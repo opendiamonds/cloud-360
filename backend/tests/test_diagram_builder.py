@@ -145,9 +145,9 @@ class TestBuildMxgraphXml(unittest.TestCase):
         self.assertIn('id="g_gcp_subnet"', xml)
         self.assertIn('id="n1"', xml)
         self.assertIn('parent="g_gcp_subnet"', xml)
-        self.assertIn('strokeColor=#4285F4', xml)  # GCP Cloud style color
-        self.assertIn('strokeColor=#34A853', xml)  # GCP VPC style color
-        self.assertIn('strokeColor=#FBBC05', xml)  # GCP Subnet style color
+        self.assertIn('fillColor=#F6F6F6', xml)  # GCP Cloud style color
+        self.assertIn('fillColor=#E3F2FD', xml)  # GCP VPC style color
+        self.assertIn('fillColor=#EDE7F6', xml)  # GCP Subnet style color
 
     @patch(
         "services.diagram_builder.fetch_icon_from_n8n",
@@ -194,9 +194,8 @@ class TestBuildMxgraphXml(unittest.TestCase):
         self.assertIn('id="g_az_vnet"', xml)
         self.assertIn('id="g_az_subnet"', xml)
         self.assertIn('parent="g_az_subnet"', xml)
-        self.assertIn('strokeColor=#0078D4', xml)  # Azure Cloud style color
-        self.assertIn('strokeColor=#5C2D91', xml)  # Azure VNet style color
-        self.assertIn('strokeColor=#00BCF2', xml)  # Azure Subnet style color
+        self.assertIn('strokeColor=light-dark(#5ea1ee, #ededed)', xml)  # Azure Cloud style color
+        self.assertIn('strokeColor=light-dark(#a1a1a1, #ededed)', xml)  # Azure VNet style color
         mock_icon.assert_called_once_with("aks", provider="Azure")
 
 

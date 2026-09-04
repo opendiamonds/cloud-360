@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -52,40 +53,88 @@ GROUP_STYLES = {
         "spacingLeft=30;fontColor=#147EBA;dashed=0;"
     ),
     "gcp_cloud": (
-        "shape=mxgraph.aws4.group;strokeColor=#4285F4;fillColor=none;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#4285F4;dashed=0;"
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#F6F6F6;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_region": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#ECEFF1;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_zone": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#FFF3E0;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
     ),
     "gcp_vpc": (
-        "shape=mxgraph.aws4.group;strokeColor=#34A853;fillColor=none;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#34A853;dashed=0;"
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#E3F2FD;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
     ),
     "gcp_subnet": (
-        "shape=mxgraph.aws4.group;strokeColor=#FBBC05;fillColor=#FFFDF0;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#FBBC05;dashed=0;"
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#EDE7F6;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
     ),
+    "gcp_firewall": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#FBE9E7;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_instance_group": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#F9FBE7;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_k8s_cluster": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#FCE4EC;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_pod": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#E8F5E9;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    "gcp_account": (
+        "shape=rect;strokeColor=none;strokeWidth=2;shadow=0;gradientColor=none;"
+        "fontColor=#757575;align=left;html=1;fontStyle=0;spacingTop=3;fillColor=#E8EAF6;"
+        "verticalAlign=top;fontSize=10;spacingLeft=10;spacing=0;"
+    ),
+    # ---------------- Azure Template 標準樣式 ----------------
     "azure_cloud": (
-        "shape=mxgraph.aws4.group;strokeColor=#0078D4;fillColor=none;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#0078D4;dashed=0;"
+        "rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;"
+        "strokeColor=light-dark(#5ea1ee, #ededed);dashPattern=8 8;verticalAlign=top;"
+        "fontColor=#757575;fontSize=12;align=left;spacingLeft=10;spacingTop=4;"
     ),
     "azure_vnet": (
-        "shape=mxgraph.aws4.group;strokeColor=#5C2D91;fillColor=none;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#5C2D91;dashed=0;"
+        "rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;"
+        "strokeColor=light-dark(#a1a1a1, #ededed);dashPattern=8 8;verticalAlign=top;"
+        "fontColor=#757575;fontSize=11;align=left;spacingLeft=10;spacingTop=4;"
     ),
-    "azure_resource_group": (
-        "shape=mxgraph.aws4.group;strokeColor=#008272;fillColor=none;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#008272;dashed=0;"
+    "azure_az": (
+        "shape=rect;strokeColor=#6c8ebf;fontColor=default;align=center;html=1;"
+        "fillColor=#dae8fc;verticalAlign=top;fontSize=12;fontFamily=Helvetica;"
+        "labelPosition=center;verticalLabelPosition=middle;container=0;rounded=1;"
+        "dashed=1;dashPattern=8 8;"
     ),
     "azure_subnet": (
-        "shape=mxgraph.aws4.group;strokeColor=#00BCF2;fillColor=#F0F9FE;verticalAlign=top;align=left;"
-        "spacingLeft=30;fontColor=#00BCF2;dashed=0;"
+        "shape=rect;strokeColor=light-dark(#a1a1a1, #ededed);fontColor=light-dark(#787878, #ededed);"
+        "align=left;html=1;fillColor=none;verticalAlign=top;fontSize=11;fontFamily=Helvetica;"
+        "rounded=0;dashed=1;spacingLeft=3;"
+    ),
+    "azure_resource_group": (
+        "rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#6e6e6e, #ededed);"
+        "verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;"
     ),
 }
 
 
 def is_inside(child: dict[str, Any], parent: dict[str, Any]) -> bool:
-    """判斷 child 的邊界盒是否完全落在 parent 內（節點預設 80x80）。"""
-    cw = child.get("width", 80)
-    ch = child.get("height", 80)
+    """判斷 child 的邊界盒是否完全落在 parent 內（節點預設 40x40）。"""
+    cw = child.get("width", 40)
+    ch = child.get("height", 40)
     return (
         child["x"] >= parent["x"]
         and child["y"] >= parent["y"]
@@ -430,11 +479,16 @@ def _groups_bbox_overlap(
 def _cluster_sibling_rows(
     siblings: list[dict[str, Any]], y_tol: float = _ROW_Y_TOL
 ) -> list[list[dict[str, Any]]]:
-    """
-    分列規則：
-    - Y 接近且與列內任一框「幾何不重疊」才可並排
-    - 若與列內已有框重疊（常見：上下疊的 subnet），強制換行，避免互遮
-    """
+    is_zone = any(
+        g.get("type") in ("az", "gcp_zone", "azure_az")
+        or "zone" in g.get("name", "").lower()
+        or "availability" in g.get("name", "").lower()
+        for g in siblings
+    )
+    if is_zone:
+        ordered = sorted(siblings, key=lambda g: float(g["x"]))
+        return [ordered]
+
     ordered = sorted(siblings, key=lambda g: (float(g["y"]), float(g["x"])))
     rows: list[list[dict[str, Any]]] = []
     for g in ordered:
@@ -1483,12 +1537,127 @@ def _waypoints_xml(waypoints: list[tuple[float, float]]) -> str:
     )
 
 
+# n8n 的圖示目錄用服務全名（`Simple Notification Service`），架構圖用縮寫
+# （`SNS`）。兩者沒有共同子字串，純比對必然落空——這裡把縮寫展開成目錄裡
+# 實際存在的名稱。每一條都對照 webhook 回傳的目錄驗證過；查無對應的縮寫
+# （如 EFS）不放進來，寧可落到灰底也不要指向錯的圖示。
+_SERVICE_ABBREVIATIONS = {
+    "asg": "auto scaling",
+    "cdn": "cloudfront",
+    "ecr": "elastic container registry",
+    "ecs": "elastic container service",
+    "eks": "elastic kubernetes service",
+    "elb": "elastic load balancing",
+    "iam": "identity and access management",
+    "kms": "key management service",
+    "msk": "managed streaming for apache kafka",
+    "s3": "simple storage service",
+    "ses": "simple email service",
+    "sns": "simple notification service",
+    "sqs": "simple queue service",
+    "vpc": "virtual private cloud",
+}
+
+
+def _normalise_icon_name(text: str) -> str:
+    """比對用的正規化形式。
+
+    目錄裡同一個服務有三種寫法：`AWS Lambda`、`CloudWatch`、
+    `Auto-Scaling-group.svg`。統一成小寫、無副檔名、無 AWS/Amazon 前綴、
+    以單一空白分隔的詞序列，好讓「完全相同」成為可判定的條件。
+    """
+    text = re.sub(r"\.svg$", "", text.strip(), flags=re.IGNORECASE)
+    text = re.sub(r"[^a-zA-Z0-9]+", " ", text).lower().strip()
+    text = re.sub(r"^(aws|amazon)\s+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _icon_match_score(service_name: str, icon_name: str) -> int:
+    """這個目錄項有多像目標服務。0 代表不算匹配。
+
+    分數的用途是**排序候選**，不是門檻。關鍵在於精確匹配必須贏過子字串
+    包含：`S3` 對 `S3 on Outposts` 是子字串命中，對 `Simple Storage
+    Service` 才是（展開後的）完全相同，而後者才是要的那一個。
+    """
+    service = _normalise_icon_name(service_name)
+    icon = _normalise_icon_name(icon_name)
+    if not service or not icon:
+        return 0
+
+    if service == icon:
+        return 100
+
+    expanded = _SERVICE_ABBREVIATIONS.get(service)
+    if expanded and expanded == icon:
+        return 90
+    if expanded and expanded in icon:
+        return 60
+
+    # 詞邊界包含優於單純的字元包含：`ecs` 不該命中 `secsomething`。
+    if f" {service} " in f" {icon} ":
+        return 50
+    # 只認「服務名是目錄名的一部分」這個方向。反向（目錄名是服務名的一部分）
+    # 實測會讓 `BigQuery` 命中目錄裡叫 `Q` 的圖示、`Cloud Spanner` 命中
+    # `AWS-Cloud`——目錄只收 AWS，非 AWS 服務本來就該落到灰底。長度下限擋掉
+    # 短字串的偶然包含；縮寫由上面的對應表處理，不倚賴這條。
+    if len(service) >= 4 and service in icon:
+        return 10
+    return 0
+
+
+def _select_icon_entry(entries: list[dict[str, Any]], service_name: str) -> dict[str, Any] | None:
+    """挑出最像 `service_name` 的目錄項；沒有像的回 None。
+
+    回 None 而不是退回 `entries[0]`：退回第一項會讓「查無此圖示」看起來
+    像成功，實際交出的是目錄裡碰巧排第一的那個服務（實測是
+    `Auto-Scaling-group`）。錯的圖示比灰底佔位圖更難發現。
+    """
+    best: tuple[int, int, dict[str, Any]] | None = None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name") or entry.get("icon_name") or entry.get("service") or ""
+        score = _icon_match_score(service_name, name)
+        if score == 0:
+            continue
+        # 同分時取較短的名稱：`CloudWatch` 勝過 `CloudWatch Logs`。
+        candidate = (score, -len(name), entry)
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    return best[2] if best else None
+
+
+def _svg_from_entry(entry: dict[str, Any]) -> str | None:
+    """目錄項裡的 SVG 內容，欄位名兩種都接受。"""
+    for key in ("svg_content", "svg"):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _normalise_icon_name(text: str) -> str:
+    text = re.sub(r"\(.*?\)", "", text, flags=re.DOTALL)
+    text = re.sub(r"\[.*?\]", "", text, flags=re.DOTALL)
+    text = text.split("+")[0]
+    text = re.sub(r"[^a-zA-Z0-9]+", " ", text).lower().strip()
+    text = re.sub(r"^(aws|amazon|google|azure|microsoft)\s+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
     """
     向 n8n webhook 取得服務 SVG。
+    使用 _normalise_icon_name 去除所有括號與加號後綴並進行正規化。
     若未設定 N8N_WEBHOOK_URL 或請求失敗，回傳灰底文字 fallback SVG。
     """
+    search_name = _normalise_icon_name(service_name)
+    if not search_name:
+        search_name = service_name.strip()
+
     webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+    n8n_user = os.environ.get("N8N_USER")
+    n8n_password = os.environ.get("N8N_PASSWORD")
     fallback_svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
         f'<rect width="100" height="100" fill="#cccccc"/>'
@@ -1499,12 +1668,27 @@ async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
     if not webhook_url:
         return fallback_svg
 
+    auth = None
+    if n8n_user and n8n_password:
+        auth = (n8n_user, n8n_password)
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                webhook_url, json={"service": service_name, "provider": provider}, timeout=5.0
+                webhook_url,
+                json={"service": search_name, "provider": provider},
+                auth=auth,
+                timeout=5.0
             )
             if response.status_code != 200:
+                # 這條路徑原本靜默 return，是最難查的一種降級：服務照常回圖，
+                # 只是每個 icon 都變灰底，沒有任何地方說得出為什麼。
+                logger.warning(
+                    "n8n 取得 %s 圖示（供應商：%s）回應 HTTP %s，改用灰底佔位圖",
+                    service_name,
+                    provider,
+                    response.status_code,
+                )
                 return fallback_svg
 
             content = response.text.strip()
@@ -1514,30 +1698,35 @@ async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
             try:
                 data = response.json()
 
-                if isinstance(data, list) and len(data) > 0:
-                    for item in data:
-                        name = item.get(
-                            "name", item.get("icon_name", item.get("service", ""))
+                if isinstance(data, list):
+                    entry = _select_icon_entry(data, search_name)
+                    if entry is None:
+                        logger.warning(
+                            "n8n 目錄（%d 項）查無 %s（供應商：%s）的圖示，改用灰底佔位圖",
+                            len(data),
+                            service_name,
+                            provider,
                         )
-                        if service_name.lower() in name.lower() or name.lower() in service_name.lower():
-                            if "svg_content" in item:
-                                    return item["svg_content"]
-                            if "svg" in item:
-                                return item["svg"]
-
-                    item = data[0]
-                    if "svg_content" in item:
-                        return item["svg_content"]
-                    if "svg" in item:
-                        return item["svg"]
+                        return fallback_svg
+                    svg = _svg_from_entry(entry)
+                    if svg:
+                        return svg
+                    logger.warning(
+                        "n8n 目錄項 %r 匹配到 %s，但不含 SVG 內容，改用灰底佔位圖",
+                        entry.get("icon_name") or entry.get("name"),
+                        service_name,
+                    )
+                    return fallback_svg
 
                 elif isinstance(data, dict):
-                    if "svg_content" in data:
-                        return data["svg_content"]
-                    if "svg" in data:
-                        return data["svg"]
-                    if "data" in data and "svg" in data["data"]:
-                        return data["data"]["svg"]
+                    svg = _svg_from_entry(data)
+                    if svg:
+                        return svg
+                    nested = data.get("data")
+                    if isinstance(nested, dict):
+                        svg = _svg_from_entry(nested)
+                        if svg:
+                            return svg
 
             except Exception as e:
                 logger.warning("解析 n8n 回應失敗: %s", e)
@@ -1576,7 +1765,21 @@ async def build_mxgraph_xml(
         g_types = {g.get("type") for g in groups if g}
         if any(t in ("azure_cloud", "azure_vnet", "azure_resource_group", "azure_subnet") for t in g_types):
             provider = "Azure"
-        elif any(t in ("gcp_cloud", "gcp_vpc", "gcp_subnet") for t in g_types):
+        elif any(
+            t in (
+                "gcp_cloud",
+                "gcp_region",
+                "gcp_zone",
+                "gcp_vpc",
+                "gcp_subnet",
+                "gcp_firewall",
+                "gcp_instance_group",
+                "gcp_k8s_cluster",
+                "gcp_pod",
+                "gcp_account",
+            )
+            for t in g_types
+        ):
             provider = "GCP"
         else:
             provider = "AWS"
@@ -1607,13 +1810,14 @@ async def build_mxgraph_xml(
     for node in nodes:
         parent_id = "1"
         rel_x, rel_y = node["x"], node["y"]
-        node["width"] = 80
-        node["height"] = 80
+        node["width"] = 40
+        node["height"] = 40
 
         best_group = None
         for g in groups_sorted:
             if is_inside(node, g):
-                best_group = g
+                if best_group is None or g["area"] < best_group["area"]:
+                    best_group = g
         if best_group:
             parent_id = best_group["id"]
             rel_x = node["x"] - best_group["x"]
@@ -1627,8 +1831,9 @@ async def build_mxgraph_xml(
     for g in groups_sorted:
         gid = g["id"]
         gname = g.get("name", "")
-        gtype = g.get("type", "vpc")
-        style = GROUP_STYLES.get(gtype, GROUP_STYLES["vpc"])
+        gtype = g.get("type", "gcp_vpc" if provider == "GCP" else "vpc")
+        fallback_style = GROUP_STYLES["gcp_vpc"] if provider == "GCP" else GROUP_STYLES["vpc"]
+        style = GROUP_STYLES.get(gtype, fallback_style)
         w, h = g.get("width", 200), g.get("height", 200)
         pid = g["parent_id"]
         rx, ry = g["rel_x"], g["rel_y"]
@@ -1653,12 +1858,13 @@ async def build_mxgraph_xml(
         b64_svg = base64.b64encode(svg_content.encode("utf-8")).decode("utf-8")
         style = (
             f"shape=image;image=data:image/svg+xml,{b64_svg};"
-            "verticalLabelPosition=bottom;verticalAlign=top;align=center;"
-            "spacingTop=4;perimeter=rectanglePerimeter;movable=1;"
+            "verticalLabelPosition=bottom;verticalAlign=middle;align=center;"
+            "labelBackgroundColor=none;aspect=fixed;imageAspect=0;"
+            "fontFamily=Helvetica;fontSize=11;fontColor=#999999;fontStyle=1;spacingTop=-6;"
         )
         cells.append(
             f'<mxCell id="{node_id}" value="{comp.upper()}" style="{style}" vertex="1" parent="{pid}">'
-            f'<mxGeometry x="{rx}" y="{ry}" width="80" height="80" as="geometry"/></mxCell>'
+            f'<mxGeometry x="{rx}" y="{ry}" width="40" height="40" as="geometry"/></mxCell>'
         )
 
     # --- Edges（正交＋ports＋繞過其他 icon 的 waypoints）---
@@ -1676,10 +1882,10 @@ async def build_mxgraph_xml(
                 ports, waypoints = compute_edge_waypoints(src_node, tgt_node, nodes)
             exit_x, exit_y, entry_x, entry_y = ports
             edge_style = (
-                "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
-                "jettySize=0;html=1;endArrow=block;endFill=1;startArrow=none;"
-                "exitPerimeter=0;entryPerimeter=0;"
-                "sourcePerimeterSpacing=0;targetPerimeterSpacing=0;"
+                "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
+                "html=1;dashed=0;strokeColor=#4284F3;strokeWidth=2;align=center;verticalAlign=middle;"
+                "fontFamily=Helvetica;fontSize=12;fontColor=default;labelBackgroundColor=default;"
+                "startSize=4;endArrow=blockThin;endFill=1;endSize=4;"
                 f"exitX={_fmt_port(exit_x)};exitY={_fmt_port(exit_y)};exitDx=0;exitDy=0;"
                 f"entryX={_fmt_port(entry_x)};entryY={_fmt_port(entry_y)};entryDx=0;entryDy=0;"
             )
