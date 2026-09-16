@@ -22,9 +22,14 @@
 #   N8N_USER           optional   basic auth for the n8n webhook
 #   N8N_PASSWORD       optional   basic auth for the n8n webhook
 #   APP_ENV            optional   defaults to staging
-#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION
-#                      optional   C1 AWS Pricing Query API (fallback: public Bulk)
 #   COST_PRICING_USE_SDK optional   auto|1|0 for C1 pricing client
+#
+# No AWS account credentials are rendered here, by rule rather than by
+# oversight: ADR-0001 keeps provider credentials out of this repo, and the C1
+# pricing rule in aidlc/spaces/default/memory/project.md admits public
+# no-account price endpoints only. AWS pricing therefore goes through the
+# public Bulk Price List, which needs no key. Re-adding the IAM path would
+# reintroduce both violations at once.
 #   GCP_BILLING_API_KEY  optional   C1 GCP Cloud Billing Catalog (needed for GCP diagrams)
 #
 # LLM_PROVIDER is pinned to openrouter here and is not overridable: the other
@@ -50,7 +55,7 @@ fi
 # POSTGRES_PASSWORD=ab$cd reaches postgres as "ab", the stack starts, and
 # nothing anywhere reports that the database is running on a two-character
 # password. Refuse the value instead of shipping a weakened one.
-for name in POSTGRES_PASSWORD JWT_SECRET N8N_PASSWORD AWS_SECRET_ACCESS_KEY; do
+for name in POSTGRES_PASSWORD JWT_SECRET N8N_PASSWORD GCP_BILLING_API_KEY; do
   eval "value=\${${name}:-}"
   case "${value}" in
     *'$'*)
@@ -84,9 +89,7 @@ APP_ENV=${APP_ENV:-staging}
 PUBLIC_URL=https://cloud360.danniel.cc
 FRONTEND_HOST_PORT=8090
 CLOUDFLARED_CREDENTIALS_FILE=${HOME}/.cloudflared/b460a579-9e0d-42f1-a31d-c84d35bef065.json
-COST_PRICING_USE_SDK=${COST_PRICING_USE_SDK:-auto}
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+COST_PRICING_USE_SDK=${COST_PRICING_USE_SDK:-0}
 AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
 GCP_BILLING_API_KEY=${GCP_BILLING_API_KEY:-}
 EOF

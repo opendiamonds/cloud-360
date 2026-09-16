@@ -102,10 +102,8 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | `N8N_WEBHOOK_URL` | 選填 | 有用動態 icon 再填 |
 | `N8N_USER` | 選填 | 存取 n8n webhook 所需之 Basic Auth 帳號 |
 | `N8N_PASSWORD` | 選填 | 存取 n8n webhook 所需之 Basic Auth 密碼 |
-| `AWS_ACCESS_KEY_ID` | 選填（C1） | IAM 使用者／角色金鑰；需 `pricing:GetProducts`（**勿**給 Cost Explorer） |
-| `AWS_SECRET_ACCESS_KEY` | 選填（C1） | 與上對應；留空則 AWS 價走公開 Bulk Price List（較慢） |
-| `AWS_DEFAULT_REGION` | `us-east-1` | Pricing API 固定用 `us-east-1` 端點即可 |
-| `COST_PRICING_USE_SDK` | `auto` | `auto`／`1`／`0`；有 AWS 憑證時優先 SDK，否則 Bulk |
+| `AWS_DEFAULT_REGION` | `us-east-1` | Bulk Price List 固定用 `us-east-1` 端點即可 |
+| `COST_PRICING_USE_SDK` | `0` | 釘在 `0`（公開 Bulk）。IAM 版 Price List Query API 已停用，見下方說明 |
 | `GCP_BILLING_API_KEY` | 選填（C1） | **有 GCP 圖要真實估價時必填**（Cloud Billing Catalog）；勿 commit |
 | `COST_PRICING_STUB` | 本機可選 `1` | **staging／正式部署勿設**；CI test stack 才用 stub |
 
@@ -115,17 +113,17 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 | 雲 | 需要的環境變數 | 未設定時 |
 |---|---|---|
-| **AWS** | 建議：`AWS_ACCESS_KEY_ID`＋`AWS_SECRET_ACCESS_KEY`（＋`AWS_DEFAULT_REGION=us-east-1`） | 仍可查價（公開 Bulk），但較慢 |
+| **AWS** | **不需**金鑰（可選 `AWS_DEFAULT_REGION=us-east-1`） | 走公開 Bulk Price List；首次 EC2 查價約 1–2 分鐘 |
 | **GCP** | **`GCP_BILLING_API_KEY`**（Catalog API key） | GCP 列無法取得官方價（維持未定價／查價失敗） |
 | **Azure** | **不需**額外金鑰 | Retail Prices 公開 API |
 
 Compose／staging 請寫在 **`deploy/.env`**（見 `deploy/.env.example` 的「C1 成本估價」段）；本機 bare-metal 寫在 **`backend/.env`**。  
 `ut` 自動部署會由 `deploy/render-env.sh` 從 GitHub Secrets 寫入同名變數——請在 repo Settings → Secrets 新增：
 
-- `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`（可選但建議）
 - `AWS_DEFAULT_REGION`（可選，預設 `us-east-1`）
 - `GCP_BILLING_API_KEY`（要估 GCP 圖則必填）
-- 可選 `COST_PRICING_USE_SDK`
+
+**AWS 帳號憑證不在此列，而且不要加。** `render-env.sh` 不再寫出 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`，`docker-compose.deploy.yml` 也不再傳遞。兩個理由：ADR-0001 把供應商憑證排除在本 repo 的範圍之外；`aidlc/spaces/default/memory/project.md` 的 C1 計價規則只准公開免帳號端點，而 Price List Query API 走 IAM。即使在 GitHub Secrets 設了同名 secret，也不會進到容器裡。
 
 **禁止**把真實金鑰寫進 `.env.example` 或 commit 進 git。
 
@@ -168,11 +166,9 @@ npm run build
 範例（寫入 `deploy/.env`，值勿 commit）：
 
 ```bash
-# C1 — AWS Pricing（建議；留空則走公開 Bulk）
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
+# C1 — AWS Pricing（走公開 Bulk Price List，不需帳號憑證）
 AWS_DEFAULT_REGION=us-east-1
-COST_PRICING_USE_SDK=auto
+COST_PRICING_USE_SDK=0
 
 # C1 — GCP Catalog（要估 GCP 架構圖時必填）
 GCP_BILLING_API_KEY=...
@@ -405,8 +401,7 @@ psql "$DATABASE_URL" -c "COPY role_permissions TO STDOUT WITH CSV HEADER" > role
 cp deploy/.env.example deploy/.env
 # 編輯：POSTGRES_*、JWT_SECRET、OPENROUTER_API_KEY、PUBLIC_URL、
 #       LLM_MODEL、LLM_MAX_OUTPUT_TOKENS（建議）、CLOUDFLARED_*（若用 tunnel）、
-#       AWS_ACCESS_KEY_ID、AWS_SECRET_ACCESS_KEY、AWS_DEFAULT_REGION、
-#       GCP_BILLING_API_KEY（C1 FinOps；見第 1.1.1 節）
+#       AWS_DEFAULT_REGION、GCP_BILLING_API_KEY（C1 FinOps；見第 1.1.1 節）
 
 # 首次或升級含 Dockerfile 變更（含 Claude Code CLI）時務必 --build
 docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build
@@ -428,7 +423,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 - Workflow：`.github/workflows/deploy.yml`（self-hosted runner `cloud360`）  
 - 觸發：合併／推送到 `ut`（或手動 `workflow_dispatch`）  
-- Secrets：至少 `JWT_SECRET`、`OPENROUTER_API_KEY`、`POSTGRES_PASSWORD` 等；**本次 C1 請再加** `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、（可選）`AWS_DEFAULT_REGION`、`GCP_BILLING_API_KEY`（由 `render-env.sh` 寫入 `deploy/.env`）  
+- Secrets：至少 `JWT_SECRET`、`OPENROUTER_API_KEY`、`POSTGRES_PASSWORD` 等；**本次 C1 請再加**（可選）`AWS_DEFAULT_REGION`、`GCP_BILLING_API_KEY`（由 `render-env.sh` 寫入 `deploy/.env`）。AWS 帳號憑證**不要加**，見第 1.1.1 節  
 - 公開：`https://cloud360.danniel.cc`；內網：`http://192.168.10.10:8090`  
 
 部署本次 A1↔A3／token 相關變更時：確認 runner 上的 compose **會 rebuild backend**（workflow 已 `up -d --build`），且 GitHub Secrets 的 OpenRouter 金鑰有效；可選在 secrets／產生的 `.env` 加上 `LLM_MAX_OUTPUT_TOKENS`。
@@ -448,7 +443,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 #### 3.5 本次功能升級檢查清單（C1 FinOps）
 
 - [ ] 已跑／確保 C1 四表與 `C1`／`C1h`～`C1o` 種子（見 2.2.4）  
-- [ ] `deploy/.env` 或 GitHub Secrets 已設 **`AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`**（建議）與 **`GCP_BILLING_API_KEY`**（估 GCP 必填）  
+- [ ] `deploy/.env` 或 GitHub Secrets 已設 **`GCP_BILLING_API_KEY`**（估 GCP 必填）；AWS 走公開 Bulk，不需憑證  
 - [ ] **未**在 staging 設 `COST_PRICING_STUB=1`  
 - [ ] Backend recreate 後出站可達 AWS／GCP／Azure 價目 host  
 - [ ] 煙測：成本頁選 AWS／GCP／Azure 圖 → 區域下拉僅該雲 → 已映射服務有官方價  
@@ -494,7 +489,7 @@ Optional: `LLM_MAX_OUTPUT_TOKENS` (default `12000`) and `LLM_XML_CONTEXT_MAX_CHA
 ### Env vars
 
 - **Backend** (`backend/.env` from `.env.example`): set `DATABASE_URL`, rotate `JWT_SECRET`, set `CORS_ORIGINS` to the real frontend origin(s), and configure OpenRouter／LLM／token-limit keys for that environment.  
-- **C1 FinOps**: set `AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`（optional; speeds AWS Pricing Query）and `GCP_BILLING_API_KEY`（required for live GCP catalog prices）. Azure needs no key. Do **not** set `COST_PRICING_STUB=1` on staging.  
+- **C1 FinOps**: set `GCP_BILLING_API_KEY`（required for live GCP catalog prices）. AWS uses the public Bulk Price List and needs no credentials — do not add them. Azure needs no key. Do **not** set `COST_PRICING_STUB=1` on staging.  
 - **Frontend** (`frontend/.env` / CI): set `VITE_API_BASE_URL` to the real API root (no trailing slash). Optional `VITE_WS_BASE_URL`; otherwise derived from the API base (`http→ws`, `https→wss`). Rebuild after changing Vite env.  
 - **Compose** (`deploy/.env` from `deploy/.env.example`): used with `deploy/docker-compose.deploy.yml`. Staging CI renders the same keys via `deploy/render-env.sh` from GitHub Secrets.  
 
