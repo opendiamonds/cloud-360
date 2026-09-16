@@ -2820,6 +2820,18 @@
               "title": "Diagram Id",
               "type": "integer"
             }
+          },
+          {
+            "description": "Azure 架構圖是否執行 Pricing Calculator agent（false 僅載入設定與資源列）",
+            "in": "query",
+            "name": "run_agent",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Azure 架構圖是否執行 Pricing Calculator agent（false 僅載入設定與資源列）",
+              "title": "Run Agent",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -2890,6 +2902,92 @@
           }
         ],
         "summary": "Get Audit"
+      }
+    },
+    "/api/cost/diagrams/{diagram_id}/calculator-export/csv": {
+      "get": {
+        "description": "Google Cloud Pricing Calculator 官方 CSV 匯出。",
+        "operationId": "get_calculator_csv_api_cost_diagrams__diagram_id__calculator_export_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "diagram_id",
+            "required": true,
+            "schema": {
+              "title": "Diagram Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Calculator Csv"
+      }
+    },
+    "/api/cost/diagrams/{diagram_id}/calculator-export/xlsx": {
+      "get": {
+        "description": "Azure Pricing Calculator 官方 Excel 匯出。",
+        "operationId": "get_calculator_excel_api_cost_diagrams__diagram_id__calculator_export_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "diagram_id",
+            "required": true,
+            "schema": {
+              "title": "Diagram Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Calculator Excel"
       }
     },
     "/api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/hours": {

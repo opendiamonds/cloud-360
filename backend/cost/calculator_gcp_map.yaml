@@ -1,0 +1,92 @@
+# Google Cloud Pricing Calculator 產品對照（C1 GCP Calculator）
+#
+# calculator_search: Calculator「Search by product name」精確產品名
+# default_quantity: Agent 未指定時的預設
+# quantity_unit: vm_instance | node | service | gb
+
+products:
+  ComputeEngine:
+    sku: ComputeEngine
+    calculator_search: "Compute Engine"
+    default_quantity: 1
+    quantity_unit: vm_instance
+  KubernetesEngine:
+    sku: KubernetesEngine
+    calculator_search: "Google Kubernetes Engine"
+    default_quantity: 1
+    quantity_unit: node
+  CloudRun:
+    sku: CloudRun
+    calculator_search: "Cloud Run"
+    default_quantity: 1
+    quantity_unit: service
+  CloudSQL:
+    sku: CloudSQL
+    calculator_search: "Cloud SQL"
+    default_quantity: 1
+    quantity_unit: service
+  CloudStorage:
+    sku: CloudStorage
+    calculator_search: "Cloud Storage"
+    default_quantity: 100
+    quantity_unit: gb
+  CloudDNS:
+    sku: CloudDNS
+    calculator_search: "Cloud DNS"
+    default_quantity: 1
+    quantity_unit: service
+  Networking:
+    sku: Networking
+    calculator_search: "Cloud Load Balancing"
+    calculator_product: "Networking"
+    calculator_service_type: "Cloud Load Balancing"
+    calculator_search_aliases:
+      - "Load Balancing"
+      - "Load Balancer"
+      - "Network Load Balancing"
+    default_quantity: 1
+    quantity_unit: service
+  CloudCDN:
+    sku: CloudCDN
+    calculator_search: "Cloud CDN"
+    default_quantity: 1
+    quantity_unit: service
+  BigQuery:
+    sku: BigQuery
+    calculator_search: "BigQuery"
+    default_quantity: 1
+    quantity_unit: service
+  Firestore:
+    sku: Firestore
+    calculator_search: "Firestore"
+    default_quantity: 1
+    quantity_unit: service
+  Apigee:
+    sku: Apigee
+    calculator_search: "Apigee"
+    calculator_search_aliases:
+      - "Apigee API Management"
+      - "API Management"
+    default_quantity: 1
+    quantity_unit: service
+  SecretManager:
+    sku: SecretManager
+    calculator_search: "Secret Manager"
+    default_quantity: 1
+    quantity_unit: service
+  CloudObservability:
+    sku: CloudObservability
+    calculator_search: "Cloud Monitoring"
+    calculator_product: "Cloud Operations"
+    calculator_service_type: "Cloud Monitoring"
+    calculator_search_aliases:
+      - "Observability"
+      - "Operations"
+      - "Monitoring"
+    default_quantity: 1
+    quantity_unit: service
+  VertexAI:
+    sku: VertexAI
+    calculator_search: "Vertex AI"
+    default_quantity: 1
+    quantity_unit: service

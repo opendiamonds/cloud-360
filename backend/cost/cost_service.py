@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -18,6 +19,15 @@ from cost.cost_calculator import (
     pie_buckets,
     total_priced,
 )
+from cost.azure_calculator_runner import AzureCalculatorError, export_azure_calculator_excel
+from cost.gcp_calculator_runner import GcpCalculatorError, export_gcp_calculator_csv
+from cost.cost_pricing_agent import (
+    plan_azure_line_items,
+    plan_gcp_line_items,
+    pricing_agent_enabled,
+    run_cost_pricing_agent,
+    run_gcp_pricing_agent,
+)
 from cost.diagram_extractor import extract_priceable_cells
 from cost.price_cache import get_cached_hourly, write_cache
 from cost.pricing_client import (
@@ -28,9 +38,12 @@ from cost.pricing_client import (
     supports_official_hourly,
 )
 from cost.sku_mapper import map_cell
+from cost.sku_ai_resolver import infer_unmapped_cells, resolve_cell
 from models import CostAuditEvent, DiagramCost, DiagramCostLine, User, UserDiagram
 from services.collab_router import _user_can_access_diagram, _visible_diagrams
 from services.rbac import user_can
+
+logger = logging.getLogger(__name__)
 
 
 def _assert_diagram_visible(user: User, diagram: Optional[UserDiagram]) -> UserDiagram:
@@ -128,6 +141,8 @@ def _resolve_line(
     cell,
     line_row: DiagramCostLine,
     region: Optional[str],
+    cloud_hint: Optional[str] = None,
+    llm_batch: Optional[dict] = None,
 ) -> Dict[str, Any]:
     label = cell.label_plain
     sku = line_row.sku_override
@@ -159,8 +174,16 @@ def _resolve_line(
             },
         }
 
+    mapping_note: Optional[str] = None
+
     if not sku:
-        mapped = map_cell(label, cell.style)
+        mapped, mapping_note = resolve_cell(
+            label,
+            cell.style,
+            cloud_hint=cloud_hint,
+            mxcell_id=cell.mxcell_id,
+            llm_batch=llm_batch,
+        )
         if mapped.kind == "unique" and mapped.candidate:
             sku = mapped.candidate.sku
             cloud = mapped.candidate.cloud
@@ -175,6 +198,7 @@ def _resolve_line(
                 "hours": line_row.hours,
                 "subtotal": None,
                 "status": "unpriced",
+                "mapping_note": mapping_note,
                 "_calc": None,
             }
 
@@ -227,10 +251,11 @@ def _resolve_line(
             "label": label,
             "sku": sku,
             "category": category,
-            "hourly_list": float(hourly_list),
+            "hourly_list": float(hourly_list) if hourly_list is not None else None,
             "hours": line_row.hours,
             "subtotal": float(subtotal),
             "status": status,
+            "mapping_note": mapping_note,
             "_calc": {
                 "status": status,
                 "hourly": hourly_for_calc,
@@ -252,7 +277,13 @@ def _resolve_line(
     }
 
 
-def build_snapshot(db: Session, user: User, diagram: UserDiagram) -> Dict[str, Any]:
+def build_snapshot(
+    db: Session,
+    user: User,
+    diagram: UserDiagram,
+    *,
+    run_agent: bool = True,
+) -> Dict[str, Any]:
     dc = _get_or_create_diagram_cost(db, diagram.id)
     region = dc.pricing_region
     cells = extract_priceable_cells(diagram.xml_data)
@@ -274,13 +305,22 @@ def build_snapshot(db: Session, user: User, diagram: UserDiagram) -> Dict[str, A
         .all()
     }
 
+    llm_batch = infer_unmapped_cells(cells, cloud_hint=diagram_cloud)
+
     out_lines: List[Dict[str, Any]] = []
     calc_lines: List[LineForCalc] = []
     pricing_times: List[datetime] = []
 
     for cell in cells:
         row = line_rows[cell.mxcell_id]
-        resolved = _resolve_line(db, cell=cell, line_row=row, region=region)
+        resolved = _resolve_line(
+            db,
+            cell=cell,
+            line_row=row,
+            region=region,
+            cloud_hint=diagram_cloud,
+            llm_batch=llm_batch,
+        )
         calc = resolved.pop("_calc", None)
         out_lines.append(resolved)
         if calc:
@@ -297,6 +337,56 @@ def build_snapshot(db: Session, user: User, diagram: UserDiagram) -> Dict[str, A
         1 for line in out_lines if line["status"] in ("unpriced", "price_fetch_failed")
     )
 
+    pricing_source: Optional[str] = None
+    pricing_error: Optional[str] = None
+    agent_assumptions: List[str] = []
+    calculator_lines: List[Dict[str, Any]] = []
+    pricing_as_of: Optional[str] = None
+    use_calculator_agent = (
+        run_agent
+        and pricing_agent_enabled()
+        and diagram_cloud in ("azure", "gcp")
+        and region
+    )
+    if use_calculator_agent:
+        hours_map = {mx: row.hours for mx, row in line_rows.items()}
+        try:
+            if diagram_cloud == "azure":
+                estimate = run_cost_pricing_agent(
+                    xml_data=diagram.xml_data,
+                    region=region,
+                    hours_by_mxcell=hours_map,
+                )
+            else:
+                estimate = run_gcp_pricing_agent(
+                    xml_data=diagram.xml_data,
+                    region=region,
+                    hours_by_mxcell=hours_map,
+                )
+        except RuntimeError:
+            logger.exception("Pricing Calculator agent 無法在同步 context 執行")
+            estimate = None
+
+        if estimate is not None:
+            pricing_source = estimate.pricing_source
+            agent_assumptions = estimate.agent_assumptions
+            calculator_lines = estimate.calculator_lines
+            if estimate.pricing_as_of:
+                pricing_as_of = estimate.pricing_as_of.isoformat()
+            if estimate.total_usd is not None:
+                total = estimate.total_usd
+            else:
+                total = None
+                if estimate.error:
+                    pricing_error = estimate.error
+                    logger.warning("%s 估價失敗：%s", diagram_cloud, estimate.error)
+        else:
+            pricing_source = f"{diagram_cloud}_calculator_failed"
+            total = None
+            pricing_error = pricing_error or f"{diagram_cloud} pricing agent 無法執行"
+    else:
+        pricing_as_of = None
+
     return {
         "id": diagram.id,
         "region": region,
@@ -307,20 +397,75 @@ def build_snapshot(db: Session, user: User, diagram: UserDiagram) -> Dict[str, A
         "total": float(total) if total is not None else None,
         "unpriced_count": unpriced_count,
         "pie": pie,
-        "pricing_as_of": None,
+        "pricing_as_of": pricing_as_of,
+        "pricing_source": pricing_source,
+        "pricing_error": pricing_error,
+        "agent_assumptions": agent_assumptions or None,
+        "calculator_lines": calculator_lines or None,
         "coverage": COVERAGE_LIST,
         "budget": None,
         "overspent": False,
     }
 
 
-def get_snapshot(db: Session, user: User, diagram_id: int) -> Dict[str, Any]:
+def get_snapshot(
+    db: Session,
+    user: User,
+    diagram_id: int,
+    *,
+    run_agent: bool = True,
+) -> Dict[str, Any]:
     diagram = db.query(UserDiagram).filter(UserDiagram.id == diagram_id).first()
     diagram = _assert_diagram_visible(user, diagram)
     _assert_c1_view(db, user)
-    result = build_snapshot(db, user, diagram)
+    result = build_snapshot(db, user, diagram, run_agent=run_agent)
     db.commit()
     return result
+
+
+def export_calculator_excel(db: Session, user: User, diagram_id: int) -> tuple[bytes, str, str]:
+    """依架構圖 line_items 在雲端 Pricing Calculator 填表並匯出官方檔案。"""
+    diagram = db.query(UserDiagram).filter(UserDiagram.id == diagram_id).first()
+    diagram = _assert_diagram_visible(user, diagram)
+    _assert_c1_view(db, user)
+
+    if not pricing_agent_enabled():
+        raise HTTPException(status_code=503, detail="Pricing Calculator 匯出未啟用（需 COST_PRICING_AGENT=1）")
+
+    dc = _get_or_create_diagram_cost(db, diagram.id)
+    region = dc.pricing_region
+    cells = extract_priceable_cells(diagram.xml_data)
+    diagram_cloud = _detect_diagram_cloud(cells)
+    if diagram_cloud not in ("azure", "gcp"):
+        raise HTTPException(status_code=400, detail="僅 Azure／GCP 架構圖可匯出 Pricing Calculator")
+    if not region or not _region_allowed(region, diagram_cloud):
+        raise HTTPException(status_code=400, detail="請先選定有效的估價區域並完成估價")
+
+    line_rows = {
+        row.mxcell_id: row
+        for row in db.query(DiagramCostLine)
+        .filter(DiagramCostLine.diagram_id == diagram.id)
+        .all()
+    }
+    hours_map = {mx: row.hours for mx, row in line_rows.items()}
+    if diagram_cloud == "azure":
+        line_items, _mapping_notes = plan_azure_line_items(diagram.xml_data, hours_map)
+        if not line_items:
+            raise HTTPException(status_code=400, detail="無可匯出至 Calculator 的 Azure 資源")
+        try:
+            export_bytes, filename, _source_url = export_azure_calculator_excel(region, line_items)
+        except AzureCalculatorError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return export_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    line_items, _mapping_notes = plan_gcp_line_items(diagram.xml_data, hours_map)
+    if not line_items:
+        raise HTTPException(status_code=400, detail="無可匯出至 Calculator 的 GCP 資源")
+    try:
+        export_bytes, filename, _source_url = export_gcp_calculator_csv(region, line_items)
+    except GcpCalculatorError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return export_bytes, filename, "text/csv"
 
 
 def list_diagrams(db: Session, user: User) -> Dict[str, Any]:

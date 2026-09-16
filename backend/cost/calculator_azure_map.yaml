@@ -1,0 +1,76 @@
+# Azure Pricing Calculator 產品對照（ADR-C1-10）
+# map_key 通常與 sku_map.yaml 的 sku 相同；Playwright 腳本只接受此檔合法 key。
+#
+# calculator_search: Calculator 產品搜尋字串
+# default_quantity: Agent 未指定 quantity 時的預設
+# quantity_unit: 語意標記（vm_instance | node | gb | gateway 等），供 Playwright 填表
+
+products:
+  VirtualMachines:
+    sku: VirtualMachines
+    calculator_search: "Virtual Machines"
+    default_quantity: 1
+    quantity_unit: vm_instance
+    quantity_field: count
+  AzureKubernetesService:
+    sku: AzureKubernetesService
+    calculator_search: "Azure Kubernetes Service"
+    default_quantity: 1
+    quantity_unit: node
+    quantity_field: count
+  ApplicationGateway:
+    sku: ApplicationGateway
+    calculator_search: "Application Gateway"
+    default_quantity: 1
+    quantity_unit: gateway
+  AzureBlobStorage:
+    sku: AzureBlobStorage
+    calculator_search: "Storage Accounts"
+    default_quantity: 100
+    quantity_unit: gb
+  AzureCosmosDB:
+    sku: AzureCosmosDB
+    calculator_search: "Azure Cosmos DB"
+    default_quantity: 1
+    quantity_unit: account
+  AzureSQLDatabase:
+    sku: AzureSQLDatabase
+    calculator_search: "Azure SQL Database"
+    default_quantity: 1
+    quantity_unit: database
+  KeyVault:
+    sku: KeyVault
+    calculator_search: "Key Vault"
+    default_quantity: 1
+    quantity_unit: vault
+  AzureMonitor:
+    sku: AzureMonitor
+    calculator_search: "Azure Monitor"
+    default_quantity: 1
+    quantity_unit: workspace
+  AzureFrontDoor:
+    sku: AzureFrontDoor
+    calculator_search: "Azure Front Door"
+    default_quantity: 1
+    quantity_unit: profile
+  AzureCDN:
+    sku: AzureCDN
+    calculator_search: "Content Delivery Network"
+    default_quantity: 100
+    quantity_unit: gb
+    quantity_field: zone1
+  AzureFirewall:
+    sku: AzureFirewall
+    calculator_search: "Azure Firewall"
+    default_quantity: 1
+    quantity_unit: firewall
+  LogAnalytics:
+    sku: LogAnalytics
+    calculator_search: "Log Analytics"
+    default_quantity: 1
+    quantity_unit: workspace
+  AzureBackup:
+    sku: AzureBackup
+    calculator_search: "Backup"
+    default_quantity: 1
+    quantity_unit: vault

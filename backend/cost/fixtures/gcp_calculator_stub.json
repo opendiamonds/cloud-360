@@ -1,0 +1,16 @@
+{
+  "total_usd": 987.65,
+  "currency": "USD",
+  "lines": [
+    {
+      "product_name": "Compute Engine",
+      "specification": "Compute Engine × 1 (stub)",
+      "monthly_usd": 567.65
+    },
+    {
+      "product_name": "Google Kubernetes Engine",
+      "specification": "Google Kubernetes Engine × 1 (stub)",
+      "monthly_usd": 420.0
+    }
+  ]
+}

@@ -18,11 +18,24 @@ type Snapshot = {
     status: string;
     hourly_list: number | null;
     sku?: string | null;
+    mapping_note?: string | null;
   }>;
   total: number | null;
   unpriced_count: number;
   pie: Record<string, number>;
   coverage: Array<{ cloud: string; mode: string }>;
+  pricing_source?: string | null;
+  pricing_error?: string | null;
+  pricing_as_of?: string | null;
+  agent_assumptions?: string[] | null;
+  calculator_lines?: Array<{
+    map_key?: string | null;
+    mxcell_id?: string | null;
+    label?: string | null;
+    product_name: string;
+    specification: string;
+    monthly_usd: number;
+  }> | null;
 };
 
 const PIE_LABELS: Record<string, string> = {
@@ -68,9 +81,9 @@ function firstFetchHint(cloud: string | null | undefined): string {
     case 'aws':
       return '首次查 AWS 官方價（Price List）可能需 1–2 分鐘';
     case 'gcp':
-      return '首次查 GCP 官方價（Billing Catalog）通常數秒至數十秒';
+      return 'GCP 架構圖將由 Agent 開啟 Pricing Calculator 估算，可能需要 1–2 分鐘';
     case 'azure':
-      return '首次查 Azure 官方價（Retail Prices）通常數秒至數十秒';
+      return 'Azure 架構圖將由 Agent 開啟 Pricing Calculator 估算，可能需要 1–2 分鐘';
     default:
       return '首次查官方價可能需數秒至數分鐘（依雲端而定）';
   }
@@ -89,47 +102,190 @@ function pricingSourceShort(cloud: string | null | undefined): string {
   }
 }
 
+function formatPricingSourceLabel(
+  pricingSource: string | null | undefined,
+  diagramCloud: string | null | undefined,
+): string {
+  switch (pricingSource) {
+    case 'azure_calculator':
+      return 'Azure Pricing Calculator（官方估價工具）';
+    case 'azure_calculator_failed':
+      return 'Azure Pricing Calculator 估價失敗';
+    case 'gcp_calculator':
+      return 'GCP Pricing Calculator（官方估價工具）';
+    case 'gcp_calculator_failed':
+      return 'GCP Pricing Calculator 估價失敗';
+    case 'aws_calculator':
+      return 'AWS Pricing Calculator（官方估價工具）';
+    default:
+      return pricingSourceShort(diagramCloud);
+  }
+}
+
+function isCalculatorPricing(pricingSource: string | null | undefined): boolean {
+  return (
+    pricingSource === 'azure_calculator' ||
+    pricingSource === 'gcp_calculator' ||
+    pricingSource === 'aws_calculator'
+  );
+}
+
+function isCalculatorFailed(pricingSource: string | null | undefined): boolean {
+  return (
+    pricingSource === 'azure_calculator_failed' ||
+    pricingSource === 'gcp_calculator_failed'
+  );
+}
+
+function usesCalculatorAgent(diagramCloud: string | null | undefined): boolean {
+  return diagramCloud === 'azure' || diagramCloud === 'gcp';
+}
+
+function calculatorCloudLabel(diagramCloud: string | null | undefined): string {
+  if (diagramCloud === 'gcp') return 'Google Cloud';
+  if (diagramCloud === 'azure') return 'Azure';
+  return '雲端';
+}
+
+function calculatorExportPath(snapshot: Snapshot): string {
+  if (snapshot.diagram_cloud === 'gcp') {
+    return `/api/cost/diagrams/${snapshot.id}/calculator-export/csv`;
+  }
+  return `/api/cost/diagrams/${snapshot.id}/calculator-export/xlsx`;
+}
+
+function calculatorExportDefaultFilename(snapshot: Snapshot): string {
+  const region = snapshot.region || 'estimate';
+  if (snapshot.diagram_cloud === 'gcp') {
+    return `gcp-calculator-estimate-${region}.csv`;
+  }
+  return `ExportedEstimate-${region}.xlsx`;
+}
+
+function calculatorExportButtonLabel(
+  isExporting: boolean,
+  diagramCloud: string | null | undefined,
+): string {
+  if (isExporting) {
+    return diagramCloud === 'gcp'
+      ? '正在填寫 Calculator 並匯出 CSV…'
+      : '正在填寫 Calculator 並匯出 Excel…';
+  }
+  return diagramCloud === 'gcp' ? '匯出官方 Calculator CSV' : '匯出官方 Calculator Excel';
+}
+
+function calculatorExportHint(diagramCloud: string | null | undefined): string {
+  if (diagramCloud === 'gcp') {
+    return '按鈕會以與估價相同的資源／數量重新填寫 Google Cloud Pricing Calculator，再點官方 Download estimate as .csv（可能需要 1–2 分鐘）。';
+  }
+  return '按鈕會以與估價相同的資源／數量重新填寫 Azure Pricing Calculator，再點官方 Export 下載 .xlsx（可能需要 1–2 分鐘）。';
+}
+
+function calculatorBreakdownHint(diagramCloud: string | null | undefined): string {
+  const vendor = calculatorCloudLabel(diagramCloud);
+  return `以下為 ${vendor} Pricing Calculator 各產品列的規格與 Monthly 價格（與上方總價同源）。`;
+}
+
+function formatPricingAsOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('zh-TW', { hour12: false });
+}
+
+function refreshHint(
+  diagramCloud: string | null | undefined,
+  pricingSource: string | null | undefined,
+): string {
+  if (
+    diagramCloud === 'azure' ||
+    pricingSource === 'azure_calculator' ||
+    pricingSource === 'azure_calculator_failed'
+  ) {
+    return '正在透過 Azure Pricing Calculator 即時估算…（可能需要 1–2 分鐘）';
+  }
+  if (
+    diagramCloud === 'gcp' ||
+    pricingSource === 'gcp_calculator' ||
+    pricingSource === 'gcp_calculator_failed'
+  ) {
+    return '正在透過 Google Cloud Pricing Calculator 即時估算…（可能需要 1–2 分鐘）';
+  }
+  return firstFetchHint(diagramCloud);
+}
+
 export const CostPage: React.FC = () => {
   const navigate = useNavigate();
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const [diagrams, setDiagrams] = useState<Array<{ id: number; title: string }>>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
+  const [status, setStatus] = useState<'loading' | 'idle' | 'ready' | 'error' | 'empty'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [selectedDiagramId, setSelectedDiagramId] = useState<number | null>(null);
+  const [hasEstimated, setHasEstimated] = useState(false);
   const [regionValue, setRegionValue] = useState('');
   const [regionSaving, setRegionSaving] = useState(false);
   const [regionError, setRegionError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const diagramId = params.get('diagram') ? Number(params.get('diagram')) : null;
+  const diagramIdFromUrl = params.get('diagram') ? Number(params.get('diagram')) : null;
   const canEditRegion = can('C1r', 'edit');
   const regionOptions = regionsForCloud(snapshot?.diagram_cloud);
   const detectedCloudLabel = cloudDisplayName(snapshot?.diagram_cloud);
+  const canRunEstimate =
+    selectedDiagramId != null &&
+    Boolean(regionValue) &&
+    !regionSaving &&
+    !isRefreshing &&
+    !isEstimating;
 
-  const loadSnapshot = useCallback(async (id: number, initial = false) => {
-    if (initial) {
-      setStatus('loading');
-    } else {
-      setIsRefreshing(true);
-    }
-    const res = await fetch(apiUrl(`/api/cost/diagrams/${id}`), { headers: authHeaders() });
-    if (!res.ok) {
-      if (initial) {
-        setStatus('error');
-        setError(`載入失敗 (${res.status})`);
+  const canExportExcel =
+    hasEstimated &&
+    isCalculatorPricing(snapshot?.pricing_source) &&
+    Boolean(snapshot?.region);
+
+  const loadSnapshot = useCallback(
+    async (id: number, options?: { runAgent?: boolean; estimating?: boolean }) => {
+      const runAgent = options?.runAgent ?? true;
+      const estimating = options?.estimating ?? runAgent;
+
+      if (estimating) {
+        setIsEstimating(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
+      const query = runAgent ? '' : '?run_agent=false';
+      const res = await fetch(apiUrl(`/api/cost/diagrams/${id}${query}`), {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        if (selectedDiagramId === id) {
+          setStatus('error');
+          setError(`載入失敗 (${res.status})`);
+        }
+        setIsRefreshing(false);
+        setIsEstimating(false);
+        return false;
+      }
+      const data = (await res.json()) as Snapshot;
+      setSnapshot(data);
+      setRegionValue(data.region ?? '');
+      setSelectedDiagramId(id);
+      setStatus('ready');
+      if (runAgent) {
+        setHasEstimated(true);
       }
       setIsRefreshing(false);
-      return;
-    }
-    const data = (await res.json()) as Snapshot;
-    setSnapshot(data);
-    setRegionValue(data.region ?? '');
-    if (initial) {
-      setStatus('ready');
-    }
-    setIsRefreshing(false);
-  }, []);
+      setIsEstimating(false);
+      return true;
+    },
+    [selectedDiagramId],
+  );
 
   useEffect(() => {
     (async () => {
@@ -145,15 +301,87 @@ export const CostPage: React.FC = () => {
         setStatus('empty');
         return;
       }
-      const id = diagramId && list.items.some((d) => d.id === diagramId)
-        ? diagramId
-        : list.items[0].id;
-      if (!diagramId || diagramId !== id) {
-        setParams({ diagram: String(id) }, { replace: true });
-      }
-      await loadSnapshot(id, true);
+
+      const urlId =
+        diagramIdFromUrl && list.items.some((d) => d.id === diagramIdFromUrl)
+          ? diagramIdFromUrl
+          : null;
+      setSelectedDiagramId(urlId);
+      setStatus('idle');
     })();
-  }, [diagramId, loadSnapshot, setParams]);
+  }, [diagramIdFromUrl]);
+
+  const onDiagramSelect = async (rawId: string) => {
+    const id = Number(rawId);
+    if (!rawId || Number.isNaN(id)) {
+      setSelectedDiagramId(null);
+      setSnapshot(null);
+      setHasEstimated(false);
+      setExportReady(false);
+      setExportError(null);
+      setRegionValue('');
+      setRegionError(null);
+      setParams({}, { replace: true });
+      setStatus('idle');
+      return;
+    }
+
+    setSelectedDiagramId(id);
+    setHasEstimated(false);
+    setExportError(null);
+    setRegionError(null);
+    setParams({ diagram: String(id) }, { replace: true });
+    setStatus('loading');
+    await loadSnapshot(id, { runAgent: false, estimating: false });
+  };
+
+  const onRunEstimate = async () => {
+    if (!selectedDiagramId || !canRunEstimate) return;
+    await loadSnapshot(selectedDiagramId, { runAgent: true, estimating: true });
+  };
+
+  const onExportCalculatorExport = async () => {
+    if (!snapshot || !canExportExcel) return;
+    setExportError(null);
+    setIsExportingExcel(true);
+    try {
+      const res = await fetch(apiUrl(calculatorExportPath(snapshot)), {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        let detail = `匯出失敗 (${res.status})`;
+        try {
+          const body = (await res.json()) as { detail?: string };
+          if (typeof body.detail === 'string' && body.detail.trim()) {
+            detail = body.detail;
+          }
+        } catch {
+          /* ignore */
+        }
+        setExportError(detail);
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+      const filename = match?.[1] || calculatorExportDefaultFilename(snapshot);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  useEffect(() => {
+    if (status !== 'idle' || selectedDiagramId == null || snapshot?.id === selectedDiagramId) {
+      return;
+    }
+    void loadSnapshot(selectedDiagramId, { runAgent: false, estimating: false });
+  }, [status, selectedDiagramId, snapshot?.id, loadSnapshot]);
 
   const onRegionChange = async (region: string) => {
     if (!snapshot || !canEditRegion || !region) return;
@@ -182,7 +410,7 @@ export const CostPage: React.FC = () => {
         );
         return;
       }
-      await loadSnapshot(snapshot.id);
+      await loadSnapshot(snapshot.id, { runAgent: true, estimating: true });
     } finally {
       setRegionSaving(false);
     }
@@ -196,7 +424,7 @@ export const CostPage: React.FC = () => {
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ hours }),
     });
-    await loadSnapshot(snapshot.id);
+    await loadSnapshot(snapshot.id, { runAgent: true, estimating: true });
   };
 
   const coverageText = snapshot?.coverage ? formatCoverage(snapshot.coverage) : '';
@@ -204,6 +432,11 @@ export const CostPage: React.FC = () => {
   const pieTotal = snapshot
     ? Object.values(snapshot.pie).reduce((sum, v) => sum + Number(v), 0)
     : 0;
+  const calculatorLines = snapshot?.calculator_lines ?? [];
+  const calculatorLinesTotal = calculatorLines.reduce(
+    (sum, row) => sum + Number(row.monthly_usd),
+    0,
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
@@ -243,8 +476,16 @@ export const CostPage: React.FC = () => {
                 />
               </svg>
             </div>
-            <p className="text-sm font-semibold text-gray-700">載入估價資料中…</p>
-            <p className="text-xs text-gray-400 mt-1">正在解析架構圖資源與定價設定</p>
+            <p className="text-sm font-semibold text-gray-700">載入架構圖設定中…</p>
+          </div>
+        )}
+
+        {status === 'idle' && diagrams.length > 0 && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-10 shadow-sm text-center space-y-3">
+            <p className="text-base font-bold text-gray-800">請先選擇要估價的架構圖</p>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">
+              選定架構圖與估價區域後，再按「開始估價」才會查詢官方定價或開啟雲端 Pricing Calculator。
+            </p>
           </div>
         )}
 
@@ -312,10 +553,11 @@ export const CostPage: React.FC = () => {
                 架構圖
                 <select
                   className={SELECT_CLASS}
-                  value={snapshot?.id ?? ''}
-                  disabled={status === 'loading'}
-                  onChange={(e) => setParams({ diagram: e.target.value })}
+                  value={selectedDiagramId ?? ''}
+                  disabled={status === 'loading' || isEstimating}
+                  onChange={(e) => onDiagramSelect(e.target.value)}
                 >
+                  <option value="">— 請選擇架構圖 —</option>
                   {diagrams.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.title}
@@ -334,7 +576,8 @@ export const CostPage: React.FC = () => {
                     status === 'loading' ||
                     !snapshot ||
                     regionSaving ||
-                    isRefreshing
+                    isRefreshing ||
+                    isEstimating
                   }
                   onChange={(e) => onRegionChange(e.target.value)}
                 >
@@ -346,6 +589,15 @@ export const CostPage: React.FC = () => {
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                data-testid="cost-run-estimate"
+                disabled={!canRunEstimate}
+                onClick={() => void onRunEstimate()}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-bold hover:bg-brand-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                {isEstimating ? '估價中…' : '開始估價'}
+              </button>
             </div>
             {snapshot?.diagram_cloud && (
               <p className="text-xs text-gray-500">
@@ -359,10 +611,30 @@ export const CostPage: React.FC = () => {
                 無法判斷架構圖雲端，暫顯示全部區域。請確認圖上元件可對應到 AWS／GCP／Azure。
               </p>
             )}
-            {(regionSaving || isRefreshing) && canEditRegion && (
+            {(regionSaving || isRefreshing || isEstimating) && canEditRegion && (
               <p className="text-xs text-gray-500">
-                正在更新估價資料…（{firstFetchHint(snapshot?.diagram_cloud)}）
+                {isEstimating ? (
+                  <>
+                    正在估價…（
+                    {refreshHint(snapshot?.diagram_cloud, snapshot?.pricing_source)}）
+                  </>
+                ) : (
+                  '正在更新架構圖設定…'
+                )}
               </p>
+            )}
+            {!hasEstimated && snapshot && regionValue && !isEstimating && (
+              <div className="rounded-xl bg-brand-50 border border-brand-100 px-4 py-2.5 text-sm text-brand-900">
+                <span className="font-bold">已選定區域，尚未估價</span>
+                <span className="text-brand-800">
+                  {' '}
+                  — 請按「開始估價」查詢官方定價
+                  {usesCalculatorAgent(snapshot.diagram_cloud)
+                    ? `（${calculatorCloudLabel(snapshot.diagram_cloud)} 將開啟 Pricing Calculator，約 1–2 分鐘）`
+                    : ''}
+                  。
+                </span>
+              </div>
             )}
             {regionError && (
               <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-800">
@@ -374,7 +646,11 @@ export const CostPage: React.FC = () => {
                 <span className="font-bold">請先選擇估價區域</span>
                 <span className="text-amber-800">
                   {' '}
-                  — 選定後才會查詢 {pricingSourceShort(snapshot.diagram_cloud)} 並計算月估總額。
+                  — 選定後才會
+                  {usesCalculatorAgent(snapshot.diagram_cloud)
+                    ? `透過 ${calculatorCloudLabel(snapshot.diagram_cloud)} Pricing Calculator 或官方 API 估算月估總額`
+                    : `查詢 ${pricingSourceShort(snapshot.diagram_cloud)} 並計算月估總額`}
+                  。
                 </span>
               </div>
             )}
@@ -391,7 +667,7 @@ export const CostPage: React.FC = () => {
           </div>
         )}
 
-        {snapshot && status === 'ready' && (
+        {snapshot && status === 'ready' && hasEstimated && (
           <>
             <div data-slot="cost-overspend" />
 
@@ -402,18 +678,43 @@ export const CostPage: React.FC = () => {
               <h2 className="text-sm font-bold text-gray-800">月估總額</h2>
               <div className="flex flex-wrap items-baseline gap-3">
                 {snapshot.total != null ? (
-                  <p className="text-3xl font-bold text-gray-900" data-testid="cost-total">
-                    ${snapshot.total.toFixed(2)}
-                    <span className="text-lg font-semibold text-gray-500 ml-1">/ 月</span>
-                  </p>
+                  <>
+                    <p className="text-3xl font-bold text-gray-900" data-testid="cost-total">
+                      ${snapshot.total.toFixed(2)}
+                      <span className="text-lg font-semibold text-gray-500 ml-1">/ 月</span>
+                    </p>
+                    {isCalculatorPricing(snapshot.pricing_source) && (
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-lg bg-brand-50 text-brand-800 text-xs font-bold border border-brand-100"
+                        data-testid="cost-calculator-badge"
+                      >
+                        Calculator 總價
+                      </span>
+                    )}
+                  </>
+                ) : isCalculatorFailed(snapshot.pricing_source) ? (
+                  <div className="space-y-2" data-testid="cost-total">
+                    <p className="text-lg font-semibold text-red-700">
+                      {formatPricingSourceLabel(snapshot.pricing_source, snapshot.diagram_cloud)}
+                    </p>
+                    {snapshot.pricing_error && (
+                      <p className="text-sm text-red-600">{snapshot.pricing_error}</p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      若瀏覽器主控台出現「message channel closed」，通常來自瀏覽器擴充功能，可忽略；請確認後端已安裝
+                      Playwright Chromium（<code className="text-xs">playwright install chromium</code>）。
+                    </p>
+                  </div>
                 ) : snapshot.unpriced_count > 0 ? (
-                  <p className="text-lg font-semibold text-gray-600">
+                  <p className="text-lg font-semibold text-gray-600" data-testid="cost-total">
                     {fetchFailedCount > 0
                       ? `${detectedCloudLabel === '未知' ? '官方' : detectedCloudLabel} 官方價尚未就緒（請稍候或執行預熱腳本）`
                       : '尚無完整估價（部分資源無法對應或未支援）'}
                   </p>
                 ) : (
-                  <p className="text-lg font-semibold text-gray-400">—</p>
+                  <p className="text-lg font-semibold text-gray-400" data-testid="cost-total">
+                    —
+                  </p>
                 )}
                 {snapshot.unpriced_count > 0 && (
                   <span
@@ -424,6 +725,59 @@ export const CostPage: React.FC = () => {
                   </span>
                 )}
               </div>
+              {(snapshot.pricing_source || snapshot.pricing_as_of) && (
+                <p
+                  className="text-sm text-gray-600"
+                  data-testid="cost-pricing-source"
+                >
+                  <span className="font-semibold text-gray-700">總價來源：</span>
+                  {formatPricingSourceLabel(snapshot.pricing_source, snapshot.diagram_cloud)}
+                  {formatPricingAsOf(snapshot.pricing_as_of) && (
+                    <span className="text-gray-400 ml-2">
+                      （{formatPricingAsOf(snapshot.pricing_as_of)}）
+                    </span>
+                  )}
+                </p>
+              )}
+              {isCalculatorPricing(snapshot.pricing_source) && (
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    data-testid="cost-calculator-export-official"
+                    disabled={isExportingExcel || isEstimating || !canExportExcel}
+                    onClick={() => void onExportCalculatorExport()}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl border border-brand-200 bg-white text-brand-800 text-sm font-bold hover:bg-brand-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {calculatorExportButtonLabel(isExportingExcel, snapshot.diagram_cloud)}
+                  </button>
+                  <p className="text-xs text-gray-500">{calculatorExportHint(snapshot.diagram_cloud)}</p>
+                </div>
+              )}
+              {exportError && (
+                <p className="text-sm text-red-600" data-testid="cost-calculator-export-error">
+                  {exportError}
+                </p>
+              )}
+              {isCalculatorPricing(snapshot.pricing_source) && (
+                <p className="text-xs text-gray-500">
+                  月估總額取自雲端供應商 Pricing Calculator 的 Estimated monthly cost；下方資源列的小計僅供參考，加總可能與總價不一致。
+                </p>
+              )}
+              {snapshot.agent_assumptions && snapshot.agent_assumptions.length > 0 && (
+                <details
+                  className="text-xs text-gray-500 border border-gray-100 rounded-xl px-3 py-2"
+                  data-testid="cost-calculator-assumptions"
+                >
+                  <summary className="cursor-pointer font-semibold text-gray-600 select-none">
+                    Calculator 假設摘要（{snapshot.agent_assumptions.length} 項）
+                  </summary>
+                  <ul className="mt-2 space-y-1 list-disc list-inside text-gray-600">
+                    {snapshot.agent_assumptions.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
               {coverageText && (
                 <p className="text-sm text-gray-500 border-t border-gray-100 pt-3">
                   <span className="font-semibold text-gray-600">定價假設：</span>
@@ -431,6 +785,85 @@ export const CostPage: React.FC = () => {
                 </p>
               )}
             </div>
+
+            {isCalculatorPricing(snapshot.pricing_source) && calculatorLines.length > 0 && (
+              <div
+                className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm overflow-hidden"
+                data-testid="cost-calculator-breakdown"
+              >
+                <h2 className="text-sm font-bold text-gray-800 mb-1">Calculator 估價明細</h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  {calculatorBreakdownHint(snapshot.diagram_cloud)}
+                </p>
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-left">
+                        <th className="py-3 px-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                          架構元件
+                        </th>
+                        <th className="py-3 px-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                          Calculator 產品
+                        </th>
+                        <th className="py-3 px-2 text-xs font-bold text-gray-500 uppercase tracking-wide">
+                          選擇規格
+                        </th>
+                        <th className="py-3 px-2 text-xs font-bold text-gray-500 uppercase tracking-wide text-right">
+                          月費 (USD)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {calculatorLines.map((row, index) => (
+                        <tr
+                          key={`${row.product_name}-${row.map_key ?? index}`}
+                          className="hover:bg-gray-50/80 transition-colors"
+                          data-testid="cost-calculator-line"
+                        >
+                          <td className="py-3 px-2 font-semibold text-gray-900">
+                            {row.label || '—'}
+                          </td>
+                          <td className="py-3 px-2 text-gray-800">{row.product_name}</td>
+                          <td className="py-3 px-2 text-gray-600 text-xs leading-relaxed max-w-md">
+                            {row.specification}
+                          </td>
+                          <td className="py-3 px-2 text-right font-bold text-gray-900 tabular-nums">
+                            ${Number(row.monthly_usd).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-200 bg-gray-50/80">
+                        <td
+                          colSpan={3}
+                          className="py-3 px-2 text-sm font-bold text-gray-700 text-right"
+                        >
+                          Calculator 項目加總
+                        </td>
+                        <td
+                          className="py-3 px-2 text-right text-base font-bold text-brand-700 tabular-nums"
+                          data-testid="cost-calculator-lines-total"
+                        >
+                          ${calculatorLinesTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                      <tr className="border-t border-gray-100">
+                        <td
+                          colSpan={3}
+                          className="py-2 px-2 text-xs font-semibold text-gray-500 text-right"
+                        >
+                          Estimated monthly cost（頁面總價）
+                        </td>
+                        <td className="py-2 px-2 text-right text-sm font-bold text-gray-900 tabular-nums">
+                          {snapshot.total != null ? `$${snapshot.total.toFixed(2)}` : '—'}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
               <h2 className="text-sm font-bold text-gray-800">成本組成</h2>
@@ -492,6 +925,9 @@ export const CostPage: React.FC = () => {
                               <div className="text-xs text-amber-600 mt-0.5">
                                 {lineStatusLabel(line.status, line.sku)}
                               </div>
+                            )}
+                            {line.mapping_note && (
+                              <div className="text-xs text-brand-700 mt-0.5">{line.mapping_note}</div>
                             )}
                           </td>
                           <td className="py-3 px-2">

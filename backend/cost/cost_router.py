@@ -5,7 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -44,10 +45,48 @@ def list_diagrams(
 @router.get("/diagrams/{diagram_id}")
 def get_snapshot(
     diagram_id: int,
+    run_agent: bool = Query(
+        True,
+        description="Azure 架構圖是否執行 Pricing Calculator agent（false 僅載入設定與資源列）",
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return cost_service.get_snapshot(db, user, diagram_id)
+    return cost_service.get_snapshot(db, user, diagram_id, run_agent=run_agent)
+
+
+@router.get("/diagrams/{diagram_id}/calculator-export/xlsx")
+def get_calculator_excel(
+    diagram_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Azure Pricing Calculator 官方 Excel 匯出。"""
+    xlsx_bytes, filename, media_type = cost_service.export_calculator_excel(db, user, diagram_id)
+    if media_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        raise HTTPException(status_code=400, detail="此架構圖請使用 CSV 匯出端點")
+    return Response(
+        content=xlsx_bytes,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/diagrams/{diagram_id}/calculator-export/csv")
+def get_calculator_csv(
+    diagram_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Google Cloud Pricing Calculator 官方 CSV 匯出。"""
+    csv_bytes, filename, media_type = cost_service.export_calculator_excel(db, user, diagram_id)
+    if media_type != "text/csv":
+        raise HTTPException(status_code=400, detail="此架構圖請使用 Excel 匯出端點")
+    return Response(
+        content=csv_bytes,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.put("/diagrams/{diagram_id}/region")

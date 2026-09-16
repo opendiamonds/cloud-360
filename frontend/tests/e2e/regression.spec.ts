@@ -643,6 +643,7 @@ test.describe('成本頁 — B1', () => {
     );
     expect(putRes.status()).toBe(200);
     await page.reload();
+    await page.getByTestId('cost-run-estimate').click();
     await expect(page.getByTestId('cost-total')).toHaveText('$14.40 / 月');
     await expect(page.getByTestId('cost-hours-input').first()).toHaveValue('4');
   });
