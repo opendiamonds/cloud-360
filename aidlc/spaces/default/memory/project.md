@@ -62,6 +62,8 @@
 - DECIDED: 所有 AIDLC artifacts（含 v2 之前的歷史文件）都在作用中 intent 的 record 目錄 `<record>/` 下；baseline record 為 `aidlc/spaces/default/intents/260802-default/`。(ADR-0011)
 - DECIDED: 專案狀態的細部來源為 `<record>/aidlc-state.md`。
 
+- reverse-engineering 的 conductor 在派工前為守門決策所做的最小事實蒐集（僅統計數字，如 git diff --stat、檔案計數），不構成 stage 檔所禁止的「檢視應用原始碼／列舉 repo／預先計算檔案清單」；界線是不讀取原始碼內容、不產生檔案清單 (decided 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:ceb610661b40115e9ffa91093a4fb885bba6cd6ac2327cd567943ee8b38a2ddf -->
+- 退場／移除類需求採逐條可執行形式（含具體檔名與行號、指明「改寫」或「刪除」），不採概括敘述。理由：遺漏套件外掛鉤的後果是 CI 紅燈而非設計瑕疵，且 codekb 的盤點結果若不在需求固定下來，下游沒有第二次機會發現 (decided 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:0fbe1955adaf68e9bfdce87558ee92df70822e24a46db6bf6c4c1e22bd9fe779 -->
 ## Scope Overrides
 
 - ✅ **In scope**：SRS、architecture diagrams、user stories、ADRs、IaC generator design、agent routing design、MCP/skill management spec、validation scripts、baseline CI、自有 staging 的部署與維運。
@@ -76,11 +78,11 @@
 
 <!-- practices-discovery 2026-08-09：本節本次無新發現（affirm 紀錄，非規則）。 -->
 
-- **NEVER** 呼叫需要雲端供應商帳號憑證的計價 API（Cost Explorer、Billing、Cost Management 等）作為 C1 價目來源；`pricing_client` 只准公開免帳號價目端點 (affirmed 2026-08-19)
+- **NEVER** 呼叫需要雲端供應商帳號憑證的計價 API（Cost Explorer、Billing、Cost Management 等）作為 C1 價目來源；`pricing_client` 只准公開免帳號價目端點 (affirmed 2026-08-19；**ADR-0017 §3＋§8 改述**：估價一律來自使用者上傳的官方估價表，不得以自動取價產生估價；agent 產生建議時得呼叫**公開免帳號**價目端點確認現價，所得價格只寫入建議文字、不得回寫明細。需帳號憑證的端點——含走 IAM 的 boto3 Pricing Query API——仍全面禁止)
 - **NEVER** 把 WA `COST-*` 啟發式 findings 當成已實作的 TCO／成本計算能力 (affirmed 2026-08-19)
 - **NEVER** 把 Assessment 的雲端供應商下拉當成 pricing Manual Override (affirmed 2026-08-19)
 - **NEVER** 把 RBAC 種子或權限頁的 C1 欄當成已有 cost router／Cost 頁 (affirmed 2026-08-19)
-- **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19)
+- **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`)
 - NEVER 以 repo 內新增的實作程式（例如 `scripts/` 下的 Python）承載**無人值守的**流程自動化與外部系統同步；此類機制一律以 gh-aw 或 GitHub Actions workflow 承載。**邊界以觸發來源判定**：由事件或排程觸發、無人在迴圈內的（`on: push`／`pull_request`／`schedule`／`workflow_dispatch` 等）屬本條禁止範圍；由 stage 檔或 slash command 觸發、須有人執行才會跑的工具**不在此限**——既有先例為 `tcms` plugin 的 `scripts/tcms_validate.py` 與 `scripts/tcms_sync.py`，兩者只被 `.claude/aidlc-common/stages/construction/tcms-test-cases.md` 呼叫，`.github/` 下無任何 workflow 呼叫它們。注意 gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo 三塊結構性盲區的「所有 LLM 路徑」那一塊，決定性的映射邏輯應優先放在純 Actions 步驟，判斷性的工作才交給 gh-aw (learned 2026-08-23；2026-08-24 收窄為「無人值守」並寫明觸發來源判準——原文的「與外部系統同步」會讓 `## Mandated` 強制要求的 tcms 流程技術性違反本條，該矛盾由使用者裁決收窄規則文字而非增列例外) <!-- cid:intent-capture:260822-c1 -->
 ## Mandated
 
@@ -117,11 +119,18 @@
   - 本規則的由來：本 repo 的自動化層有三塊**結構性**盲區（所有 LLM 路徑、n8n 圖示取得、本機環境殘值），實測證實六道 CI 閘門全綠時仍會放行這三類缺陷。 (affirmed 2026-08-16)
 
 - **ALWAYS** 第一個 C1 HTTP 端點落地時，即使 `role_permissions` seed 未改，也須有 allow/deny 雙向 TestClient：有 C1 權限 → 2xx，無 C1 權限 → 403（不得只測 happy path） (affirmed 2026-08-19)
-- **ALWAYS** cost 功能域採三層：`cost_router` → `cost_service` → 純函式 `cost_calculator`，另獨立 `pricing_client`；禁止把 cost 邏輯寫進 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 內禁止 httpx、DB session、`HTTPException` (affirmed 2026-08-19)
+- **ALWAYS** cost 功能域採三層：`cost_router` → `cost_service` → 純函式 `cost_calculator`，另獨立 `pricing_client`；禁止把 cost 邏輯寫進 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 內禁止 httpx、DB session、`HTTPException` (affirmed 2026-08-19；**ADR-0017 §1–§2＋§8**：三層形狀與純函式禁令**保留**，純函式層由 `cost_calculator` 改錨至估價表解析器，ADR-0006 的 PBT hard constraint 隨之移轉——不是豁免。`pricing_client` 子句於 §1 廢止後由 §8 恢復，職責改為「包裝公開免帳號價目端點供 agent 按需查價」，非取價主路徑。可執行檢查：解析器模組內 `import httpx`、DB session 型別、`HTTPException` 三者 grep 結果須為零)
 - ALWAYS 在新增任何憑證型 secret 後實地查證它落在 secrets 而非 variables（`gh api repos/<owner>/<repo>/actions/secrets` 與同路徑的 `/variables` 各查一次，比對名稱）。Actions variables 為明文、UI 可回讀、且在 workflow log 中不遮罩，而本 repo 為 public、Actions log 公開可讀——一次意外 echo 即等同公開發布。若憑證曾誤存為 variable，僅搬移到 secret 不足以結案，必須重新產生金鑰：「應該沒人看過」是沒有證據的假設 (learned 2026-08-23) <!-- cid:approval-handoff:260822-c4 -->
 - ALWAYS 把 `<record>/inception/decisions/` 的既有 ADR 納入 intent 的唯讀查證範圍（含其他 intent record 下的 ADR），只要主題可能重疊——查 code、workflow、官方文件與 repo 現況都不能取代它。本 intent 即因 ideation 四站全未引用 ADR-0012，拖到 reverse-engineering 才發現六處衝突（四處為直接矛盾），必須回頭以 Modify 模式重走 approval-handoff 並新開 ADR-0013 才收斂 (learned 2026-08-23) <!-- cid:reverse-engineering:260822-re-c5 -->
 - ALWAYS 把 codekb 寫進以 **repo** 命名的目錄，不隨 clone／worktree 目錄名開新庫——`codekb-path` 由 `basename(projectDir)` 推導，在名為 `chiton` 的 worktree 會為同一個 repo 開出第三份（已有 `codekb/cloud-360/` 與過期的 `codekb/cloud/`）；就地更新既有那份即滿足引擎對 `codekb/*/` 的 ANY-exists 完成檢查。且不得以手改 `intents.json` 補 repo 名來繞開，那會讓 swarm `prepare` 去找一個不存在的兄弟目錄 (learned 2026-08-23) <!-- cid:reverse-engineering:260822-re-c3 -->
 - ALWAYS 在派 reviewer 之前跑完六項送審前自檢，並在 stage summary **逐項報告結果**（blocking，未報告不得派工）：(1) **可達性**——每條「偵測 X 狀態」的規則先驗 X 可達；(2) **契約端點三問**——每一個宣告的**欄位**（誰寫、誰讀、誰清）與**方法**（誰擁有、誰呼叫）都要能指名，缺一即缺口；**檢查範圍是整個 stage 的全部產出，不是本輪動過的檔**；(3) **引用逐字核對**——每個來源標籤開檔驗證，不憑印象；(4) **檔案集合一致性**——同類單元之間 diff 產出檔清單，缺一個就是一項發現；(5) **跨檔傳播**——列出改動的**事實**（非字串），每個事實用它的幾種表達形式各 grep 一次；(6) **可算的數字先算再寫**。由來：functional-design 跑了三輪 reviewer、約 41 分鐘 wall-clock，而六項發現**全部**是送審前可自行查出的，reviewer 沒有找到任何需要獨立視角才看得見的東西——問題不在輪數而在沒有自檢就送出。第 3、5、6 項在本輪之前已是規則但未被執行，故本條要求機械化報告而非僅列為指引。第 2 項的兩處擴充來自它第一次實跑的結果：**只跑動過的檔會漏掉最嚴重的一類**（functional-design 的八個單元並行審查中，四個 Critical／Major 都是「契約有一端懸空」——`managed_block_hash` 有讀者無寫者、`resolve_if_open` 有定義無呼叫者、`read_issue_state` 支撐一條 AC 卻無呼叫者、`parse` 的兩種 `null` 有語意差無區分者），而它們全部落在我那一輪沒有編輯的檔案裡。可執行做法：對 `component-methods.md` 的每個方法與每個共享狀態欄位，grep 全 stage 產出，**出現在少於兩個單元者逐一判定**是內部方法還是孤兒契約，判定結果寫進產出。目標是一輪送審一輪 READY，不是不送審 (learned 2026-08-29) <!-- cid:functional-design:user-1 -->
+- **ALWAYS** 在 Cursor harness 執行 AIDLC 時，每次用檔案工具寫出 record 內的 artifact 之後，立即對每個檔案執行 `printf '{"tool_name":"Write","tool_input":{"file_path":"<abs>"}}' | bun .claude/hooks/aidlc-write-audit-log.ts` 補記 ARTIFACT_CREATED／UPDATED；Cursor 沒有 upstream 的 PostToolUse write hook，少了這步 `aidlc-log.ts review` 會以 "output document was not saved after the confirmed answers" 拒絕 reviewer 請求 (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:intent-capture:a3e03d80cabb2def88ac4c41cd56b4445316fe4077db7b5989545441875cc57f -->
+- ALWAYS 當使用者在核可關卡提出推翻上游定案的要求時，先以追問界定反轉的確切範圍（是新增能力還是取代既有決定、影響哪幾條已核可的答案、是否觸及已發出的 ADR），再把「就地修訂上游產出 vs 重跑受影響的 stage」當成問題交給使用者裁決；不得由 AI 逕自判定為小幅澄清吸收掉，也不得逕自啟動重跑 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:approval-handoff:e2923632dcb33245681c7470ddeb644702f15ea86478509b3f23a8125877b9ca -->
+- ALWAYS 當使用者選的選項會製造新的正確性問題時，說出具體理由並請其重選，不得照單全收；理由須指名會壞掉的是什麼，而非只表達疑慮 (learned 2026-09-16；實例：以官方目錄價覆蓋上傳估價表的明細，會把含 CUD／RI／Savings Plan 折扣的正確價格改成未折扣定價) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:approval-handoff:91f49c7f17956d4aca9d3422f11aaa25778a1aa644b539681f116bf7ee284e50 -->
+- ALWAYS 派長時間掃描或盤點任務給 subagent 時，在 brief 明寫「寧可在設定深度下寫出完整可用的輸出檔，也不要追求窮盡而未落地；時間不足時須據實記為 skimmed，不得宣稱 deep」；少了這句，agent 會把時間全花在讀取而不產出 (learned 2026-09-16；實例：reverse-engineering 首次 developer 派工跑 7 分鐘被中斷，handoff 零產出) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:0aac21419814052895a76b8998b78fb76e75535540fd112c23d0ebf7f908f12c -->
+- ALWAYS codekb 以 kind: full 發布時，須在產出內明寫深度分佈（哪些路徑深讀、哪些僅盤點），不得讓 full 被下游讀成「處處都讀過」；深度切分跨越元件邊界時，拆分元件而非放寬覆蓋宣稱 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:2608f768557e75d3aab19caf5ce98b809e44c34be808f4f35f663e6bb62de474 -->
+- NEVER 對已有 reviewer 或其他 subagent 寫入內容的 artifact 做附加時，使用 index 字串切片截尾（如 s[:s.index("## Review")]）——會把下游寫入的整段內容刪掉，且 artifact 多半尚未進版控無法還原。一律以純 append 或錨定自己寫入的標記進行 (learned 2026-09-16；實例：requirements-analysis 誤刪 product-lead 的 ## Review 區段，需 resume reviewer 重寫) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:204c7209210b6fb6ccf8348a2f9af1e49cddf79d3a192473f555618f8c7a9f67 -->
+- ALWAYS requirements 或後續階段新增／推翻了已核可 scope-document 的項目時，須在產出文件內逐處明標「本階段新增或推翻、scope 尚未涵蓋」並要求回補，不得當作既有 CAP 的自然延伸吸收；標記須在提問當下即向使用者揭露後果，非事後補記 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:ed182d6322d3545d0af1f58229ee65ae34e61f2255d2afaeb1770a47d0f8005e -->
 ## Corrections
 
 <!-- Project-specific corrections from human feedback. -->

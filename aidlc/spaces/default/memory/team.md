@@ -193,9 +193,9 @@
 - **單一真實來源**：當同一份事實已存在於程式中（角色清單、權限矩陣、schema 欄位），新增第二份物化前必須先確認是否有既有常數或 API 可直接使用。若確實無法避免（如跨語言邊界），新增副本的同一個 PR 必須一併新增鎖住兩者一致的測試；無法寫測試的副本不新增。
   - 已知既有副本與正本（既成事實，本輪不強制立即消除，收斂方式待後續評估）：角色清單正本 `services/rbac.py::CANONICAL_ROLES`；副本 `services/auth.py::require_any_user`（11 個字串手寫 allowlist）、`services/user_router.py::ROLE_DISPLAY_NAMES`、`frontend/src/pages/AdminPage.tsx::AVAILABLE_ROLES`（已與正本順序漂移）、`schema_rbac.sql` seed。密碼雜湊正本 `services/auth.py::get_password_hash`；副本 `database.py::hash_password`（逐字相同）。
 
-- **Q4 定案（A）— C1 Cost 功能域的三層形狀與純函式約束**：`cost_router`（HTTP 層，FastAPI router）→ `cost_service`（業務協調，可讀 DB）→ 純函式 `cost_calculator`（計算核心，不讀 DB、不連外、不 raise `HTTPException`）+ 獨立 `pricing_client`（外部計價 Port，包裝 `httpx`）。禁止把 cost 邏輯寫入 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 模組內禁止 import `httpx`、任何 DB session 型別，以及 `HTTPException`——這是 ADR-0006 PBT 約束能在計算核心起作用的結構前提。
+- **Q4 定案（A）— C1 Cost 功能域的三層形狀與純函式約束**：`cost_router`（HTTP 層，FastAPI router）→ `cost_service`（業務協調，可讀 DB）→ 純函式 `cost_calculator`（計算核心，不讀 DB、不連外、不 raise `HTTPException`）+ 獨立 `pricing_client`（外部計價 Port，包裝 `httpx`）。禁止把 cost 邏輯寫入 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 模組內禁止 import `httpx`、任何 DB session 型別，以及 `HTTPException`——這是 ADR-0006 PBT 約束能在計算核心起作用的結構前提。**ADR-0017 §1–§2、§4＋§8 修訂**：三層形狀與純函式禁令保留，純函式層由 `cost_calculator` 改錨至估價表解析器（解析 AWS CSV／Azure XLSX／GCP CSV），PBT 約束原樣移轉。`pricing_client` 於 §1 廢止後由 §8 恢復，職責改為 agent 按需查價的 Port（只對公開免帳號端點），不再是取價主路徑。
 
-- **Q2 計價 API 規範（交叉參照 `discovered-rules.md` Forbidden）**：`pricing_client` 一律只對接公開免帳號的計價端點（如 AWS Pricing API 公開 endpoint）；禁止使用需雲端供應商帳號憑證的 Cost Explorer、Billing API 或同類 API。完整約束見 `discovered-rules.md ## Forbidden ## C1 計價 API`。
+- **Q2 計價 API 規範（交叉參照 `discovered-rules.md` Forbidden）**：`pricing_client` 一律只對接公開免帳號的計價端點（如 AWS Pricing API 公開 endpoint）；禁止使用需雲端供應商帳號憑證的 Cost Explorer、Billing API 或同類 API。完整約束見 `discovered-rules.md ## Forbidden ## C1 計價 API`。**ADR-0017 §3、§4＋§8 修訂**：本條原樣有效。估價一律來自上傳的官方估價表，不得以自動取價產生估價；agent 得經 `pricing_client` 查公開免帳號端點確認現價，結果只寫入建議文字。需帳號憑證者（含走 IAM 的 boto3 Pricing Query API）仍全禁。
 ## Forbidden
 
 - ❌ **不得產生雙語分段**：文件不得保留或新增 `## 中文版` / `## English Version` 標題；文件為單一語言（繁體中文）。`scripts/validate_repo_contract.py` 會擋下 record 內殘留的 `## English Version`（CI 紅燈）。
