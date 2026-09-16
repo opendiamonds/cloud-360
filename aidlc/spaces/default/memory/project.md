@@ -78,11 +78,11 @@
 
 <!-- practices-discovery 2026-08-09：本節本次無新發現（affirm 紀錄，非規則）。 -->
 
-- **NEVER** 呼叫需要雲端供應商帳號憑證的計價 API（Cost Explorer、Billing、Cost Management 等）作為 C1 價目來源；`pricing_client` 只准公開免帳號價目端點 (affirmed 2026-08-19；**ADR-0017 §3＋§8 改述**：估價一律來自使用者上傳的官方估價表，不得以自動取價產生估價；agent 產生建議時得呼叫**公開免帳號**價目端點確認現價，所得價格只寫入建議文字、不得回寫明細。需帳號憑證的端點——含走 IAM 的 boto3 Pricing Query API——仍全面禁止)
+- **NEVER** 呼叫需要雲端供應商帳號憑證的計價 API（Cost Explorer、Billing、Cost Management 等）作為 C1 價目來源；`pricing_client` 只准公開免帳號價目端點 (affirmed 2026-08-19；**ADR-0017 §3＋§8 改述**：估價一律來自使用者上傳的官方估價表，不得以自動取價產生估價；agent 產生建議時得呼叫**公開免帳號**價目端點確認現價，所得價格只寫入建議文字、不得回寫明細。需帳號憑證的端點——含走 IAM 的 boto3 Pricing Query API——仍全面禁止。**ADR-0018 §1 再改述**：**目錄價類**端點解禁，得使用帳號憑證——AWS Price List Query API（IAM）、GCP Cloud Billing Catalog API（API key）、Azure Retail Prices（本即免憑證）；**帳單與用量類**——Cost Explorer、Cost and Usage Report、Cost Management、Billing Export——**維持全面禁止**（§2）。「所得價格只寫入建議文字、不得回寫明細」的界線不變)
 - **NEVER** 把 WA `COST-*` 啟發式 findings 當成已實作的 TCO／成本計算能力 (affirmed 2026-08-19)
 - **NEVER** 把 Assessment 的雲端供應商下拉當成 pricing Manual Override (affirmed 2026-08-19)
 - **NEVER** 把 RBAC 種子或權限頁的 C1 欄當成已有 cost router／Cost 頁 (affirmed 2026-08-19)
-- **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`)
+- **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`；**ADR-0018 §1**：`pricing_client` 可對接的端點集合擴大至目錄價類的需憑證端點，httpx 不得直打的規定不變)
 - NEVER 以 repo 內新增的實作程式（例如 `scripts/` 下的 Python）承載**無人值守的**流程自動化與外部系統同步；此類機制一律以 gh-aw 或 GitHub Actions workflow 承載。**邊界以觸發來源判定**：由事件或排程觸發、無人在迴圈內的（`on: push`／`pull_request`／`schedule`／`workflow_dispatch` 等）屬本條禁止範圍；由 stage 檔或 slash command 觸發、須有人執行才會跑的工具**不在此限**——既有先例為 `tcms` plugin 的 `scripts/tcms_validate.py` 與 `scripts/tcms_sync.py`，兩者只被 `.claude/aidlc-common/stages/construction/tcms-test-cases.md` 呼叫，`.github/` 下無任何 workflow 呼叫它們。注意 gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo 三塊結構性盲區的「所有 LLM 路徑」那一塊，決定性的映射邏輯應優先放在純 Actions 步驟，判斷性的工作才交給 gh-aw (learned 2026-08-23；2026-08-24 收窄為「無人值守」並寫明觸發來源判準——原文的「與外部系統同步」會讓 `## Mandated` 強制要求的 tcms 流程技術性違反本條，該矛盾由使用者裁決收窄規則文字而非增列例外) <!-- cid:intent-capture:260822-c1 -->
 ## Mandated
 

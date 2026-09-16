@@ -54,7 +54,7 @@ agent 產生建議時，得經 `pricing_client` 呼叫三朵雲的**公開免帳
 1. **只有 agent 能呼叫**，系統本身不主動取價。這不是一條自動估價路徑。
 2. **按需，非逐列**。agent 自己決定查哪幾筆，不做全表掃描、不做完整 SKU 對應。
 3. **所得價格只寫入建議文字**，不得回寫明細表的任何數值、不得新增「官方現價」欄位。跨過這條線就等於系統在改寫使用者上傳的權威估價。
-4. **只准公開免帳號端點**。走 IAM 的 boto3 Pricing Query API 禁用（`project.md` 原始規則，ADR-0017 §8 重申）。
+4. ~~**只准公開免帳號端點**。走 IAM 的 boto3 Pricing Query API 禁用（`project.md` 原始規則，ADR-0017 §8 重申）。~~ → **2026-09-16 requirements-analysis 修訂（ADR-0018 §1）**：改為**只准目錄價類端點**，得使用帳號憑證——AWS Price List Query API（IAM，權限限於 `pricing:GetProducts`／`DescribeServices`／`GetAttributeValues`）、GCP Cloud Billing Catalog API（API key 綁定該 API）、Azure Retail Prices（本即免憑證）。**帳單與用量類**（Cost Explorer、Cost and Usage Report、Cost Management、Billing Export）**維持全面禁止**（ADR-0018 §2）——此禁令是前者得以解禁的對價。前三條界線不變。
 
 查不到時 agent 必須明說查不到，不得改用推測值 [RISK-07]。引用現價時須標明那是**未折扣定價**——估價表可能含 CUD／RI／Savings Plan 折扣，兩者不該相等 [RISK-08]。
 
@@ -66,11 +66,31 @@ agent 產生建議時，得經 `pricing_client` 呼叫三朵雲的**公開免帳
 
 **它與 CAP-5、CAP-8 是三件不同的事，不得在下游被合併**：CAP-5 是 agent 用自然語言指出可疑數字（Should，LLM 判斷）；CAP-8 是 agent 按需查現價（Should，LLM 決定查什麼）；CAP-9 是每次都跑、結果可複現的程式判定（Must）。只有 CAP-9 能作為 RISK-01 的確定性防線——前兩者都由 LLM 決定要不要做。
 
+### CAP-10 — 估價表分享（Must）
+
+**新增於 2026-09-16 的 requirements-analysis**（問答檔 F3），非 ideation 原有能力。
+
+估價表預設僅上傳者本人可見；上傳者可將特定估價表明確分享給指定使用者，沿用架構圖既有的分享模型。經使用者裁定為 **Must**——沒有分享就不算交付完成。
+
+對應 `requirements.md` FR6.5、FR6.6。它在 value-first 排序（SD-7：先上傳與明細、建議後補）中的位置未定，留給 delivery-planning（`requirements.md` OQ2）。
+
+### CAP-11 — 歷史上傳檢視（Should）
+
+**新增於 2026-09-16 的 requirements-analysis**（問答檔 F2），非 ideation 原有能力。
+
+每次上傳建立新紀錄，舊紀錄保留。UI 提供「顯示歷史上傳」的展開清單，可檢視單一舊版的明細。
+
+**不得提供並排比較**——「歷史版本比較」在本文件的未承諾清單中。可檢視單一舊版與可並排比較是兩件事，這條界線是本 CAP 不越界的唯一依據。
+
+對應 `requirements.md` FR6.2、FR6.3、FR6.4。
+
 ### CAP-7 — 既有自動估價路徑退場（Must）
 
 移除 `cost_router.py` 全部 9 個掛在 `/diagrams` 之下的端點 [R1]；移除 4 張資料表（`diagram_cost`、`diagram_cost_line`、`pricing_cache`、`cost_audit_event`），不保留歷史資料、不做遷移 [R2]；移除 AWS／GCP／Azure 的 Playwright calculator runner 與相關 spike 腳本 [R3]。
 
-**2026-09-16 修訂**：`pricing_client.py` 由退場清單**移出**，改由 CAP-8 承接（ADR-0017 §8）。其消費端模組（`sku_mapper.py`、`price_cache.py`、`pricing_azure.py`、`pricing_gcp.py` 等）的去留由 code-generation 依 CAP-8 實際需要判定，不預先承諾全留或全刪。`pricing_sdk.py` **確定刪除**——它是 boto3 IAM 路徑，仍在禁用之列。`pricing_cache` 資料表仍在退場清單，不因 CAP-8 而保留。
+**2026-09-16 修訂**：`pricing_client.py` 由退場清單**移出**，改由 CAP-8 承接（ADR-0017 §8）。其消費端模組（`sku_mapper.py`、`price_cache.py`、`pricing_azure.py`、`pricing_gcp.py` 等）的去留由 code-generation 依 CAP-8 實際需要判定，不預先承諾全留或全刪。~~`pricing_sdk.py` **確定刪除**——它是 boto3 IAM 路徑，仍在禁用之列。~~ → **2026-09-16 requirements-analysis 修訂（ADR-0018 §1）**：`pricing_sdk.py` 與 `boto3` 相依改為**保留**，作為 AWS Price List Query API 的客戶端；連帶保留 `pricing_query_parser.py`、`tests/test_pricing_sdk.py`，以及 `pricing_client.py:20` 與 `:280-283` 的 `use_sdk_enabled()` 分支。`pricing_cache` 資料表仍在退場清單，不因 CAP-8 而保留。
+
+**2026-09-16 requirements-analysis 追加（ADR-0018 §5–§6）**：本 CAP 另增一批與退場方向相反的工作——重建 commit `aa2daec` 移除的 AWS 憑證傳遞管線（範圍更窄，僅限目錄價類端點與最小權限），並調整 `scripts/validate_repo_contract.py` 的 `FORBIDDEN_CONTENT_PATTERNS` 使其不再以字串比對無差別攔截 `AWS_SECRET_ACCESS_KEY`。詳見 `requirements.md` FR11。
 
 **退場與新功能上線在同一次部署完成** [Q3]。
 
