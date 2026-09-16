@@ -135,6 +135,11 @@ Cloud-360 內建 MCP 與 Skill 管理功能，用來治理平台可呼叫的工�
 - Health Check：檢查 MCP server 可用性、schema、auth scope、latency 與錯誤率。
 - Agent Routing Integration：讓 Routing Agent 可根據任務、權限、風險與上下文選擇合適 MCP / Skill。
 
+## Requirements Source
+
+Cloud-360 的需求清單正本是 opendiamonds 帳號的 GitHub Project #16 [「Cloud-360 開發計劃」](https://github.com/users/opendiamonds/projects/16)。看板上的項目是需求的權威來源；repo 內的需求文件與 GitHub issue 皆為其衍生，兩者不一致時以看板為準。
+GitHub Project #16 "Cloud-360 開發計劃" is the source of truth for the Cloud-360 requirement list; documents and issues in this repository are derived from it.
+
 ## Documentation
 
 Cloud-360 的文件由 AI-DLC 各階段產生與維護，存放在作用中 intent 的 record 目錄下：`aidlc/spaces/<space>/intents/<record>/`。目前的 baseline record 是 `aidlc/spaces/default/intents/260802-default/`（見 ADR-0011；v2 之前為扁平的 `aidlc-docs/`）。

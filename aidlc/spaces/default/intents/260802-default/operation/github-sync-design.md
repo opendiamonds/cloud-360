@@ -268,7 +268,16 @@ permissions:
   pull-requests: write   # 反向同步一律開 PR
 ```
 
-步驟：讀 `sync-state` 的 issue 清單 → 抓現況（state／assignees／labels）→ 與 `last_pulled_state` 比對，無差異就結束 → 有差異則更新 `<record>/aidlc-state.md` 的狀態欄與 `sync-state` → **開 PR**（不直接推 `ut`）。
+步驟：讀 `sync-state` 的 issue 清單 → 抓現況（state／assignees／labels）→ 與 `last_pulled_state` 比對，無差異就結束 → 有差異則寫 `<record>/github-status.md` 與 `sync-state` → **開 PR**（不直接推 `ut`）。
+
+> **不寫 `aidlc-state.md`（實作時修正的設計）。** 藍圖初稿寫「更新 `aidlc-state.md` 的狀態欄」，
+> 實作時查證發現那個檔案是 **engine-owned**：`aidlc-state.ts:575` 明文拒絕外部的生命週期寫入，
+> 且有 `aidlc-state-transition-guard` 與 `aidlc-validate-state` 兩個 hook 守著，格式也是引擎專用的
+> checkbox 語法。外部寫入等於與引擎搶同一個檔案，遲早不一致。狀態鏡像因此自己一個檔
+> （`github-status.md`），誰擁有誰就寫，不重疊。
+
+腳本以**退出碼 10** 表示「有狀態變更」（0 = 無變更，其餘為錯誤），workflow 用它決定要不要開 PR——
+無變更時完全不建立分支，避免產生空 PR 的噪音。
 
 PR 標題：`整合(sync): 從 GitHub 拉回 <intent> 的狀態變更`。
 

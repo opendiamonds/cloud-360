@@ -270,6 +270,17 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "last_opened_diagram_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Opened Diagram Id"
+          },
           "pending_request": {
             "anyOf": [
               {
@@ -572,6 +583,7 @@
               },
               "type": "object"
             },
+            "maxItems": 100,
             "title": "Messages",
             "type": "array"
           }
@@ -583,10 +595,14 @@
         "properties": {
           "title": {
             "default": "未命名架構圖",
+            "maxLength": 200,
+            "minLength": 1,
             "title": "Title",
             "type": "string"
           },
           "xml_data": {
+            "maxLength": 2097152,
+            "minLength": 1,
             "title": "Xml Data",
             "type": "string"
           }

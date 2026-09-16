@@ -1,0 +1,61 @@
+{
+  "_readme": [
+    "本檔是被禁字樣的唯一正本，也是 R-1.2 掃描面唯一的豁免項（見 check-agentic-steps.py",
+    "的 SCAN_EXEMPT）。它是純資料，沒有任何可執行語意。",
+    "",
+    "為什麼要有這個檔（reviewer iteration 2 的 M-2，Major）：原本的豁免是**整檔**豁免",
+    "三支 .py，而其中兩支每個 pull_request 都在 CI 執行 PR head 的程式碼。reviewer 實測把",
+    "真正的 subprocess.run([\"copilot\", ...]) 加進被豁免的檔 → rc=0。把清單抽到這裡之後，",
+    "那三支 .py 自己的本體不再需要寫出被禁字樣，因此全部回到掃描面內。",
+    "",
+    "為什麼是 .json 而不是 reviewer 建議的 .txt：agentic_run_tokens 的第一項是 'gh aw '，",
+    "**結尾有一個有意義的空白**（它防的是 `gh aw compile`，而不該命中 `gh awesome`）。純文字",
+    "檔的行尾空白會被大多數編輯器與 pre-commit 靜默吃掉，那會讓這條 token 的語意悄悄變寬。",
+    "JSON 的字串把空白算進值裡，改動必須是刻意的。"
+  ],
+
+  "agentic_run_tokens": [
+    "gh aw ",
+    "gh-aw",
+    "copilot",
+    "claude-code",
+    "aider ",
+    "@anthropic-ai/",
+    "npx claude"
+  ],
+
+  "known_agentic_uses": [
+    "github/gh-aw",
+    "githubnext/",
+    "anthropics/claude",
+    "copilot",
+    "openai"
+  ],
+
+  "lock_token": ".lock.yml",
+
+  "_named_readme": [
+    "`run-selftest-tests.py` 要**構造**違規樹（`run: <agent_cli> -p …`、",
+    "`uses: <agent_action_repo>@v1`）才能證明檢查器真的會紅。它自己也在掃描面上，所以",
+    "不能把那些字樣寫成字面值——改成按名字到這裡取。",
+    "",
+    "為什麼是具名查表而不是把字串拆開寫（`c = \"cop\"; d = \"ilot\"`）：拆字正是本檢查",
+    "宣告擋不住的那種刻意混淆，在自己的測試裡示範它會讓「這是規避手法」這句話失去說服",
+    "力。具名查表沒有這個問題——檔案裡完全不出現那個詞的任何片段。"
+  ],
+
+  "named": {
+    "agent_cli": "copilot",
+    "agent_action_repo": "github/gh-aw",
+    "agent_action_org": "githubnext/gh-aw",
+    "agent_action_setup": "github/gh-aw-actions/setup",
+    "agent_compile_cmd": "gh aw compile",
+
+    "_lock_metadata_prefix_why": [
+      "check-paths-relations.py 的 COMPILER: 檢查要讀 .lock.yml 首行的 metadata 註解，",
+      "而那個前綴本身含被禁字樣。它在掃描面上，所以不能寫成字面值——按名字到這裡取，",
+      "與 run-selftest-tests.py 取 agent_cli／agent_action_repo 是同一條路。"
+    ],
+    "lock_metadata_prefix": "# gh-aw-metadata: "
+  }
+}

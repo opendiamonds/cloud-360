@@ -350,12 +350,10 @@ psql "$DATABASE_URL" -c "SELECT role, story_id, can_view, can_edit, updated_by F
 執行 `schema_rbac.sql` 後：
 
 1. **`role_permissions`**：寫入設計預設矩陣（約 **308** 列，11 角色 × 各 Story）。  
-2. **`users`**：若不存在則建立  
-   - 帳號：`admin`  
-   - 密碼：`admin123`（**上線後請立刻改密碼**）  
-   - 角色：`Platform_Admin`（可進「使用者角色」「角色細項權限」）
+2. **`users`**：只建表，不建立固定密碼管理員。
 
-後端若在**空庫**啟動，`init_db()` 也會：建表、必要時 seed `role_permissions`、確保有 `admin`。  
+後端若在**空庫**啟動，`init_db()` 也會：建表、必要時 seed `role_permissions`。
+Local 環境仍會 seed demo persona 帳號；test/ci 只會建立 `admin/admin123` 供自動化測試使用；staging/production 不會建立固定密碼使用者。全新部署若需要 bootstrap admin，請在第一次啟動前設定 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD` 為強隨機臨時密碼，登入後立刻輪替或清除該 secret。
 **新環境仍建議先跑 `schema_rbac.sql`**，行為與文件一致、不依賴啟動順序。
 
 #### 2.4 重要：若沒跑 seed，角色細項會是「全空」
@@ -363,7 +361,7 @@ psql "$DATABASE_URL" -c "SELECT role, story_id, can_view, can_edit, updated_by F
 | 情況 | 結果 |
 |---|---|
 | 只建空表、**沒有**插入 `role_permissions` | 矩陣**全空**（所有角色對所有功能都無檢視／編輯／審核）→ Sidebar 幾乎看不到功能、API 易 403 |
-| 有跑 `schema_rbac.sql`（或後端空表自動 seed） | 有設計預設權限，可用 `admin` 登入再在 Admin UI 調整 |
+| 有跑 `schema_rbac.sql`（或後端空表自動 seed） | 有設計預設權限；需搭配既有管理員或 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD` 建立的 bootstrap admin 調整 |
 
 因此：**新環境請務必執行 `schema_rbac.sql`（或確認啟動後 `role_permissions` 列數約 308）**，不要只建表不塞預設。
 
@@ -462,9 +460,9 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 1. 準備 PostgreSQL，設定 `DATABASE_URL`  
 2. 執行 `psql "$DATABASE_URL" -f schema_rbac.sql`  
 3. 準備 LLM：OpenRouter 金鑰 ＋ **Claude Code CLI**（Docker build 或本機安裝）  
-4. 設定後端 `.env`／`deploy/.env`（含 `CORS_ORIGINS`、`JWT_SECRET`、LLM／token 變數，以及 **C1 的 `AWS_*`／`GCP_BILLING_API_KEY`**）並啟動 API  
+4. 設定後端 `.env`／`deploy/.env`（含 `CORS_ORIGINS`、`JWT_SECRET`、LLM／token 變數，以及 **C1 的 `AWS_*`／`GCP_BILLING_API_KEY`**；全新 staging 可選 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`）並啟動 API
 5. 設定前端 `VITE_API_BASE_URL` 後 build／部署  
-6. 用 `admin` / `admin123` 登入 → **立刻改密碼** → 調整角色權限  
+6. 用既有管理員或 bootstrap admin 登入 → **立刻輪替臨時密碼／清除 bootstrap secret** → 調整角色權限
 7. 依第 3.4／3.5 節做 A1／A3／優化與成本頁煙測  
 
 ---
@@ -517,10 +515,10 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 ```
 
 Creates: `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`, **`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`, plus `last_opened_diagram_id`.  
-Seeds ~**308** `role_permissions` rows and default user **`admin` / `admin123`** (`Platform_Admin`) if missing.
+Seeds ~**308** `role_permissions` rows. It does **not** create a fixed-password admin user.
 
 **A3** `architecture_reviews` stores review scores/findings/suggestions. **`wa_lenses`** stores the active Custom Lens JSON editable by users with **A3.review** (default: Security_Reviewer VER; reviews resolve DB-first, then file fallback). Existing DBs: re-run `schema_rbac.sql` (`IF NOT EXISTS`) or rely on backend `_ensure_a3_schema()` on startup.
 
 **If you create empty tables without seeding `role_permissions`, the matrix is entirely empty** — no view/edit/review for any role, Sidebar stays empty, APIs return 403. Always run `schema_rbac.sql` (or confirm ~308 rows after backend empty-DB seed).
 
-Re-running **wipes and re-seeds** `role_permissions` (backup first if customized). Does not overwrite an existing admin password. Change `admin123` immediately after first login.
+Re-running **wipes and re-seeds** `role_permissions` (backup first if customized). Bootstrap admin creation is handled by backend startup via `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`, not by this SQL script.

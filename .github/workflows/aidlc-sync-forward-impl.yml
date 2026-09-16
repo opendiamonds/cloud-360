@@ -1,0 +1,934 @@
+name: AI-DLC Sync Forward (impl)
+
+# 正向同步的**實作**（[ad:S-A]）。觸發設定在薄外層 aidlc-sync-forward.yml；本檔
+# 只認 workflow_call，全部設定經 inputs 進來，一個值都不寫死（[ad:ADR-A10]／[F1=A]）。
+#
+# 規格正本：
+#   aidlc/spaces/default/intents/260822-gh-projects-sync/construction/
+#     U-6-forward-workflow/functional-design/business-rules.md        （R-1〜R-7 群）
+#     U-6-forward-workflow/functional-design/business-logic-model.md  （序列圖與錯誤表）
+#     U-6-forward-workflow/functional-design/domain-entities.md       （D-1 跨單元契約）
+#     U-6-forward-workflow/nfr-requirements/security-requirements.md  （SEC-1〜SEC-3）
+#
+# 憑證拓樸依 ADR-0016 §1：單一擁有者帳號 token（`project` ＋ `repo` scope），
+# 不是 GitHub App、也不是 GITHUB_TOKEN。ADR-A10 原文的 app_id／app_private_key
+# 兩個 secret 因此併為一個 sync_token。
+#
+# 行為測試：.github/actions/aidlc-sync-forward/run-orchestration-tests.py
+#   （以 stub 取代五支 composite action，斷言呼叫序列與回寫的欄位集合）
+# live 測試：.github/actions/aidlc-sync-forward/run-live-tests.py
+#   （只打測試看板 #23，SEC-3 進場斷言 project_number != 16）
+
+on:
+  workflow_call:
+    inputs:
+      project_owner:
+        description: 'Project 擁有者 login。ADR-0016 §4.1：查詢根是 user(login:)，不是 organization(login:)'
+        required: true
+        type: string
+      project_number:
+        description: 'Project 編號（正整數）。**正式看板與測試看板的差別只有這個值**'
+        required: true
+        type: string
+      stage_field_name:
+        description: >-
+          承載 stage 的看板自訂欄位名稱（[req:FR-F1]）。**刻意不給預設值**：這個字面
+          從未被上游任何一份已核可文件定案，給預設等於在這裡替它定案，而 write_field
+          在欄位不存在時會**自動建立**它——寫錯就是在正式看板上多開一個欄位。
+        required: true
+        type: string
+      record_root:
+        description: 'record 根目錄；registry 為 <record_root>/intents.json，intent_id 由 record_path 相對它推導'
+        required: false
+        default: aidlc/spaces/default/intents
+        type: string
+      whitelist:
+        description: '已知結構性例外的 intent id 集合（[req:FR-J5]），換行分隔。空字串為空集合'
+        required: false
+        default: ''
+        type: string
+      field_max_length:
+        description: '自訂欄位長度上限，交給 U-1 組值時用。前綴與 (<編號>) 永不截斷，故結果可能刻意超限'
+        required: false
+        default: '50'
+        type: string
+    secrets:
+      sync_token:
+        description: >-
+          同步身分的 token（ADR-0016 §1：擁有者帳號，scope 為 project ＋ repo）。
+          它同時是 checkout 的憑證（U-4 的 commit_and_push 沿用 persist-credentials）
+          與 U-3／U-5 的 GH_TOKEN。**U-1／U-2 不得收到它**——見下方 SEC-1 的落實。
+        required: true
+
+# 本 workflow 自己的 GITHUB_TOKEN 只要讀。所有寫入（看板、issue、push）都走
+# sync_token，不走 GITHUB_TOKEN——後者推的 push 不會觸發 workflow，會讓 R-4.2 的
+# 防線②變成恆真（見 business-rules.md R-4.3 與下方 R-4.3 的理由更正）。
+permissions:
+  contents: read
+
+jobs:
+  forward:
+    name: Forward sync round
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # checkout 取**分支尖端的那顆 commit**：R-4.2 要讀 HEAD commit 訊息，而
+      # pull_request 事件預設 checkout 的是 merge ref（訊息是合併結果的、不是 PR
+      # head 的）。以 sha 而非分支名 checkout，是為了讓 PR closed 事件在 head 分支
+      # 已被刪除時仍拿得到內容（refs/pull/N/head 在 PR 情境下仍可 fetch）。
+      #
+      # token 必須是同步身分且 persist-credentials: true——U-4 的 action.yml
+      # 明訂「U-6／U-7／U-8 必須以同步 token 做 checkout，否則 push 會以認證失敗收場」。
+      - name: Check out the branch tip with the sync identity
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.sync_token }}
+          persist-credentials: true
+          fetch-depth: 2
+
+      - name: Orchestrate one forward-sync round
+        id: orchestrate
+        env:
+          # SEC-1：憑證的分發面在此收斂。GH_TOKEN 在 step 層設定，U-3／U-4／U-5
+          # 由此繼承；**U-1（map.sh）與 U-2（block.sh）的每一次呼叫都以
+          # `env -u GH_TOKEN -u GITHUB_TOKEN` 剝掉它**，見下方 run_pure()。
+          #
+          # 這與 security-requirements.md SEC-1 寫的驗證方式（「呼叫 map／block 的
+          # step 不得有 env: GH_TOKEN，讀 YAML 即可驗」）不同——因為 R-3 的迴圈
+          # 不可能寫成一連串 uses: step，五支 action 都在同一個 step 內被呼叫。
+          # 約束本身一字未弱化，改由 run-orchestration-tests.py 的行為斷言鎖住
+          # （stub 記錄自己看到的環境，map／block 兩支必須看不到憑證）。
+          GH_TOKEN: ${{ secrets.sync_token }}
+          AIDLC_PROJECT_OWNER: ${{ inputs.project_owner }}
+          AIDLC_PROJECT_NUMBER: ${{ inputs.project_number }}
+          AIDLC_FIELD_NAME: ${{ inputs.stage_field_name }}
+          AIDLC_RECORD_ROOT: ${{ inputs.record_root }}
+          AIDLC_WHITELIST: ${{ inputs.whitelist }}
+          AIDLC_FIELD_MAX_LENGTH: ${{ inputs.field_max_length }}
+          # 回寫的目標分支（[US:S-1 AC 4]「觸發本次同步的那個分支」）。與 R-1.1 的
+          # concurrency 表達式同源：PR 事件取 head 分支名、push 事件取 ref_name。
+          AIDLC_SYNC_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          # ===================================================================
+          # 一輪正向同步的編排
+          # ===================================================================
+          # 本步驟**不含商業邏輯**：判定在 U-1、格式在 U-2、寫入在 U-3、持久化在
+          # U-4、通報在 U-5。這裡的內容是**順序、分流、與兩道自我排除**
+          # （business-logic-model.md 開頭逐字）。
+          #
+          # 為什麼是一整段 bash 而不是一連串 uses: 步驟——R-3 的選取是 registry
+          # 驅動的**迴圈**（掃過 intents.json 內的全部 intent），而 GitHub Actions
+          # 無法對執行期才算出來的清單重複 uses:。五支 action 的 action.yml 都自述
+          # 「本檔只做介面轉接（inputs → 環境變數 → *.sh → $GITHUB_OUTPUT）」，
+          # 五支自己的測試 runner（run-fixtures.py／run-stub-tests.py／
+          # run-live-tests.py）也一律直接呼叫 *.sh。本步驟沿用**同一條介面**
+          # （同一組 AIDLC_* 環境變數、同一份 $GITHUB_OUTPUT 契約），不繞過任何
+          # 一支的邏輯，也不複製任何一支的邏輯。
+          #
+          # -------------------------------------------------------------------
+          # `-e` 是**從外面帶進來的**，所以要明確關掉（不是「刻意不開」）
+          # -------------------------------------------------------------------
+          # ① GitHub Actions 對未指定 `shell:` 的 `run:` 步驟一律以 `bash -e {0}`
+          #    啟動。本檔全檔沒有 `shell:`，也沒有 `defaults.run.shell`，所以這段
+          #    腳本在真實 runner 上是**開著 errexit** 進來的。
+          # ② `set -uo pipefail` **加不掉**已經生效的 `-e`——`set -<flags>` 只開不關，
+          #    要關必須 `set +e`。本機可複驗：
+          #      bash -e -c 'set -uo pipefail; false; rc=$?; echo "REACHED rc=$rc"'
+          #    什麼都不會印，exit 1。
+          # ③ 因此這裡明確 `set +e`。錯誤表要求「單一 intent 的 ExternalError 不中止
+          #    整輪」，而五支腳本以非零 exit 表達 ExternalError／Rejected；`-e` 之下
+          #    第一個外部錯誤會直接殺掉整個 step，其餘 intent 一個都不會被處理，而
+          #    workflow 只顯示該 step 失敗。下方 14 處 `rc=$?` 全部依賴這一行才拿得到
+          #    值。-u 保留（未設定變數是真的寫錯），pipefail 保留。
+          # ④ 測試 harness（.github/actions/aidlc-sync-forward/run-orchestration-tests.py）
+          #    已改成以 `bash -e` 啟動受測腳本，與 CI 同語意；在此之前它用不帶 `-e`
+          #    的 `bash`，兩邊對這些分支的判定相反。移除下面那行 `set +e`，該檔的
+          #    test_f5_actions_bash_e_does_not_abort_the_round 會紅。
+          set -uo pipefail
+          set +e
+          export LC_ALL=C
+
+          WORKSPACE="${GITHUB_WORKSPACE:-$PWD}"
+          ACTIONS_DIR="${WORKSPACE}/.github/actions"
+          MAP_SH="${ACTIONS_DIR}/aidlc-sync-map/map.sh"
+          BLOCK_SH="${ACTIONS_DIR}/aidlc-sync-block/block.sh"
+          BOARD_SH="${ACTIONS_DIR}/aidlc-sync-board/board.sh"
+          RECORD_SH="${ACTIONS_DIR}/aidlc-sync-record/record.sh"
+          NOTIFY_SH="${ACTIONS_DIR}/aidlc-sync-notify/notify.sh"
+
+          for f in "$MAP_SH" "$BLOCK_SH" "$BOARD_SH" "$RECORD_SH" "$NOTIFY_SH"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::找不到 ${f}——五支 composite action 必須與本 workflow 同進 checkout"
+              exit 1
+            fi
+          done
+
+          RECORD_ROOT="${AIDLC_RECORD_ROOT%/}"
+          REGISTRY="${WORKSPACE}/${RECORD_ROOT}/intents.json"
+
+          # D-1（domain-entities.md，跨三單元契約）：反向同步 PR 的 label。本單元是
+          # 它在程式中的**第一個**物化點——U-8（產生者）與 U-10b（排除）尚未交付。
+          # 那兩支上線時必須從這裡取，不得各抄一份（`[aidlc-sync]` 抄三份的代價，
+          # 本 intent 已經付過一次）。
+          REVERSE_PR_LABEL="aidlc-sync-reverse"
+
+          RUN_TMP="$(mktemp -d)"
+          trap 'rm -rf "$RUN_TMP"' EXIT
+          CALL_SEQ=0
+
+          # 本輪的判定時刻（Context.decided_at，R-7 的 Context 表）。**整輪一個值**。
+          DECIDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          ROUND_RED=0        # 有任何一項要求紅燈的失敗
+          RESOLVE_KEYS=""    # R-6.1b 蒐集到的待關閉鍵（換行分隔）
+          PROCESSED=0
+          SKIPPED_EXCLUDED=0
+          WROTE=0
+
+          # -------------------------------------------------------------------
+          # 小工具
+          # -------------------------------------------------------------------
+
+          next_out() {
+            CALL_SEQ=$((CALL_SEQ + 1))
+            local f="${RUN_TMP}/out.${CALL_SEQ}"
+            : > "$f"
+            printf '%s' "$f"
+          }
+
+          # 從一份 $GITHUB_OUTPUT 檔取一個值。兩種寫法都要吃：U-1 用
+          # `name=value` 單行形式，U-2／U-3／U-4／U-5 用 heredoc 形式
+          # （`name<<DELIM` … `DELIM`），因為 U-2 的 block_text 是多行的。
+          out_get() {
+            awk -v want="$2" '
+              state == 1 {
+                if ($0 == delim) { state = 0; next }
+                if (keep) { if (n++ > 0) buf = buf "\n"; buf = buf $0 }
+                next
+              }
+              {
+                h = index($0, "<<"); e = index($0, "=")
+                if (h > 0 && (e == 0 || h < e)) {
+                  k = substr($0, 1, h - 1); delim = substr($0, h + 2); state = 1
+                  if (k == want) { keep = 1; found = 1; buf = ""; n = 0 } else { keep = 0 }
+                  next
+                }
+                if (e > 0) {
+                  k = substr($0, 1, e - 1)
+                  if (k == want) { found = 1; buf = substr($0, e + 1); n = 1 }
+                }
+              }
+              END { if (found) printf "%s", buf }
+            ' "$1"
+          }
+
+          # U-5 的 notify。呼叫端只需給四個值；ISO 8601 時間戳由 U-5 自己寫。
+          # 失敗（含通報本身失敗）一律出聲，不靜默。
+          notify_failure() {
+            local intent_id="$1" reason="$2" stage="$3" detail="$4" out rc
+            out="$(next_out)"
+            AIDLC_OPERATION=notify \
+            AIDLC_INTENT_ID="$intent_id" \
+            AIDLC_REASON_CODE="$reason" \
+            AIDLC_STAGE="$stage" \
+            AIDLC_DETAIL="$detail" \
+            GITHUB_OUTPUT="$out" \
+              bash "$NOTIFY_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::warning::通報失敗（intent=${intent_id} reason=${reason} rc=${rc}）——原始失敗仍照常計入"
+            fi
+          }
+
+          # U-1／U-2 是零 I/O 純函式，**不得看見憑證**（SEC-1）。這個包裝器是那條
+          # 約束在本步驟的落實：env -u 讓變數真的不存在，而不是存在但為空。
+          run_pure() {
+            env -u GH_TOKEN -u GITHUB_TOKEN "$@"
+          }
+
+          # -------------------------------------------------------------------
+          # 防線②（R-4.2）：HEAD commit 訊息含同步標記 → 整輪 skip
+          # -------------------------------------------------------------------
+          # 標記字串**從 U-4 的 record.sh 推導**，不在這裡再抄一份：它是
+          # commit_and_push 的介面檢查（R-3.3）與本防線共用的同一個常數，而本
+          # intent 已經為「各抄一份」付過代價（U-10a 的 MARKER-1 就是為此而生）。
+          #
+          # 【R-4.3 的理由更正，2026-09-05】business-rules.md 的 R-4.3 逐字寫著
+          # 「[Q2=A] 於 application-design 選的是 **GitHub App**（非 GITHUB_TOKEN），
+          # 故防線②確實會被執行」。那個前提**已被 ADR-0016 §1 推翻**——憑證拓樸
+          # 由組織層 GitHub App 改為擁有者帳號 token（`gh auth status` 實測 scopes
+          # 為 admin:public_key, gist, project, read:org, repo, workflow）。
+          #
+          # 依 `project.md` 的 `functional-design:c22`（查證推翻的是理由而非決定時，
+          # 只修理由不改決定）：**R-4.3 的結論仍然成立**，但理由要換成正確的那一句
+          # ——關鍵區別從來不是「App vs GITHUB_TOKEN」，而是「**是不是
+          # GITHUB_TOKEN**」。GitHub 明訂以 GITHUB_TOKEN 推的 push 不觸發 workflow，
+          # 而任何其他憑證（App token 或 PAT）都會觸發。擁有者 PAT 屬後者，故本防線
+          # 會被實際執行、不是一條恆真的死碼。**不得沿用「因為是 GitHub App」的說法。**
+          # 這是本 intent 第二次被同一個假前提咬到（U-10a 的 github.actor 是第一次）。
+          SYNC_MARKER="$(sed -n 's/^SYNC_MARKER="\(.*\)"$/\1/p' "$RECORD_SH" | head -n 1)"
+          if [ -z "$SYNC_MARKER" ]; then
+            echo "::error::在 ${RECORD_SH} 找不到 SYNC_MARKER 常數，推導不出同步標記——防線②無從成立，中止"
+            exit 1
+          fi
+
+          HEAD_MESSAGE=""
+          if ! HEAD_MESSAGE="$(git -C "$WORKSPACE" log -1 --format=%B HEAD 2>&1)"; then
+            # 讀不到就往「不是同步回寫」判，讓本輪照常跑。兩個方向的代價不對稱：
+            # 誤判為同步 → 整輪不處理（要等下一次事件）；誤判為非同步 → 照常跑，
+            # 而選取是漂移驅動的，沒有漂移就不會產生任何寫入（防線①）。
+            echo "::warning::讀不到 HEAD commit 訊息，保守判定為非同步回寫；git 輸出：${HEAD_MESSAGE}"
+            HEAD_MESSAGE=""
+          fi
+          if printf '%s\n' "$HEAD_MESSAGE" | grep -qF -- "$SYNC_MARKER"; then
+            echo "防線②（R-4.2）命中：HEAD commit 訊息含 ${SYNC_MARKER}，整輪 skip。"
+            echo "已知代價（services.md 逐字，本檔不弱化）：該次 run 內其他 intent 的漂移也一併不處理，等下一次事件或隔日對帳。"
+            exit 0
+          fi
+
+          # -------------------------------------------------------------------
+          # R-2 群：迴圈之前的**一次**反向 PR 查詢（承接缺口 F-4）
+          # -------------------------------------------------------------------
+          # R-2.5 是 fail-closed，**不得改成 fail-open**：reverse_pending 的用途就是
+          # 「哪些 intent 不該被覆寫」，算不出來即等於不知道該不該覆寫。
+          # R-2.6：查詢失敗時**不得**把全部 intent 記為 suppressed——那會讓受管
+          # 區塊寫下不存在的反向 PR，紀錄會說謊。
+          PR_JSON=""
+          if ! PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                            --label "$REVERSE_PR_LABEL" --state all --limit 200 \
+                            --json number,state,closedAt,mergedAt,files 2>&1)"; then
+            echo "::error::反向 PR 查詢失敗（R-2.5 fail-closed，整輪中止）：${PR_JSON}"
+            # FailureIdentity 需要一個 intent_id，而這是**整輪層級**的失敗，沒有
+            # 任何一個 intent 該為它負責。以本 workflow 自己的識別字當合成身分。
+            # 這是本站發現的契約缺口（U-5 的 FailureIdentity 假設失敗必屬某個
+            # intent），已列入交還報告，落點待 Bolt 1 gate。
+            notify_failure "aidlc-sync-forward" "ExternalError" \
+              "forward-sync/reverse-pr-query" \
+              "反向 PR 查詢（label ${REVERSE_PR_LABEL}）失敗，整輪中止且未對任何 intent 寫入（R-2.5）。gh 輸出：${PR_JSON}"
+            exit 1
+          fi
+
+          # 路徑 → intent id：取 record_root 底下的第一段（與 U-1 的
+          # derive_intent_id 同一條推導）。R-2.2 天然是逐 intent 的，
+          # [US:S-6 AC 3] 的反例要求（X 在 PR 內、Y 不在，Y 照常寫）由此成立。
+          REVERSE_PENDING=""
+          REVERSE_REJECTED=""   # 每行 "<intent_id><TAB><closedAt>"
+          if ! REVERSE_PENDING="$(printf '%s' "$PR_JSON" | jq -r --arg root "$RECORD_ROOT" '
+                [ .[] | select(.state == "OPEN") | .files[]?.path
+                  | select(startswith($root + "/"))
+                  | (ltrimstr($root + "/") | split("/")[0])
+                  | select(. != "") ] | unique | .[]' 2>&1)"; then
+            echo "::error::反向 PR 清單解析失敗（R-2.5 fail-closed）：${REVERSE_PENDING}"
+            notify_failure "aidlc-sync-forward" "ExternalError" \
+              "forward-sync/reverse-pr-query" \
+              "反向 PR 清單解析失敗，整輪中止且未對任何 intent 寫入（R-2.5）。"
+            exit 1
+          fi
+          # 關閉而未合併者 → reverse_rejected（R-6.2a）。以 mergedAt == null 判定，
+          # 不依賴 state 是回 CLOSED 還是 MERGED。同一 intent 有多則時取最晚的
+          # closedAt（最近一次被拒才是該告示的事實）。
+          if ! REVERSE_REJECTED="$(printf '%s' "$PR_JSON" | jq -r --arg root "$RECORD_ROOT" '
+                [ .[] | select(.state != "OPEN") | select(.mergedAt == null) | . as $pr
+                  | $pr.files[]?.path
+                  | select(startswith($root + "/"))
+                  | (ltrimstr($root + "/") | split("/")[0])
+                  | select(. != "")
+                  | { id: ., closed: ($pr.closedAt // "") } ]
+                | group_by(.id)
+                | map({ id: .[0].id, closed: (map(.closed) | max) })
+                | .[] | "\(.id)\t\(.closed)"' 2>&1)"; then
+            echo "::error::反向 PR 清單解析失敗（R-6.2a）：${REVERSE_REJECTED}"
+            notify_failure "aidlc-sync-forward" "ExternalError" \
+              "forward-sync/reverse-pr-query" \
+              "反向 PR 清單（關閉未合併）解析失敗，整輪中止且未對任何 intent 寫入（R-2.5）。"
+            exit 1
+          fi
+
+          echo "reverse_pending（R-2.3，傳給 U-1 的 map）：$(printf '%s' "$REVERSE_PENDING" | tr '\n' ' ')"
+          echo "reverse_rejected（R-6.2a，本輪執行期集合，不進 Config）：$(printf '%s' "$REVERSE_REJECTED" | tr '\n' ' ')"
+
+          rejected_closed_at() {
+            local needle="$1" id closed
+            while IFS=$'\t' read -r id closed; do
+              [ -n "$id" ] || continue
+              if [ "$id" = "$needle" ]; then printf '%s' "$closed"; return 0; fi
+            done <<< "$REVERSE_REJECTED"
+            return 1
+          }
+
+          # -------------------------------------------------------------------
+          # 逐 record 迴圈（R-3 群：registry 驅動的選取）
+          # -------------------------------------------------------------------
+          # R-3.3：**不得依事件 diff 推導要處理哪些 record**。選取一律走
+          # intents.json 的 registry——fixture record 不註冊進去，因此永不被選中。
+          if [ ! -f "$REGISTRY" ]; then
+            echo "::error::找不到 registry ${REGISTRY}——選取來源不存在，整輪中止"
+            notify_failure "aidlc-sync-forward" "ExternalError" \
+              "forward-sync/registry" "找不到 registry ${RECORD_ROOT}/intents.json，整輪中止。"
+            exit 1
+          fi
+          INTENT_DIRS=""
+          if ! INTENT_DIRS="$(jq -r '.[] | .dirName // empty' "$REGISTRY" 2>&1)"; then
+            echo "::error::registry 解析失敗：${INTENT_DIRS}"
+            notify_failure "aidlc-sync-forward" "ExternalError" \
+              "forward-sync/registry" "registry ${RECORD_ROOT}/intents.json 解析失敗，整輪中止。"
+            exit 1
+          fi
+
+          # -------------------------------------------------------------------
+          # 單一 intent 的處理
+          # -------------------------------------------------------------------
+          INTENT_OK=0
+
+          process_intent() {
+            local dir_name="$1"
+            local intent_id="$dir_name"
+            local record_path="${RECORD_ROOT}/${dir_name}"
+            local abs_record="${WORKSPACE}/${record_path}"
+            local out rc
+            local state_json binding
+            local last_status last_field_value last_reason_code last_synced_at
+            local dec_status dec_field_value dec_reason_code dec_traceable_row dec_scope_note
+            local state_md=""
+            local state_dirty=0
+            local field_written=0 body_written=0 status_written=0 new_hash="" synced_at=""
+            local drift=0 notice_due=0 closed_at=""
+            local block_text="" patch=""
+
+            INTENT_OK=0
+
+            if [ ! -d "$abs_record" ]; then
+              # registry 指到一個不存在的目錄。這是 registry 與檔案系統的落差，
+              # 不是 record 的內容問題——U-4 的 read_sync_state 會以介面誤用
+              # （exit 2）拒絕它，而那個 exit code 的語意是「呼叫端 bug」。
+              # 在此明說並跳過，不靜默。
+              echo "::warning::registry 列出的 ${record_path} 目錄不存在，本輪跳過該 intent"
+              return 0
+            fi
+
+            # ---- R-5.1：讀一次 sync-state.json ------------------------------
+            # 這一次呼叫同時給出 SyncState 的六欄**與** binding——U-4 的 action.yml
+            # 逐字「read_binding／write_binding 是它 binding 欄位的投影，不是第二
+            # 份資料」，序列圖也把 binding 畫在 read_sync_state 的輸出裡。分成兩次
+            # 讀會在兩次之間開一個競態視窗，而 R-5.3 明說本單元不接受那個視窗。
+            out="$(next_out)"
+            AIDLC_OPERATION=read_sync_state AIDLC_RECORD_PATH="$record_path" \
+            GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              echo "::error::${intent_id}：read_sync_state 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/read_sync_state" \
+                "讀取 ${record_path}/sync-state.json 失敗（rc=${rc}），本輪未對該 intent 做任何看板動作。"
+              return 0
+            fi
+            state_json="$(out_get "$out" state_json)"
+            binding="$(out_get "$out" binding)"
+            last_status="$(printf '%s' "$state_json" | jq -r '.last_status // ""')"
+            # last_written_status：「機制上次**真的寫進看板**的 Status」。與 last_status
+            # （「上次的**判定**」）分開，是 reviewer iteration 2 Critical 的修法核心——
+            # 兩者先前共用一欄，而 R-5.8 自己說這兩種語意「不可互相取代」。
+            # 缺席時回退到 last_status：本欄之前寫下的狀態檔沒有它，而在那個年代
+            # last_status 記的就是「上次寫進看板的值」，回退是正確的、不是將就。
+            last_written_status="$(printf '%s' "$state_json" \
+              | jq -r 'if has("last_written_status") then (.last_written_status // "") else (.last_status // "") end')"
+            last_field_value="$(printf '%s' "$state_json" | jq -r '.last_field_value // ""')"
+            last_reason_code="$(printf '%s' "$state_json" | jq -r '.last_reason_code // ""')"
+            last_synced_at="$(printf '%s' "$state_json" | jq -r '.last_synced_at // ""')"
+
+            # ---- U-1：算出本輪的 Decision（R-3.0 要它在分流之前）------------
+            if [ -f "${abs_record}/aidlc-state.md" ]; then
+              state_md="$(cat "${abs_record}/aidlc-state.md")"
+            else
+              # 狀態檔缺席 → 交給 U-1 判為 Unparseable，不在這裡自己下結論。
+              state_md=""
+            fi
+            out="$(next_out)"
+            run_pure \
+              AIDLC_STATE_MD="$state_md" \
+              AIDLC_RECORD_PATH="$record_path" \
+              AIDLC_REVERSE_PENDING="$REVERSE_PENDING" \
+              GITHUB_OUTPUT="$out" \
+              bash "$MAP_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              echo "::error::${intent_id}：map 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/map" \
+                "U-1 map 對 ${record_path} 失敗（rc=${rc}），本輪未對該 intent 做任何看板動作。"
+              return 0
+            fi
+            dec_status="$(out_get "$out" status)"
+            dec_field_value="$(out_get "$out" field_value)"
+            dec_reason_code="$(out_get "$out" reason_code)"
+            dec_traceable_row="$(out_get "$out" traceable_row)"
+            dec_scope_note="$(out_get "$out" scope_note)"
+            echo "${intent_id}: status='${dec_status}' reason_code='${dec_reason_code}' row='${dec_traceable_row}' binding='${binding}'"
+
+            # ---- R-3.0：分流**之前**的排除閘門（[req:FR-J3]）----------------
+            # unparseable／whitelisted ⇒ 本輪對它不做任何看板動作：不首建、不寫入、
+            # 不渲染。這道閘門的位置是 iteration 5 C-2 的修正——把它放進寫入鏈裡
+            # 會讓首建路徑繞過去（`260802-default` 今日就在 registry 內且無綁定）。
+            case "$dec_reason_code" in
+              unparseable|whitelisted)
+                SKIPPED_EXCLUDED=$((SKIPPED_EXCLUDED + 1))
+                if [ -n "$binding" ]; then
+                  # 已綁定者「僅回寫 SyncState 記錄本輪判定」（R-3.0／R-5.10 (b)）。
+                  #
+                  # 【已知的上游契約衝突，見交還報告】R-5.8 說這三欄的語意是
+                  # 「機制上次**寫進看板**的值」，而這條路徑一個字都沒寫進看板；
+                  # R-5.12 對 write_status 失敗的處置正是「看板一個字都沒動 ⇒
+                  # 完全不回寫」。兩條規則對同一個情境給出相反的指示。這裡照
+                  # R-3.0／R-5.10 (b) 的**明文**實作（它們是專門管這條分支的規則、
+                  # 且各寫了一次），衝突與其後果標出、指派 Bolt 1 gate，不自行改
+                  # 上游。
+                  patch="$(jq -nc --arg st "$dec_status" --arg fv "$dec_field_value" \
+                                  --arg rc "$dec_reason_code" '{
+                        last_status: (if $st == "" then null else $st end),
+                        last_field_value: (if $fv == "" then null else $fv end),
+                        last_reason_code: $rc
+                      }')"
+                  out="$(next_out)"
+                  AIDLC_OPERATION=write_sync_state AIDLC_RECORD_PATH="$record_path" \
+                  AIDLC_STATE_JSON="$patch" GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+                  rc=$?
+                  if [ "$rc" -ne 0 ]; then
+                    ROUND_RED=1
+                    notify_failure "$intent_id" "ExternalError" "forward-sync/write_sync_state" \
+                      "排除路徑（${dec_reason_code}）回寫 sync-state.json 失敗（rc=${rc}）。"
+                    return 0
+                  fi
+                  state_dirty=1
+                  push_state "$intent_id" "$record_path" || return 0
+                else
+                  # 未綁定者連狀態檔都不建：為一個機制拒絕處理的 record 建立狀態檔，
+                  # 等於在 record 目錄產生一個沒有對應 item 的孤兒檔（R-3.0 逐字）。
+                  echo "${intent_id}: ${dec_reason_code} 且無綁定 → 連狀態檔都不建（R-3.0）"
+                fi
+                INTENT_OK=1
+                return 0
+                ;;
+            esac
+
+            # ---- R-3.1：首建路徑（無綁定編號）------------------------------
+            if [ -z "$binding" ]; then
+              out="$(next_out)"
+              AIDLC_OPERATION=create_item AIDLC_INTENT_ID="$intent_id" \
+              AIDLC_EXISTING_BINDING="" GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+              rc=$?
+              if [ "$rc" -ne 0 ]; then
+                ROUND_RED=1
+                echo "::error::${intent_id}：create_item 失敗（rc=${rc}）"
+                notify_failure "$intent_id" "ExternalError" "forward-sync/create_item" \
+                  "首建 item 失敗（rc=${rc}）：$(out_get "$out" message)"
+                return 0
+              fi
+              binding="$(out_get "$out" binding)"
+              echo "${intent_id}: 首建完成，binding=${binding}（created=$(out_get "$out" created)）"
+
+              # 首建成功後**立刻**寫回綁定編號（R-7 的表逐字）。回寫失敗的後果是
+              # 下一輪看不到綁定而再建一則 issue（[US:S-1 AC 6] 攔得住 workflow
+              # 重跑、攔不住回寫失敗），所以它必須紅燈。
+              out="$(next_out)"
+              AIDLC_OPERATION=write_binding AIDLC_RECORD_PATH="$record_path" \
+              AIDLC_ISSUE_NUMBER="$binding" GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+              rc=$?
+              if [ "$rc" -ne 0 ]; then
+                ROUND_RED=1
+                echo "::error::${intent_id}：write_binding 失敗（rc=${rc}）——issue #${binding} 已建立但綁定未落地"
+                notify_failure "$intent_id" "ExternalError" "forward-sync/write_binding" \
+                  "issue #${binding} 已建立但綁定編號回寫失敗（rc=${rc}）；下一輪會再建一則，需人工介入。"
+                return 0
+              fi
+              state_dirty=1
+              # **接著往下走寫入鏈**：[US:S-1 AC 1] 逐字要求「新 intent 的 record
+              # 首次被推送，When 同步執行，Then …其 Status 欄位值為 Ready」——
+              # 同一輪內既要出現 item 也要有 Status。此時 SyncState 三欄皆為 null，
+              # 三欄比對必然判有漂移，寫入鏈自然啟動；expected 為空字串等於
+              # 「期望未設值」——**前提是看板不會自己給新 item 設 Status**。
+              # Project #16 實測（2026-09-06）不是這樣：item 加入即被看板自動化設為
+              # Backlog，首寫的回讀比對因此 Aborted，且因 SyncState 永遠記不到第一筆
+              # 成功寫入，每一輪都重演。這個情境由下方 R-5.7a 的一次重試涵蓋。
+            fi
+
+            # ---- R-5.2 ∪ R-5.6：寫入理由判定 --------------------------------
+            if [ "$dec_status" != "$last_status" ] \
+               || [ "$dec_field_value" != "$last_field_value" ] \
+               || [ "$dec_reason_code" != "$last_reason_code" ]; then
+              drift=1
+            fi
+            if closed_at="$(rejected_closed_at "$intent_id")"; then
+              # R-5.6 的第二個寫入理由：該 intent 在本輪的 reverse_rejected 內，
+              # 且其 PR 關閉時刻晚於 last_synced_at（後者為 null 時該比較判為真）。
+              # 兩邊都是 UTC 的 ISO 8601（GitHub 的 closedAt 與本檔的 date -u
+              # 同形），故字串比較即為時間比較。
+              if [ -z "$last_synced_at" ] || [ "$closed_at" \> "$last_synced_at" ]; then
+                notice_due=1
+              fi
+            fi
+            if [ "$drift" -eq 0 ] && [ "$notice_due" -eq 0 ]; then
+              # R-5.5：無漂移且無待送告示 → 不呼叫 write_sync_state。這就是防線①
+              # ——回寫的內容就是剛寫進看板的值，下一輪自然無漂移。
+              echo "${intent_id}: 無漂移、無待送告示 → 不寫（R-5.5／防線①）"
+              # 這個 state_dirty 檢查在今日的資料流下**走不到**：唯一會讓它為 1
+              # 的路徑是剛剛首建，而剛建好的狀態檔三欄皆為 null、reason_code 一律
+              # 非空，三欄比對必然判有漂移。保留它不是為了防禦一個假想的狀態，
+              # 而是因為「檔案改過了就要推上去」這件事不該綁在任何一條分支的
+              # 可達性上——若日後有人改動首建路徑，漏推綁定編號的後果是每 push
+              # 一次多一張卡（[US:S-1 AC 6]）。如實記載其現況不可達。
+              if [ "$state_dirty" -eq 1 ]; then
+                push_state "$intent_id" "$record_path" || return 0
+              fi
+              INTENT_OK=1
+              return 0
+            fi
+
+            # ---- 寫入鏈 -----------------------------------------------------
+            # R-5.10 (b) 的深度防禦。正常情況下走不到這裡（R-3.0 已在分流之前擋
+            # 下），保留它是規則明文要求的——若哪天有人動了 R-3.0 的位置，這一層
+            # 仍不得對 unparseable／whitelisted 產生任何看板寫入。
+            case "$dec_reason_code" in
+              unparseable|whitelisted)
+                echo "::warning::${intent_id}：${dec_reason_code} 走到了寫入鏈——R-3.0 的閘門被繞過了。此處以 R-5.10 (b) 的深度防禦擋下，不做任何看板寫入。"
+                INTENT_OK=1
+                return 0
+                ;;
+            esac
+
+            # status_written 追蹤「write_status 這一輪**真的執行並成功**了嗎」。
+            # dec_status 為空（R-5.10 (a)：parked／suppressed／undecidable）時整段
+            # 被跳過，看板 Status 一個字都沒動——此時 last_status 不得被回寫，
+            # 理由見下方回寫段的長註解。
+            if [ -n "$dec_status" ]; then
+              # R-5.7：expected 由 R-5.1 讀到的 SyncState 重建，代表「機制上次寫進
+              # 看板的值」。**不得**改取當下的 read_item——那會讓 write_status
+              # 內部的回讀比對恆真、[req:FR-C3] 的守門變成死碼（iteration 3 C-1）。
+              # 三欄之中只有 last_status 跨得過介面：U-3 的 write_status 依其
+              # Plan Approval 定案只比對 Status 欄位。
+              #
+              # R-5.7a（首寫例外，2026-09-06 實測補入）：expected 為空代表 SyncState
+              # 從未記錄過一次成功的 Status 寫入——R-5.7 守的是「我上次寫入**之後**
+              # 有沒有人動過」，首寫前沒有「上次寫入」可守。此時回讀到的非空 actual
+              # 來自看板自動化（Project #16：item 加入即為 Backlog），不是人為變更；
+              # 以它為 expected **重試一次**，重試仍 Aborted 則照 R-5.12 處置。這不是
+              # iteration 2 那種「改取當下 read_item」：例外只在從未寫入時成立一次，
+              # 首寫成功後 last_written_status 就有值，R-5.7 全額生效。
+              expected_status="$last_written_status"
+              ws_attempt=1
+              while :; do
+                out="$(next_out)"
+                AIDLC_OPERATION=write_status AIDLC_BINDING="$binding" \
+                AIDLC_EXPECTED_STATUS="$expected_status" AIDLC_DESIRED_STATUS="$dec_status" \
+                GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+                rc=$?
+                if [ "$rc" -ne 0 ]; then
+                  # ExternalError：看板可能一個字都沒動，也可能動了但我們不知道。
+                  # R-5.12 第一種：**完全不回寫**。
+                  ROUND_RED=1
+                  echo "::error::${intent_id}：write_status 外部錯誤（rc=${rc}）"
+                  notify_failure "$intent_id" "ExternalError" "forward-sync/write_status" \
+                    "write_status 失敗（rc=${rc}）：$(out_get "$out" message)"
+                  [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+                  return 0
+                fi
+                if [ "$(out_get "$out" result)" != "aborted" ]; then
+                  break
+                fi
+                ws_actual="$(out_get "$out" actual_status)"
+                if [ "$ws_attempt" -eq 1 ] && [ -z "$expected_status" ] && [ -n "$ws_actual" ]; then
+                  echo "${intent_id}: 首寫前回讀到 Status='${ws_actual}'（機制從未寫入，無「上次寫入」可守；視為看板自動化的預設值）→ 以它為 expected 重試一次（R-5.7a）"
+                  expected_status="$ws_actual"
+                  ws_attempt=2
+                  continue
+                fi
+                # R-5.12 第一種的另一半：Aborted ⇒ 看板一個字都沒動（U-3 明文
+                # 「不送出寫入」）⇒ 完全不回寫、鏈中止。不紅燈（錯誤表）。
+                echo "${intent_id}: write_status 回 aborted（actual='${ws_actual}' expected='${expected_status}'）→ 鏈中止、完全不回寫"
+                notify_failure "$intent_id" "Aborted" "forward-sync/write_status" \
+                  "$(out_get "$out" message)"
+                [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+                return 0
+              done
+              status_written=1
+            else
+              # R-5.10 (a)：status 為 null（parked／suppressed／undecidable）⇒
+              # 跳過 write_status，其餘照走。[req:FR-G3] 要暫停覆寫的是 Status，
+              # 不是整個 item；不寫的原因與時間戳由自訂欄位與受管區塊承載。
+              echo "${intent_id}: status 為 null（${dec_reason_code}）→ 跳過 write_status（R-5.10 (a)）"
+            fi
+
+            # ---- write_field（R-5.10 (a) 照走；undecidable 例外，見下）-------
+            if [ "$dec_reason_code" = "undecidable" ]; then
+              # 【人工裁決 Q1=A，2026-09-05】R-5.10 (a) 的字面要求 undecidable 也
+              # 照走 write_field。但 U-1 的 compose_field_value 對 undecidable
+              # 正確地**拒絕猜前綴**、回空字串（ADR-0015 §14 明令「在它落地之前，
+              # undecidable 的自訂欄位行為未定義——實作不得自行猜」），而 U-3 的
+              # write_field 對空值無守衛，會直送 text=""、把欄位**清空**。清空是
+              # 一個沒人核可過的可觀察行為。
+              # 裁決：跳過 write_field，欄位維持原值；其餘（render／write_body／
+              # 回讀／回寫）照走。**這收窄了 R-5.10 (a) 的字面**，已列入待 gate
+              # 追認清單。
+              echo "${intent_id}: undecidable → 跳過 write_field，自訂欄位維持原值（Q1=A 對 R-5.10 (a) 的收窄）"
+            else
+              out="$(next_out)"
+              AIDLC_OPERATION=write_field AIDLC_BINDING="$binding" \
+              AIDLC_FIELD_VALUE="$dec_field_value" GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+              rc=$?
+              if [ "$rc" -ne 0 ]; then
+                # write_field 的非零 exit 只剩 R-1.4 的多筆斷言（看板損壞）。
+                # R-5.12 沒有列這一種；此處採與 write_status ExternalError 相同的
+                # 保守處置（完全不回寫），已列入交還報告的缺口清單。
+                ROUND_RED=1
+                echo "::error::${intent_id}：write_field 外部錯誤（rc=${rc}）"
+                notify_failure "$intent_id" "ExternalError" "forward-sync/write_field" \
+                  "write_field 失敗（rc=${rc}）：$(out_get "$out" message)"
+                [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+                return 0
+              fi
+              if [ "$(out_get "$out" result)" = "written" ]; then
+                field_written=1
+              else
+                # R-5.12 第二種：Failed ⇒ **不連坐**（[US:S-5 AC 2]），續走；
+                # last_field_value 維持原值。不紅燈。
+                echo "${intent_id}: write_field 回 failed → 不連坐、續走；last_field_value 維持原值（R-5.12）"
+                notify_failure "$intent_id" "Failed" "forward-sync/write_field" \
+                  "$(out_get "$out" message)"
+              fi
+            fi
+
+            # ---- U-2 render（Context 由本單元組裝，R-7 的 Context 表）--------
+            #   decided_at        本輪的當前時刻（整輪一個值）
+            #   scope_note        U-1 composite action 的第五個 output，逐字轉交
+            #   rejection_notice  R-6.2b：落在本輪 reverse_rejected 內時為關閉時刻
+            local rejection_at=""
+            if [ "$notice_due" -eq 1 ]; then rejection_at="$closed_at"; fi
+            out="$(next_out)"
+            run_pure \
+              AIDLC_OPERATION=render \
+              AIDLC_STATUS="$dec_status" \
+              AIDLC_TRACEABLE_ROW="$dec_traceable_row" \
+              AIDLC_REASON_CODE="$dec_reason_code" \
+              AIDLC_SCOPE_NOTE="$dec_scope_note" \
+              AIDLC_DECIDED_AT="$DECIDED_AT" \
+              AIDLC_REJECTION_CLOSED_AT="$rejection_at" \
+              GITHUB_OUTPUT="$out" \
+              bash "$BLOCK_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              echo "::error::${intent_id}：render 失敗（rc=${rc}）——這是呼叫端接線 bug，不是外部錯誤"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/render" \
+                "U-2 render 失敗（rc=${rc}），受管區塊未產生，本輪不回寫狀態檔。"
+              [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+              return 0
+            fi
+            # $( ) 會吃掉尾端換行，而 U-2 的格式契約是「以一個 LF 結尾」。補回來，
+            # 讓交給 write_body 的字串與 render 的 stdout 逐位元組相同。
+            block_text="$(out_get "$out" block_text)"
+            block_text="${block_text}"$'\n'
+
+            # ---- U-3 write_body（受管區塊唯一的持久化路徑）------------------
+            out="$(next_out)"
+            AIDLC_OPERATION=write_body AIDLC_BINDING="$binding" \
+            AIDLC_BLOCK_TEXT="$block_text" GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              echo "::error::${intent_id}：write_body 外部錯誤（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/write_body" \
+                "write_body 失敗（rc=${rc}）：$(out_get "$out" message)"
+              [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+              return 0
+            fi
+            if [ "$(out_get "$out" result)" = "written" ]; then
+              body_written=1
+            else
+              # R-5.12 第三種：write_body 回 Failed ⇒ 受管區塊**未被寫入**，故舊
+              # 雜湊仍然正確 ⇒ managed_block_hash **與 last_synced_at** 皆維持原值
+              # （後者是告示是否送達的標記，R-5.13）。不連坐、續走、不紅燈。
+              echo "${intent_id}: write_body 回 failed → managed_block_hash 與 last_synced_at 皆維持原值（R-5.12／R-5.13）"
+              notify_failure "$intent_id" "Failed" "forward-sync/write_body" \
+                "$(out_get "$out" message)"
+            fi
+
+            # ---- R-5.4：寫入後**回讀**取得 managed_block_hash ----------------
+            # 雜湊必須取自寫入後的 read_item，**不得**對 render 的輸出自己算：
+            # 它要與 U-8 日後 read_item → parse → content_hash 算出的值逐位元組
+            # 相等，等價性由「走同一條路徑」構造保證（ADR-0015 §10）。這條錯了
+            # 的後果是 U-8 在沒有任何人為變更的情況下每天為每個 intent 開一則
+            # 反向 PR。
+            if [ "$body_written" -eq 1 ]; then
+              out="$(next_out)"
+              AIDLC_OPERATION=read_item AIDLC_BINDING="$binding" \
+              GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+              rc=$?
+              if [ "$rc" -ne 0 ]; then
+                # R-5.12 第四種：受管區塊**已經寫成功**，只是算不出它的雜湊 ⇒
+                # **完全不回寫**，讓 U-7 的 R-6.5（看板 == record 而 SyncState ≠
+                # 兩者）成立並由 R-6.8 修復。若此時回寫三欄，R-6.5 不會觸發、
+                # R-6.8 不可達，U-8 便會每天開一則無人為變更的反向 PR。
+                ROUND_RED=1
+                echo "::error::${intent_id}：R-5.4 的寫入後回讀失敗（rc=${rc}）→ 完全不回寫（R-5.12 第四種）"
+                notify_failure "$intent_id" "ExternalError" "forward-sync/read_item" \
+                  "受管區塊已寫入但回讀失敗（rc=${rc}），本輪完全不回寫狀態檔，交由對帳修復。"
+                [ "$state_dirty" -eq 1 ] && push_state "$intent_id" "$record_path"
+                return 0
+              fi
+              new_hash="$(out_get "$out" managed_block_hash)"
+              synced_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            fi
+
+            # ---- R-5.12：逐欄回寫「實際寫成功」的部分 ------------------------
+            #
+            # **兩欄分家**（reviewer iteration 2 Critical 的修法）：
+            #
+            #   last_status         = 「我們**上一輪的判定**是什麼」  → R-5.2 漂移比對
+            #   last_written_status = 「我們**上次真的寫進看板**的值」 → R-5.7 的 expected
+            #
+            # R-5.8 逐字說這兩種語意「不可互相取代」，但先前它們**共用 last_status
+            # 一欄**——只要有一條分支刻意不寫（R-5.10 (a)：parked／suppressed／
+            # undecidable 跳過 write_status），兩者就分岔，而一欄裝不下兩個值。
+            #
+            # 兩次修法都失敗過，兩次的失敗方向相反，值得完整記下來：
+            #
+            #  (1) 原版「無條件回寫 last_status」：走 (a) 支時看板 Status 一個字
+            #      都沒動，卻把 last_status 寫成 null ⇒ 這一欄宣稱了一次沒發生的
+            #      寫入 ⇒ 下一輪判定回 mapped 時 expected='' 而看板仍是舊值 ⇒
+            #      必然 Aborted ＋ 假通報 ⇒ [US:S-6 AC 5] 的告示送不出去。
+            #  (2) iteration 1 的「last_status 改條件式」：誠實了，但**不收斂**——
+            #      last_status 凍在最後一個真實值、dec_status 恆為 ""，R-5.2 的
+            #      比對永遠不回零 ⇒ 每一輪都重跑整條寫入鏈；而 block.sh 對
+            #      status 為空時會嵌入當輪新的 decided_at ⇒ managed_block_hash
+            #      每輪都不同 ⇒ **每一次外部 push 都產生一個真實 commit**。
+            #      （reviewer iteration 2 以三輪 stub 模擬重現。）
+            #
+            # 現在的形狀讓兩個語意各有自己的欄位，(1) 與 (2) 同時消失：
+            # last_status 恢復無條件回寫（判定就是判定，null 也是一個判定，比對
+            # 因此收斂）；last_written_status 才是條件式（$sw），只在 write_status
+            # 真的執行並成功時才前進。
+            #
+            # 這正是 code-summary 的 (C) 當初列的**選項 (a)**。可行性已查證：U-4 的
+            # write_sync_state 以 jq '. + $patch' 就地合併並**明文保留未知欄位**
+            # （record.sh:24／:202／:452），所以新增這一欄**不需要改動 U-4**。
+            # 舊狀態檔沒有這一欄，讀取端會回退到 last_status——在那個年代
+            # last_status 記的就是「上次寫進看板的值」，回退是正確的。
+            #
+            # **上游 R-5.4「五欄一起回寫」的字面仍需修訂**（見 code-summary 的
+            # (C)），本處是實作層的收斂；gate 若裁決別的修法，改這一段即可。
+            patch="$(jq -nc \
+                --arg st "$dec_status" --arg fv "$dec_field_value" \
+                --arg rc "$dec_reason_code" --arg ts "$synced_at" --arg h "$new_hash" \
+                --argjson fw "$field_written" --argjson bw "$body_written" \
+                --argjson sw "$status_written" '
+                {
+                  last_status: (if $st == "" then null else $st end),
+                  last_reason_code: $rc
+                }
+                | (if $sw == 1 then .last_written_status = (if $st == "" then null else $st end) else . end)
+                | (if $fw == 1 then .last_field_value = (if $fv == "" then null else $fv end) else . end)
+                | (if $bw == 1 then (.last_synced_at = $ts | .managed_block_hash = (if $h == "" then null else $h end)) else . end)
+              ')"
+            out="$(next_out)"
+            AIDLC_OPERATION=write_sync_state AIDLC_RECORD_PATH="$record_path" \
+            AIDLC_STATE_JSON="$patch" GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              echo "::error::${intent_id}：write_sync_state 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/write_sync_state" \
+                "回寫 ${record_path}/sync-state.json 失敗（rc=${rc}）；看板已寫入但記錄失敗（R-5.9 ③）。"
+              return 0
+            fi
+            state_dirty=1
+            WROTE=$((WROTE + 1))
+
+            push_state "$intent_id" "$record_path" || return 0
+            INTENT_OK=1
+            return 0
+          }
+
+          # U-4 的 commit_and_push。回傳非 0 代表本 intent 不算成功（不進 R-6.1
+          # 的待關閉鍵集合）。paths 白名單逐字只有 <record_path>/sync-state.json
+          # （U-4 的 R-3.2），訊息必含同步標記（R-3.3——它就是防線②的依據）。
+          push_state() {
+            local intent_id="$1" record_path="$2" out rc result reason
+            out="$(next_out)"
+            AIDLC_OPERATION=commit_and_push \
+            AIDLC_RECORD_PATH="$record_path" \
+            AIDLC_BRANCH="$AIDLC_SYNC_BRANCH" \
+            AIDLC_PATHS="${record_path}/sync-state.json" \
+            AIDLC_MESSAGE="雜項(aidlc-sync): 更新 ${intent_id} 的看板同步狀態 ${SYNC_MARKER}" \
+            GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            result="$(out_get "$out" result)"
+            reason="$(out_get "$out" reason)"
+            if [ "$rc" -eq 0 ]; then
+              echo "${intent_id}: commit_and_push → ${result}（attempts=$(out_get "$out" attempts) sha=$(out_get "$out" commit_sha)）"
+              return 0
+            fi
+            ROUND_RED=1
+            if [ "$rc" -eq 3 ]; then
+              # R-5.9 ②：看板已寫成功但記錄那次寫入的動作失敗。修復落點在 U-7 的
+              # R-6.5，不在本單元——本單元在事件路徑上分辨不出「我上輪寫的但沒
+              # 記錄」與「別人改的」。
+              echo "::error::${intent_id}：commit_and_push 被拒（reason=${reason}）"
+              notify_failure "$intent_id" "Rejected" "forward-sync/commit_and_push" \
+                "回寫推送被拒（reason=${reason}）：$(out_get "$out" message)"
+            else
+              echo "::error::${intent_id}：commit_and_push 外部錯誤（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "forward-sync/commit_and_push" \
+                "回寫推送失敗（rc=${rc}）：$(out_get "$out" message)"
+            fi
+            return 1
+          }
+
+          # -------------------------------------------------------------------
+          # 迴圈本體
+          # -------------------------------------------------------------------
+          while IFS= read -r dir_name; do
+            [ -n "$dir_name" ] || continue
+            PROCESSED=$((PROCESSED + 1))
+            process_intent "$dir_name"
+            if [ "$INTENT_OK" -eq 1 ]; then
+              # R-6.1b：對本輪**處理成功**的每一個 intent，以 U-5 列舉的失敗值域
+              # **逐一**構成鍵。**不得**以 SyncState.last_reason_code 當鍵來源——
+              # 它的型別是 ReasonCode（mapped／parked／…），與 FailureIdentity 的
+              # reason_code 是兩個不同的命名空間，且它只在寫入成功時才被寫，
+              # 失敗的那一輪根本不會留下任何記錄（R-6.1d）。
+              for code in ExternalError Rejected Aborted CannotCreate Failed; do
+                RESOLVE_KEYS="${RESOLVE_KEYS}${dir_name}/${code}"$'\n'
+              done
+            fi
+          done <<< "$INTENT_DIRS"
+
+          # -------------------------------------------------------------------
+          # R-6.1a：**迴圈之後**關閉已不再成立的通報 issue
+          # -------------------------------------------------------------------
+          # 「在迴圈之後」的理由是**鍵的蒐集需要整輪跑完**——某 intent 本輪是否
+          # 成功，要等它被處理過才知道。收集在迴圈內，呼叫在迴圈後。
+          # resolve_if_open 對不存在的 issue 是 no-op，所以「多問幾個鍵」零成本。
+          if [ -n "$RESOLVE_KEYS" ]; then
+            out="$(next_out)"
+            AIDLC_OPERATION=resolve_if_open AIDLC_KEYS="$RESOLVE_KEYS" \
+            GITHUB_OUTPUT="$out" bash "$NOTIFY_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              # R-6.1c：失敗只記 log 與紅燈，**不回滾**已寫入看板的內容。
+              ROUND_RED=1
+              echo "::error::resolve_if_open 失敗（rc=${rc}）：$(out_get "$out" message)。本輪已寫入看板的內容不回滾（R-6.1c）。"
+            else
+              echo "resolve_if_open：關閉 $(out_get "$out" closed) 則（$(out_get "$out" closed_numbers)）"
+            fi
+          fi
+
+          echo "---- 本輪摘要 ----"
+          echo "registry 內的 intent：${PROCESSED}"
+          echo "R-3.0 排除（unparseable／whitelisted）：${SKIPPED_EXCLUDED}"
+          echo "實際寫入看板並回寫狀態：${WROTE}"
+          echo "decided_at：${DECIDED_AT}"
+
+          if [ "$ROUND_RED" -eq 1 ]; then
+            echo "::error::本輪有失敗（詳見上方逐項訊息與通報 issue）"
+            exit 1
+          fi

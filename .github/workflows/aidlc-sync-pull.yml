@@ -1,0 +1,81 @@
+name: AI-DLC Sync — 從 GitHub 拉回狀態
+
+# ADR-0012 階段 2：Issues → repo 的反向同步。
+#
+# 只拉狀態（open/closed、assignee、labels），不碰內容——內容的真實來源是 repo。
+#
+# 一律開 PR，不直接推 ut。反向同步是唯一可能繞過 AI-DLC approval gate 的路徑，
+# PR 化讓它必須經過人眼。
+#
+# 這是普通的 GitHub Actions，不是 gh-aw：同步是確定性邏輯（抓 API、比對、寫檔），
+# 沒有需要判斷的地方。用 agent 跑只會更慢、更貴、更不可預測。
+
+on:
+  schedule:
+    # 每 6 小時。狀態變更不急，而過於頻繁的 PR 會變成新的噪音來源。
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+concurrency:
+  # 不取消進行中的執行：它可能正在開 PR，中斷會留下半途的分支。
+  group: aidlc-sync-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ut
+
+      - name: 拉取 GitHub 狀態
+        id: pull
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          python3 scripts/aidlc_sync_pull.py --all-intents | tee /tmp/pull.log
+          code=${PIPESTATUS[0]}
+          set -e
+          # 10 = 有狀態變更（見腳本的 main()）；0 = 無變更；其餘為真正的錯誤
+          case "$code" in
+            0)  echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            10) echo "changed=true"  >> "$GITHUB_OUTPUT" ;;
+            *)  echo "同步失敗，退出碼 $code"; exit "$code" ;;
+          esac
+
+      - name: 開 PR
+        if: steps.pull.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="aidlc-sync/pull-$(date -u +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add 'aidlc/spaces/*/intents/*/github-status.md' \
+                  'aidlc/spaces/*/intents/*/aidlc-sync-state.json'
+          # commit 訊息寫進檔案再以 -F 帶入：heredoc 的結束標記必須頂格，
+          # 而頂格會跳出 YAML 的 block scalar。
+          # [aidlc-sync] 前綴讓正向同步的 workflow 排除這個 commit——防迴圈第 2 道
+          {
+            echo "整合(sync): [aidlc-sync] 從 GitHub 拉回 intent 狀態"
+            echo
+            sed -n '/項變更/,/^$/p' /tmp/pull.log | head -20
+            echo
+            echo "由 aidlc-sync-pull workflow 自動產生（ADR-0012 階段 2）。"
+            echo "只含狀態鏡像與同步狀態，不含任何內容變更。"
+          } > /tmp/commit-msg.txt
+          git commit -F /tmp/commit-msg.txt
+          git push -u origin "$branch"
+          gh pr create --base ut --head "$branch" \
+            --title "整合(sync): 從 GitHub 拉回 intent 狀態" \
+            --body-file .github/aidlc-sync-pr-body.md

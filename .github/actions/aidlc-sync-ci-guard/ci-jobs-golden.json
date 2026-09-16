@@ -1,0 +1,141 @@
+{
+  "_comment": "U-10a 的 NFR-C1 快照：四個既有 job 的 name / runs-on / steps 在變更前的樣子。由 check-ci-yml.py --emit-golden 產生，不要手改。",
+  "_source_sha256": "d109965a61c5e1e770a0448b70e512499511a3afef695b8f3ce1bdb10df8f825",
+  "jobs": {
+    "backend": {
+      "name": "Backend (import + unit tests)",
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "actions/setup-python@v5",
+          "with": {
+            "cache": "pip",
+            "cache-dependency-path": "backend/requirements.txt",
+            "python-version": "3.12"
+          }
+        },
+        {
+          "run": "pip install -r requirements.txt"
+        },
+        {
+          "env": {
+            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/cloud360",
+            "JWT_SECRET": "ci_only_not_a_real_secret"
+          },
+          "name": "Import FastAPI app",
+          "run": "python -c \"import main; print('app:', main.app.title)\""
+        },
+        {
+          "env": {
+            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/cloud360",
+            "JWT_SECRET": "ci_only_not_a_real_secret"
+          },
+          "name": "OpenAPI spec drift",
+          "run": "python scripts/dump_openapi.py --check"
+        },
+        {
+          "env": {
+            "JWT_SECRET": "ci_only_not_a_real_secret"
+          },
+          "name": "Run unit tests",
+          "run": "python -m unittest discover -s tests -v"
+        }
+      ]
+    },
+    "docker-build": {
+      "name": "Docker images build",
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "docker/setup-buildx-action@v3"
+        },
+        {
+          "name": "Build backend image",
+          "uses": "docker/build-push-action@v6",
+          "with": {
+            "cache-from": "type=gha",
+            "cache-to": "type=gha,mode=max",
+            "context": "./backend",
+            "push": false
+          }
+        },
+        {
+          "name": "Build frontend image",
+          "uses": "docker/build-push-action@v6",
+          "with": {
+            "build-args": "VITE_API_BASE_URL=https://cloud360.danniel.cc\n",
+            "cache-from": "type=gha",
+            "cache-to": "type=gha,mode=max",
+            "context": "./frontend",
+            "push": false
+          }
+        }
+      ]
+    },
+    "frontend": {
+      "name": "Frontend (lint + typecheck + build)",
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "actions/setup-node@v4",
+          "with": {
+            "cache": "npm",
+            "cache-dependency-path": "frontend/package-lock.json",
+            "node-version": "22"
+          }
+        },
+        {
+          "run": "npm ci"
+        },
+        {
+          "name": "Lint",
+          "run": "npm run lint"
+        },
+        {
+          "name": "API type contract drift",
+          "run": "npm run check:types"
+        },
+        {
+          "name": "Typecheck and build",
+          "run": "npm run build"
+        },
+        {
+          "name": "Spec must not be served statically",
+          "run": "if find dist -type f \\( -name 'openapi*' -o -name '*.openapi.*' \\) | grep -q .; then\n  echo \"openapi spec found inside dist/ -- it would be publicly readable:\"\n  find dist -type f \\( -name 'openapi*' -o -name '*.openapi.*' \\)\n  exit 1\nfi\necho \"no spec file in dist/\"\n"
+        }
+      ]
+    },
+    "repo-contract": {
+      "name": "Repository contract",
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "actions/setup-python@v5",
+          "with": {
+            "python-version": "3.x"
+          }
+        },
+        {
+          "name": "Validate repository contract",
+          "run": "python scripts/validate_repo_contract.py"
+        },
+        {
+          "name": "Validate environment configuration contract",
+          "run": "python scripts/validate_env_contract.py"
+        }
+      ]
+    }
+  }
+}

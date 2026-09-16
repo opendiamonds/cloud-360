@@ -27,10 +27,24 @@
     "status": "complete"
   },
   {
+    "uuid": "01a00b09-1ac0-7fd8-97b2-84d4cfb81912",
+    "slug": "production-path-check",
+    "dirName": "260816-production-path-check",
+    "scope": "bugfix",
+    "status": "complete"
+  },
+  {
     "uuid": "01a01805-ccba-748e-b9b8-b74c99c838c4",
     "slug": "cost-finops",
     "dirName": "260819-cost-finops",
     "scope": "mvp",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a02bca-9920-7d25-bcac-1c67e36d0462",
+    "slug": "gh-projects-sync",
+    "dirName": "260822-gh-projects-sync",
+    "scope": "aidlc-github-projects-sync",
+    "status": "complete"
   }
 ]

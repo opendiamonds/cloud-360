@@ -1,7 +1,7 @@
 import os
 import logging
 import bcrypt
-from dotenv import load_dotenv
+from env_bootstrap import load_backend_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, User
@@ -13,7 +13,10 @@ app_env = os.environ.get("APP_ENV", "local")
 if app_env == "local":
     # 這裡確保只在 local 開發時強制讀取 .env
     # 部署到正式環境 (如 production) 時，通常由平台 (AWS/Vercel) 直接注入環境變數
-    load_dotenv()
+    # 路徑必須是明確的 backend/.env：這行比 main.py 的載入更早執行（main 在
+    # 匯入本模組時就會觸發），所以它決定了整個 process 第一次看到的 .env 是哪
+    # 一份。留著無參數的 load_dotenv() 會讓 main 那邊的修正完全失效。
+    load_backend_dotenv()
 
 # Database configuration
 DATABASE_URL = os.environ.get(
@@ -22,6 +25,39 @@ DATABASE_URL = os.environ.get(
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+LOCAL_APP_ENVS = {"local", "test", "ci"}
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _current_app_env() -> str:
+    return os.environ.get("APP_ENV", app_env).strip().lower()
+
+
+def _allow_insecure_default_users() -> bool:
+    """Fixed demo credentials are only acceptable in local/test, or by opt-in."""
+    if _current_app_env() in LOCAL_APP_ENVS:
+        return True
+    return _truthy_env("ALLOW_INSECURE_DEFAULT_USERS")
+
+
+def _allow_insecure_default_personas() -> bool:
+    """Seed the multi-persona demo catalog only where it is intentionally useful."""
+    if _current_app_env() == "local":
+        return True
+    return _truthy_env("ALLOW_INSECURE_DEFAULT_PERSONAS")
+
+
+def _bootstrap_admin_password() -> str | None:
+    password = os.environ.get("CLOUD360_BOOTSTRAP_ADMIN_PASSWORD", "").strip()
+    if password:
+        return password
+    if _allow_insecure_default_users():
+        return "admin123"
+    return None
 
 def hash_password(password: str) -> str:
     pwd_bytes = password.encode('utf-8')
@@ -49,7 +85,7 @@ def init_db():
     try:
         # 檢查是否已存在使用者
         user_count = db.query(User).count()
-        if user_count == 0:
+        if user_count == 0 and _allow_insecure_default_personas():
             logger.info("資料庫為空，開始從 personas.md 初始化 11 位預設使用者...")
 
             default_personas = [
@@ -79,24 +115,36 @@ def init_db():
 
             db.commit()
             logger.info("預設使用者初始化完成！")
+        elif user_count == 0:
+            logger.warning(
+                "資料庫為空，但 APP_ENV=%s 未允許 demo persona seed；略過 persona 建立。",
+                _current_app_env(),
+            )
         else:
             logger.info(f"資料庫已存在 {user_count} 位使用者，跳過初始化。")
 
         # 確保預設 admin 帳號存在（與 schema_rbac.sql 對齊）
         admin = db.query(User).filter(User.username == "admin").first()
+        bootstrap_admin_password = _bootstrap_admin_password()
         if admin is None:
-            db.add(
-                User(
-                    username="admin",
-                    password_hash=hash_password("admin123"),
-                    role="Platform_Admin",
-                    is_active=True,
-                    authorization_status="approved",
+            if bootstrap_admin_password:
+                db.add(
+                    User(
+                        username="admin",
+                        password_hash=hash_password(bootstrap_admin_password),
+                        role="Platform_Admin",
+                        is_active=True,
+                        authorization_status="approved",
+                    )
                 )
-            )
-            db.commit()
-            logger.info("已建立預設帳號 admin / Platform_Admin")
-        elif getattr(admin, "authorization_status", None) != "approved":
+                db.commit()
+                logger.info("已建立 bootstrap admin / Platform_Admin")
+            else:
+                logger.warning(
+                    "未設定 CLOUD360_BOOTSTRAP_ADMIN_PASSWORD；APP_ENV=%s 不建立固定密碼 admin。",
+                    _current_app_env(),
+                )
+        elif bootstrap_admin_password and getattr(admin, "authorization_status", None) != "approved":
             admin.authorization_status = "approved"
             if not admin.role:
                 admin.role = "Platform_Admin"

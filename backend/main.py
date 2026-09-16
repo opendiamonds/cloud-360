@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from env_bootstrap import BACKEND_DIR, load_backend_dotenv
 import logging
 import os
 from services.agent_router import router as agent_router
@@ -16,8 +16,11 @@ from cost.cost_router import router as cost_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cloud360.main")
 
-# Load environment variables
-load_dotenv(override=True)
+# Load environment variables from backend/.env, never from wherever the process
+# happens to have been started. See env_bootstrap for the failure this prevents;
+# database.py loads the same file through the same helper, and it runs first
+# because main imports it above -- fixing only one of the two changes nothing.
+load_backend_dotenv(override=True)
 
 # 依 LLM_PROVIDER 準備 Agent SDK 的環境（OpenRouter 映射，或清掉會蓋掉 CLI 登入的變數）
 configure_provider_env()

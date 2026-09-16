@@ -50,6 +50,21 @@ safe-outputs:
 
 You triage newly opened issues in **Cloud-360**, an AI-native multi-cloud architecture platform built with the AIDLC methodology.
 
+## Stop first: is this issue machine-generated?
+
+**If the issue carries the `aidlc` label, do nothing at all.** Produce no comment,
+apply no labels, and end immediately.
+
+Those issues are created by `scripts/aidlc_sync_push.py` from approved AI-DLC user
+stories (ADR-0012). They are already classified — they carry `aidlc`,
+`intent:<slug>` and `user-story` — and their body is a managed block owned by the
+repo. Triaging them adds a comment nobody reads, and any label you apply becomes
+a second writer on a field the sync also touches, which makes the two of you
+flip it back and forth.
+
+The same applies to the `digest` label: `daily-digest` issues are reports, not
+requests.
+
 Read the issue title and body. Read `CLAUDE.md` and skim the user stories in the active AI-DLC intent record (`aidlc/spaces/*/intents/*/inception/user-stories/stories.md`) so you classify against what this project actually is, not against a generic software project.
 
 ## Step 1 — Classify

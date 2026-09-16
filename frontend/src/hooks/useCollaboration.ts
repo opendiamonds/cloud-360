@@ -3,10 +3,11 @@ import { wsUrl } from '../config/api';
 
 interface UseCollaborationProps {
   workspaceId: string;
+  token: string | null;
   onReceiveXml: (xml: string) => void;
 }
 
-export const useCollaboration = ({ workspaceId, onReceiveXml }: UseCollaborationProps) => {
+export const useCollaboration = ({ workspaceId, token, onReceiveXml }: UseCollaborationProps) => {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   
@@ -17,9 +18,11 @@ export const useCollaboration = ({ workspaceId, onReceiveXml }: UseCollaboration
   }, [onReceiveXml]);
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !token) return;
 
-    const ws = new WebSocket(wsUrl(`/api/collab/ws/${workspaceId}`));
+    const url = new URL(wsUrl(`/api/collab/ws/${workspaceId}`));
+    url.searchParams.set('token', token);
+    const ws = new WebSocket(url.toString());
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -49,7 +52,7 @@ export const useCollaboration = ({ workspaceId, onReceiveXml }: UseCollaboration
     return () => {
       ws.close();
     };
-  }, [workspaceId]);
+  }, [workspaceId, token]);
 
   const broadcastXml = useCallback((xml: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

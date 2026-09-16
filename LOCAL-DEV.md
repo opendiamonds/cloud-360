@@ -246,10 +246,22 @@ open http://localhost:8010/docs
 
 **A1／A3 要在 UI 上驗**：登入 → Workspace 輸入一句架構描述 → 應該串流出圖。若回 500，照這個順序查：
 
-1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值
+0. **你改的 `.env` 跟跑起來的 process 是不是同一份 checkout。** 這個 repo 常同時存在多個
+   worktree，症狀是「`backend/.env` 明明寫著 `LLM_PROVIDER=cli`，API 卻回報尚未設定
+   `OPENROUTER_API_KEY`」。查法：
+   ```bash
+   # 找出跑著的 uvicorn 究竟在哪個目錄
+   lsof -p "$(pgrep -f 'uvicorn main:app')" | awk '$4=="cwd" {print $NF}'
+   ```
+   訊息本身也能分辨版本：新版的那句後面會接「本機開發也可改設 LLM_PROVIDER=cli」，
+   沒有那句就是舊碼。
+1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值（`LLM_PROVIDER=cli` 時不需要）
 2. `command -v claude` 找不找得到
 3. `ANTHROPIC_API_KEY` 是不是**留空**
 4. OpenRouter 餘額（402 錯誤來自額度，或 `max_tokens` 預扣過高 → 調低 `LLM_MAX_OUTPUT_TOKENS`）
+
+> 從哪個目錄啟動 uvicorn **不再影響**讀到哪份 `.env`：`backend/env_bootstrap.py` 把路徑釘死在
+> `backend/.env`。先前 `load_dotenv()` 沒給路徑，會從 cwd 一路往上找，曾經摸到家目錄的 `.env`。
 
 ---
 

@@ -6,16 +6,17 @@
 // validator: no I/O, no YAML parsing, no mutation — callers pass an
 // already-parsed object.
 
-import { isPlainObject, UNIT_KINDS } from "./aidlc-lib.ts";
+import { artifactFilename, isPlainObject, UNIT_KINDS } from "./aidlc-lib.ts";
 
 // --- Public types ---
 
 export interface StageFrontmatter {
   slug: string;
-  // number — authored display order, `<phase-prefix>.<index>` (e.g. "2.7", "4.50").
-  // Optional at the schema layer (shape-checked when present). Display/ordering
-  // only; slug is identity. A plugin authors its own numbers without renumbering
-  // core (plugin mechanism — see docs/reference/18-plugin-mechanism.md §2).
+  // number — authored ordering hint, `<phase-prefix>.<index>` (e.g. "2.7", "4.50").
+  // Optional at the schema layer (shape-checked when present). Slug is identity;
+  // compiled number values are assigned by the engine (an authored value only
+  // breaks ties among a plugin's independent new stages — its absolute value
+  // never lands in the graph; see docs/reference/18-plugin-mechanism.md §2).
   number?: string;
   // name — authored human-readable display name. Optional; shape-checked (string)
   // when present.
@@ -74,11 +75,22 @@ export interface StageFrontmatter {
   // validates. `aidlc-graph compile` reads this to emit the compiled grid.
   scopes?: string[];
   // reviewer — agent slug to invoke as a quality gate after the stage body
-  // (stage-protocol.md §12a). Optional; absent when the stage has no review step.
+  // (stage-protocol-reviewer.md §12a). Optional; absent when the stage has no review step.
   reviewer?: string;
+  // review_artifact — required with reviewer. Names the required Markdown
+  // produces[] artifact that owns the appended `## Review` section.
+  review_artifact?: string;
   // reviewer_max_iterations — review-cycle cap before escalating to the human.
   // Defaults to 2 when reviewer is present.
   reviewer_max_iterations?: number;
+  // review_class — "adversarial" (refute + fix loop) or "advisory" (single
+  // pass, findings to the human gate). Defaults to "adversarial" when a
+  // reviewer is present. Requires a reviewer.
+  review_class?: "adversarial" | "advisory";
+  // summary_confirmation — deterministic pre-generation checkpoint policy.
+  // `required` means every run must create the questions file and record the
+  // human's consolidated-summary choice; `if-present` is for conditional Q&A.
+  summary_confirmation?: "required" | "if-present";
   // when — structured activation predicate (plugin mechanism, Layer 4). A
   // single-key map; the one predicate is `producer-in-plan: <artifact-slug>`.
   // Accepted for shape here; the compile-time grid evaluation is separate.
@@ -164,7 +176,7 @@ const REQUIRED_FIELDS = [
   "outputs",
 ] as const;
 
-const OPTIONAL_FIELDS = ["number", "name", "plugin", "for_each", "workspace_requires", "optional_produces", "produces_kinds", "sensors", "scopes", "reviewer", "reviewer_max_iterations", "when", "required_sections"] as const;
+const OPTIONAL_FIELDS = ["number", "name", "plugin", "for_each", "workspace_requires", "optional_produces", "produces_kinds", "sensors", "scopes", "reviewer", "review_artifact", "reviewer_max_iterations", "review_class", "summary_confirmation", "when", "required_sections"] as const;
 
 const KNOWN_FIELDS = new Set<string>([...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]);
 
@@ -175,8 +187,9 @@ const KNOWN_FIELDS = new Set<string>([...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]);
 const SLUG_RE = /^[a-z][a-z0-9-]*$/;
 
 // Stage display number: `<int>.<int>` (e.g. "0.1", "2.7", "4.50"). Shape only —
-// numericStageOrder (aidlc-graph.ts) parses it; a plugin authors numbers in its
-// own range. Phase-prefix/phase agreement is a separate compile cross-check.
+// numericStageOrder (aidlc-graph.ts) parses it; an authored value is an
+// ordering hint (only its index segment is read, as a tiebreak), the engine
+// assigns all compiled values.
 const NUMBER_RE = /^\d+\.\d+$/;
 
 // Lowercase-kebab artifact names — see docs/reference/16-artifact-vocabulary.md
@@ -275,6 +288,23 @@ export function validateStageFrontmatter(
       errors.push(`mode "${o.mode}" requires a non-empty support_agents`);
     }
   }
+  if (
+    o.mode === "pipeline" &&
+    typeof o.lead_agent === "string" &&
+    Array.isArray(o.support_agents)
+  ) {
+    const seen = new Set([o.lead_agent]);
+    for (const agent of o.support_agents) {
+      if (typeof agent !== "string") continue;
+      if (seen.has(agent)) {
+        errors.push(
+          `mode "pipeline" requires unique lead/support chain entries; duplicate agent "${agent}"`,
+        );
+        break;
+      }
+      seen.add(agent);
+    }
+  }
 
   // for_each — optional. Absent → valid. Present → must be string.
   // Explicit `null` falls through the typeof check and is rejected as
@@ -306,12 +336,23 @@ export function validateStageFrontmatter(
   // can never match a real agent file, so Rule 9 already rejects it — a pattern
   // check here would be redundant.
   checkString(o, "reviewer", errors);
+  checkString(o, "review_artifact", errors);
 
   // reviewer_max_iterations — optional. When present, must be a positive
   // integer (>= 1). V1 makes the parser return a number for an integer
   // literal; a non-integer literal stays a string and is rejected here as a
   // type error rather than silently coercing to NaN at compile.
   checkPositiveInteger(o, "reviewer_max_iterations", errors);
+  if (
+    "summary_confirmation" in o &&
+    o.summary_confirmation !== undefined &&
+    o.summary_confirmation !== "required" &&
+    o.summary_confirmation !== "if-present"
+  ) {
+    errors.push(
+      `summary_confirmation must be one of required, if-present, got ${describe(o.summary_confirmation)}`,
+    );
+  }
 
   // Coupling — a cap with no reviewer is silently dropped at compile
   // (aidlc-graph.ts guards the whole reviewer block on `reviewer` being
@@ -324,6 +365,31 @@ export function validateStageFrontmatter(
     !("reviewer" in o && o.reviewer !== undefined)
   ) {
     errors.push("reviewer_max_iterations requires a reviewer");
+  }
+
+  const reviewerDeclared = "reviewer" in o && o.reviewer !== undefined;
+  const reviewArtifactDeclared =
+    "review_artifact" in o && o.review_artifact !== undefined;
+  if (reviewerDeclared && !reviewArtifactDeclared) {
+    errors.push("reviewer requires review_artifact");
+  }
+  if (reviewArtifactDeclared && !reviewerDeclared) {
+    errors.push("review_artifact requires a reviewer");
+  }
+
+  // review_class — optional. When present, must be "adversarial" or
+  // "advisory" and requires a reviewer (same coupling rationale as the cap:
+  // the compiler guards the whole reviewer block on `reviewer`). "none" is
+  // deliberately NOT a stage value — a stage that wants no review deletes its
+  // `reviewer:` line; "none" exists only on the scope cap and the run
+  // override, which can silence a declared reviewer without editing stages.
+  if ("review_class" in o && o.review_class !== undefined) {
+    if (o.review_class !== "adversarial" && o.review_class !== "advisory") {
+      errors.push('review_class must be "adversarial" or "advisory"');
+    }
+    if (!("reviewer" in o && o.reviewer !== undefined)) {
+      errors.push("review_class requires a reviewer");
+    }
   }
 
   // required_sections — optional list of non-empty section names (plugin
@@ -416,6 +482,52 @@ export function validateStageFrontmatter(
             }
           }
         }
+      }
+    }
+  }
+
+  if (typeof o.review_artifact === "string") {
+    const requiredProduces = Array.isArray(o.produces)
+      ? o.produces.filter((name): name is string => typeof name === "string")
+      : [];
+    if (!requiredProduces.includes(o.review_artifact)) {
+      errors.push(
+        `review_artifact "${o.review_artifact}" must name a required produces entry`,
+      );
+    }
+    if (!artifactFilename(o.review_artifact).endsWith(".md")) {
+      errors.push(
+        `review_artifact "${o.review_artifact}" must resolve to a Markdown artifact`,
+      );
+    }
+
+    if (o.for_each === "unit-of-work" && isPlainObject(o.produces_kinds)) {
+      const applicableKinds = new Set<string>();
+      for (const name of requiredProduces) {
+        const kinds = o.produces_kinds[name];
+        if (Array.isArray(kinds)) {
+          for (const kind of kinds) {
+            if (typeof kind === "string") applicableKinds.add(kind);
+          }
+        } else {
+          for (const kind of UNIT_KINDS) applicableKinds.add(kind);
+        }
+      }
+      const targetKinds = o.produces_kinds[o.review_artifact];
+      const targetApplicable = new Set<string>(
+        Array.isArray(targetKinds)
+          ? targetKinds.filter(
+              (kind): kind is string => typeof kind === "string",
+            )
+          : UNIT_KINDS,
+      );
+      const missingKinds = [...applicableKinds].filter(
+        (kind) => !targetApplicable.has(kind),
+      );
+      if (missingKinds.length > 0) {
+        errors.push(
+          `review_artifact "${o.review_artifact}" is pruned for applicable unit kinds: ${missingKinds.join(", ")}`,
+        );
       }
     }
   }

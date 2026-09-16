@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 import logging
 import re
@@ -22,7 +22,7 @@ from services.auth import (
     create_access_token,
     get_current_user,
 )
-from services.activity import as_aware_utc, is_overdue
+from services.activity import as_aware_utc, is_overdue, record_activity
 from services.rbac import (
     CANONICAL_ROLES,
     STORY_IDS,
@@ -114,6 +114,8 @@ class LoginResponse(BaseModel):
 
 
 class UserSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     role: Optional[str] = None
@@ -125,9 +127,6 @@ class UserSchema(BaseModel):
     # 構造當下就是 ValidationError。
     last_activity_at: Optional[datetime]
     is_overdue: bool
-
-    class Config:
-        orm_mode = True
 
 
 # 每頁筆數（AD-10）：預設 20、上限 100。上限讓單次回應有界（NFR-8）。
@@ -156,6 +155,11 @@ class MeResponse(BaseModel):
     authorization_status: str
     permissions: Dict[str, dict]
     pending_request: Optional[dict] = None
+    # 規格 §4.1.2 要求 /me 帶出此欄位。欄位本身早已存在（models.py 的 User
+    # 欄、database.py 的補欄、collab_router 的讀寫），只有這個回應模型漏掉，
+    # 所以 spec-sync 把它報成漂移（#468）。可為 null：使用者尚未開過任何圖，
+    # 或原圖已被刪除（外鍵為 ON DELETE SET NULL）。
+    last_opened_diagram_id: Optional[int] = None
 
 
 class UpdateRoleRequest(BaseModel):
@@ -197,6 +201,8 @@ class ResetDefaultsResponse(BaseModel):
 
 
 class AuthorizationRequestSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     username: str
@@ -206,9 +212,6 @@ class AuthorizationRequestSchema(BaseModel):
     updated_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     decided_at: Optional[datetime] = None
-
-    class Config:
-        orm_mode = True
 
 
 def _audit_append(title: str, request_raw: str, outcome: str, approver: str) -> None:
@@ -395,6 +398,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="您的帳號已被停用，請聯絡平台管理員",
         )
 
+    if record_activity(db, user):
+        db.refresh(user)
     access_token = create_access_token(data={"sub": user.username})
     return {
         "access_token": access_token,
@@ -431,6 +436,7 @@ def get_me(
             db, current_user.role, authorization_status=status_val
         ),
         "pending_request": pending,
+        "last_opened_diagram_id": current_user.last_opened_diagram_id,
     }
 
 
@@ -506,6 +512,8 @@ def list_users(
     頁次**合法但超出範圍**時不是錯誤：offset 超過總數，查詢自然回空清單，
     `page` 照樣回顯請求值（FR-6.4，不夾到最後一頁）。
     """
+    if record_activity(db, admin_user):
+        db.refresh(admin_user)
     now = datetime.now(timezone.utc)
     # total 為獨立的計數查詢，**不得**由 len(items) 導出——後者只在多頁時才錯，
     # 而目前的資料量下多頁情境不會自然出現（BR-P2）。

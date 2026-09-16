@@ -9,6 +9,9 @@ interface CatalogRole {
   features: string[];
 }
 
+const SHOW_DEMO_QUICK_USERS =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_QUICK_USERS === 'true';
+
 export const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +36,7 @@ export const LoginPage: React.FC = () => {
         if (roles.length && !requestedRole) setRequestedRole(roles[0].role);
       })
       .catch(() => setCatalog([]));
-  }, [isRegisterMode]);
+  }, [isRegisterMode, requestedRole]);
 
   const handleToggleMode = () => {
     setIsRegisterMode(!isRegisterMode);
@@ -236,7 +239,7 @@ export const LoginPage: React.FC = () => {
             {isRegisterMode ? '已有帳號？立即登入系統' : '沒有帳號？立即註冊新帳號'}
           </button>
 
-          {!isRegisterMode && (
+          {!isRegisterMode && SHOW_DEMO_QUICK_USERS && (
             <>
               <button
                 onClick={() => setShowHelper(!showHelper)}

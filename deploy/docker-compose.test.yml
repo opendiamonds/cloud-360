@@ -2,9 +2,9 @@
 # minus the Cloudflare tunnel: the browser reaches nginx directly on
 # localhost:8090, and nginx reverse-proxies /api to the backend.
 #
-# The database is created fresh from schema_rbac.sql every run (no volume), so
-# the seeded admin / admin123 is expected and harmless — this stack never
-# touches production data.
+# The database is created fresh every run (no volume). The backend runs with
+# APP_ENV=test, so its local/test-only seed creates admin / admin123 for UI
+# regression; this stack never touches production data.
 #
 #   docker compose -f deploy/docker-compose.test.yml up -d --build
 

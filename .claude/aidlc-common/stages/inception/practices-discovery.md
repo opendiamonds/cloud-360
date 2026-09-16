@@ -9,6 +9,7 @@ support_agents:
   - aidlc-developer-agent
   - aidlc-devsecops-agent
 mode: subagent
+summary_confirmation: required
 produces:
   - team-practices
   - discovered-rules
@@ -44,14 +45,13 @@ scopes:
   - feature
   - mvp
   - infra
+  - classic
   - workshop
 inputs: <record>/aidlc-state.md + (brownfield) reverse-engineering evidence
 outputs: "team-practices.md, discovered-rules.md, evidence.md, practices-discovery-timestamp.md, plus one contribution file per support agent. On affirmation, content is promoted to aidlc/spaces/<active-space>/memory/team.md and project.md."
 ---
 
 # Practices Discovery
-
-MANDATORY: Follow stage-protocol.md for approval gates, question format, and completion messages.
 
 This stage discovers how the team works: way of working, walking-skeleton
 stance, testing posture, deployment, and code style. It is a hub-and-spoke
@@ -118,8 +118,8 @@ Each support agent writes:
 `<record>/inception/practices-discovery/contributions/<agent-slug>.md`
 
 The first line must be `**Collaborator:** <agent-slug>`, followed by
-`## Contribution` and `## Positions` as defined by `stage-protocol.md` section
-11. Collect all three files before the interview. Their presence and identity
+`## Contribution` and `## Positions` as defined by
+`stage-protocol-ensemble.md` §11. Collect all three files before the interview. Their presence and identity
 markers are deterministic completion evidence checked by the engine.
 
 ### Step 4: Interview (Always)
@@ -136,6 +136,24 @@ Working, Walking Skeleton, Testing Posture, Deployment, and Code Style.
   sections as suggested answers.
 - **Re-run:** show the matching `memory/team.md` content as the default.
 
+The `memory/*.md` sections you draw the suggested answers from are written for
+this framework's own resolution rules, so they carry vocabulary the person
+answering has no reason to know. Two obligations follow, and they apply to the
+question text as much as to the options:
+
+- **Ask in their words, not the section's.** A section's phrasing is an input to
+  your question, never the question itself. "Walking Skeleton" is the name of a
+  practice; "Should we build a thin end-to-end slice first?" is a question
+  someone can answer. Drop the framework's process nouns from what you present.
+- **Gloss a term of art the first time it appears, in the question itself.** A
+  practice with a name the user may not share gets a single clause defining it,
+  in the question line rather than tucked inside one option, so the definition is
+  read before the choice is made. For the Walking Skeleton area, ask it as
+  **"Build a thin end-to-end slice first? A walking skeleton is a minimal
+  version that runs the whole way through, built first to prove the pieces
+  connect before the real features go in."** and offer the yes/no choice
+  beneath it. Later mentions need no gloss.
+
 Log every interview question with `aidlc-log.ts decision` before presenting it
 and every interview answer with `aidlc-log.ts answer` after the response,
 following the standard non-gate question flow.
@@ -148,7 +166,15 @@ file. The lead alone updates the four declared artifacts:
 
 1. **team-practices.md** - five sections matching `memory/team.md`
    (`## Way of Working`, `## Walking Skeleton`, `## Testing Posture`,
-   `## Deployment`, `## Code Style`), in team voice.
+   `## Deployment`, `## Code Style`), in team voice. `## Testing Posture`
+   MUST include:
+   - `- **Methodology**: tdd | bdd | atdd | test-after | custom`
+   - `- **Ordering**: <the affirmed ordering in one explicit sentence>`
+
+   Use `custom` whenever the answer mixes cadences (for example, BDD scenarios
+   before implementation with lower-level unit tests after implementation).
+   Keep coverage, tooling, test-type, and scope notes as additional bullets;
+   they do not replace the two structured fields.
 2. **discovered-rules.md** - `## Mandated` rules in `ALWAYS ...` form and
    `## Forbidden` rules in `NEVER ...` form, only for human-stated hard
    constraints.
@@ -176,12 +202,15 @@ Run the section 13 learnings ritual, then:
 2. Do not log the affirmation gate with `aidlc-log.ts decision` or
    `aidlc-log.ts answer`; the lifecycle `report` calls own its audit events.
 3. Present `team-practices.md` and `discovered-rules.md` with two options:
-   **Approve** (promote, then continue to `directive.next_stage`) and
-   **Request Changes**.
+   **Approve** (promote, then continue to the next stage) and
+   **Request Changes**. Write the actual next stage name into the Approve
+   option's description, read from the run-stage directive's `next_stage` field
+   (`Complete workflow` when it is null); never show the field name to the user.
 4. STOP and wait for the human response.
 5. Carry the exact answer only into the matching `report` or promotion path
    below; never call `aidlc-log.ts answer` for this gate.
-6. On Request Changes, report `--result rejected --user-input "<feedback>"`,
+6. On Request Changes, report `--result rejected --user-input "Request Changes"
+   --reason "<feedback>"`,
    revise through the lead (and re-run a support only when its evidence must be
    refreshed), then report `--result revised` before re-presenting the gate.
    A rejection invalidates any earlier promotion receipt: the engine refuses
@@ -238,33 +267,18 @@ Use the stage-protocol.md completion template:
 This stage's declared outputs are markdown artifacts under
 `<record>/inception/practices-discovery/`.
 
-- **`required-sections`** checks the markdown shape of the declared outputs.
-- **`upstream-coverage`** checks citation of the brownfield evidence paths that
-  are present. Greenfield conditional inputs are absent by design.
+Imports: `required-sections`, `upstream-coverage`.
+
+Upstream targets: `code-structure`, `technology-stack`, `dependencies`, `code-quality-assessment`, `architecture`, `business-overview`.
+
+Brownfield upstream targets are conditional; inputs absent in a greenfield
+workspace do not count as missing coverage.
 
 ## Learn
 
-While running this stage, maintain a running log in
-`<record>/<phase>/<stage>/memory.md` (create on stage start if absent).
-Append entries under four standard headings:
-
-- **Interpretations** - choices made where the stage prose was ambiguous
-- **Deviations** - places you intentionally departed from the stage prose, and why
-- **Tradeoffs** - alternatives considered and why you picked what you did
-- **Open questions** - anything to confirm before next run, or uncertain context
-
-Format each entry with an ISO 8601 timestamp:
-`- 2026-05-20T10:14:32Z - <summary>; <context>`
-
-Before the approval gate, read memory.md and surface candidates as a
-structured question. For each entry the user keeps, write through the
-section 13 learning tool to:
-
-- `aidlc/spaces/<active-space>/memory/project.md` by default, or `team.md` when
-  the human promotes a team-wide practice;
-- a new `.claude/sensors/aidlc-<id>.md` manifest for a verification
-  check, with its id added to the relevant stage's `sensors:` list.
-
-Even when nothing surfaces, still ask the mandatory "Anything to add for next time?" question from stage-protocol.md section 13. Do not infer "Nothing to add." Only after the human answers that question may you proceed to the gate. The memory.md
-file stays in the artifact directory as part of the stage's permanent record.
-Stage bodies remain immutable framework artifacts.
+Follow stage-protocol.md §13: maintain `<record>/<phase>/<stage>/memory.md`
+under the four standard headings while working; before the approval gate,
+surface candidates with `aidlc-learnings.ts`;
+still ask the mandatory "Anything to add for next time?" question, and persist confirmed selections
+with the tool. The memory file stays in the artefact directory, and the stage
+file remains immutable.

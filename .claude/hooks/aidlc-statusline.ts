@@ -3,20 +3,26 @@
 // Invoked via: bun $CLAUDE_PROJECT_DIR/.claude/hooks/aidlc-statusline.ts
 import { existsSync, readFileSync } from "node:fs";
 import {
-  activeIntent,
-  activeSpace,
   displaySlugFromDirName,
   listIntents,
   listSpaces,
   loadAgents,
+  resolveWorkflowSelection,
   resolveProjectDirFromHook,
-  stateFilePath,
+  stateFilePathForSelection,
+  validSessionId,
 } from "../tools/aidlc-lib.ts";
+import { sessionUsageAggregate } from "../tools/aidlc-usage.ts";
 
 type Input = {
+  session_id?: string;
   workspace?: { project_dir?: string };
   model?: { id?: string };
   context_window?: { used_percentage?: number };
+  // The live transcript path the host pipes in. Accepted for completeness -
+  // costSegment reads the rolled-up ledger, not the transcript, so this is not
+  // required for the cost render.
+  transcript_path?: string;
 };
 
 async function resolveProjectDir(input: Input): Promise<string> {
@@ -78,7 +84,8 @@ const STAGE_DISPLAY: Record<string, string> = {
   "requirements-analysis": "Requirements Analysis",
   "user-stories": "User Stories",
   "refined-mockups": "Refined Mockups",
-  "application-design": "Application Design",
+  "domain-design": "Domain Design",
+  "contract-design": "Contract Design",
   "units-generation": "Units Generation",
   "delivery-planning": "Delivery Planning",
   "functional-design": "Functional Design",
@@ -164,7 +171,65 @@ function progressBar(completed: number, total: number): string {
   return `[${"\u2593".repeat(filled)}${"\u2591".repeat(empty)}]`;
 }
 
-function buildRightSide(modelShort: string, ctxInt: number | null): { plain: string; formatted: string } {
+// covers: function:fmtTokens
+// Compact token count: 1234 -> "1.2k", 3_400_000 -> "3.4M". Sub-1000 values
+// render as their integer. Negative / non-finite guarded to "0". One decimal
+// place at k/M scale, trailing ".0" trimmed ("2k" not "2.0k").
+export function fmtTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  const trim = (s: string): string => s.replace(/\.0$/, "");
+  if (n >= 1e6) return `${trim((n / 1e6).toFixed(1))}M`;
+  if (n >= 1e3) return `${trim((n / 1e3).toFixed(1))}k`;
+  return String(Math.round(n));
+}
+
+// covers: function:costSegment
+// The current workflow/session cost segment: `up<in> down<out> $<usd>`. Reads
+// the rolled-up ledger (FAST - the fold hooks already parsed the transcript; we
+// never re-parse it here). When the total USD is
+// null/zero/unknown (e.g. only unknown models), render tokens only - NEVER a
+// fabricated "$0". Renders ONLY when the ledger exists and carries data: an
+// install without the Claude fold hook (Kiro/Codex/opencode, or an upstream
+// session that never folded) sees no ledger and gets "", so the statusline is
+// byte-unchanged from before this feature.
+//
+// The ledger advances on each fold, so this segment reflects usage through the
+// last folded turn - it can lag the in-flight turn by up to one fold. That is
+// acceptable for a statusline. Returns "" on ANY failure - the statusline must
+// never error out of a cost read. `transcriptPath` selects the current session's
+// workflow-scoped aggregate; the transcript itself is never parsed here.
+export function costSegment(
+  projectDir: string,
+  transcriptPath?: string,
+  sessionId?: string,
+): string {
+  try {
+    if (!projectDir) return "";
+    const t = sessionUsageAggregate(
+      projectDir,
+      transcriptPath,
+      undefined,
+      sessionId,
+    )?.totals;
+    if (!t) return "";
+    const input = t.tokens?.input ?? 0;
+    const output = t.tokens?.output ?? 0;
+    if (input <= 0 && output <= 0 && !(t.usd > 0)) return "";
+    let seg = `↑${fmtTokens(input)} ↓${fmtTokens(output)}`;
+    if (typeof t.usd === "number" && Number.isFinite(t.usd) && t.usd > 0) {
+      seg += ` $${t.usd.toFixed(2)}`;
+    }
+    return seg;
+  } catch {
+    return "";
+  }
+}
+
+function buildRightSide(
+  modelShort: string,
+  ctxInt: number | null,
+  cost: string,
+): { plain: string; formatted: string } {
   const parts: string[] = [];
   const fmtParts: string[] = [];
   if (modelShort) {
@@ -176,6 +241,10 @@ function buildRightSide(modelShort: string, ctxInt: number | null): { plain: str
     const color = contextColor(ctxInt);
     fmtParts.push(`${color}ctx:${ctxInt}%${RESET}`);
   }
+  if (cost) {
+    parts.push(cost);
+    fmtParts.push(cost);
+  }
   return { plain: parts.join(" "), formatted: fmtParts.join(" ") };
 }
 
@@ -186,21 +255,22 @@ function buildRightSide(modelShort: string, ctxInt: number | null): { plain: str
 //     (listSpaces() always reports at least the always-present "default", so a
 //     single-team user — exactly one space — never sees the word "space");
 //   - the intent slug renders whenever a per-intent record is active. On the
-//     flat-legacy / pre-auto-birth layout activeIntent() returns null, so the
+//     flat-legacy / pre-auto-create layout activeIntent() returns null, so the
 //     prefix is empty and the line reads exactly as it did before the workspace
 //     move (a flat project is unchanged).
 // The intent SLUG comes from the registry (rename-stable) when the active
 // record has a registry row; otherwise it falls back to the record dir name
 // minus its `-id8` disambiguator (an orphan / hand-created record).
-function orientationPrefix(projectDir: string): string {
-  const space = activeSpace(projectDir);
-  const activeDir = activeIntent(projectDir, space);
+function orientationPrefix(projectDir: string, sessionId?: string): string {
+  const selection = resolveWorkflowSelection(projectDir, { sessionId });
+  const space = selection.space;
+  const activeDir = selection.intent;
   if (activeDir === null) return ""; // flat-legacy / no record → no prefix
-  const intents = listIntents(projectDir, space);
+  const intents = listIntents(projectDir, space, activeDir);
   const match = intents.find((i) => i.dirName === activeDir);
   const slug = match?.slug || displaySlugFromDirName(activeDir);
   const segments: string[] = [];
-  if (listSpaces(projectDir).length > 1) segments.push(space);
+  if (listSpaces(projectDir, space).length > 1) segments.push(space);
   segments.push(slug);
   return `${segments.join(" · ")} · `;
 }
@@ -232,12 +302,20 @@ async function main(stdinText: string): Promise<void> {
   }
 
   const projectDir = await resolveProjectDir(input);
+  const sessionId = validSessionId(input.session_id) ?? undefined;
   const modelShort = abbreviateModel(input.model?.id ?? "");
   const ctxRaw = input.model?.id ? input.context_window?.used_percentage : undefined;
   const ctxInt = typeof ctxRaw === "number" ? Math.round(ctxRaw) : null;
-  const right = buildRightSide(modelShort, ctxInt);
+  const cost = costSegment(projectDir, input.transcript_path, sessionId);
+  const right = buildRightSide(modelShort, ctxInt, cost);
 
-  const stateFile = projectDir ? stateFilePath(projectDir) : "";
+  const selection = projectDir
+    ? resolveWorkflowSelection(projectDir, { sessionId })
+    : null;
+  const stateFile =
+    projectDir && selection
+      ? stateFilePathForSelection(projectDir, selection)
+      : "";
   if (!stateFile || !existsSync(stateFile)) {
     printLine("[AIDLC] ready", right);
     return;
@@ -262,7 +340,7 @@ async function main(stdinText: string): Promise<void> {
   }
   // Orientation prefix — only computed once a record is active (the state file
   // resolved above), so the empty-state "[AIDLC] ready" lines never carry it.
-  const prefix = orientationPrefix(projectDir);
+  const prefix = orientationPrefix(projectDir, sessionId);
   if (status === "Completed" || status === "Complete") {
     // At workflow completion, show a full bar even if Lifecycle Phase no longer
     // resolves to a real heading (e.g. a future caller writes a "COMPLETE"

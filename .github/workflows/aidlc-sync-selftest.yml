@@ -1,0 +1,662 @@
+name: AI-DLC Sync Selftest
+
+# 同步機制的**自我測試**（[ad:S-D]）。它是本 intent 裡唯一會因為別的單元壞掉而紅燈的
+# 東西：其餘十一個單元交付的是機制，本單元交付的是「機制壞了會有人知道」。
+#
+# 規格正本：
+#   aidlc/spaces/default/intents/260822-gh-projects-sync/construction/
+#     U-9-selftest-workflow/functional-design/business-rules.md        （R-1〜R-6）
+#     U-9-selftest-workflow/functional-design/business-logic-model.md  （兩段式與錯誤表）
+#     U-9-selftest-workflow/functional-design/domain-entities.md       （A-1〜A-6、fixture 集）
+#     U-9-selftest-workflow/nfr-requirements/*.md                      （承載、上界、失敗語意）
+#
+# ==========================================================================
+# 承載形式：純 Actions 單檔，不走 gh-aw、不拆 *-impl.yml
+# ==========================================================================
+# `tech-stack-decisions.md` 逐字：「**不走 gh-aw 對本單元特別重要**：本單元的全部工作是
+# 斷言，**沒有任何一項是判斷性的**。把斷言交給 LLM 路徑，等於讓要被驗證的那類不確定性
+# 進入驗證層本身」。不拆兩檔的理由是 ADR-A10 的拆分前提（多觸發器共用實作、需參數化）
+# 在本單元不成立——只有一個觸發器、不被任何人 workflow_call。
+#
+# 直接後果：`timeout-minutes` 正常生效（gh-aw v0.81.6 編譯 pre-agent-steps 時會靜默丟棄
+# 它，見 ui-regression.md 的註解與 PR #510 的七小時事件）。
+#
+# ==========================================================================
+# 檢查對象是 .yml 原始檔，不是 .lock.yml —— open-items.md 的 N:C-3
+# ==========================================================================
+# `functional-design/business-rules.md:25`、`:29` 與 `business-logic-model.md:22`、`:83`
+# 仍寫「解析編譯後的 `.lock.yml`」、allowlist 涵蓋 `aidlc-sync-*.md`／`.lock.yml`。
+# **那四處是過期的敘述**：四支同步 workflow 已全數定案為純 Actions，`.lock.yml` 根本不
+# 存在，照它寫會交付一個**恆綠的閘門**、而且改同步 workflow 的 PR 根本不觸發本單元。
+#
+# 更正已由 `nfr-requirements/tech-stack-decisions.md:32-34`（2026-08-30T06:11:59Z，
+# reviewer 判 Critical）與 `performance-requirements.md:31` 落地。本檔依**更正版**實作：
+# 下方 allowlist 指向 `.yml`，靜態檢查 `check-agentic-steps.py` 也讀 `.yml`。
+#
+# **上游那四處不由本單元回改**（已核可 artifact，超出授權），登錄為待 Bolt 1 gate 追認
+# ——`N:C-3` 的原定期限就是「Bolt 1 前更正檔名樣式」。更正本身由
+# `run-selftest-tests.py` 的兩條測試釘住（`.lock.yml` 出現即紅、allowlist 指向 `.yml`），
+# 有人把實作改回 `.lock.yml` 時會紅燈。
+
+on:
+  pull_request:
+    # ==================================================================
+    # R-3：本單元的觸發集合，與 U-10a／U-10b 的排除集合**無交集**
+    # ==================================================================
+    # 涵蓋**同步機制本身**：四支 workflow 的原始檔、八個 composite action 目錄、以及
+    # fixture 集。**刻意不含 `aidlc/spaces/*/intents/*/sync-state.json`**——那是反向 PR
+    # 唯一會改的檔（U-8 的 E-1 讓 diff 結構上只含它），改資料不改機制的 PR 不該觸發
+    # 自我測試。
+    #
+    # 這個「無交集」不是靠讀這段註解維持的：`check-paths-relations.py` 的 DISJOINT-1
+    # 每次執行都重新判定一次交集，而它比對的 glob 是從 U-4 的 record.sh 推導出來的，
+    # 不是這裡抄一份。
+    #
+    # fixture 集在 allowlist 內是刻意的（`scalability-requirements.md`）：**改壞 fixture
+    # 等於改壞斷言**，那個改動至少要出現在一次 CI 執行的 diff 裡，而不是悄悄過去。
+    #
+    # 下面九條承載體路徑是 reviewer iteration 1 的 F7 補上的：A-6 斷言的九個檔案
+    # （`ci.yml` ＋ 四支 gh-aw 的 `.md`／`.lock.yml`）原本一個都不在 allowlist 內，於是
+    # **U-10b 上線後任何人把 `paths-ignore` 拿掉都不會觸發 U-9**——那道斷言只在沒人動它
+    # 的時候才會執行，而把排除拿掉的那個 PR 正好是它唯一該紅的時候。
+    #
+    # 最後三條是 reviewer iteration 3 的 F1 補上的：R-1.2 的掃描面是**執行可達閉包**，
+    # 而 `ci.yml` 在種子裡，所以它 `run:` 直接呼叫的這三支也在掃描面上——它們本來一個都
+    # 不在 allowlist 內。後果不是漏檢而是**誤報落在無關的 PR 上**：在它們之中引入代理式
+    # 呼叫的那個 PR 不會跑自我測試，紅燈會落在下一個改同步機制的 PR 身上，而那個作者什麼
+    # 都沒做錯。（同一輪也把 `_walk_python` 收窄成只收 subprocess 呼叫位置——原本另外 8
+    # 個 `frontend/`／`deploy/`／`.claude/` 底下的檔是被**資料清單提到**而不是被呼叫，
+    # 那 8 個的正解是不進掃描面，不是把三個大目錄拉進本單元的觸發面。）
+    #
+    # 這份清單是手寫的 YAML（`on:` 不能求值），但它**不是第二份真實來源**：
+    # `check-paths-relations.py` 的 COVERAGE-1 從 `GH_AW_CARRIERS` 產生要求清單並逐一
+    # 比對這裡，COVERAGE-2 則從 R-1.2 的掃描面產生要求清單並逐一比對這裡，少一條就紅。
+    # 加上它們之後 DISJOINT-1 仍成立（見該檔的交集判定）。
+    paths:
+      - '.github/workflows/aidlc-sync-*.yml'
+      - '.github/actions/aidlc-sync-*/**'
+      - 'aidlc/spaces/*/intents/*/.test-fixtures/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/ui-regression.md'
+      - '.github/workflows/ui-regression.lock.yml'
+      - '.github/workflows/pr-reviewer.md'
+      - '.github/workflows/pr-reviewer.lock.yml'
+      - '.github/workflows/lint-fix.md'
+      - '.github/workflows/lint-fix.lock.yml'
+      - '.github/workflows/contract-guard.md'
+      - '.github/workflows/contract-guard.lock.yml'
+      - 'scripts/validate_repo_contract.py'
+      - 'scripts/validate_env_contract.py'
+      - 'backend/scripts/dump_openapi.py'
+      # 併入 `ut`（PR #508）後多了 `aidlc-sync-pull.yml`：它落在 R-1.2 的種子 glob 內，
+      # 其 `run:` 直接呼叫的這一支因此也在掃描面上（COVERAGE-2 於 2026-09-06 實測紅燈）。
+      - 'scripts/aidlc_sync_pull.py'
+  # [US:S-10] 的可展示性需要手動觸發。第一段不碰網路也不用憑證，多按幾次沒有副作用；
+  # 第二段有 `if:` 把關，缺憑證或缺測試 Project 時整段跳過。
+  workflow_dispatch:
+
+  # ------------------------------------------------------------------
+  # 每週一次的定期執行（ci-pipeline stage，Q3=C）
+  # ------------------------------------------------------------------
+  # `performance-requirements.md` 逐字自陳本 workflow 的常態是**不執行**，並把它列為
+  # 弱點：「一支很少跑的閘門，壞掉時不會立刻被發現」。allowlist 觸發只在有人改動同步
+  # 機制時才生效——而「沒有人改動它」正是它悄悄壞掉最久的那段時間。
+  #
+  # cron 避開全 repo 既有的五個排程：daily-digest `0 23 * * 1-5`、
+  # agentics-maintenance `37 0 * * *`、release-watch `39 16 * * 1`、
+  # 本 intent 的對帳 `13 21 * * *` 與反向 `29 22 * * *`。
+  #
+  # **只有第一段會跑**：第二段的 `if: github.event_name == 'workflow_dispatch'` 讓排程
+  # 執行不碰憑證、不建立任何 issue、不寫任何看板。
+  schedule:
+    - cron: '47 5 * * 3'
+
+# ==========================================================================
+# 刻意**沒有** concurrency —— `scalability-requirements.md:42` 逐字
+# ==========================================================================
+# 「**本單元不需要 concurrency group。** 這與 U-8 的 P-2（必須自成第三組）相反，差別在
+# 於：U-8 的兩次執行會寫同一份 `sync-state.json`，本單元的兩次執行寫的是不同的 item。」
+#
+# 測試 item 是**本次執行專屬**的（見第二段），所以並行的兩個 PR 不會互相覆寫，
+# [ad:ADR-A3] 的「並行 CI 寫同一 item 觸發回讀不符而自動增生 issue」路徑不成立。
+# 這一項與 U-8 相反、容易被「對齊其他同步 workflow」順手加回去，`run-selftest-tests.py`
+# 有一條靜態斷言鎖住它的缺席。
+
+permissions:
+  # 兩段都只讀。第二段對測試 Project 的寫入走 secrets.AIDLC_SYNC_TOKEN，不用
+  # GITHUB_TOKEN——本 workflow 自己的 token 一個字都不寫。
+  contents: read
+
+jobs:
+  # ==========================================================================
+  # 第一段：fixture 驅動的 dry-run（無網路、無憑證）
+  # ==========================================================================
+  # `performance-requirements.md` 的兩段順序就是本單元的效能設計：第一段秒級、失敗訊息
+  # 精確；第二段分鐘級、失敗可能是外部的。**第一段全綠才跑第二段**——一個 fixture 級的
+  # 錯誤若以「端到端失敗」的面貌出現，診斷成本高一個量級，而診斷成本高的閘門會被當成
+  # 雜訊。
+  fixtures:
+    name: Stage 1 — fixture dry-run (no network, no credentials)
+    runs-on: ubuntu-latest
+    # `performance-requirements.md` 給的上界是 10 分鐘。GitHub Actions **沒有 workflow 層
+    # 的 timeout-minutes**（那個鍵只存在於 job 與 step 層），所以這裡是每個 job 各 10 分鐘、
+    # 兩段串接的最壞情況是 20 分鐘 wall clock。這一點與該檔字面的「workflow 層 10」有落差，
+    # 已列入交還 Bolt 4 gate 的清單（`code-summary.md` 交還第 4 項，與第一段的實測耗時同
+    # 一項）；該檔本身也寫明「10 分鐘不是量測值而是估計值，須在
+    # Bolt 4 首次真實執行後複核」。**寫下它的理由是：沒有上界的預設是 GitHub 的 360 分鐘，
+    # 而這個 repo 已經被那個預設咬過一次。**
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # 排程執行沒有 PR，預設會檢出 default branch（`main`）——而同步機制的整合主幹
+          # 是 `ut`（`org.md ## Way of Working`），每個 Bolt 合併到它、deploy-on-merge 也
+          # 掛在它上面。定期健檢要驗的是 `ut` 上的狀態。
+          # 其餘事件維持原行為：`github.ref` 對 `pull_request` 就是 `refs/pull/<n>/merge`
+          # （即 checkout 的預設值），對 `workflow_dispatch` 就是使用者選的 ref。
+          ref: ${{ github.event_name == 'schedule' && 'ut' || github.ref }}
+
+      # ------------------------------------------------------------------
+      # Python 與 PyYAML：釘住，不賭 runner 映像有什麼
+      # ------------------------------------------------------------------
+      # 三支檢查器都 `import yaml`。**「PyYAML 在 GitHub runner 上可用」這件事本 repo 從未
+      # 驗證過**——三個 `import yaml` 的檔（`check-ci-yml.py`、`run-probe-tests.py`、
+      # `aidlc-sync-forward/run-live-tests.py`）至今沒有任何 workflow 執行過它們。
+      #
+      # 而原本的 fallback `python3 -m pip install pyyaml` 在 ubuntu-24.04 的**系統 Python**
+      # 上會以 PEP 668 的 `externally-managed-environment` 失敗（reviewer iteration 1 的
+      # F14）。兩個修法之中選 `actions/setup-python`：它給的是一個獨立的直譯器，pip 裝得
+      # 進去、版本也一起釘住；`--break-system-packages` 只是繞過那道保護，而且把整段第一
+      # 段的可重現性押在系統 Python 的當下狀態上。
+      #
+      # **本 session 無法在 runner 上實測這一段**（沒有 CI 觸發），如實記載為未驗證。
+      - name: Pin the interpreter (do not trust the runner image)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Make sure PyYAML is importable
+        # 已核可計畫的括號裡寫「YAML 以既有 check-ci-yml.py 的同一套自寫解析形狀處理，
+        # 不引入 PyYAML」——那句對 `check-ci-yml.py` 的描述與事實不符（該檔第 56 行就是
+        # `import yaml`），交還報告已記為偏離。
+        run: |
+          set -uo pipefail
+          if python3 -c 'import yaml' 2>/dev/null; then
+            echo "PyYAML 已可 import：$(python3 -c 'import yaml; print(yaml.__version__)')"
+          else
+            echo "setup-python 的環境沒有 PyYAML，安裝一次。"
+            python3 -m pip install --quiet --disable-pip-version-check pyyaml
+            python3 -c 'import yaml; print("已安裝 PyYAML " + yaml.__version__)'
+          fi
+
+      - name: R-1.2 — no agentic engine step in any aidlc-sync workflow
+        # 這是**唯一的機械化決定性閘門**（`business-rules.md` R-2）。沒有它，「有人把判定
+        # 搬進 agent step」只會被 code review 攔，而本 repo 三塊結構性盲區的第一塊就是
+        # 「所有 LLM 路徑」。
+        run: python3 .github/actions/aidlc-sync-selftest/check-agentic-steps.py
+
+      # ------------------------------------------------------------------
+      # 這一步之後的每一道檢查都帶 `if: always()`（reviewer iteration 2 的 M-4，Major）
+      # ------------------------------------------------------------------
+      # A-6 今天對真實 repo **是紅的**（U-10b 未交付，見下）。沒有 `if: always()` 的話，
+      # 它後面的每一步都會被 skip——實測後果是 `run-selftest-fixtures.py` 在 CI 上**一次
+      # 都不會執行**，連帶 A-1／A-2／A-3 的全部 fixture 斷言、F2 的全部具名證據、以及
+      # F7 這一輪才接進來的 `check-ci-yml.py` 與 `run-probe-tests.py` 統統沒跑。
+      #
+      # 也就是說：F7 的 code-summary 寫「加進來之後它每次第一段都跑」——**那句話當時不
+      # 成立**，守衛只是從「沒有被任何 workflow 執行」換成「被一個永遠跑不到的 step 執行」。
+      #
+      # 這幾道檢查彼此獨立（不同的斷言面），所以誰紅都不該遮住其他人的結果。代價是：
+      # 若上面的 checkout／setup-python 失敗，這三步也會各自失敗一次而不是安靜跳過——
+      # 換來的是三道閘門在 CI log 上永遠分得開，這個交換是刻意的。
+      - name: A-6 — reverse-PR write paths vs. every paths-ignore carrier
+        # **這一步現在會紅，而且那是正確的。** U-10b 尚未交付，四支 gh-aw 的 paths-ignore
+        # 還不存在 ⇒ 反向 PR 現在真的會進 gauntlet，正是 R-5 逐字警告的後果。
+        # 不得為了讓它現在綠而把那四支寫成可選（`open-items.md` 的 N:M-5 警告的形狀）。
+        if: always()
+        run: python3 .github/actions/aidlc-sync-selftest/check-paths-relations.py
+
+      - name: A-1 / A-2 / A-3 — fixture-driven assertions and the upstream drivers
+        if: always()
+        run: python3 .github/actions/aidlc-sync-selftest/run-selftest-fixtures.py
+
+      # ------------------------------------------------------------------
+      # 三支檢查器自己的行為測試（orchestrator 裁決，iteration 2 的 m-3）
+      # ------------------------------------------------------------------
+      # `run-selftest-tests.py` 過去**不被任何 workflow 執行**（`aidlc-sync-selftest.yml`
+      # 對它的四處命中全部是註解）。後果是這兩輪合計 24 項修正的迴歸保護在 CI 上等於零：
+      # 所有 code-summary 裡「由 test_X 釘住」的宣稱，實際意思是「有人手動跑時會紅」。
+      #
+      # 裁決與 F7 同一條理由：一套沒人跑的測試等於沒有。實測約 40 秒，落在
+      # `performance-requirements.md` 的 10 分鐘上界內。
+      - name: The checkers' own behaviour tests
+        if: always()
+        run: python3 .github/actions/aidlc-sync-selftest/run-selftest-tests.py
+
+      # ------------------------------------------------------------------
+      # 四支從未被任何 workflow 執行的離線套件（ci-pipeline stage，Q1=A）
+      # ------------------------------------------------------------------
+      # 逐支比對 `.github/workflows/` 之後的事實：14 支離線套件中 10 支會在 CI 執行
+      # （4 支是本 job 的直接 step，6 支由 `run-selftest-fixtures.py` 的 UPSTREAM_DRIVERS
+      # 轉呼），**下面這四支一支都不會**。三支 impl workflow 與 `ci.yml` 對它們的命中
+      # 全部是註解，不是 `run:`。
+      #
+      # 合計 135 tests / 995 checks 在 CI 上等於零——與 `run-selftest-tests.py` 被接進來
+      # 之前是同一種狀況，理由也同一條：一套沒人跑的測試等於沒有。
+      #
+      # 為什麼放這裡而不是 `ci.yml`：本 job 的 allowlist 已涵蓋
+      # `.github/actions/aidlc-sync-*/**`，也就是這四支與它們受測物**唯一**能被改動的
+      # 路徑；放進 `ci.yml` 反而會被 `gate` job 的 [aidlc-sync] skip 影響。
+      #
+      # 每支各自一個 step（不是一個迴圈）：失敗時 GitHub 的 UI 直接指出是哪一個單元，
+      # 而合成一步會讓四支的輸出混在同一塊 log 裡。全部帶 `if: always()`，理由與上面
+      # 每一步相同——任何一支紅了，其餘各支的結果仍然要看得到。
+      #
+      # 實測耗時（本機，ci-pipeline stage）：board 16.90 s、record 24.00 s、
+      # notify 17.08 s、reconcile 48.84 s，合計 106.82 s。加上本 job 原有的量，
+      # 仍落在 `performance-requirements.md` 的 10 分鐘上界內。
+      - name: U-3 — board client stub suite
+        if: always()
+        run: python3 .github/actions/aidlc-sync-board/run-stub-tests.py
+
+      - name: U-4 — record store stub suite
+        if: always()
+        run: python3 .github/actions/aidlc-sync-record/run-stub-tests.py
+
+      - name: U-5 — notifier stub suite
+        if: always()
+        run: python3 .github/actions/aidlc-sync-notify/run-stub-tests.py
+
+      - name: U-7 — reconcile orchestration suite
+        if: always()
+        run: python3 .github/actions/aidlc-sync-reconcile/run-reconcile-tests.py
+
+  # ==========================================================================
+  # 第二段：對獨立測試 Project 的端到端
+  # ==========================================================================
+  # **本段從未被執行過**（code-generation Q2=A）。它需要真實憑證與真實 PR 觸發，兩者都
+  # 不在該 stage 的授權內，所以本 intent 至今對它只有 stub 證據：`run-selftest-tests.py`
+  # 以抽出腳本 ＋ 假 `gh` 的方式驗過 SEC-3 守衛與 preflight 的分支，**沒有任何一次真實的
+  # 看板往返**。這一點必須留在這裡，不要因為它看起來寫完了就當成驗過了。
+  #
+  # 完成判準三條中，只有②（把判定搬進 agent step ⇒ 靜態檢查失敗）在 code-generation
+  # 階段被突變驗證證實；①（改壞映射 ⇒ CI 紅燈）由第一段的突變驗證證實其機制；
+  # ③（憑證做範圍外寫入 ⇒ 403）只有 stub 證據，且 `security-requirements.md` 的缺口 Q-1
+  # 已指出它在**組織層** Projects 授權下恆不發生——落點待 Bolt 0 gate。
+  endtoend:
+    name: Stage 2 — end-to-end against the isolated test Project
+    # 第一段紅 ⇒ 本段不跑。**needs 這一行就是兩段順序的全部實作**：下面的 `if:` 沒有用
+    # `always()`／`!cancelled()`（那兩者會覆寫 needs 的跳過語意），所以第一段失敗時
+    # GitHub 仍會直接跳過本 job。`run-selftest-tests.py` 有靜態斷言鎖住這兩件事。
+    needs: fixtures
+    # ------------------------------------------------------------------
+    # 只在 workflow_dispatch 執行 —— reviewer iteration 1 的 F8（Major，安全）
+    # ------------------------------------------------------------------
+    # 上面的 `paths` allowlist 涵蓋 `.github/actions/aidlc-sync-*/**`，而本段 checkout
+    # **PR head** 之後直接 `bash "${BOARD_SH}"`，環境帶 `secrets.AIDLC_SYNC_TOKEN`
+    # （組織層 Projects 讀寫 ＋ contents write ＋ issues write ＋ PR write）。
+    # 也就是說：**一個修改 `board.sh` 的 PR，會讓自我測試用那份憑證執行它自己改的腳本。**
+    #
+    # 裁決（orchestrator，保守收窄）：第二段改為只在手動觸發時執行；第一段維持
+    # `pull_request` 不變——那是閘門，而且它不碰憑證（`test_stage_1_uses_no_credential`）。
+    #
+    # 三個理由：①憑證尚未鑄造，本段目前本來就不會跑，收窄的成本為零；②收窄是**減少
+    # 能力**，可由 gate 隨時放寬，反之不然；③這是 IAM 面向的決定，屬 Bolt 0 gate。
+    #
+    # `security-requirements.md` 的 ADR-0006 四面向表**沒有處理這一面**（IAM 欄只指向
+    # 缺口 Q-1 的 403）。該檔是已核可上游，本單元不回改；此事已列入 `code-summary.md`
+    # 的交還清單，指派 Bolt 0 gate。
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # ------------------------------------------------------------------
+      # preflight：兩個外部依賴缺任一即整段跳過，並在 summary 寫明**是哪一個**
+      # ------------------------------------------------------------------
+      # `business-logic-model.md` 的錯誤表逐字要求「第二段建立測試 item 失敗……訊息須指出
+      # 是哪一個」。這裡把它提前到進場：與其讓它在某個更深的地方以更難懂的方式失敗，
+      # 不如在第一步就講清楚缺的是憑證還是測試 Project。
+      #
+      # 為什麼是 step 層而不是 job 層的 `if:`：GitHub 的 `secrets` context **在 job 層的
+      # `if:` 不可用**，把它寫在那裡會靜默地永遠為假。
+      #
+      # 跳過不是紅燈：缺外部依賴屬 `reliability-requirements.md` 的「外部錯誤」類，與
+      # 「斷言失敗」是相反意義的兩種紅燈。但它也**不是靜默**——summary 上留一行。
+      - name: Preflight — which external dependency is missing
+        id: preflight
+        env:
+          SYNC_TOKEN: ${{ secrets.AIDLC_SYNC_TOKEN }}
+          TEST_PROJECT_NUMBER: ${{ vars.AIDLC_SELFTEST_PROJECT_NUMBER }}
+        run: |
+          set -uo pipefail
+          missing=""
+          [ -n "${SYNC_TOKEN}" ] || missing="${missing} secrets.AIDLC_SYNC_TOKEN"
+          [ -n "${TEST_PROJECT_NUMBER}" ] || missing="${missing} vars.AIDLC_SELFTEST_PROJECT_NUMBER"
+          if [ -n "${missing}" ]; then
+            {
+              echo "### 第二段已跳過"
+              echo ""
+              echo "缺少下列外部依賴：\`${missing# }\`"
+              echo ""
+              echo "獨立測試 Project 需要在組織層建立，與 E-1 的憑證屬同一類外部依賴。"
+              echo "它是否已列入 \`external-dependency-map.md\` 的 E-1〜E-4，"
+              echo "\`domain-entities.md:71\` 逐字記為「本站未逐項核對——列為 Bolt 4 前必須確認的一項」。"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "第二段跳過：缺${missing}"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "proceed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # ------------------------------------------------------------------
+      # SEC-3：正式看板 #16 絕對不許寫入
+      # ------------------------------------------------------------------
+      # 同一份憑證同時寫得了 #16，**隔離只靠這個設定值、不靠權限**。
+      #
+      # 比對**必須先正規化成整數再比**，不能比字串：真正的查詢點用的是 int()，而
+      # "016"／" 16"／"16 "／"0016"／"+16" 在 int() 之下**全部等於 16**、在字串比對之下
+      # **全部不等於 "16"** —— 守衛放行、查詢卻打到正式看板。形式逐字沿用
+      # `aidlc-sync-forward/run-live-tests.py` 已修正的那一份（reviewer iteration 1
+      # Critical，實測五種變體皆可繞過），**不自創第二種寫法**。
+      #
+      # 為什麼是 python3 而不是 bash：bash 的 `$((016))` 是**八進位**，等於 14 —— 拿它
+      # 做正規化會親手製造這道守衛存在的目的所要防的那個洞。
+      - name: SEC-3 — refuse to write the production board
+        id: sec3-guard
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          AIDLC_PROJECT_NUMBER: ${{ vars.AIDLC_SELFTEST_PROJECT_NUMBER }}
+        run: |
+          set -uo pipefail
+          python3 - <<'PY'
+          import os
+          import sys
+
+          # SEC-3 的唯一禁區。具名常數而非散落的字面值——這道防線是使用者明示的硬約束，
+          # 它的值不該要靠 grep 才找得到。
+          LIVE_FORBIDDEN_PROJECT = 16
+
+          raw = os.environ.get("AIDLC_PROJECT_NUMBER", "")
+          try:
+              project_number_int = int(str(raw).strip())
+          except (TypeError, ValueError):
+              sys.stderr.write(
+                  f"REFUSE：AIDLC_PROJECT_NUMBER={raw!r} 不是整數，"
+                  "無法判定它是不是正式看板（SEC-3）。exit 4。\n")
+              raise SystemExit(4)
+          if project_number_int == LIVE_FORBIDDEN_PROJECT:
+              sys.stderr.write(
+                  f"REFUSE：AIDLC_PROJECT_NUMBER={raw!r} 解析為 "
+                  f"#{project_number_int}，是正式看板（SEC-3）。"
+                  "自我測試只准寫獨立的測試看板。exit 4。\n")
+              raise SystemExit(4)
+          print(f"SEC-3 通過：目標看板 #{project_number_int}，非正式看板 #{LIVE_FORBIDDEN_PROJECT}。")
+          PY
+
+      - name: Check out the pull request head
+        if: steps.preflight.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ------------------------------------------------------------------
+      # 建立**本次執行專屬**的測試 item
+      # ------------------------------------------------------------------
+      # `domain-entities.md` 的生命週期表：位置在獨立測試 Project（不在 #16）、生命週期
+      # 為本次執行專屬（建立於執行開始、清理於結束含失敗路徑）、並行時各寫各的 item。
+      # intent_id 帶 run id 與 attempt，兩次執行不會撞名。
+      #
+      # ⚠ 隔離邊界只畫在 Project 上，item 的**載體是正式 repo 的 issue**（iteration 3 的 F3）
+      # ------------------------------------------------------------------
+      # `board.sh` 的 create_item 走 `POST repos/${REPO_OWNER}/${REPO_NAME}/issues`，而
+      # owner／name 取自 `GITHUB_REPOSITORY`——也就是 `opendiamonds/cloud-360` 本身。
+      # `domain-entities.md` 的生命週期表把隔離邊界只畫在 Project 上，沒有寫下這一面。
+      # 三件事必須寫在這裡，因為它們不會從別的地方看出來：
+      #
+      #   1. 每一次第二段執行，都會在**正式 repo** 開一則真的 issue。
+      #   2. 全 repo 只有 `issue-triage.lock.yml` 吃 `on.issues`（types: opened,
+      #      reopened，實測 2026-09-06 逐檔解析全部 workflow，命中僅此一支）。所以開這則
+      #      issue 會**立刻啟動一支 gh-aw（LLM 驅動）workflow 去分類它**。那正好落在
+      #      `project.md` 逐字點名的三塊結構性盲區的第一塊（所有 LLM 路徑），而本單元的
+      #      整個設計論證是「不把不確定性放進驗證層」。
+      #   3. 清理與那次 triage run 是**互相競賽**的：清理在本 job 結束時跑，triage 由
+      #      issue 事件觸發，兩者沒有任何同步。清理贏了也只是關閉＋移出看板（見清理
+      #      step 的 F2 說明），triage 仍可能已經貼上標籤或留言。
+      #
+      # **這裡不自行選定方案**——「開專用測試 repo」還是「把 selftest 的 issue 排除在
+      # issue-triage 之外」是範圍決定，屬 Bolt 0 gate 與憑證鑄造一起裁。已寫進
+      # `code-summary.md` 的交還清單（併入 `domain-entities.md:71` 那一項，並寫明它不只
+      # 是一個 Project）。在裁決之前，第二段只在 `workflow_dispatch` 下執行，所以這件事
+      # 目前不會自動發生。
+      - name: Create the run-scoped test item
+        id: create
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AIDLC_SYNC_TOKEN }}
+          AIDLC_PROJECT_OWNER: ${{ vars.AIDLC_SELFTEST_PROJECT_OWNER || 'opendiamonds' }}
+          AIDLC_PROJECT_NUMBER: ${{ vars.AIDLC_SELFTEST_PROJECT_NUMBER }}
+          AIDLC_FIELD_NAME: ${{ vars.AIDLC_SELFTEST_FIELD_NAME || 'AI-DLC Stage' }}
+        run: |
+          # `set -uo pipefail` **關不掉 `-e`**：GitHub 的預設 shell 是 `bash -e {0}`，而
+          # `set -o` 只能開、關要用 `set +e`。所以每一個「跑完之後要看 rc」的呼叫都必須
+          # 寫成 `rc=0; cmd || rc=$?`——直接 `cmd` 再 `rc=$?` 在 CI 上根本走不到第二行，
+          # 下面那段錯誤表要求的診斷訊息一個字都印不出來（reviewer iteration 1 的 F4）。
+          set -uo pipefail
+          BOARD_SH=".github/actions/aidlc-sync-board/board.sh"
+          [ -f "${BOARD_SH}" ] || { echo "::error::找不到 ${BOARD_SH}"; exit 1; }
+          INTENT_ID="aidlc-sync-selftest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          out="$(mktemp)"
+          rc=0
+          AIDLC_OPERATION=create_item AIDLC_INTENT_ID="${INTENT_ID}" \
+          AIDLC_ISSUE_TITLE="${INTENT_ID}" GITHUB_OUTPUT="${out}" bash "${BOARD_SH}" || rc=$?
+          binding="$(sed -n 's/^binding=//p' "${out}" | tail -n 1 || true)"
+          if [ "${rc}" -ne 0 ] || [ -z "${binding}" ]; then
+            echo "::error::建立測試 item 失敗（rc=${rc}）。這通常代表**憑證**或**測試 Project**有問題——"
+            echo "::error::目標為 ${AIDLC_PROJECT_OWNER}/projects/${AIDLC_PROJECT_NUMBER}，intent_id=${INTENT_ID}"
+            exit 1
+          fi
+          echo "binding=${binding}" >> "${GITHUB_OUTPUT}"
+          echo "intent_id=${INTENT_ID}" >> "${GITHUB_OUTPUT}"
+          echo "建立完成：issue #${binding}（${INTENT_ID}）"
+
+      # ------------------------------------------------------------------
+      # 真實走一次 write → 回讀，斷言看板上真的變了
+      # ------------------------------------------------------------------
+      # 斷言失敗與外部錯誤在**第一行**即可分辨（`reliability-requirements.md`），且斷言
+      # 失敗的訊息含**預期與實得**（R-1.1）。第二段**不做自動重試**：本單元是驗證路徑，
+      # 「靠重試才綠的驗證，證明的東西比它宣稱的少」。
+      - name: Round trip — write Status, read it back, assert the value
+        id: round-trip
+        if: steps.preflight.outputs.proceed == 'true' && steps.create.outputs.binding != ''
+        env:
+          GH_TOKEN: ${{ secrets.AIDLC_SYNC_TOKEN }}
+          AIDLC_PROJECT_OWNER: ${{ vars.AIDLC_SELFTEST_PROJECT_OWNER || 'opendiamonds' }}
+          AIDLC_PROJECT_NUMBER: ${{ vars.AIDLC_SELFTEST_PROJECT_NUMBER }}
+          AIDLC_FIELD_NAME: ${{ vars.AIDLC_SELFTEST_FIELD_NAME || 'AI-DLC Stage' }}
+          BINDING: ${{ steps.create.outputs.binding }}
+        run: |
+          # 同上：`-e` 關不掉，所以兩個 board.sh 呼叫都寫成 `rc=0; … || rc=$?`。原本的
+          # `bash "${BOARD_SH}"` 後接 `rc=$?` 讓下面兩段 `EXTERNAL-ERROR:` 在 CI 上完全
+          # 不可達——step 在 board.sh 非零的那一刻就結束了（reviewer iteration 1 的 F4）。
+          set -uo pipefail
+          BOARD_SH=".github/actions/aidlc-sync-board/board.sh"
+          DESIRED="In progress"
+          out="$(mktemp)"
+          rc=0
+          AIDLC_OPERATION=write_status AIDLC_BINDING="${BINDING}" \
+          AIDLC_DESIRED_STATUS="${DESIRED}" AIDLC_EXPECTED_STATUS="" \
+          GITHUB_OUTPUT="${out}" bash "${BOARD_SH}" || rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo "EXTERNAL-ERROR: write_status 以 rc=${rc} 結束（外部錯誤，非斷言失敗）"
+            exit 1
+          fi
+          out2="$(mktemp)"
+          rc=0
+          AIDLC_OPERATION=read_item AIDLC_BINDING="${BINDING}" \
+          GITHUB_OUTPUT="${out2}" bash "${BOARD_SH}" || rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo "EXTERNAL-ERROR: read_item 以 rc=${rc} 結束（外部錯誤，非斷言失敗）"
+            exit 1
+          fi
+          actual="$(sed -n 's/^status=//p' "${out2}" | tail -n 1 || true)"
+          if [ "${actual}" != "${DESIRED}" ]; then
+            echo "ASSERTION-FAILED: 寫入後回讀的 Status 與寫入值不符"
+            echo "  預期：${DESIRED}"
+            echo "  實得：${actual}"
+            exit 1
+          fi
+          echo "往返一致：Status=${actual}"
+
+      # ------------------------------------------------------------------
+      # R-1.3：憑證做**範圍外**寫入 → 斷言 403
+      # ------------------------------------------------------------------
+      # **這條斷言目前在設計上就打不到目標，這件事必須寫在它旁邊而不是只寫在文件裡。**
+      # `security-requirements.md` 的缺口 Q-1 逐字：NFR-S1（經 ADR-0014 更正）把 Projects
+      # 那一項定為「**組織層** Projects 讀寫」，而組織層讀寫涵蓋該組織下的**所有**
+      # Project——沒有任何組織內的 Project 是「範圍外」的，403 永遠不會發生。
+      #
+      # 該檔給了三個真實的落點（另一個組織的 Project／repo 內容的範圍外路徑／未安裝該
+      # App 的 repo），並把選定落點指派給 **units-generation 的 U-9 完成判準第 3 條**，
+      # 確認人為 **Bolt 0 的 gate**（與憑證怎麼鑄是同一個決定點）。
+      #
+      # 在那個決定做出來之前，本步驟**不假裝有斷言**：它以 `vars` 是否提供了一個明確的
+      # 範圍外目標為條件，沒提供就跳過並在 summary 說明為什麼。寫一個「呼叫一個一定會成功
+      # 的 API 然後不檢查」的步驟會比沒有這一步更糟——那正是 `project.md` 記載過的恆真
+      # 斷言。
+      - name: R-1.3 — an out-of-scope write must come back 403
+        id: r13-out-of-scope
+        if: steps.preflight.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AIDLC_SYNC_TOKEN }}
+          OUT_OF_SCOPE_REPO: ${{ vars.AIDLC_SELFTEST_OUT_OF_SCOPE_REPO }}
+        run: |
+          # **這條斷言原本是反向的**（reviewer iteration 1 的 F4）：`gh api` 對 403 會
+          # exit 1，而 `-e` 關不掉，於是**通過路徑**（真的收到 403）當場殺掉 step，寫入
+          # **成功**時才走得到 `ASSERTION-FAILED`。也就是說它在補上範圍外目標之後仍然
+          # 永遠不可能綠。修法是把取狀態碼與判定分開：取的時候一律 `|| true`（403 是
+          # 預期結果，不是錯誤），判定交給下面的字串比對。
+          set -uo pipefail
+          if [ -z "${OUT_OF_SCOPE_REPO}" ]; then
+            {
+              echo "### R-1.3（403）未執行"
+              echo ""
+              echo "未設定 \`vars.AIDLC_SELFTEST_OUT_OF_SCOPE_REPO\`，本次沒有可安全嘗試的範圍外目標。"
+              echo ""
+              echo "這不是設定遺漏而是**上游未定案**：\`security-requirements.md\` 的缺口 Q-1 指出"
+              echo "組織層 Projects 授權之下沒有任何組織內 Project 是範圍外的，403 恆不發生；"
+              echo "真實落點的選定已指派 units-generation 的 U-9 完成判準第 3 條，確認人為 Bolt 0 gate。"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "R-1.3 跳過：沒有已定案的範圍外目標（見 summary）"
+            exit 0
+          fi
+          raw="$(gh api -X PUT "repos/${OUT_OF_SCOPE_REPO}/contents/aidlc-sync-selftest-probe.txt" \
+                   -f message="aidlc-sync selftest scope probe" \
+                   -f content="$(printf 'probe' | base64)" \
+                   --include --silent 2>/dev/null || true)"
+          http="$(printf '%s\n' "${raw}" \
+                  | sed -n 's/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p' | head -n 1 || true)"
+          if [ "${http}" != "403" ]; then
+            echo "ASSERTION-FAILED: 範圍外寫入沒有被拒絕"
+            echo "  預期：HTTP 403"
+            echo "  實得：HTTP ${http:-（讀不到狀態碼）}（目標 ${OUT_OF_SCOPE_REPO}）"
+            exit 1
+          fi
+          echo "R-1.3 通過：範圍外寫入回 403"
+
+      # ------------------------------------------------------------------
+      # 清理：**必須在失敗路徑上也執行**（R-4）
+      # ------------------------------------------------------------------
+      # 殘留的後果不是髒資料而是**假紅燈**：下一次執行可能因為看到不屬於自己的 item 而
+      # 失敗，於是有人開始把自我測試的紅燈當成雜訊。「**一個會誤報的閘門，比沒有閘門更快
+      # 失去作用。**」
+      #
+      # 清理失敗**本身是紅燈**，且訊息須含殘留 item 的識別資訊（`business-logic-model.md`
+      # 的錯誤表）——若清理失敗只記 warning，殘留會累積，而累積的殘留正好把本單元推進
+      # 「紅了就重跑」的狀態。
+      #
+      # 動手之前先核對標題是本次執行建立的那一則，不對就拒絕並大聲失敗：一個會改別人
+      # 東西的步驟，最壞的失敗模式是改到別人的東西。
+      #
+      # 清理＝**關閉 issue ＋ 把 item 移出測試看板**，不是刪除 issue（iteration 3 的 F2）
+      # ------------------------------------------------------------------
+      # 前一版用 GraphQL `deleteIssue`。它需要 repo **admin**——fine-grained PAT 與
+      # GitHub App 的 `issues: write` 只能建立／關閉／編輯，**沒有任何權限項可以刪除
+      # issue**。而本 workflow 已宣告的憑證權限是「組織層 Projects 讀寫 ＋ contents
+      # write ＋ issues write ＋ PR write」（`security-requirements.md`，ADR-0015 §8），
+      # 也就是說那個呼叫在正式憑證下必然失敗。
+      #
+      # 後果不是「清理失敗一次」，是 R-4 想防的螺旋**反過來成真**：清理失敗是紅燈，於是
+      # 第二段永遠紅；而每跑一次又殘留一則 item。所以改成兩個**在已宣告權限內**的動作。
+      # 沒有為了保留「真刪除」而去要 repo admin——為了清理測試資料而把憑證升到 admin，
+      # 代價遠大於「issue 留在那裡但已關閉」。
+      - name: Clean up the run-scoped test item
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.AIDLC_SYNC_TOKEN }}
+          BINDING: ${{ steps.create.outputs.binding }}
+          INTENT_ID: ${{ steps.create.outputs.intent_id }}
+          AIDLC_PROJECT_OWNER: ${{ vars.AIDLC_SELFTEST_PROJECT_OWNER || 'opendiamonds' }}
+          AIDLC_PROJECT_NUMBER: ${{ vars.AIDLC_SELFTEST_PROJECT_NUMBER }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BINDING}" ]; then
+            echo "沒有建立過測試 item（第二段在建立之前就結束了），無須清理。"
+            exit 0
+          fi
+          node_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${BINDING}" --jq '.node_id' 2>/dev/null || true)"
+          title="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${BINDING}" --jq '.title' 2>/dev/null || true)"
+          if [ -z "${node_id}" ]; then
+            echo "::error::清理失敗：讀不到 issue #${BINDING}（intent_id=${INTENT_ID}）。"
+            echo "::error::**殘留一則測試 item，需人工清理**——留著它會讓下一次執行假紅燈。"
+            exit 1
+          fi
+          if [ "${title}" != "${INTENT_ID}" ]; then
+            echo "::error::拒絕清理 issue #${BINDING}：標題為 ${title}，不是本次執行建立的 ${INTENT_ID}。"
+            echo "::error::**殘留一則測試 item，需人工清理**。"
+            exit 1
+          fi
+
+          # ① 關閉 issue（`issues: write` 做得到；`deleteIssue` 做不到）。
+          if ! gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/${BINDING}" \
+                 -f state=closed -f state_reason=not_planned >/dev/null; then
+            echo "::error::清理失敗：關閉 issue #${BINDING}（${INTENT_ID}）沒有成功。"
+            echo "::error::**殘留一則開啟中的測試 item，需人工清理**。"
+            exit 1
+          fi
+
+          # ② 把它移出測試看板。殘留在看板上的 item 才是會讓下一次執行假紅燈的那一個，
+          #    所以這一步不是可選的。`deleteProjectV2Item` 只移除看板上的 item，不動
+          #    issue 本身——它落在「組織層 Projects 讀寫」內。
+          items="$(gh api graphql -f query='
+            query($owner:String!,$name:String!,$number:Int!){
+              repository(owner:$owner,name:$name){
+                issue(number:$number){
+                  projectItems(first:20){ nodes{ id project{ id number owner{ ... on Organization { login } ... on User { login } } } } }
+                }
+              }
+            }' -f owner="${GITHUB_REPOSITORY%%/*}" -f name="${GITHUB_REPOSITORY#*/}" \
+               -F number="${BINDING}" 2>&1)" || {
+            echo "::error::清理失敗：查不到 issue #${BINDING}（${INTENT_ID}）在哪些看板上。"
+            echo "::error::回應：${items}"
+            echo "::error::**看板上可能殘留一則測試 item，需人工清理**。"
+            exit 1
+          }
+          pair="$(printf '%s' "${items}" | jq -r --arg owner "${AIDLC_PROJECT_OWNER}" --argjson num "${AIDLC_PROJECT_NUMBER}" '
+            .data.repository.issue.projectItems.nodes[]
+            | select(.project.number == $num and .project.owner.login == $owner)
+            | "\(.project.id) \(.id)"' | head -n 1)"
+          if [ -z "${pair}" ]; then
+            echo "::notice::issue #${BINDING}（${INTENT_ID}）不在 ${AIDLC_PROJECT_OWNER}/projects/${AIDLC_PROJECT_NUMBER} 上——看板無殘留，只關閉 issue。"
+            exit 0
+          fi
+          project_id="${pair%% *}"
+          item_id="${pair#* }"
+          if ! gh api graphql -f query='mutation($p:ID!,$i:ID!){ deleteProjectV2Item(input:{projectId:$p,itemId:$i}){ deletedItemId } }' \
+                 -f p="${project_id}" -f i="${item_id}" >/dev/null; then
+            echo "::error::清理失敗：把 issue #${BINDING}（${INTENT_ID}）移出測試看板沒有成功。"
+            echo "::error::**看板上殘留一則測試 item，需人工清理**——留著它會讓下一次執行假紅燈。"
+            exit 1
+          fi
+          echo "已清理測試 item：issue #${BINDING}（${INTENT_ID}）已關閉，並已移出測試看板"

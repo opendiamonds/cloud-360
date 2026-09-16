@@ -95,6 +95,11 @@ REQUIRED_TEXT = {
         "Cloud Security Posture",
         "human approval gate",
         "MCP & Skill Management",
+        # U-11（intent 260822-gh-projects-sync）：README 的需求正本指路段落。
+        # 在此登錄之前，刪掉整段不會讓任何檢查變紅——本段是該 intent 對外唯一的
+        # 「需求正本在哪」宣告，沒有斷言等於沒有交付。
+        "Requirements Source",
+        "https://github.com/users/opendiamonds/projects/16",
     ),
     "CLAUDE.md": (
         "AIDLC",
@@ -229,15 +234,21 @@ def fail(message: str) -> int:
     return 1
 
 
-def git_diff_name_only(*args: str) -> list[str]:
+def git_ls_files() -> list[str]:
+    """Every file tracked by git, as repo-root-relative paths.
+
+    ``-z`` returns NUL-separated, unquoted paths. Without it git applies
+    ``core.quotePath`` and escapes non-ASCII names, which would corrupt the
+    path parts this contract compares against.
+    """
     result = subprocess.run(
-        ["git", "diff", "--name-only", *args],
+        ["git", "ls-files", "-z"],
         cwd=ROOT,
         check=True,
         text=True,
         capture_output=True,
     )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return [path for path in result.stdout.split("\0") if path]
 
 
 def all_record_roots() -> list[Path]:
@@ -354,10 +365,23 @@ def validate_docs_traditional_chinese() -> int:
 
 
 def validate_no_production_config_added() -> int:
-    changed_files = set(git_diff_name_only("--cached")) | set(git_diff_name_only())
+    """Reject any tracked file whose path carries a forbidden part.
+
+    This scans EVERY tracked file (``git ls-files``), deliberately NOT a diff.
+    Do not "optimise" it back to a diff base: CI checks out a clean tree, so
+    ``git diff`` and ``git diff --cached`` are both empty there, the loop never
+    runs, and the check passes unconditionally on every PR. It only ever fired
+    on a dirty local working tree, which made the rule's claim ("CI blocks it")
+    stronger than the mechanism (see issue #509). A whole-repo scan needs no
+    base ref, so it behaves identically in CI, on a shallow clone, and locally.
+
+    Matching stays part-exact via ``Path(path).parts`` rather than substring:
+    ``aidlc-product-agent.md`` contains "prod" without being a "prod" path
+    part, and 10 such files legitimately exist in this repo.
+    """
     violations: list[str] = []
 
-    for path in changed_files:
+    for path in git_ls_files():
         parts = {part.lower() for part in Path(path).parts}
         if parts & FORBIDDEN_NEW_PATH_PARTS:
             violations.append(path)

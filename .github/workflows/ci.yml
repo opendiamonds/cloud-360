@@ -5,6 +5,9 @@ name: CI
 # very contract it enforces.
 
 on:
+  # pull_request 側刻意不加 paths-ignore：GitHub 對 pull_request 的路徑過濾比對的是
+  # 整個 PR 的檔案集合，不是這一次推送的 commit。PR 裡永遠還有別的檔案，所以過濾永遠
+  # 不成立——寫了會是一個看起來有、實際不會生效的假保證。
   pull_request:
   push:
     branches:
@@ -12,17 +15,133 @@ on:
       - ut
       - "danniel/**"
       - "chore/**"
+    # 同步機制的回寫只碰這一個檔案（U-4 的 record.sh 把白名單逐字限定為
+    # <record>/sync-state.json），所以只排除這一條 glob：只改它的推送根本不會建立
+    # CI run，開發者手上正在跑的 run 也就不會被 cancel-in-progress 取消。
+    # 這條 glob 必須維持這麼窄（security-requirements.md SEC-1）：寫成 aidlc/**
+    # 會讓所有 AIDLC 產出繞過 repo contract 檢查；寫成 **/*.json 會讓
+    # package-lock.json 與 .github/aw/actions-lock.json 這些供應鏈相關的檔案繞過 CI。
+    # .github/actions/aidlc-sync-ci-guard/check-ci-yml.py 會拿 record.sh 的白名單常數
+    # 推導出這條 glob 來比對，兩邊漂移就紅。
+    paths-ignore:
+      - "aidlc/spaces/*/intents/*/sync-state.json"
 
 permissions:
   contents: read
 
+# 這裡刻意**不**把 github.actor 放進 group。上游 nfr-requirements 的選項 A 假設
+# 「同步以 bot 身分推送，actor 與開發者不同，所以會落在不同 group」，但 ADR-0016 §1
+# 把同步身分定為擁有者帳號的 token，實測開發者與同步機制的 github.actor 同為
+# opendiamonds——分不開。（U-4 SEC-4 設定的 aidlc-sync 是 commit 的 author；
+# github.actor 由推送用的憑證決定，與 commit author 無關，兩者不是同一件事。）
+# 加下去只會讓下一個讀這個檔的人以為問題已經解決。
+#
+# 因此 [US:S-1 AC 7] 的「既有 run 不被取消」只在 push 事件成立，靠的是上面的
+# paths-ignore（run 根本不建立），不是 concurrency。pull_request 事件下結構性無解：
+# 要分辨這次 synchronize 是機器還是人造成的，所需資訊（commit 訊息或不同身分）都不在
+# 事件酬載裡，而 concurrency 是 workflow 層、在任何 job 跑起來之前就決定了。
+# 已知代價：開發者的 PR 測試仍會被同步回寫取消一次、需要重跑。AC 7 的這一半待改寫，
+# 確認人為 Bolt 1 gate。下面的 gate job 處理的是 AC 7 的另一半（不跑那四個 job）。
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # 同步機制的回寫 commit 不需要跑下面四道關卡：它只改 <record>/sync-state.json，
+  # 那是機制自己的狀態檔，沒有任何程式、設定或文件契約會被它影響。push 事件由上面的
+  # paths-ignore 擋掉（run 不會建立），這個 job 擋的是 pull_request 事件——它的酬載
+  # 裡沒有 commit 訊息，只能 checkout 之後自己去讀。判斷依據是 U-4 契約定下的
+  # [aidlc-sync] 標記（component-methods.md §C-4）。
+  gate:
+    name: Sync write-back gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      is_sync: ${{ steps.probe.outputs.is_sync }}
+    steps:
+      # 只有非 push 事件才 checkout：push 的訊息在事件酬載裡直接拿得到，省一次
+      # checkout。這個 job 擋在四道關卡前面，它慢多久整條 CI 就慢多久。
+      # fetch-depth: 2 是必要的——pull_request 事件 checkout 的是 refs/pull/N/merge，
+      # 它的 HEAD 是合併結果、訊息不是 PR head commit 的；深度 2 才會把兩個 parent
+      # （其中一個就是 PR head）一起帶下來，下一步才讀得到那一顆。
+      - name: Check out enough history to read the PR head commit
+        if: github.event_name != 'push'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # commit 訊息一律經由 env 傳進來，不用 ${{ }} 直接內插進 run：訊息是任何有推送
+      # 權的人可控的字串，內插等於把它當成 shell 程式碼執行。
+      - name: Decide whether this run came from a sync write-back
+        id: probe
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # 這個 step 的失敗代價不對稱：gate 一旦以非 0 結束，四個 job 就因 needs 全部
+          # 被 skip。此時 run 的結論是 failure（gate 自己紅），PR 上看得到紅燈——但
+          # **merge 不會被擋**：GitHub 對 required status check 把 skipped 視同通過
+          # （官方文件：「Successful check statuses are success, skipped, and neutral」），
+          # 而 ut 根本沒設任何 required check。所以真正的代價是「四道關卡沒跑卻仍可合併」，
+          # 不是「紅燈看不見」。
+          # 因此這個 step 必須「無論如何都走完並輸出一個判定」，不能因為某個非預期的
+          # 非 0 回傳值就中途中止。下面兩行 set 就是在買這個保證：
+          #
+          # set +e 是必要的，不是多餘。GitHub 對沒有寫 shell: 的 run: 一律用
+          # `bash -e {0}`——本檔無 top-level defaults、gate job 無 defaults、本 step 無
+          # shell:（已機械確認），所以 -e 從一開始就是開著的。而 `set -uo pipefail`
+          # **關不掉它**：set -<flags> 只開不關，要關 errexit 必須明寫 set +e。
+          # 今天這段腳本裡每一個可能回非 0 的命令（git log、printf | grep）都剛好落在
+          # if / elif 的**條件位置**，-e 對那裡不適用，所以現況即使沒有 set +e 也是安全
+          # 的——但那是巧合，不是設計。下一個人照著上面那句話在這裡加一行裸命令
+          # （例如 `git rev-parse --verify "$SHA"`），普通 commit 就會讓 gate 非 0 結束。
+          # 加上 set +e，上面宣稱的保證才真的成立而不只是一段註解。
+          # （同型缺陷 F5：U-6／U-7／U-8 三支 workflow 的「刻意不開 -e」註解同樣是錯的，
+          #  已一併修正。run-probe-tests.py 用注入裸命令的行為測試把這條鎖住。）
+          #
+          # -u 保留：未設定變數是真的寫錯，要當場炸——-u 的中止與 errexit 無關，
+          # set +e 之後仍然有效（已實測）。pipefail 保留：下面的 printf | grep 需要
+          # 正確的回傳值。與 U-4 的 record.sh（全檔 set -euo pipefail）的差異僅在 -e，
+          # 理由即上述的不對稱代價。
+          set -uo pipefail
+          set +e
+
+          message=""
+          if [ "$EVENT_NAME" = "push" ]; then
+            message="$PUSH_HEAD_MESSAGE"
+          elif [ -n "$PR_HEAD_SHA" ]; then
+            if ! message="$(git log -1 --format=%B "$PR_HEAD_SHA" 2>&1)"; then
+              # 讀不到就往「不是同步」判，讓四道關卡照常跑。誤判成同步會讓一顆真正的
+              # 開發者 commit 完全沒被檢查；誤判成非同步只是多跑一輪 CI。
+              echo "::warning::讀不到 PR head commit ($PR_HEAD_SHA) 的訊息，保守判定為非同步回寫；git 輸出：$message"
+              message=""
+            fi
+          else
+            echo "::warning::事件 $EVENT_NAME 既無 head_commit 也無 pull_request.head.sha，保守判定為非同步回寫。"
+          fi
+
+          # -F 是必要的：標記含中括號，當成 regex 會變成字元集而永遠比對不到。
+          # 訊息可能多行，所以是「含有」而不是等於。
+          if printf '%s\n' "$message" | grep -qF '[aidlc-sync]'; then
+            is_sync=true
+          else
+            is_sync=false
+          fi
+
+          # ${...} 的大括號是必要的，不是風格：$is_sync 後面緊接全形括號時，bash 會把那
+          # 個多位元組字元的位元組也讀進變數名，於是 set -u 判定為未設定變數、整個 step
+          # 以非 0 結束。gate 一失敗，四個 job 因 needs 而全部被 skip——CI 等於沒跑。
+          # （上面的 set +e 關掉的是 errexit，關不掉 -u：未設定變數仍會當場中止，
+          #  所以這一段的風險真實存在，不會因為 set +e 而消失。）
+          echo "判定：is_sync=${is_sync}（事件：${EVENT_NAME}）"
+          echo "is_sync=$is_sync" >> "$GITHUB_OUTPUT"
+
   repo-contract:
     name: Repository contract
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +163,8 @@ jobs:
 
   frontend:
     name: Frontend (lint + typecheck + build)
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,6 +215,8 @@ jobs:
 
   backend:
     name: Backend (import + unit tests)
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -139,6 +262,8 @@ jobs:
 
   docker-build:
     name: Docker images build
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

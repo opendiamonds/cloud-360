@@ -5,8 +5,8 @@ import { test, expect, Page } from '@playwright/test';
 // OpenRouter, costs money, and is externally flaky). They exercise auth, RBAC
 // visibility, and navigation against the ephemeral stack's seeded data.
 //
-// Seeded by schema_rbac.sql on the fresh test DB: one user, admin / admin123,
-// role Platform_Admin. New registrations get role Developer.
+// Seeded by the ephemeral backend running with APP_ENV=test: one user,
+// admin / admin123, role Platform_Admin. New registrations start pending.
 
 const ADMIN = { username: 'admin', password: 'admin123' };
 
@@ -61,7 +61,7 @@ test.describe('身分驗證', () => {
    * @api GET /api/auth/me -> 200 | 取得目前登入者與其權限
    * @ui / | 登入頁：帳號／密碼輸入框、「登入系統」按鈕
    * @ui /workspace | 工作區：側邊導覽、「架構」按鈕、「登出系統」控制項
-   * @given seed 帳號 admin / admin123，角色 Platform_Admin
+   * @given test seed 帳號 admin / admin123，角色 Platform_Admin
    * @step 以 admin / admin123 送出登入 | 登入成功
    * @step 檢視當前路徑 | 導向 `/workspace`
    * @step 檢視工作區介面 | 出現「架構」按鈕
@@ -125,7 +125,7 @@ test.describe('角色權限存取控制 (RBAC)', () => {
    * @ui / | 登入頁：帳號／密碼輸入框、「登入系統」按鈕
    * @ui /workspace | 工作區：側邊導覽、「架構」按鈕、「登出系統」控制項
    * @ui /admin/authorization-requests | 授權申請審核頁：申請列表與「核准」按鈕
-   * @given seed 只有 admin；新註冊帳號預設角色為 Developer，且需管理員核准
+   * @given test seed 只有 admin；新註冊帳號申請 Developer，且需管理員核准
    * @step 以公開註冊建立一個唯一帳號（密碼 devpass123） | 註冊成功
    * @step 檢視當前路徑 | 導向 `/waiting-approval` 等待審核頁
    * @step 登出，改以 admin / admin123 登入 | 進入 `/workspace`

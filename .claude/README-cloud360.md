@@ -2,7 +2,7 @@
 
 本目錄由 upstream [`awslabs/aidlc-workflows`](https://github.com/awslabs/aidlc-workflows) 的 `v2` 分支產出複製而來。除下列**兩處**外，內容與 upstream 一致。
 
-版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.5.33**。初次並行安裝為 2.5.11（upstream commit `257b43a`，見 commit `4f2b626`）。
+版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.7.0**（ADR-0013）。升級歷程：2.5.11 並行安裝（upstream commit `257b43a`，見 commit `4f2b626`）→ 2.5.33（commit `f17c40f`，ADR-0011）→ 2.7.0。
 
 ## 調整 1：`settings.json` 移除環境相依設定
 
@@ -15,7 +15,7 @@ upstream 的 `settings.json` 是**進版控**的共享檔案，預設帶著 AWS 
 | `CLAUDE_CODE_USE_BEDROCK` | `1` | 強制走 Bedrock；本團隊未必都使用 |
 | `AWS_REGION` | `us-east-1` | 環境相依 |
 | `ANTHROPIC_DEFAULT_*_MODEL` | `global.anthropic.*` | Bedrock 專用 model ID，非 Bedrock 環境無效 |
-| `AWS_AIDLC_DEFAULT_SCOPE` | `workshop` | 教學用 scope，不適合真實功能開發；改為由 `/aidlc` 依描述自動偵測 |
+| `AWS_AIDLC_DEFAULT_SCOPE` | `classic`（2.6.18 前為 `workshop`） | 由 `/aidlc` 依描述自動偵測；未命中關鍵字時引擎的硬編碼 fallback 本來就是 `classic`，寫與不寫行為相同。隱含預設自 2.6.18 起由 `feature` 變為 `classic`，需要完整 Ideation 時明示 `--scope feature`（ADR-0013） |
 | `model` | `opus[1m]` | 個人偏好 |
 | `effortLevel` | `xhigh` | 個人偏好 |
 
@@ -86,7 +86,7 @@ cp .claude/settings.local.json.example .claude/settings.local.json
    bun .claude/tools/aidlc-graph.ts compile --check
    bun .claude/tools/aidlc-runner-gen.ts check
    ```
-   並確認 stage 有進 graph（`/aidlc --doctor` 應列出 33 個 stage，其中 `tcms-test-cases` 的 `plugin` 為 `tcms`）。
+   並確認 stage 有進 graph（`/aidlc --doctor` 應列出 34 個 stage：aidlc 30、bootstrap 3、tcms 1，其中 `tcms-test-cases` 的 `plugin` 為 `tcms`）。upstream 若要求 reviewer stage 宣告 `review_artifact:`（2.6.121 起），tcms stage 無 `reviewer:`，不受影響。
 
    兩種漏做各有守門機制，不必靠記憶：
 
@@ -95,7 +95,14 @@ cp .claude/settings.local.json.example .claude/settings.local.json
    | stage 檔沒放回 | `scripts/validate_repo_contract.py`（已列入 `REQUIRED_FILES`）→ CI 紅燈 |
    | 放回了但沒重新編譯 | `/aidlc --doctor` 的 `Uncompiled stage files` 檢查 |
 
-接著跑 `/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證。
+4. 跑 `bun .claude/tools/aidlc-utility.ts plugin-sync`（upstream 自 2.6.110 起要求每次升級後執行；tcms 目前不是 plugin root，會回 `no installed plugins; nothing to sync`、exit 0，這是正常的）。
+5. 對照 upstream `CHANGELOG.md` 的 **Upgrade**／**Breaking** 段逐項檢查（2.7.0 的 roll-up 不取代中間版本的一次性動作）。2.5.33 → 2.7.0 實測踩到的四項，下次升級先看：
+   - **State Version**：`grep "State Version" aidlc/spaces/*/intents/*/aidlc-state.md`，比對 `aidlc-lib.ts` 的 `CURRENT_STATE_VERSION`。舊版 state 會被 doctor 與 `next`／`report` 拒絕，upstream 不提供遷移；處置見 ADR-0013 第 3 點。
+   - **規則層引用的 hook 檔名**：`grep -rn "\.claude/hooks/" aidlc/spaces/*/memory/`，被更名的 hook（如 `aidlc-mint-presence.ts` → `aidlc-record-human-turn.ts`）要同步改。
+   - **`.gitignore`**：比對 upstream `.claude/CLAUDE.md` 的 Git Integration 段與 CHANGELOG 的 gitignore 項，本 repo 的 `.gitignore` 是手動維護的。
+   - **殘留的舊 runner**：`git status` 應看到被更名 stage 的舊 `skills/aidlc-<old>/` 為 D；若用 `cp -R` merge copy 會留下，需手動刪。
+
+接著跑 `/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證。升級記錄寫入新 ADR（本次為 ADR-0013）。
 
 ## 現況
 

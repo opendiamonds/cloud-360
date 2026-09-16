@@ -12,17 +12,24 @@ from tests.helpers import close_session, make_diagram, make_session, make_user
 
 from services.collab_router import (
     DEFAULT_WELCOME,
+    MAX_CHAT_CONTENT_CHARS,
+    MAX_DIAGRAM_XML_CHARS,
     MAX_CHAT_MESSAGES,
     REVIEW_ONLY_WELCOME,
     VIEW_ONLY_WELCOME,
+    _authorize_ws_user,
     _get_accessible_diagram,
     _get_or_create_chat,
     _parse_messages,
     _serialize_messages,
     _user_can_access_diagram,
+    _validate_chat_messages,
+    _validate_diagram_payload,
     _visible_diagrams,
     _welcome_for_user,
+    _workspace_id_to_diagram_id,
 )
+from services.auth import create_access_token
 
 
 class TestAccessHelpers(unittest.TestCase):
@@ -140,6 +147,63 @@ class TestChatMessages(unittest.TestCase):
         raw = _serialize_messages(messages)
         back = _parse_messages(raw)
         self.assertEqual(back, [{"role": m["role"], "content": str(m["content"])} for m in messages])
+
+
+class TestPayloadValidation(unittest.TestCase):
+    def test_diagram_payload_accepts_drawio_xml(self):
+        _validate_diagram_payload("<mxGraphModel><root /></mxGraphModel>")
+
+    def test_diagram_payload_rejects_non_diagram_xml(self):
+        with self.assertRaises(HTTPException) as ctx:
+            _validate_diagram_payload("<not-a-diagram />")
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_diagram_payload_rejects_large_xml(self):
+        xml = "<mxGraphModel>" + ("x" * MAX_DIAGRAM_XML_CHARS) + "</mxGraphModel>"
+        with self.assertRaises(HTTPException) as ctx:
+            _validate_diagram_payload(xml)
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_chat_validation_rejects_large_message(self):
+        with self.assertRaises(HTTPException) as ctx:
+            _validate_chat_messages(
+                [{"role": "user", "content": "x" * (MAX_CHAT_CONTENT_CHARS + 1)}]
+            )
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_workspace_id_must_be_diagram_id(self):
+        self.assertEqual(_workspace_id_to_diagram_id("123"), 123)
+        with self.assertRaises(HTTPException):
+            _workspace_id_to_diagram_id("abc")
+
+
+class TestWebSocketAuthorization(unittest.TestCase):
+    def setUp(self):
+        self.db = make_session()
+        self.owner = make_user(self.db, username="alex", role="Project_Architect")
+        self.viewer = make_user(self.db, username="viewer", role="FinOps_Analyst")
+        self.diagram = make_diagram(self.db, owner=self.owner)
+
+    def tearDown(self):
+        close_session(self.db)
+
+    def test_ws_authorizes_editor_for_owned_diagram(self):
+        token = create_access_token({"sub": self.owner.username})
+        user = _authorize_ws_user(str(self.diagram.id), token, self.db)
+        self.assertEqual(user.id, self.owner.id)
+
+    def test_ws_rejects_missing_token(self):
+        with self.assertRaises(HTTPException) as ctx:
+            _authorize_ws_user(str(self.diagram.id), None, self.db)
+        self.assertEqual(ctx.exception.status_code, 401)
+
+    def test_ws_rejects_user_without_edit_permission(self):
+        self.diagram.shared_users.append(self.viewer)
+        self.db.commit()
+        token = create_access_token({"sub": self.viewer.username})
+        with self.assertRaises(HTTPException) as ctx:
+            _authorize_ws_user(str(self.diagram.id), token, self.db)
+        self.assertEqual(ctx.exception.status_code, 403)
 
 
 class TestGetOrCreateChat(unittest.TestCase):

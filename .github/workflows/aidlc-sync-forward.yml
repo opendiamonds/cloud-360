@@ -1,0 +1,70 @@
+name: AI-DLC Sync Forward
+
+# 正向同步的**薄外層**（[ad:ADR-A10]）：只負責觸發設定與 concurrency，實作全部在
+# aidlc-sync-forward-impl.yml（on: workflow_call，全參數化）。本檔是這套機制在
+# **本 repo** 的組態；把它抄到另一個 repo 只需改下面 with: 的四個值。
+#
+# 規格正本：construction/U-6-forward-workflow/functional-design/business-rules.md
+# 的 R-1 群（觸發與 concurrency）。
+
+on:
+  # [ad:services.md] S-A 逐字：「push（任一分支，含 danniel/**）＋ pull_request
+  # （opened／synchronize／closed）」[req:FR-B4]。push 側刻意不加分支過濾——選取是
+  # registry 驅動的，不是事件 diff 驅動的（R-3.3），漏掉任何一個分支就等於讓那個
+  # 分支上的 record 變更要等隔日對帳。
+  push:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - closed
+
+concurrency:
+  # R-1.1 逐字。github.ref_name 在 pull_request 事件下是 PR 的 merge ref 而不是
+  # 來源分支，兩種事件因此會落在不同 group——head.ref || ref_name 讓它們收斂到
+  # 同一個分支名，R-1.3（push 與同分支 PR 事件必須同組）靠的就是這個。
+  group: aidlc-sync-event-${{ github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  # R-1.2：**排隊不取消**（[req:NFR-P3]）。不取消換來不遺漏。
+  #
+  # 已知殘留（[ad:services.md] 逐字，本檔不弱化）：GitHub 只保留一個 pending run，
+  # 同分支高頻 push 時第三個以後到達會取消先前的 pending。因選取為漂移驅動，被
+  # 取消 run 的工作由下一次執行涵蓋——不造成遺漏、只造成延遲。
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  forward:
+    name: Forward sync
+    uses: ./.github/workflows/aidlc-sync-forward-impl.yml
+    with:
+      # ADR-0016 §Context：opendiamonds 是**個人帳號**不是組織，查詢根為
+      # user(login:)。Project #16 的網址即 github.com/users/opendiamonds/projects/16。
+      project_owner: opendiamonds
+      # 正式看板。**測試看板是 #23**——兩者的差別只有這個值，
+      # run-live-tests.py 的 SEC-3 進場斷言就是為了守住這一點。
+      project_number: "16"
+      # 【上游未定案，本檔是它第一個落地的字面】[req:FR-F1] 只說「以單一看板自訂
+      # 欄位承載目前 stage 的 slug ＋ 編號」，從未指名該欄位叫什麼。U-3 的
+      # write_field 在欄位不存在時會**自動建立**（TEXT），所以這個字串寫錯就是在
+      # 正式看板上多開一個欄位。已列入待 Bolt 1 gate 追認的清單。
+      stage_field_name: AI-DLC Stage
+      record_root: aidlc/spaces/default/intents
+      # [req:FR-J5]／[US:S-3 AC 6]：已知的結構性例外須以白名單明列，且 requirements
+      # 的驗收判準逐字「白名單中列有 260802-default」。實測（map.sh 對該 record）
+      # 確認它今日即回 reason_code=whitelisted，會走 R-3.0 的排除路徑。
+      whitelist: 260802-default
+      # 2026-09-06 由 50 改為 80。50 是 [US-OQ-4] 定案的預設值，實測把
+      # `skipped feedback-optimization (260802-last-login-column)`（56 字）截成
+      # `skipped feedback-optimi (260802-last-login-column)`，讀起來像壞掉。現有
+      # 最長合法組合實算：前綴 `parked @ `（9）＋最長 stage slug
+      # `environment-provisioning`（24）＋` (`＋最長 record 編號
+      # `260816-production-path-check`（28）＋`)` ＝ 64，80 讓全部現有組合不截斷；
+      # U-1 的 R-5 截斷規則維持為超長時的保底。兩個薄外層必須同值。
+      field_max_length: "80"
+    secrets:
+      # ADR-0016 §1：擁有者帳號 token，scope 為 project ＋ repo。
+      # `project.md ## Mandated` 要求實地查證它落在 secrets 而非 variables——本 repo
+      # 為 public、Actions log 公開可讀，一次意外 echo 即等同公開發布。
+      sync_token: ${{ secrets.AIDLC_SYNC_TOKEN }}

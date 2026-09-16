@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -11,7 +11,24 @@ from models import User
 from services.activity import record_activity
 
 # Security Configurations
-SECRET_KEY = os.environ.get("JWT_SECRET", "cloud360_secret_key_change_me_in_production")
+INSECURE_DEV_SECRET = "cloud360_secret_key_change_me_in_production"
+LOCAL_APP_ENVS = {"local", "test", "ci"}
+
+
+def _env_allows_insecure_defaults() -> bool:
+    return os.environ.get("APP_ENV", "local").strip().lower() in LOCAL_APP_ENVS
+
+
+def _resolve_secret_key() -> str:
+    secret = os.environ.get("JWT_SECRET", "").strip()
+    if secret:
+        return secret
+    if _env_allows_insecure_defaults():
+        return INSECURE_DEV_SECRET
+    raise RuntimeError("JWT_SECRET is required outside local/test environments")
+
+
+SECRET_KEY = _resolve_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 預設 8 小時
 
@@ -30,18 +47,15 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security_bearer),
-    db: Session = Depends(get_db)
-) -> User:
-    token = credentials.credentials
+
+def get_user_from_token(token: str, db: Session, *, record: bool = True) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="身分驗證失敗，憑證無效或已過期",
@@ -54,7 +68,7 @@ def get_current_user(
             raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
-        
+
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
@@ -63,11 +77,18 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="該帳號已被停用"
         )
-    # PU-1：任何以有效憑證發出的請求都更新該帳號的最後活動時間（節流見 C-1）。
-    # 放在這裡而非各 router，是因為這是所有認證請求的唯一必經點。
-    # record_activity 自行管理交易並吞掉自身的失敗——記錄失敗不得讓使用者請求失敗。
-    record_activity(db, user)
+    if record:
+        # PU-1：任何以有效憑證發出的請求都更新該帳號的最後活動時間（節流見 C-1）。
+        # record_activity 自行管理交易並吞掉自身的失敗——記錄失敗不得讓使用者請求失敗。
+        record_activity(db, user)
     return user
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security_bearer),
+    db: Session = Depends(get_db)
+) -> User:
+    return get_user_from_token(credentials.credentials, db)
 
 class RoleChecker:
     def __init__(self, allowed_roles: List[str]):

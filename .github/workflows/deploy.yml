@@ -91,6 +91,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
           N8N_USER: ${{ secrets.N8N_USER }}
@@ -192,6 +193,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
           N8N_USER: ${{ secrets.N8N_USER }}

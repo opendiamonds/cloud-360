@@ -16,20 +16,14 @@ interface LastActivityCellProps {
  *
  * **在地化策略**：換算為使用者的本地時區後再格式化。直接截斷 ISO 字串會讓顯示
  * 時間整體偏移一個時區位移量（AC-1.6 直接失敗）—— 後端一律回 UTC，顯示端負責
- * 在地化。`sv-SE` locale 的日期時間格式恰為 `YYYY-MM-DD HH:MM`，不需手動組字串。
+ * 在地化。輸出格式由本函式手動組成，避免不同瀏覽器／ICU locale 資料導致分隔符
+ * 或空白字元不一致。
  */
 function formatLocal(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-    .format(date)
-    .replace(',', '');
+  const pad2 = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 /**

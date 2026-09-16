@@ -82,6 +82,16 @@ class UserListEndpointTest(unittest.TestCase):
         self.assertIsNotNone(row["last_activity_at"])
         self.assertFalse(row["is_overdue"])
 
+    def test_current_admin_activity_is_recorded_before_listing(self):
+        """管理頁自身的清單請求必須讓目前管理員列有最後活動時間。"""
+        self.assertIsNone(self.admin.last_activity_at)
+
+        row = self._find(self.client.get(LIST_URL).json()["items"], "admin")
+
+        self.assertIsNotNone(row["last_activity_at"])
+        self.db.refresh(self.admin)
+        self.assertIsNotNone(self.admin.last_activity_at)
+
     def test_overdue_flag_is_computed_by_backend(self):
         user = make_user(self.db, username="stale", role="Developer")
         user.last_activity_at = NOW - timedelta(days=200)

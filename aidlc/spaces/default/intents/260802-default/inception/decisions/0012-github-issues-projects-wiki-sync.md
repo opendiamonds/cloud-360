@@ -1,6 +1,6 @@
 # ADR 0012: AI-DLC 與 GitHub Issues／Projects／Wiki 的雙向同步
 
-- Status: Accepted（設計；實作分階段，見「分階段落地」）
+- Status: Accepted，**部分經 ADR-0013 修訂（2026-08-23）** —— 第 1 點的映射層級、第 5 點的承載形式與提權論證、以及「分階段落地」表已被修訂；第 2、3、4、6 點與其餘 Consequences 維持有效。閱讀本 ADR 時必須併讀 `../../260822-gh-projects-sync/inception/decisions/0013-aidlc-projects-sync-scoping.md`。
 - Date: 2026-08-16
 - Related: ADR-0011（採用 AI-DLC v2）、ADR-0008（Construction↔Operations 連續模型）、ADR-0009（文件一律繁體中文）、`.github/workflows/spec-sync.md`、`.github/workflows/issue-triage.md`
 
@@ -56,7 +56,7 @@ AI-DLC 的工作狀態目前**只存在於 repo 內**：intent 的進度在 `<re
 
 ```
 repo  ──內容──▶  GitHub      （AI-DLC 流程觸發，覆寫 issue 內文的受管區塊）
-repo  ◀──狀態──  GitHub      （定時 workflow 拉取，寫回 aidlc-state.md 與 intents.json）
+repo  ◀──狀態──  GitHub      （定時 workflow 拉取，寫進 github-status.md）
 ```
 
 **issue 內文分兩區**：`<!-- aidlc:managed -->` 與 `<!-- /aidlc:managed -->` 之間由 repo 覆寫；標記之外的內容是人寫的，同步永不觸碰。這讓「內容 repo 贏」不至於吃掉協作者在 issue 上補充的脈絡。
@@ -82,7 +82,7 @@ Wiki 是**單向鏡像**（repo → Wiki），不回寫。Wiki 頁首自動加�
 2. **來源標記**：所有由同步產生的 commit 訊息帶 `[aidlc-sync]`；反向同步的觸發條件排除這類 commit。
 3. **狀態欄位單向**：狀態只從 GitHub 流向 repo，repo 不寫 GitHub 的狀態欄位（除了建立 issue 時的初始值）。單向的欄位不可能來回震盪。
 
-同步狀態記錄於 `<record>/.aidlc-sync-state.json`（gitignored 的 per-clone 檔不適用——這需要進版控才能跨 runner 比對，因此放在 record 內並隨同步 commit 一起更新）。
+同步狀態記錄於 `<record>/aidlc-sync-state.json`（需進版控才能跨 runner 比對，因此放在 record 內並隨同步 commit 一起更新）。**檔名刻意不以 `.aidlc-` 開頭**：AI-DLC 出貨的 `.gitignore` 有 `aidlc/spaces/*/intents/*/.aidlc-*`（排除機器本地暫存），實作時實測會把這個檔擋掉。
 
 #### 5. 權限：明確提權，範圍最小
 
@@ -116,7 +116,7 @@ Wiki 是**單向鏡像**（repo → Wiki），不回寫。Wiki 頁首自動加�
 |---|---|---|
 | 同步 workflows | `.github/workflows/aidlc-sync-*.md` | 無 —— upstream 不碰 `.github/` |
 | 同步腳本 | `scripts/aidlc_sync_*.py` | 無 |
-| 同步狀態 | `<record>/.aidlc-sync-state.json` | 無 —— `aidlc/` 工作區永不被覆蓋 |
+| 同步狀態 | `<record>/aidlc-sync-state.json` | 無 —— `aidlc/` 工作區永不被覆蓋 |
 | 規則與說明 | `aidlc/spaces/*/memory/project.md` | 無 |
 
 **觸發方式是 git push，不是 AI-DLC 的 stage 或 hook。** AI-DLC 產出 artifact 並 commit 之後，`on: push` 的 paths 過濾自然觸發同步。AI-DLC 對此一無所知，也不需要知道。這讓同步機制與框架版本完全解耦：升級 AI-DLC 不影響同步，停用同步不影響 AI-DLC。
@@ -155,7 +155,7 @@ Wiki 是**單向鏡像**（repo → Wiki），不回寫。Wiki 頁首自動加�
 | 階段 | 範圍 | 出口條件 |
 |---|---|---|
 | **1** | repo → Issues 單向：intent 的 stories 建立／更新 issue（受管區塊） | 一個 intent 的所有 story 在 GitHub 有對應 issue，重跑不產生重複 |
-| **2** | Issues → repo 反向：狀態（open/closed、assignee、labels）定時拉回，開 PR | 在 GitHub 關掉 issue，下次同步產生一個更新 `aidlc-state.md` 的 PR |
+| **2** | Issues → repo 反向：狀態（open/closed、assignee、labels）定時拉回，開 PR | 在 GitHub 關掉 issue，下次同步產生一個更新 `github-status.md` 的 PR |
 | **2.5** | **bug 路徑 B（半自動）**：列出待修 bug，人選一個帶入 `/aidlc --scope bugfix` | 從 issue 挑一個 bug 到產出帶 `Closes #N` 的 PR，全程可在本機完成 |
 | **3** | Projects v2：intent → Project、看板欄位 ↔ 階段狀態、Bolt → iteration | 看板反映真實進度；拖動卡片會回寫 repo |
 | **3.5** | **bug 路徑 A（自動）**：`aidlc:auto` label 觸發，自架 runner 跑完並開 PR | 貼 label 後不需人介入即產出 PR，且 PR 說明揭露未經 stage gate |

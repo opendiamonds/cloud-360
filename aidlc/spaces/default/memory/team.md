@@ -148,12 +148,13 @@
 
 ### 已知的規則宣稱與機制落差（如實記載，不美化）
 
-`project.md ## Forbidden` 現有兩條規則的宣稱強度高於機制的實際強度：
+`project.md ## Forbidden` 現有一條規則的宣稱強度高於機制的實際強度：
 
-- **Secret 掃描**：`validate_no_obvious_secrets()`（`scripts/validate_repo_contract.py:347`）只讀取 `contract_files()`（12 個 repo 層必要檔 + baseline record 必要檔 + audit shard）。`backend/`、`frontend/`、`deploy/`、`schema_rbac.sql`、任何 `.env.example` 都不在其中——本 repo 唯一的 secret 掃描器結構上看不到應用程式碼。
-- **禁止 production 路徑**：`validate_no_production_config_added()`（同檔 `:330`）以 `git diff --name-only`（unstaged ∪ staged）為輸入。CI 是乾淨 checkout，兩者皆為空集合，**這道檢查在 CI 恆為 no-op**，只在本機有未提交變更時才作用。
+- **Secret 掃描**：`validate_no_obvious_secrets()`（`scripts/validate_repo_contract.py`）只讀取 `contract_files()`（12 個 repo 層必要檔 + baseline record 必要檔 + audit shard）。`backend/`、`frontend/`、`deploy/`、`schema_rbac.sql`、任何 `.env.example` 都不在其中——本 repo 唯一的 secret 掃描器結構上看不到應用程式碼。
 
-這兩項不是「缺工具」，是既有機制的實際作用域小於規則所宣稱——修復方式（擴大掃描器作用域、修正 diff 基準）列為待補承載機制（見 `discovered-rules.md`），本輪不逕自變更腳本行為（未經訪談定案）。
+這一項不是「缺工具」，是既有機制的實際作用域小於規則所宣稱——修復方式（擴大掃描器作用域至應用程式碼）列為待補承載機制（見 `discovered-rules.md`）。
+
+> 原本並列於此的第二項已解決，故從上面的清單移除：禁止 production 路徑的檢查原先以 working-tree diff 為比對基準，在 CI 的乾淨 checkout 下不會擋到任何東西。intent `260816-production-path-check`（issue #509）已把比對基準改為 `git ls-files` 全域掃描，並補上回歸測試 `backend/tests/test_repo_contract_production_paths.py`（在暫存 git repo 內以乾淨工作樹重現 CI 條件）。`discovered-rules.md` 第 4 項的對應記載屬另一個 intent 的 record，待下一輪 practices-discovery 標為已解決。
 
 ---
 

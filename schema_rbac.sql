@@ -8,7 +8,7 @@
 --      另含 users.last_activity_at（最後活動時間欄位）
 --   E) A3：architecture_reviews（評核結果）+ wa_lenses（Offline Lens 現行標準）
 --   C) RBAC：role_permissions + 預設矩陣（308 列）
---   D) 預設管理員：admin / admin123（Platform_Admin）
+--   D) 不建立固定密碼管理員；bootstrap admin 由後端依環境變數建立
 --
 -- 執行（新環境可只跑這支）：
 --   psql "$DATABASE_URL" -f schema_rbac.sql
@@ -588,27 +588,6 @@ INSERT INTO role_permissions (role, story_id, can_view, can_edit, can_review) VA
   ('Platform_Admin', 'J3b', true, true, true),
   ('Platform_Owner', 'J3b', true, false, false)
 ;
-
--- ###########################################################################
--- D) Default admin account
---    username: admin
---    password: admin123   ※上線後請立即更換
--- ###########################################################################
-
-INSERT INTO users (username, password_hash, role, is_active)
-SELECT
-  'admin',
-  '$2b$12$3.9UUW/RwGhlhYd3qfBfcuFRALszLp6Wek7kDoVFSSgQNnuYn8pNG',
-  'Platform_Admin',
-  TRUE
-WHERE NOT EXISTS (
-  SELECT 1 FROM users WHERE username = 'admin'
-);
-
-UPDATE users
-SET role = 'Platform_Admin',
-    is_active = TRUE
-WHERE username = 'admin';
 
 COMMIT;
 

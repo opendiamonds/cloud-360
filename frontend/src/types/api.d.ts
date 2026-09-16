@@ -906,6 +906,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Last Opened Diagram Id */
+            last_opened_diagram_id?: number | null;
             /** Pending Request */
             pending_request?: {
                 [key: string]: unknown;

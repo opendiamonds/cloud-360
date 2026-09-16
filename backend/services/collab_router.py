@@ -19,9 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import SessionLocal, get_db
 from models import User, UserDiagram, UserDiagramChat, diagram_shares
-from services.auth import get_current_user
+from services.auth import get_current_user, get_user_from_token
 from services.rbac import require_arch_action, user_can_arch
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,10 @@ router = APIRouter()
 
 # 限制持久化輪數，避免 messages_json 過大
 MAX_CHAT_MESSAGES = 100
+MAX_DIAGRAM_XML_CHARS = 2 * 1024 * 1024
+MAX_DIAGRAM_TITLE_CHARS = 200
+MAX_CHAT_CONTENT_CHARS = 8000
+MAX_WS_MESSAGE_CHARS = MAX_DIAGRAM_XML_CHARS
 
 DEFAULT_WELCOME = (
     "嗨！我是您的 AI 雲端架構助理 👋\n"
@@ -218,17 +222,76 @@ def _get_or_create_chat(
     return chat
 
 
+def _looks_like_diagram_xml(xml: str) -> bool:
+    lowered = (xml or "").lower()
+    return "<mxgraphmodel" in lowered or "<mxfile" in lowered
+
+
+def _validate_diagram_payload(xml: str) -> None:
+    if not xml or not xml.strip():
+        raise HTTPException(status_code=400, detail="xml_data 不可為空")
+    if len(xml) > MAX_DIAGRAM_XML_CHARS:
+        raise HTTPException(status_code=400, detail="架構圖檔過大（上限約 2MB）")
+    if not _looks_like_diagram_xml(xml):
+        raise HTTPException(status_code=400, detail="xml_data 不是有效的 draw.io 架構圖 XML")
+
+
+def _validate_chat_messages(messages: List[dict[str, str]]) -> None:
+    if len(messages) > MAX_CHAT_MESSAGES:
+        raise HTTPException(status_code=400, detail=f"聊天紀錄最多保留 {MAX_CHAT_MESSAGES} 則")
+    for m in messages:
+        content = str(m.get("content", ""))
+        if len(content) > MAX_CHAT_CONTENT_CHARS:
+            raise HTTPException(status_code=400, detail="單則聊天內容過長")
+
+
+def _workspace_id_to_diagram_id(workspace_id: str) -> int:
+    try:
+        return int(workspace_id)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail="workspace_id 必須是 diagram id") from e
+
+
+def _authorize_ws_user(workspace_id: str, token: Optional[str], db: Session) -> User:
+    if not token:
+        raise HTTPException(status_code=401, detail="WebSocket 需要 token")
+    user = get_user_from_token(token, db, record=False)
+    diagram_id = _workspace_id_to_diagram_id(workspace_id)
+    _get_accessible_diagram(diagram_id, user, db)
+    if not _arch_can_edit(db, user):
+        raise HTTPException(status_code=403, detail="WebSocket 共編需要架構圖編輯權限")
+    return user
+
+
 @router.websocket("/ws/{workspace_id}")
 async def websocket_endpoint(websocket: WebSocket, workspace_id: str):
+    db = SessionLocal()
+    try:
+        _authorize_ws_user(workspace_id, websocket.query_params.get("token"), db)
+    except HTTPException as e:
+        code = 1008 if e.status_code in (401, 403) else 1003
+        await websocket.close(code=code, reason=str(e.detail)[:120])
+        return
+    finally:
+        db.close()
+
     await manager.connect(websocket, workspace_id)
     try:
         while True:
             data = await websocket.receive_text()
+            if len(data) > MAX_WS_MESSAGE_CHARS:
+                await websocket.close(code=1009, reason="架構圖訊息過大")
+                break
+            if not _looks_like_diagram_xml(data):
+                await websocket.close(code=1003, reason="WebSocket 只接受 draw.io XML")
+                break
             try:
                 await manager.broadcast(data, workspace_id, exclude=websocket)
             except Exception as e:
                 logger.error("Error processing message: %s", e)
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket, workspace_id)
 
 
@@ -243,8 +306,8 @@ def get_users(
 
 
 class SaveDiagramRequest(BaseModel):
-    xml_data: str
-    title: str = "未命名架構圖"
+    xml_data: str = Field(..., min_length=1, max_length=MAX_DIAGRAM_XML_CHARS)
+    title: str = Field("未命名架構圖", min_length=1, max_length=MAX_DIAGRAM_TITLE_CHARS)
 
 
 class ShareDiagramRequest(BaseModel):
@@ -252,7 +315,7 @@ class ShareDiagramRequest(BaseModel):
 
 
 class SaveChatRequest(BaseModel):
-    messages: List[dict[str, str]] = Field(default_factory=list)
+    messages: List[dict[str, str]] = Field(default_factory=list, max_length=MAX_CHAT_MESSAGES)
 
 
 class LastOpenedRequest(BaseModel):
@@ -387,6 +450,7 @@ def save_diagram_chat(
     db: Session = Depends(get_db),
 ):
     _get_accessible_diagram(diagram_id, current_user, db)
+    _validate_chat_messages(request.messages)
     chat = _get_or_create_chat(current_user.id, diagram_id, db)
     chat.messages_json = _serialize_messages(request.messages)
     current_user.last_opened_diagram_id = diagram_id
@@ -449,6 +513,7 @@ def create_diagram(
     current_user: User = Depends(require_arch_action("edit")),
     db: Session = Depends(get_db),
 ):
+    _validate_diagram_payload(request.xml_data)
     diagram = UserDiagram(
         user_id=current_user.id, title=request.title, xml_data=request.xml_data
     )
@@ -472,6 +537,7 @@ def update_diagram(
     db: Session = Depends(get_db),
 ):
     diagram = _get_accessible_diagram(diagram_id, current_user, db)
+    _validate_diagram_payload(request.xml_data)
     # 僅擁有者可改 XML（被分享者若有 edit 仍可協作寫入）
     diagram.xml_data = request.xml_data
     diagram.title = request.title

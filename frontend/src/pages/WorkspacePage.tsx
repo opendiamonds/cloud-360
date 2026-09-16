@@ -72,6 +72,7 @@ export const WorkspacePage = () => {
 
   const { isConnected, broadcastXml } = useCollaboration({
     workspaceId: currentDiagramId ? currentDiagramId.toString() : '',
+    token,
     onReceiveXml: (newXml) => {
       if (newXml) {
         setXml(newXml);

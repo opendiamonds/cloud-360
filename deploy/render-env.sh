@@ -16,6 +16,7 @@
 #
 #   POSTGRES_PASSWORD  required   database superuser password
 #   JWT_SECRET         required   signs every login token
+#   CLOUD360_BOOTSTRAP_ADMIN_PASSWORD optional one-time admin bootstrap password
 #   OPENROUTER_API_KEY optional   A1 design agent; empty disables generation
 #   N8N_WEBHOOK_URL    optional   dynamic architecture icons
 #   N8N_USER           optional   basic auth for the n8n webhook
@@ -68,6 +69,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=cloud360
 JWT_SECRET=${JWT_SECRET}
+CLOUD360_BOOTSTRAP_ADMIN_PASSWORD=${CLOUD360_BOOTSTRAP_ADMIN_PASSWORD:-}
 LLM_PROVIDER=openrouter
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
 ANTHROPIC_BASE_URL=https://openrouter.ai/api
