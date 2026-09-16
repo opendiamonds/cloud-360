@@ -1,214 +1,230 @@
 # 系統架構（Architecture）
 
-> Reverse Engineering 合成產物｜repo `cloud`｜HEAD `c3de2c8`｜intent `260819-cost-finops`｜mode **Modify overlay for C1**（保留 2026-08-06 模組化單體總覽；訂正已過時的 A1／A3 hotspot；疊加 C1 現況 vs 意圖）
+> Reverse Engineering 合成產物｜repo `cloud`｜工作樹掃描日 2026-09-16｜intent `260916-estimate-upload-rework`｜mode **Full rescan**
+> 每個 Mermaid 區塊都附文字 fallback（ADR-0009 與 `team.md` `## Mandated` 的內容驗證要求）。
 
-## 架構風格與邊界
+## 架構風格
 
-Cloud-360 現況為 **模組化單體（modular monolith）** 的雙程序部署：
+**模組化單體（Modular Monolith）＋ SPA 前端**，證據如下：
 
-| 邊界 | 技術 | 職責 |
-|---|---|---|
-| Frontend SPA | React 19 + Vite + React Router 6 | 路由、RBAC 門禁 UI、A1 Workspace、A3 Assessment、管理頁、draw.io iframe 宿主；Sidebar 可收合（`NavChromeContext`） |
-| Backend API | FastAPI + SQLAlchemy + PostgreSQL | 認證／授權、agent 編排、圖 XML 組裝、協作 CRUD／WS、WA review／lens、`prompt_guard` |
-| Embed 畫布 | embed.diagrams.net（iframe） | 互動式圖編輯；經 `postMessage` 與 `DrawioCanvas` 交換 XML（含 save／exit） |
-| LLM 執行層 | claude-agent-sdk（`LLM_PROVIDER`：OpenRouter 映射或 claude CLI） | `design_agent` 產生架構結構；`review_agent`／orchestrator 產生審核結果 |
+- 單一 FastAPI process 掛載 6 個 router 到 5 個 URL 前綴（`backend/main.py:51-56`），沒有跨 process 的服務邊界、沒有訊息佇列、沒有服務間 HTTP 呼叫。
+- 單一 PostgreSQL 資料庫由所有領域共用（11 張 ORM 表，見 `code-structure.md`）；領域之間以 Python import 直接耦合，不是以契約解耦。
+- 部署為 4 個容器（db、backend、frontend、cloudflared），一次整包上線（`deploy/docker-compose.deploy.yml`）。
 
-持久化單一 PostgreSQL；**無獨立微服務邊界、無 cost／pricing 服務**。Router 以 prefix 劃分公開 API 面（仍為五組：`/api/architecture`、`/api/collab`、`/api/auth`），服務層（`backend/services/*`）承載領域邏輯。
+模組邊界的清晰度**依領域而異**，這是既成事實而非待修違規：`cost`、`review`／`lens`／`wa_*` 家族有清楚的 router → service → 純函式三層；`user`／`collab` 家族的商業邏輯直寫在 handler 裡。
 
-C1 在架構上是 **缺席的 bounded context**：沒有 calculator 元件、沒有 pricing port、沒有 Cost UI。最接近的既有模組是 A3 的 `wa_rule_engine.parse_diagram_summary`（給 WA 用的精簡 mxCell 摘要）與 `cost_optimization` 啟發式 findings——**不是 TCO**。
-
-## 元件關係圖
+## 元件關係總覽
 
 ```mermaid
-flowchart TB
-  subgraph FE["Frontend SPA"]
-    Layout["Layout + NavChromeContext"]
-    SB["Sidebar 架構 / 系統管理"]
-    WP["WorkspacePage A1"]
-    AP["AssessmentPage A3"]
-    DC["DrawioCanvas"]
-    AuthCtx["auth-context RBAC"]
-    Admin["Admin last_activity + pagination"]
-    Layout --> SB
-    Layout --> WP
-    Layout --> AP
-    Layout --> Admin
-    WP --> DC
-    AP --> DC
-    AuthCtx --> Layout
+graph TD
+  subgraph FE["frontend SPA - React 19 + Vite"]
+    ROUTES["App.tsx 路由與 RouteGuard"]
+    COSTPAGE["CostPage"]
+    OTHERPAGES["Workspace / Assessment / Admin 等 8 頁"]
   end
 
-  subgraph BE["Backend FastAPI"]
-    AR["agent_router /api/architecture"]
-    RR["review_router /api/architecture"]
-    LR["lens_router /api/architecture"]
-    CR["collab_router /api/collab"]
-    UR["user_router /api/auth"]
-    PG_G["prompt_guard"]
-    DA["design_agent"]
-    DBB["diagram_builder"]
-    WO["wa_collab_orchestrator / review_orchestrator"]
-    WRE["wa_rule_engine parse + COST-* heuristics"]
-    RBAC["rbac + auth"]
-    AR --> PG_G
-    AR --> DA --> DBB
-    AR --> WO
-    RR --> WO
-    RR --> WRE
-    UR --> RBAC
-    CR --> RBAC
+  subgraph BE["backend - FastAPI 單一 process"]
+    MAIN["main.py 應用組裝"]
+    COST["cost 套件 - C1 成本估算"]
+    SVC["services 套件 - A1 / A3 / J / collab"]
+    ORM["models.py + database.py"]
   end
 
-  PG[(PostgreSQL xml_data blob)]
-  LLM["LLM via claude-agent-sdk"]
-  DIO["embed.diagrams.net"]
-  N8N["n8n SVG webhook"]
-  ABSENT["ABSENT: cost calculator / pricing client / Cost page"]
+  subgraph EXT["外部依賴"]
+    PG[("PostgreSQL 16")]
+    DRAWIO["embed.diagrams.net"]
+    LLM["OpenRouter 或 claude CLI"]
+    N8N["n8n webhook - 圖示 SVG"]
+    PRICE["雲端公開價目端點"]
+    CALC["Azure / GCP Calculator 網頁"]
+  end
 
-  WP -->|API| AR
-  WP -->|API / WS| CR
-  AP -->|"API"| RR
-  AP -->|"API"| LR
-  AP -->|"API"| CR
-  DC <-->|"postMessage XML"| DIO
-  DA --> LLM
-  WO --> LLM
-  DBB --> N8N
-  CR --> PG
-  RR --> PG
-  UR --> PG
-  LR --> PG
-  ABSENT -.->|"no edge"| FE
-  ABSENT -.->|"no edge"| BE
+  ROUTES --> COSTPAGE
+  ROUTES --> OTHERPAGES
+  COSTPAGE -->|"/api/cost"| MAIN
+  OTHERPAGES -->|"/api/architecture, /api/auth, /api/collab"| MAIN
+  MAIN --> COST
+  MAIN --> SVC
+  COST --> SVC
+  COST --> ORM
+  SVC --> ORM
+  ORM --> PG
+  OTHERPAGES --> DRAWIO
+  SVC --> LLM
+  SVC --> N8N
+  COST --> LLM
+  COST --> PRICE
+  COST --> CALC
 ```
 
-<!--
-文字 fallback：使用者經 Layout／可收合 Sidebar（架構、系統管理兩組）進入 A1 或 A3；A1 經 prompt_guard 後呼叫 /api/architecture/generate* 與 /api/collab，畫布 XML 經 DrawioCanvas ↔ diagrams.net（含 save／exit）；diagram_builder 可向 n8n 取 SVG。A3 呼叫 reviews／lens；wa_rule_engine 從 XML 做關鍵字啟發式（含 COST-*），寫入 PostgreSQL。沒有任何邊連到 cost calculator、pricing client 或 Cost 頁——那些元件不存在。
--->
+**文字 fallback**：前端 SPA 由 `App.tsx` 的路由表與 `RouteGuard` 分派到 9 個頁面，其中 `CostPage` 打 `/api/cost`，其餘頁面打 `/api/architecture`、`/api/auth`、`/api/collab`。後端 `main.py` 同時掛載 `cost` 套件與 `services` 套件；`cost` 單向依賴 `services`（授權、LLM provider、XML 清理），`services` 不反向依賴 `cost`。兩者都經 `models.py`／`database.py` 存取同一個 PostgreSQL。外部依賴中，draw.io 由前端直連，LLM、n8n、雲端公開價目端點與 Azure／GCP Calculator 網頁由後端呼叫。
 
-## Interaction Diagrams
+## `backend/cost/` 內部結構
 
-### A1：產生架構圖 → 畫布（仍成立，已含 guard 與儲存事件）
+```mermaid
+graph LR
+  ROUTER["cost_router"] --> SERVICE["cost_service"]
+  SERVICE --> AGENT["cost_pricing_agent"]
+  SERVICE --> CALCPURE["cost_calculator 純函式"]
+  SERVICE --> EXTRACT["diagram_extractor"]
+  SERVICE --> CACHE["price_cache"]
+  SERVICE --> PCLIENT["pricing_client"]
+  SERVICE --> SKU["sku_mapper"]
+  SERVICE --> SKUAI["sku_ai_resolver"]
+  SERVICE --> AZRUN["azure_calculator_runner"]
+  SERVICE --> GCPRUN["gcp_calculator_runner"]
+  AGENT --> PCLIENT
+  AGENT --> SKU
+  AGENT --> SKUAI
+  AGENT --> AZRUN
+  AGENT --> GCPRUN
+  AGENT --> EXTRACT
+  PCLIENT --> PGCP["pricing_gcp"]
+  PCLIENT --> PAZ["pricing_azure"]
+  PCLIENT --> POFFER["pricing_offer_parser"]
+  PCLIENT --> PSDK["pricing_sdk - boto3"]
+  PSDK --> PQUERY["pricing_query_parser"]
+  PGCP --> PUNITS["pricing_units"]
+  PAZ --> PUNITS
+  POFFER --> PUNITS
+  PQUERY --> PUNITS
+  GCPRUN --> GRESOLVE["gcp_calculator_product_resolver"]
+  GRESOLVE --> SKUAI
+  SKUAI --> SKU
+  CONFIG["config - 讀 9 份 YAML"]
+  SERVICE --> CONFIG
+  AGENT --> CONFIG
+  PCLIENT --> CONFIG
+  SKU --> CONFIG
+```
+
+**文字 fallback**：`cost_router` 是唯一 HTTP 入口，單向呼叫 `cost_service`；`cost_service` 是扇出最廣的協調層（10 條內部邊）；`config` 是扇入最廣的葉節點（12 個模組引用，於 import 時載入 9 份 YAML）；`cost_calculator` 是唯一零相依的純函式模組（ADR-0006 property-based testing 的落點）；`pricing_client` 之下分為 GCP、Azure、offer parser 與 boto3 SDK 四條查價支線，四者最終都收斂到 `pricing_units`。套件內**未偵測到循環引用**。完整的正反向相依表在 `dependencies.md`。
+
+## 互動圖（Interaction Diagrams）
+
+以下三張圖描述跨元件的實際業務交易。
+
+### 交易一：C1 取得架構圖成本快照
 
 ```mermaid
 sequenceDiagram
-  actor U as User
-  participant WP as WorkspacePage
-  participant Chat as ChatBox
-  participant API as agent_router
-  participant Guard as prompt_guard
+  participant U as FinOps 使用者
+  participant FE as CostPage
+  participant R as cost_router
+  participant S as cost_service
+  participant RB as services.rbac
+  participant X as diagram_extractor
+  participant M as sku_mapper 與 sku_ai_resolver
+  participant P as pricing_client
+  participant C as price_cache
+  participant DB as PostgreSQL
+
+  U->>FE: 開啟 /cost 並選擇架構圖
+  FE->>R: GET /api/cost/diagrams/ID 帶 run_agent
+  R->>S: get_snapshot
+  S->>RB: user_can C1 view
+  RB-->>S: 允許或拒絕
+  S->>DB: 讀 user_diagrams 的 xml_data
+  S->>X: 解析 mxGraph XML 取得資源列
+  X-->>S: mxcell_id 與 label 清單
+  S->>M: 對每個資源解析 SKU
+  M-->>S: SKU 或未對應
+  S->>C: 查 pricing_cache 24 小時內的價格
+  alt 快取未命中
+    S->>P: 向雲端公開價目端點查現價
+    P-->>S: 每小時單價
+    S->>C: 寫回 pricing_cache
+  end
+  S->>DB: upsert diagram_cost 與 diagram_cost_line
+  S-->>R: 成本快照
+  R-->>FE: JSON 回應
+  FE-->>U: 逐項成本與月費
+```
+
+**文字 fallback**：使用者在 `/cost` 選圖後，前端呼叫 `GET /api/cost/diagrams/ID`。`cost_router` 轉交 `cost_service`，後者先經 `services.rbac.user_can` 檢查 `C1.view`，再從 `user_diagrams` 取出 mxGraph XML 交給 `diagram_extractor` 解析成資源列，逐項以 `sku_mapper`（YAML 規則）或 `sku_ai_resolver`（LLM）解析 SKU。價格先查 `pricing_cache`（24 小時 TTL），未命中才經 `pricing_client` 向雲端公開價目端點取價並寫回快取。結果 upsert 進 `diagram_cost`／`diagram_cost_line` 後回傳。`run_agent` 查詢參數預設為 `true`，會額外觸發 `cost_pricing_agent`。
+
+### 交易二：調整每日時數與稽核
+
+```mermaid
+sequenceDiagram
+  participant U as 架構師
+  participant FE as CostPage
+  participant R as cost_router
+  participant S as cost_service
+  participant RB as services.rbac
+  participant CALC as cost_calculator 純函式
+  participant DB as PostgreSQL
+
+  U->>FE: 修改某一列的每日時數
+  FE->>R: PUT /api/cost/diagrams/ID/lines/MXCELL/hours
+  R->>S: apply_hours
+  S->>RB: user_can C1h edit
+  RB-->>S: 允許或拒絕
+  S->>DB: 讀 diagram_cost_line 現值
+  S->>CALC: 以時數與單價重算月費
+  CALC-->>S: 新金額
+  S->>DB: 更新 diagram_cost_line
+  S->>DB: 寫入 cost_audit_event 含舊值與新值
+  S-->>R: 更新後的列
+  R-->>FE: JSON 回應
+  FE-->>U: 就地更新該列與總計
+```
+
+**文字 fallback**：時數、區域、SKU、單價覆寫四種寫入操作共用同一形狀——router 轉交 service、service 檢查對應故事權限（`C1h`／`C1r`／`C1o` 的 `edit`）、讀現值、交由純函式 `cost_calculator` 重算、更新 `diagram_cost_line`，並把「誰、何時、舊值、新值」寫進 `cost_audit_event`。稽核寫入與資料更新在同一交易內，沒有非同步補寫路徑。
+
+### 交易三：A1 從自然語言到架構圖
+
+```mermaid
+sequenceDiagram
+  participant U as 架構師
+  participant FE as WorkspacePage
+  participant AR as agent_router
+  participant PG as prompt_guard
   participant DA as design_agent
-  participant DBB as diagram_builder
-  participant Collab as collab_router
-  participant DC as DrawioCanvas
-  participant DIO as diagrams.net iframe
+  participant DB2 as diagram_builder
+  participant N8N as n8n webhook
+  participant DB as PostgreSQL
 
-  U->>Chat: 輸入架構提示並送出
-  Chat->>WP: onGenerate / messages
-  WP->>API: POST /api/architecture/generate-wa-collab
-  API->>Guard: 平台自我竄改預檢
-  alt 命中敏感變更
-    Guard-->>API: REFUSAL_MESSAGE
-    API-->>WP: 固定拒答，不呼叫 LLM
+  U->>FE: 輸入架構需求
+  FE->>AR: POST /api/architecture 產圖請求
+  AR->>PG: 平台自我竄改預檢
+  alt 命中防護
+    PG-->>AR: 固定拒絕訊息
+    AR-->>FE: 不呼叫 LLM 直接回覆
   else 通過
-    API->>DA: query LLM + tools
-    DA->>DBB: groups / nodes / edges
-    DBB-->>API: mxGraphModel XML
-    API-->>WP: stream / JSON（xml）
-    WP->>WP: setXml(generatedXml)
-    WP->>Collab: PUT /api/collab/diagrams/{id}（autosave）
-    WP->>DC: xml prop
-    DC->>DIO: postMessage load / init
-    DIO-->>DC: autosave / save / exit
-    DC->>WP: onAutosave(xml)
+    AR->>DA: 呼叫 LLM 產生結構化描述
+    DA-->>AR: 節點與連線結構
+    AR->>DB2: 轉換為 mxGraph XML
+    DB2->>N8N: 取得元件圖示 SVG
+    N8N-->>DB2: SVG 或失敗
+    DB2-->>AR: mxGraph XML
+    AR->>DB: 寫入 user_diagrams
+    AR-->>FE: 架構圖 XML
   end
+  FE-->>U: 於 draw.io 畫布呈現
 ```
 
-<!--
-文字 fallback：A1 提示先經 prompt_guard；通過後 design_agent → diagram_builder 產出 mxGraph XML，Workspace 寫入 collab 並載入 iframe。DrawioCanvas 處理 save／exit（HEAD 已接 data.event === 'save'|'exit'）。成功卡 CTA 為繼續編輯、IaC coming-soon、導向 A3；沒有成本 CTA。
--->
+**文字 fallback**：A1 產圖請求先過 `prompt_guard` 的平台自我竄改預檢（命中則不呼叫 LLM，回固定拒絕訊息，見 `project.md` `## Mandated`）；通過後由 `design_agent` 呼叫 LLM 取得結構化描述，`diagram_builder` 轉成 mxGraph XML 並向 n8n webhook 取元件圖示 SVG（失敗則降級為灰底佔位圖），最後寫入 `user_diagrams` 並回傳給前端於 draw.io 畫布呈現。C1 的估價正是消費這份 XML。
 
-### A3：WA Review 流程（含 COST-* 啟發式；不是 TCO）
+## 資料流與持久化
 
-```mermaid
-sequenceDiagram
-  actor U as Reviewer
-  participant AP as AssessmentPage
-  participant Collab as collab_router
-  participant RR as review_router
-  participant WRE as wa_rule_engine
-  participant Orch as review / WA orchestrator
-  participant Lens as lens_router / wa_lens_engine
-  participant Pref as DiagramPreviewPanel
+- **唯一寫入路徑**：所有 DDL 有兩個真實來源——`schema_rbac.sql`（僅在空 volume 經 `docker-entrypoint-initdb.d` 生效）與 `backend/database.py` 的 5 支 `_ensure_*_schema()` 啟動補丁（既有環境靠它升級）。兩者必須手動保持一致，沒有機械檢查。
+- **成本相關 4 張表**（`diagram_cost`、`diagram_cost_line`、`pricing_cache`、`cost_audit_event`）只存在於 `schema_rbac.sql:169-212` 與 `_ensure_cost_schema()`（`database.py:329-395`）；`schema.sql` **完全沒有**成本 DDL。
+- **雙層快取重疊**：`pricing_client` 在 `backend/cost/.pricing_offer_cache/` 寫 24 小時磁碟快取，`price_cache` 又在 `pricing_cache` 表寫 24 小時快取，兩套 TTL 各自為政。
 
-  U->>AP: 選擇 diagram／發起審核
-  AP->>Collab: GET /api/collab/diagrams/{id}
-  Collab-->>AP: xml_data
-  AP->>RR: POST /api/architecture/reviews
-  RR->>WRE: parse_diagram_summary（id/label/style）
-  WRE-->>RR: nodes/edges + 可選 COST-* findings
-  Note over WRE: COST-* 為關鍵字啟發式，無金額、無 SKU
-  RR->>Orch: 編排 detect-provider + LLM review
-  Orch->>Lens: 套用 active lens（可選）
-  Orch-->>RR: findings / scores_json
-  RR-->>AP: review 記錄
-  AP->>Pref: 預覽 XML + findings
-```
+## 關鍵設計決策與其後果
 
-<!--
-文字 fallback：A3 讀 xml_data，用 parse_diagram_summary 做精簡 mxCell 摘要，再跑 WA orchestrator。detect_provider 與 AssessmentPage 的 AWS／GCP／Azure 下拉是雲別覆寫（auto_detect_provider: false），不是成本 Manual Override。COST-* findings 不是 TCO。
--->
+| 決策 | 位置 | 後果 |
+|---|---|---|
+| 成本域採 router → service → 純函式三層＋獨立 pricing port | `cost_router`／`cost_service`／`cost_calculator`／`pricing_client` | ADR-0006 的 PBT 約束有明確落點；`validate_cost_calculator_boundary.py` 以硬編碼路徑機械強制純函式層不得 import `httpx`／`requests`／`sqlalchemy`／`fastapi` |
+| 成本套件放在 `backend/cost/` 而非 `backend/services/` 之下 | 目錄結構 | 相依方向單向為 `main → cost → services`；`services` 無任何模組 import `cost.*`，退役面的耦合因此極窄 |
+| OpenAPI 與前端型別以 CI drift 閘門綁定 | `dump_openapi.py --check`、`npm run check:types` | 任何端點變更必須在同一 PR 重產 `openapi.json` 與 `frontend/src/types/api.d.ts` |
+| Agent 以 in-process MCP server 暴露工具 | `cost_pricing_agent.py:43-49` | `cloud360-cost` 的 3 個 tool 是 agent 介面的唯一契約定義，遷移框架時必須逐一對應 |
+| 根路徑導向以 C1 為第一順位 | `frontend/src/App.tsx:24` | 成本頁同時是 FinOps 角色的落地頁，存廢變更會改變登入後行為 |
 
-### C1：現況路徑 vs 意圖路徑（本 overlay 必備）
+## 架構強化機會
 
-現況在「圖 XML + WA 成本啟發式 findings」終止；**沒有 TCO calculator**。下圖左為 HEAD 實際資料流，右為設計意圖（repo 內不存在，不得當成已實作）。
-
-```mermaid
-flowchart LR
-  subgraph NOW["Current HEAD c3de2c8"]
-    P1[NL / 既有圖] --> G1[design_agent + diagram_builder]
-    G1 --> X1["user_diagrams.xml_data"]
-    X1 --> S1["parse_diagram_summary 僅 id label style"]
-    S1 --> H1["wa_rule_engine COST 啟發式 findings"]
-    H1 --> STOP["到此停止：無金額、無 SKU、無 cost API"]
-  end
-
-  subgraph INT["Intended C1 未實作"]
-    P2[同一份圖 XML] --> E2["可定價資源擷取 SKU hours region"]
-    E2 --> C2["pricing client 或靜態表"]
-    C2 --> T2["TCO calculator"]
-    T2 --> U2["Cost page + C1 RBAC"]
-    T2 --> N2["budget / overspend notify"]
-  end
-
-  NOW -.->|"gap：須新寫 extract／client／UI"| INT
-```
-
-<!--
-文字 fallback（現況）：A1 把 groups/nodes/edges 寫成 mxCell（無 sku／size／hours）；持久化只有 xml_data。A3 的 parse_diagram_summary 抽出 id、label、style，wa_rule_engine 用關鍵字產生 COST-OVERSIZE-HINT、COST-NO-LIFECYCLE、COST-NAT-HINT、GCP-COST-NO-COMMIT、AZ-COST-NO-COMMIT。流程在此停止。沒有 /api/cost*、沒有 calculator、沒有 Cost 頁、沒有 inbox。
-文字 fallback（意圖，未實作）：從圖抽出可定價資源 → 查價（public list 或覆寫）→ TCO calculator → Cost UI（Sidebar C 組、C1 守衛）與預算通知。意圖邊不得畫成現有元件。
--->
-
-## 改善機會與 hotspot 狀態
-
-**已關閉（相對 2026-08-06 codekb，勿再當開帳）**
-
-1. **Sidebar 可收合** — `NavChromeContext.tsx` + `localStorage` key `cloud360.nav.sidebarCollapsed`；收合為 icon rail `w-14`（`Sidebar.tsx`）。
-2. **Sidebar A／J 分組** — 展開時「架構」（`/workspace`、`/assessment`）與「系統管理」（三個 admin 路徑）。仍**無 C／FinOps 組**。
-3. **Edges exit／entry** — `diagram_builder.compute_edge_waypoints` 寫入 `exitX/Y`、`entryX/Y`。殘項：edge `parent` 仍 `"1"`。
-4. **Draw.io save／exit** — `DrawioCanvas.tsx` 處理 `data.event === 'save'|'exit'`。
-5. **prompt refusal** — `backend/services/prompt_guard.py` 已存在。
-
-**仍開／未重驗（A1／A3 殘項）**
-
-- Undo：程式註解稱已避免 autosave echo load（`DrawioCanvas.tsx`）；本 scan **未重跑 UX 驗證**。
-- Edge `parent` 恆 `"1"`。
-
-**C1 新 hotspot（本 intent 設計起點）**
-
-1. 圖契約無 SKU：`DRAW_INPUT_SCHEMA` required 僅 `id,name,x,y`；`user_diagrams` 無平行資源表。
-2. Public pricing client 與成本 Manual Override **ABSENT**（勿把 A3 provider select 當成覆寫單價）。
-3. UI 掛點全缺：無 `/cost`、無 `CostPage`、成功卡無成本 CTA、`DefaultRedirect` 無 C1。
-4. 無 inbox／budget／overspend primitive；超支警告須從零開始。
-5. RBAC 種子領先執行期：`user_can(..., "C1", ...)` 通用函式可用，但無 router 以 C1 守衛。
-6. 若新增 cost／budget 表，必須同步 `schema_rbac.sql`、`DEPLOY.md`、`database.py` `_ensure_*`（今日無 C1 DDL，尚無增量義務）。
+1. **DDL 單一真實來源**：`schema_rbac.sql` 與 `_ensure_*_schema()` 的重複應收斂為單一來源或加上一致性檢查。
+2. **跨模組私有函式引用**：`cost_service.py:43` 引用 `services.collab_router._user_can_access_diagram` 與 `_visible_diagrams`，破壞封裝；授權來源應提升為公開介面。
+3. **快取層重疊**：磁碟快取與 DB 快取應擇一，或明確定義兩者的職責分界。
+4. **God module**：`diagram_builder.py`（1,818 行）、`gcp_calculator_runner.py`（979 行）、`wa_rule_engine.py`（973 行）等已達難以測試的規模，清單與行數見 `code-quality-assessment.md`。

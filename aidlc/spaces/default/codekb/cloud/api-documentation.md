@@ -1,91 +1,73 @@
 # API 文件（API Documentation）
 
-> Reverse Engineering 合成產物｜repo `cloud`｜HEAD `c3de2c8`｜intent `260819-cost-finops`｜mode **Modify overlay for C1**
+> Reverse Engineering 合成產物｜repo `cloud`｜工作樹掃描日 2026-09-16｜intent `260916-estimate-upload-rework`｜mode **Full rescan**
+> 端點清單以 `openapi.json` 程式列舉為準（本次深度分析項目），並與 `cost_router.py` 逐一核對。
 
-## 公開 HTTP 表面
+## HTTP API 總覽
 
-後端於 `backend/main.py:47-51` 掛載**五組** router（皆需依端點搭配 Bearer／cookie 認證與 RBAC；細節以原始碼 `Depends` 為準）。**無第六組。**
+`openapi.json` 共 **45 paths／54 operations**，全部前綴 `/api/*`，另加根 `GET /`。
 
-### ABSENT：`/api/cost*`
-
-**Cost／pricing／TCO 端點不存在。** `openapi.json` 對 `cost|pricing|tco|finops|budget` 的命中只有 schema 名 `CommitCollabReviewBody`（false positive）。`frontend/src/types/api.d.ts` 對上述關鍵字：**0**。HEAD `/api/*` 路徑集合與 2026-08-06 相同前綴；新增欄位在 `/api/auth/list` 的 `last_activity_at`／分頁，**不是**成本端點。落地 C1 時必須跑 `backend/scripts/dump_openapi.py` 與 `frontend` `npm run gen:types`，否則 CI OpenAPI drift 紅燈。
-
-不得發明下列契約：`GET/POST /api/cost`、`/api/cost/estimate`、`/api/pricing`、SKU 查價、budget CRUD。下列三節為實際存在的表面。
-
-### `/api/architecture`（產生、審核、Lens）
-
-| 方法 | 路徑 | 用途 | 主要消費者 |
+| 群組 | 掛載前綴 | operations | 來源 router |
 |---|---|---|---|
-| POST | `/generate` | 架構產生（基礎路徑） | Workspace／agent |
-| POST | `/generate-wa-collab` | WA 協作產生（A1 主路徑） | `WorkspacePage` |
-| POST | `/reviews/detect-provider` | 偵測雲端供應商（A3 雲別，非成本 Override） | `AssessmentPage` |
-| POST | `/reviews` | 建立審核 | A3 |
-| POST | `/reviews/commit-collab` | 提交協作審核結果 | A3 |
-| GET | `/reviews` | 列表（支援 `diagram_id`、`ephemeral`） | A3 |
-| GET | `/reviews/{review_id}` | 審核詳情 | A3 |
-| POST | `/reviews/{review_id}/persist-diagram` | 審核結果回寫圖 | A3 |
-| DELETE | `/reviews/{review_id}` | 刪除審核 | A3 |
-| POST | `/reviews/{review_id}/retry-suggestions` | 重試改善建議 | A3 |
-| POST | `/diagrams/render-png` | 圖轉 PNG（httpx → convert.diagrams.net／exp.draw.io） | 匯出／預覽 |
-| GET/PUT | `/lens/active` | 作用中 lens | A3 lens tab |
-| GET | `/lens/new-question-template` | 新問題範本 | Lens 編輯 |
-| POST | `/lens/suggest-improvement-plan` | 改善計畫建議 | A3 |
-| POST | `/lens/validate` | Lens 驗證 | Lens 編輯 |
+| architecture（agent／review／lens） | `/api/architecture` | 16 | `agent_router`、`review_router`、`lens_router`（三者共用同一前綴） |
+| auth／user／RBAC | `/api/auth` | 16 | `user_router` |
+| collab | `/api/collab` | 12 | `collab_router` |
+| **cost（C1）** | `/api/cost` | **9** | `cost_router` |
+| root | `/` | 1 | `main.py` |
 
-實作：`agent_router.py`、`review_router.py`、`lens_router.py`。`detect-provider` 回傳 `{ provider, scores }`；前端送審時 `auto_detect_provider: false` 並帶 `body.provider`（`AssessmentPage.tsx`）。這是雲別，不是單價／時數覆寫。
+## `/api/cost` 的 9 個 operations
 
-### `/api/collab`（圖庫與即時同步）
+| # | Method 與路徑 | `cost_service` 對應函式 | 說明 |
+|---|---|---|---|
+| 1 | `GET /api/cost/diagrams` | `list_diagrams` | 可估價的架構圖清單 |
+| 2 | `GET /api/cost/diagrams/{diagram_id}` | `get_snapshot` | 成本快照；query `run_agent` 預設 `true`，會觸發 `cost_pricing_agent` |
+| 3 | `GET /api/cost/diagrams/{diagram_id}/audit` | `get_audit` | 該圖的 `cost_audit_event` 稽核紀錄 |
+| 4 | `GET /api/cost/diagrams/{diagram_id}/calculator-export/csv` | `export_calculator_excel` | GCP Calculator 匯出 |
+| 5 | `GET /api/cost/diagrams/{diagram_id}/calculator-export/xlsx` | `export_calculator_excel` | Azure Calculator 匯出 |
+| 6 | `PUT /api/cost/diagrams/{diagram_id}/region` | `apply_region` | 套用估價區域（story `C1r`） |
+| 7 | `PUT /api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/hours` | `apply_hours` | 每日時數（story `C1h`） |
+| 8 | `PUT /api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/override` | `apply_override` | 單價覆寫（story `C1o`） |
+| 9 | `PUT /api/cost/diagrams/{diagram_id}/sku`（實為 `/lines/{mxcell_id}/sku`） | `apply_sku` | SKU 覆寫（story `C1o`） |
 
-| 方法 | 路徑 | 用途 |
-|---|---|---|
-| WS | `/ws/{workspace_id}` | 工作區即時同步（圖協作 broadcast，非通知 inbox） |
-| GET | `/users` | 協作用戶 |
-| GET | `/diagrams` | 圖列表 |
-| GET | `/workspace/bootstrap` | 工作區啟動資料 |
-| PUT | `/workspace/last-opened` | 記錄上次開啟 |
-| GET/PUT/DELETE | `/diagrams/{id}/chat` | 聊天歷史 |
-| GET/POST/PUT/DELETE | `/diagrams`、`/diagrams/{id}` | 圖 CRUD（`xml_data` blob，無 SKU 欄） |
-| POST | `/diagrams/{id}/share` | 分享 |
+授權形狀一致：`cost_router` 以 FastAPI 依賴取得 `database.get_db`、`models.User`、`services.auth.get_current_user`，再由 `cost_service` 呼叫 `services.rbac.user_can` 檢查故事權限——`C1.view` 用於讀取，`C1h`／`C1r`／`C1o` 的 `edit` 用於四個 `PUT`。
 
-實作：`collab_router.py`。A1 autosave 與 A3 選圖皆依賴此面。
+## 契約同步規則（硬性）
 
-### `/api/auth`（使用者與權限）
+改動任何端點必須在**同一個 PR** 內同時重產兩份衍生物，否則 CI 兩道 drift 閘門都會紅燈：
 
-涵蓋 `register`／`login`／`me`、授權請求核准／駁回、使用者啟用／角色指派、`role-permissions` 讀寫與 reset-defaults、roles catalog、`GET /list`（**NEW 欄位** `last_activity_at` 與分頁）。實作：`user_router.py`；守衛依賴 `auth.py`／`rbac.py`。無任何端點以 `require_story_action("C1")` 守衛。
+1. `python scripts/dump_openapi.py`（實際路徑為 `backend/scripts/dump_openapi.py`）重產 `openapi.json` — backend job 以 `--check` 驗證。
+2. `npm run gen:types` 重產 `frontend/src/types/api.d.ts`（2,751 行）— frontend job 以 `npm run check:types` 驗證。
 
-健康檢查：`GET /` → `{"message": "Cloud-360 Backend is running"}`。
+此外，`fastapi[standard]==0.141.1` 與 `pydantic==2.13.4` 是**精確釘選**的，目的正是讓 `openapi.json` 的輸出具位元決定性。升級這兩者會使 dump 漂移。
 
-## 內部契約與副作用
+## 內部 API（非 HTTP）：in-process MCP server
 
-| 內部邊界 | 契約摘要 | 副作用注意 |
-|---|---|---|
-| `prompt_guard` → `agent_router` | 命中平台 DB／金鑰／系統值變更則回固定拒答 | **PRESENT**（2026-08-06 codekb 寫「無」已過時） |
-| `design_agent` → `diagram_builder` | LLM tool 輸出 `groups`／`nodes`／`edges` → mxGraph XML | nodes required：`id`,`name`,`x`,`y`；**無 sku／size／hours**。Edges 已有 `exitX/Y` `entryX/Y`；`parent` 仍 `"1"`。Provider 只拿去跟 n8n 要 SVG |
-| `parse_diagram_summary` | mxCell → `{ nodes: {id,label,style}, edges, counts }` | 消費者全是 A3 評核路徑；style 截斷 200 字元；**不是價目表** |
-| `wa_rule_engine` `COST-*` | 關鍵字啟發式 findings（無金額） | **不是 TCO**；codes 僅定義於此檔，**零測試** |
-| `DrawioCanvas` ↔ iframe | `postMessage`：init、load XML、autosave、**save／exit** | Undo echo-load：註解稱已避免，未重驗 UX |
-| Review orchestrator → DB | findings／scores_json 持久化 | ephemeral reviews 與 persist-diagram 語意不同 |
-| `LLM_PROVIDER` | `llm_provider.configure_provider_env`：OpenRouter 映射或 claude CLI | 不得把 secret 寫入 repo／artifacts |
-| n8n icon fetch | `diagram_builder` `POST` `N8N_WEBHOOK_URL`（Basic Auth） | 失敗時圖示降級；非價目 HTTP |
+`cost_pricing_agent.py:43-49` 以 `claude_agent_sdk` 自建一個 in-process MCP server，名稱 `cloud360-cost`，暴露 3 個 tool（FQN 形如 `mcp__cloud360-cost__<tool>`）：
 
-前端以 `apiUrl()` 組絕對路徑；CORS 由 `CORS_ORIGINS` 控制（預設 localhost Vite）。
+| Tool | 用途 |
+|---|---|
+| `list_mapped_resources` | 列出已完成 SKU 對應的架構圖資源 |
+| `fetch_official_hourly` | 向公開價目端點取得每小時官方價 |
+| `run_azure_calculator_estimate` | 以 Playwright 驅動 Azure Calculator 產生估價 |
 
-## A1／A3／C1 序列與契約缺口
+**這 3 個 tool 契約是 agent 介面的唯一正式定義**；搭配的 system prompt 以路徑載入自 `backend/prompts/cost_pricing_agent_system.md`。任何 agent 框架遷移都必須逐一決定這 3 個 tool 的去留與對應物，並處理 prompt 檔的歸屬（拆除後會成為孤兒檔）。
 
-**A1 generate→canvas**
+## 對外呼叫的第三方 API
 
-1. `POST /api/architecture/generate-wa-collab`（messages、可選 current XML）  
-2. 入口經 `prompt_guard`；通過後回應 XML → `WorkspacePage.setXml` → `DrawioCanvas` load  
-3. iframe autosave／save → `PUT /api/collab/diagrams/{id}`  
+| 目的 | 端點類型 | 呼叫者 | 憑證需求 |
+|---|---|---|---|
+| AWS 價目 | Bulk／Offer 公開端點 | `pricing_client` → `pricing_offer_parser` | 無 |
+| AWS 價目（替代路徑） | Pricing Query API（boto3） | `pricing_sdk` | **需 IAM 憑證**；由 `COST_PRICING_USE_SDK` 控制，工作樹現況預設 `0`（關閉） |
+| Azure 價目 | Retail Prices 公開端點 | `pricing_azure` | 無 |
+| GCP 價目 | Cloud Billing Catalog | `pricing_gcp` | `GCP_BILLING_API_KEY` |
+| Azure／GCP Calculator | 官方 Calculator 網頁（Playwright 驅動） | `azure_calculator_runner`、`gcp_calculator_runner` | 無，但**需要瀏覽器二進位** |
+| LLM 推論 | OpenRouter 或本機 `claude` CLI | `services.llm_provider` | 依 provider |
+| 架構圖元件圖示 | n8n webhook（Basic Auth） | `services.diagram_builder` | `N8N_USER`／`N8N_PASSWORD` |
 
-先前缺口「無 prompt refusal」「embed 未接 save／exit」在 HEAD **已關閉**。成功卡仍無成本 CTA。
+允許呼叫的價目主機白名單記在 `backend/cost/pricing_urls.yaml`（307 行）的 `allowlist_hosts`。
 
-**A3 review**
+## 前端路由表（`frontend/src/App.tsx`）
 
-1. `GET /api/collab/diagrams/{id}` 取 XML  
-2. `POST /api/architecture/reviews`（＋可選 detect-provider／lens）  
-3. `GET /api/architecture/reviews*` 呈現 findings（可含 `COST-*` 字串，**無金額欄**）
+`/login`、`/403`、`/waiting-approval`、`/workspace`、`/assessment`、`/cost`、`/admin/users`、`/admin/authorization-requests`、`/admin/role-permissions`、`/admin`（redirect）、`/`（redirect）、`*`。
 
-**C1（不存在的序列）**
-
-沒有「讀圖 → 查價 → 回傳 TCO」的 HTTP 步驟可寫。設計時若新增，屬全新路徑，必須同時擴充 OpenAPI 與 generated types；不得把 `COST-*` finding payload 或 `detect-provider` 回應當成估算契約。
+**`App.tsx:24` 的根路徑導向第一順位為 `if (can('C1','view')) return <Navigate to="/cost" replace />;`**；側欄入口在 `Sidebar.tsx:201` 的 `NavLink to="/cost"`。這兩處與 9 個端點同屬 C1 的對外介面面，變更時必須一併處理。
