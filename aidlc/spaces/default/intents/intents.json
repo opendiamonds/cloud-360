@@ -46,5 +46,12 @@
     "dirName": "260822-gh-projects-sync",
     "scope": "aidlc-github-projects-sync",
     "status": "complete"
+  },
+  {
+    "uuid": "01a0a835-ff67-765a-a9ef-88cd96f4d4d1",
+    "slug": "estimate-upload-rework",
+    "dirName": "260916-estimate-upload-rework",
+    "scope": "c1-estimate-upload-rework",
+    "status": "in-flight"
   }
 ]
