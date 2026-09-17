@@ -1894,3 +1894,298 @@
 **Artifact Mtime Ms**: 1789547273978.4702
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-17T06:23:04Z
+**Event**: HUMAN_TURN
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-17T06:23:04Z
+**Event**: QUESTION_ANSWERED
+**Stage**: domain-design
+**Details**: 解析器單一元件含三讀取器、獨立純函式驗證器、建議持久化、SSE、綁定為純標籤、cost 域自有授權判斷、backend/cost/estimate_parser.py、查價為唯讀 Port、建議產生為背景工作
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-17T06:23:04Z
+**Event**: DECISION_RECORDED
+**Stage**: domain-design
+**Decision**: Consolidated Summary Confirmation
+**Options**: Looks correct / Q7改C / 不要EstimateSet / F1改C
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/domain-design-questions.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-17T06:23:12Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/domain-design-questions.md
+**Context**: inception > domain-design > domain-design-questions.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-17T06:23:12Z
+**Event**: HUMAN_TURN
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-17T06:23:12Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: domain-design
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/domain-design-questions.md
+**Questions SHA-256**: e3e8bd6dcc312694ec8ae9eadd6a27e010a5d09714d4ec4931ed1cc361fb8c34
+**Hash Scope**: confirmed-content-v1
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-17T06:31:03Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/components.md
+**Context**: inception > domain-design > components.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-17T06:31:03Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/decisions.md
+**Context**: inception > domain-design > decisions.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-17T06:31:03Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/traceability.json
+**Context**: inception > domain-design > traceability.json
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-17T06:31:03Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/memory.md
+**Context**: inception > domain-design > memory.md
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-17T06:31:04Z
+**Event**: REVIEW_REQUESTED
+**Stage**: domain-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:889b6147d03eebfb7118e5db7836b6c6835b18e72ad78110154672097466dd8b
+**Review Appendix Artifact**: inception/domain-design/components.md
+**Review Appendix Offset**: 30579
+**Review Appendix Prior Digest**: none
+**Review Appendix Prior Length**: 0
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-17T06:37:44Z
+**Event**: REVIEW_COMPLETED
+**Stage**: domain-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Iteration**: 1
+**Verdict**: READY
+**Request Fingerprint**: sha256:889b6147d03eebfb7118e5db7836b6c6835b18e72ad78110154672097466dd8b
+**Artifact Fingerprint**: sha256:3f4645c3e5c6786f144288e3d59e845c983ff0752fd9f89fdb104b705ca77b38
+**Review Appendix Artifact**: inception/domain-design/components.md
+**Review Appendix Offset**: 30579
+**Review Appendix Prior Digest**: none
+**Review Appendix Prior Length**: 0
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 9be6844d
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/components.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 9be6844d
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/components.md
+**Duration ms**: 73
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 25b15c0d
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/decisions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 25b15c0d
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/decisions.md
+**Duration ms**: 30
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 17d1d73f
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 17d1d73f
+**Sensor ID**: required-sections
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/traceability.json
+**Duration ms**: 30
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: ad3eef26
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/components.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FAILED
+**Fire id**: ad3eef26
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/components.md
+**Detail path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/.aidlc-sensors/domain-design/upstream-coverage-ad3eef26.md
+**Findings count**: 1
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 42c5a2dc
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/decisions.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-17T06:41:20Z
+**Event**: SENSOR_FAILED
+**Fire id**: 42c5a2dc
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/decisions.md
+**Detail path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/.aidlc-sensors/domain-design/upstream-coverage-42c5a2dc.md
+**Findings count**: 1
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-17T06:41:21Z
+**Event**: SENSOR_FIRED
+**Fire id**: 4821a35b
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/traceability.json
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-17T06:41:21Z
+**Event**: SENSOR_FAILED
+**Fire id**: 4821a35b
+**Sensor ID**: upstream-coverage
+**Stage slug**: domain-design
+**Output path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/domain-design/traceability.json
+**Detail path**: aidlc/spaces/default/intents/260916-estimate-upload-rework/.aidlc-sensors/domain-design/upstream-coverage-4821a35b.md
+**Findings count**: 1
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-09-17T06:41:21Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: domain-design
+**Recovered**: true
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-17T06:41:21Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state approve domain-design --user-input Approve --project-dir <project-dir>
+**Error**: Cannot approve "domain-design" because no new human reply has been received for this approval question. Wait for the human to type their choice, then retry the approval.
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-17T06:41:28Z
+**Event**: HUMAN_TURN
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-09-17T06:41:28Z
+**Event**: GATE_APPROVED
+**Stage**: domain-design
+**User Input**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-09-17T06:41:28Z
+**Event**: STAGE_COMPLETED
+**Stage**: domain-design
+**Validation Basis**: {"graphContract":"sha256:4e5ba0b6334a8c25f8dea5929cee93c113f34e58b422ef110b998ef5ff29e179","inputs":[{"artifact":"architecture","contentHash":"sha256:a732984a27b361172ac07a3c35ae73a564fafa22916b1528e58eeafde32d5db6","instanceCount":1,"presentCount":1,"producer":"reverse-engineering","required":false,"structureHash":"sha256:4a78f5bd08d75992a3bcc4ad80b7bb8c7cca7d8cda2232fb6ad3116a17fd2850"},{"artifact":"component-inventory","contentHash":"sha256:840a1b1877e26f96b1623b956cb8b8f6c7d13da1dbbf16b8775445dc0b9f2cd5","instanceCount":1,"presentCount":1,"producer":"reverse-engineering","required":false,"structureHash":"sha256:57d3a7d028afa03746017fadb268b128c0f9931f6318e0a8f2b1a837bbe11a42"},{"artifact":"requirements","contentHash":"sha256:b650fcdbe870567284e70dfe9935f031997d5cc1f8e497c3b0c37e20e90444ff","instanceCount":1,"presentCount":1,"producer":"requirements-analysis","required":true,"structureHash":"sha256:f17ab3d452efb7561293be9d7bd72707a48d0abc1a1c600b53ed104f2c04ca4c"}],"outputs":[{"artifact":"components","contentHash":"sha256:19121f21521f81a136f392a5c883fde8cde7e0cb02d01e7ad06d30e8fa38715a","instanceCount":1,"presentCount":1,"producer":"domain-design","required":true,"structureHash":"sha256:3dd2d5f815d66cad1b3e8f6fb3d0abfcf7573ebe7d69c248598cac2da02d3e2d"},{"artifact":"decisions","contentHash":"sha256:657df1408ee8f1b0a53cc1fd646ae153328bac33e120d748febc3c58f3a4e71e","instanceCount":1,"presentCount":1,"producer":"domain-design","required":true,"structureHash":"sha256:402e76bafda49796c188abd4a9ea62abae4986fc2d9d379ef24aeddbdda8032d"},{"artifact":"traceability","contentHash":"sha256:233663dcdca853a6593aba53283e01ce903c976df6279c6dc6a84b760f637c51","instanceCount":1,"presentCount":1,"producer":"domain-design","required":true,"structureHash":"sha256:0f1d99f6bb6a8c6191c724cde8025b61220f2912b34eacad3b1641ab6f431066"}],"projectType":"brownfield","schema":3}
+**Details**: Stage Domain Design approved by gate
+
+---
+
+## Stage Start
+**Timestamp**: 2026-09-17T06:41:28Z
+**Event**: STAGE_STARTED
+**Stage**: units-generation
+**Agent**: aidlc-architect-agent
+
+---
