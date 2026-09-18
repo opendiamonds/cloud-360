@@ -1,0 +1,61 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Logs and runtime output
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Node / Python local artifacts
+node_modules/
+# Playwright output from a local `npm run test:e2e` (LOCAL-DEV.md 7).
+test-results/
+playwright-report/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Build / coverage artifacts
+dist/
+build/
+coverage/
+
+
+
+
+# AI-DLC v2 — per-user session cursors 與機器本地衍生狀態不進版控；
+# 共享的工作（method、registry、state、audit shards、artifacts）一律 commit。
+# 來源：upstream v2 的 dist/claude/.gitignore（僅取 AI-DLC 段，通用規則本檔已有）。
+aidlc/active-space
+aidlc/spaces/*/intents/active-intent
+aidlc/.aidlc-clone-id
+aidlc/.aidlc-sessions/
+aidlc/spaces/*/intents/*/runtime-graph.json
+aidlc/spaces/*/intents/*/.aidlc-*
+aidlc/diagnostics/
+.claude/settings.local.json
+
+# graphify 知識圖輸出（本地衍生產物，可由來源重建）
+graphify-out/
+
+# Bun
+bun.lock
+bun.lockb

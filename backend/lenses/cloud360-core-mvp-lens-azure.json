@@ -1,0 +1,229 @@
+{
+  "schemaVersion": "2021-11-01",
+  "name": "Cloud-360 Azure WARA-aligned MVP Lens",
+  "description": "Offline Custom Lens for Azure diagrams. Reliability questions are inspired by Microsoft Azure Well-Architected Reliability Assessment (WARA) themes—zones, redundancy, recovery targets, DR, and health/ops—adapted for architecture-diagram review (not a live WARA collector). Other pillars use Azure service vocabulary. References: https://github.com/Azure/Well-Architected-Reliability-Assessment and https://learn.microsoft.com/azure/well-architected/reliability/checklist",
+  "pillars": [
+    {
+      "id": "security",
+      "name": "Security",
+      "questions": [
+        {
+          "id": "sec_edge",
+          "title": "How do you protect public ingress on Azure?",
+          "description": "Look for Application Gateway, Front Door, Azure Firewall, WAF, or Load Balancer at the edge.",
+          "choices": [
+            {
+              "id": "sec_edge_waf",
+              "title": "WAF / Front Door / Application Gateway is present",
+              "improvementPlan": {
+                "displayText": "Place Azure Front Door or Application Gateway with WAF in front of public entry points (aligns with edge protection expectations in Azure WAF reviews)."
+              }
+            },
+            {
+              "id": "sec_edge_tls",
+              "title": "TLS / HTTPS termination is indicated",
+              "improvementPlan": {
+                "displayText": "Terminate TLS at the edge (App Gateway / Front Door) and enforce HTTPS."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "sec_edge_waf && sec_edge_tls", "risk": "NO_RISK" },
+            { "condition": "sec_edge_waf || sec_edge_tls", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        },
+        {
+          "id": "sec_data",
+          "title": "How are secrets and data at rest protected?",
+          "description": "Look for Key Vault, encryption, private endpoints, or private networking on data stores.",
+          "choices": [
+            {
+              "id": "sec_data_encrypt",
+              "title": "Key Vault / encryption is labeled",
+              "improvementPlan": {
+                "displayText": "Use Azure Key Vault for keys/secrets and enable encryption on Storage / Azure SQL / Cosmos DB."
+              }
+            },
+            {
+              "id": "sec_data_private",
+              "title": "Private Endpoint / private network for data is labeled",
+              "improvementPlan": {
+                "displayText": "Expose data planes via Private Endpoint or private VNet; avoid public data access."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "sec_data_encrypt && sec_data_private", "risk": "NO_RISK" },
+            { "condition": "sec_data_encrypt || sec_data_private", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reliability",
+      "name": "Reliability",
+      "questions": [
+        {
+          "id": "rel_ha",
+          "title": "[WARA] How do you use Availability Zones for critical tiers?",
+          "description": "WARA / Azure WAF Reliability emphasizes zone redundancy. Look for multiple Availability Zones, zone-redundant services, or AZ labels.",
+          "choices": [
+            {
+              "id": "rel_ha_multiaz",
+              "title": "Multiple Availability Zones are shown",
+              "improvementPlan": {
+                "displayText": "Deploy critical compute and data across at least two Availability Zones (WARA: resilience via zone redundancy)."
+              }
+            },
+            {
+              "id": "rel_ha_standby",
+              "title": "Zone-redundant / replica / failover is labeled",
+              "improvementPlan": {
+                "displayText": "Enable zone-redundant SKUs or replicas (e.g. Azure SQL zone-redundant, Cosmos multi-write) and label them on the diagram."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "rel_ha_multiaz && rel_ha_standby", "risk": "NO_RISK" },
+            { "condition": "rel_ha_multiaz || rel_ha_standby", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        },
+        {
+          "id": "rel_dr",
+          "title": "[WARA] How do you plan disaster recovery / geo-failover?",
+          "description": "WARA recovery focus: paired regions, geo-replication, ASR, or explicit DR path on the diagram.",
+          "choices": [
+            {
+              "id": "rel_dr_geo",
+              "title": "Secondary region / geo-replica / paired region is labeled",
+              "improvementPlan": {
+                "displayText": "Add a secondary region or geo-replication path and document failover (aligns with WARA DR / recovery review)."
+              }
+            },
+            {
+              "id": "rel_dr_backup",
+              "title": "Backup / vault / recovery point is labeled",
+              "improvementPlan": {
+                "displayText": "Show Azure Backup, Recovery Services vault, or PITR and validate RPO on the diagram."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "rel_dr_geo && rel_dr_backup", "risk": "NO_RISK" },
+            { "condition": "rel_dr_geo || rel_dr_backup", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        },
+        {
+          "id": "rel_health",
+          "title": "[WARA] How does the workload detect faults and self-heal?",
+          "description": "Look for health probes, load-balancer probes, auto-heal, circuit breaker, or retry patterns labeled on the diagram.",
+          "choices": [
+            {
+              "id": "rel_health_probe",
+              "title": "Health probe / health endpoint is labeled",
+              "improvementPlan": {
+                "displayText": "Add LB / App Gateway health probes and app health endpoints (WARA: detect and withstand faults)."
+              }
+            },
+            {
+              "id": "rel_health_heal",
+              "title": "Auto-scale / auto-heal / restart policy is labeled",
+              "improvementPlan": {
+                "displayText": "Enable VMSS / AKS / App Service auto-heal or scale rules and show them on the diagram."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "rel_health_probe && rel_health_heal", "risk": "NO_RISK" },
+            { "condition": "rel_health_probe || rel_health_heal", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cost_optimization",
+      "name": "Cost Optimization",
+      "questions": [
+        {
+          "id": "cost_storage",
+          "title": "How do you manage Azure storage tiers / lifecycle?",
+          "description": "Look for lifecycle management, Cool/Archive tiers, or reserved capacity labels.",
+          "choices": [
+            {
+              "id": "cost_lifecycle",
+              "title": "Lifecycle / tiering / reservation is labeled",
+              "improvementPlan": {
+                "displayText": "Add Blob lifecycle policies or reserved capacity where appropriate."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "cost_lifecycle", "risk": "NO_RISK" },
+            { "condition": "default", "risk": "MEDIUM_RISK" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "performance_efficiency",
+      "name": "Performance Efficiency",
+      "questions": [
+        {
+          "id": "perf_cache",
+          "title": "How do you accelerate read-heavy paths on Azure?",
+          "description": "Look for Azure Cache for Redis, CDN, Front Door caching.",
+          "choices": [
+            {
+              "id": "perf_cache_present",
+              "title": "Redis / CDN / Front Door cache is present",
+              "improvementPlan": {
+                "displayText": "Add Azure Cache for Redis and/or Azure CDN / Front Door caching for hot reads."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "perf_cache_present", "risk": "NO_RISK" },
+            { "condition": "default", "risk": "MEDIUM_RISK" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "operational_excellence",
+      "name": "Operational Excellence",
+      "questions": [
+        {
+          "id": "oe_observe",
+          "title": "How do you observe and alert the Azure workload?",
+          "description": "Look for Azure Monitor, Log Analytics, Application Insights, Action Groups, alerts.",
+          "choices": [
+            {
+              "id": "oe_monitor",
+              "title": "Monitor / App Insights / Log Analytics is labeled",
+              "improvementPlan": {
+                "displayText": "Add Azure Monitor metrics/logs and Application Insights (WARA ops visibility)."
+              }
+            },
+            {
+              "id": "oe_alarm",
+              "title": "Alerts / Action Group is labeled",
+              "improvementPlan": {
+                "displayText": "Wire metric alerts to Action Groups for on-call notification."
+              }
+            }
+          ],
+          "riskRules": [
+            { "condition": "oe_monitor && oe_alarm", "risk": "NO_RISK" },
+            { "condition": "oe_monitor || oe_alarm", "risk": "MEDIUM_RISK" },
+            { "condition": "default", "risk": "HIGH_RISK" }
+          ]
+        }
+      ]
+    }
+  ]
+}

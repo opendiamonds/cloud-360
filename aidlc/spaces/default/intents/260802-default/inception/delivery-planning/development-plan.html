@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud-360 開發計劃</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-2: #273548;
+    --accent: #38bdf8;
+    --accent2: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #334155;
+    --w0: #f43f5e;
+    --w1: #38bdf8;
+    --w2: #34d399;
+    --w3: #fbbf24;
+    --done: #22c55e;
+    --pending: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+                 "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  header h1 {
+    font-size: 2.1rem;
+    margin: 0 0 0.4rem;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle { color: var(--muted); font-size: 0.95rem; }
+  .meta-row { color: var(--muted); font-size: 0.8rem; margin-top: 0.4rem; }
+  nav.toc {
+    background: var(--card);
+    padding: 0.9rem 1.2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    border-left: 3px solid var(--accent2);
+  }
+  nav.toc strong { color: var(--accent2); margin-right: 0.6rem; }
+  nav.toc a {
+    color: var(--accent);
+    text-decoration: none;
+    margin-right: 1rem;
+    font-size: 0.9rem;
+  }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section { margin: 2.5rem 0; scroll-margin-top: 1rem; }
+  h2 {
+    font-size: 1.4rem;
+    border-left: 4px solid var(--accent);
+    padding-left: 0.75rem;
+    margin: 2.5rem 0 1rem;
+  }
+  h3 { font-size: 1.15rem; margin: 1.25rem 0 0.75rem; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 0.5rem;
+  }
+  .stat {
+    background: var(--card);
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+  }
+  .stat .num {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+  .stat .label { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+
+  .wave {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.2rem;
+    border-top: 4px solid var(--accent);
+  }
+  .wave.w0 { border-top-color: var(--w0); }
+  .wave.w1 { border-top-color: var(--w1); }
+  .wave.w2 { border-top-color: var(--w2); }
+  .wave.w3 { border-top-color: var(--w3); }
+  .wave h3 { margin-top: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.6rem; }
+  .wave .goal { color: var(--muted); margin-bottom: 0.8rem; font-size: 0.93rem; }
+  .wave .meta {
+    display: flex;
+    gap: 1.4rem;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0.3rem 0 0.9rem;
+  }
+  .wave .meta b { color: var(--text); }
+  .wave .stories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  .story-chip {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+  .story-chip .id {
+    color: var(--accent2);
+    font-weight: 700;
+    margin-right: 0.3rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: rgba(56, 189, 248, 0.08); color: var(--accent); font-weight: 600; }
+  tr:hover td { background: rgba(255, 255, 255, 0.02); }
+  td.id-cell { color: var(--accent2); font-weight: 700; white-space: nowrap; }
+  td.wave-cell { white-space: nowrap; }
+
+  .pillar {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--accent);
+  }
+  .pillar h3 { margin-top: 0; display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .pillar-id {
+    background: var(--accent);
+    color: var(--bg);
+    padding: 0.15rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .pillar p.summary { color: var(--muted); margin: 0.3rem 0 0.9rem; font-size: 0.93rem; }
+  .pillar .story {
+    border-left: 2px solid var(--border);
+    padding: 0.4rem 0 0.4rem 1rem;
+    margin: 0.6rem 0;
+  }
+  .pillar .story-id { color: var(--accent2); font-weight: 700; font-size: 0.85rem; }
+  .pillar .story-title { font-weight: 600; }
+  .pillar .story-criteria { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .pillar .story-criteria li { margin: 0.2rem 0; }
+
+  .wave-tag {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .wave-tag.w0 { background: rgba(244, 63, 94, 0.2); color: var(--w0); }
+  .wave-tag.w1 { background: rgba(56, 189, 248, 0.2); color: var(--w1); }
+  .wave-tag.w2 { background: rgba(52, 211, 153, 0.2); color: var(--w2); }
+  .wave-tag.w3 { background: rgba(251, 191, 36, 0.2); color: var(--w3); }
+
+  .mermaid-wrapper {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 1.5rem;
+    overflow-x: auto;
+    text-align: center;
+  }
+
+  /* Kanban board */
+  .kanban {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(260px, 1fr));
+    gap: 0.9rem;
+    margin-top: 0.8rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+  @media (max-width: 1024px) {
+    .kanban {
+      grid-template-columns: repeat(4, minmax(260px, 320px));
+    }
+  }
+  .kanban-col {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 0.9rem 0.8rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .kanban-col-header {
+    border-top: 4px solid var(--accent);
+    border-radius: 6px 6px 0 0;
+    padding: 0.6rem 0.65rem 0.7rem;
+    background: var(--card);
+    margin-bottom: 0.3rem;
+  }
+  .kanban-col.w0 .kanban-col-header { border-top-color: var(--w0); }
+  .kanban-col.w1 .kanban-col-header { border-top-color: var(--w1); }
+  .kanban-col.w2 .kanban-col-header { border-top-color: var(--w2); }
+  .kanban-col.w3 .kanban-col-header { border-top-color: var(--w3); }
+  .kanban-col-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .kanban-col-meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 0.25rem;
+  }
+  .kanban-card {
+    background: var(--card);
+    border-radius: 6px;
+    padding: 0.65rem 0.75rem;
+    border-left: 3px solid var(--accent);
+    cursor: default;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .kanban-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+  .kanban-col.w0 .kanban-card { border-left-color: var(--w0); }
+  .kanban-col.w1 .kanban-card { border-left-color: var(--w1); }
+  .kanban-col.w2 .kanban-card { border-left-color: var(--w2); }
+  .kanban-col.w3 .kanban-card { border-left-color: var(--w3); }
+  .kanban-card-id {
+    font-weight: 700;
+    color: var(--accent2);
+    font-size: 0.78rem;
+    letter-spacing: 0.4px;
+  }
+  .kanban-card-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    margin: 0.2rem 0 0.3rem;
+    line-height: 1.35;
+  }
+  .kanban-card-pillar {
+    display: inline-block;
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent);
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-right: 0.3rem;
+  }
+  .kanban-card-deps {
+    color: var(--muted);
+    font-size: 0.74rem;
+    margin-top: 0.35rem;
+  }
+  .kanban-legend {
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .kanban-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .kanban-legend-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block;
+  }
+  .kanban-legend-dot.w0 { background: var(--w0); }
+  .kanban-legend-dot.w1 { background: var(--w1); }
+  .kanban-legend-dot.w2 { background: var(--w2); }
+  .kanban-legend-dot.w3 { background: var(--w3); }
+
+  .bilingual {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 768px) { .bilingual { grid-template-columns: 1fr; } }
+  .lang-zh, .lang-en {
+    background: var(--card-2);
+    padding: 1rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+  }
+  .lang-zh::before {
+    content: "中文版";
+    display: block;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.5px;
+  }
+  .lang-en::before {
+    content: "ENGLISH";
+    display: block;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.5px;
+  }
+
+  .nfr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.8rem;
+  }
+  .nfr-item {
+    background: var(--card);
+    padding: 0.7rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    border-left: 3px solid var(--accent2);
+  }
+
+  .risks { padding-left: 1.3rem; }
+  .risks li { margin-bottom: 0.6rem; }
+
+  code, kbd {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-family: "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  footer a { color: var(--accent); }
+
+  @media print {
+    body { background: white; color: black; }
+    .wave, .pillar, .stat, .mermaid-wrapper, .lang-zh, .lang-en, .nfr-item, nav.toc {
+      background: #f8f8f8;
+      border: 1px solid #ddd;
+    }
+    a { color: #0369a1; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Cloud-360 開發計劃</h1>
+    <div class="subtitle">9 個支柱 · 26 條 User Story · 4 個 Wave · AIDLC v0.1.8 inception 階段產物</div>
+    <div class="meta-row">
+      建立 2026-05-09 · 更新 2026-05-10 · 來源：<code>aidlc-docs/inception/{requirements,user-stories,application-design}/</code> · 狀態：Draft
+    </div>
+    <div style="margin-top:0.9rem;">
+      <a href="https://github.com/users/opendiamonds/projects/16"
+         target="_blank" rel="noopener noreferrer"
+         style="display:inline-flex; align-items:center; gap:0.5rem; padding:0.55rem 1rem; background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#0f172a; font-weight:700; text-decoration:none; border-radius:6px; font-size:0.9rem;">
+        ▶ 開啟 GitHub Project（live 看板）
+      </a>
+      <span style="color:var(--muted); font-size:0.82rem; margin-left:0.7rem;">本 HTML 是靜態快照；GitHub Project 為 live 看板，可拖卡片改 status</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <strong>目錄</strong>
+    <a href="#summary">總覽</a>
+    <a href="#kanban">Kanban 看板</a>
+    <a href="#dep-graph">相依圖</a>
+    <a href="#story-table">26 條 Stories</a>
+    <a href="#pillars">9 個 Pillar 細節</a>
+    <a href="#nfr">非功能性需求</a>
+    <a href="#risks">風險與待解</a>
+    <a href="#nextsteps">下一步</a>
+  </nav>
+
+  <section id="summary">
+    <h2>1. 總覽</h2>
+    <p style="font-size:0.95rem; line-height:1.7;">
+      Cloud-360 是 AI-native 多雲架構與維運平台，目前 SDD baseline 已寫入 9 大支柱、26 條 user stories；尚未產製 application code。本計劃把這些 stories 依相依性切成 4 個 wave，從基礎建設（MCP/Skill registry、Agent Routing 骨架、Desktop shell）開始，逐步堆疊核心差異化功能、FinOps/維運/Mobile 配套與擴充規範。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="num">9</div><div class="label">核心支柱（A–I）</div></div>
+      <div class="stat"><div class="num">26</div><div class="label">User stories</div></div>
+      <div class="stat"><div class="num">4</div><div class="label">交付 wave</div></div>
+      <div class="stat"><div class="num">3</div><div class="label">雲端供應商（AWS / GCP / Azure）</div></div>
+      <div class="stat"><div class="num">0</div><div class="label">尚未產製 application code</div></div>
+      <div class="stat"><div class="num">2</div><div class="label">Web 目標（Desktop + Mobile PWA）</div></div>
+    </div>
+  </section>
+
+  <section id="kanban">
+    <h2>2. Kanban 看板 / Wave 看板</h2>
+    <p style="color:var(--muted); font-size:0.92rem;">
+      四欄看板對應 4 個交付 wave；卡片左邊色條同 wave。<a href="https://github.com/users/opendiamonds/projects/16" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">在 GitHub Project 上可拖卡片改 Status / Wave</a>，本 HTML 為靜態快照。
+    </p>
+
+    <div class="kanban-legend">
+      <span class="kanban-legend-item"><span class="kanban-legend-dot w0"></span>W0 基礎建設 · 8 條 · 無前置</span>
+      <span class="kanban-legend-item"><span class="kanban-legend-dot w1"></span>W1 核心差異化 · 9 條 · 接 W0</span>
+      <span class="kanban-legend-item"><span class="kanban-legend-dot w2"></span>W2 FinOps · 維運 · Mobile · 8 條 · 接 W1</span>
+      <span class="kanban-legend-item"><span class="kanban-legend-dot w3"></span>W3 擴充 · 1 條 · 接 W1</span>
+    </div>
+
+    <div class="kanban">
+
+      <!-- W0 -->
+      <div class="kanban-col w0">
+        <div class="kanban-col-header">
+          <div class="kanban-col-title">Wave 0 — 基礎建設 <span class="wave-tag w0">8</span></div>
+          <div class="kanban-col-meta">Registry · Routing · Auth · Shell · 無前置</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">I1</div>
+          <div class="kanban-card-title">MCP Server Registry</div>
+          <span class="kanban-card-pillar">I MCP/Skill</span>
+          <div class="kanban-card-deps">前置：基礎</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">I2</div>
+          <div class="kanban-card-title">Skill Catalog</div>
+          <span class="kanban-card-pillar">I MCP/Skill</span>
+          <div class="kanban-card-deps">前置：I1</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">I3</div>
+          <div class="kanban-card-title">Tool 權限與風險模型</div>
+          <span class="kanban-card-pillar">I MCP/Skill</span>
+          <div class="kanban-card-deps">前置：I1、I2</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">I4</div>
+          <div class="kanban-card-title">MCP / Skill 審批流程</div>
+          <span class="kanban-card-pillar">I MCP/Skill</span>
+          <div class="kanban-card-deps">前置：I1–I3、Audit</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">I5</div>
+          <div class="kanban-card-title">Agent Tool 選用可觀察性</div>
+          <span class="kanban-card-pillar">I MCP/Skill</span>
+          <div class="kanban-card-deps">前置：I1–I4、Routing trace</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">F1</div>
+          <div class="kanban-card-title">AI Chat 雲端查詢（read-only）</div>
+          <span class="kanban-card-pillar">F AI 多雲</span>
+          <div class="kanban-card-deps">前置：I1、Agent Routing</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">F2</div>
+          <div class="kanban-card-title">AI Chat 雲端操作（含 approval）</div>
+          <span class="kanban-card-pillar">F AI 多雲</span>
+          <div class="kanban-card-deps">前置：F1、Approval Gate、I3</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">H1</div>
+          <div class="kanban-card-title">桌面 Web 完整工作台</div>
+          <span class="kanban-card-pillar">H Web 體驗</span>
+          <div class="kanban-card-deps">前置：API GW、Auth/MFA/WebAuthn</div>
+        </div>
+      </div>
+
+      <!-- W1 -->
+      <div class="kanban-col w1">
+        <div class="kanban-col-header">
+          <div class="kanban-col-title">Wave 1 — 核心差異化 <span class="wave-tag w1">9</span></div>
+          <div class="kanban-col-meta">架構 · 選型 · IaC · 安全 · 接 W0</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">A1</div>
+          <div class="kanban-card-title">自然語言轉架構藍圖</div>
+          <span class="kanban-card-pillar">A 架構設計</span>
+          <div class="kanban-card-deps">前置：Routing（W0）、Intent Parser、Design Agent</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">A2</div>
+          <div class="kanban-card-title">Well-Architected 架構檢查</div>
+          <span class="kanban-card-pillar">A 架構設計</span>
+          <div class="kanban-card-deps">前置：A1、provider best-practice 規則</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">A3</div>
+          <div class="kanban-card-title">AI + draw.io 共同編輯</div>
+          <span class="kanban-card-pillar">A 架構設計</span>
+          <div class="kanban-card-deps">前置：draw.io XML adapter → Architecture Graph</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">B1</div>
+          <div class="kanban-card-title">服務比較矩陣</div>
+          <span class="kanban-card-pillar">B 跨雲選型</span>
+          <div class="kanban-card-deps">前置：雲端服務目錄資料</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">B2</div>
+          <div class="kanban-card-title">依工作負載推薦元件</div>
+          <span class="kanban-card-pillar">B 跨雲選型</span>
+          <div class="kanban-card-deps">前置：B1 + Component Selection Agent</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">D1</div>
+          <div class="kanban-card-title">模組化 IaC 產生</div>
+          <span class="kanban-card-pillar">D IaC</span>
+          <div class="kanban-card-deps">前置：Architecture Graph、provider 範本</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">D2</div>
+          <div class="kanban-card-title">IaC 安全掃描</div>
+          <span class="kanban-card-pillar">D IaC</span>
+          <div class="kanban-card-deps">前置：D1、tfsec/trivy/Checkov MCP</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">G1</div>
+          <div class="kanban-card-title">多雲安全姿態檢視</div>
+          <span class="kanban-card-pillar">G 安全</span>
+          <div class="kanban-card-deps">前置：IAM/Config/SCC/Defender MCP</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">G2</div>
+          <div class="kanban-card-title">最小權限分析</div>
+          <span class="kanban-card-pillar">G 安全</span>
+          <div class="kanban-card-deps">前置：G1 + IAM Access Analyzer 等資料</div>
+        </div>
+      </div>
+
+      <!-- W2 -->
+      <div class="kanban-col w2">
+        <div class="kanban-col-header">
+          <div class="kanban-col-title">Wave 2 — FinOps · 維運 · Mobile <span class="wave-tag w2">8</span></div>
+          <div class="kanban-col-meta">成本 · 維運 · Mobile · Agentic · 接 W1</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">C1</div>
+          <div class="kanban-card-title">月費 TCO 估算</div>
+          <span class="kanban-card-pillar">C FinOps</span>
+          <div class="kanban-card-deps">前置：Architecture Graph、pricing API</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">C2</div>
+          <div class="kanban-card-title">Spot / Preemptible 計費比較</div>
+          <span class="kanban-card-pillar">C FinOps</span>
+          <div class="kanban-card-deps">前置：C1 基礎價格</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">C3</div>
+          <div class="kanban-card-title">跨雲流量成本分析</div>
+          <span class="kanban-card-pillar">C FinOps</span>
+          <div class="kanban-card-deps">前置：Architecture Graph traffic edges</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">E1</div>
+          <div class="kanban-card-title">Right-sizing 建議</div>
+          <span class="kanban-card-pillar">E 維運</span>
+          <div class="kanban-card-deps">前置：雲端 metrics MCP、Approval Gate</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">E2</div>
+          <div class="kanban-card-title">架構現代化建議</div>
+          <span class="kanban-card-pillar">E 維運</span>
+          <div class="kanban-card-deps">前置：Architecture Graph + 新服務目錄</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">F3</div>
+          <div class="kanban-card-title">Agentic AI 主動分析</div>
+          <span class="kanban-card-pillar">F AI 多雲</span>
+          <div class="kanban-card-deps">前置：provider signal pipelines + Memory + Routing</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">H2</div>
+          <div class="kanban-card-title">行動 Web 維運伴隨介面</div>
+          <span class="kanban-card-pillar">H Web 體驗</span>
+          <div class="kanban-card-deps">前置：responsive shell、F1/F3 輸出</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">H3</div>
+          <div class="kanban-card-title">行動 Web 審批（MFA / WebAuthn）</div>
+          <span class="kanban-card-pillar">H Web 體驗</span>
+          <div class="kanban-card-deps">前置：H2 + WebAuthn / Passkey</div>
+        </div>
+      </div>
+
+      <!-- W3 -->
+      <div class="kanban-col w3">
+        <div class="kanban-col-header">
+          <div class="kanban-col-title">Wave 3 — 擴充 <span class="wave-tag w3">1</span></div>
+          <div class="kanban-col-meta">Policy-as-Code · 接 W1</div>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-id">G3</div>
+          <div class="kanban-card-title">Policy-as-Code 建議</div>
+          <span class="kanban-card-pillar">G 安全</span>
+          <div class="kanban-card-deps">前置：G1+G2 findings、Approval Gate。目標：OPA/Rego、Sentinel、Azure Policy、GCP Org Policy、AWS Config rule</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="dep-graph">
+    <h2>3. Wave 相依圖</h2>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+flowchart LR
+  classDef w0 fill:#3a1a25,stroke:#f43f5e,color:#fda4af;
+  classDef w1 fill:#0c2e44,stroke:#38bdf8,color:#bae6fd;
+  classDef w2 fill:#0f3a2a,stroke:#34d399,color:#bbf7d0;
+  classDef w3 fill:#3a2e0c,stroke:#fbbf24,color:#fde68a;
+
+  W0["<b>Wave 0 — 基礎建設</b><br/>I1 I2 I3 I4 I5<br/>F1 F2<br/>H1 + Auth/RBAC/MFA/WebAuthn"]:::w0
+  W1["<b>Wave 1 — 核心差異化</b><br/>A1 A2 A3<br/>B1 B2<br/>D1 D2<br/>G1 G2"]:::w1
+  W2["<b>Wave 2 — FinOps · 維運 · Mobile</b><br/>C1 C2 C3<br/>E1 E2<br/>F3<br/>H2 H3"]:::w2
+  W3["<b>Wave 3 — 擴充</b><br/>G3 Policy-as-Code"]:::w3
+
+  W0 --> W1
+  W1 --> W2
+  W1 --> W3
+  W2 -.選用.-> W3
+      </pre>
+    </div>
+  </section>
+
+  <section id="story-table">
+    <h2>4. 26 條 User Stories（含 Wave 與相依）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>編號</th>
+          <th>標題</th>
+          <th>支柱</th>
+          <th>Wave</th>
+          <th>主要前置</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="id-cell">A1</td><td>自然語言轉架構藍圖</td><td>A · 架構設計</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>Routing Agent（W0）、Intent Parser、Design Agent</td></tr>
+        <tr><td class="id-cell">A2</td><td>Well-Architected 架構檢查</td><td>A</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>A1 輸出、provider best-practice 規則</td></tr>
+        <tr><td class="id-cell">A3</td><td>AI + draw.io 共同編輯</td><td>A</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>draw.io XML adapter → Architecture Graph</td></tr>
+        <tr><td class="id-cell">B1</td><td>服務比較矩陣</td><td>B · 跨雲選型</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>雲端服務目錄資料</td></tr>
+        <tr><td class="id-cell">B2</td><td>依工作負載推薦元件</td><td>B</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>B1 + Component Selection Agent</td></tr>
+        <tr><td class="id-cell">C1</td><td>月費 TCO 估算</td><td>C · FinOps</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>Architecture Graph（W1）、pricing API</td></tr>
+        <tr><td class="id-cell">C2</td><td>Spot / Preemptible 計費比較</td><td>C</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>C1 基礎價格</td></tr>
+        <tr><td class="id-cell">C3</td><td>跨雲流量成本分析</td><td>C</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>Architecture Graph traffic edges</td></tr>
+        <tr><td class="id-cell">D1</td><td>模組化 IaC 產生</td><td>D · IaC</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>Architecture Graph（W1）、provider 範本</td></tr>
+        <tr><td class="id-cell">D2</td><td>IaC 安全掃描</td><td>D</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>D1 輸出、tfsec/trivy/Checkov MCP</td></tr>
+        <tr><td class="id-cell">E1</td><td>Right-sizing 建議</td><td>E · 維運</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>雲端 metrics MCP、Approval Gate</td></tr>
+        <tr><td class="id-cell">E2</td><td>架構現代化建議</td><td>E</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>Architecture Graph + provider 新服務目錄</td></tr>
+        <tr><td class="id-cell">F1</td><td>AI Chat 雲端查詢（read-only）</td><td>F · AI 多雲</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>MCP registry（I1）、Agent Routing</td></tr>
+        <tr><td class="id-cell">F2</td><td>AI Chat 雲端操作（含 approval）</td><td>F</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>F1 + Approval Gate + Risk Model（I3）</td></tr>
+        <tr><td class="id-cell">F3</td><td>Agentic AI 主動分析</td><td>F</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>provider signal pipelines + Memory + Routing</td></tr>
+        <tr><td class="id-cell">G1</td><td>多雲安全姿態檢視</td><td>G · 安全</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>IAM/Config/SCC/Defender MCP、finding store</td></tr>
+        <tr><td class="id-cell">G2</td><td>最小權限分析</td><td>G</td><td class="wave-cell"><span class="wave-tag w1">W1</span></td><td>G1 + IAM Access Analyzer 等資料</td></tr>
+        <tr><td class="id-cell">G3</td><td>Policy-as-Code 建議</td><td>G</td><td class="wave-cell"><span class="wave-tag w3">W3</span></td><td>G1+G2 findings、Approval Gate</td></tr>
+        <tr><td class="id-cell">H1</td><td>桌面 Web 完整工作台</td><td>H · Web 體驗</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>API Gateway、Auth（RBAC/MFA/WebAuthn）</td></tr>
+        <tr><td class="id-cell">H2</td><td>行動 Web 維運伴隨介面</td><td>H</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>responsive web shell、F1/F3 輸出</td></tr>
+        <tr><td class="id-cell">H3</td><td>行動 Web 審批</td><td>H</td><td class="wave-cell"><span class="wave-tag w2">W2</span></td><td>H2 + WebAuthn / Passkey 整合</td></tr>
+        <tr><td class="id-cell">I1</td><td>MCP Server Registry</td><td>I · MCP/Skill 管理</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>（基礎，無前置）</td></tr>
+        <tr><td class="id-cell">I2</td><td>Skill Catalog</td><td>I</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>I1</td></tr>
+        <tr><td class="id-cell">I3</td><td>Tool 權限與風險模型</td><td>I</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>I1 + I2</td></tr>
+        <tr><td class="id-cell">I4</td><td>MCP / Skill 審批流程</td><td>I</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>I1–I3 + Audit log</td></tr>
+        <tr><td class="id-cell">I5</td><td>Agent Tool 選用可觀察性</td><td>I</td><td class="wave-cell"><span class="wave-tag w0">W0</span></td><td>I1–I4 + Routing trace + Audit</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="pillars">
+    <h2>5. 9 個 Pillar 細節 / Pillar Details</h2>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">A</span>架構設計 <span class="wave-tag w1">Wave 1</span></h3>
+      <p class="summary">把自然語言需求轉成單雲／多雲架構藍圖，整合 Mermaid / PlantUML / draw.io，並支援 Active-Active / Active-Passive cross-cloud DR。</p>
+      <div class="story">
+        <div><span class="story-id">A1</span> · <span class="story-title">自然語言轉架構藍圖</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>萃取 workload、HA、DR、scalability、region、security、compliance 需求</li>
+            <li>產生 Mermaid / PlantUML / draw.io 輸出</li>
+            <li>說明 assumption 與 trade-off</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">A2</span> · <span class="story-title">Well-Architected 架構檢查</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>覆蓋 reliability / security / cost / operational excellence / performance 五支柱</li>
+            <li>產生 severity、impact、remediation 建議</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">A3</span> · <span class="story-title">AI + draw.io 共同編輯</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>支援 <code>.drawio</code> / XML source format</li>
+            <li>AI 可加 / 刪 node、改 connection、標 data flow</li>
+            <li>每次 AI 修改有 change summary 與 version history</li>
+            <li>圖面可解析成 architecture graph 給其他 agent 共用</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">B</span>跨雲元件選型 <span class="wave-tag w1">Wave 1</span></h3>
+      <p class="summary">依 workload profile 比較 AWS / GCP / Azure 同質託管服務，輸出 SLA、limits、lock-in、cost、ops complexity 與替代方案。</p>
+      <div class="story">
+        <div><span class="story-id">B1</span> · <span class="story-title">服務比較矩陣</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>含 SLA、限制、相容性、成本風險、lock-in、維運複雜度</li>
+            <li>覆蓋 compute、database、storage、network、Kubernetes、messaging、AI/ML</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">B2</span> · <span class="story-title">依工作負載推薦元件</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>使用 QPS、concurrency、data size、latency、region、compliance 限制</li>
+            <li>提供 rationale、alternatives、known limitations</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">C</span>成本估算與 FinOps <span class="wave-tag w2">Wave 2</span></h3>
+      <p class="summary">估算多雲 TCO、比較 Spot / Preemptible、計算跨雲 / 跨區 egress、提出 right-sizing 建議。</p>
+      <div class="story">
+        <div><span class="story-id">C1</span> · <span class="story-title">月費 TCO 估算</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>估算 compute、database、cache、storage、network、CDN、egress、observability</li>
+            <li>顯示 pricing assumption 與來源 timestamp</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">C2</span> · <span class="story-title">Spot / Preemptible 計費比較</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>覆蓋 AWS Spot、Azure Spot、GCP Spot / Preemptible</li>
+            <li>含 savings estimate 與 interruption risk</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">C3</span> · <span class="story-title">跨雲流量成本分析</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>區分 intra-region、inter-region、internet egress、cross-cloud traffic</li>
+            <li>標出昂貴 / 高風險 traffic path</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">D</span>Terraform / OpenTofu IaC <span class="wave-tag w1">Wave 1</span></h3>
+      <p class="summary">把確認後的架構轉為 Terraform / OpenTofu 模組草稿，支援 aws / google / azurerm provider，整合靜態安全掃描。</p>
+      <div class="story">
+        <div><span class="story-id">D1</span> · <span class="story-title">模組化 IaC 產生</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>產出 <code>providers.tf</code>、<code>main.tf</code>、<code>variables.tf</code>、<code>outputs.tf</code> 與 <code>modules/</code></li>
+            <li>支援 aws / google / azurerm provider</li>
+            <li>禁止產生 plaintext secret</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">D2</span> · <span class="story-title">IaC 安全掃描</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>支援 tfsec、trivy、Checkov</li>
+            <li>標出 public storage、過寬 ingress、缺加密、過寬 IAM/RBAC</li>
+            <li>產出 remediation guidance</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">E</span>維運最佳化 <span class="wave-tag w2">Wave 2</span></h3>
+      <p class="summary">針對部署中或設計中的架構持續做健康檢查、效能、可用性與現代化建議。</p>
+      <div class="story">
+        <div><span class="story-id">E1</span> · <span class="story-title">Right-sizing 建議</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>分析 CPU、memory、IOPS、network、storage</li>
+            <li>估算改動後的成本影響</li>
+            <li>調整 production 資源前需 approval</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">E2</span> · <span class="story-title">架構現代化建議</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>找出 legacy / 高維運成本 / 高雲費的服務</li>
+            <li>建議 managed、serverless、container、event-driven 替代</li>
+            <li>含 migration risk 與預期效益</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">F</span>AI 多雲維運 <span class="wave-tag w0">Wave 0</span> <span class="wave-tag w2">Wave 2</span></h3>
+      <p class="summary">透過 AI Chat 與 Agentic AI 管理多雲環境；高風險操作必經 human approval；所有操作寫 audit log。</p>
+      <div class="story">
+        <div><span class="story-id">F1</span> · <span class="story-title">AI Chat 雲端查詢</span> <span class="wave-tag w0">W0</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>支援 account / project / subscription、region 選擇</li>
+            <li>查 inventory、cost、metrics、logs、IAM/security findings</li>
+            <li>含 data source 與 query time，遮罩 secrets</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">F2</span> · <span class="story-title">AI Chat 雲端操作</span> <span class="wave-tag w0">W0</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>Read-only action 經 policy 分類後可執行</li>
+            <li>Write / delete / deploy / permission change 需 human approval</li>
+            <li>顯示 plan、impact、rollback、verification step</li>
+            <li>記錄 audit log</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">F3</span> · <span class="story-title">Agentic AI 主動分析</span> <span class="wave-tag w2">W2</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>背景 agent 偵測 cost spike、安全風險、可用性缺口、效能瓶頸</li>
+            <li>產出建議與 remediation plan</li>
+            <li>無 explicit approval 時不執行高風險變更</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">G</span>安全姿態與政策諮詢 <span class="wave-tag w1">Wave 1</span> <span class="wave-tag w3">Wave 3</span></h3>
+      <p class="summary">整合 AWS Config / Security Hub / GuardDuty / GCP SCC / Org Policy / Azure Policy / Defender 等資料源，提出可執行的治理建議。</p>
+      <div class="story">
+        <div><span class="story-id">G1</span> · <span class="story-title">多雲安全姿態檢視</span> <span class="wave-tag w1">W1</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>檢查 IAM/RBAC、network exposure、storage access、encryption、audit logging、policy guardrails</li>
+            <li>產出 severity、evidence、impact、remediation</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">G2</span> · <span class="story-title">最小權限分析</span> <span class="wave-tag w1">W1</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>偵測 wildcard permissions、stale identities、unused permissions</li>
+            <li>產出 least-privilege 建議</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">G3</span> · <span class="story-title">Policy-as-Code 建議</span> <span class="wave-tag w3">W3</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>支援 Terraform patch、OPA / Rego、Sentinel、Azure Policy、GCP Org Policy、AWS Config rule</li>
+            <li>套用前需 approval</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">H</span>Web 桌面與行動體驗 <span class="wave-tag w0">Wave 0</span> <span class="wave-tag w2">Wave 2</span></h3>
+      <p class="summary">Desktop Web 為完整工作台、Mobile Web 走 PWA 為伴隨介面；不做 native iOS / Android app。</p>
+      <div class="story">
+        <div><span class="story-id">H1</span> · <span class="story-title">桌面 Web 完整工作台</span> <span class="wave-tag w0">W0</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>支援 AI Chat、draw.io editor、IaC editor、FinOps / Security / Ops dashboard、agent trace、approval mgmt console</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">H2</span> · <span class="story-title">行動 Web 維運伴隨介面</span> <span class="wave-tag w2">W2</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>Responsive web / PWA</li>
+            <li>支援 AI Chat、alerts、approvals、health digest、findings、readonly diagram</li>
+            <li>不需 native iOS / Android app</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">H3</span> · <span class="story-title">行動 Web 審批（MFA / WebAuthn）</span> <span class="wave-tag w2">W2</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>顯示 plan、affected resources、risk、impact、rollback</li>
+            <li>高風險 approval 需 MFA、Passkey 或 WebAuthn</li>
+            <li>記錄 audit log，支援 timeout / escalation</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pillar">
+      <h3><span class="pillar-id">I</span>MCP 與 Skill 管理 <span class="wave-tag w0">Wave 0</span></h3>
+      <p class="summary">整個治理層的命脈：MCP server registry、skill catalog、權限／風險模型、approval workflow、observability。</p>
+      <div class="story">
+        <div><span class="story-id">I1</span> · <span class="story-title">MCP Server Registry</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>欄位：name、endpoint/transport、owner、environment、auth scope、enabled、version</li>
+            <li>支援 health check（availability、schema 相容、latency、recent errors）</li>
+            <li>禁存 secrets 於 config 或 log</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">I2</span> · <span class="story-title">Skill Catalog</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>追蹤 skill name、domain、owner、version、description、required tools、risk level、change log</li>
+            <li>支援 enable / disable / deprecate / rollback</li>
+            <li>顯示 skill ↔ MCP tool ↔ SDK/CLI ↔ provider 的相依關係</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">I3</span> · <span class="story-title">Tool 權限與風險模型</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>分類：read-only、write、deploy、delete、permission-change、production-impacting</li>
+            <li>高風險 tool 啟用或執行前需 approval</li>
+            <li>Agent Routing Layer 必須在選 tool 前看分類</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">I4</span> · <span class="story-title">MCP / Skill 審批流程</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>新增高風險 tool、擴 auth scope、停用 critical tool 都要 review</li>
+            <li>停用需 impact summary 與 rollback plan</li>
+            <li>所有變更寫 audit log</li>
+          </ul>
+        </div>
+      </div>
+      <div class="story">
+        <div><span class="story-id">I5</span> · <span class="story-title">Agent Tool 選用可觀察性</span></div>
+        <div class="story-criteria">
+          <ul>
+            <li>顯示選用的 tool/skill、原因、input summary、permission level、approval status、execution result</li>
+            <li>遮罩 secrets 與敏感 payload</li>
+            <li>把 tool execution 連回原始 user request、agent trace、audit log</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="nfr">
+    <h2>6. 非功能性需求（NFR · cross-cutting）</h2>
+    <p style="color:var(--muted); font-size:0.92rem;">
+      所有 wave 的 story 在 construction 階段都必須對齊以下 NFR；它們是 SRS §7 的 hard constraints。
+    </p>
+    <div class="nfr-grid" style="margin-top:0.8rem;">
+      <div class="nfr-item">Security by default</div>
+      <div class="nfr-item">Auditability（所有操作有 audit log）</div>
+      <div class="nfr-item">RBAC and least privilege</div>
+      <div class="nfr-item">Human approval gate for high-risk action</div>
+      <div class="nfr-item">Multi-cloud extensibility</div>
+      <div class="nfr-item">Explainable AI decisions</div>
+      <div class="nfr-item">Reproducible IaC generation</div>
+      <div class="nfr-item">Recommendation vs execution 分離</div>
+      <div class="nfr-item">Responsive Web 支援桌機 / 平板 / 手機</div>
+      <div class="nfr-item">Governed MCP / Skill lifecycle</div>
+      <div class="nfr-item">Bilingual documentation（per ADR-0005）</div>
+      <div class="nfr-item">Property-based testing on IaC / cost / routing</div>
+    </div>
+  </section>
+
+  <section id="risks">
+    <h2>7. 已知風險與待解</h2>
+    <ul class="risks">
+      <li><b>Wave 0 太重</b>：MCP/Skill registry + Routing + Auth + Desktop shell 一次做太多。建議再細切成 W0a（registry + permission model + audit）／W0b（routing + chat shell）／W0c（desktop UI + auth）三個 sub-wave。</li>
+      <li><b>Architecture Graph 設計</b>：A3 → C/D/E/G 都要吃 architecture graph。Schema 沒對齊就會回頭翻工。建議在 Wave 0 末或 Wave 1 起手就把 graph schema 先定下來（單獨 ADR）。</li>
+      <li><b>Pricing 來源時效性</b>：C 系列要靠雲端 pricing API，價格資訊有時效；要規範 cache TTL、source timestamp、stale fallback。</li>
+      <li><b>跨雲 IAM 概念對齊</b>：G1/G2 要把 AWS IAM、GCP IAM、Azure RBAC 的差異攤平到統一 finding model，定義權限抽象層。</li>
+      <li><b>Approval Gate UX</b>：F2、E1、H3 都會經 approval。Approval payload schema 統一才能在 Mobile Web 安全展開（H3 需 MFA / WebAuthn）。</li>
+      <li><b>Agentic AI 的副作用控制</b>：F3 背景 agent 不可在沒 approval 時做高風險變更。建議用 Guardrail Agent + 預設 read-only。</li>
+      <li><b>Test 與 property-based 範圍</b>：cost calculator、IaC generator、routing 是預設 enable 的 property-based extension。要在 wave 進入 construction 前先寫 property 草稿。</li>
+    </ul>
+  </section>
+
+  <section id="nextsteps">
+    <h2>8. 下一步</h2>
+    <ol>
+      <li><b>Workflow Planning（推薦下一步）</b>：以本計劃為輸入，跑 AIDLC <code>workflow-planning.md</code>，把每個 wave 拆成可執行的 unit / sprint。</li>
+      <li><b>NFR 落地</b>：把 SRS §7 的 NFR 各自寫成可驗收條件，作為 construction 階段的 hard constraint。</li>
+      <li><b>Wave 0 細切</b>：拆 W0a / W0b / W0c，避免「foundation 做太久卻沒可見成果」。</li>
+      <li><b>Architecture Graph schema ADR</b>：開 ADR-0007，定義 internal architecture graph 的 schema、序列化、版本策略。</li>
+      <li><b>Reverse Engineering</b>：repo 裡的 <code>firebase_templates/</code>、<code>workflows/n8n/</code>、<code>tools/</code> 跑一次 AIDLC reverse-engineering 對齊新 SRS，標出可重用 vs 要丟。</li>
+      <li><b>啟動 Pillar I 的 inception → construction</b>：Pillar I（MCP &amp; Skill Mgmt）是其他 pillar 的前置。建議第一個跑完 AIDLC 全 inception 階段。</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>
+      建立 2026-05-09 · 更新 2026-05-10 · 來源檔案：
+      <code>aidlc-docs/inception/requirements/cloud-360-srs.md</code>、
+      <code>aidlc-docs/inception/user-stories/core-pillars.md</code>、
+      <code>aidlc-docs/inception/application-design/system-architecture.md</code>。
+    </p>
+    <p>
+      AIDLC v0.1.8 · 預設啟用 extensions：<code>security/baseline</code>、<code>testing/property-based</code>、<code>bilingual-docs</code>。
+      開啟方式：<kbd>open aidlc-docs/inception/plans/development-plan.html</kbd>
+    </p>
+    <p>
+      Live 看板：<a href="https://github.com/users/opendiamonds/projects/16" target="_blank" rel="noopener noreferrer">opendiamonds/projects/16</a>（拖卡片改 Status / Wave）
+    </p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1e293b',
+        primaryTextColor: '#e2e8f0',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#94a3b8',
+        background: '#0f172a',
+      },
+    });
+  }
+</script>
+</body>
+</html>

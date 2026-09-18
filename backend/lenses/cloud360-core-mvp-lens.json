@@ -1,0 +1,225 @@
+{
+  "schemaVersion": "2021-11-01",
+  "name": "Cloud-360 Core MVP Lens",
+  "description": "Offline POC lens (format compatible with AWS WA Custom Lens). 5 questions across common pillars. Not an official AWS lens; structure follows https://docs.aws.amazon.com/wellarchitected/latest/userguide/lenses-format-specification.html and sample-well-architected-custom-lens.",
+  "pillars": [
+    {
+      "id": "security",
+      "name": "Security",
+      "questions": [
+        {
+          "id": "sec_edge",
+          "title": "How do you protect edge / ingress entry points?",
+          "description": "Based on the architecture diagram (WAF, ALB, API Gateway, CloudFront).",
+          "choices": [
+            {
+              "id": "sec_edge_waf",
+              "title": "WAF is present in front of public entry",
+              "improvementPlan": {
+                "displayText": "Add AWS WAF (or equivalent) in front of ALB / API Gateway / CloudFront."
+              }
+            },
+            {
+              "id": "sec_edge_tls",
+              "title": "TLS / HTTPS termination is indicated",
+              "improvementPlan": {
+                "displayText": "Terminate TLS at the edge and enforce HTTPS."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "sec_edge_waf && sec_edge_tls",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "sec_edge_waf || sec_edge_tls",
+              "risk": "MEDIUM_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "HIGH_RISK"
+            }
+          ]
+        },
+        {
+          "id": "sec_data",
+          "title": "How is data protected at rest?",
+          "description": "Look for S3 / DB encryption or KMS labels on the diagram.",
+          "choices": [
+            {
+              "id": "sec_data_encrypt",
+              "title": "Encryption / KMS is labeled on data stores",
+              "improvementPlan": {
+                "displayText": "Enable SSE-KMS (or provider equivalent) on object and database storage."
+              }
+            },
+            {
+              "id": "sec_data_private",
+              "title": "Data stores are in private subnets / no public access labeled",
+              "improvementPlan": {
+                "displayText": "Keep databases and buckets private; block public access."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "sec_data_encrypt && sec_data_private",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "sec_data_encrypt || sec_data_private",
+              "risk": "MEDIUM_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "HIGH_RISK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reliability",
+      "name": "Reliability",
+      "questions": [
+        {
+          "id": "rel_ha",
+          "title": "How do you achieve multi-AZ / standby for critical data?",
+          "description": "Look for Multi-AZ, replica, standby, or multiple AZ frames.",
+          "choices": [
+            {
+              "id": "rel_ha_multiaz",
+              "title": "Multiple AZs are shown",
+              "improvementPlan": {
+                "displayText": "Deploy critical tiers across at least two Availability Zones."
+              }
+            },
+            {
+              "id": "rel_ha_standby",
+              "title": "DB standby / replica is labeled",
+              "improvementPlan": {
+                "displayText": "Enable Multi-AZ or read replica for databases."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "rel_ha_multiaz && rel_ha_standby",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "rel_ha_multiaz || rel_ha_standby",
+              "risk": "MEDIUM_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "HIGH_RISK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cost_optimization",
+      "name": "Cost Optimization",
+      "questions": [
+        {
+          "id": "cost_storage",
+          "title": "How do you manage storage lifecycle / tiering?",
+          "description": "Look for lifecycle, Glacier, Intelligent-Tiering labels.",
+          "choices": [
+            {
+              "id": "cost_lifecycle",
+              "title": "Lifecycle / tiering is labeled",
+              "improvementPlan": {
+                "displayText": "Add S3 lifecycle or Intelligent-Tiering policies."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "cost_lifecycle",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "MEDIUM_RISK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "performance_efficiency",
+      "name": "Performance Efficiency",
+      "questions": [
+        {
+          "id": "perf_cache",
+          "title": "How do you accelerate read-heavy paths?",
+          "description": "Look for cache, ElastiCache, CloudFront, CDN.",
+          "choices": [
+            {
+              "id": "perf_cache_present",
+              "title": "Cache or CDN is present",
+              "improvementPlan": {
+                "displayText": "Add CloudFront and/or ElastiCache for hot reads."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "perf_cache_present",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "MEDIUM_RISK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "operational_excellence",
+      "name": "Operational Excellence",
+      "questions": [
+        {
+          "id": "oe_observe",
+          "title": "How do you observe and alert on the workload?",
+          "description": "Look for CloudWatch, alarms, SNS, monitoring nodes.",
+          "choices": [
+            {
+              "id": "oe_monitor",
+              "title": "Monitoring component is labeled",
+              "improvementPlan": {
+                "displayText": "Add CloudWatch metrics/logs and dashboards."
+              }
+            },
+            {
+              "id": "oe_alarm",
+              "title": "Alarms / notification path is labeled",
+              "improvementPlan": {
+                "displayText": "Wire alarms to SNS or an on-call channel."
+              }
+            }
+          ],
+          "riskRules": [
+            {
+              "condition": "oe_monitor && oe_alarm",
+              "risk": "NO_RISK"
+            },
+            {
+              "condition": "oe_monitor || oe_alarm",
+              "risk": "MEDIUM_RISK"
+            },
+            {
+              "condition": "default",
+              "risk": "HIGH_RISK"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

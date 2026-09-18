@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+# Test-only assets never belong in the frontend image, and keeping them out of
+# the build context stops a test edit from busting the COPY layer.
+tests/
+playwright.config.ts
+pw-report.json
+playwright-report/
+test-results/
+junit.xml
+junit.kiwi.xml
+eslint-report.json

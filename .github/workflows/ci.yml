@@ -1,0 +1,163 @@
+name: CI
+
+# The filename is load-bearing: scripts/validate_repo_contract.py lists
+# .github/workflows/ci.yml in REQUIRED_FILES, so renaming this file fails the
+# very contract it enforces.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - ut
+      - "danniel/**"
+      - "chore/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-contract:
+    name: Repository contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate repository contract
+        run: python scripts/validate_repo_contract.py
+
+      # Catches drift between the three environment-config sources: nothing
+      # else notices when the deploy stack consumes a variable nobody writes.
+      - name: Validate environment configuration contract
+        run: python scripts/validate_env_contract.py
+
+  frontend:
+    name: Frontend (lint + typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Drift gate 2 of 2 (the spec's gate is in the backend job below). This one
+      # regenerates the committed API types from the committed openapi.json and
+      # fails if they differ. `tsc -b` structurally cannot catch this: it checks
+      # "usage against the type file", not "type file against the spec", so a
+      # re-dumped spec whose types were never regenerated would sail through.
+      # Needs node + the generator, which is why it lives here and not in backend.
+      - name: API type contract drift
+        run: npm run check:types
+
+      # `npm run build` is `tsc -b && vite build`, so this covers typecheck too.
+      - name: Typecheck and build
+        run: npm run build
+
+      # The OpenAPI spec is a complete API map (36 paths, 29 schemas) covering
+      # every user-management and permission endpoint. nginx serves dist/ as-is
+      # and Vite copies public/ into it verbatim, so a spec file that ever lands
+      # in the frontend tree would be readable by unauthenticated visitors. The
+      # current layout (spec at repo root, types compiled away) makes that
+      # impossible by construction -- this step is what stops a future edit from
+      # quietly undoing it.
+      - name: Spec must not be served statically
+        run: |
+          if find dist -type f \( -name 'openapi*' -o -name '*.openapi.*' \) | grep -q .; then
+            echo "openapi spec found inside dist/ -- it would be publicly readable:"
+            find dist -type f \( -name 'openapi*' -o -name '*.openapi.*' \)
+            exit 1
+          fi
+          echo "no spec file in dist/"
+
+
+  backend:
+    name: Backend (import + unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      # Import smoke: catches syntax errors, bad imports, and router wiring
+      # mistakes at CI time rather than on the deploy host. The unit suite below
+      # covers behaviour; this step still catches breakage the suite never imports.
+      - name: Import FastAPI app
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud360
+          JWT_SECRET: ci_only_not_a_real_secret
+        run: python -c "import main; print('app:', main.app.title)"
+
+      # Drift gate 1 of 2 (the type file's gate is in the frontend job above).
+      # Re-dumps the OpenAPI spec from the code and fails if the committed
+      # openapi.json differs. The truth source is the backend code, and this job
+      # already has the Python env. fastapi/pydantic are pinned to exact versions
+      # in requirements.txt precisely so this gate cannot go red on an unrelated
+      # PR — the spec output is byte-deterministic within a version pair but
+      # drifts across them.
+      - name: OpenAPI spec drift
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud360
+          JWT_SECRET: ci_only_not_a_real_secret
+        run: python scripts/dump_openapi.py --check
+
+      # Unit suite (SQLite in-memory; psycopg2 mocked in tests/helpers.py)
+      - name: Run unit tests
+        env:
+          JWT_SECRET: ci_only_not_a_real_secret
+        run: python -m unittest discover -s tests -v
+
+  docker-build:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only — the deploy job on the self-hosted runner is what actually
+      # ships. This exists so a broken Dockerfile fails the PR, not the deploy.
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          build-args: |
+            VITE_API_BASE_URL=https://cloud360.danniel.cc
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

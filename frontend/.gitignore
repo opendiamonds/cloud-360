@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# 本機覆寫（部署用變數請走 CI／主機環境，勿提交）
+.env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# Playwright 產出物（`playwright.config.ts` 的 reporter 會寫這幾個）。CI 的
+# ui-regression workflow 在 runner 上讀它們，不進版控。
+pw-report.json
+test-results/
+playwright-report/
+junit.xml
+junit.kiwi.xml
+eslint-report.json

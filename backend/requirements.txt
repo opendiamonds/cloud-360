@@ -1,0 +1,19 @@
+# fastapi 與 pydantic 採**精確等值**釘選（AD-9／C-8）。
+# 理由：OpenAPI 規格的輸出在同一組版本下是位元決定性的，但**跨版本會飄**
+# （實測：同一份原始碼換這兩支的版本即產生 20 行差異）。本 repo 的依賴全部
+# 未 pin、CI 每次重新解析最新版，不釘會讓規格漂移檢查在完全無關的 PR 上變紅，
+# 且該紅燈與「真的漂移了」在訊號上不可區分。
+# 升版這兩支時，必須在**同一個 PR 內**重新 dump openapi.json 並重產前端型別檔。
+# 相容釋出形式（~=）仍會在次版本線上浮動，形式選錯等於沒釘 —— 故用 ==。
+fastapi[standard]==0.141.1
+pydantic==2.13.4
+uvicorn
+httpx
+python-dotenv
+sqlalchemy
+psycopg2-binary
+passlib[bcrypt]
+bcrypt
+pyjwt
+claude-agent-sdk
+hypothesis

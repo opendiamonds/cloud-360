@@ -182,16 +182,16 @@ _LABEL_GAP = 4.0
 # 節點與 group 排版
 _NODE_W = 80
 _NODE_H = 80
-_NODE_GAP_X = 48
-_NODE_GAP_Y = 36
-_GROUP_PAD_X = 28
-_GROUP_PAD_TOP = 52  # AWS／雲 group 標題列
-_GROUP_PAD_BOTTOM = 20
+_NODE_GAP_X = 28
+_NODE_GAP_Y = 20
+_GROUP_PAD_X = 16
+_GROUP_PAD_TOP = 44  # AWS／雲 group 標題列
+_GROUP_PAD_BOTTOM = 12
 _LABEL_RESERVE = _LABEL_GAP + _LABEL_HEIGHT  # icon 下方文字保留高度
-_LABEL_SEP = 16  # 相鄰標籤之間的最小間隙
-_SIBLING_GAP = 48  # 同層 sibling group 間距（避免填色遮住隔壁圖示／文字）
+_LABEL_SEP = 8  # 相鄰標籤之間的最小間隙
+_SIBLING_GAP = 32  # 同層 sibling group 間距（避免填色遮住隔壁圖示／文字）
 _ROW_Y_TOL = 80  # 判斷同列 sibling 的 Y 容差
-_CONTENT_INSET = 8  # 標籤相對 layer 邊的內縮
+_CONTENT_INSET = 4  # 標籤相對 layer 邊的內縮
 
 
 def _node_footprint_h() -> float:
@@ -258,6 +258,21 @@ def _smallest_covering_group(
     return None
 
 
+# 邊界與全域服務清單（不可被自動歸類入內部 Subnet/VPC/AZ/VNet/Cloud 容器，避免 parent 被設為內部容器，永遠保持於最外層 Canvas）
+_BOUNDARY_EXTERNAL_SERVICES = {
+    "user", "client", "client apps", "admin", "web", "app", "external client", "mobile app",
+    "cloud dns", "route 53", "azure dns", "dns",
+    "cloud armor", "waf", "web application firewall", "azure waf", "cloudfront", "azure front door", "front door", "apigee",
+    "iam", "secret manager", "secrets manager", "key vault", "azure key vault", "kms", "cloud kms",
+    "cloud storage", "s3", "blob storage", "azure blob storage", "azure files", "files", "google cloud observability", "cloudwatch",
+    "cloud nat", "nat gateway", "azure nat gateway", "cloud monitoring", "cloud monitoring alerting", "monitoring"
+}
+
+def _is_boundary_node(node: dict[str, Any]) -> bool:
+    name = _normalise_icon_name(node.get("name") or node.get("label") or "")
+    return any(b in name for b in _BOUNDARY_EXTERNAL_SERVICES)
+
+
 def _assign_nodes_to_groups(
     groups: list[dict[str, Any]], nodes: list[dict[str, Any]]
 ) -> None:
@@ -265,6 +280,9 @@ def _assign_nodes_to_groups(
     for node in nodes:
         node["width"] = _NODE_W
         node["height"] = _NODE_H
+        if _is_boundary_node(node):
+            node["_layout_gid"] = None
+            continue
         cx = float(node["x"]) + _NODE_W / 2.0
         cy = float(node["y"]) + _NODE_H / 2.0
         best = _smallest_covering_group(groups, cx, cy)
@@ -1556,6 +1574,29 @@ _SERVICE_ABBREVIATIONS = {
     "sns": "simple notification service",
     "sqs": "simple queue service",
     "vpc": "virtual private cloud",
+    "cloud monitoring alerting": "cloud monitoring",
+    "monitoring alerting": "cloud monitoring",
+    "compute engine managed instance group": "compute engine",
+    "managed instance group": "compute engine",
+    "mig": "compute engine",
+    "web application firewall": "waf",
+    "azure web application firewall": "waf",
+    "azure dns": "dns",
+    "azure front door": "front door",
+    "azure nat gateway": "nat gateway",
+    "azure sql database": "sql database",
+    "azure monitor alerts": "azure monitor",
+    "monitor alerts": "azure monitor",
+    "alerts": "azure monitor",
+    "recovery services vault": "recovery services vaults",
+    "azure backup recovery services vault": "recovery services vaults",
+    "backup recovery services vault": "recovery services vaults",
+    "azure blob storage": "storage accounts",
+    "blob storage": "storage accounts",
+    "virtual machine scale sets": "virtual machine scale sets",
+    "vmss": "virtual machine scale sets",
+    "application gateway waf v2": "application gateway",
+    "application gateway waf": "application gateway",
 }
 
 
@@ -1637,11 +1678,27 @@ def _svg_from_entry(entry: dict[str, Any]) -> str | None:
 
 
 def _normalise_icon_name(text: str) -> str:
+    """比對與 n8n 查詢用的正規化形式。
+
+    移除括號 (PRIMARY)、中括號、+後綴、.svg 後綴，
+    並將 `for postgresql` / `for mysql` 等 DB 引擎描述去除，
+    去除前綴廠商 (aws/google/azure/microsoft)，
+    若出現 `external cloud load balancing` 亦可正規化出乾淨關鍵字。
+    """
     text = re.sub(r"\(.*?\)", "", text, flags=re.DOTALL)
     text = re.sub(r"\[.*?\]", "", text, flags=re.DOTALL)
-    text = text.split("+")[0]
+    text = text.split("+")[0].strip()
+    text = re.sub(r"\.svg$", "", text, flags=re.IGNORECASE).strip()
+    # 清除 for postgresql / for mysql / for mariadb / for sql server / for redis 等後綴
+    text = re.sub(r"\s+for\s+(postgresql|postgres|mysql|mariadb|sqlserver|sql\s+server|redis)\b", "", text, flags=re.IGNORECASE)
     text = re.sub(r"[^a-zA-Z0-9]+", " ", text).lower().strip()
+    # 清除 waf_v2, v2 等版本修飾標記
+    text = re.sub(r"\s+waf\s+v?2\b", " waf", text)
+    text = re.sub(r"\s+v?2$", "", text)
     text = re.sub(r"^(aws|amazon|google|azure|microsoft)\s+", "", text)
+    # 若剩餘名稱為 external/internal load balancing，處理為 cloud load balancing 或 load balancing
+    if text.startswith("external ") or text.startswith("internal "):
+        text = text.split(" ", 1)[1]
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -1814,10 +1871,11 @@ async def build_mxgraph_xml(
         node["height"] = 40
 
         best_group = None
-        for g in groups_sorted:
-            if is_inside(node, g):
-                if best_group is None or g["area"] < best_group["area"]:
-                    best_group = g
+        if not _is_boundary_node(node):
+            for g in groups_sorted:
+                if is_inside(node, g):
+                    if best_group is None or g["area"] < best_group["area"]:
+                        best_group = g
         if best_group:
             parent_id = best_group["id"]
             rel_x = node["x"] - best_group["x"]

@@ -1,0 +1,19 @@
+# Locally-managed tunnel: ingress lives here, not in the Cloudflare dashboard.
+# The tunnel UUID is an identifier, not a credential — the secret is the
+# credentials JSON, which stays on the host and is mounted read-only.
+tunnel: b460a579-9e0d-42f1-a31d-c84d35bef065
+credentials-file: /etc/cloudflared/creds.json
+
+ingress:
+  # Only the frontend nginx is reachable from the internet. It reverse-proxies
+  # /api to the backend over the compose-internal network, so the backend and
+  # the database are never exposed.
+  - hostname: cloud360.danniel.cc
+    service: http://frontend:80
+    originRequest:
+      # The A1 design agent streams; don't let the tunnel cut it short.
+      noTLSVerify: false
+      connectTimeout: 30s
+      # WebSocket at /api/collab/ws/{workspace_id} must survive idle periods.
+      tcpKeepAlive: 30s
+  - service: http_status:404

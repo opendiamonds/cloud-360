@@ -57,7 +57,7 @@ D. 其他（請說明）
 
 | 區域 | 雲端服務清單 | 排版規則與限制 |
 | :--- | :--- | :--- |
-| **GCP 外部：頂部邊緣層** | `Cloud DNS`, `Cloud Armor`, `Cloud CDN`, `Apigee` | 放置於最頂端 (Y=60~120)，嚴禁放入 VPC 或 Subnet 內。 |
+| **全域外部與入口層** | `User`, `Client`, `Client Apps`, `Admin`, `Web`, `App`, `Cloud DNS`, `Cloud Armor`, `Cloud CDN`, `Apigee`, `Secret Manager`, `IAM`, `Cloud KMS` | **必須放置於 AWS / GCP / Azure 整個雲端區域與 VPC 框框的最外圍頂部 (Y=40~120, Y 在 Cloud/VPC 外)**，絕對不可放在 VPC/Subnet 圖中間！ |
 | **GCP 外部：全域／周邊服務** | `IAM`, `Cloud Storage`, `Secret Manager`, `BigQuery`, `Pub/Sub`, `Google Cloud Observability` | 放置於 VPC 兩側外圍空白區（左側儲存/安全 X=60~120，右側大數據/監控 X=1100~1160）。 |
 | **GCP 內部：Ingest / Public Subnet** | `Cloud Load Balancing`, `Cloud NAT` | 必須在 Ingest/Public Subnet 框內 (Y=250~380)。 |
 | **GCP 內部：App / Cluster Subnet** | `Compute Engine`, `GKE`, `Cloud Run (VPC connector)` | 放置於中間層 Private Subnet (Y=410~610)，並做跨 Zone 水平對稱。 |

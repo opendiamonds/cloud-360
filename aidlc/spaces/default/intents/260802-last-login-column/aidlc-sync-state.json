@@ -1,0 +1,78 @@
+{
+  "intent": "last-login-column",
+  "last_pulled": "2026-08-16T13:16:51Z",
+  "stories": {
+    "US-1": {
+      "content_hash": "963b2a7f",
+      "issue": 503,
+      "last_pulled_state": {
+        "assignees": [],
+        "labels": [
+          "aidlc",
+          "intent:last-login-column",
+          "user-story"
+        ],
+        "state": "open"
+      },
+      "summary": "US-1 兩類使用者看得到每個帳號的最後活動時間"
+    },
+    "US-2": {
+      "content_hash": "845c12d3",
+      "issue": 504,
+      "last_pulled_state": {
+        "assignees": [],
+        "labels": [
+          "aidlc",
+          "intent:last-login-column",
+          "user-story"
+        ],
+        "state": "open"
+      },
+      "summary": "US-2 稽核者一眼看出哪些帳號已逾期未活動"
+    },
+    "US-3": {
+      "content_hash": "ed705006",
+      "issue": 505,
+      "last_pulled_state": {
+        "assignees": [],
+        "labels": [
+          "aidlc",
+          "intent:last-login-column",
+          "user-story"
+        ],
+        "state": "open"
+      },
+      "summary": "US-3 稽核者能自行進入使用者管理介面"
+    },
+    "US-4": {
+      "content_hash": "fa28d397",
+      "issue": 506,
+      "last_pulled_state": {
+        "assignees": [],
+        "labels": [
+          "aidlc",
+          "intent:last-login-column",
+          "user-story"
+        ],
+        "state": "open"
+      },
+      "summary": "US-4 兩類使用者在小螢幕上也能完成查驗與管理"
+    },
+    "US-5": {
+      "content_hash": "48d0e95c",
+      "issue": 507,
+      "last_pulled_state": {
+        "assignees": [],
+        "labels": [
+          "aidlc",
+          "enhancement",
+          "intent:last-login-column",
+          "user-story"
+        ],
+        "state": "open"
+      },
+      "summary": "US-5 兩類使用者在帳號數成長後仍能逐頁查驗清單（**Revision 1 新增**）"
+    }
+  },
+  "version": 1
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "uuid": "019fc044-4138-71c6-a68c-8c272c3824bd",
+    "slug": "default",
+    "dirName": "260802-default",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "019fc129-2257-7826-84b2-cad7e36eb86e",
+    "slug": "last-login-column",
+    "dirName": "260802-last-login-column",
+    "scope": "feature",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "019fd4ba-08aa-7d1c-9090-18e375de1756",
+    "slug": "a1-a3-ux",
+    "dirName": "260806-a1-a3-ux",
+    "scope": "bugfix",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "019fd5d0-8c2a-7044-acda-047f6920a469",
+    "slug": "drawio-templates",
+    "dirName": "260806-drawio-templates",
+    "scope": "bugfix",
+    "status": "complete"
+  },
+  {
+    "uuid": "01a00b09-1ac0-7fd8-97b2-84d4cfb81912",
+    "slug": "production-path-check",
+    "dirName": "260816-production-path-check",
+    "scope": "bugfix",
+    "status": "complete"
+  }
+]
