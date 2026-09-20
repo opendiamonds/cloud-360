@@ -2590,7 +2590,6 @@
       "feature",
       "mvp",
       "infra",
-      "classic",
       "workshop"
     ],
     "summary_confirmation": "required",
@@ -2777,7 +2776,6 @@
       "bugfix",
       "refactor",
       "security-patch",
-      "classic",
       "workshop",
       "express"
     ],
@@ -2861,7 +2859,6 @@
       "enterprise",
       "feature",
       "infra",
-      "classic",
       "workshop"
     ],
     "summary_confirmation": "required",
@@ -2955,7 +2952,6 @@
       "bugfix",
       "refactor",
       "security-patch",
-      "classic",
       "workshop",
       "express"
     ],
@@ -3053,7 +3049,6 @@
       "enterprise",
       "feature",
       "infra",
-      "classic",
       "workshop",
       "express"
     ],
@@ -3145,7 +3140,6 @@
     "scopes": [
       "enterprise",
       "feature",
-      "classic",
       "workshop"
     ],
     "summary_confirmation": "required",
@@ -3238,7 +3232,6 @@
     "scopes": [
       "enterprise",
       "feature",
-      "classic",
       "workshop"
     ],
     "summary_confirmation": "required",
@@ -3339,7 +3332,6 @@
     "scopes": [
       "enterprise",
       "feature",
-      "classic",
       "workshop"
     ],
     "summary_confirmation": "required",
