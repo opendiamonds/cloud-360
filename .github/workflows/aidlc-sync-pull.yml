@@ -51,13 +51,24 @@ jobs:
             *)  echo "同步失敗，退出碼 $code"; exit "$code" ;;
           esac
 
-      - name: 開 PR
+      - name: 開／更新 PR
         if: steps.pull.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          branch="aidlc-sync/pull-$(date -u +%Y%m%d-%H%M%S)"
+          # 固定分支，不帶時間戳。
+          #
+          # 事故紀錄（2026-09-20 修）：原本這裡是 aidlc-sync/pull-<UTC 時間戳>，每次
+          # 執行都開一個新分支、新 PR。但 PR 沒被合併時 ut 不會變，下一輪（每 6 小時）
+          # 又偵測到同一筆差異，於是再開一個。從 09-06 上線到 09-19 累積了 53 個開著
+          # 的 PR，其中 52 個是同一筆 state: open → closed 的重複，彼此只差 last_pulled
+          # 的時間戳。
+          #
+          # 固定分支 ＋ force-push 讓已開的 PR 就地帶到最新內容：任何時刻最多一個
+          # sync PR。ADR-0012 的「PR 不自動合併，人的決定權完整保留」不受影響——
+          # 關卡還在，只是不再每 6 小時複製一份。
+          branch="aidlc-sync/pull"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
@@ -75,7 +86,17 @@ jobs:
             echo "只含狀態鏡像與同步狀態，不含任何內容變更。"
           } > /tmp/commit-msg.txt
           git commit -F /tmp/commit-msg.txt
-          git push -u origin "$branch"
+          # force：分支每輪都從 ut 的當下狀態重新長出來，舊 commit 沒有保留價值；
+          # 且 ut 前進之後若不覆寫，這個分支會是無法快轉的舊基底。
+          git push --force origin "HEAD:refs/heads/$branch"
+
+          # force-push 已經把開著的 PR 帶到最新內容，不需要也不能重開一個。
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "已就地更新既有 PR #${existing}"
+            exit 0
+          fi
+
           gh pr create --base ut --head "$branch" \
             --title "整合(sync): 從 GitHub 拉回 intent 狀態" \
             --body-file .github/aidlc-sync-pr-body.md
