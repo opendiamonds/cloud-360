@@ -1,0 +1,31 @@
+{
+  "stage": "functional-design",
+  "unit": "legacy-cost-retirement",
+  "note": "退場型 service。上游 FR9.1–9.3、9.7–9.11；FR9.4／9.5 以保留約束覆蓋；FR9.6 屬 U1（BR9.8）。OK target 為 rules.md 的 BR9.x。",
+  "upstream_ids": [
+    "FR9.1",
+    "FR9.2",
+    "FR9.3",
+    "FR9.4",
+    "FR9.5",
+    "FR9.7",
+    "FR9.9",
+    "FR9.10",
+    "FR9.11"
+  ],
+  "coverage": [
+    { "id": "FR9.1", "status": "OK", "target": "BR9.1" },
+    { "id": "FR9.2", "status": "OK", "target": "BR9.2" },
+    { "id": "FR9.3", "status": "OK", "target": "BR9.3" },
+    { "id": "FR9.4", "status": "OK", "target": "BR9.4" },
+    { "id": "FR9.5", "status": "OK", "target": "BR9.4" },
+    { "id": "FR9.7", "status": "OK", "target": "BR9.7" },
+    { "id": "FR9.9", "status": "OK", "target": "BR9.6" },
+    { "id": "FR9.10", "status": "OK", "target": "BR9.7" },
+    { "id": "FR9.11", "status": "OK", "target": "BR9.7" }
+  ],
+  "reverse": [
+    { "id": "BR9.5", "status": "N/A", "target": "bolt-plan B5／Q1=A 同批部署；無獨立 FR 編號" },
+    { "id": "BR9.8", "status": "N/A", "target": "FR9.6 已由 U1 覆蓋；本規則為不得回退約束" }
+  ]
+}

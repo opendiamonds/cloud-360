@@ -1,0 +1,20 @@
+# AWS Price List Query API 的 location 欄位（對應 region code）
+locations:
+  us-east-1: US East (N. Virginia)
+  us-west-2: US West (Oregon)
+  eu-west-1: Europe (Ireland)
+  ap-northeast-1: Asia Pacific (Tokyo)
+  ap-southeast-1: Asia Pacific (Singapore)
+  ap-east-2: Asia Pacific (Taipei)
+
+# usagetype 前綴（例 USE1-Fargate-…）
+usage_type_prefixes:
+  us-east-1: USE1
+  us-west-2: USW2
+  eu-west-1: EUW1
+  ap-northeast-1: APN1
+  ap-southeast-1: APS1
+  ap-east-2: APE2
+
+# get-products 必須打 pricing endpoint region（非資源 region）
+pricing_api_region: us-east-1

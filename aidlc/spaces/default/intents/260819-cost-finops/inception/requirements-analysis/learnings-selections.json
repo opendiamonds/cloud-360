@@ -1,0 +1,61 @@
+{
+  "stage_slug": "requirements-analysis",
+  "selections": [
+    {
+      "candidate_id": "c20",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Requirements Analysis 對上游已鎖定的產品決策（範圍增量、公開價目、未定價列、權限語意、橫幅、三層模組、測試底線）不重問；本站只補 codekb 證明仍缺的可測不變量",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c21",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "超支橫幅要求「每次進入產品都看到」且本輪無 inbox 時，估價／時數／覆寫／預算必須伺服器持久化；不得把跨登入橫幅建立在瀏覽器暫存上",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c22",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "可行性階段已鎖定的稽核（誰、何時、舊值、新值）在 Requirements Analysis 寫成可測 FR，不重問「要不要稽核」",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c23",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "估價區域與每日時數同屬架構假設：由架構師設定／修改，非該角色 API 403；變更權清單須與時數、預算、單價覆寫一併列入設計 OQ",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c24",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "「跟圖走」的估價列以目前架構圖 XML 每次重擷取、以 mxCell id 對齊；該 id 的時數與 FinOps SKU／單價覆寫保留，已刪節點的列與覆寫移除",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c25",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "圓餅、CTA、C2／C3、inbox、核准流、價目憑證等 ideation 已定案題在 Requirements Analysis 省略；價目快取／重試手段留設計，不在本站預選",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c26",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "當既有擷取沒有 SKU／區域／時數預設時，Requirements Analysis 必須問出 calculator 不變量：SKU 對應、區域與幣別、預設時數、圓餅切法、多圖橫幅、時數換月費公式",
+      "source": "orchestrator"
+    }
+  ]
+}

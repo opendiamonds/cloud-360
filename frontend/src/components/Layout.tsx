@@ -13,6 +13,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <Sidebar />
         {/* min-h-0 + overflow-y-auto：Admin／矩陣頁可用滾輪看完整內容 */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div data-slot="cost-banner" />
           {children}
         </div>
       </div>

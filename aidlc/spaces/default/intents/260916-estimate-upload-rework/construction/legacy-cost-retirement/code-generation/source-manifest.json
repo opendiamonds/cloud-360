@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "unit": "legacy-cost-retirement",
+  "version": 1,
+  "writes": [
+    { "path": "backend/main.py" },
+    { "path": "backend/models.py" },
+    { "path": "backend/database.py" },
+    { "path": "backend/cost/config.py" },
+    { "path": "backend/cost/pricing_client.py" },
+    { "path": "backend/cost/pricing_urls.yaml" },
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/.env.example" },
+    { "path": "backend/tests/test_legacy_cost_retirement.py" },
+    { "path": "backend/tests/test_pricing_client.py" },
+    { "path": "schema_rbac.sql" },
+    { "path": "DEPLOY.md" },
+    { "path": "LOCAL-DEV.md" },
+    { "path": "deploy/docker-compose.test.yml" },
+    { "path": "deploy/.env.example" },
+    { "path": "openapi.json" },
+    { "path": "frontend/src/types/api.d.ts" },
+    { "path": "frontend/src/pages/CostPage.tsx" },
+    { "path": "frontend/tests/e2e/regression.spec.ts" }
+  ]
+}

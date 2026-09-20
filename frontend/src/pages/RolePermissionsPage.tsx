@@ -35,7 +35,7 @@ const STORY_LABELS: Record<string, string> = {
   B1: '單一雲端評選',
   B2: '生態相容掃描',
   B3: '地緣合規與延遲',
-  C1: 'TCO 與流量預算',
+  C1: '上傳與檢視估價表',
   C2: '資源優化定價',
   C3: 'Egress 隱性成本',
   D1: 'Terraform 產出',
@@ -57,6 +57,47 @@ const STORY_LABELS: Record<string, string> = {
   J3a: '使用者設定',
   J3b: '細項設定',
 };
+
+/** Story → hover 功能描述（含 story id 供對照） */
+const STORY_DESCRIPTIONS: Record<string, string> = {
+  __ARCH__:
+    '架構圖工作區：自然語言產圖、協同編輯與圖／對話持久化（對應 A1／A2／A4）。',
+  A1: '以自然語言產生／改寫架構圖（A1）。',
+  A2: '與 AI 對話協同編輯架構圖（A2）。',
+  A3: 'Well-Architected 評核與風險建議（A3）。',
+  A4: '架構圖與聊天紀錄的儲存／載入（A4）。',
+  B1: '單一雲端評選與建議（B1）。',
+  B2: '生態相容掃描（B2）。',
+  B3: '地緣合規與延遲評估（B3）。',
+  C1: '上傳與檢視估價表（C1；edit＝上傳／刪除／分享）。',
+  C2: '資源優化定價模型（C2）。',
+  C3: 'Egress 等隱性成本估算（C3）。',
+  D1: '產出 Terraform／IaC（D1）。',
+  D2: 'IaC 安全掃描（D2）。',
+  D3: 'Secret／敏感值處理（D3）。',
+  E1: 'Right-sizing 建議（E1）。',
+  E2: '架構現代化建議（E2）。',
+  E3: 'Runbooks 生成（E3）。',
+  F1: '跨雲健康狀態查詢（F1）。',
+  F2: '變更與回滾（F2）。',
+  F3: '高風險操作審批閘門（F3）。',
+  G1: 'CSPM 持續合規（G1）。',
+  G2: 'IAM 最小權限（G2）。',
+  G3: 'Policy-as-Code（G3）。',
+  H1: '內部 API 註冊（H1）。',
+  H2: 'Agent 存取邊界（H2）。',
+  H3: 'MCP／Skill 生命週期（H3）。',
+  J3a: '使用者帳號與角色核准（J3a）。',
+  J3b: '角色細項權限矩陣設定（J3b）。',
+};
+
+function storyTitle(story: string): string {
+  return STORY_LABELS[story] || story;
+}
+
+function storyDescription(story: string): string {
+  return STORY_DESCRIPTIONS[story] || `功能代碼：${story}`;
+}
 
 /** Pillar J 在矩陣 UI 只顯示的 story */
 const J_MATRIX_STORIES = new Set(['J3a', 'J3b']);
@@ -283,10 +324,30 @@ export const RolePermissionsPage: React.FC = () => {
     }
   };
 
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+
+  const showStoryTip = (el: HTMLElement, story: string) => {
+    const rect = el.getBoundingClientRect();
+    setTip({
+      text: storyDescription(story),
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + 8,
+    });
+  };
+
   const dirtyCount = Object.keys(dirty).length;
 
   return (
     <div className="relative min-h-full bg-slate-950 p-6 md:p-10 pb-16 text-white font-sans w-full">
+      {tip && (
+        <div
+          role="tooltip"
+          className="fixed z-[200] max-w-xs px-3 py-2 rounded-xl bg-slate-800 border border-white/15 text-slate-100 text-xs font-medium leading-relaxed shadow-2xl pointer-events-none -translate-x-1/2"
+          style={{ left: tip.x, top: tip.y }}
+        >
+          {tip.text}
+        </div>
+      )}
       {toast && (
         <div
           className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl shadow-xl backdrop-blur-xl border flex items-center gap-3 ${
@@ -353,18 +414,29 @@ export const RolePermissionsPage: React.FC = () => {
         ) : error ? (
           <div className="p-20 text-center text-red-300 font-bold">{error}</div>
         ) : (
-          <div className="overflow-auto max-h-[min(70vh,720px)] overscroll-contain">
+          <div
+            className="overflow-auto max-h-[min(70vh,720px)] overscroll-contain"
+            onScroll={() => setTip(null)}
+          >
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead className="sticky top-0 z-20">
                 <tr className="bg-slate-950 border-b border-white/10 text-[10px] font-bold text-slate-400 tracking-wider">
                   <th className="px-4 py-4 sticky left-0 top-0 bg-slate-950 z-30">角色</th>
                   {visibleStories.map((s) => (
-                    <th key={s} className="px-3 py-4 text-center min-w-[7rem] bg-slate-950">
-                      <div className="text-slate-300 font-extrabold">
-                        {s === ARCH_COLUMN ? 'A1／A2／A4' : s}
+                    <th
+                      key={s}
+                      className="px-3 py-4 text-center min-w-[7.5rem] bg-slate-950"
+                      onMouseEnter={(e) => showStoryTip(e.currentTarget, s)}
+                      onMouseLeave={() => setTip(null)}
+                      onFocus={(e) => showStoryTip(e.currentTarget, s)}
+                      onBlur={() => setTip(null)}
+                      tabIndex={0}
+                    >
+                      <div className="text-slate-200 font-extrabold normal-case leading-snug">
+                        {storyTitle(s)}
                       </div>
-                      <div className="mt-1 font-medium text-slate-500 normal-case leading-snug">
-                        {STORY_LABELS[s] || s}
+                      <div className="mt-1 font-medium text-slate-500 tracking-wide">
+                        {s === ARCH_COLUMN ? 'A1／A2／A4' : s}
                       </div>
                     </th>
                   ))}

@@ -1,0 +1,91 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "estimate-parser",
+  "note": "library：僅 security + tech-stack。NFR3／NFR4／NFR6／NFR7 為核心；NFR1／NFR2／NFR5／NFR8／NFR9 對本 unit N/A 或外溢。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "端到端 3–5 分鐘屬上傳→建議整體；library 無 HTTP SLO"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "進度 UI 屬 U2／前端"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.1, NFR3.2"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.1"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "事件稽核屬 U2／U7；錯誤不洩路徑屬 NFR3.2（非稽核事件）"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "NFR6.1"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.1"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "無容器部署面；tech-stack 明確禁止為本 unit 引入 Playwright"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "憑證管線屬 U4 credential-pipeline"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "NFR3; Q1=A"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "NFR3; Q2=A"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "NFR4; FR2.4; Q3=A"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "NFR6; FR2.3; FR9.6; Q4=A"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "NFR7; Q6=A"
+    }
+  ],
+  "confirmed": "Looks correct"
+}
