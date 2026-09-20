@@ -1,0 +1,22 @@
+{
+  "stage": "code-generation",
+  "unit": "estimate-intake-api",
+  "version": 1,
+  "writes": [
+    { "path": "backend/models.py" },
+    { "path": "backend/database.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/cost/estimate_access.py" },
+    { "path": "backend/cost/estimate_audit.py" },
+    { "path": "backend/cost/estimate_intake_service.py" },
+    { "path": "backend/cost/estimate_intake_router.py" },
+    { "path": "backend/services/rbac_seed_data.py" },
+    { "path": "backend/services/user_router.py" },
+    { "path": "backend/tests/test_estimate_intake_api.py" },
+    { "path": "schema_rbac.sql" },
+    { "path": "DEPLOY.md" },
+    { "path": "openapi.json" },
+    { "path": "frontend/src/types/api.d.ts" },
+    { "path": "frontend/src/pages/RolePermissionsPage.tsx" }
+  ]
+}

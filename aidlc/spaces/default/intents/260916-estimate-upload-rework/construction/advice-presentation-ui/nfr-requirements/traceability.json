@@ -1,0 +1,10 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "advice-presentation-ui",
+  "coverage": [
+    { "id": "NFR2", "status": "OK" },
+    { "id": "ADR-0006", "status": "OK", "note": "JWT header; no token in query" },
+    { "id": "FR4.5", "status": "OK" },
+    { "id": "C3", "status": "OK" }
+  ]
+}

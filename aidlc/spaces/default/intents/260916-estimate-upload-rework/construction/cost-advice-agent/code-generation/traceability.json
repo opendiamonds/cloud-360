@@ -1,0 +1,28 @@
+{
+  "stage": "code-generation",
+  "unit": "cost-advice-agent",
+  "coverage": [
+    {
+      "id": "FR5.1",
+      "status": "OK"
+    },
+    {
+      "id": "FR5.10",
+      "status": "OK"
+    },
+    {
+      "id": "BR7.5",
+      "status": "OK"
+    },
+    {
+      "id": "BR7.6",
+      "status": "OK"
+    },
+    {
+      "id": "C3",
+      "status": "OK",
+      "target": "advice/stream"
+    }
+  ],
+  "plan_fingerprint": "sha256:9d31c66ffd8ec60dc3e570a1ae296bdd685607ead094cb8e6712374ca1590593"
+}

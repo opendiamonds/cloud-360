@@ -1,0 +1,29 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "legacy-cost-retirement",
+  "note": "退場 service。security／reliability／tech-stack 為主；perf／scalability／observability N/A。",
+  "upstream_ids": [
+    "FR9.1",
+    "FR9.2",
+    "FR9.3",
+    "FR9.8",
+    "NFR7",
+    "NFR8",
+    "NFR9"
+  ],
+  "coverage": [
+    { "id": "FR9.1", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR9.2", "status": "OK", "target": "reliability-requirements.md" },
+    { "id": "FR9.3", "status": "OK", "target": "tech-stack-decisions.md" },
+    { "id": "FR9.8", "status": "OK", "target": "security-requirements.md" },
+    { "id": "NFR7", "status": "OK", "target": "security-requirements.md" },
+    { "id": "NFR8", "status": "OK", "target": "tech-stack-decisions.md" },
+    { "id": "NFR9", "status": "OK", "target": "security-requirements.md" }
+  ],
+  "reverse": [
+    { "id": "NFR1", "status": "N/A", "target": "performance-requirements.md — 非本 unit" },
+    { "id": "NFR2", "status": "N/A", "target": "observability／UI — 非本 unit" },
+    { "id": "Q3-gate", "status": "OK", "target": "reliability-requirements.md — 程序閘門" },
+    { "id": "Q5-drop", "status": "OK", "target": "reliability-requirements.md — DROP 另開" }
+  ]
+}

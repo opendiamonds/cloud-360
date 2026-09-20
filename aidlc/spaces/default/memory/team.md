@@ -33,13 +33,13 @@
 
 一律使用**繁體中文**，包含 type、描述、body 與 PR 標題（ADR-0010）。格式沿用 conventional commits，但 type 改為中文：
 
-```
-<type>(<scope>)<!>: <描述>
 
-<body（可選，繁體中文）>
 
-<footer（可選）>
-```
+
+
+
+
+
 
 `<type>` 限定下列中文詞，英文對應僅供理解與 branch 命名換算，**不得**寫進 commit message：
 
@@ -61,26 +61,26 @@
 
 範例：
 
-```
-功能(rbac): 新增角色與故事的權限矩陣
-修正(deploy): 讓 cloudflared 以 uid 1000 讀取 0400 憑證
-整合(ci): 新增 Lint Fixer agentic workflow
-```
+
+
+
+
+
 
 **Branch type 與 commit type 已解耦**：branch 名稱維持英文 type（中文在 `gh` CLI、URL 與部分 CI 工具需 percent-encoding），commit 用中文 type，兩者以上表換算。
 
-```
-branch：danniel/feat/rbac-permission-matrix
-commit：功能(rbac): 新增角色與故事的權限矩陣
-```
+
+
+
+
 
 適用於人工 commit、AI agent 產生的 commit／PR 標題、CI 自動產生的 commit（`deploy.yml` 的 revert PR、gh-aw workflow 的 push）。不溯及既往；不適用 `dependabot/*` 等第三方工具與 git 預設的 merge commit 訊息。
 
 中文 type 無法被 conventional-commits 生態的預設 parser 解析；未來若接 changelog 產生器需自訂 preset，可用 regex：
 
-```
-^(功能|修正|文件|格式|重構|效能|測試|建置|整合|雜項|還原)(\([a-zA-Z0-9_,\-\/\.]+\))?!?: .+
-```
+
+
+
 
 ### PR 合併方式（Q2 定案：視情況並用）
 
@@ -91,6 +91,8 @@ commit：功能(rbac): 新增角色與故事的權限矩陣
 
 規則生效前的 PR 標題中英混用（如 `feat(A1): improve workspace chat UX`）不溯及既往；規則生效後的 PR 標題合規率留待下次 practices-discovery 覆核。
 
+---
+
 ## Walking Skeleton
 
 **Q3 定案：`skeleton: off`。**
@@ -99,39 +101,46 @@ commit：功能(rbac): 新增角色與故事的權限矩陣
 
 若未來個別大型 intent（例如引入全新技術層）需要 skeleton 驗證，可在該 intent 的 scope 檔逐案開啟，不需改動團隊預設值。
 
+> **Q1 定案（A）**：260819-cost-finops 雖屬全新 Cost／FinOps 功能域（greenfield，無 calculator、無 router、無 CostPage），人工訪談確認本 intent **不開啟** walking skeleton。Bolt 序列照常從第一個 Construction Bolt 開始，不需額外一輪 skeleton gate 與儀式。
+
+---
+
 ## Testing Posture
 
 ### 既成事實
 
-- **Backend 測試框架**為 Python 內建 `unittest` + `hypothesis` + `unittest.mock`，**未使用 pytest**。CI 以 `python -m unittest discover -s tests -v` 執行（`ci.yml`）。測試 DB 策略見 `backend/tests/helpers.py`：在任何 DB import 前 `sys.modules.setdefault("psycopg2", MagicMock())`，改走 in-memory SQLite，每 session `ensure_role_permissions_seeded(db, force=True)`。規模：`backend/tests/` 14 個測試檔 + `helpers.py` + `__init__.py`。
-- **Frontend e2e** 為 Playwright（chromium 單一 project），涵蓋登入與 RBAC 可視性共 6 case，且無一導覽至 Admin 頁；`ui-regression` gh-aw workflow 每 PR 對短生命週期 stack 執行並回報 Kiwi TCMS。**這是真閘門**：`post-steps` 讀 `pw-report.json` 的 `.stats.unexpected`，非 0 即 `exit 1`；容忍 `stats.flaky`，`retries: 1`。
-- **Frontend 完全沒有 unit／component 測試框架**：`frontend/package.json` 的 `devDependencies` 只有 `@playwright/test`，無 vitest、無 jest、無 `@testing-library/*`；`scripts` 只有 `test:e2e`。前端的唯一自動化驗證層就是那 6 個 e2e case。
-- **Property-based testing**：5 個檔共 8 個 `@given`（`test_diagram_builder` 2、`test_design_agent` 2、`test_wa_rule_engine` 2、`test_auth` 1、`test_collab` 1），皆落在純函式模組，屬自發良好實踐。`project.md` ADR-0006 點名的三個 hard-constraint 落點（IaC generator、cost calculator、agent routing）在本 repo **尚無對應實作模組**，故該約束目前對 repo 現況為 N/A（非豁免、非違反），本 intent 亦不觸及。
-- **完全沒有覆蓋率量測機制**（無 `.coveragerc`、無 `coverage`／`pytest-cov`、CI 無 coverage step）。`org.md` 宣告的「最低 80% line coverage」目前**既無法量測也無法強制，是宣告而非閘門**——這是誠實記載，不是待補的美化用語，也不在本檔弱化 `org.md` 的宣告（弱化會與 strict-additive 矛盾）。真正可執行的收斂方式見下方「本輪新增規則」。
-- **零 HTTP 層測試**：全 repo 無 `TestClient` 使用。`review_router.py`、`agent_router.py`、`lens_router.py` 完全無測試檔引用；`user_router.py` 僅 3 個私有 helper（`_build_role_catalog`、`_hard_delete_user`）被 `test_j5_authz.py` 直接呼叫，**路由函式（HTTP 層、`Depends` 鏈、`response_model` 序列化）本身零覆蓋**。
-- **測試落點沿架構分層，非隨機分布**：engine／service 類純函式模組（`wa_rule_engine`、`wa_lens_engine`、`diagram_builder`、`rbac`、`lens_service`、`collab_suggestions`、`llm_limits` 等）皆有對應測試檔；router（HTTP 層）類模組（`review_router`、`agent_router`、`lens_router`、`user_router`）幾乎無測試涵蓋。團隊會為可直接呼叫的純函式寫測試，不為需要組裝請求的路由寫測試。
-- **正面實務（已落地，非待 affirm 的理想）**：近四次功能 commit 皆在同一個 commit 內附上後端測試，非事後補——`b19e0d6`（`test_wa_lens_engine.py` +48、`test_wa_rule_engine.py` +16）、`92f7f29`（`test_diagram_builder.py` +51）、`a4de2c3`（`test_collab_suggestions.py` +52、`test_llm_limits.py` +41、`test_wa_collab.py` +48）、`b77d456`（`test_wa_rule_engine.py` +34）。`org.md` 的「tests written alongside code」在本專案是已落地的實務，但邊界要一併寫清楚：這些測試無一落在 router 層，無一落在前端。
-- **既有授權測試皆在 service 層**：`test_rbac.py`（`test_user_can`、`test_user_can_arch`、`test_permissions_map_for_role`）、`test_j5_authz.py`（`test_pending_user_can_is_false`、`test_null_role_cannot`、`test_project_admin_cannot_approve_owner` 等）、`test_review_authz.py`，皆非 HTTP 層測試。
+- **Backend 測試框架**為 Python 內建 `unittest` + `hypothesis` + `unittest.mock`，**未使用 pytest**。CI 以 `python -m unittest discover -s tests -v` 執行（`ci.yml`）。測試 DB 策略見 `backend/tests/helpers.py`：在任何 DB import 前 `sys.modules.setdefault("psycopg2", MagicMock())`，改走 in-memory SQLite，每 session `ensure_role_permissions_seeded(db, force=True)`。規模：`backend/tests/` 21 個測試檔（HEAD `c3de2c8`；2026-08-06 版「14 個」已過時）。
+- **Frontend e2e** 為 Playwright（chromium 單一 project），涵蓋登入與 RBAC 可視性；`ui-regression` gh-aw workflow 每 PR 對短生命週期 stack 執行並回報 Kiwi TCMS。**這是真閘門**：`post-steps` 讀 `pw-report.json` 的 `.stats.unexpected`，非 0 即 `exit 1`；容忍 `stats.flaky`，`retries: 1`。HEAD 現有 e2e 涵蓋 Admin 最後活動與分頁，**無成本頁 e2e**。
+- **Frontend 完全沒有 unit／component 測試框架**：`frontend/package.json` 的 `devDependencies` 只有 `@playwright/test`，無 vitest、無 jest、無 `@testing-library/*`；`scripts` 只有 `test:e2e`。前端的唯一自動化驗證層就是 Playwright e2e。
+- **Property-based testing**：7 個檔共 13 個 `@given`（HEAD `c3de2c8`；覆蓋 `test_design_agent`、`test_wa_rule_engine`、`test_diagram_builder`、`test_diagram_icons`、`test_collab`、`test_auth`、`test_activity`），皆落在純函式模組，屬自發良好實踐。`project.md` ADR-0006 點名的三個 hard-constraint 落點（IaC generator、cost calculator、agent routing）中，**cost calculator 在本 repo 尚無對應實作模組**，故該約束目前對 repo 現況為 N/A（非豁免、非違反）。本 intent 若新建 calculator 模組，ADR-0006 PBT 約束隨即由 N/A 轉為 blocking。
+- **HTTP 層 TestClient 現況**：`backend/tests/test_user_list_endpoint.py` 用 `starlette.testclient.TestClient` 測 `/api/auth/list` 分頁欄位（樣板在 `tests/helpers.py`）。此為現行唯一 TestClient 使用例；**無 cost router 可測**。
+- **C1 / pricing 測試完全缺席**：無 `test_cost*`；`'C1'`／`"C1"` 在 `backend/tests/` 0 命中；`test_rbac.py` 不覆蓋 C1／C2／C3。WA `COST-*` findings 連 example-based 測試都沒有。
+- **完全沒有覆蓋率量測機制**（無 `.coveragerc`、無 `coverage`／`pytest-cov`、CI 無 coverage step）。`org.md` 宣告的「最低 80% line coverage」目前**既無法量測也無法強制，是宣告而非閘門**。
+- **既有授權測試皆在 service 層**：`test_rbac.py`、`test_j5_authz.py`、`test_review_authz.py` 皆非 HTTP 層測試。
 
 ### 本輪新增規則（Q4 定案：A + B + C，D 不採）
 
 依據：本 intent 的六道現有 CI 閘門（`repo-contract`、frontend lint、`tsc -b`、backend import smoke、backend `unittest`、`ui-regression`）逐一查證後，**對「後端漏欄位、序列化成 null、前端渲染成空白」這條失敗路徑全部無效**——不是覆蓋率不足的程度問題，是這條變更路徑上沒有任何自動化斷言存在的有無問題。三項零新依賴的測試底線本輪起生效：
 
-- **A — 授權矩陣變更需 allow/deny 雙向測試**：任何 `role_permissions` 預設值變更，必須有測試同時驗證「該角色能做到」與「其他角色做不到」。零新依賴，直接擴充既有 `test_rbac.py`／`test_j5_authz.py` 形狀。本 intent 的 `Security_Reviewer` 取得 `J3a:view` 即屬此類。
-- **B — 新增或修改 HTTP 端點需 `TestClient` 測試**：斷言其 status code 與 `response_model` 的欄位集合。採用成本為零——`backend/requirements.txt` 已含 `fastapi[standard]` 與 `httpx`，`starlette.testclient.TestClient` 前置條件已滿足；新測試檔放進 `backend/tests/` 即被現有 `python -m unittest discover -s tests` 撿到；`get_db`（`database.py:31`）與 `get_current_user`（`services/auth.py:39`）為穩定的模組層函式，可用 `app.dependency_overrides` 覆寫，且 `require_story_action` closure 依賴上述兩者，真實 `user_can` 授權路徑仍會被執行；以 `TestClient(app)` 直接使用不觸發 `@app.on_event("startup")` 的 `init_db()`，不需要真實 DB。
-- **C — 前端資料形狀變更需 e2e 斷言**：例如本次 Admin 表格加欄，須新增至少一個 Playwright case 斷言表頭出現該欄位、且至少一列顯示值或既定的「從未」佔位。用既有 Playwright，不需新依賴，且是目前**唯一**能碰到 `AdminPage` 的自動化層。
+- **A — 授權矩陣變更需 allow/deny 雙向測試**：任何 `role_permissions` 預設值變更，必須有測試同時驗證「該角色能做到」與「其他角色做不到」。零新依賴，直接擴充既有 `test_rbac.py`／`test_j5_authz.py` 形狀。C1 的 RBAC seed 種子已存在（`FinOps_Analyst` 與 C1 相關欄位）；若本 intent 改動 C1 預設值（例如讓架構師 edit 時數），屬 seed 變更，須 A 規則測試。
+- **B — 新增或修改 HTTP 端點需 `TestClient` 測試**：斷言其 status code 與 `response_model` 的欄位集合。採用成本為零——`backend/requirements.txt` 已含 `fastapi[standard]` 與 `httpx`，`starlette.testclient.TestClient` 前置條件已滿足；新測試檔放進 `backend/tests/` 即被現有 `python -m unittest discover -s tests` 撿到；`get_db`（`database.py:31`）與 `get_current_user`（`services/auth.py:39`）為穩定的模組層函式，可用 `app.dependency_overrides` 覆寫；以 `TestClient(app)` 直接使用不觸發 `@app.on_event("startup")` 的 `init_db()`，不需要真實 DB。C1 若新增 `/api/cost*` 端點，須依 B 規則補 TestClient 測試，且 CI 的 OpenAPI drift 檢查會要求同步更新 `openapi.json`。
+- **C — 前端資料形狀變更需 e2e 斷言**：例如本次 Admin 表格加欄，須新增至少一個 Playwright case 斷言表頭出現該欄位、且至少一列顯示值或既定的「從未」佔位。用既有 Playwright，不需新依賴，且是目前**唯一**能碰到前端頁面的自動化層。C1 若新建 Cost 頁，資料形狀為全新，須 C 規則 e2e 斷言。
 - **D（不採用）— 引入前端 unit／component 測試框架**：需新增依賴（Vitest 或類似），成本明顯較高，且屬獨立的工具鏈決策，不由本次加欄 feature 夾帶。C 項的 e2e 斷言已覆蓋本 intent 的加欄驗證需求。
+
+- **Q3 定案（A）— C1 HTTP 消費者的最小授權測試義務**：即使 `role_permissions` seed 資料未修改（C1 種子已存在於 `rbac_seed_data.py`），第一個 C1 HTTP 端點落地時仍須補 allow/deny 雙向 TestClient 測試——「具 C1 權限的角色應收到 2xx」與「無 C1 權限的角色應收到 403」兩個案例缺一不可。此為 A 規則與 B 規則的交叉要求，適用於本 intent 新增的任何 `/api/cost*` 端點。
 
 ### 80% 覆蓋率門檻的定位
 
-**維持 `org.md` 原文，不在本檔弱化或改寫其宣稱**（把「80% 是目標不是閘門」寫進 `team.md` 會構成 `team.md` 弱化 `org.md` 的矛盾，屬 §13 learning admission 應擋下的形狀）。如實記載目前無法量測、無法強制的現況（見上），並以上述 A/B/C 三項變更範圍內、二元可判、零工具成本的規則作為現階段的實際門檻——它們衡量的是 PR 作者能控制的增量，而非量不到的存量百分比。導入 `coverage.py` 量測工具列為待補承載機制（見 `discovered-rules.md`）。
+**維持 `org.md` 原文，不在本檔弱化或改寫其宣稱**（把「80% 是目標不是閘門」寫進 `team.md` 會構成 `team.md` 弱化 `org.md` 的矛盾，屬 §13 learning admission 應擋下的形狀）。如實記載目前無法量測、無法強制的現況（見上），並以上述 A/B/C 三項變更範圍內、二元可判、零工具成本的規則作為現階段的實際門檻。導入 `coverage.py` 量測工具列為待補承載機制（見 `discovered-rules.md`）。
+
+---
 
 ## Deployment
 
 延伸 `org.md` 與 `project.md` 已定案的部署模型（Construction／Operations 連續、deploy-on-merge 至 `192.168.10.10`，見 ADR-0007／ADR-0008），記載團隊層級的執行細節：
 
-- **CI（`ci.yml`）四道關卡**依序為 `repo-contract` → `frontend`（lint + `tsc -b` typecheck + build）→ `backend`（import smoke + `unittest`）→ `docker-build`（buildx 建兩個 image，`push: false`）。四者皆為 PR 與 push 到 `main`／`ut`／`danniel/**`／`chore/**` 時觸發，`concurrency` 會取消同 ref 的舊 run。
-  - **`tsc -b` 對前後端 schema 落差無效**：`AdminPage.tsx` 的 `DbUser` 是手寫本地 interface，`fetchUserList` 內 `const data = await res.json(); return data;` 把 `any` 直接放行為 `DbUser[]`。前端型別與後端 `UserSchema` 無任何編譯期連結——這道 typecheck 看似有型別保護，實際對「後端加欄、前端漏接」這類變更無效，必須被誠實記載，不能被誤當成已有的護欄。
+- **CI（`ci.yml`）管線**依序為 `repo-contract` → `frontend`（lint + `tsc -b` typecheck + build）→ **OpenAPI spec drift 檢查**（`backend/scripts/dump_openapi.py --check`，`c3de2c8` 起新增）→ `backend`（import smoke + `unittest`）→ `docker-build`（buildx 建兩個 image，`push: false`）。管線觸發條件：PR 與 push 到 `main`／`ut`／`danniel/**`／`chore/**`；`concurrency` 會取消同 ref 的舊 run。
+  - **`tsc -b` 對前後端 schema 落差無效**：`AdminPage.tsx` 的 `DbUser` 是手寫本地 interface，`fetchUserList` 內 `const data = await res.json(); return data;` 把 `any` 直接放行為 `DbUser[]`。前端型別與後端 `UserSchema` 無任何編譯期連結——這道 typecheck 看似有型別保護，實際對「後端加欄、前端漏接」這類變更無效，必須被誠實記載，不能被誤當成已有的護欄。OpenAPI drift 檢查（新增後）可補上此缺口：若後端回應 schema 改動但 `openapi.json` 未重 dump，CI 即紅燈；前端 `gen:types` 產生的 `src/types/api.d.ts` 依此更新，縮窄型別缺口——但仍不是零缺口（手寫 interface 仍可存在）。
 - **`deploy.yml`** 於 PR closed（merge）到 `ut` 或手動 `workflow_dispatch` 觸發，跑在自架 runner（`[self-hosted, linux, x64, cloud360]`），30 分鐘逾時，`concurrency: deploy-10-10` 且 `cancel-in-progress: false`（部署中不可被新 run 打斷）。
 - **Rollback 已具備自動化路徑**：部署失敗時，`rollback` job 會還原 last-good、開 revert PR、dispatch Deploy Doctor agentic workflow 自癒。此 job 權限提升為 `contents: write` + `pull-requests: write` + `actions: write`——**這是刻意放寬（功能需要），但可否進一步縮窄（改用 GitHub App token，或把「開 revert PR」拆到最小權限獨立 job）尚未被評估過**，不記為已評估無虞。
 - 部署後會清理 `deploy/.env`（避免機敏檔留在 runner 上）。
@@ -147,6 +156,8 @@ commit：功能(rbac): 新增角色與故事的權限矩陣
 
 > 原本並列於此的第二項已解決，故從上面的清單移除：禁止 production 路徑的檢查原先以 working-tree diff 為比對基準，在 CI 的乾淨 checkout 下不會擋到任何東西。intent `260816-production-path-check`（issue #509）已把比對基準改為 `git ls-files` 全域掃描，並補上回歸測試 `backend/tests/test_repo_contract_production_paths.py`（在暫存 git repo 內以乾淨工作樹重現 CI 條件）。`discovered-rules.md` 第 4 項的對應記載屬另一個 intent 的 record，待下一輪 practices-discovery 標為已解決。
 
+---
+
 ## Code Style
 
 我們依循既有的語言慣例與已生效的檢查工具，並如實記載工具鏈的落差：
@@ -161,7 +172,7 @@ commit：功能(rbac): 新增角色與故事的權限矩陣
 - **前端 API 呼叫現況**：URL 組裝已集中於 `src/config/api.ts`（`apiUrl()` / `wsUrl()`），52 處 `fetch()`（10 支檔）一致沿用。未集中的是認證標頭（40 處手寫 `Authorization: Bearer`）、401 處理、錯誤解包與回應型別。新增呼叫點時沿用現有形狀（`apiUrl()` + 手寫 header + `res.ok` 判斷 + `data.detail` 取錯誤訊息），不要單點自創抽象。
 
 - **Backend（既成事實，非理想）**：完全沒有 linter、formatter、type checker（無 Ruff、無 Black、無 mypy／pyright）。`org.md` 宣告的「Formatter: Black (Python)」「Linter: Ruff 等，CI 強制」在 backend 側不成立，這不是團隊決議不用，是尚未補上，導入方式列為待補承載機制（見 `discovered-rules.md`）。
-- **Backend 依賴 100% 未 pin、無 lockfile**：11 個 `requirements.txt` 依賴（`fastapi[standard]`、`pydantic`、`uvicorn`、`httpx`、`python-dotenv`、`sqlalchemy`、`psycopg2-binary`、`passlib[bcrypt]`、`bcrypt`、`pyjwt`、`claude-agent-sdk`）加 `hypothesis` 共 12 行，無一有版本約束，CI／Docker build／staging 部署三處各自解析當下最新版，可能彼此不同。Frontend 對照組有已 commit 的 `package-lock.json`，CI 用 `npm ci`。此為既成事實，導入 pin／lockfile 的具體做法未經本輪訪談定案，列為待補承載機制。
+- **Backend 依賴 pin 現況**：`fastapi[standard]==0.141.1` 與 `pydantic==2.13.4` 精確釘選（因 OpenAPI dump 位元決定性）；其餘 10 個套件仍未 pin、無 lockfile。CI／Docker build／staging 部署三處各自解析當下最新版，可能彼此不同。Frontend 對照組有已 commit 的 `package-lock.json`，CI 用 `npm ci`。此為既成事實，導入 pin／lockfile 的具體做法未經本輪訪談定案，列為待補承載機制。
 - **零 TODO／FIXME／HACK／XXX 標記**（全 repo），且無死碼區塊——這是應該保護、不應在後續規範中弱化的既有紀律。
 - **模組級 docstring 覆蓋率 16/18**：其中 router 類多為單行摘要（如 `user_router.py` 僅單行功能清單，無安全邊界、無契約段），`agent_router.py` 的「契約（前端依賴，請勿變更）」是最完整的樣板。建議追認為既成慣例，新模組沿用 `agent_router.py` 的樣板深度。
 
@@ -169,18 +180,22 @@ commit：功能(rbac): 新增角色與故事的權限矩陣
   - Python 檔名／router：`snake_case.py`；router 一律 `*_router.py`；WA 引擎一律 `wa_*` 前綴——一致，追認為規則。
   - React 命名：元件與頁面 `PascalCase.tsx`；頁面一律 `*Page.tsx`——一致，追認為規則。
   - 非元件 TS 檔名：**已知不一致**（`auth-context.ts` kebab-case vs `useCollaboration.ts`／`diagramViewer.ts` camelCase）。新規則：hook 檔沿用 `use*.ts`，其餘 camelCase；`auth-context.ts` 為既存例外，不強制改名。
-  - logger 命名：**已知不一致**（11 支模組用 `logging.getLogger("cloud360.<module>")`，5 支用 `__name__`：`collab_router`、`design_agent`、`agent_router`、`diagram_builder`）。新模組一律 `"cloud360.<module>"` 形式；本 intent 觸及的 `user_router.py` 已是此形式。
+  - logger 命名：**已知不一致**（11 支模組用 `logging.getLogger("cloud360.<module>")`，5 支用 `__name__`：`collab_router`、`design_agent`、`agent_router`、`diagram_builder`）。新模組一律 `"cloud360.<module>"` 形式；C1 新增的 cost router／calculator 須沿用此形式。
   - `HTTPException` 呼叫風格：**已知不一致**（`user_router.py` 內同檔混用 12 處具名引數 `status_code=`、17 處位置引數）。記為已知不一致，不強制統一（純格式改動的收益低於 diff 噪音）；新程式碼沿用所在函式鄰近寫法。
 
 - **後端分層**：分層成熟度依模組家族而異，這是已知且刻意保留的現況，不是待修的違規。
   - `review` / `lens` / `wa_*` 家族：router → orchestrator/service → 純函式引擎 → model，三層清楚；純函式引擎層（`wa_rule_engine.py`／`wa_lens_engine.py`／`diagram_builder.py`）不讀 DB、不連外，是 property-based 測試的實際落點。
   - `user` / `collab` 家族：無 service 層，商業邏輯直寫 handler（`user_router.py` 831 LOC、`collab_router.py` 527 LOC）。
-  - 規則依改動落點分流：**新模組／新業務邏輯**一律走三層形狀，純運算下沉到不讀 DB 的函式；**修改 `user_router.py`／`collab_router.py`** 就地沿用既有形狀，不趁機夾帶 service 層抽取（這兩支目前無 HTTP 層測試保護，重構與功能變更混在同一個 PR 不可驗證，抽 service 層是獨立任務，前置條件是先有端點測試）；不得在這兩支之外新建「router 直寫商業邏輯」的模組。
+  - 規則依改動落點分流：**新模組／新業務邏輯**一律走三層形狀，純運算下沉到不讀 DB 的函式；**修改 `user_router.py`／`collab_router.py`** 就地沿用既有形狀，不趁機夾帶 service 層抽取（這兩支目前無 HTTP 層測試保護，重構與功能變更混在同一個 PR 不可驗證，抽 service 層是獨立任務，前置條件是先有端點測試）；不得在這兩支之外新建「router 直寫商業邏輯」的模組。C1 新增 cost_router 與 calculator 須走三層形狀。
 
 - **錯誤處理形狀**（既成事實）：`user_router.py` 有 0 個 `try/except`，全部靠 `raise HTTPException` 快速失敗；`review_router.py`（4 個）、`collab_router.py`（5 個）的 `try/except` 都用在外部呼叫邊界。既有慣例：DB／驗證錯誤直接 `raise HTTPException`，不 try/except 吞掉；`try/except` 只用在外部依賴邊界（LLM、webhook、檔案）且必須降級或記 log，不得靜默。與 `construction.md` 的「Errors must be surfaced」一致。
 
 - **單一真實來源**：當同一份事實已存在於程式中（角色清單、權限矩陣、schema 欄位），新增第二份物化前必須先確認是否有既有常數或 API 可直接使用。若確實無法避免（如跨語言邊界），新增副本的同一個 PR 必須一併新增鎖住兩者一致的測試；無法寫測試的副本不新增。
   - 已知既有副本與正本（既成事實，本輪不強制立即消除，收斂方式待後續評估）：角色清單正本 `services/rbac.py::CANONICAL_ROLES`；副本 `services/auth.py::require_any_user`（11 個字串手寫 allowlist）、`services/user_router.py::ROLE_DISPLAY_NAMES`、`frontend/src/pages/AdminPage.tsx::AVAILABLE_ROLES`（已與正本順序漂移）、`schema_rbac.sql` seed。密碼雜湊正本 `services/auth.py::get_password_hash`；副本 `database.py::hash_password`（逐字相同）。
+
+- **Q4 定案（A）— C1 Cost 功能域的三層形狀與純函式約束**：`cost_router`（HTTP 層，FastAPI router）→ `cost_service`（業務協調，可讀 DB）→ 純函式 `cost_calculator`（計算核心，不讀 DB、不連外、不 raise `HTTPException`）+ 獨立 `pricing_client`（外部計價 Port，包裝 `httpx`）。禁止把 cost 邏輯寫入 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 模組內禁止 import `httpx`、任何 DB session 型別，以及 `HTTPException`——這是 ADR-0006 PBT 約束能在計算核心起作用的結構前提。**ADR-0017 §1–§2、§4＋§8 修訂**：三層形狀與純函式禁令保留，純函式層由 `cost_calculator` 改錨至估價表解析器（解析 AWS CSV／Azure XLSX／GCP CSV），PBT 約束原樣移轉。`pricing_client` 於 §1 廢止後由 §8 恢復，職責改為 agent 按需查價的 Port（只對公開免帳號端點），不再是取價主路徑。
+
+- **Q2 計價 API 規範（交叉參照 `discovered-rules.md` Forbidden）**：`pricing_client` 一律只對接公開免帳號的計價端點（如 AWS Pricing API 公開 endpoint）；禁止使用需雲端供應商帳號憑證的 Cost Explorer、Billing API 或同類 API。完整約束見 `discovered-rules.md ## Forbidden ## C1 計價 API`。**ADR-0017 §3、§4＋§8 修訂**：本條原樣有效。估價一律來自上傳的官方估價表，不得以自動取價產生估價；agent 得經 `pricing_client` 查公開免帳號端點確認現價，結果只寫入建議文字。需帳號憑證者（含走 IAM 的 boto3 Pricing Query API）仍全禁。**ADR-0018 §1＋§2 再修訂**：**目錄價類**的需憑證端點解禁——AWS Price List Query API（IAM，權限限於 `pricing:GetProducts`／`DescribeServices`／`GetAttributeValues`）、GCP Cloud Billing Catalog API（API key 須綁定該 API）；Azure 維持公開 Retail Prices 不變。**帳單與用量類**（Cost Explorer、Cost and Usage Report、Cost Management、Billing Export）**維持全面禁止**——此禁令是前者得以解禁的對價，不得一併放寬。`pricing_sdk.py` 與 `boto3` 由「確定刪除」改為保留。
 ## Forbidden
 
 - ❌ **不得產生雙語分段**：文件不得保留或新增 `## 中文版` / `## English Version` 標題；文件為單一語言（繁體中文）。`scripts/validate_repo_contract.py` 會擋下 record 內殘留的 `## English Version`（CI 紅燈）。
