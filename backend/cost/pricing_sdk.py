@@ -182,7 +182,17 @@ def fetch_hourly_via_sdk(sku: str, region: str) -> Optional[Decimal]:
             Filters=filters,
         )
     except (BotoCoreError, ClientError) as exc:
-        logger.warning("pricing SDK failed for %s(%s)@%s: %s", sku, api_code, region, exc)
+        # NFR9.1: log type/code only — never raw exception text (may echo env).
+        code = type(exc).__name__
+        if isinstance(exc, ClientError):
+            code = exc.response.get("Error", {}).get("Code", code)
+        logger.warning(
+            "pricing SDK failed for %s(%s)@%s: %s",
+            sku,
+            api_code,
+            region,
+            code,
+        )
         return None
 
     return parse_price_list_items(

@@ -24,7 +24,7 @@ override=True, so any value on disk or in the shell reaches the subprocess.
 The ANTHROPIC_DEFAULT_*_MODEL family has to be deleted for the same reason,
 and it is easy to miss because it neither authenticates nor routes. Those
 variables define what the CLI's *aliases* resolve to: with
-ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-sonnet-4.6 in the environment,
+ANTHROPIC_DEFAULT_SONNET_MODEL=google/gemini-3.7-flash in the environment,
 asking the CLI for `sonnet` gets you that OpenRouter slug sent to Anthropic,
 which answers 404. That silently cancels the model normalisation below --
 :func:`get_model_name` maps the leftover slug to a bare `sonnet`, and the alias
@@ -72,7 +72,7 @@ _CLI_CONFLICTING_VARS = _CLI_AUTH_VARS + _CLI_ALIAS_MODEL_VARS
 # OpenRouter addresses models as "<vendor>/<model>"; the CLI uses bare names or
 # aliases. A slug from the wrong provider is rejected at request time, which is
 # far from where the misconfiguration lives.
-_OPENROUTER_DEFAULT_MODEL = "anthropic/claude-sonnet-4.6"
+_OPENROUTER_DEFAULT_MODEL = "google/gemini-3.7-flash"
 _OPENROUTER_DEFAULT_REVIEW_MODEL = "anthropic/claude-3.5-haiku"
 _CLI_DEFAULT_MODEL = "sonnet"
 _CLI_DEFAULT_REVIEW_MODEL = "haiku"

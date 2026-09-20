@@ -1,6 +1,56 @@
 {
   "components": {
     "schemas": {
+      "Body_upload_estimate_set_api_cost_v1_sets_post": {
+        "properties": {
+          "cloud_overrides": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Overrides"
+          },
+          "diagram_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagram Id"
+          },
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_upload_estimate_set_api_cost_v1_sets_post",
+        "type": "object"
+      },
       "BulkRolePermissionUpdate": {
         "properties": {
           "rows": {
@@ -167,21 +217,6 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
-      "HoursBody": {
-        "properties": {
-          "hours": {
-            "maximum": 24.0,
-            "minimum": 0.0,
-            "title": "Hours",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "hours"
-        ],
-        "title": "HoursBody",
-        "type": "object"
-      },
       "LastOpenedRequest": {
         "properties": {
           "diagram_id": {
@@ -345,28 +380,6 @@
         "title": "Message",
         "type": "object"
       },
-      "OverrideBody": {
-        "properties": {
-          "hourly_override": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              }
-            ],
-            "title": "Hourly Override"
-          }
-        },
-        "required": [
-          "hourly_override"
-        ],
-        "title": "OverrideBody",
-        "type": "object"
-      },
       "PatchAuthorizationRequest": {
         "properties": {
           "requested_role": {
@@ -425,21 +438,6 @@
           "lens"
         ],
         "title": "PutLensBody",
-        "type": "object"
-      },
-      "RegionBody": {
-        "properties": {
-          "region": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Region",
-            "type": "string"
-          }
-        },
-        "required": [
-          "region"
-        ],
-        "title": "RegionBody",
         "type": "object"
       },
       "RegisterRequest": {
@@ -613,6 +611,21 @@
         "title": "SaveDiagramRequest",
         "type": "object"
       },
+      "SaveEstimateBody": {
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SaveEstimateBody",
+        "type": "object"
+      },
       "ShareDiagramRequest": {
         "properties": {
           "user_ids": {
@@ -629,18 +642,17 @@
         "title": "ShareDiagramRequest",
         "type": "object"
       },
-      "SkuBody": {
+      "ShareReplaceBody": {
         "properties": {
-          "sku": {
-            "minLength": 1,
-            "title": "Sku",
-            "type": "string"
+          "user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "User Ids",
+            "type": "array"
           }
         },
-        "required": [
-          "sku"
-        ],
-        "title": "SkuBody",
+        "title": "ShareReplaceBody",
         "type": "object"
       },
       "StartReviewBody": {
@@ -2787,51 +2799,42 @@
         "summary": "Set Last Opened"
       }
     },
-    "/api/cost/diagrams": {
+    "/api/cost/v1/sets": {
       "get": {
-        "operationId": "list_diagrams_api_cost_diagrams_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Diagrams"
-      }
-    },
-    "/api/cost/diagrams/{diagram_id}": {
-      "get": {
-        "operationId": "get_snapshot_api_cost_diagrams__diagram_id__get",
+        "operationId": "list_estimate_sets_api_cost_v1_sets_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "diagram_id",
-            "required": true,
-            "schema": {
-              "title": "Diagram Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Azure 架構圖是否執行 Pricing Calculator agent（false 僅載入設定與資源列）",
             "in": "query",
-            "name": "run_agent",
+            "name": "include_history",
             "required": false,
             "schema": {
               "default": true,
-              "description": "Azure 架構圖是否執行 Pricing Calculator agent（false 僅載入設定與資源列）",
-              "title": "Run Agent",
+              "title": "Include History",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -2859,19 +2862,102 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Snapshot"
+        "summary": "List Estimate Sets",
+        "tags": [
+          "cost-estimate-v1"
+        ]
+      },
+      "post": {
+        "operationId": "upload_estimate_set_api_cost_v1_sets_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_estimate_set_api_cost_v1_sets_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Estimate Set",
+        "tags": [
+          "cost-estimate-v1"
+        ]
       }
     },
-    "/api/cost/diagrams/{diagram_id}/audit": {
+    "/api/cost/v1/sets/{set_id}": {
+      "delete": {
+        "operationId": "delete_estimate_set_api_cost_v1_sets__set_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Estimate Set",
+        "tags": [
+          "cost-estimate-v1"
+        ]
+      },
       "get": {
-        "operationId": "get_audit_api_cost_diagrams__diagram_id__audit_get",
+        "operationId": "get_estimate_set_api_cost_v1_sets__set_id__get",
         "parameters": [
           {
             "in": "path",
-            "name": "diagram_id",
+            "name": "set_id",
             "required": true,
             "schema": {
-              "title": "Diagram Id",
+              "title": "Set Id",
               "type": "integer"
             }
           }
@@ -2901,20 +2987,75 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Audit"
+        "summary": "Get Estimate Set",
+        "tags": [
+          "cost-estimate-v1"
+        ]
+      },
+      "patch": {
+        "operationId": "save_estimate_set_api_cost_v1_sets__set_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveEstimateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Estimate Set",
+        "tags": [
+          "cost-estimate-v1"
+        ]
       }
     },
-    "/api/cost/diagrams/{diagram_id}/calculator-export/csv": {
+    "/api/cost/v1/sets/{set_id}/advice": {
       "get": {
-        "description": "Google Cloud Pricing Calculator 官方 CSV 匯出。",
-        "operationId": "get_calculator_csv_api_cost_diagrams__diagram_id__calculator_export_csv_get",
+        "operationId": "get_advice_snapshot_api_cost_v1_sets__set_id__advice_get",
         "parameters": [
           {
             "in": "path",
-            "name": "diagram_id",
+            "name": "set_id",
             "required": true,
             "schema": {
-              "title": "Diagram Id",
+              "title": "Set Id",
               "type": "integer"
             }
           }
@@ -2944,20 +3085,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Calculator Csv"
+        "summary": "Get Advice Snapshot",
+        "tags": [
+          "cost-estimate-v1"
+        ]
       }
     },
-    "/api/cost/diagrams/{diagram_id}/calculator-export/xlsx": {
+    "/api/cost/v1/sets/{set_id}/advice/stream": {
       "get": {
-        "description": "Azure Pricing Calculator 官方 Excel 匯出。",
-        "operationId": "get_calculator_excel_api_cost_diagrams__diagram_id__calculator_export_xlsx_get",
+        "operationId": "stream_advice_api_cost_v1_sets__set_id__advice_stream_get",
         "parameters": [
           {
             "in": "path",
-            "name": "diagram_id",
+            "name": "set_id",
             "required": true,
             "schema": {
-              "title": "Diagram Id",
+              "title": "Set Id",
               "type": "integer"
             }
           }
@@ -2987,29 +3130,66 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Calculator Excel"
+        "summary": "Stream Advice",
+        "tags": [
+          "cost-estimate-v1-advice"
+        ]
       }
     },
-    "/api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/hours": {
-      "put": {
-        "operationId": "put_hours_api_cost_diagrams__diagram_id__lines__mxcell_id__hours_put",
+    "/api/cost/v1/sets/{set_id}/shares": {
+      "get": {
+        "operationId": "list_shares_api_cost_v1_sets__set_id__shares_get",
         "parameters": [
           {
             "in": "path",
-            "name": "diagram_id",
+            "name": "set_id",
             "required": true,
             "schema": {
-              "title": "Diagram Id",
+              "title": "Set Id",
               "type": "integer"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shares",
+        "tags": [
+          "cost-estimate-v1"
+        ]
+      },
+      "put": {
+        "operationId": "replace_shares_api_cost_v1_sets__set_id__shares_put",
+        "parameters": [
           {
             "in": "path",
-            "name": "mxcell_id",
+            "name": "set_id",
             "required": true,
             "schema": {
-              "title": "Mxcell Id",
-              "type": "string"
+              "title": "Set Id",
+              "type": "integer"
             }
           }
         ],
@@ -3017,7 +3197,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/HoursBody"
+                "$ref": "#/components/schemas/ShareReplaceBody"
               }
             }
           },
@@ -3048,42 +3228,15 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Put Hours"
+        "summary": "Replace Shares",
+        "tags": [
+          "cost-estimate-v1"
+        ]
       }
     },
-    "/api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/override": {
-      "put": {
-        "operationId": "put_override_api_cost_diagrams__diagram_id__lines__mxcell_id__override_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "diagram_id",
-            "required": true,
-            "schema": {
-              "title": "Diagram Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mxcell_id",
-            "required": true,
-            "schema": {
-              "title": "Mxcell Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OverrideBody"
-              }
-            }
-          },
-          "required": true
-        },
+    "/api/cost/v1/share-users": {
+      "get": {
+        "operationId": "list_share_users_api_cost_v1_share_users_get",
         "responses": {
           "200": {
             "content": {
@@ -3092,16 +3245,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "security": [
@@ -3109,120 +3252,10 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Put Override"
-      }
-    },
-    "/api/cost/diagrams/{diagram_id}/lines/{mxcell_id}/sku": {
-      "put": {
-        "operationId": "put_sku_api_cost_diagrams__diagram_id__lines__mxcell_id__sku_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "diagram_id",
-            "required": true,
-            "schema": {
-              "title": "Diagram Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "mxcell_id",
-            "required": true,
-            "schema": {
-              "title": "Mxcell Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SkuBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Put Sku"
-      }
-    },
-    "/api/cost/diagrams/{diagram_id}/region": {
-      "put": {
-        "operationId": "put_region_api_cost_diagrams__diagram_id__region_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "diagram_id",
-            "required": true,
-            "schema": {
-              "title": "Diagram Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegionBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Put Region"
+        "summary": "List Share Users",
+        "tags": [
+          "cost-estimate-v1"
+        ]
       }
     }
   }

@@ -81,9 +81,16 @@ commit `aa2daec`（2026-09-16）移除了整條 AWS 憑證傳遞管線，理由�
 
 ### 6. `validate_repo_contract.py` 的禁用字串比對須調整
 
-`scripts/validate_repo_contract.py:224-228` 的 `FORBIDDEN_CONTENT_PATTERNS` 目前以字串比對攔截 `AWS_SECRET_ACCESS_KEY`，**不分變數名引用與實際金鑰值**。§5 的重建會讓 `deploy/render-env.sh` 再次出現該變數名，CI 立刻紅燈。
+`scripts/validate_repo_contract.py` 先前以字串比對攔截 `AWS_SECRET_ACCESS_KEY`，**不分變數名引用與實際金鑰值**。§5 的重建會讓 `deploy/render-env.sh` 再次出現該變數名，CI 立刻紅燈。
 
-**調整必須保留「禁止 commit 實際金鑰值」的原意**，只放行變數名引用。具體手法（偵測金鑰值樣式、或對特定設定檔建立白名單）由 nfr-requirements 或 devsecops 路徑決定，見 `requirements.md` OQ7。
+**定案手法（NFR Q1=A／credential-pipeline code-gen；關閉 OQ7）**：自 `FORBIDDEN_CONTENT_PATTERNS` **移除**對變數名的裸字串攔截；改以賦值右端值樣式掃描所有受版控文字檔：
+
+| 標籤 | Regex |
+|---|---|
+| AWS secret | `AWS_SECRET_ACCESS_KEY\s*=\s*([A-Za-z0-9/+=]{40})` |
+| GCP Catalog key | `GCP_BILLING_API_KEY\s*=\s*(AIza[0-9A-Za-z\-_]{35})` |
+
+`BEGIN PRIVATE KEY` 字串禁令維持。空值、註解變數名、shell `${AWS_SECRET_ACCESS_KEY:-}` **通過**。驗證見 `backend/tests/test_repo_contract_secret_patterns.py`。
 
 **放寬一道安全閘門本身是高風險動作。** 調整後必須以實際金鑰樣式的測試資料驗證它仍會攔下真正的外洩，不得只驗證「CI 變綠」。
 
@@ -134,6 +141,6 @@ commit `aa2daec`（2026-09-16）移除了整條 AWS 憑證傳遞管線，理由�
 - [assumption] 假設 AWS Price List Query API 回傳的目錄價與公開 Bulk Price List 一致。兩者同為 AWS 官方牌價來源，但本 ADR 未實測比對。若不一致，需決定以何者為準。
 - [assumption] 假設 `pricing:GetProducts` 等動作確實無法觸及帳戶資源。此判定依 AWS IAM 文件，未經實際的權限邊界測試。§4 的動作列舉是防線，但若 AWS 日後擴大該動作的語意，防線會失效而無人察覺。
 - [assumption] 假設平台統一一組憑證足夠。若日後需要按使用者或按租戶區分查價來源，本 ADR 的 §5 管線設計需重做。
-- [open] §6 的 `FORBIDDEN_CONTENT_PATTERNS` 具體調整手法未定（`requirements.md` OQ7），須在實作前決定並驗證其仍能攔下真實金鑰。
+- [closed] §6 的 `FORBIDDEN_CONTENT_PATTERNS` 具體調整手法已定（原 `requirements.md` OQ7）：值樣式 regex 見 §6；NFR Q1=A；實作於 credential-pipeline code-generation。
 - [open] 憑證輪替機制不存在。本 ADR 引入憑證但未規定輪替週期與流程，這是新增的運維義務，歸屬階段未指派。
 - [open] `requirements.md` OQ8：§5 與 §6 的工作量是與上傳解析主線平行的一批，其在 value-first 排序中的插入位置留給 delivery-planning。

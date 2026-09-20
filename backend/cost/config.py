@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import yaml
 
@@ -29,7 +29,6 @@ COVERAGE_LIST: List[Dict[str, str]] = _load_yaml("pricing_coverage.yaml").get(
 )
 
 PRICING_URLS = _load_yaml("pricing_urls.yaml")
-SKU_MAP = _load_yaml("sku_map.yaml")
 _REGIONS_DOC = _load_yaml("supported_regions.yaml")
 SUPPORTED_REGIONS: List[str] = list(_REGIONS_DOC.get("regions", []))
 REGIONS_BY_CLOUD: Dict[str, List[str]] = {
@@ -40,11 +39,3 @@ _AWS_LOC = _load_yaml("aws_region_locations.yaml")
 AWS_REGION_LOCATIONS: Dict[str, str] = _AWS_LOC.get("locations", {})
 AWS_USAGE_TYPE_PREFIXES: Dict[str, str] = _AWS_LOC.get("usage_type_prefixes", {})
 AWS_PRICING_API_REGION: str = str(_AWS_LOC.get("pricing_api_region", "us-east-1"))
-_CALC_AZ = _load_yaml("calculator_azure_map.yaml")
-CALCULATOR_AZURE_PRODUCTS: Dict[str, Dict[str, Any]] = _CALC_AZ.get("products", {})
-_CALC_AZ_REG = _load_yaml("calculator_azure_regions.yaml")
-CALCULATOR_AZURE_REGIONS: Dict[str, str] = _CALC_AZ_REG.get("regions", {})
-_CALC_GCP = _load_yaml("calculator_gcp_map.yaml")
-CALCULATOR_GCP_PRODUCTS: Dict[str, Dict[str, Any]] = _CALC_GCP.get("products", {})
-_CALC_GCP_REG = _load_yaml("calculator_gcp_regions.yaml")
-CALCULATOR_GCP_REGIONS: Dict[str, str] = _CALC_GCP_REG.get("regions", {})

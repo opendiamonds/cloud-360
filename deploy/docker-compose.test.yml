@@ -37,7 +37,6 @@ services:
       OPENROUTER_API_KEY: ""
       APP_ENV: test
       CORS_ORIGINS: http://localhost:8090
-      COST_PRICING_STUB: "1"
     depends_on:
       db:
         condition: service_healthy

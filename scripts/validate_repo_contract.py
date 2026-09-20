@@ -221,11 +221,26 @@ FORBIDDEN_NEW_PATH_PARTS = {
     "secrets",
 }
 
+# Literal substrings still banned in contract-governed files. Variable *names*
+# such as AWS_SECRET_ACCESS_KEY are allowed (ADR-0018 §6 / NFR9.1): catch real
+# key *values* via SECRET_VALUE_REGEXES below instead.
 FORBIDDEN_CONTENT_PATTERNS = (
     "BEGIN " + "PRIVATE KEY",
-    "AWS_" + "SECRET_ACCESS_KEY",
     "AZURE_" + "CLIENT_SECRET=",
     "GOOGLE_" + "APPLICATION_CREDENTIALS=",
+)
+
+# Assignment-right-hand-side shapes that look like live credentials (NFR9.1).
+# Empty / commented / name-only references must not match.
+SECRET_VALUE_REGEXES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "AWS_SECRET_ACCESS_KEY value",
+        re.compile(r"AWS_SECRET_ACCESS_KEY\s*=\s*([A-Za-z0-9/+=]{40})"),
+    ),
+    (
+        "GCP_BILLING_API_KEY value",
+        re.compile(r"GCP_BILLING_API_KEY\s*=\s*(AIza[0-9A-Za-z\-_]{35})"),
+    ),
 )
 
 
@@ -395,14 +410,38 @@ def validate_no_production_config_added() -> int:
 
 
 def validate_no_obvious_secrets() -> int:
+    """Reject committed private-key markers and credential-shaped assignments.
+
+    Literal ``FORBIDDEN_CONTENT_PATTERNS`` apply to ``REQUIRED_FILES`` under
+    ``ROOT`` (same contract-governed set as before). Credential *value* shapes
+    (ADR-0018 §6 / NFR9.1) are scanned across every tracked text file so a leak
+    in ``deploy/`` or a workflow is not invisible. Variable-name-only references
+    (empty assignments, shell ``${AWS_SECRET_ACCESS_KEY:-}``) are intentionally
+    allowed. Docs that *discuss* the PEM ban (e.g. ADRs) are not in
+    ``REQUIRED_FILES`` and therefore may mention the marker without failing.
+    """
     violations: list[str] = []
-    for display, path in contract_files():
+    for rel in REQUIRED_FILES:
+        path = ROOT / rel
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         for pattern in FORBIDDEN_CONTENT_PATTERNS:
             if pattern in text:
-                violations.append(f"{display}: {pattern}")
+                violations.append(f"{rel}: {pattern}")
+
+    for rel in git_ls_files():
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for label, regex in SECRET_VALUE_REGEXES:
+            if regex.search(text):
+                violations.append(f"{rel}: {label}")
+
     if violations:
         return fail("Forbidden secret-like content found: " + ", ".join(violations))
     return 0

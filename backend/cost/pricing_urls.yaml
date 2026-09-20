@@ -300,7 +300,6 @@ default_products_azure:
     sku_name: Azure Blob
     meter_name: Azure Blob Protected Instance
 
-stub_default_hourly: "0.12"
 offer_connect_timeout_seconds: 3
 offer_read_timeout_seconds: 180
 cli_timeout_seconds: 60

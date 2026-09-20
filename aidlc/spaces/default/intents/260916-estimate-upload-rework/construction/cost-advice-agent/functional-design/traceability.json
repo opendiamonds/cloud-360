@@ -1,0 +1,69 @@
+{
+  "stage": "functional-design",
+  "unit": "cost-advice-agent",
+  "upstream_ids": [
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "FR5.4",
+    "FR5.5",
+    "FR5.10",
+    "NFR1",
+    "NFR2",
+    "FR10.2",
+    "FR10.3"
+  ],
+  "coverage": [
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "BR7.1"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "BR7.1"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "BR7.1"
+    },
+    {
+      "id": "FR5.4",
+      "status": "OK",
+      "target": "BR7.2"
+    },
+    {
+      "id": "FR5.5",
+      "status": "OK",
+      "target": "BR7.3, BR7.4"
+    },
+    {
+      "id": "FR5.10",
+      "status": "OK",
+      "target": "BR7.3"
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "BR7.6"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "W2 heartbeat/progress"
+    },
+    {
+      "id": "FR10.2",
+      "status": "OK",
+      "target": "BR7.9"
+    },
+    {
+      "id": "FR10.3",
+      "status": "OK",
+      "target": "BR7.9"
+    }
+  ],
+  "confirmed": "Looks correct"
+}

@@ -1,0 +1,13 @@
+{
+  "stage": "code-generation",
+  "unit": "advice-presentation-ui",
+  "coverage": [
+    { "id": "FR5.1", "status": "OK" },
+    { "id": "FR5.2", "status": "OK" },
+    { "id": "FR5.3", "status": "OK" },
+    { "id": "FR4.5", "status": "OK" },
+    { "id": "C3", "status": "OK" },
+    { "id": "M5", "status": "OK" }
+  ],
+  "plan_fingerprint": "sha256:d259dc076865f869eadbdd55fb36011f66e7712c8adcae846d1010d9f492ddae"
+}

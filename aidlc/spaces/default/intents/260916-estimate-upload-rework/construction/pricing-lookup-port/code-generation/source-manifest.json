@@ -1,0 +1,22 @@
+{
+  "stage": "code-generation",
+  "unit": "pricing-lookup-port",
+  "version": 1,
+  "writes": [
+    {
+      "path": "scripts/validate_pricing_lookup_boundary.py"
+    },
+    {
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "path": "backend/cost/pricing_client.py"
+    },
+    {
+      "path": "backend/cost/pricing_sdk.py"
+    },
+    {
+      "path": "backend/tests/test_pricing_client.py"
+    }
+  ]
+}

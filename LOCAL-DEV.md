@@ -157,15 +157,12 @@ LLM_MODEL=
 # N8N_WEBHOOK_URL=https://.../webhook/get-icon
 # N8N_USER=
 # N8N_PASSWORD=
-# COST_PRICING_STUB=1   # 成本頁本機驗收：不連 AWS Price List，回固定 stub 單價
-# 若要真實 AWS 定價：不要設 STUB。查價順序為 **Postgres pricing_cache → 公開 Bulk API**。
-# 不需要 AWS 帳號憑證——走 IAM 的 boto3 Price List Query API 已停用（ADR-0001 把供應商
-# 憑證排除在本 repo 之外，project.md 的 C1 計價規則只准公開免帳號端點）。首次 EC2 約 1–2 分鐘。
-# 若要真實 GCP 定價：同樣不要設 STUB，並設定 `GCP_BILLING_API_KEY`（Cloud Billing Catalog API）。
-# GCP 圖請選 `us-central1` 等 GCP 區域（勿選 AWS 的 us-east-1）。
-# 若要真實 Azure 定價：不要設 STUB；走公開 Retail Prices API（prices.azure.com，免金鑰）。
-# Azure 圖請選 `eastus`／`westus2`／`westeurope`（勿選 AWS／GCP 區域碼）。
-# 可先跑 `python3 scripts/warm_aws_pricing_cache.py` 預熱 DB 快取（含 AWS／GCP／Azure）。
+# 查價（C1／U5）：**檔案快取 → boto3 Pricing Query API → 公開 Bulk**（不再寫 Postgres pricing_cache）。
+# 可選填 `AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`（僅 pricing:GetProducts／DescribeServices／GetAttributeValues；ADR-0018）。
+# 未設時走公開 Bulk Price List。本機**不必**持有雲端憑證即可啟動（FR11.4）。
+# GCP：設定 `GCP_BILLING_API_KEY`（Cloud Billing Catalog API）。
+# Azure：公開 Retail Prices API（prices.azure.com，免金鑰）。
+# 禁止把真金鑰寫進版控檔；log／錯誤訊息不得含 secret 值（變數名可出現）。
 EOF
 ```
 
@@ -176,7 +173,7 @@ EOF
 > **本機設定與部署設定是分開的兩套，不要互相抄。** `backend/.env`／`frontend/.env` 只服務本機 bare-metal 執行；部署走 `deploy/.env`（由 `deploy/render-env.sh` 產生，範本 `deploy/.env.example`）。把 `localhost` 來源寫進部署範本、或把 `POSTGRES_*`／`PUBLIC_URL` 寫進本機範本，`scripts/validate_env_contract.py` 都會擋下（CI 紅燈）。
 
 
-> **金鑰安全**：`.env` 已被 `.gitignore` 涵蓋（`.gitignore:17`），可以安心放 `OPENROUTER_API_KEY`。但要知道**這是唯一的防線** —— `validate_repo_contract.py` 的 secret 掃描只讀 contract 清單內的檔案，**看不到 `backend/`／`frontend/`**（`team.md` 已記為既有機制落差）。所以金鑰**絕不要**寫進 `.env` 以外的地方，例如貼進程式碼、測試或文件。
+> **金鑰安全**：`.env` 已被 `.gitignore` 涵蓋（`.gitignore:17`），可以安心放本機金鑰。`validate_repo_contract.py` 會對受版控文字檔做密鑰**值樣式**掃描（ADR-0018 §6）；空值與變數名引用允許，真值賦值會紅燈。仍不要把真金鑰貼進程式碼、測試或文件。
 
 ### 建議用 venv（避免污染系統 Python）
 

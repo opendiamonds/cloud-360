@@ -192,7 +192,7 @@ class AuthReadiness(unittest.TestCase):
 class ModelSelection(unittest.TestCase):
     def test_provider_specific_defaults(self):
         with env(LLM_PROVIDER="openrouter"):
-            self.assertEqual(get_model_name(), "anthropic/claude-sonnet-4.6")
+            self.assertEqual(get_model_name(), "google/gemini-3.7-flash")
         with env(LLM_PROVIDER="cli"):
             self.assertEqual(get_model_name(), "sonnet")
 

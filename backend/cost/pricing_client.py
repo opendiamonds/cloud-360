@@ -1,4 +1,9 @@
-"""Public list price fetch — DB cache (service) → AWS SDK → Bulk API fallback."""
+"""PricingLookup Port — public catalog list-price fetch (``fetch_hourly``).
+
+Call chain: AWS SDK (optional) → Bulk／disk cache; GCP Catalog; Azure Retail.
+Results are for advice text only — never persist into estimate line items (AH-6).
+No Postgres ``pricing_cache`` writes.
+"""
 
 from __future__ import annotations
 
@@ -237,21 +242,14 @@ def fetch_hourly(cloud: str, sku: str, region: str) -> PriceHit | PriceMiss | Pr
     """
     Fetch hourly list price for a mapped service family + region.
 
-    Intended call chain (cost_service):
-      1. Postgres ``pricing_cache`` (24h TTL)
-      2. This function:
-         - aws → SDK ``get_products`` → Bulk API fallback
-         - gcp → Cloud Billing Catalog API (cloudbilling.googleapis.com)
-         - azure → Retail Prices API (prices.azure.com)
-      3. Write Postgres on hit
+    Call chain (U5 Port; no Postgres pricing_cache write):
+      - aws → SDK ``get_products`` → Bulk API fallback
+      - gcp → Cloud Billing Catalog API (cloudbilling.googleapis.com)
+      - azure → Retail Prices API (prices.azure.com)
     """
     mode = COVERAGE_BY_CLOUD.get(cloud)
     if mode != "official_list":
         return PriceUnsupported()
-
-    if os.environ.get("COST_PRICING_STUB", "").strip() in ("1", "true", "yes"):
-        hourly = Decimal(str(PRICING_URLS.get("stub_default_hourly", "0.12")))
-        return PriceHit(hourly=hourly, fetched_at=datetime.now(timezone.utc), source="stub")
 
     fetched_at = datetime.now(timezone.utc)
 

@@ -44,17 +44,7 @@ class TestPricingOfferParser(unittest.TestCase):
 
 
 class TestPricingClient(unittest.TestCase):
-    def tearDown(self):
-        os.environ.pop("COST_PRICING_STUB", None)
-
-    def test_stub_mode(self):
-        os.environ["COST_PRICING_STUB"] = "1"
-        result = fetch_hourly("aws", "AmazonEC2", "us-east-1")
-        self.assertEqual(result.kind, "hit")
-        self.assertEqual(result.hourly, Decimal("0.12"))
-
     def test_gcp_without_api_key_miss(self):
-        os.environ.pop("COST_PRICING_STUB", None)
         os.environ.pop("GCP_BILLING_API_KEY", None)
         result = fetch_hourly("gcp", "ComputeEngine", "us-central1")
         self.assertIsInstance(result, PriceMiss)
@@ -67,13 +57,11 @@ class TestPricingClient(unittest.TestCase):
         self.assertTrue(supports_official_hourly("AzureKubernetesService"))
 
     def test_s3_supported_with_assumed_storage(self):
-        os.environ.pop("COST_PRICING_STUB", None)
         self.assertTrue(supports_official_hourly("AmazonS3"))
 
     @patch("cost.pricing_client.fetch_hourly_via_sdk")
     @patch("cost.pricing_client.use_sdk_enabled")
     def test_sdk_path_before_bulk(self, sdk_enabled_mock, sdk_fetch_mock):
-        os.environ.pop("COST_PRICING_STUB", None)
         os.environ["COST_PRICING_USE_SDK"] = "1"
         sdk_enabled_mock.return_value = True
         sdk_fetch_mock.return_value = Decimal("0.0104")
@@ -85,7 +73,6 @@ class TestPricingClient(unittest.TestCase):
 
     @patch("cost.pricing_client._download_offer")
     def test_live_parse_path(self, download_mock):
-        os.environ.pop("COST_PRICING_STUB", None)
         with _FIXTURE.open(encoding="utf-8") as f:
             download_mock.return_value = json.load(f)
         result = fetch_hourly("aws", "AmazonEC2", "us-east-1")
@@ -102,6 +89,65 @@ class TestPricingClient(unittest.TestCase):
             )
         )
         self.assertTrue(_host_allowed("https://prices.azure.com/api/retail/prices"))
+
+    def test_unknown_cloud_unsupported(self):
+        result = fetch_hourly("oracle", "Anything", "us-east-1")
+        self.assertIsInstance(result, PriceUnsupported)
+
+    @patch("cost.pricing_client._fetch_via_bulk_api")
+    @patch("cost.pricing_client.fetch_hourly_via_sdk")
+    @patch("cost.pricing_client.use_sdk_enabled")
+    def test_sdk_failure_degrades_to_bulk(self, sdk_enabled_mock, sdk_fetch_mock, bulk_mock):
+        sdk_enabled_mock.return_value = True
+        sdk_fetch_mock.return_value = None
+        bulk_mock.return_value = Decimal("0.02")
+        result = fetch_hourly("aws", "AmazonEC2", "us-east-1")
+        self.assertEqual(result.kind, "hit")
+        self.assertEqual(result.source, "bulk_api")
+        bulk_mock.assert_called_once()
+
+    @patch("cost.pricing_client._write_disk_cache")
+    @patch("cost.pricing_client._read_disk_cache", return_value=None)
+    @patch("cost.pricing_client._download_offer")
+    @patch("cost.pricing_client.use_sdk_enabled", return_value=False)
+    def test_disk_cache_payload_has_no_secrets(
+        self, _sdk_off, download_mock, _read_cache, write_mock
+    ):
+        with _FIXTURE.open(encoding="utf-8") as f:
+            download_mock.return_value = json.load(f)
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        try:
+            result = fetch_hourly("aws", "AmazonEC2", "us-east-1")
+            self.assertEqual(result.kind, "hit")
+            self.assertTrue(write_mock.called)
+            args, kwargs = write_mock.call_args
+            blob = str(args) + str(kwargs) + str(result)
+            self.assertNotIn("AWS_SECRET_ACCESS_KEY", blob)
+            self.assertNotIn("wJalrXUtnFEMI", blob)
+        finally:
+            os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
+
+    @patch("cost.pricing_sdk._get_pricing_client")
+    def test_sdk_log_omits_secret_on_client_error(self, client_mock):
+        from botocore.exceptions import ClientError
+        from cost.pricing_sdk import fetch_hourly_via_sdk, reset_client_for_tests
+
+        reset_client_for_tests()
+        fake_secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        os.environ["COST_PRICING_USE_SDK"] = "1"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = fake_secret
+        err = ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": f"bad {fake_secret}"}},
+            "GetProducts",
+        )
+        client_mock.return_value.get_products.side_effect = err
+        with self.assertLogs("cost.pricing_sdk", level="WARNING") as cm:
+            out = fetch_hourly_via_sdk("AmazonEC2", "us-east-1")
+        self.assertIsNone(out)
+        joined = "\n".join(cm.output)
+        self.assertNotIn(fake_secret, joined)
+        self.assertIn("AccessDenied", joined)
+        os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
 
 
 if __name__ == "__main__":

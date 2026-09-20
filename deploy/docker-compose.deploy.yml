@@ -51,10 +51,13 @@ services:
       APP_ENV: ${APP_ENV}
       # Same-origin through nginx, so CORS is belt-and-braces rather than load-bearing.
       CORS_ORIGINS: ${CORS_ORIGINS:-${PUBLIC_URL}}
-      # C1：AWS 價目一律走公開 Bulk Price List（免帳號）。需 IAM 憑證的
-      # Price List Query API 已停用——ADR-0001 把供應商憑證排除在本 repo 之外，
-      # project.md 的 C1 計價規則也只准公開免帳號端點。
+      # C1 catalog-price credentials (ADR-0018 §1／§5). Optional — empty
+      # keeps public Bulk / skips IAM lookup. IAM must be limited to
+      # pricing:GetProducts / DescribeServices / GetAttributeValues only.
+      # Billing／usage APIs stay forbidden.
       COST_PRICING_USE_SDK: ${COST_PRICING_USE_SDK:-0}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       GCP_BILLING_API_KEY: ${GCP_BILLING_API_KEY:-}
     depends_on:

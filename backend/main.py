@@ -8,9 +8,10 @@ from services.user_router import router as user_router
 from services.collab_router import router as collab_router
 from services.review_router import router as review_router
 from services.lens_router import router as lens_router
+from cost.estimate_intake_router import router as estimate_intake_router
+from cost.advice_stream_router import router as advice_stream_router
 from services.llm_provider import configure_provider_env
 from database import init_db
-from cost.cost_router import router as cost_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +54,8 @@ app.include_router(review_router, prefix="/api/architecture")
 app.include_router(lens_router, prefix="/api/architecture")
 app.include_router(user_router, prefix="/api/auth")
 app.include_router(collab_router, prefix="/api/collab")
-app.include_router(cost_router, prefix="/api/cost")
+app.include_router(estimate_intake_router, prefix="/api/cost/v1")
+app.include_router(advice_stream_router, prefix="/api/cost/v1")
 
 @app.get("/")
 def read_root():

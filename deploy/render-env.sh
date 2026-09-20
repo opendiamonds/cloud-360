@@ -24,13 +24,12 @@
 #   APP_ENV            optional   defaults to staging
 #   COST_PRICING_USE_SDK optional   auto|1|0 for C1 pricing client
 #
-# No AWS account credentials are rendered here, by rule rather than by
-# oversight: ADR-0001 keeps provider credentials out of this repo, and the C1
-# pricing rule in aidlc/spaces/default/memory/project.md admits public
-# no-account price endpoints only. AWS pricing therefore goes through the
-# public Bulk Price List, which needs no key. Re-adding the IAM path would
-# reintroduce both violations at once.
-#   GCP_BILLING_API_KEY  optional   C1 GCP Cloud Billing Catalog (needed for GCP diagrams)
+# Catalog-price credentials (ADR-0018 §1 / §5) — optional; empty is fine:
+#   AWS_ACCESS_KEY_ID       optional   IAM user limited to pricing:GetProducts etc.
+#   AWS_SECRET_ACCESS_KEY   optional   pair for the key above (never commit a real value)
+#   AWS_DEFAULT_REGION      optional   defaults to us-east-1
+#   GCP_BILLING_API_KEY     optional   C1 GCP Cloud Billing Catalog (needed for GCP diagrams)
+# Billing / usage APIs (Cost Explorer, CUR, …) stay forbidden — do not add those keys.
 #
 # LLM_PROVIDER is pinned to openrouter here and is not overridable: the other
 # mode (cli) needs an interactively logged-in claude CLI, which a container
@@ -55,7 +54,9 @@ fi
 # POSTGRES_PASSWORD=ab$cd reaches postgres as "ab", the stack starts, and
 # nothing anywhere reports that the database is running on a two-character
 # password. Refuse the value instead of shipping a weakened one.
-for name in POSTGRES_PASSWORD JWT_SECRET N8N_PASSWORD GCP_BILLING_API_KEY; do
+# Access Key IDs are normally AKIA… alphanumerics (no '$'), but include them
+# in the same guard as secrets so a malformed secret paste cannot truncate.
+for name in POSTGRES_PASSWORD JWT_SECRET N8N_PASSWORD GCP_BILLING_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   eval "value=\${${name}:-}"
   case "${value}" in
     *'$'*)
@@ -78,8 +79,8 @@ CLOUD360_BOOTSTRAP_ADMIN_PASSWORD=${CLOUD360_BOOTSTRAP_ADMIN_PASSWORD:-}
 LLM_PROVIDER=openrouter
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
 ANTHROPIC_BASE_URL=https://openrouter.ai/api
-ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-sonnet-4.6
-LLM_MODEL=anthropic/claude-sonnet-4.6
+ANTHROPIC_DEFAULT_SONNET_MODEL=google/gemini-3.7-flash
+LLM_MODEL=google/gemini-3.7-flash
 LLM_MAX_OUTPUT_TOKENS=12000
 LLM_XML_CONTEXT_MAX_CHARS=32000
 N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
@@ -90,6 +91,8 @@ PUBLIC_URL=https://cloud360.danniel.cc
 FRONTEND_HOST_PORT=8090
 CLOUDFLARED_CREDENTIALS_FILE=${HOME}/.cloudflared/b460a579-9e0d-42f1-a31d-c84d35bef065.json
 COST_PRICING_USE_SDK=${COST_PRICING_USE_SDK:-0}
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
 AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
 GCP_BILLING_API_KEY=${GCP_BILLING_API_KEY:-}
 EOF

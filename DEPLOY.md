@@ -17,7 +17,7 @@
   → Python 套件 claude-agent-sdk（ClaudeSDKClient）
     → 本機／容器內子行程：Claude Code CLI（@anthropic-ai/claude-code）
       → HTTP：OpenRouter（ANTHROPIC_BASE_URL=https://openrouter.ai/api）
-        → 模型（例：anthropic/claude-sonnet-4.6）
+        → 模型（例：google/gemini-3.7-flash）
 ```
 
 | 元件 | 角色 | 缺了會怎樣 |
@@ -72,7 +72,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | `ANTHROPIC_BASE_URL` | 預設 `https://openrouter.ai/api` | 通常維持 |
 | `ANTHROPIC_AUTH_TOKEN` | 可空；啟動時由 `OPENROUTER_API_KEY` 映射 | 可留空 |
 | `ANTHROPIC_API_KEY` | **必須為空** | 避免走 Anthropic 直連 |
-| `LLM_MODEL`／`ANTHROPIC_DEFAULT_SONNET_MODEL` | OpenRouter 模型 slug | 例：`anthropic/claude-sonnet-4.6` |
+| `LLM_MODEL`／`ANTHROPIC_DEFAULT_SONNET_MODEL` | OpenRouter 模型 slug | 例：`google/gemini-3.7-flash` |
 | `LLM_MAX_OUTPUT_TOKENS` | Agent 輸出 token 上限（對應 `CLAUDE_CODE_MAX_OUTPUT_TOKENS`） | 預設 `12000`；出現 402 credits 可降到 `8192` |
 | `LLM_XML_CONTEXT_MAX_CHARS` | 送入 LLM 的架構 XML 字元上限 | 預設 `32000` |
 
@@ -102,30 +102,32 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | `N8N_WEBHOOK_URL` | 選填 | 有用動態 icon 再填 |
 | `N8N_USER` | 選填 | 存取 n8n webhook 所需之 Basic Auth 帳號 |
 | `N8N_PASSWORD` | 選填 | 存取 n8n webhook 所需之 Basic Auth 密碼 |
-| `AWS_DEFAULT_REGION` | `us-east-1` | Bulk Price List 固定用 `us-east-1` 端點即可 |
-| `COST_PRICING_USE_SDK` | `0` | 釘在 `0`（公開 Bulk）。IAM 版 Price List Query API 已停用，見下方說明 |
+| `AWS_ACCESS_KEY_ID` | 選填（C1） | 目錄價 IAM 使用者（ADR-0018）；最小權限見 1.1.1；勿 commit 真值 |
+| `AWS_SECRET_ACCESS_KEY` | 選填（C1） | 與上成對；空則走公開 Bulk；**不得**把真值寫進版控檔 |
+| `AWS_DEFAULT_REGION` | `us-east-1` | Price List／Bulk 端點區域 |
+| `COST_PRICING_USE_SDK` | `0`／`auto` | `0`＝偏公開 Bulk；有 IAM 憑證時可 `auto`／`1`（agent 查價，見 ADR-0018） |
 | `GCP_BILLING_API_KEY` | 選填（C1） | **有 GCP 圖要真實估價時必填**（Cloud Billing Catalog）；勿 commit |
-| `COST_PRICING_STUB` | 本機可選 `1` | **staging／正式部署勿設**；CI test stack 才用 stub |
 
 #### 1.1.1 C1 成本估價（本次 FinOps 部署必讀）
 
-三雲查價行為：
+三雲查價行為（ADR-0018）：
 
 | 雲 | 需要的環境變數 | 未設定時 |
 |---|---|---|
-| **AWS** | **不需**金鑰（可選 `AWS_DEFAULT_REGION=us-east-1`） | 走公開 Bulk Price List；首次 EC2 查價約 1–2 分鐘 |
-| **GCP** | **`GCP_BILLING_API_KEY`**（Catalog API key） | GCP 列無法取得官方價（維持未定價／查價失敗） |
+| **AWS** | 可選 `AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`（僅 `pricing:GetProducts`、`pricing:DescribeServices`、`pricing:GetAttributeValues`）；可選 `AWS_DEFAULT_REGION` | 無憑證仍可啟動；查價降級公開 Bulk Price List（或略過，見 U5／FR5.10） |
+| **GCP** | **`GCP_BILLING_API_KEY`**（Catalog API key，建議綁 Cloud Billing API） | GCP 列無法取得官方價（維持未定價／查價失敗） |
 | **Azure** | **不需**額外金鑰 | Retail Prices 公開 API |
 
 Compose／staging 請寫在 **`deploy/.env`**（見 `deploy/.env.example` 的「C1 成本估價」段）；本機 bare-metal 寫在 **`backend/.env`**。  
-`ut` 自動部署會由 `deploy/render-env.sh` 從 GitHub Secrets 寫入同名變數——請在 repo Settings → Secrets 新增：
+`ut` 自動部署會由 `deploy/render-env.sh` 從 GitHub Secrets 寫入同名變數——請在 repo Settings → Secrets 新增（皆可選，缺則服務仍須能啟動）：
 
+- `AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`（目錄價 IAM；**不要**授 Cost Explorer／CUR／帳單類權限）
 - `AWS_DEFAULT_REGION`（可選，預設 `us-east-1`）
 - `GCP_BILLING_API_KEY`（要估 GCP 圖則必填）
 
-**AWS 帳號憑證不在此列，而且不要加。** `render-env.sh` 不再寫出 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`，`docker-compose.deploy.yml` 也不再傳遞。兩個理由：ADR-0001 把供應商憑證排除在本 repo 的範圍之外；`aidlc/spaces/default/memory/project.md` 的 C1 計價規則只准公開免帳號端點，而 Price List Query API 走 IAM。即使在 GitHub Secrets 設了同名 secret，也不會進到容器裡。
+**日誌／錯誤訊息不得含 secret 值**（變數名可出現）。`docker-compose.test.yml` 與 CI **不**注入真密鑰。
 
-**禁止**把真實金鑰寫進 `.env.example` 或 commit 進 git。
+**禁止**把真實金鑰寫進 `.env.example` 或 commit 進 git。repo contract 以值樣式 regex 攔 `AWS_SECRET_ACCESS_KEY=`／`GCP_BILLING_API_KEY=` 形賦值（見 ADR-0018 §6）；空值與變數名引用允許。
 
 #### 1.2 前端 `frontend/.env`（build 時注入）
 
@@ -166,12 +168,14 @@ npm run build
 範例（寫入 `deploy/.env`，值勿 commit）：
 
 ```bash
-# C1 — AWS Pricing（走公開 Bulk Price List，不需帳號憑證）
+# C1 — AWS Pricing（可選 IAM 目錄價憑證；空則公開 Bulk）
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION=us-east-1
 COST_PRICING_USE_SDK=0
 
 # C1 — GCP Catalog（要估 GCP 架構圖時必填）
-GCP_BILLING_API_KEY=...
+GCP_BILLING_API_KEY=
 ```
 
 Azure Retail Prices **不需**寫入金鑰。改完後 `docker compose … up -d`（必要時 `--force-recreate backend`）。
@@ -216,28 +220,44 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | E | `architecture_reviews` | **A3** Well-Architected 評核結果（分數／發現／建議） |
 | E | `wa_lenses` | **A3** Offline Custom Lens 現行標準（具 A3 **審核** 者可編輯） |
 | C | `role_permissions` | 角色 × Story 的檢視／編輯／審核 |
-| F | **C1** `diagram_cost`／`diagram_cost_line`／`pricing_cache`／`cost_audit_event` | **成本估算**（FinOps C1） |
+| F | **C1 退場** `archive_diagram_cost`／`archive_diagram_cost_line`／`archive_pricing_cache`／`archive_cost_audit_event` | **舊成本表（已 rename；應用零讀寫；≥90 天後另開 chore DROP）** |
+| G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
 | D | 預設使用者 `admin` | 見下方 |
 
-#### 2.2.4 C1 成本表（DDL 摘要）
+#### 2.2.4 C1 成本表退場（U3 `legacy-cost-retirement`）
 
 | 表 | 說明 |
 |---|---|
-| `diagram_cost` | 每圖一列：估價區域、月預算（B2） |
-| `diagram_cost_line` | 每圖×mxCell：時數、SKU／小時價覆寫 |
-| `pricing_cache` | 公開價目快取（UK: cloud+sku+region；`hourly` 為 `NUMERIC(12,6)` 等效小時單價） |
-| `cost_audit_event` | 覆寫與預算稽核 |
+| `archive_diagram_cost` | 舊 `diagram_cost` rename；應用**不得**讀寫 |
+| `archive_diagram_cost_line` | 舊 `diagram_cost_line` rename；應用**不得**讀寫 |
+| `archive_pricing_cache` | 舊 `pricing_cache` rename；應用**不得**讀寫 |
+| `archive_cost_audit_event` | 舊 `cost_audit_event` rename；應用**不得**讀寫 |
 
-**既有環境升級**：重跑 `schema_rbac.sql`（含四表 `CREATE IF NOT EXISTS` 與 C1h～C1o 種子），或依賴後端啟動時 `database._ensure_cost_schema()` + `ensure_missing_role_permissions()`（**勿**對 brownfield 重跑整份 SQL 的 `DELETE FROM role_permissions`）。
+**保留期**：自本退場合併日起 **≥90 天**；**最早可 DROP 日不早於 2026-12-18**（合併若晚於 2026-09-19 則以合併日 +90 天為準）。到期物理 `DROP` 另開 chore／operation（本 unit 不做自動 DROP）。
 
-**RBAC 增量**：`C1h`／`C1r`／`C1b`／`C1o` 共 44 列；`role_permissions` 新環境總列數 **352**。
+**既有環境升級**：後端啟動時 `database._ensure_cost_schema()` 會將仍存在的 live 表 `RENAME TO archive_*`。新環境以 `schema_rbac.sql` 直接建立 `archive_*`（可為空）。**勿**再建立 live 四表。
+
+**合併約束**：本退場須與 U8（新估價工作區 UI）**同批**部署。
 
 驗證：
 
 ```bash
-psql "$DATABASE_URL" -c "\d diagram_cost"
+psql "$DATABASE_URL" -c "\d archive_diagram_cost"
 psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions WHERE story_id LIKE 'C1%';"
 ```
+
+#### 2.2.5 U2 估價上傳表（`estimate-intake-api`）
+
+| 表 | 說明 |
+|---|---|
+| `estimate_sets` | 上傳批次根；`diagram_id` 純標籤（不 FK、不參與授權）；`is_saved` 為 false 時為分析草稿，需命名儲存後才進歷史 |
+| `estimates` | 每雲一列；同 Set 內 `cloud` UNIQUE |
+| `estimate_line_items` | 解析明細；機械檢查不落庫 |
+| `estimate_shares` | 分享名單 PK `(set_id, user_id)` |
+| `estimate_audit_events` | 事件稽核（無金額／原文） |
+| `advice` | 建議空殼；`estimate_set_id` UNIQUE／PK；正文屬 U7 |
+
+**既有環境升級**：`database._ensure_estimate_intake_schema()` 於啟動時 `CREATE IF NOT EXISTS`；新環境亦可由 `schema_rbac.sql` 建立。RBAC：`C1`＝上傳與檢視；**已無** `C1h`／`C1r`／`C1o`／`C1b`。
 
 #### 2.2.1 A3 `architecture_reviews`（DDL 摘要）
 
@@ -423,7 +443,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 - Workflow：`.github/workflows/deploy.yml`（self-hosted runner `cloud360`）  
 - 觸發：合併／推送到 `ut`（或手動 `workflow_dispatch`）  
-- Secrets：至少 `JWT_SECRET`、`OPENROUTER_API_KEY`、`POSTGRES_PASSWORD` 等；**本次 C1 請再加**（可選）`AWS_DEFAULT_REGION`、`GCP_BILLING_API_KEY`（由 `render-env.sh` 寫入 `deploy/.env`）。AWS 帳號憑證**不要加**，見第 1.1.1 節  
+- Secrets：至少 `JWT_SECRET`、`OPENROUTER_API_KEY`、`POSTGRES_PASSWORD` 等；**本次 C1 請再加**（可選）`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_DEFAULT_REGION`、`GCP_BILLING_API_KEY`（由 `render-env.sh` 寫入 `deploy/.env`）。IAM 僅目錄價動作，見第 1.1.1 節／ADR-0018。  
 - 公開：`https://cloud360.danniel.cc`；內網：`http://192.168.10.10:8090`  
 
 部署本次 A1↔A3／token 相關變更時：確認 runner 上的 compose **會 rebuild backend**（workflow 已 `up -d --build`），且 GitHub Secrets 的 OpenRouter 金鑰有效；可選在 secrets／產生的 `.env` 加上 `LLM_MAX_OUTPUT_TOKENS`。
@@ -442,11 +462,11 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 #### 3.5 本次功能升級檢查清單（C1 FinOps）
 
-- [ ] 已跑／確保 C1 四表與 `C1`／`C1h`～`C1o` 種子（見 2.2.4）  
-- [ ] `deploy/.env` 或 GitHub Secrets 已設 **`GCP_BILLING_API_KEY`**（估 GCP 必填）；AWS 走公開 Bulk，不需憑證  
-- [ ] **未**在 staging 設 `COST_PRICING_STUB=1`  
+- [ ] 已確認四表為 `archive_*`（或啟動後已 rename）；應用零讀寫  
+- [ ] `deploy/.env` 或 GitHub Secrets 已設 **`GCP_BILLING_API_KEY`**（估 GCP 必填）；AWS 可選目錄價 IAM（`AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY`），缺則公開 Bulk  
 - [ ] Backend recreate 後出站可達 AWS／GCP／Azure 價目 host  
-- [ ] 煙測：成本頁選 AWS／GCP／Azure 圖 → 區域下拉僅該雲 → 已映射服務有官方價  
+- [ ] **合併閘門**：U3 退場變更須與 U8 新 Cost UI **同批**合併／部署（勿單獨合 U3）  
+- [ ] 煙測：新成本頁（U8）上傳／估價流程可走通（舊 diagrams API 已移除）  
 
 ---
 
@@ -489,7 +509,7 @@ Optional: `LLM_MAX_OUTPUT_TOKENS` (default `12000`) and `LLM_XML_CONTEXT_MAX_CHA
 ### Env vars
 
 - **Backend** (`backend/.env` from `.env.example`): set `DATABASE_URL`, rotate `JWT_SECRET`, set `CORS_ORIGINS` to the real frontend origin(s), and configure OpenRouter／LLM／token-limit keys for that environment.  
-- **C1 FinOps**: set `GCP_BILLING_API_KEY`（required for live GCP catalog prices）. AWS uses the public Bulk Price List and needs no credentials — do not add them. Azure needs no key. Do **not** set `COST_PRICING_STUB=1` on staging.  
+- **C1 FinOps**: set `GCP_BILLING_API_KEY`（required for live GCP catalog prices）. Optionally set `AWS_ACCESS_KEY_ID`／`AWS_SECRET_ACCESS_KEY` for Price List Query (pricing:* only, ADR-0018); without them AWS falls back to the public Bulk Price List. Azure needs no key. Legacy `COST_PRICING_STUB`／diagrams cost API have been retired (U3); deploy U3 only with U8.  
 - **Frontend** (`frontend/.env` / CI): set `VITE_API_BASE_URL` to the real API root (no trailing slash). Optional `VITE_WS_BASE_URL`; otherwise derived from the API base (`http→ws`, `https→wss`). Rebuild after changing Vite env.  
 - **Compose** (`deploy/.env` from `deploy/.env.example`): used with `deploy/docker-compose.deploy.yml`. Staging CI renders the same keys via `deploy/render-env.sh` from GitHub Secrets.  
 

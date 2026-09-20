@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Table,
     Numeric,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -185,69 +186,160 @@ class RolePermission(Base):
     updated_by = Column(String(128), nullable=True)
 
 
-class DiagramCost(Base):
-    """C1：每圖估價設定（區域、預算）。"""
-
-    __tablename__ = "diagram_cost"
-
-    diagram_id = Column(
-        Integer,
-        ForeignKey("user_diagrams.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    pricing_region = Column(String(64), nullable=True)
-    monthly_budget = Column(Numeric(12, 2), nullable=True)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+# ---------------------------------------------------------------------------
+# Estimate intake (U2 /api/cost/v1) — EstimateSet tree + Advice shell
+# ---------------------------------------------------------------------------
 
 
-class DiagramCostLine(Base):
-    """C1：每圖可估價節點的持久化狀態。"""
+class EstimateSet(Base):
+    """一次上傳批次（最多三朵雲）；分享／建議／稽核的掛載根。"""
 
-    __tablename__ = "diagram_cost_line"
-
-    diagram_id = Column(
-        Integer,
-        ForeignKey("user_diagrams.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    mxcell_id = Column(String(128), primary_key=True)
-    hours = Column(Integer, nullable=False, default=24)
-    sku_override = Column(String(128), nullable=True)
-    hourly_override = Column(Numeric(12, 2), nullable=True)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
-class PricingCache(Base):
-    """C1：公開價目快取。"""
-
-    __tablename__ = "pricing_cache"
-
-    cloud = Column(String(16), primary_key=True)
-    sku = Column(String(128), primary_key=True)
-    region = Column(String(64), primary_key=True)
-    hourly = Column(Numeric(12, 6), nullable=False)
-    fetched_at = Column(DateTime(timezone=True), nullable=False)
-
-
-class CostAuditEvent(Base):
-    """C1：覆寫與預算變更稽核。"""
-
-    __tablename__ = "cost_audit_event"
+    __tablename__ = "estimate_sets"
 
     id = Column(Integer, primary_key=True, index=True)
-    diagram_id = Column(
+    owner_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    diagram_id = Column(Integer, nullable=True)  # 純標籤；不 FK、不參與授權
+    note = Column(Text, nullable=True)
+    # False until owner explicitly saves with a name (history drawer only shows saved).
+    is_saved = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    estimates = relationship(
+        "Estimate",
+        back_populates="estimate_set",
+        cascade="all, delete-orphan",
+    )
+    shares = relationship(
+        "EstimateShare",
+        back_populates="estimate_set",
+        cascade="all, delete-orphan",
+    )
+    audit_events = relationship(
+        "EstimateAuditEvent",
+        back_populates="estimate_set",
+        cascade="all, delete-orphan",
+    )
+    advice = relationship(
+        "Advice",
+        back_populates="estimate_set",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class Estimate(Base):
+    """批次內單一雲別的估價表彙總。"""
+
+    __tablename__ = "estimates"
+    __table_args__ = (
+        UniqueConstraint("estimate_set_id", "cloud", name="uq_estimates_set_cloud"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    estimate_set_id = Column(
         Integer,
-        ForeignKey("user_diagrams.id", ondelete="CASCADE"),
+        ForeignKey("estimate_sets.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    field = Column(String(32), nullable=False)
-    mxcell_id = Column(String(128), nullable=True)
-    old_value = Column(Text, nullable=True)
-    new_value = Column(Text, nullable=False)
-    actor_username = Column(String(128), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    cloud = Column(String(16), nullable=False)  # aws | azure | gcp
+    stated_total = Column(Numeric(18, 6), nullable=True)
+    currency = Column(String(16), nullable=True)
+    parsed_line_count = Column(Integer, nullable=False, default=0)
+    unparsed_line_count = Column(Integer, nullable=False, default=0)
+    source_format = Column(String(8), nullable=False)  # csv | xlsx
+
+    estimate_set = relationship("EstimateSet", back_populates="estimates")
+    line_items = relationship(
+        "EstimateLineItem",
+        back_populates="estimate",
+        cascade="all, delete-orphan",
+        order_by="EstimateLineItem.ordinal",
+    )
+
+
+class EstimateLineItem(Base):
+    """逐列明細（機械檢查不持久化）。"""
+
+    __tablename__ = "estimate_line_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    estimate_id = Column(
+        Integer,
+        ForeignKey("estimates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ordinal = Column(Integer, nullable=False)
+    item_name = Column(Text, nullable=True)
+    spec = Column(Text, nullable=True)
+    quantity = Column(Numeric(18, 6), nullable=True)
+    amount = Column(Numeric(18, 6), nullable=True)
+    currency = Column(String(16), nullable=True)
+    parse_status = Column(String(32), nullable=False)  # parsed | unidentifiable
+    raw_text = Column(Text, nullable=False)
+
+    estimate = relationship("Estimate", back_populates="line_items")
+
+
+class EstimateShare(Base):
+    """批次分享關聯（擁有者＋名單）。"""
+
+    __tablename__ = "estimate_shares"
+
+    estimate_set_id = Column(
+        Integer,
+        ForeignKey("estimate_sets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    shared_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    estimate_set = relationship("EstimateSet", back_populates="shares")
+
+
+class EstimateAuditEvent(Base):
+    """事件層級稽核（不含金額／明細全文／檔案）。"""
+
+    __tablename__ = "estimate_audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    estimate_set_id = Column(
+        Integer,
+        ForeignKey("estimate_sets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type = Column(String(64), nullable=False)
+    occurred_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    cloud = Column(String(16), nullable=True)
+    parsed_line_count = Column(Integer, nullable=True)
+    unparsed_line_count = Column(Integer, nullable=True)
+
+    estimate_set = relationship("EstimateSet", back_populates="audit_events")
+
+
+class Advice(Base):
+    """建議列空殼（U7 擁有正文）；U2 觸發建立／薄讀。"""
+
+    __tablename__ = "advice"
+
+    estimate_set_id = Column(
+        Integer,
+        ForeignKey("estimate_sets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status = Column(String(32), nullable=False, default="generating")
+    saving_text = Column(Text, nullable=True)
+    comparison_text = Column(Text, nullable=True)
+    quality_text = Column(Text, nullable=True)
+    unavailable_reasons_json = Column(Text, nullable=True)  # JSON object
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    estimate_set = relationship("EstimateSet", back_populates="advice")

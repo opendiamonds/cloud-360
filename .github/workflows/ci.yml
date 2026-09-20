@@ -161,6 +161,11 @@ jobs:
       - name: Validate cost calculator import boundary
         run: python scripts/validate_cost_calculator_boundary.py
 
+      # AH-6 / BR5.7–5.8: intake must not import PricingLookup; others must not
+      # hard-code catalog-price hosts outside the pricing_* survival set.
+      - name: Validate pricing lookup boundary
+        run: python scripts/validate_pricing_lookup_boundary.py
+
   frontend:
     name: Frontend (lint + typecheck + build)
     needs: gate

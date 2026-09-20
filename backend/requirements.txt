@@ -16,8 +16,9 @@ passlib[bcrypt]
 bcrypt
 pyjwt
 claude-agent-sdk
+langgraph==1.2.11
+langchain-openai==1.6.2
 hypothesis
+openpyxl==3.1.5
 PyYAML>=6.0
 boto3
-# C1 Azure Pricing Calculator automation（ADR-C1-10）；CI 用 stub，live 需 playwright install chromium
-playwright

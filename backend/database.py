@@ -79,6 +79,7 @@ def init_db():
     _ensure_j5_schema()
     _ensure_a3_schema()
     _ensure_cost_schema()
+    _ensure_estimate_intake_schema()
     _ensure_last_activity_schema()
 
     db = SessionLocal()
@@ -327,54 +328,166 @@ def _ensure_a3_schema():
 
 
 def _ensure_cost_schema():
-    """C1：diagram_cost／diagram_cost_line／pricing_cache／cost_audit_event。"""
+    """C1 退場：四張舊表 rename → archive_*（保留 ≥90 天；應用零讀寫）。
+
+    既有環境：若 live 表仍在則 RENAME。新環境：不再建立 live 表。
+    到期物理 DROP 屬後續 chore／operation，本函式不做 DROP。
+    """
+    from sqlalchemy import text
+
+    renames = (
+        ("diagram_cost", "archive_diagram_cost"),
+        ("diagram_cost_line", "archive_diagram_cost_line"),
+        ("pricing_cache", "archive_pricing_cache"),
+        ("cost_audit_event", "archive_cost_audit_event"),
+    )
+    with engine.begin() as conn:
+        for live, archive in renames:
+            try:
+                # PostgreSQL / SQLite：live 存在且 archive 不存在時才 rename
+                conn.execute(
+                    text(
+                        f"ALTER TABLE IF EXISTS {live} RENAME TO {archive}"
+                    )
+                )
+            except Exception as e:
+                # SQLite 舊版可能不支援 IF EXISTS；再試無 IF EXISTS
+                try:
+                    conn.execute(text(f"ALTER TABLE {live} RENAME TO {archive}"))
+                except Exception as e2:
+                    logger.warning(
+                        "Cost schema rename %s→%s 略過/失敗: %s / %s",
+                        live,
+                        archive,
+                        e,
+                        e2,
+                    )
+        try:
+            conn.execute(
+                text(
+                    "ALTER TABLE IF EXISTS archive_cost_audit_event "
+                    "RENAME CONSTRAINT cost_audit_event_pkey TO archive_cost_audit_event_pkey"
+                )
+            )
+        except Exception:
+            pass
+        try:
+            conn.execute(
+                text(
+                    "ALTER INDEX IF EXISTS ix_cost_audit_event_diagram_created "
+                    "RENAME TO ix_archive_cost_audit_event_diagram_created"
+                )
+            )
+        except Exception as e:
+            logger.warning("Cost schema index rename 略過/失敗: %s", e)
+    logger.info("Cost schema 退場 rename 檢查完成（archive_*；應用不得讀寫）")
+
+
+def _ensure_estimate_intake_schema():
+    """U2：EstimateSet 樹＋Advice 空殼（雙軌：create_all ＋既有庫 CREATE IF NOT EXISTS）。"""
     from sqlalchemy import text
 
     statements = [
         """
-        CREATE TABLE IF NOT EXISTS diagram_cost (
-            diagram_id INTEGER PRIMARY KEY REFERENCES user_diagrams(id) ON DELETE CASCADE,
-            pricing_region VARCHAR(64),
-            monthly_budget NUMERIC(12, 2),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        CREATE TABLE IF NOT EXISTS estimate_sets (
+          id SERIAL PRIMARY KEY,
+          owner_user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          diagram_id INTEGER,
+          note TEXT,
+          is_saved BOOLEAN NOT NULL DEFAULT FALSE
         )
         """,
         """
-        CREATE TABLE IF NOT EXISTS diagram_cost_line (
-            diagram_id INTEGER NOT NULL REFERENCES user_diagrams(id) ON DELETE CASCADE,
-            mxcell_id VARCHAR(128) NOT NULL,
-            hours INTEGER NOT NULL DEFAULT 24,
-            sku_override VARCHAR(128),
-            hourly_override NUMERIC(12, 2),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            PRIMARY KEY (diagram_id, mxcell_id)
+        ALTER TABLE estimate_sets
+          ADD COLUMN IF NOT EXISTS is_saved BOOLEAN
+        """,
+        """
+        UPDATE estimate_sets SET is_saved = TRUE WHERE is_saved IS NULL
+        """,
+        """
+        ALTER TABLE estimate_sets
+          ALTER COLUMN is_saved SET DEFAULT FALSE
+        """,
+        """
+        ALTER TABLE estimate_sets
+          ALTER COLUMN is_saved SET NOT NULL
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_estimate_sets_owner
+          ON estimate_sets (owner_user_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS estimates (
+          id SERIAL PRIMARY KEY,
+          estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+          cloud VARCHAR(16) NOT NULL,
+          stated_total NUMERIC(18, 6),
+          currency VARCHAR(16),
+          parsed_line_count INTEGER NOT NULL DEFAULT 0,
+          unparsed_line_count INTEGER NOT NULL DEFAULT 0,
+          source_format VARCHAR(8) NOT NULL,
+          CONSTRAINT uq_estimates_set_cloud UNIQUE (estimate_set_id, cloud)
         )
         """,
         """
-        CREATE TABLE IF NOT EXISTS pricing_cache (
-            cloud VARCHAR(16) NOT NULL,
-            sku VARCHAR(128) NOT NULL,
-            region VARCHAR(64) NOT NULL,
-            hourly NUMERIC(12, 6) NOT NULL,
-            fetched_at TIMESTAMPTZ NOT NULL,
-            PRIMARY KEY (cloud, sku, region)
+        CREATE INDEX IF NOT EXISTS ix_estimates_set
+          ON estimates (estimate_set_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS estimate_line_items (
+          id SERIAL PRIMARY KEY,
+          estimate_id INTEGER NOT NULL REFERENCES estimates (id) ON DELETE CASCADE,
+          ordinal INTEGER NOT NULL,
+          item_name TEXT,
+          spec TEXT,
+          quantity NUMERIC(18, 6),
+          amount NUMERIC(18, 6),
+          currency VARCHAR(16),
+          parse_status VARCHAR(32) NOT NULL,
+          raw_text TEXT NOT NULL
         )
         """,
         """
-        CREATE TABLE IF NOT EXISTS cost_audit_event (
-            id SERIAL PRIMARY KEY,
-            diagram_id INTEGER NOT NULL REFERENCES user_diagrams(id) ON DELETE CASCADE,
-            field VARCHAR(32) NOT NULL,
-            mxcell_id VARCHAR(128),
-            old_value TEXT,
-            new_value TEXT NOT NULL,
-            actor_username VARCHAR(128) NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        CREATE INDEX IF NOT EXISTS ix_estimate_line_items_estimate
+          ON estimate_line_items (estimate_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS estimate_shares (
+          estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+          shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (estimate_set_id, user_id)
         )
         """,
         """
-        CREATE INDEX IF NOT EXISTS ix_cost_audit_event_diagram_created
-        ON cost_audit_event (diagram_id, created_at DESC)
+        CREATE TABLE IF NOT EXISTS estimate_audit_events (
+          id SERIAL PRIMARY KEY,
+          actor_user_id INTEGER NOT NULL REFERENCES users (id),
+          estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+          event_type VARCHAR(64) NOT NULL,
+          occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          cloud VARCHAR(16),
+          parsed_line_count INTEGER,
+          unparsed_line_count INTEGER
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_estimate_audit_events_set
+          ON estimate_audit_events (estimate_set_id)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS advice (
+          estimate_set_id INTEGER PRIMARY KEY
+            REFERENCES estimate_sets (id) ON DELETE CASCADE,
+          status VARCHAR(32) NOT NULL DEFAULT 'generating',
+          saving_text TEXT,
+          comparison_text TEXT,
+          quality_text TEXT,
+          unavailable_reasons_json TEXT,
+          started_at TIMESTAMPTZ,
+          completed_at TIMESTAMPTZ
+        )
         """,
     ]
     with engine.begin() as conn:
@@ -382,16 +495,10 @@ def _ensure_cost_schema():
             try:
                 conn.execute(text(sql))
             except Exception as e:
-                logger.warning("Cost schema 補丁略過/失敗: %s — %s", sql[:60], e)
-        try:
-            conn.execute(
-                text(
-                    "ALTER TABLE pricing_cache ALTER COLUMN hourly TYPE NUMERIC(12, 6)"
+                logger.warning(
+                    "Estimate intake schema 補丁略過/失敗: %s — %s", sql[:60], e
                 )
-            )
-        except Exception as e:
-            logger.warning("Cost schema pricing_cache precision 補丁略過/失敗: %s", e)
-    logger.info("Cost schema 檢查完成")
+    logger.info("Estimate intake schema 檢查完成")
 
 
 def _ensure_last_activity_schema():
