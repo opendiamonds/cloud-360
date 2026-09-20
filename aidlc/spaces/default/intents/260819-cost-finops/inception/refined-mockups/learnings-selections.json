@@ -1,0 +1,29 @@
+{
+  "stage_slug": "refined-mockups",
+  "selections": [
+    {
+      "candidate_id": "c20",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Refined Mockups 在已有線框時不重問層級／CTA／超支標示／就地編輯／AA；只問線框未釘死的實作（圓餅依賴、時數控件、橫幅釘點、SKU 密度、視覺契約）",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c21",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "C1 成本頁沿用既有 Tailwind 與 Layout；圓餅自畫 SVG 不新增圖表套件；建議路由與 test-id 可寫進 mockups，精確 path 留 application-design",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c22",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Refined Mockups reviewer 指出的畫面缺口（全未定價結構、多圖橫幅可見字串、區域控件是 select 還是 input）應在 READY 後補進 mockups／interaction-spec，不要只留在 Review 表",
+      "source": "orchestrator"
+    }
+  ]
+}

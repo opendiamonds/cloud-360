@@ -60,13 +60,11 @@ on:
     # **U-10b 上線後任何人把 `paths-ignore` 拿掉都不會觸發 U-9**——那道斷言只在沒人動它
     # 的時候才會執行，而把排除拿掉的那個 PR 正好是它唯一該紅的時候。
     #
-    # 最後三條是 reviewer iteration 3 的 F1 補上的：R-1.2 的掃描面是**執行可達閉包**，
-    # 而 `ci.yml` 在種子裡，所以它 `run:` 直接呼叫的這三支也在掃描面上——它們本來一個都
-    # 不在 allowlist 內。後果不是漏檢而是**誤報落在無關的 PR 上**：在它們之中引入代理式
-    # 呼叫的那個 PR 不會跑自我測試，紅燈會落在下一個改同步機制的 PR 身上，而那個作者什麼
-    # 都沒做錯。（同一輪也把 `_walk_python` 收窄成只收 subprocess 呼叫位置——原本另外 8
-    # 個 `frontend/`／`deploy/`／`.claude/` 底下的檔是被**資料清單提到**而不是被呼叫，
-    # 那 8 個的正解是不進掃描面，不是把三個大目錄拉進本單元的觸發面。）
+    # 後面幾條是 R-1.2 掃描面的執行可達閉包：`ci.yml` 在種子裡，所以它 `run:` 直接呼叫
+    # 的腳本也在掃描面上，必須逐一列進 allowlist。少一條 ⇒ COVERAGE-2 紅（改那些腳本的
+    # PR 不會跑自我測試，紅燈會落在下一個改同步機制的 PR 上）。同一輪也把 `_walk_python`
+    # 收窄成只收 subprocess 呼叫位置——被**資料清單提到**而不是被呼叫的檔正解是不進掃描
+    # 面，不是把大目錄拉進本單元的觸發面。
     #
     # 這份清單是手寫的 YAML（`on:` 不能求值），但它**不是第二份真實來源**：
     # `check-paths-relations.py` 的 COVERAGE-1 從 `GH_AW_CARRIERS` 產生要求清單並逐一
@@ -91,6 +89,9 @@ on:
       # 併入 `ut`（PR #508）後多了 `aidlc-sync-pull.yml`：它落在 R-1.2 的種子 glob 內，
       # 其 `run:` 直接呼叫的這一支因此也在掃描面上（COVERAGE-2 於 2026-09-06 實測紅燈）。
       - 'scripts/aidlc_sync_pull.py'
+      # estimate-upload-rework：`ci.yml` 新增兩支 boundary 閘門，掃描面隨之擴大。
+      - 'scripts/validate_cost_calculator_boundary.py'
+      - 'scripts/validate_pricing_lookup_boundary.py'
   # [US:S-10] 的可展示性需要手動觸發。第一段不碰網路也不用憑證，多按幾次沒有副作用；
   # 第二段有 `if:` 把關，缺憑證或缺測試 Project 時整段跳過。
   workflow_dispatch:

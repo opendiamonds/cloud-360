@@ -1,0 +1,29 @@
+{
+  "stage_slug": "rough-mockups",
+  "selections": [
+    {
+      "candidate_id": "c7",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "ALWAYS 當 intent 含使用者可見的成本／估價畫面、Sidebar 入口、產圖後 CTA 或進產品橫幅時，判定 rough-mockups 的 user-facing UI condition 適用並執行，把判定理由記入 diary",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c8",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "ALWAYS 在 rough-mockups 不重問上游已定案的產品能力（是否做圓餅、inbox、Sidebar 是否按故事大類分層）；已決項列在問題檔前言與 diary",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c6",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "ALWAYS 當產品邊界已鎖時，rough-mockups 優先只問這六類：資訊層級、CTA 落點、超支畫面標示、覆寫操作、無障礙／裝置、第二段預算區塊位置",
+      "source": "orchestrator"
+    }
+  ]
+}

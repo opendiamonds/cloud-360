@@ -1,0 +1,10 @@
+{
+  "stage": "code-generation",
+  "unit": "advice-presentation-ui",
+  "version": 1,
+  "writes": [
+    { "path": "frontend/src/components/cost/EstimateAdvicePanel.tsx" },
+    { "path": "frontend/src/pages/CostPage.tsx" },
+    { "path": "frontend/tests/e2e/estimate-workspace.spec.ts" }
+  ]
+}

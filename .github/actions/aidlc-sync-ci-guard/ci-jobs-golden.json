@@ -1,6 +1,6 @@
 {
   "_comment": "U-10a 的 NFR-C1 快照：四個既有 job 的 name / runs-on / steps 在變更前的樣子。由 check-ci-yml.py --emit-golden 產生，不要手改。",
-  "_source_sha256": "d109965a61c5e1e770a0448b70e512499511a3afef695b8f3ce1bdb10df8f825",
+  "_source_sha256": "6400c71b00008a12bb06c62daad829947a3046f6575149f57ec6acff5cbbd5ba",
   "jobs": {
     "backend": {
       "name": "Backend (import + unit tests)",
@@ -134,6 +134,14 @@
         {
           "name": "Validate environment configuration contract",
           "run": "python scripts/validate_env_contract.py"
+        },
+        {
+          "name": "Validate cost calculator import boundary",
+          "run": "python scripts/validate_cost_calculator_boundary.py"
+        },
+        {
+          "name": "Validate pricing lookup boundary",
+          "run": "python scripts/validate_pricing_lookup_boundary.py"
         }
       ]
     }

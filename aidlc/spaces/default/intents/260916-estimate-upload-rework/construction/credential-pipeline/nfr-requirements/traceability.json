@@ -1,0 +1,86 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "credential-pipeline",
+  "note": "packaging：僅 security + tech-stack。上游 NFR1–NFR7 不適用本 unit；NFR8／NFR9 為核心。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "無執行期服務；無延遲 SLO"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "無使用者進度 UI"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "上傳面屬 U1／U2，非憑證管線"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "解析正確性屬 U1"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "事件稽核屬 U2／U7；本 unit 僅訂 secret 值禁現於 log 的契約（見 NFR9.3）"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "無 cost_router 分層變更"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "TCMS 案例於 tcms-test-cases stage；本 unit 以 contract 腳本為機械閘門"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.1"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.1, NFR9.2, NFR9.3"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "FR11.2 / OQ7 Q1=A"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "OK",
+      "target": "FR11.1, FR11.3, FR5.8, FR5.9"
+    },
+    {
+      "id": "NFR9.3",
+      "status": "OK",
+      "target": "NFR9; Q3=A"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "FR11.4; Q2=A"
+    }
+  ],
+  "confirmed": "Looks correct"
+}

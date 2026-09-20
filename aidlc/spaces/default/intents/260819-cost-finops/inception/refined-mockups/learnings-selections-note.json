@@ -1,0 +1,13 @@
+{
+  "stage_slug": "refined-mockups",
+  "selections": [
+    {
+      "candidate_id": "c23",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "已超支後要以與 A1／A3 相同路徑的 AI agent 提供修改建議；此為後續 intent，不得在已核可的 C1 橫幅範圍內夾帶 LLM 建議",
+      "source": "user_addition"
+    }
+  ]
+}
