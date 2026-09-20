@@ -174,11 +174,6 @@ export function EstimateAdvicePanel({ estimateSetId, adviceStatus }: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const titleId = 'estimate-advice-title';
 
-  const stop = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-  };
-
   const applyTerminal = (s: AdviceSnapshot, terminal: Phase) => {
     setSnap(s);
     setPhase(terminal);
@@ -186,37 +181,83 @@ export function EstimateAdvicePanel({ estimateSetId, adviceStatus }: Props) {
     if (terminal === 'failed') setLiveMsg('建議產生失敗');
   };
 
-  const load = async () => {
-    stop();
+  const startStream = (setId: number, signal: AbortSignal) => {
+    setPhase('pending');
+    setProgress('正在連線並開始分析…');
     setError('');
     setLiveMsg('');
+    return readAdviceStream(
+      setId,
+      signal,
+      (msg) => setProgress(msg),
+      (s, terminal) => applyTerminal(s, terminal),
+    );
+  };
+
+  const retry = () => {
+    abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     const status = adviceStatus || 'none';
-    try {
-      if (status === 'completed' || status === 'failed') {
-        const s = await fetchAdviceSnapshot(estimateSetId, ac.signal);
-        applyTerminal(s, s.status === 'failed' || status === 'failed' ? 'failed' : 'complete');
-        return;
-      }
-      setPhase('pending');
-      setProgress('正在連線並開始分析…');
-      await readAdviceStream(
-        estimateSetId,
-        ac.signal,
-        (msg) => setProgress(msg),
-        (s, terminal) => applyTerminal(s, terminal)
-      );
-    } catch (e) {
+    if (status === 'completed' || status === 'failed') {
+      fetchAdviceSnapshot(estimateSetId, ac.signal)
+        .then((s) => {
+          if (ac.signal.aborted) return;
+          applyTerminal(
+            s,
+            s.status === 'failed' || status === 'failed' ? 'failed' : 'complete',
+          );
+        })
+        .catch((e) => {
+          if (ac.signal.aborted) return;
+          setError(e instanceof Error ? e.message : '建議載入失敗');
+          setPhase('failed');
+        });
+      return;
+    }
+    startStream(estimateSetId, ac.signal).catch((e) => {
       if (ac.signal.aborted) return;
       setError(e instanceof Error ? e.message : '建議載入失敗');
       setPhase('failed');
-    }
+    });
   };
 
   useEffect(() => {
-    void load();
-    return () => stop();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const status = adviceStatus || 'none';
+    // 純抓取函式不含 setState；落地只在 .then／.catch（與 AdminPage 同型）。
+    if (status === 'completed' || status === 'failed') {
+      fetchAdviceSnapshot(estimateSetId, ac.signal)
+        .then((s) => {
+          if (ac.signal.aborted) return;
+          applyTerminal(
+            s,
+            s.status === 'failed' || status === 'failed' ? 'failed' : 'complete',
+          );
+        })
+        .catch((e) => {
+          if (ac.signal.aborted) return;
+          setError(e instanceof Error ? e.message : '建議載入失敗');
+          setPhase('failed');
+        });
+    } else {
+      // startStream 含 setState，不可由 effect 同步呼叫；排入 microtask。
+      Promise.resolve()
+        .then(() => {
+          if (ac.signal.aborted) return;
+          return startStream(estimateSetId, ac.signal);
+        })
+        .catch((e) => {
+          if (ac.signal.aborted) return;
+          setError(e instanceof Error ? e.message : '建議載入失敗');
+          setPhase('failed');
+        });
+    }
+    return () => {
+      ac.abort();
+      if (abortRef.current === ac) abortRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when set / status changes
   }, [estimateSetId, adviceStatus]);
 
@@ -277,7 +318,7 @@ export function EstimateAdvicePanel({ estimateSetId, adviceStatus }: Props) {
           <button
             type="button"
             className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold"
-            onClick={() => void load()}
+            onClick={retry}
           >
             重試連線
           </button>

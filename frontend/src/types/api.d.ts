@@ -707,7 +707,8 @@ export interface paths {
         delete: operations["delete_estimate_set_api_cost_v1_sets__set_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Save Estimate Set */
+        patch: operations["save_estimate_set_api_cost_v1_sets__set_id__patch"];
         trace?: never;
     };
     "/api/cost/v1/sets/{set_id}/advice": {
@@ -755,6 +756,23 @@ export interface paths {
         get: operations["list_shares_api_cost_v1_sets__set_id__shares_get"];
         /** Replace Shares */
         put: operations["replace_shares_api_cost_v1_sets__set_id__shares_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cost/v1/share-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Share Users */
+        get: operations["list_share_users_api_cost_v1_share_users_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -994,6 +1012,11 @@ export interface components {
             title: string;
             /** Xml Data */
             xml_data: string;
+        };
+        /** SaveEstimateBody */
+        SaveEstimateBody: {
+            /** Name */
+            name: string;
         };
         /** ShareDiagramRequest */
         ShareDiagramRequest: {
@@ -2614,6 +2637,41 @@ export interface operations {
             };
         };
     };
+    save_estimate_set_api_cost_v1_sets__set_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveEstimateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_advice_snapshot_api_cost_v1_sets__set_id__advice_get: {
         parameters: {
             query?: never;
@@ -2738,6 +2796,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_share_users_api_cost_v1_share_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

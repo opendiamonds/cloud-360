@@ -3,29 +3,25 @@ import { apiUrl } from '../../config/api';
 import { authHeaders } from './types';
 
 type Props = {
-  isOpen: boolean;
   onClose: () => void;
-  estimateSetId: number | null;
+  estimateSetId: number;
   initialName?: string | null;
   onSaved: (detail: unknown) => void;
 };
 
+/** Mount only while open — initial name comes from useState, not an effect reset. */
 export function EstimateSaveModal({
-  isOpen,
   onClose,
   estimateSetId,
   initialName,
   onSaved,
 }: Props) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => (initialName || '').trim());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setName((initialName || '').trim());
-    setError('');
     const t = window.setTimeout(() => inputRef.current?.focus(), 0);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -35,12 +31,9 @@ export function EstimateSaveModal({
       window.clearTimeout(t);
       window.removeEventListener('keydown', onKey);
     };
-  }, [isOpen, initialName, onClose]);
-
-  if (!isOpen) return null;
+  }, [onClose]);
 
   const save = async () => {
-    if (!estimateSetId) return;
     const cleaned = name.trim();
     if (!cleaned) {
       setError('請輸入名稱');

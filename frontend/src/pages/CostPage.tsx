@@ -29,7 +29,9 @@ export const CostPage: React.FC = () => {
   const [shareOpen, setShareOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  // 無檢視權時第一次 render 即非 loading，避免 effect 內同步 setLoading(false)
+  // （react-hooks/set-state-in-effect）。
+  const [loading, setLoading] = useState(canView);
 
   const loadDetail = useCallback(async (id: number) => {
     setLoading(true);
@@ -55,21 +57,26 @@ export const CostPage: React.FC = () => {
     }
   }, [setSearchParams]);
 
+  /** Pure fetch — caller applies setHistory in .then (set-state-in-effect). */
+  const fetchHistory = useCallback(async (): Promise<EstimateSetSummary[]> => {
+    const res = await fetch(apiUrl('/api/cost/v1/sets?include_history=true'), {
+      headers: authHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = (data.items || data.sets || data) as EstimateSetSummary[];
+    return Array.isArray(items) ? items : [];
+  }, []);
+
   const refreshHistory = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl('/api/cost/v1/sets?include_history=true'), {
-        headers: authHeaders(),
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      const items = (data.items || data.sets || data) as EstimateSetSummary[];
-      const list = Array.isArray(items) ? items : [];
+      const list = await fetchHistory();
       setHistory(list);
       return list;
     } catch {
       return [];
     }
-  }, []);
+  }, [fetchHistory]);
 
   const deleteHistoryItem = useCallback(
     async (id: number) => {
@@ -81,10 +88,10 @@ export const CostPage: React.FC = () => {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          const detail =
+          const msg =
             typeof data.detail === 'string' ? data.detail : `刪除失敗（HTTP ${res.status}）`;
-          setError(detail);
-          throw new Error(detail);
+          setError(msg);
+          throw new Error(msg);
         }
         const remaining = await refreshHistory();
         if (detail?.id === id) {
@@ -97,37 +104,43 @@ export const CostPage: React.FC = () => {
           }
         }
       } catch (e) {
-        if (e instanceof Error && e.message) {
-          /* error already set when from API */
-        } else {
+        if (!(e instanceof Error && e.message)) {
           setError('刪除失敗');
         }
         throw e;
       }
     },
-    [detail?.id, loadDetail, refreshHistory, setSearchParams],
+    [detail, loadDetail, refreshHistory, setSearchParams],
   );
 
   useEffect(() => {
-    if (!canView) {
-      setLoading(false);
-      return;
-    }
-    const boot = async () => {
-      const items = (await refreshHistory()) || [];
-      const fromQuery = Number(searchParams.get('estimate') || '');
-      if (fromQuery > 0) {
-        await loadDetail(fromQuery);
-        return;
-      }
-      if (items.length > 0) {
-        await loadDetail(items[0].id);
-        return;
-      }
-      setDetail(null);
-      setLoading(false);
+    if (!canView) return;
+    let cancelled = false;
+    const fromQuery = Number(searchParams.get('estimate') || '');
+    fetchHistory()
+      .then(async (items) => {
+        if (cancelled) return;
+        setHistory(items);
+        if (fromQuery > 0) {
+          await loadDetail(fromQuery);
+          return;
+        }
+        if (items.length > 0) {
+          await loadDetail(items[0].id);
+          return;
+        }
+        setDetail(null);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDetail(null);
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
     };
-    void boot();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- landing once on mount
   }, [canView]);
 
@@ -287,26 +300,28 @@ export const CostPage: React.FC = () => {
           onSelect={(id) => void loadDetail(id)}
           onDelete={deleteHistoryItem}
         />
-        <EstimateSaveModal
-          isOpen={saveOpen}
-          onClose={() => setSaveOpen(false)}
-          estimateSetId={detail?.id ?? null}
-          initialName={detail?.note}
-          onSaved={(d) => {
-            const next = d as EstimateSetDetail;
-            setDetail(next);
-            void refreshHistory();
-          }}
-        />
-        <EstimateShareModal
-          isOpen={shareOpen}
-          onClose={() => setShareOpen(false)}
-          estimateSetId={detail?.id ?? null}
-          onSaved={() => {
-            if (detail) void loadDetail(detail.id);
-            void refreshHistory();
-          }}
-        />
+        {saveOpen && detail && (
+          <EstimateSaveModal
+            onClose={() => setSaveOpen(false)}
+            estimateSetId={detail.id}
+            initialName={detail.note}
+            onSaved={(d) => {
+              const next = d as EstimateSetDetail;
+              setDetail(next);
+              void refreshHistory();
+            }}
+          />
+        )}
+        {shareOpen && detail && (
+          <EstimateShareModal
+            onClose={() => setShareOpen(false)}
+            estimateSetId={detail.id}
+            onSaved={() => {
+              void loadDetail(detail.id);
+              void refreshHistory();
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -5,14 +5,44 @@ import { authHeaders } from './types';
 type UserRow = { id: number; username: string; role: string };
 
 type Props = {
-  isOpen: boolean;
   onClose: () => void;
-  estimateSetId: number | null;
+  estimateSetId: number;
   onSaved?: () => void;
 };
 
+type ShareBootstrap = {
+  users: UserRow[];
+  selected: number[];
+  error: string;
+};
+
+/** Pure fetch — no setState (react-hooks/set-state-in-effect). */
+async function fetchShareBootstrap(estimateSetId: number): Promise<ShareBootstrap> {
+  const [usersRes, sharesRes] = await Promise.all([
+    fetch(apiUrl('/api/cost/v1/share-users'), { headers: authHeaders() }),
+    fetch(apiUrl(`/api/cost/v1/sets/${estimateSetId}/shares`), {
+      headers: authHeaders(),
+    }),
+  ]);
+  const usersData = await usersRes.json().catch(() => []);
+  let users: UserRow[] = [];
+  let error = '';
+  if (!usersRes.ok) {
+    error =
+      typeof usersData.detail === 'string' ? usersData.detail : '載入分享名單失敗';
+  } else {
+    users = Array.isArray(usersData) ? usersData : [];
+  }
+  let selected: number[] = [];
+  if (sharesRes.ok) {
+    const sharesData = await sharesRes.json();
+    selected = (sharesData.shares || []).map((s: { user_id: number }) => s.user_id);
+  }
+  return { users, selected, error };
+}
+
+/** Mount only while open so list state resets without an effect setState. */
 export function EstimateShareModal({
-  isOpen,
   onClose,
   estimateSetId,
   onSaved,
@@ -24,55 +54,32 @@ export function EstimateShareModal({
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isOpen || !estimateSetId) return;
-    setError('');
-    const load = async () => {
-      try {
-        const [usersRes, sharesRes] = await Promise.all([
-          fetch(apiUrl('/api/cost/v1/share-users'), { headers: authHeaders() }),
-          fetch(apiUrl(`/api/cost/v1/sets/${estimateSetId}/shares`), {
-            headers: authHeaders(),
-          }),
-        ]);
-        const usersData = await usersRes.json().catch(() => []);
-        if (!usersRes.ok) {
-          setError(
-            typeof usersData.detail === 'string'
-              ? usersData.detail
-              : '載入分享名單失敗'
-          );
-          setUsers([]);
-        } else {
-          setUsers(Array.isArray(usersData) ? usersData : []);
-        }
-        if (sharesRes.ok) {
-          const sharesData = await sharesRes.json();
-          const ids = (sharesData.shares || []).map(
-            (s: { user_id: number }) => s.user_id
-          );
-          setSelected(ids);
-        }
-      } catch {
-        setError('載入分享名單失敗');
-      }
+    let cancelled = false;
+    fetchShareBootstrap(estimateSetId)
+      .then((data) => {
+        if (cancelled) return;
+        setUsers(data.users);
+        setSelected(data.selected);
+        setError(data.error);
+      })
+      .catch(() => {
+        if (!cancelled) setError('載入分享名單失敗');
+      });
+    return () => {
+      cancelled = true;
     };
-    void load();
-  }, [isOpen, estimateSetId]);
+  }, [estimateSetId]);
 
   useEffect(() => {
-    if (!isOpen) return;
     panelRef.current?.querySelector<HTMLElement>('button,input')?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
+  }, [onClose]);
 
   const save = async () => {
-    if (!estimateSetId) return;
     setBusy(true);
     setError('');
     try {
@@ -146,7 +153,7 @@ export function EstimateShareModal({
             data-testid="estimate-share-save"
             disabled={busy}
             className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-            onClick={save}
+            onClick={() => void save()}
           >
             {busy ? '儲存中…' : '確認分享'}
           </button>

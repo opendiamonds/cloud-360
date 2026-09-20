@@ -30,10 +30,6 @@ export function EstimateHistoryDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (!open) setDeletingId(null);
-  }, [open]);
-
   if (!open) return null;
 
   const handleDelete = async (it: EstimateSetSummary) => {

@@ -1,12 +1,12 @@
 /** Official cloud pricing calculator links — guide users to export estimates first. */
 
-export type OfficialCalculator = {
+type OfficialCalculator = {
   id: 'aws' | 'gcp' | 'azure';
   label: string;
   href: string;
 };
 
-export const OFFICIAL_COST_CALCULATORS: OfficialCalculator[] = [
+const OFFICIAL_COST_CALCULATORS: OfficialCalculator[] = [
   {
     id: 'aws',
     label: 'AWS Pricing Calculator',
