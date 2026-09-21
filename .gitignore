@@ -12,6 +12,7 @@ logs/
 tmp/
 temp/
 .cache/
+backend/cost/.pricing_offer_cache/
 
 # Environment and secrets
 .env

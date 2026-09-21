@@ -1,0 +1,306 @@
+allowlist_hosts:
+  - pricing.us-east-1.amazonaws.com
+  - cloudbilling.googleapis.com
+  - prices.azure.com
+
+aws:
+  base_url: https://pricing.us-east-1.amazonaws.com
+  index_url: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/index.json
+  # AWS Price List Bulk API — 公開免帳號 JSON（參考 AWS offer v1.0 路徑）
+  offer_path_template: /offers/v1.0/aws/{service_code}/current/{region}/index.json
+
+gcp:
+  base_url: https://cloudbilling.googleapis.com
+  skus_path_template: /v1/services/{service_id}/skus
+  max_pages: 20
+
+azure:
+  base_url: https://prices.azure.com
+  prices_path: /api/retail/prices
+  api_version: 2023-01-01-preview
+  currency_code: USD
+
+# 架構圖僅對到服務家族（如 AmazonEC2）時，用代表性規格查 On-Demand 單價。
+# 非 Hrs 計費以 assumed_quantity 換算成等效 hourly（730h/月）供 C1 計算器使用。
+default_products:
+  AmazonEC2:
+    product_family: Compute Instance
+    instanceType: t3.micro
+    operatingSystem: Linux
+    tenancy: Shared
+    preInstalledSw: NA
+    capacitystatus: Used
+  AmazonRDS:
+    product_family: Database Instance
+    instanceType: db.t3.micro
+    databaseEngine: PostgreSQL
+    deploymentOption: Single-AZ
+  AWSELB:
+    product_family: Load Balancer-Application
+  AmazonElastiCache:
+    product_family: Cache Instance
+    instanceType: cache.t3.micro
+    cacheEngine: Redis
+  AmazonEFS:
+    product_family: Storage
+    storageClass: General Purpose
+    assumed_quantity: 100
+  AmazonS3:
+    product_family: Storage
+    storageClass: General Purpose
+    volumeType: Standard
+    assumed_quantity: 100
+  AmazonRoute53:
+    product_family: DNS Zone
+    usagetype: HostedZone
+    location_optional: true
+  AWSWAF:
+    product_family: Web Application Firewall
+    assumed_quantity: 1000000
+  AmazonCloudFront:
+    product_family: Data Transfer
+    location_optional: true
+    assumed_quantity: 100
+  AWSShield:
+    product_family: Shield-DataTransfer
+    location_optional: true
+    assumed_quantity: 50
+  AmazonECS:
+    product_family: Compute
+    usagetype_template: "{prefix}-Fargate-vCPU-Hours:perCPU"
+  AmazonEKS:
+    product_family: Compute
+    usagetype_template: "{prefix}-AmazonEKS-Hours:perCluster"
+  # 代表規格：每月 100 萬次呼叫（C1 示意；非真實工作負載）
+  AWSLambda:
+    product_family: Serverless
+    group: AWS-Lambda-Requests
+    assumed_quantity: 1000000
+  # 代表規格：10 個自訂 metric／月
+  AmazonCloudWatch:
+    product_family: Metric
+    usagetype: CW:MetricMonitorUsage
+    assumed_quantity: 10
+  # NAT Gateway 價目掛在 AmazonEC2；us-east-1 的 usagetype 無 USE1 前綴
+  AmazonEC2NatGateway:
+    service_code: AmazonEC2
+    product_family: NAT Gateway
+    usagetype_template: "{prefix}-NatGateway-Hours"
+    usagetype_bare_prefixes: [USE1]
+  # 代表規格：每月 100 萬次 HTTP API 請求（C1 示意）
+  AmazonApiGateway:
+    product_family: API Calls
+    usagetype_template: "{prefix}-ApiGatewayHttpRequest"
+    assumed_quantity: 1000000
+  # 代表規格：1 DPU 持續 ETL（DPU-Hour ≈ Hrs）
+  AWSGlue:
+    product_family: AWS Glue
+    usagetype_template: "{prefix}-ETL-DPU-Hour"
+  # 代表規格：Notebook ml.t3.medium
+  AmazonSageMaker:
+    product_family: ML Instance
+    usagetype_template: "{prefix}-Notebk:ml.t3.medium"
+  # 代表規格：每月掃描 1 TB（C1 示意；非真實工作負載）
+  AmazonAthena:
+    product_family: Athena Queries
+    usagetype_template: "{prefix}-DataScannedInTB"
+    assumed_quantity: 1
+
+# GCP Cloud Billing Catalog — service_id 為公開 Catalog ID；需 GCP_BILLING_API_KEY
+default_products_gcp:
+  ComputeEngine:
+    service_id: 6F81-5844-456A
+    usage_type: OnDemand
+    resource_family: Compute
+    resource_group: CPU
+    description_contains:
+      - E2 Instance Core
+    description_excludes:
+      - Preemptible
+      - Spot
+  CloudStorage:
+    service_id: 95FF-2EF5-5EA1
+    usage_type: OnDemand
+    resource_family: Storage
+    description_contains:
+      - Standard Storage
+    assumed_quantity: 100
+  CloudSQL:
+    service_id: 9662-B51E-5089
+    usage_type: OnDemand
+    resource_family: ApplicationServices
+    description_contains:
+      - Cloud SQL for PostgreSQL
+      - db-f1-micro
+    description_excludes:
+      - Preemptible
+      - Spot
+  KubernetesEngine:
+    service_id: CCD8-9BF1-090E
+    usage_type: OnDemand
+    region_optional: true
+    description_contains:
+      - Zonal Kubernetes Clusters
+  CloudRun:
+    service_id: 152E-C115-5142
+    usage_type: OnDemand
+    resource_family: ApplicationServices
+    description_contains:
+      - Services CPU (Instance-based billing)
+    description_excludes:
+      - Idle
+      - Min Instance
+  CloudDNS:
+    service_id: FA26-5236-B8B5
+    usage_type: OnDemand
+    region_optional: true
+    description_contains:
+      - ManagedZone
+  Networking:
+    service_id: E505-1604-58F8
+    usage_type: OnDemand
+    description_contains:
+      - Forwarding Rule
+    description_excludes:
+      - Internal
+  CloudArmor:
+    service_id: E505-1604-58F8
+    usage_type: OnDemand
+    description_contains:
+      - Cloud Armor
+  CloudCDN:
+    service_id: E505-1604-58F8
+    usage_type: OnDemand
+    description_contains:
+      - Cloud CDN
+      - Cache Lookup
+  Apigee:
+    service_id: 1C2D-8C78-EC58
+    usage_type: OnDemand
+    region_optional: true
+    description_contains:
+      - Apigee Gateway Node Hours
+  BigQuery:
+    service_id: 24E6-581D-38E5
+    usage_type: OnDemand
+    resource_group: OnDemandAnalysis
+    description_contains:
+      - Analysis
+    assumed_quantity: 1
+  Firestore:
+    service_id: EE2C-7FAC-5E08
+    usage_type: OnDemand
+    region_optional: true
+    description_contains:
+      - Cloud Firestore Storage Iowa
+    description_excludes:
+      - Enterprise
+      - Backup
+      - free tier
+    assumed_quantity: 100
+  # 代表規格：Online/Batch Prediction E2 Instance Core（Americas；C1 示意）
+  VertexAI:
+    service_id: C7E2-9256-1C43
+    usage_type: OnDemand
+    resource_family: ApplicationServices
+    resource_group: AiPlatform
+    region_optional: true
+    description_contains:
+      - Online/Batch Prediction E2 Instance Core running in Americas
+    description_excludes:
+      - Management fee
+  # 代表規格：1 個 secret version replica／月
+  SecretManager:
+    service_id: EE82-7A5E-871C
+    usage_type: OnDemand
+    resource_family: ApplicationServices
+    resource_group: SecretManager
+    description_contains:
+      - Secret version replica storage
+    assumed_quantity: 1
+  # 代表規格：Cloud Monitoring 100 萬 workload metric samples／月（Observability 示意）
+  CloudObservability:
+    service_id: 58CD-E7C3-72CA
+    usage_type: OnDemand
+    region_optional: true
+    description_contains:
+      - Workload Metrics Samples Ingested
+    assumed_quantity: 1000000
+
+# Azure Retail Prices API — 公開免帳號；region 用 armRegionName（如 eastus）
+default_products_azure:
+  AzureKubernetesService:
+    service_name: Azure Kubernetes Service
+    meter_name: Standard Uptime SLA
+  VirtualMachines:
+    service_name: Virtual Machines
+    product_name: Virtual Machines BS Series
+    arm_sku_name: Standard_B1s
+  ApplicationGateway:
+    service_name: Application Gateway
+    product_name: Application Gateway Standard v2
+    meter_name: Standard Fixed Cost
+  AzureBlobStorage:
+    service_name: Storage
+    product_name: Blob Storage
+    sku_name: Hot LRS
+    meter_name: Hot LRS Data Stored
+    assumed_quantity: 100
+  AzureCosmosDB:
+    service_name: Azure Cosmos DB
+    product_name: Azure Cosmos DB
+    meter_name: 100 RU/s
+    sku_name: RUs
+    meter_name_excludes:
+      - Free
+  AzureSQLDatabase:
+    service_name: SQL Database
+    product_name_contains: General Purpose - Compute Gen5
+    sku_name: 2 vCore
+    meter_name: vCore
+  KeyVault:
+    service_name: Key Vault
+    product_name: Key Vault
+    sku_name: Standard
+    meter_name: Operations
+    assumed_quantity: 1
+  AzureMonitor:
+    service_name: Azure Monitor
+    meter_name_contains: Metrics ingestion
+    assumed_quantity: 1
+  AzureFrontDoor:
+    service_name: Azure Front Door Service
+    product_name: Azure Front Door
+    sku_name: Standard
+    meter_name: Standard Base Fees
+    region_optional: true
+    prefer_arm_region: Zone 1
+  AzureCDN:
+    service_name: Content Delivery Network
+    product_name: Azure CDN from Microsoft
+    sku_name: Standard
+    meter_name: Standard Data Transfer
+    region_optional: true
+    prefer_arm_region: Zone 1
+    assumed_quantity: 100
+  AzureFirewall:
+    service_name: Azure Firewall
+    product_name: Azure Firewall
+    sku_name: Standard
+    meter_name: Standard Deployment
+  LogAnalytics:
+    service_name: Log Analytics
+    product_name: Log Analytics
+    sku_name: Analytics Logs
+    meter_name: Analytics Logs Data Ingestion
+    assumed_quantity: 5
+  AzureBackup:
+    service_name: Backup
+    product_name: Backup
+    sku_name: Azure Blob
+    meter_name: Azure Blob Protected Instance
+
+offer_connect_timeout_seconds: 3
+offer_read_timeout_seconds: 180
+cli_timeout_seconds: 60
+sdk_timeout_seconds: 60

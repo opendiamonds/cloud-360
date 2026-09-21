@@ -459,11 +459,11 @@ def strip_python_comments_and_docstrings(text):
 #
 # 兩條路都試過，選了收窄而不是把那些路徑補進 allowlist：把 `frontend/`、`deploy/`、
 # `.claude/` 拉進本單元的觸發面會讓自我測試在無關的 PR 上跑——那是同一個誤報換一個方向。
-# 收窄之後真正被執行的三支（`scripts/validate_repo_contract.py`、
-# `scripts/validate_env_contract.py`、`backend/scripts/dump_openapi.py`，都由 `ci.yml` 的
-# `run:` 直接呼叫）仍在掃描面上，並已補進 allowlist——它們是**真的**會被執行的東西，
-# 改它們的 PR 本來就該跑一次 R-1.2。掃描面 ⊆ allowlist 這件事由
-# `check-paths-relations.py` 的 COVERAGE-2 每次執行機械比對。
+# 收窄之後真正被執行的腳本（`scripts/validate_repo_contract.py`、
+# `scripts/validate_env_contract.py`、`backend/scripts/dump_openapi.py`，以及後續由
+# `ci.yml` `run:` 直接呼叫的 boundary 閘門）仍在掃描面上，並已補進 allowlist——它們是
+# **真的**會被執行的東西，改它們的 PR 本來就該跑一次 R-1.2。掃描面 ⊆ allowlist 這件事
+# 由 `check-paths-relations.py` 的 COVERAGE-2 每次執行機械比對。
 SUBPROCESS_CALLEES = frozenset({
     "run", "call", "check_call", "check_output", "Popen", "getoutput", "getstatusoutput",
 })
