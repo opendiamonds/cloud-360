@@ -41,6 +41,45 @@ AI 不得代答。回答格式為選項字母（可複選者以逗號分隔）�
   `review_orchestrator.py`、`wa_collab_orchestrator.py`。
 - V6 — repo 內 **Redis 與 LangGraph 的引用為 0**（由編排階段的掃描確認）。
 
+### 修訂 1 的查證更新（2026-09-21）
+
+下列查證於 2026-09-21T09:0x:xxZ 對本分支工作樹重跑，**推翻了 V2 與 V6 的
+一半**。V2／V6 原文保留不改（它們記載的是當時為真的事實），以本區塊為準。
+
+- V7 — **成本／FinOps 能力已存在，且規模不小**（推翻 V2）。`ut` 於
+  2026-09-20T14:43Z 合併 PR #647 後，`backend/cost/` 為完整套件（23 個
+  檔案），`main.py` 掛載 `estimate_intake_router` 與 `advice_stream_router`
+  於 `/api/cost/v1`，共 **10 條**端點：`POST /sets`、`GET /sets`、
+  `GET|PATCH|DELETE /sets/{set_id}`、`GET|PUT /sets/{set_id}/shares`、
+  `GET /share-users`、`GET /sets/{set_id}/advice`、
+  `GET /sets/{set_id}/advice/stream`。最後一條是 **SSE 串流式成本建議**
+  （`media_type="text/event-stream"`，事件型別 `completed`／`timeout`／
+  `failed`）。前端有 `CostPage`（路由 `/cost`，`can('C1','view')` 者登入
+  即導向）。現行的成本資料表為 `estimate_sets`、
+  `estimates`、`estimate_line_items`、`estimate_shares`、
+  `estimate_audit_events`、`advice` 六張（`schema_rbac.sql` 219–283 行，
+  對應 `backend/models.py` 的同名 model）。**更正（iteration 2 / R-07）**：
+  本條原引用 `archive_diagram_cost`、`archive_diagram_cost_line`、
+  `archive_cost_audit_event` 三表作為證據，該引用錯誤——`schema_rbac.sql`
+  第 166 行的區塊標題逐字為「C1 Cost / FinOps tables — RETIRED
+  (U3 legacy-cost-retirement)」，三張表的 `COMMENT ON TABLE` 逐字皆為
+  「retired: … app must not read/write; drop after >=90d」，是**明文禁止
+  讀寫的退役表**，方向與本條結論相反。V7 的結論（成本能力存在）本身仍
+  成立，由 23 個檔案、10 條端點、`CostPage` 路由等證據獨立支撐。
+  取得方式：`grep -n "RETIRED\|retired" schema_rbac.sql` 與
+  `grep -n "__tablename__" backend/models.py` 實讀。
+- V8 — **LangGraph 已是釘選依賴且已在用**（推翻 V6 的 LangGraph 半邊）。
+  `backend/requirements.txt` 有 `langgraph==1.2.11` 與
+  `langchain-openai==1.6.2`；`backend/services/langgraph_runtime.py`
+  （165 行）提供 `openrouter_chat_model`、`invoke_graph`、`stream_graph`、
+  `astream_graph`；`backend/cost/cost_advice_agent.py` 以它建 `StateGraph`。
+  該 runtime 的 docstring 自述與 `llm_provider`／`claude-agent-sdk`
+  **並行**，且只走 OpenRouter，不含本機 CLI 模式。
+- V9 — **Redis 仍為 0**（V6 的 Redis 半邊維持成立）。`backend/`、`deploy/`
+  中所有 `redis` 命中皆為 Well-Architected 規則引擎裡的雲端服務名稱字串
+  （`wa_rule_engine.py`、`wa_lens_engine.py`）與定價表資料，非實際依賴。
+
+
 ## 選項收斂說明
 
 初版問題檔每題為 A–E（5 個語意選項）＋ X。提問介面每題上限為 4 個選項，
@@ -164,6 +203,11 @@ Cloud-360 目前的 LLM 能力散在各頁面各自的端點上（V5）。這個
 
 [Answer]: C  <!-- 2026-09-20T17:49:16Z | Mode: guided -->
 
+> **本題已於修訂 1 被 Q12 取代（2026-09-21T09:12:55Z）。** 題幹與選項所依據的
+> 「成本／FinOps 能力完全不存在」（V2）已被 V7 推翻，選項 C
+> 「成本 agent 的空殼」在現況下沒有對應物。原答案與選項本文一律不改，
+> 依 `project.md` 的 `scope-definition:rev1-c4`；下游一律以 Q12 為準。
+
 ## Q7. 「每個功能頁面都會共享 session」涵蓋哪些頁面？
 
 既有頁面為 `/workspace`、`/assessment`、`/admin/users`、
@@ -242,6 +286,87 @@ Cloud-360 目前的 LLM 能力散在各頁面各自的端點上（V5）。這個
 
 [Answer]: B  <!-- 2026-09-20T17:55:05Z | Mode: guided -->
 
+> **本題已於修訂 1 被 Q12 取代（2026-09-21T09:12:55Z）。** 本題是為了消解「Q2 列成本關注者
+> 為主要使用者，Q6 卻只做空殼」的跨題矛盾而加開的；V7 推翻空殼前提後，
+> 該矛盾的成因消失（成本能力是真的），本題不再有適用情境。原答案不改。
+
+
+## Q12. 成本／FinOps agent 已是真實能力，第一版的大腦要拿它怎麼辦？
+
+**本題取代 Q6 與 Q11。** V7 推翻了「成本能力不存在」，Q6 的選項 C
+（空殼）與 Q11 的選項 B（空殼回「尚未提供」）都失去對應物。現況是：
+成本 agent 已有 10 條端點、一張 LangGraph 圖，且它**自己就會 SSE 串流**
+（`GET /sets/{set_id}/advice/stream`）。
+
+- A. **編排既有的真實成本 agent**：大腦把成本類問題路由到既有
+  `/api/cost/v1`，使用者真的問得到成本答案；不新建成本能力。
+- B. **第一版只接架構設計 agent**：成本 agent 完全不接，留到下一版。
+- C. **編排既有成本 agent，並補上「跨雲分析（by 專案）」**：除了路由，
+  再補上原始描述提到但既有實作沒有的跨雲比較。
+- D. 尚未定義。
+- X. Other（請說明）
+
+[Answer]: A  <!-- 2026-09-21T09:12:55Z | Mode: guided | 修訂 1 -->
+
+採 A 的已揭露後果（提問時列於選項說明，使用者在此前提下作答）：
+
+1. 大腦必須處理**巢狀串流**交接——大腦自己要串流回前端，而它編排的成本
+   agent 也是串流來源。這是空殼版本不會遇到的技術面，feasibility 必須把它
+   列為風險項，不得當成路由的附帶細節。
+2. 「成本／FinOps 關注者」在第一版由**間接**服務對象改為**直接**服務對象，
+   `stakeholder-map.md` 與 `intent-statement.md` 的 Target Customer 需同步。
+
+## Q13. 大腦的 LangGraph 編排層要落在哪裡？
+
+V8 推翻了「LangGraph 引用為 0」。`backend/services/langgraph_runtime.py`
+已是共用的 LangGraph + OpenRouter 執行層（`invoke_graph`／`stream_graph`／
+`astream_graph`），成本 agent 正在用它。原始描述的「框架請用 langgraph」
+因此不再是從零開始。
+
+- A. **沿用既有 runtime，需要時擴充**：大腦直接用
+  `services/langgraph_runtime.py`，缺的能力以擴充方式加上。
+- B. **大腦自建獨立 runtime**：大腦有自己的 LangGraph 執行層，與成本
+  agent 那份並行、互不影響。
+- C. **重構成通用編排層**：把既有 runtime 升級為通用 agent 編排層，
+  成本 agent 一併改接。
+- D. 尚未定義。
+- X. Other（請說明）
+
+[Answer]: B  <!-- 2026-09-21T09:12:55Z | Mode: guided | 修訂 1 -->
+
+採 B 的已揭露代價（提問時列於選項說明，使用者在此前提下作答）：
+repo 內將並存兩份 OpenRouter 客戶端與兩套串流事件語意。`team.md` 的
+`## Code Style ## 單一真實來源` 要求「新增第二份物化前必須先確認是否有
+既有常數或 API 可直接使用；若確實無法避免，新增副本的同一個 PR 必須
+一併新增鎖住兩者一致的測試」。此為**使用者知情後的決定**，不是疏漏；
+處置是把「鎖住兩份 runtime 一致性的測試」列為 feasibility 的約束項，
+而非在本階段推翻決定。
+
+## Q14. 成本問題的答案要在哪裡呈現？
+
+**本題因 iteration 2 審查的 R-05（Critical）而加開。** Q12=A 把成本關注者
+變成直接服務對象後，與 Q7=A（共享工作階段只涵蓋入口頁、架構圖工作區、
+評估頁，不含 `/cost`）產生張力。這與 Q10 處理過的張力形狀完全相同
+（Q2 列管理者為服務對象 vs Q7 排除 `/admin/*`），Q10 的處置是加開一題由
+使用者定案。修訂 1 原本沒有加開本題，而是由 conductor 自行在 artifact 寫出
+「服務是在入口處完成的，不以該頁加入共享範圍為前提」並掛上 `[Q7]` 標籤——
+逐字核對 Q7 與 Q12 的作答內容，**兩題都沒有一個字支持該推論**，屬
+`project.md` `intent-capture:c11` 要防的形狀。本題即為該缺陷的修正。
+
+- A. **就地在入口頁呈現**：大腦把成本 agent 的串流轉送到入口頁，使用者
+  不離開入口頁就看到答案。Q7=A 已核可的三頁範圍不變。
+- B. **入口頁給摘要 ＋ 前往 `/cost` 的連結**：入口頁先給摘要，詳細資料
+  提供連結到既有 CostPage。
+- C. **導向 `/cost` 頁呈現**：入口頁辨識後把使用者帶到 `/cost`。此選項會
+  擴充 Q7=A 已核可的三頁範圍，須回跳上游修訂。
+- D. **成本關注者退回間接服務**：比照 Q10 的 C，張力從根源消失；但與
+  Q12=A 直接矛盾。
+- X. Other（請說明）
+
+[Answer]: A  <!-- 2026-09-21T09:40:25Z | Mode: guided | iteration 2 修正 R-05 -->
+
+採 A 的已揭露代價（提問時列於選項說明）：入口頁必須承擔巢狀串流轉送。
+此項已登記於 `intent-statement.md` 的 Assumptions 第 5 條，非本題新增。
 
 ## Consolidated Summary Confirmation
 
@@ -250,32 +375,49 @@ Does this all look correct before I generate the artifact?
 - Looks correct
 - Request changes
 
+<!-- 修訂 1（2026-09-21T09:12:55Z）新增 Q12／Q13 於本確認之後，依 project.md
+     `requirements-analysis:260822-ra-L3` 清空並重新取得確認。 -->
+<!-- iteration 2（2026-09-21T09:40:25Z）於本確認之後新增 Q14，依 project.md
+     `requirements-analysis:260822-ra-L3` 清空並重新取得確認。 -->
 [Answer]: Looks correct
 
 ## Assumption Confirmation
 
-兩份產出的 `## Assumptions & Open Questions` 共列出 6 項未確認事項。請選擇
-處置方式。
+兩份產出的 `## Assumptions & Open Questions` 共保留 9 條假設，逐條逐字列出
+如下（與 artifact 內文完全一致）。接受不會讓假設變成事實，只是確認它們可以
+以假設的身分帶往下一階段。
 
-`intent-statement.md`：
+來自 `intent-statement.md`：
 
-1. 三項成功指標的**具體門檻值**（意圖識別準確率的百分比、首字回應時間的
-   秒數、上下文保留率的百分比）尚未定案，留待後續階段決定。
-2. 使用者的原始描述提到「跨雲分析（by 專案）」是專案層級的一個面向，但
-   本階段未確認它是否屬於第一版要交付的能力、或僅是層級模型要預留的位置。
-3. 使用者的原始描述提到「主動通知推播」，但本階段未確認推播的觸發情境與
-   接收對象。
-4. 「專案 → 系統 → 架構圖」層級一旦建立，既有以單張架構圖為單位的使用
-   方式將如何銜接（既有資料的歸屬、既有頁面的呈現）尚未確認。
+- 三項成功指標的具體門檻值（意圖識別準確率的百分比、首字回應時間的秒數、上下文保留率的百分比）尚未定案，留待後續階段決定；在那之前本文件不對任何數值做出承諾 [assumption]
+- 使用者的原始描述提到「跨雲分析（by 專案）」是專案層級的一個面向，但本階段未確認它是否屬於第一版要交付的能力、或僅是層級模型要預留的位置 [assumption]
+- 使用者的原始描述提到「主動通知推播」，但本階段未確認推播的觸發情境與接收對象 [assumption]
+- 「專案 → 系統 → 架構圖」層級一旦建立，既有以單張架構圖為單位的使用方式將如何銜接（既有資料的歸屬、既有頁面的呈現）尚未確認 [assumption]
+- 統一入口本身要以串流方式逐步顯示回覆，而本次要編排的成本能力自己也是串流來源；兩層串流如何交接（逐字轉送、彙整後再送、或兩者並存）尚未確認 [assumption]
+- 大腦代使用者呼叫既有成本能力時，既有的成本授權（`CostPage` 與成本端點以 `can('C1','view')` 控管）如何在代呼叫路徑上被沿用、確保不被繞過，本階段未確認；此為 ADR-0006 security baseline 的 IAM 面向影響項 [assumption]
+- 既有成本能力會寫稽核事件，而經大腦代呼叫時稽核記錄的行為主體如何認定（記為使用者本人或記為大腦）本階段未確認；此為 ADR-0006 security baseline 的 audit logging 面向影響項 [assumption]
 
-`stakeholder-map.md`：
+來自 `stakeholder-map.md`：
 
-5. 四類關係人為**角色**，非具名個人；本階段未確認每個角色實際對應哪些人、
-   共有多少人。
-6. 「成本／FinOps 關注者」與「管理者／平台維運者」在第一版為間接服務對象；
-   本階段未確認他們在哪一個後續階段會變成直接服務對象。
+- 上表四類關係人為角色，非具名個人；本階段未確認每個角色實際對應哪些人、共有多少人，若後續需要逐人溝通或分派權限需另行確認 [assumption]
+- 「管理者／平台維運者」在第一版為間接服務對象；本階段未確認他在哪一個後續階段會變成直接服務對象 [assumption]
 
-- A. Accept assumptions
-- B. Convert to follow-up questions
+A. Accept assumptions
+B. Convert to follow-up questions
 
-[Answer]: A. Accept assumptions
+<!-- 修訂 1（2026-09-21）：新增第 5 條（兩層串流交接）、自原第 6 條移除
+     「成本／FinOps 關注者」，依 project.md intent-capture:c12 清空重取。
+     第一次重取（09:17:04Z）所附清單誤記為 6 項且漏列 1 項，係未先實算所致
+     （delivery-planning:dp-L1），依 user-stories:260822-us-L3 再取一次。
+     本清單改為逐字複製 artifact 內文，以滿足 claim-sources sensor 的比對。 -->
+<!-- iteration 2 收尾：依 project.md 的 ADR-0006 hard constraint 逐面向檢查後，
+     新增 IAM 與 audit logging 兩個影響項為假設，依 intent-capture:c12 清空重取。 -->
+[Answer]: A. Accept assumptions  <!-- 2026-09-21T09:47:15Z | iteration 2 收尾確認（9 項） -->
+
+<!-- 流程備註（2026-09-21）：本次之前，本 stage 的三次確認都只把 [Answer]
+     寫進本檔，未先以 `aidlc-log.ts decision --checkpoint summary-confirmation`
+     登記提示，因此引擎端一張稽核收據都沒有產生（report 時以
+     SUMMARY_RECEIPT_MISSING 退回）。正確順序為：decision 登記提示 →
+     向使用者提問 → answer 記錄選擇 → 以 Write/Edit 工具存檔（存檔事件由
+     hook 蓋上 Summary Authorization Id）。以 python 直接寫檔不會觸發 hook，
+     產出會因缺少帶戳記的 ARTIFACT_UPDATED 而被判為 SUMMARY_ARTIFACT_UNAUTHORIZED。 -->

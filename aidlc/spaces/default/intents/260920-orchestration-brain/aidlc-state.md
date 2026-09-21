@@ -7,7 +7,7 @@
 - **Scope**: agent-orchestration-brain
 - **Start Date**: 2026-09-20T17:24:28Z
 - **State Version**: 8
-- **Active Agent**: aidlc-design-agent
+- **Active Agent**: aidlc-architect-agent
 - **Worktree Path**:
 - **Bolt Refs**:
 - **Practices Affirmed Timestamp**:
@@ -27,8 +27,8 @@
 
 ## Execution Plan Summary
 - **Total Stages**: 28
-- **Completed**: 6
-- **In Progress**: rough-mockups
+- **Completed**: 4
+- **In Progress**: feasibility
 
 ## Runtime State
 - **Revision Count**: 0
@@ -53,10 +53,10 @@
 ### IDEATION PHASE
 - [x] intent-capture — EXECUTE
 - [ ] market-research — SKIP
-- [x] feasibility — EXECUTE
-- [x] scope-definition — EXECUTE
+- [-] feasibility — EXECUTE
+- [ ] scope-definition — EXECUTE
 - [ ] team-formation — SKIP
-- [-] rough-mockups — EXECUTE
+- [ ] rough-mockups — EXECUTE
 - [ ] approval-handoff — EXECUTE
 
 ### INCEPTION PHASE
@@ -92,12 +92,12 @@ Per unit: [TBD]
 
 ## Current Status
 - **Lifecycle Phase**: IDEATION
-- **Current Stage**: rough-mockups
-- **Next Stage**: approval-handoff
+- **Current Stage**: feasibility
+- **Next Stage**: scope-definition
 - **Status**: Running
-- **Last Updated**: 2026-09-21T07:19:30Z
+- **Last Updated**: 2026-09-21T10:04:02Z
 
 ## Session Resume Point
-- **Last Completed Stage**: scope-definition
-- **Next Action**: Execute Rough Mockups
+- **Last Completed Stage**: intent-capture
+- **Next Action**: Execute Feasibility & Constraints
 - **Pending Artifacts**: none
