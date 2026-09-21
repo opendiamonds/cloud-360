@@ -53,5 +53,12 @@
     "dirName": "260916-estimate-upload-rework",
     "scope": "c1-estimate-upload-rework",
     "status": "complete"
+  },
+  {
+    "uuid": "01a0bfd9-0e72-7d4d-be91-2b0ffb79c980",
+    "slug": "orchestration-brain",
+    "dirName": "260920-orchestration-brain",
+    "scope": "agent-orchestration-brain",
+    "status": "in-flight"
   }
 ]
