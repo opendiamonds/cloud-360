@@ -39,5 +39,12 @@
     "dirName": "260822-gh-projects-sync",
     "scope": "aidlc-github-projects-sync",
     "status": "complete"
+  },
+  {
+    "uuid": "01a0bfd9-0e72-7d4d-be91-2b0ffb79c980",
+    "slug": "orchestration-brain",
+    "dirName": "260920-orchestration-brain",
+    "scope": "agent-orchestration-brain",
+    "status": "in-flight"
   }
 ]
