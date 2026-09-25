@@ -7,7 +7,7 @@
 - **Scope**: agent-orchestration-brain
 - **Start Date**: 2026-09-20T17:24:28Z
 - **State Version**: 8
-- **Active Agent**: aidlc-product-agent
+- **Active Agent**: aidlc-design-agent
 - **Worktree Path**:
 - **Bolt Refs**:
 - **Practices Affirmed Timestamp**:
@@ -27,8 +27,8 @@
 
 ## Execution Plan Summary
 - **Total Stages**: 28
-- **Completed**: 10
-- **In Progress**: user-stories
+- **Completed**: 11
+- **In Progress**: refined-mockups
 
 ## Runtime State
 - **Revision Count**: 5
@@ -65,8 +65,8 @@
 - [x] reverse-engineering — EXECUTE
 - [ ] practices-discovery — SKIP
 - [x] requirements-analysis — EXECUTE
-- [-] user-stories — EXECUTE
-- [ ] refined-mockups — EXECUTE
+- [x] user-stories — EXECUTE
+- [-] refined-mockups — EXECUTE
 - [ ] domain-design — EXECUTE
 - [ ] units-generation — EXECUTE
 - [ ] contract-design — EXECUTE
@@ -94,12 +94,12 @@ Per unit: [TBD]
 
 ## Current Status
 - **Lifecycle Phase**: INCEPTION
-- **Current Stage**: user-stories
-- **Next Stage**: refined-mockups
+- **Current Stage**: refined-mockups
+- **Next Stage**: domain-design
 - **Status**: Running
-- **Last Updated**: 2026-09-25T01:58:45Z
+- **Last Updated**: 2026-09-25T03:57:26Z
 
 ## Session Resume Point
-- **Last Completed Stage**: requirements-analysis
-- **Next Action**: Execute User Stories
+- **Last Completed Stage**: user-stories
+- **Next Action**: Execute Refined Mockups
 - **Pending Artifacts**: none

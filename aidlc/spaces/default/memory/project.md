@@ -131,6 +131,8 @@
 - ALWAYS codekb 以 kind: full 發布時，須在產出內明寫深度分佈（哪些路徑深讀、哪些僅盤點），不得讓 full 被下游讀成「處處都讀過」；深度切分跨越元件邊界時，拆分元件而非放寬覆蓋宣稱 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:2608f768557e75d3aab19caf5ce98b809e44c34be808f4f35f663e6bb62de474 -->
 - NEVER 對已有 reviewer 或其他 subagent 寫入內容的 artifact 做附加時，使用 index 字串切片截尾（如 s[:s.index("## Review")]）——會把下游寫入的整段內容刪掉，且 artifact 多半尚未進版控無法還原。一律以純 append 或錨定自己寫入的標記進行 (learned 2026-09-16；實例：requirements-analysis 誤刪 product-lead 的 ## Review 區段，需 resume reviewer 重寫) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:204c7209210b6fb6ccf8348a2f9af1e49cddf79d3a192473f555618f8c7a9f67 -->
 - ALWAYS requirements 或後續階段新增／推翻了已核可 scope-document 的項目時，須在產出文件內逐處明標「本階段新增或推翻、scope 尚未涵蓋」並要求回補，不得當作既有 CAP 的自然延伸吸收；標記須在提問當下即向使用者揭露後果，非事後補記 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:ed182d6322d3545d0af1f58229ee65ae34e61f2255d2afaeb1770a47d0f8005e -->
+- **mob 整合的失敗模式是「選擇性整合」，而且它在產出上看不出來**。reviewer 把三份 contribution 逐項對照整合後的 `stories.md`，找出約十二項有證據的發現被無聲落掉，其中數項是貢獻者自評 Major、且**正好落在本檔宣稱零容忍的那一類缺陷**（不可構造的 Given、無法造假的 Then）——我修了 lead 自己發現的與被標 Critical 的那幾項（`AC1.4.3`／`AC1.4.4`、`AC4.1.1`、`AC9.1.4`），剩下的 Major 沒有處置也沒有拒絕理由。關鍵在於：落掉的東西在 artifact 上不留痕跡，只有把 contribution 檔當成 checklist 逐項對照才看得出來。可執行做法：整合完成後，對每一份 contribution 的每一項編號發現，在整合產出中指出它的落點（AC／DoD／Assumptions）或寫下拒絕理由，兩者皆無即為未整合。這件事的成本極低（貢獻者已經把證據與建議修法都寫好了），而不做的代價是 mob 這個模式本身失去意義——三位專家的獨立視角付了代價卻只用了最顯眼的那部分。 (learned 2026-09-25) <!-- cid:260920-orchestration-brain:user-stories:b2962f1a6e1daa710d646809e454a0e6beb047ddaec3f300a09da5f2f5c7ccbc -->
+
 ## Corrections
 
 <!-- Project-specific corrections from human feedback. -->
