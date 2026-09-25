@@ -1,0 +1,129 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "US1.1",
+    "US1.2",
+    "US1.3",
+    "US1.4",
+    "US2.1",
+    "US2.2",
+    "US3.1",
+    "US4.1",
+    "US4.2",
+    "US4.3",
+    "US4.4",
+    "US4.5",
+    "US5.1",
+    "US6.1",
+    "US7.1",
+    "US8.1",
+    "US9.1",
+    "US9.2",
+    "US10.1",
+    "US10.2"
+  ],
+  "coverage": [
+    {
+      "id": "US1.1",
+      "status": "OK",
+      "target": "IntentRouter、WorkItem"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "IntentRouter"
+    },
+    {
+      "id": "US1.3",
+      "status": "OK",
+      "target": "WorkOrchestrator、WorkItem"
+    },
+    {
+      "id": "US1.4",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "SessionContext、BrainSession"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "SessionContext"
+    },
+    {
+      "id": "US3.1",
+      "status": "OK",
+      "target": "SessionContext"
+    },
+    {
+      "id": "US4.1",
+      "status": "OK",
+      "target": "MemoryStore"
+    },
+    {
+      "id": "US4.2",
+      "status": "OK",
+      "target": "MemoryStore"
+    },
+    {
+      "id": "US4.3",
+      "status": "OK",
+      "target": "MemoryStore、MemoryAuditEvent",
+      "note": "管理者取得記憶變更紀錄；其使用者可見面為回補項 N-8（稽核查詢面）"
+    },
+    {
+      "id": "US4.4",
+      "status": "OK",
+      "target": "MemoryStore"
+    },
+    {
+      "id": "US4.5",
+      "status": "OK",
+      "target": "MemoryStore"
+    },
+    {
+      "id": "US5.1",
+      "status": "OK",
+      "target": "IntentRouter、WorkItem"
+    },
+    {
+      "id": "US6.1",
+      "status": "OK",
+      "target": "IntentRouter、SessionContext"
+    },
+    {
+      "id": "US7.1",
+      "status": "OK",
+      "target": "BrainGateway",
+      "note": "能力 7 為唯一的 Should；其推播通道即 BrainGateway 的 WebSocket。本 intent 未必交付（FR7.4：未交付時 FR8 仍須獨立成立）"
+    },
+    {
+      "id": "US8.1",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "US9.1",
+      "status": "OK",
+      "target": "ProjectHierarchy"
+    },
+    {
+      "id": "US9.2",
+      "status": "OK",
+      "target": "ProjectHierarchy"
+    },
+    {
+      "id": "US10.1",
+      "status": "OK",
+      "target": "WorkOrchestrator"
+    },
+    {
+      "id": "US10.2",
+      "status": "OK",
+      "target": "WorkOrchestrator、WorkItem"
+    }
+  ]
+}
