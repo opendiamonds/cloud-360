@@ -252,7 +252,7 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions WHERE story_id LI
 |---|---|
 | `estimate_sets` | 上傳批次根；`diagram_id` 純標籤（不 FK、不參與授權）；`is_saved` 為 false 時為分析草稿，需命名儲存後才進歷史 |
 | `estimates` | 每雲一列；同 Set 內 `cloud` UNIQUE |
-| `estimate_line_items` | 解析明細；機械檢查不落庫 |
+| `estimate_line_items` | 解析明細；`spec_description` 為目錄價 API 查出的規格說明（查不到則空）；機械檢查不落庫 |
 | `estimate_shares` | 分享名單 PK `(set_id, user_id)` |
 | `estimate_audit_events` | 事件稽核（無金額／原文） |
 | `advice` | 建議空殼；`estimate_set_id` UNIQUE／PK；正文屬 U7 |

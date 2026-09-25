@@ -12,7 +12,9 @@
     "FR8.1", "FR8.2", "FR8.3",
     "FR9.1", "FR9.2", "FR9.3", "FR9.4", "FR9.5", "FR9.6", "FR9.7", "FR9.8", "FR9.9", "FR9.10", "FR9.11",
     "FR10.1", "FR10.2", "FR10.3", "FR10.4",
-    "FR11.1", "FR11.2", "FR11.3", "FR11.4"
+    "FR11.1", "FR11.2", "FR11.3", "FR11.4",
+    "FR12.1", "FR12.2", "FR12.3", "FR12.4", "FR12.5",
+    "FR13.1", "FR13.2", "FR13.3", "FR13.4", "FR13.5", "FR13.6"
   ],
   "coverage": [
     { "id": "FR1.1", "status": "OK", "target": "U8" },
@@ -73,6 +75,17 @@
     { "id": "FR11.1", "status": "OK", "target": "U4" },
     { "id": "FR11.2", "status": "OK", "target": "U4" },
     { "id": "FR11.3", "status": "OK", "target": "U4" },
-    { "id": "FR11.4", "status": "OK", "target": "U4" }
+    { "id": "FR11.4", "status": "OK", "target": "U4" },
+    { "id": "FR12.1", "status": "OK", "target": "U8" },
+    { "id": "FR12.2", "status": "OK", "target": "U8" },
+    { "id": "FR12.3", "status": "OK", "target": "U8" },
+    { "id": "FR12.4", "status": "OK", "target": "U8" },
+    { "id": "FR12.5", "status": "OK", "target": "U8" },
+    { "id": "FR13.1", "status": "OK", "target": "U2" },
+    { "id": "FR13.2", "status": "OK", "target": "U2" },
+    { "id": "FR13.3", "status": "OK", "target": "U2" },
+    { "id": "FR13.4", "status": "OK", "target": "U5" },
+    { "id": "FR13.5", "status": "OK", "target": "U2" },
+    { "id": "FR13.6", "status": "OK", "target": "U2" }
   ]
 }

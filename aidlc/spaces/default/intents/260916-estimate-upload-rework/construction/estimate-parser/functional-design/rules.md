@@ -27,9 +27,12 @@ rules:
     category: calculation
     applies_to: LineItem, EstimateTotals
     trigger: 格式讀取器執行時
-    logic: IF 列可讀 THEN 填入對應欄位；表級 totals 自頁尾／合計列擷取，缺則 null
+    logic: >
+      IF 列可讀 THEN 填入對應欄位；規格優先取 sku／sku id 等別名；
+      GCP 另取 serviceId（有則填）；表級 totals 自頁尾／合計列擷取，缺則 null；
+      不得填 specDescription（屬 FR13／U2）
     violation: 不中止整份；單列不足則該列走 BR2.2
-    source: FR2.1
+    source: FR2.1, FR13.1
 
   - id: BR2.2
     statement: 金額或數量無法解析為數值的列標為 unidentifiable，保留 rawText

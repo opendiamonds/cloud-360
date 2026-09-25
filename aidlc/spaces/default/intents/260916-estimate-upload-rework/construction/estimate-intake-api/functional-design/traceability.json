@@ -23,7 +23,13 @@
     "FR7.3",
     "FR8.1",
     "FR8.2",
-    "FR8.3"
+    "FR8.3",
+    "FR13.1",
+    "FR13.2",
+    "FR13.3",
+    "FR13.4",
+    "FR13.5",
+    "FR13.6"
   ],
   "coverage": [
     { "id": "FR1.1", "status": "OK", "target": "BR2.11" },
@@ -46,7 +52,13 @@
     { "id": "FR7.3", "status": "OK", "target": "BR2.5" },
     { "id": "FR8.1", "status": "OK", "target": "BR2.12" },
     { "id": "FR8.2", "status": "OK", "target": "BR2.12" },
-    { "id": "FR8.3", "status": "OK", "target": "BR2.3" }
+    { "id": "FR8.3", "status": "OK", "target": "BR2.3" },
+    { "id": "FR13.1", "status": "OK", "target": "BR2.13" },
+    { "id": "FR13.2", "status": "OK", "target": "BR2.13" },
+    { "id": "FR13.3", "status": "OK", "target": "BR2.13" },
+    { "id": "FR13.4", "status": "OK", "target": "BR2.13" },
+    { "id": "FR13.5", "status": "OK", "target": "BR2.13" },
+    { "id": "FR13.6", "status": "OK", "target": "BR2.13" }
   ],
   "reverse": [
     { "id": "BR2.8", "status": "N/A", "target": "contract C2／Q2=A 觸發面；FR5 正文屬 U7" },

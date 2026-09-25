@@ -17,14 +17,17 @@ components:
       呈現拖放上傳區並常駐顯示限制（5 MB、3 檔、.csv/.xlsx）；每檔落地後顯示雲別判定
       結果並允許就地更正。三張雲別卡片預設摺疊，標頭攜帶雲別、項數、總額與機械檢查
       摘要（含無法辨識列數——此為 FR3.2 在摺疊版面下成立的依據）。展開後為逐項明細表，
-      無法辨識的列留在原始順序、淡色底、金額欄標示「無法辨識」。「檢查結果」與
-      「AI 建議」為兩個標題分明的區段，後者固定加註「由 AI 產生，請自行核對」（FR4.5）。
-      建議區在等待期間為骨架載入狀態，經 SSE 接收階段進度與最終結果。隱私狀態徽章為
-      純展示不可點；分享按鈕為唯一入口。歷史上傳以側邊抽屜呈現，**不提供勾選框與並排
-      比較**（FR6.3）。細部規格見 refined-mockups 的 mockups.md 與 interaction-spec.md。
+      無法辨識的列留在原始順序、淡色底、金額欄標示「無法辨識」。規格欄有
+      spec_description 時優先顯示描述，原始 SKU 作副標（FR3.1、FR13）。空狀態與上傳區
+      提供三雲官方估價教學按鈕，開啟 2–3 頁彈窗（官網截圖＋匯出位置），不得只放裸外連
+      （FR12）。「檢查結果」與「AI 建議」為兩個標題分明的區段，後者固定加註「由 AI
+      產生，請自行核對」（FR4.5）。建議區在等待期間為骨架載入狀態，經 SSE 接收階段
+      進度與最終結果。隱私狀態徽章為純展示不可點；分享按鈕為唯一入口。歷史上傳以側邊
+      抽屜呈現，**不提供勾選框與並排比較**（FR6.3）。細部規格見 refined-mockups。
     responsibilities:
       - 上傳互動與前端層的限制提示
-      - 明細、機械檢查結果與 AI 建議的呈現與來源區分
+      - 官方估價教學彈窗（FR12）
+      - 明細（含規格描述）、機械檢查結果與 AI 建議的呈現與來源區分
       - SSE 訂閱與進度呈現
       - 歷史清單與分享入口
     depends_on:
@@ -48,15 +51,17 @@ components:
       與副檔名相符，不符者拒絕並說明原因（FR1.3、FR1.4）。呼叫 EstimateParser 取得
       雲別判定與解析結果；判定失敗時不逕自拒絕，回報給前端要求使用者指定（FR1.5）。
       原始檔案在解析完成後即丟棄，不落地保存（FR1.6）——這是本元件唯一持有原始位元組
-      的地方，丟棄責任在此。持久化 EstimateSet、Estimate 與 EstimateLineItem，接著
-      觸發 AdviceOrchestrator。**機械檢查結果不持久化**：EstimateValidator 是純函式
-      且輸入（逐項明細）已持久化，每次讀取時重算，永遠與明細一致。維持
-      cost_router → cost_service → 純函式層的三層形狀（NFR6），router 為本元件的
-      HTTP 邊界、不含業務邏輯。
+      的地方，丟棄責任在此。寫庫前得呼叫 SkuCatalog 為目錄形 SKU 補規格描述
+      （FR13）；**不得**因此 import PricingLookup／pricing_client。持久化
+      EstimateSet、Estimate 與 EstimateLineItem，接著觸發 AdviceOrchestrator。
+      **機械檢查結果不持久化**：EstimateValidator 是純函式且輸入（逐項明細）已持久化，
+      每次讀取時重算，永遠與明細一致。維持 cost_router → cost_service → 純函式層的
+      三層形狀（NFR6），router 為本元件的 HTTP 邊界、不含業務邏輯。
     responsibilities:
       - 上傳限制與檔案型別把關
       - 原始檔案的即用即棄
       - 解析與機械檢查的協調
+      - 目錄形 SKU 的描述補齊（經 SkuCatalog，失敗略過）
       - 估價批次、單雲估價表與逐項明細的持久化與讀取
       - 歷史清單與刪除
     depends_on:
@@ -75,6 +80,9 @@ components:
       - component: AdviceOrchestrator
         interaction: 解析完成後觸發建議產生
         style: async
+      - component: SkuCatalog
+        interaction: 寫庫前為目錄形 SKU 補規格描述（失敗略過）
+        style: sync
     dependents:
       - component: EstimateWorkspacePage
         interaction: 上傳與讀取
@@ -102,7 +110,7 @@ components:
             relationship: 每份 Estimate 屬於一個 EstimateSet，同一批次內每朵雲至多一份
       - name: EstimateLineItem
         identifier: id
-        attributes: [id, estimateId, ordinal, itemName, spec, quantity, amount, currency, parseStatus, rawText]
+        attributes: [id, estimateId, ordinal, itemName, spec, specDescription, quantity, amount, currency, parseStatus, rawText]
         references:
           - entity: Estimate
             owned_by: EstimateIntakeService
@@ -114,7 +122,8 @@ components:
       依檔案標頭欄位判定雲別（FR1.5）；判定不出來時回傳 ambiguous，**不拋例外、不做
       使用者互動**——互動是協調層的事。依判定結果選用 AWS CSV、Azure XLSX 或 GCP CSV
       三個內部讀取器之一（FR1.2），擷取品項、規格、數量、金額，以及該表的總額與幣別
-      （FR2.1）。採寬鬆策略：能解析的列照常產出，無法辨識的列保留原始文字並標記
+      （FR2.1）。規格優先對應 SKU／SKU ID 別名；GCP 另擷取 serviceId。**不填**
+      specDescription、**不外呼**。採寬鬆策略：能解析的列照常產出，無法辨識的列保留原始文字並標記
       （FR2.2）。「無法辨識」的判定為該列的金額或數量無法解析為數值；品項或規格文字
       缺漏但金額與數量完好者不計入。**模組內不得 import httpx、requests、sqlalchemy、
       fastapi**（FR2.3），由 scripts/validate_cost_calculator_boundary.py 機械強制。
@@ -272,15 +281,16 @@ components:
   - name: PricingLookup
     summary: 唯讀目錄價查詢 Port，改造自既有 pricing_client
     behaviour: >
-      **唯讀。其輸出不得進入估價明細的寫入路徑**——這條界線是本元件的職責定義而非
-      使用慣例（AH-6、ADR-0017 §8）。僅限目錄價端點（FR5.7）：AWS Price List Query
+      **唯讀。其價格輸出不得進入估價明細的寫入路徑**——這條界線是本元件的職責定義而非
+      使用慣例（AH-6、ADR-0017 §8）。規格**文字描述**的查詢不經本元件，見 SkuCatalog
+      （FR13）。僅限目錄價端點（FR5.7）：AWS Price List Query
       API（boto3，走 IAM）與公開 Bulk Price List、GCP Cloud Billing Catalog API
       （需 API key）、Azure Retail Prices API（本即公開）。**實際帳單與用量類 API
       ——Cost Explorer、Cost Management、Billing Export——全面禁止**，此禁令是前者
       得以解禁的對價（ADR-0018 §2）。IAM 權限限於 pricing:GetProducts 等 Price List
       Query API 所需動作，不得包含任何帳戶資源或帳單資料的讀取權（FR5.9）。憑證缺漏
       或呼叫失敗時降級回公開端點或略過，**不得使建議產生流程失敗**（FR5.10、FR11.4）。
-      httpx 不得在任何位置直打雲端 Pricing API，一律經本元件。保留 pricing_sdk、
+      httpx 不得在 PricingLookup／SkuCatalog 以外直打雲端 Pricing API。保留 pricing_sdk、
       pricing_query_parser、pricing_units、pricing_gcp、pricing_azure、
       pricing_offer_parser、config 與其 YAML（FR9.4、FR9.5）。
     responsibilities:
@@ -301,6 +311,32 @@ components:
       - name: Azure Retail Prices API
         kind: third-party-api
         purpose: Azure 目錄價查詢（公開，不需憑證）
+    entities: []
+
+  - name: SkuCatalog
+    summary: 目錄 SKU → 人類可讀規格描述；不回傳、不持久化價格
+    behaviour: >
+      僅當規格文字符合 FR13.1 的目錄 SKU 形狀時查詢 ADR-0018 目錄價端點，回傳描述
+      字串。失敗、逾時、缺憑證、超過互異 SKU 上限時靜默略過。**不得**回傳 hourly
+      或寫入金額欄；**不得** import／轉呼叫 PricingLookup.fetch_hourly。模組路徑
+      cost/sku_catalog.py；由 EstimateIntakeService 延遲載入。
+    responsibilities:
+      - 目錄形 SKU 的描述查詢與短時磁碟快取
+      - 價格不進入明細的第二道結構界線（與 PricingLookup 互補）
+    depends_on: []
+    dependents:
+      - component: EstimateIntakeService
+        interaction: 寫庫前補 specDescription
+    external_dependencies:
+      - name: AWS Price List Query API
+        kind: third-party-api
+        purpose: AWS SKU 描述（非估價金額）
+      - name: GCP Cloud Billing Catalog API
+        kind: third-party-api
+        purpose: GCP SKU 描述
+      - name: Azure Retail Prices API
+        kind: third-party-api
+        purpose: Azure SKU 描述
     entities: []
 
   - name: EstimateAuditLog
@@ -393,6 +429,7 @@ graph TD
   ADVISOR["AdviceOrchestrator"]
   AGENT["CostAdviceAgent LangGraph"]
   PRICE["PricingLookup 唯讀 Port"]
+  SKU["SkuCatalog 只取描述"]
   AUDIT["EstimateAuditLog"]
   IDENT["IdentityAndRbac 既有"]
   COLLAB["Collaboration 既有"]
@@ -405,6 +442,7 @@ graph TD
   INTAKE -->|"授權判斷"| ACL
   INTAKE -->|"稽核"| AUDIT
   INTAKE -->|"觸發建議 async"| ADVISOR
+  INTAKE -->|"補規格描述"| SKU
   ADVISOR -->|"產生建議"| AGENT
   ADVISOR -->|"授權判斷"| ACL
   ADVISOR -->|"稽核"| AUDIT
@@ -412,20 +450,21 @@ graph TD
   ACL -->|"身分與 C1 權限"| IDENT
 ```
 
-**文字 fallback**：前端 `EstimateWorkspacePage` 有三條對外邊——上傳與讀取走 `EstimateIntakeService`、建議進度以 SSE 訂閱 `AdviceOrchestrator`、分享名單走 `EstimateAccessControl`。`EstimateIntakeService` 是扇出最廣的協調層（五條邊）：同步呼叫兩個純函式元件（`EstimateParser` 解析、`EstimateValidator` 檢查）、同步呼叫 `EstimateAccessControl` 授權與 `EstimateAuditLog` 稽核，並以非同步觸發 `AdviceOrchestrator`。`AdviceOrchestrator` 同步呼叫 `CostAdviceAgent`，後者再同步呼叫 `PricingLookup` 查目錄價。`EstimateAccessControl` 是唯一接觸既有 `IdentityAndRbac` 的新元件；**沒有任何新元件呼叫 `Collaboration`**——這是 Q6=B 刻意的結果，用以維持 C6 的單向相依。兩個純函式元件（`EstimateParser`、`EstimateValidator`）與 `PricingLookup` 皆為零出度葉節點。圖為有向無環。
+**文字 fallback**：前端 `EstimateWorkspacePage` 有三條對外邊——上傳與讀取走 `EstimateIntakeService`、建議進度以 SSE 訂閱 `AdviceOrchestrator`、分享名單走 `EstimateAccessControl`。`EstimateIntakeService` 是扇出最廣的協調層：同步呼叫兩個純函式元件（`EstimateParser` 解析、`EstimateValidator` 檢查）、同步呼叫 `SkuCatalog` 補規格描述、`EstimateAccessControl` 授權與 `EstimateAuditLog` 稽核，並以非同步觸發 `AdviceOrchestrator`。**不**呼叫 `PricingLookup`。`AdviceOrchestrator` 同步呼叫 `CostAdviceAgent`，後者再同步呼叫 `PricingLookup` 查目錄價。`EstimateAccessControl` 是唯一接觸既有 `IdentityAndRbac` 的新元件；**沒有任何新元件呼叫 `Collaboration`**。兩個純函式元件、`PricingLookup` 與 `SkuCatalog` 皆為零出度葉節點。圖為有向無環。
 
 ### 元件摘要
 
 | Component | Purpose | Depends On | Dependents | Entities Owned |
 |---|---|---|---|---|
 | EstimateWorkspacePage | `/cost` 頁面 | EstimateIntakeService, AdviceOrchestrator, EstimateAccessControl | — | — |
-| EstimateIntakeService | 上傳入口與協調 | EstimateParser, EstimateValidator, EstimateAccessControl, EstimateAuditLog, AdviceOrchestrator | EstimateWorkspacePage | EstimateSet, Estimate, EstimateLineItem |
+| EstimateIntakeService | 上傳入口與協調 | EstimateParser, EstimateValidator, SkuCatalog, EstimateAccessControl, EstimateAuditLog, AdviceOrchestrator | EstimateWorkspacePage | EstimateSet, Estimate, EstimateLineItem |
 | EstimateParser | 純函式解析 | — | EstimateIntakeService | — |
 | EstimateValidator | 純函式機械檢查 | — | EstimateIntakeService | — |
 | EstimateAccessControl | 可見性與分享 | IdentityAndRbac | EstimateIntakeService, AdviceOrchestrator, EstimateWorkspacePage | EstimateShare |
 | AdviceOrchestrator | 背景工作與 SSE 發布 | CostAdviceAgent, EstimateAccessControl, EstimateAuditLog | EstimateIntakeService, EstimateWorkspacePage | Advice |
 | CostAdviceAgent | LangGraph 建議產生 | PricingLookup | AdviceOrchestrator | — |
-| PricingLookup | 唯讀目錄價 Port | — | CostAdviceAgent | — |
+| PricingLookup | 唯讀目錄價 Port（價格） | — | CostAdviceAgent | — |
+| SkuCatalog | 目錄 SKU 描述 | — | EstimateIntakeService | — |
 | EstimateAuditLog | 事件層級稽核 | — | EstimateIntakeService, AdviceOrchestrator | EstimateAuditEvent |
 | IdentityAndRbac（既有） | 身分與權限 | — | EstimateAccessControl | User |
 | Collaboration（既有） | 架構圖 CRUD | — | — | UserDiagram |
@@ -436,7 +475,7 @@ graph TD
 |---|---|---|---|---|
 | EstimateSet | EstimateIntakeService | id | id, ownerUserId, createdAt, diagramId, note | User（IdentityAndRbac）、UserDiagram（Collaboration，可為空） |
 | Estimate | EstimateIntakeService | id | id, estimateSetId, cloud, statedTotal, currency, parsedLineCount, unparsedLineCount | EstimateSet |
-| EstimateLineItem | EstimateIntakeService | id | id, estimateId, ordinal, itemName, spec, quantity, amount, currency, parseStatus, rawText | Estimate |
+| EstimateLineItem | EstimateIntakeService | id | id, estimateId, ordinal, itemName, spec, specDescription, quantity, amount, currency, parseStatus, rawText | Estimate |
 | EstimateShare | EstimateAccessControl | (estimateSetId, userId) | estimateSetId, userId, sharedAt | EstimateSet、User |
 | Advice | AdviceOrchestrator | id | id, estimateSetId, status, savingText, comparisonText, qualityText, unavailableReasons, startedAt, completedAt | EstimateSet |
 | EstimateAuditEvent | EstimateAuditLog | id | id, actorUserId, eventType, occurredAt, cloud, parsedLineCount, unparsedLineCount, estimateSetId | User、EstimateSet |
@@ -457,6 +496,7 @@ graph TD
 | PricingLookup | AWS Price List Query API | third-party-api | AWS 目錄價（IAM，最小權限） |
 | PricingLookup | GCP Cloud Billing Catalog API | third-party-api | GCP 目錄價（API key 限用此 API） |
 | PricingLookup | Azure Retail Prices API | third-party-api | Azure 目錄價（公開） |
+| SkuCatalog | AWS／GCP／Azure 目錄價 API | third-party-api | 只取 SKU 描述，不取估價金額 |
 | IdentityAndRbac（既有） | PostgreSQL | database | 使用者與權限 |
 | Collaboration（既有） | PostgreSQL | database | 架構圖 |
 
@@ -473,7 +513,8 @@ graph TD
 | EstimateAccessControl | 授權是橫切關注；獨立後 FR7.3 的跨模組私有函式引用才有單一替代落點。分享關聯的擁有權也需要明確歸屬 |
 | AdviceOrchestrator | **生命週期與其他元件不同**——它是唯一跨越 HTTP 請求邊界存活的構件（F1=B 的背景工作）。把它併進協調層會讓「請求結束即結束」與「工作續跑」兩種生命週期糾纏在一起 |
 | CostAdviceAgent | LangGraph 遷移（FR10.1）的變更面須與排程、SSE、持久化隔離，否則框架遷移會波及不相關的程式碼 |
-| PricingLookup | **職責即界線**：「唯讀、不得回寫明細」（AH-6）需要一個可指認的邊界來承載。併進 agent 會讓這條界線變成註解而非結構 |
+| PricingLookup | **職責即界線**：「唯讀、價格不得回寫明細」（AH-6）需要一個可指認的邊界來承載。併進 agent 會讓這條界線變成註解而非結構 |
+| SkuCatalog | 描述查詢必須與 `fetch_hourly` 分離，否則 intake 會被迫依賴 PricingLookup，AH-6 的相依圖守門失效 |
 | EstimateAuditLog | 「不含金額與明細」（FR8.2）同樣需要結構性的界線。獨立元件使違反此界線需要跨元件傳遞，較易在審查中被發現 |
 
 ### Alternatives Rejected

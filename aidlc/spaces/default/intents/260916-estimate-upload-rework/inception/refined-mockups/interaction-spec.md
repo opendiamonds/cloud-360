@@ -173,7 +173,7 @@
 | Breakpoint | Behaviour |
 |---|---|
 | mobile | 展開後明細表**每列轉為一張卡片**（Q8=B）：品項為卡片標題，規格／數量／金額為標籤-值配對 |
-| tablet | 表格保留，規格欄截斷並可 hover 看全文 |
+| tablet | 表格保留，規格欄優先顯示 `spec_description`（無則 `spec`），過長截斷並可 hover 看全文 |
 | desktop | 完整四欄表格 |
 
 mobile 的卡片化是 Q8=B 的實質內容。四欄寬表在 375px 上水平捲動會讓金額欄長期不可見，而金額是這張表的主要資訊。
@@ -387,6 +387,26 @@ mobile 卡片化**不得**用 `display: block` 打掉 `<table>` 的語意——�
 
 ---
 
+## 8c. EstimateCalculatorGuideModal（FR12）
+
+| Field | Value |
+|---|---|
+| Component | `EstimateCalculatorGuideModal` |
+| Description | 各雲官方估價 2–3 頁教學（截圖＋匯出呼出＋官方連結） |
+| Category | overlay |
+
+### States
+
+| State | Description | Trigger |
+|---|---|---|
+| closed | 不渲染 | 預設／關閉 |
+| open | dialog，顯示當前頁 | 點三雲教學按鈕 |
+| lastPage | 顯示官方計算機連結 | 翻到最後一頁 |
+
+規格：`role="dialog"`、Escape 關閉、焦點回觸發按鈕。官方連結 `target="_blank"` 且有可感知的「另開分頁」說明。
+
+---
+
 ## 9. 全域鍵盤導覽順序
 
 Tab 順序遵循視覺順序，不使用正值 `tabindex`：
@@ -396,6 +416,7 @@ Tab 順序遵循視覺順序，不使用正值 `tabindex`：
 隱私狀態徽章（非互動，不進 Tab 序）
   → 歷史按鈕 → 分享按鈕
   → 拖放區 file input
+  → AWS／GCP／Azure 教學按鈕
   → 判定列 1（雲別下拉 → 移除鈕）→ 判定列 2 → …
   → AWS 卡片標頭 →（展開時）明細內的展開鈕
   → Azure 卡片標頭 → …

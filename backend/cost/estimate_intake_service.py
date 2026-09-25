@@ -151,6 +151,7 @@ def _line_to_orm(estimate_id: int, line: dict[str, Any]) -> EstimateLineItem:
         ordinal=int(line["ordinal"]),
         item_name=line.get("itemName") or None,
         spec=line.get("spec") or None,
+        spec_description=line.get("specDescription") or None,
         quantity=Decimal(str(qty)) if qty is not None else None,
         amount=Decimal(str(amt)) if amt is not None else None,
         currency=line.get("currency"),
@@ -211,6 +212,7 @@ def _line_view(li: EstimateLineItem) -> dict[str, Any]:
         "ordinal": li.ordinal,
         "item_name": li.item_name,
         "spec": li.spec,
+        "spec_description": getattr(li, "spec_description", None),
         "quantity": float(li.quantity) if li.quantity is not None else None,
         "amount": float(li.amount) if li.amount is not None else None,
         "currency": li.currency,
@@ -366,6 +368,12 @@ def create_estimate_set(
         )
         db.add(est)
         db.flush()
+        try:
+            from cost.sku_catalog import enrich_line_specs
+
+            enrich_line_specs(cloud, lines)
+        except Exception:
+            logger.info("sku catalog enrich skipped cloud=%s", cloud)
         for line in lines:
             db.add(_line_to_orm(est.id, line))
         write_audit_event(

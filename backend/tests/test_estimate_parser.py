@@ -272,6 +272,8 @@ class TestEstimateParser(unittest.TestCase):
         self.assertEqual(names, ["N4 Core", "Standard Storage"])
         self.assertEqual(result["lines"][0]["amount"], 45.54)
         self.assertEqual(result["lines"][0]["currency"], "USD")
+        self.assertEqual(result["lines"][0]["spec"], "SKU2")
+        self.assertEqual(result["lines"][0].get("serviceId"), "SID2")
         self.assertEqual(result["totals"]["statedTotal"], 47.54)
         self.assertEqual(result["totals"]["currency"], "USD")
 

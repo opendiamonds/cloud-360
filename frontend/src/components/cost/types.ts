@@ -6,6 +6,7 @@ export type EstimateLine = {
   ordinal: number;
   item_name: string | null;
   spec: string | null;
+  spec_description?: string | null;
   quantity: number | null;
   amount: number | null;
   currency: string | null;

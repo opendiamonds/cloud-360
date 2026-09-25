@@ -31,6 +31,21 @@
       "id": "FR7.1",
       "status": "OK",
       "target": "C1 gate on CostPage"
+    },
+    {
+      "id": "FR12.1",
+      "status": "OK",
+      "target": "EstimateOfficialCalculators"
+    },
+    {
+      "id": "FR12.2",
+      "status": "OK",
+      "target": "EstimateCalculatorGuideModal"
+    },
+    {
+      "id": "FR13",
+      "status": "OK",
+      "target": "EstimateCloudCard spec column"
     }
   ],
   "confirmed": "Looks correct"

@@ -139,6 +139,20 @@ rules:
       不得含 amount／rawText／檔名路徑／secret
     violation: 稽核可重建明細金額或檔案
     source: FR8.1, FR8.2
+
+  - id: BR2.13
+    statement: 寫庫前可對目錄形 SKU 補規格描述，不得寫入價格
+    category: policy
+    applies_to: EstimateLineItem
+    trigger: POST /sets parse 成功後、insert 前
+    logic: >
+      IF 列 spec 符合 FR13.1 的目錄 SKU 形狀 THEN 得呼叫 cost.sku_catalog.enrich_line_specs；
+      僅可把描述寫入 specDescription／spec_description；
+      禁止寫入 amount／quantity／任何 hourly 欄；
+      不得 import pricing_client／pricing_sdk；
+      查詢失敗、逾時、缺憑證、超過互異 SKU 上限 THEN 該列描述留空並繼續寫庫
+    violation: 明細金額被目錄價覆寫；或缺描述導致整批 5xx
+    source: FR13, FR5.5, AH-6, NFR10
 ```
 
 ## 規則摘要表
@@ -157,3 +171,4 @@ rules:
 | BR2.10 | C1 seed 更新 |
 | BR2.11 | estimate_intake_*＋v1 |
 | BR2.12 | 稽核無金額／檔 |
+| BR2.13 | SKU 描述可寫、價格不可寫 |

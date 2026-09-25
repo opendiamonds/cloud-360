@@ -77,10 +77,10 @@ rules:
     applies_to: PricingLookupPort
     trigger: 程式碼變更／CI
     logic: >
-      IF backend 他處（非 pricing_* 存活集）以 httpx／requests 直打 allowlist 定價 host
-      THEN 邊界檢查失敗
+      IF backend 他處（非 pricing_* 存活集、且非 cost/sku_catalog.py）
+      以 httpx／requests 直打 allowlist 定價 host THEN 邊界檢查失敗
     violation: CI 紅燈
-    source: unit-of-work U5, domain
+    source: unit-of-work U5, domain, FR13.4
 
   - id: BR5.8
     statement: intake 寫入路徑不得 import PricingLookup
@@ -90,9 +90,10 @@ rules:
     logic: >
       IF estimate_intake_router／estimate_intake_service／estimate_access／
       estimate_audit（或等價明細寫入模組）import pricing_client／pricing_sdk
-      THEN 檢查失敗
+      THEN 檢查失敗。
+      允許 intake 延遲 import cost.sku_catalog（只取描述，見 BR5.11）
     violation: CI 紅燈
-    source: AH-6, Q5=A
+    source: AH-6, Q5=A, FR13.4
 
   - id: BR5.9
     statement: 保留 pricing_sdk 與最小存活模組集
@@ -116,6 +117,18 @@ rules:
       THEN 改為暖磁碟／呼叫 Port 或刪除死引用；缺憑證時腳本失敗不得阻止應用啟動
     violation: 啟動依賴 warm 腳本成功或引用已刪模組
     source: FR9.7, Q4=A
+
+  - id: BR5.11
+    statement: sku_catalog 只解讀 SKU 描述，不經 Port 取價
+    category: constraint
+    applies_to: CatalogEndpointPolicy
+    trigger: 上傳寫入前的規格解讀
+    logic: >
+      IF 呼叫 sku_catalog THEN 僅回傳人類可讀描述；不得回傳或持久化 hourly；
+      不得 import／轉呼叫 fetch_hourly；須列入 validate_pricing_lookup_boundary 存活集；
+      失敗靜默。PriceHit 路徑仍僅供 U7 建議文字
+    violation: intake 經 Port 取價並寫回明細
+    source: FR13, FR5.5, AH-6
 ```
 
 ## 規則摘要表
@@ -132,5 +145,6 @@ rules:
 | BR5.8 | intake 不得 import Port |
 | BR5.9 | 保留 sdk／存活集 |
 | BR5.10 | warm／死引用盤點 |
+| BR5.11 | sku_catalog 只寫描述 |
 
 <!-- post-confirmation save -->

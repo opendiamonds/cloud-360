@@ -62,7 +62,12 @@ export function EstimateCloudCard({ estimate }: Props) {
                 <tr key={ln.ordinal} className="border-t border-gray-50">
                   <td className="py-1.5 pr-3 text-gray-500">{ln.ordinal}</td>
                   <td className="py-1.5 pr-3">{ln.item_name || '—'}</td>
-                  <td className="py-1.5 pr-3">{ln.spec || '—'}</td>
+                  <td className="py-1.5 pr-3">
+                    <div>{ln.spec_description || ln.spec || '—'}</div>
+                    {ln.spec_description && ln.spec && ln.spec_description !== ln.spec && (
+                      <div className="text-[11px] text-gray-400">SKU {ln.spec}</div>
+                    )}
+                  </td>
                   <td className="py-1.5 pr-3">{ln.quantity ?? '—'}</td>
                   <td className="py-1.5 pr-3">
                     {ln.amount != null ? `${ln.amount} ${ln.currency || ''}` : '—'}

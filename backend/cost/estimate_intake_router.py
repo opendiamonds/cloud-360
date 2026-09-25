@@ -35,6 +35,69 @@ class SaveEstimateBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
 
 
+class LineItemView(BaseModel):
+    ordinal: int
+    item_name: str | None = None
+    spec: str | None = None
+    spec_description: str | None = None
+    quantity: float | None = None
+    amount: float | None = None
+    currency: str | None = None
+    parse_status: str
+    raw_text: str
+
+
+class TotalReconciledView(BaseModel):
+    attempted: bool | None = None
+    within_tolerance: bool | None = None
+    skipped_reason: str | None = None
+
+
+class OffendersView(BaseModel):
+    currency_ordinals: list[int]
+    quantity_ordinals: list[int]
+
+
+class MechanicalCheckView(BaseModel):
+    currency_consistent: bool
+    currency_tie: bool
+    quantity_positive: bool
+    total_reconciled: TotalReconciledView
+    offenders: OffendersView
+
+
+class CloudEstimateView(BaseModel):
+    cloud: str
+    stated_total: float | None = None
+    currency: str | None = None
+    lines: list[LineItemView]
+    checks: MechanicalCheckView
+
+
+class CloudSummaryView(BaseModel):
+    cloud: str
+    stated_total: float | None = None
+    currency: str | None = None
+    line_count: int
+    unparsed_count: int
+
+
+class EstimateSetSummaryView(BaseModel):
+    id: int
+    created_at: str | None = None
+    note: str | None = None
+    diagram_id: int | None = None
+    is_owner: bool
+    is_saved: bool
+    privacy: str
+    clouds: list[CloudSummaryView]
+    advice_status: str | None = None
+
+
+class EstimateSetDetailView(EstimateSetSummaryView):
+    estimates: list[CloudEstimateView]
+
+
 def _read_uploads(files: list[UploadFile]) -> tuple[list[UploadFile], list[bytes]]:
     payloads: list[bytes] = []
     for uf in files:
@@ -42,7 +105,11 @@ def _read_uploads(files: list[UploadFile]) -> tuple[list[UploadFile], list[bytes
     return files, payloads
 
 
-@router.post("/sets", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sets",
+    status_code=status.HTTP_201_CREATED,
+    response_model=EstimateSetDetailView,
+)
 async def upload_estimate_set(
     files: Annotated[list[UploadFile], File(...)],
     diagram_id: Annotated[int | None, Form()] = None,
@@ -116,7 +183,7 @@ def list_estimate_sets(
     )
 
 
-@router.get("/sets/{set_id}")
+@router.get("/sets/{set_id}", response_model=EstimateSetDetailView)
 def get_estimate_set(
     set_id: int,
     db: Session = Depends(get_db),

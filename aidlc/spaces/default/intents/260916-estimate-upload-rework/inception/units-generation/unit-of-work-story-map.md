@@ -67,6 +67,9 @@
 | FR11.2 | U4 | `u4-credential-pipeline` | |
 | FR11.3 | U4 | `u4-credential-pipeline` | |
 | FR11.4 | U4 | `u4-credential-pipeline` | |
+| FR12.1–12.5 | U8 | `u8-estimate-workspace-ui` | 官方估價教學彈窗 |
+| FR13.1–13.3／13.5–13.6 | U2 | `u2-estimate-intake-api` | SKU 描述補齊與落庫 |
+| FR13.4 | U5 | `u5-pricing-lookup-port` | 邊界腳本放行 sku_catalog |
 
 ## 跨單元 FR
 
@@ -78,23 +81,24 @@
 | FR6.5／FR6.6 | U2、U8 | API／ACL vs UI |
 | FR9.8 | U3、U4 | 環境變數減與增 |
 | FR10.1 | U6、U7 | runtime 骨架 vs 成本建議圖 |
+| FR13 | U2、U5、U8 | 寫庫／邊界／規格欄呈現 |
 
 ## 各單元內關注序（單元內，非全域建置序）
 
 | Unit | 建議關注序 |
 |---|---|
 | U1 | FR2.3／FR9.6 邊界 → FR1.2／FR2.1 讀取 → FR1.5 判定 → FR2.2 → FR4.* → FR2.4 PBT |
-| U2 | Schema／實體 → 上傳限制 → 解析協調 → ACL／分享 → 稽核 → 觸發建議 |
+| U2 | Schema／實體 → 上傳限制 → 解析協調 → SKU 描述補齊 → ACL／分享 → 稽核 → 觸發建議 |
 | U3 | 舊端點／表刪除 → Playwright → 工具鏈／e2e／OpenAPI → 孤兒檔 |
 | U4 | repo contract 調整 → 憑證傳遞 → 文件 → 缺憑證可啟動驗證 |
 | U5 | 保留最小集 → 目錄價包裝 → 降級 → 唯讀界線測試 |
 | U6 | 相依引入 → OpenRouter 煙測 → 串流輔助 |
 | U7 | Advice 實體／狀態 → Orchestrator 背景工作 → 省錢建議 → SSE → 跨雲／品質 |
-| U8 | 空狀態／上傳 → 明細與檢查 → 歷史 → 分享／無障礙 |
+| U8 | 空狀態／教學彈窗 → 上傳 → 明細（規格描述）與檢查 → 歷史 → 分享／無障礙 |
 | U9 | SSE 訂閱 → 骨架／進度 → 三類建議呈現 |
 
 ## 覆蓋核對
 
-- 上游 FR：59 條（與 `requirements.md`／domain-design `traceability.json` 一致）
+- 上游 FR：70 條（含後補 FR12／FR13；與 `requirements.md`／domain-design `traceability.json` 一致）
 - 每條均有 Unit 或明示 GAP（僅 FR10.4）
 - 九個 Unit 皆至少承載一條 FR

@@ -7,17 +7,17 @@
 
 ## 覆蓋盤點
 
-外部可觀察行為（本 intent 引入／變更）共 **18 項**。分桶：
+外部可觀察行為（本 intent 引入／變更）共 **21 項**。分桶：
 
 | 桶 | 數量 |
 |---|---|
-| 已自動化 | 15 |
+| 已自動化 | 17 |
 | 待自動化 —— 本 stage 新寫腳本 | 0 |
 | 待自動化 —— 本輪 open item | 0 |
-| 只能手動 | **3** |
+| 只能手動 | **4** |
 | 無法分類 | **0** |
 
-### 已自動化（15 項）
+### 已自動化（17 項）
 
 | # | 行為 | 斷言落點 |
 |---|---|---|
@@ -30,18 +30,21 @@
 | A-7 | 舊 cost HTTP／Calculator 退役 | boundary scripts＋discover suite |
 | A-8 | secret／contract patterns | `tests.test_repo_contract_secret_patterns` |
 | A-9 | `/cost` SPA 上傳→明細工作區 | `frontend/tests/e2e/estimate-workspace.spec.ts` |
+| A-9b | 官方估價教學彈窗（FR12） | `frontend/tests/e2e/estimate-workspace.spec.ts`「官方估價教學彈窗顯示截圖與官方連結」 |
 | A-10 | 建議面板三態（mock／fixture 路徑） | 同上 e2e＋`EstimateAdvicePanel` 配線 |
+| A-16 | SKU 形狀判斷與描述 enrich（mock） | `backend/tests/test_sku_catalog.py`；明細含 `spec_description` 鍵見 `test_estimate_intake_api` |
 | A-11–A-15 | repo／env contract、OpenAPI、frontend build | CI `repo-contract`／`unittest`／`npm run build` |
 
 > 不上手動案例覆寫以上行為（TESTING.md §1）。
 
-### 只能手動（3 項）
+### 只能手動（4 項）
 
 | # | 行為 | 為何不能自動化 |
 |---|---|---|
 | M-1 | 真實 OpenRouter 金鑰下 SSE 建議串流跑完 | 每跑一次花錢（LLM） |
 | M-2 | 本機缺 OpenRouter 金鑰時 UI／API 降級可讀 | 依賴真實 `.env` 殘值／缺值 |
 | M-3 | 定價憑證缺漏時建議流程不整段失敗（FR5.10） | 需真實環境缺憑證；CI mock 遮住此路徑 |
+| M-4 | 官方匯出檔上的真實目錄 SKU 解讀成可讀規格（FR13） | 依賴各雲目錄價 API 與憑證；CI mock 不打真端點 |
 
 ---
 
@@ -198,3 +201,59 @@
 - 自動化對應：無
 - PR／commit：本 intent construction
 - User story：FR5
+
+---
+
+## TC: 官方估價表目錄 SKU 顯示人類可讀規格
+
+- plan: Cloud-360 C1 Estimate Upload Rework
+- priority: P1
+
+### 目的
+
+保護 FR13：上傳含目錄形 SKU 的官方匯出檔後，規格欄須顯示目錄查到的描述（或明確仍為原始 SKU），且金額欄不得被目錄價覆寫。
+
+### 背景
+
+1. 症狀：規格欄只見 `2DA5-2C43-66E6`／`DZH…` 這類代碼，使用者無法對照服務。  
+2. 錯誤訊息：無固定例外字串；失敗路徑應靜默保留原始 SKU，上傳仍 201。  
+3. 既有自動化層為何沒抓到：`test_sku_catalog.py` 只 mock `_lookup`；CI 不呼叫 AWS／GCP／Azure 真實目錄端點，也沒有官方匯出樣本的外網 enrich。
+
+### 受測介面
+
+- API: `POST /api/auth/login` → 200 — 取得 JWT
+- API: `POST /api/cost/v1/sets` → 201 — 上傳後明細含 `spec` 與 `spec_description`
+- API: `GET /api/cost/v1/sets/{set_id}` → 200 — 讀回同一欄位
+- UI: `/cost` — 雲別卡片規格欄
+- 外部相依: AWS Price List／GCP Cloud Billing Catalog／Azure Retail Prices（視檔案雲別）
+
+### 前置條件
+
+1. 依 `LOCAL-DEV.md` 啟動 backend＋frontend（後端 :8001、前端 :5173）。  
+2. 測試帳號具備 C1 view／edit（例如 `admin`／`admin123`）。  
+3. 準備一份官方匯出檔，其中至少一列規格為目錄形 SKU（GCP `XXXX-XXXX-XXXX`、Azure `DZH*`／`Standard_*`、或 AWS 12–20 位英數 SKU，**不是** `m5.large`）。  
+4. 若測 GCP，`backend/.env` 可有 `GCP_BILLING_API_KEY`；若測 AWS 可有 IAM。Azure 可不需憑證。改 `.env` 後**重啟** backend。
+
+### 測試步驟
+
+| # | 操作 | 預期結果 |
+|---|---|---|
+| 1 | 登入後開啟 `/cost`，上傳該官方檔並完成解析 | `POST /api/cost/v1/sets` 回 201；明細出現該列 |
+| 2 | 在 Network 展開 201 JSON，找該列 | `spec` 仍為檔案內 SKU；`spec_description` 若查到則為非空文字且**不是**數字單價；查不到則為 null |
+| 3 | 看雲別卡片規格欄 | 有描述時主列為描述、下方灰色 `SKU …`；無描述時只顯示檔案規格。金額欄數字與上傳檔一致，不得被目錄 hourly 取代 |
+| 4 | 再開 `GET /api/cost/v1/sets/{set_id}` | `spec`／`spec_description`／`amount` 與步驟 2 相同 |
+
+### 通過條件
+
+- 上傳為 201；原始 `spec` 與 `amount` 未被目錄價覆寫；查到描述時 UI 主列顯示該文字且副標為 SKU。
+
+### 追溯
+
+- 實作：`backend/cost/sku_catalog.py`、`backend/cost/estimate_intake_service.py`、`frontend/src/components/cost/EstimateCloudCard.tsx`
+- 自動化對應：`backend/tests/test_sku_catalog.py`（mock，不替代本案）
+- PR／commit：本 intent construction
+- User story：FR13
+
+### 清理
+
+- 可刪除本次上傳的估價 set。

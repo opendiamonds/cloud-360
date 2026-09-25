@@ -95,6 +95,98 @@
         "title": "ChatRequest",
         "type": "object"
       },
+      "CloudEstimateView": {
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/MechanicalCheckView"
+          },
+          "cloud": {
+            "title": "Cloud",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LineItemView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "stated_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Total"
+          }
+        },
+        "required": [
+          "cloud",
+          "lines",
+          "checks"
+        ],
+        "title": "CloudEstimateView",
+        "type": "object"
+      },
+      "CloudSummaryView": {
+        "properties": {
+          "cloud": {
+            "title": "Cloud",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "stated_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Total"
+          },
+          "unparsed_count": {
+            "title": "Unparsed Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cloud",
+          "line_count",
+          "unparsed_count"
+        ],
+        "title": "CloudSummaryView",
+        "type": "object"
+      },
       "CommitCollabReviewBody": {
         "properties": {
           "collab_status": {
@@ -204,6 +296,94 @@
         "title": "DetectProviderBody",
         "type": "object"
       },
+      "EstimateSetDetailView": {
+        "properties": {
+          "advice_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advice Status"
+          },
+          "clouds": {
+            "items": {
+              "$ref": "#/components/schemas/CloudSummaryView"
+            },
+            "title": "Clouds",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "diagram_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagram Id"
+          },
+          "estimates": {
+            "items": {
+              "$ref": "#/components/schemas/CloudEstimateView"
+            },
+            "title": "Estimates",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_owner": {
+            "title": "Is Owner",
+            "type": "boolean"
+          },
+          "is_saved": {
+            "title": "Is Saved",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "privacy": {
+            "title": "Privacy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "is_owner",
+          "is_saved",
+          "privacy",
+          "clouds",
+          "estimates"
+        ],
+        "title": "EstimateSetDetailView",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -232,6 +412,95 @@
           }
         },
         "title": "LastOpenedRequest",
+        "type": "object"
+      },
+      "LineItemView": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "item_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Name"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "parse_status": {
+            "title": "Parse Status",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "raw_text": {
+            "title": "Raw Text",
+            "type": "string"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
+          },
+          "spec_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Description"
+          }
+        },
+        "required": [
+          "ordinal",
+          "parse_status",
+          "raw_text"
+        ],
+        "title": "LineItemView",
         "type": "object"
       },
       "LoginRequest": {
@@ -362,6 +631,37 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MechanicalCheckView": {
+        "properties": {
+          "currency_consistent": {
+            "title": "Currency Consistent",
+            "type": "boolean"
+          },
+          "currency_tie": {
+            "title": "Currency Tie",
+            "type": "boolean"
+          },
+          "offenders": {
+            "$ref": "#/components/schemas/OffendersView"
+          },
+          "quantity_positive": {
+            "title": "Quantity Positive",
+            "type": "boolean"
+          },
+          "total_reconciled": {
+            "$ref": "#/components/schemas/TotalReconciledView"
+          }
+        },
+        "required": [
+          "currency_consistent",
+          "currency_tie",
+          "quantity_positive",
+          "total_reconciled",
+          "offenders"
+        ],
+        "title": "MechanicalCheckView",
+        "type": "object"
+      },
       "Message": {
         "properties": {
           "content": {
@@ -378,6 +678,30 @@
           "content"
         ],
         "title": "Message",
+        "type": "object"
+      },
+      "OffendersView": {
+        "properties": {
+          "currency_ordinals": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Currency Ordinals",
+            "type": "array"
+          },
+          "quantity_ordinals": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Quantity Ordinals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency_ordinals",
+          "quantity_ordinals"
+        ],
+        "title": "OffendersView",
         "type": "object"
       },
       "PatchAuthorizationRequest": {
@@ -726,6 +1050,45 @@
           "title"
         ],
         "title": "SuggestImprovementBody",
+        "type": "object"
+      },
+      "TotalReconciledView": {
+        "properties": {
+          "attempted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempted"
+          },
+          "skipped_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped Reason"
+          },
+          "within_tolerance": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Within Tolerance"
+          }
+        },
+        "title": "TotalReconciledView",
         "type": "object"
       },
       "UpdateActiveRequest": {
@@ -2883,7 +3246,9 @@
           "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateSetDetailView"
+                }
               }
             },
             "description": "Successful Response"
@@ -2966,7 +3331,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateSetDetailView"
+                }
               }
             },
             "description": "Successful Response"

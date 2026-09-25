@@ -111,7 +111,7 @@ psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 | `schema_rbac.sql` | 你手動跑，或 Docker 的 db 容器**在資料目錄為空時**跑一次 | 既有資料庫**不會**自動重跑（隱性依賴 H2） |
 | `backend/database.py` 的 `_ensure_*_schema()` | **每次後端啟動** | 這才是既有環境真正的遷移機制 |
 
-**實務結論**：改了 `schema_rbac.sql` 卻只重啟容器 → 不生效。反過來，多數欄位新增只要**重啟後端**就會被 `_ensure_*_schema()` 的 `ALTER TABLE ... IF NOT EXISTS` 補上。
+**實務結論**：改了 `schema_rbac.sql` 卻只重啟容器 → 不生效。反過來，多數欄位新增只要**重啟後端**就會被 `_ensure_*_schema()` 的 `ALTER TABLE ... IF NOT EXISTS` 補上（例如 `estimate_line_items.spec_description`）。
 
 要整個重來：
 

@@ -10,7 +10,7 @@
 2. 保留 24h 磁碟 offer 快取；不重建 Postgres `pricing_cache`（Q2）
 3. AWS：SDK 可啟用；無憑證／失敗 → Bulk → miss／unsupported；不讓 U7 崩潰（Q3）
 4. 盤點 warm／死引用並修或刪（Q4）
-5. CI 邊界：intake 寫入路徑不得 import Port；他處不得直打 Pricing API（Q5／BR5.7–5.8）
+5. CI 邊界：intake 寫入路徑不得 import Port；他處不得直打 Pricing API（Q5／BR5.7–5.8）。`cost/sku_catalog.py` 為 FR13 允許的描述查詢例外（BR5.11），不得轉呼叫 `fetch_hourly`
 6. GCP Catalog、Azure Retail；禁 Cost Explorer 等帳單 API（Q6）
 
 **不含：** 建議正文／SSE（U7）、上傳／明細 API（U2）、憑證注入管線（U4 已做）、SPA。
@@ -98,7 +98,7 @@ erDiagram
 
 ## 衍生檢視：規則摘要
 
-見 `rules.md` BR5.1–BR5.10。
+見 `rules.md` BR5.1–BR5.11。
 
 ---
 
@@ -108,7 +108,7 @@ erDiagram
 |---|---|---|
 | ← U4 | 憑證可注入、可缺席 | 本 Unit 執行期降級 |
 | → U7 | `fetch_hourly` 結果 | 非單元相依；可選呼叫 |
-| ∥ U2 | 無 import／無寫回 | AH-6／Q5 |
+| ∥ U2 | 不得 import Port；得呼叫 sku_catalog 只寫描述 | AH-6／Q5／BR5.11 |
 | ∥ U3 | archive_* 不讀寫 | 不重建 pricing_cache |
 
 ## 錯誤與邊緣

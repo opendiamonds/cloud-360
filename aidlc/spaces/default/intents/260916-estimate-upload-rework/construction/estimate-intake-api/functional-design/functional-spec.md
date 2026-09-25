@@ -24,7 +24,7 @@
 | 1 | JWT＋C1 view／edit 權限檢查 | BR2.10、BR2.5 |
 | 2 | 驗證檔數、大小、副檔名、魔數 | BR2.1 |
 | 3 | 對每檔呼叫 `parse`；ambiguous 套用 `cloud_overrides` | BR2.2 |
-| 4 | 建 EstimateSet／Estimate／LineItem；丟棄原始位元組 | BR2.3 |
+| 4 | 對目錄形 SKU 補 `specDescription`（失敗略過）；建 EstimateSet／Estimate／LineItem；丟棄原始位元組 | BR2.3、BR2.13 |
 | 5 | 寫 upload AuditEvent（列數／雲別，無金額） | BR2.12 |
 | 6 | enqueue 建議；回 201＋Detail（含當場重算 checks） | BR2.8、BR2.4 |
 
@@ -39,12 +39,13 @@ sequenceDiagram
   C->>R: POST /sets multipart
   R->>S: authorize + validate files
   S->>P: parse / validate
+  S->>S: enrich_line_specs（sku_catalog；可略過）
   S->>DB: insert Set/Estimate/Lines
   S->>Q: enqueue advice
   R-->>C: 201 EstimateSetDetail
 ```
 
-**文字：** 客戶端上傳 → 授權與檔案驗證 → 解析 → 寫庫 → 背景入隊建議 → 立即 201。
+**文字：** 客戶端上傳 → 授權與檔案驗證 → 解析 →（可選）SKU 描述補齊 → 寫庫 → 背景入隊建議 → 立即 201。
 
 ---
 

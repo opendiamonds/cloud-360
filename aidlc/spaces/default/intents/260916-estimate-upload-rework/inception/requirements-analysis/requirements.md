@@ -33,14 +33,14 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 
 ### FR2 — 解析
 
-- **FR2.1** 解析器須自估價表擷取逐項資料：品項、規格、數量、金額，以及該表的總額與幣別。
+- **FR2.1** 解析器須自估價表擷取逐項資料：品項、規格、數量、金額，以及該表的總額與幣別。規格欄須優先對應檔案中的 SKU／SKU ID 等別名（而非僅服務顯示名）；GCP 另須擷取 `serviceId`（若檔案有該欄），供 FR13 目錄查詢，**不得**因此呼叫網路。
 - **FR2.2** 解析採寬鬆策略：能解析的列照常呈現，無法辨識的列須保留其原始文字並標示為「無法辨識」，不得整份失敗（FE-4）。**「無法辨識」的判定為：該列的金額或數量無法解析為數值。**品項名稱或規格文字缺漏但金額與數量完好者，不計入無法辨識——它仍可參與 FR4.3 的總額對帳。
 - **FR2.3** 解析器須為純函式——模組內不得 import `httpx`、不得出現 DB session 型別、不得 raise `HTTPException`。ADR-0017 §2 將原 `cost_calculator` 的純函式約束改錨至此。**可執行檢查沿用 `scripts/validate_cost_calculator_boundary.py` 現行的判準形式**：以正規式比對模組內的 import 敘述，命中 `httpx`、`requests`、`sqlalchemy`、`fastapi` 任一即失敗（FR9.6 只改目標路徑，不改判準）。此判準涵蓋上述三項禁令——`sqlalchemy` 涵蓋 DB session，`fastapi` 涵蓋 `HTTPException`。
 - **FR2.4** 解析器須受 property-based test 覆蓋（ADR-0006 hard constraint，隨純函式層一併移轉）。
 
 ### FR3 — 明細呈現
 
-- **FR3.1** UI 須顯示完整逐項明細（品項、規格、數量、金額）加上總額（SD-2）。
+- **FR3.1** UI 須顯示完整逐項明細（品項、規格、數量、金額）加上總額（SD-2）。規格欄有 `spec_description` 時須優先顯示該描述，原始 SKU 改為副標；查不到描述時仍顯示檔案內規格文字。
 - **FR3.2** 無法辨識的列須在明細中可見並明確標示，不得隱藏。
 - **FR3.3** 新頁面沿用 `/cost` 路徑；`frontend/src/App.tsx:24` 的根導向邏輯與 `Sidebar.tsx:201` 的導覽項目維持不變，對使用者而言路徑無感。
 
@@ -60,7 +60,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **FR5.2** 跨雲比較與品質檢查建議為 Should；尚未產生時以「產生中」狀態呈現，不得空白或假裝不存在。若該類建議在本期未交付，UI 須顯示明確的「本期未提供」而非停留在「產生中」——「產生中」僅適用於本次請求仍在處理的情形。
 - **FR5.3** 跨雲比較至少需一朵雲的資料；僅上傳一朵雲時，跨雲比較須明示「資料不足」而非給出無依據的結論（FE-7）。
 - **FR5.4** 送交 LLM 的內容為完整解析結果（品項、規格、數量、金額）（FE-3）。
-- **FR5.5** agent 得經 `pricing_client` 呼叫各雲的**目錄價**端點確認現價。所得價格只寫入建議文字，**不得回寫明細表**（AH-6）。
+- **FR5.5** agent 得經 `pricing_client` 呼叫各雲的**目錄價**端點確認現價。所得**價格**只寫入建議文字，**不得回寫明細表**（AH-6）。FR13 允許把目錄查到的**規格文字描述**寫入明細的 `spec_description`；此例外不含 hourly／單價／小計，且必須走 `sku_catalog`，不得讓 intake 寫入路徑 import `pricing_client`／`pricing_sdk`。
 - **FR5.6** 允許的端點為三類，含需帳號憑證者：
   - AWS：Price List **Query** API（boto3，走 IAM）與既有公開 Bulk Price List 皆可。
   - GCP：Cloud Billing **Catalog** API（需 API key）。
@@ -97,7 +97,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 
 - **FR9.1** 移除 `/api/cost` 的 9 個 HTTP operations 與 `cost_router` 相關實作。
 - **FR9.2** 移除 4 張資料表（`diagram_cost`、`diagram_cost_line`、`pricing_cache`、`cost_audit_event`）。DDL 為雙軌，須同時處理 `backend/database.py::_ensure_cost_schema()`（329-395 行）與 `schema_rbac.sql:169-212`，並同步更新 `DEPLOY.md:219-238` 的資料表對照表（`project.md` 的 schema↔deploy 同步為 blocking 規則）。
-- **FR9.3** 移除 Playwright Calculator 自動化：`azure_calculator_runner.py`、`gcp_calculator_runner.py`、`gcp_calculator_product_resolver.py` 與兩支 spike script，以及 Python 端的 `playwright` 相依。
+- **FR9.3** 移除 Playwright Calculator 自動化：`azure_calculator_runner.py`、`gcp_calculator_runner.py`、`gcp_calculator_product_resolver.py` 與兩支 spike script，以及 Python 端的 `playwright` 相依。**允許**將事先擷取的官方計算機靜態截圖放入 `frontend/public/cost-guides/`，供 FR12 教學彈窗使用；執行期部署映像仍不得安裝或呼叫 Playwright（NFR8）。
 - **FR9.4** **保留** `pricing_sdk.py` 與 `boto3` 相依，作為 FR5.6 的 AWS Price List Query API 客戶端。`pricing_client.py:20` 與 `:280-283` 的 `use_sdk_enabled()` 分支保留，`COST_PRICING_USE_SDK` 預設值須由目前的 `0` 改回可啟用。`tests/test_pricing_sdk.py` 與 `tests/test_pricing_client.py:73-74`（patch 該兩個符號）一併保留。
 - **FR9.5** 保留 `pricing_client` 及其最小存活集合作為 FR5.5 的查價 Port：`config.py` 與其 9 份 YAML、`pricing_units.py`、`pricing_offer_parser.py`、`pricing_gcp.py`、`pricing_azure.py`、`pricing_query_parser.py`（`pricing_sdk` 的解析相依）。
 - **FR9.6** 改寫 `scripts/validate_cost_calculator_boundary.py`——它是 CI `repo-contract` job 的第三步，以硬編碼路徑指向 `backend/cost/cost_calculator.py`，**檔案不存在即 `return 1`**。須改為指向 FR2.3 的新解析器模組，並同步調整 `ci.yml`。**不得直接刪除。**
@@ -126,6 +126,25 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **FR11.3** `DEPLOY.md` 與 `LOCAL-DEV.md` 須同步說明新增的憑證需求與最小權限範圍（`project.md` 的 schema↔deploy 同步為 blocking 規則）。
 - **FR11.4** 憑證缺席時系統須可正常啟動並運作（搭配 FR5.10 的降級），本機開發不得被迫持有雲端憑證。
 
+### FR12 — 官方估價教學（後補：工作區最佳化）
+
+本節補齊「使用者先到官方計算機匯出、再回來上傳」的引導面；不恢復系統自動操作 Calculator。
+
+- **FR12.1** `/cost` 須為 AWS／GCP／Azure 各提供一個按鈕（不得只放裸外連）。點擊後開啟該雲的教學彈窗。
+- **FR12.2** 每雲教學為 2–3 頁，須含官方站實際畫面截圖，並用呼出標示「建立估價／加入服務／匯出」等關鍵控件。
+- **FR12.3** 教學須明確標示各雲應匯出的格式：AWS CSV、GCP CSV、Azure XLSX（與 FR1.2 一致）。
+- **FR12.4** 彈窗須提供該雲官方計算機的連結，供使用者離開教學後前往填表。
+- **FR12.5** 截圖為版控靜態資產；教學內容過期時以更新圖檔與文案處理，不得在執行期再開 Playwright 抓頁。
+
+### FR13 — 規格欄 SKU 目錄解讀（後補：工作區最佳化）
+
+- **FR13.1** 僅當規格文字「看起來像目錄 SKU」時才查詢：GCP `XXXX-XXXX-XXXX`、Azure `DZH*` 或 `Standard_*`、AWS 12–20 位英數（且非純數字）。人類可讀規格（如 `m5.large`）不得觸發外呼。
+- **FR13.2** 查詢只准 ADR-0018 目錄價端點（AWS Price List、GCP Cloud Billing Catalog、Azure Retail Prices）。所得為描述字串；**禁止**把 hourly／單價寫入 `EstimateLineItem` 任何金額欄。
+- **FR13.3** 描述可持久化為 `estimate_line_items.spec_description`（查不到則空）。原始 `spec` 必須保留。
+- **FR13.4** 實作模組為 `cost/sku_catalog.py`。`estimate_intake_*` 寫入路徑不得 import `pricing_client`／`pricing_sdk`；`sku_catalog` 須列入定價邊界腳本的存活／允許集，且自身不得轉呼叫 Port 的 `fetch_hourly`。
+- **FR13.5** 查詢失敗、逾時、缺憑證時必須靜默降級：該列維持原始 SKU、上傳流程仍 201，不得整批失敗。
+- **FR13.6** 單次上傳對互異 SKU 的外呼須有上限；結果可做行程外磁碟快取，不得重建 `pricing_cache` 表。
+
 ---
 
 ## 非功能需求
@@ -139,6 +158,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **NFR7 — 可測試性**：新功能須產出 TCMS 測試案例，通過 `scripts/tcms_validate.py --all` 且無 ERROR（`project.md` `## Mandated`，blocking）。
 - **NFR8 — 部署環境可用性**：新路徑不得依賴部署容器內不存在的執行期元件。`backend/Dockerfile` 未執行 `playwright install chromium`——這正是既有 Calculator 路徑在部署環境結構性不可用的原因，新設計不得重蹈。
 - **NFR9 — 憑證安全**：ADR-0006 的 IAM hard constraint 適用於 FR11 的憑證管線。憑證不得出現在版控、日誌或錯誤訊息中；權限範圍限於 FR5.9 的最小集合。此處的風險輪廓明顯低於帳單類 API——`pricing:GetProducts` 這類動作讀不到帳戶內任何資源，回傳的是與公開 Bulk API 相同的目錄價，憑證僅為存取方式；此判斷是 OQ6 之 ADR 的核心論據，也是 FR5.7 維持禁止帳單類 API 的理由。
+- **NFR10 — SKU 解讀時延**：FR13 的目錄查詢不得讓上傳主路徑無上限等待。單一查詢須有短逾時（實作上限約 4 秒連線／讀取），單次上傳互異 SKU 外呼上限 20；超出者該列不查、保留原始規格。
 
 ---
 
@@ -185,6 +205,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **OQ6 — FR5.6 與 FR11 需要一份新 ADR（暫編 ADR-0018），且其影響面超出本 intent。** 需推翻的規則有三處：`project.md` `## Never` 的計價 API 條款、`team.md` Q2 計價 API 規範、ADR-0017 §3 與 §8。此外須判定「僅授 `pricing:GetProducts` 的唯讀 IAM 使用者」是否落入 ADR-0001／0002 所列的 production credentials 範圍外事項——若是，ADR-0001 亦須修訂。此決定於 requirements-analysis 階段由使用者裁定，時序上晚於 ADR-0017 的同日兩次修訂，ADR-0018 須明載它取代的是本 session 稍早的哪些敘述。
 - **OQ7 — FR11.2 的 repo contract 調整方式未定。** 現行 `FORBIDDEN_CONTENT_PATTERNS` 以字串比對攔截 `AWS_SECRET_ACCESS_KEY`，不分變數名引用與實際金鑰值。要放行 FR11.1 又不失去防護，可行方向包括改為偵測金鑰值的樣式（如 40 字元 base64）、或對特定設定檔建立白名單。選擇哪一種需在 nfr-requirements 或 devsecops 路徑決定，並須確保調整後仍能攔下真正的金鑰外洩。
 - **OQ8 — FR11 的工作量是否影響本期交付順序。** 憑證管線重建、contract 腳本調整、ADR-0018 撰寫是與上傳解析主線平行的一批工作。SD-7 的 value-first 排序（先上傳與明細、建議後補）未預期此項，其插入位置留給 delivery-planning。
+- **OQ9 — FR12／FR13 後補的 OpenAPI 與 TCMS。** 已收尾：`LineItemView.spec_description` 進執行期 OpenAPI（FR9.10）；教學彈窗走 e2e（FR12）；真實目錄 SKU 解讀為手動案 M-4（FR13）。
 
 ## Review
 

@@ -17,15 +17,26 @@
 1. 渲染 `#advice-slot`；文案「AI 建議載入區（U9）」
 2. **不**連線 `/advice/stream`
 
+## 工作流 W4 — 官方估價教學（FR12）
+1. `EstimateOfficialCalculators` 顯示三雲按鈕（非裸外連）
+2. 點擊開啟 `EstimateCalculatorGuideModal`：2–3 頁官網截圖＋匯出呼出（AWS CSV／GCP CSV／Azure XLSX）
+3. 彈窗提供該雲官方計算機連結
+4. 使用者匯出後回到本頁走 W1 上傳
+
+## 工作流 W5 — 規格欄顯示（FR3.1／FR13）
+1. `EstimateCloudCard` 規格欄優先 `spec_description`，否則 `spec`
+2. 兩者皆有且不同時，SKU 以副標顯示
+
 ```mermaid
 flowchart LR
+  Guide --> Upload
   Upload --> Detail
   Detail --> History
   Detail --> Share
   Detail --> AdviceSlot
 ```
 
-**文字：** 上傳得明細；歷史／分享獨立；建議僅占位。
+**文字：** 先教學再上傳得明細；歷史／分享獨立；建議僅占位。規格欄可顯示目錄描述。
 
 ## Review
 

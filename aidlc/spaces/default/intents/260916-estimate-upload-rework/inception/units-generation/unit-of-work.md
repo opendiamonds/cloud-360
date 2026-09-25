@@ -55,7 +55,7 @@
 **Responsibilities**
 
 - 上傳限制與魔數驗證；原始檔即用即棄（FR1.6）
-- 協調 Parser／Validator；持久化批次與明細；機械檢查結果**不**持久化（每次重算）
+- 協調 Parser／Validator；寫庫前得經 `sku_catalog` 補規格描述（FR13，失敗略過）；持久化批次與明細；機械檢查結果**不**持久化（每次重算）
 - 自有授權判斷（擁有者＋分享名單）；RBAC story `C1` 語意更新與 `C1h`／`C1r`／`C1o`／`C1b` seed 移除（FR7.1–7.2）
 - 事件層級稽核（不含金額／明細）
 - 觸發 U7 的建議產生（async）
@@ -129,12 +129,13 @@
 **Responsibilities**
 
 - 統一包裝三雲目錄價端點；憑證缺漏／失敗時降級（FR5.10）
-- **唯讀**：輸出不得進入明細寫入路徑（AH-6）
+- **唯讀**：價格輸出不得進入明細寫入路徑（AH-6）
+- 邊界腳本允許 `cost/sku_catalog.py` 直打目錄 host（只取描述）；intake 仍不得 import `pricing_client`／`pricing_sdk`（FR13.4）
 
 **Constraints**
 
 - 單元相依僅 U4（需要憑證管線才能測 IAM 路徑）；**不被 U7 列為單元相依**（Q3=A）——接上時機由 delivery-planning 決定
-- httpx 不得在他處直打 Pricing API
+- httpx 不得在 Port 與 `sku_catalog` 以外直打 Pricing API
 
 **Components:** PricingLookup
 
@@ -193,14 +194,15 @@
 
 **Boundaries**
 
-- `/cost` 頁的上傳、明細、機械檢查結果、歷史抽屜、分享、隱私徽章
+- `/cost` 頁的上傳、明細、機械檢查結果、官方估價教學彈窗（FR12）、歷史抽屜、分享、隱私徽章
 - **不含** AI 建議區的 SSE 訂閱與建議呈現（屬 U9）
 - 建議區可留骨架殼位或「尚未啟用」占位，但不實作訂閱邏輯
 
 **Responsibilities**
 
-- refined-mockups M1–M4、M6–M8 中與上傳／明細／歷史／分享相關的畫面
-- 拖放上傳、雲別就地更正、摺疊卡片、無法辨識列呈現、檢查結果區
+- refined-mockups M1–M4、M6–M8、M9 中與上傳／明細／教學／歷史／分享相關的畫面
+- 拖放上傳、雲別就地更正、摺疊卡片、規格欄優先顯示目錄描述、無法辨識列呈現、檢查結果區
+- 三雲教學按鈕＋ 2–3 頁官網截圖彈窗（FR12）
 - WCAG 2.1 AA；`ShareModal` 無障礙補丁
 
 **Constraints**

@@ -14,6 +14,7 @@ async function login(page: Page, username: string, password: string) {
   await page.getByPlaceholder('請輸入您的帳號').fill(username);
   await page.getByPlaceholder('請輸入密碼').fill(password);
   await page.getByRole('button', { name: '登入系統' }).click();
+  await expect(page).toHaveURL(/\/(workspace|cost)/);
 }
 
 test.describe('估價工作區（U8）', () => {
@@ -52,6 +53,39 @@ test.describe('估價工作區（U8）', () => {
         .or(page.getByTestId('advice-category-saving'))
         .or(page.getByTestId('advice-failed'))
     ).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/cost/);
+  });
+
+  /**
+   * @purpose 三雲教學按鈕開啟多頁彈窗（官網截圖＋匯出說明），官方連結另開，按鈕本身不是裸外連。
+   * @given seed 帳號 admin / admin123，角色 Platform_Admin（具 C1 view）
+   * @ui /cost | 官方估價教學：estimate-official-calculators、教學 dialog
+   * @step 登入後開啟 /cost | 看到 estimate-official-calculators 與 official-calc-aws
+   * @step 點擊 AWS 教學按鈕 | 出現 role=dialog 且 data-testid=estimate-calc-guide-aws，畫面含截圖
+   * @step 按「下一頁」直到最後一頁 | official-calc-link-aws 的 href 包含 calculator.aws
+   * @step 按「完成」 | dialog 關閉，網址仍為 /cost
+   * @pass AWS 教學為站內 dialog；官方連結指向 AWS Pricing Calculator；按鈕不是 <a> 外連
+   * @story FR12
+   */
+  test('官方估價教學彈窗顯示截圖與官方連結', async ({ page }) => {
+    await login(page, ADMIN.username, ADMIN.password);
+    await page.goto('/cost');
+    await expect(page.getByTestId('estimate-official-calculators')).toBeVisible();
+    const awsBtn = page.getByTestId('official-calc-aws');
+    await expect(awsBtn).toBeVisible();
+    await expect(awsBtn).not.toHaveAttribute('href', /./);
+    await awsBtn.click();
+    const dialog = page.getByTestId('estimate-calc-guide-aws');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('img')).toBeVisible();
+    await expect(dialog.getByText(/第 1／/)).toBeVisible();
+    while (await dialog.getByRole('button', { name: '下一頁' }).count()) {
+      await dialog.getByRole('button', { name: '下一頁' }).click();
+    }
+    const official = page.getByTestId('official-calc-link-aws');
+    await expect(official).toHaveAttribute('href', /calculator\.aws/);
+    await dialog.getByRole('button', { name: '完成' }).click();
+    await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(/\/cost/);
   });
 });

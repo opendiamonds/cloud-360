@@ -32,7 +32,7 @@
 
 ## NFR9.3 — 唯讀與禁帳單 API（BR5.2、BR5.3）
 
-- 查得價格**不得**進入估價明細寫入路徑（AH-6、BR5.2）。
+- 查得**價格**不得進入估價明細寫入路徑（AH-6、BR5.2）。規格文字描述得經 `sku_catalog` 寫入 `spec_description`（FR13），不含 hourly。
 - 禁止實作／呼叫 Cost Explorer、Cost Management、Billing Export 或等價帳單／用量 API（FR5.7）。
 
 ## NFR8.1 — 部署可執行；無憑證可啟動
@@ -49,8 +49,8 @@
 
 - 本 stage **不**手寫 TCMS markdown。
 - code-gen：unittest＋mock 覆蓋 hit／miss／unsupported、SDK 降級、密鑰遮罩；邊界腳本：
-  1. intake 寫入模組不得 import `pricing_client`／`pricing_sdk`
-  2. 非 `pricing_*` 存活集不得直打 allowlist 定價 host
+  1. intake 寫入模組不得 import `pricing_client`／`pricing_sdk`（得延遲 import `sku_catalog`）
+  2. 非 `pricing_*` 存活集、且非 `cost/sku_catalog.py`，不得直打 allowlist 定價 host
 - TCMS 義務歸後續 `tcms-test-cases` stage。
 
 ## 明確不在本 unit

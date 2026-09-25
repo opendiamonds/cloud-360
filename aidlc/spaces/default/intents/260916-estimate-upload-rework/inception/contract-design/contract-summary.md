@@ -52,6 +52,8 @@ shared-schema:
         ordinal: { type: integer, required: true, minimum: 0 }
         itemName: { type: string, required: false }
         spec: { type: string, required: false }
+        serviceId: { type: string, required: false, description: "GCP 等檔案內服務識別；供 FR13 查詢，可不落庫" }
+        specDescription: { type: string, required: false, description: "目錄規格說明；parse() 不填，intake 可於寫庫前補（FR13）" }
         quantity: { type: number, required: false, nullable: true }
         amount: { type: number, required: false, nullable: true }
         currency: { type: string, required: false, nullable: true }
@@ -281,6 +283,7 @@ components:
         ordinal: { type: integer }
         item_name: { type: string, nullable: true }
         spec: { type: string, nullable: true }
+        spec_description: { type: string, nullable: true, description: "目錄價 API 查出的規格說明；查不到為 null（FR13）" }
         quantity: { type: number, nullable: true }
         amount: { type: number, nullable: true }
         currency: { type: string, nullable: true }

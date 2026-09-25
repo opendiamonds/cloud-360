@@ -807,6 +807,31 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["Message"][];
         };
+        /** CloudEstimateView */
+        CloudEstimateView: {
+            checks: components["schemas"]["MechanicalCheckView"];
+            /** Cloud */
+            cloud: string;
+            /** Currency */
+            currency?: string | null;
+            /** Lines */
+            lines: components["schemas"]["LineItemView"][];
+            /** Stated Total */
+            stated_total?: number | null;
+        };
+        /** CloudSummaryView */
+        CloudSummaryView: {
+            /** Cloud */
+            cloud: string;
+            /** Currency */
+            currency?: string | null;
+            /** Line Count */
+            line_count: number;
+            /** Stated Total */
+            stated_total?: number | null;
+            /** Unparsed Count */
+            unparsed_count: number;
+        };
         /** CommitCollabReviewBody */
         CommitCollabReviewBody: {
             /**
@@ -855,6 +880,29 @@ export interface components {
             /** Xml Data */
             xml_data: string;
         };
+        /** EstimateSetDetailView */
+        EstimateSetDetailView: {
+            /** Advice Status */
+            advice_status?: string | null;
+            /** Clouds */
+            clouds: components["schemas"]["CloudSummaryView"][];
+            /** Created At */
+            created_at?: string | null;
+            /** Diagram Id */
+            diagram_id?: number | null;
+            /** Estimates */
+            estimates: components["schemas"]["CloudEstimateView"][];
+            /** Id */
+            id: number;
+            /** Is Owner */
+            is_owner: boolean;
+            /** Is Saved */
+            is_saved: boolean;
+            /** Note */
+            note?: string | null;
+            /** Privacy */
+            privacy: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -864,6 +912,27 @@ export interface components {
         LastOpenedRequest: {
             /** Diagram Id */
             diagram_id?: number | null;
+        };
+        /** LineItemView */
+        LineItemView: {
+            /** Amount */
+            amount?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Item Name */
+            item_name?: string | null;
+            /** Ordinal */
+            ordinal: number;
+            /** Parse Status */
+            parse_status: string;
+            /** Quantity */
+            quantity?: number | null;
+            /** Raw Text */
+            raw_text: string;
+            /** Spec */
+            spec?: string | null;
+            /** Spec Description */
+            spec_description?: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -916,12 +985,30 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** MechanicalCheckView */
+        MechanicalCheckView: {
+            /** Currency Consistent */
+            currency_consistent: boolean;
+            /** Currency Tie */
+            currency_tie: boolean;
+            offenders: components["schemas"]["OffendersView"];
+            /** Quantity Positive */
+            quantity_positive: boolean;
+            total_reconciled: components["schemas"]["TotalReconciledView"];
+        };
         /** Message */
         Message: {
             /** Content */
             content: string;
             /** Role */
             role: string;
+        };
+        /** OffendersView */
+        OffendersView: {
+            /** Currency Ordinals */
+            currency_ordinals: number[];
+            /** Quantity Ordinals */
+            quantity_ordinals: number[];
         };
         /** PatchAuthorizationRequest */
         PatchAuthorizationRequest: {
@@ -1061,6 +1148,15 @@ export interface components {
         SuggestImprovementBody: {
             /** Title */
             title: string;
+        };
+        /** TotalReconciledView */
+        TotalReconciledView: {
+            /** Attempted */
+            attempted?: boolean | null;
+            /** Skipped Reason */
+            skipped_reason?: string | null;
+            /** Within Tolerance */
+            within_tolerance?: boolean | null;
         };
         /** UpdateActiveRequest */
         UpdateActiveRequest: {
@@ -2563,7 +2659,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EstimateSetDetailView"];
                 };
             };
             /** @description Validation Error */
@@ -2594,7 +2690,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EstimateSetDetailView"];
                 };
             };
             /** @description Validation Error */

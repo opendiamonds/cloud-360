@@ -39,6 +39,8 @@ class LineItem(TypedDict, total=False):
     ordinal: int
     itemName: str
     spec: str
+    serviceId: str
+    specDescription: str
     quantity: float | None
     amount: float | None
     currency: str | None
@@ -108,28 +110,21 @@ def _normalize_line(
     if not item:
         item = row_get(row, mapping.get("itemNameAlt")).strip() or None
     spec = row_get(row, mapping.get("spec")).strip() or None
+    service_id = row_get(row, mapping.get("serviceId")).strip() or None
 
-    if qty is None or amount is None:
-        return {
-            "ordinal": ordinal,
-            "itemName": item or "",
-            "spec": spec or "",
-            "quantity": _decimal_to_float(qty),
-            "amount": _decimal_to_float(amount),
-            "currency": currency_raw,
-            "parseStatus": "unidentifiable",
-            "rawText": raw_text,
-        }
-    return {
+    line: LineItem = {
         "ordinal": ordinal,
         "itemName": item or "",
         "spec": spec or "",
         "quantity": _decimal_to_float(qty),
         "amount": _decimal_to_float(amount),
         "currency": currency_raw,
-        "parseStatus": "parsed",
+        "parseStatus": "unidentifiable" if qty is None or amount is None else "parsed",
         "rawText": raw_text,
     }
+    if service_id:
+        line["serviceId"] = service_id
+    return line
 
 
 def _is_total_label(text: str) -> bool:

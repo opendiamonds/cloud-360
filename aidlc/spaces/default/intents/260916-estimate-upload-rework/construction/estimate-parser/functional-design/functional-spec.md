@@ -22,7 +22,7 @@
 | 1 | 依副檔名／內容嗅探選 csv 或 xlsx 讀取路徑 | BR1.1 |
 | 2 | 讀標頭；執行雲別判定；再以 sourceFormat 過濾不符 BR1.1 的候選雲（排除後無候選 → ambiguous） | BR1.2、BR1.1 |
 | 3 | 若無法建立欄位對應 | BR3.1 → ambiguous + `lines=[]` + totals 全 null |
-| 4 | 逐列正規化為 LineItem（保留 ordinal 與 rawText） | BR2.1、BR2.2 |
+| 4 | 逐列正規化為 LineItem（保留 ordinal 與 rawText；規格取 SKU 別名、GCP 取 serviceId；不填 specDescription） | BR2.1、BR2.2 |
 | 5 | 擷取 EstimateTotals（缺則 null） | BR2.1、BR4.4 |
 | 6 | 組裝 ParseResult 回傳 | — |
 

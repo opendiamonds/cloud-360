@@ -142,6 +142,10 @@ class EstimateIntakeApiTest(unittest.TestCase):
         self.assertEqual(est["cloud"], "aws")
         self.assertTrue(body["is_owner"])
         self.assertFalse(body["is_saved"])
+        line = est["lines"][0]
+        self.assertIn("spec_description", line)
+        self.assertIsNone(line["spec_description"])
+        self.assertEqual(line["spec"], "m5.large")
 
     def test_save_puts_set_into_history(self):
         created = self._upload()

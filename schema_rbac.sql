@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS estimate_line_items (
   ordinal INTEGER NOT NULL,
   item_name TEXT,
   spec TEXT,
+  spec_description TEXT,
   quantity NUMERIC(18, 6),
   amount NUMERIC(18, 6),
   currency VARCHAR(16),

@@ -42,6 +42,7 @@ entities:
       - { name: ordinal, type: integer, required: true }
       - { name: itemName, type: string, required: false, nullable: true }
       - { name: spec, type: string, required: false, nullable: true }
+      - { name: specDescription, type: string, required: false, nullable: true, description: "目錄規格說明；不得含價格（FR13／AH-6）" }
       - { name: quantity, type: number, required: false, nullable: true }
       - { name: amount, type: number, required: false, nullable: true }
       - { name: currency, type: string, required: false, nullable: true }
