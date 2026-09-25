@@ -10732,3 +10732,602 @@
 **Agent**: aidlc-design-agent
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-25T04:14:34Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-25T04:15:07Z
+**Event**: QUESTION_ANSWERED
+**Stage**: refined-mockups
+**Details**: D1=C（獨立頁 /memory ＋ 入口頁捷徑）、D2=D（選單建立 ＋ 對話建立並存）、D3=A（結構化 WS clarify 訊息型別）、D4=C（對話流內區塊 ＋ 脈絡列下方常駐區並存）。D2 與 D4 的並存選項各自帶一個我已在選項中揭露的風險（授權／稽核兩個入口、同一狀態兩處渲染），處置為在 interaction-spec.md 明文釘住單一真實來源、兩個視圖
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T04:25:21Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-25T04:25:40Z
+**Event**: QUESTION_ANSWERED
+**Stage**: refined-mockups
+**Details**: D5=A（成本卡片帶 ?estimate=<id> 深連，CostPage 已支援）、D6=A（引入 @axe-core/playwright，違規即 CI 紅燈；為既有 Playwright 層的 plugin，非新測試框架，不落在 US:U9=A 拒絕的範圍）、D7=A（只用 md: 768px 單一斷點，與既有 19 處 md: 的實況一致）
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T04:45:19Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log decision --checkpoint summary-confirmation --stage refined-mockups --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md --decision 呈現 refined-mockups 七題（D1–D7）定案摘要、四份產出規模、六項送審前自檢的逐項結果（共查出 8 處已全部修畢）、以及三件需使用者過目的事（upstream-coverage 首次空轉、/memory 不需新 story id 的查證、唯一新增 scope 項 N-9 與 stories.md 的刻意落差），請使用者確認
+**Error**: Summary confirmation questions file aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md is invalid: unsupported H3 heading "六項送審前自檢的結果（blocking，逐項報告）" after the consolidated summary; only Q<n>, "Requested Changes Feedback", or one "Assumption Confirmation" section may follow.
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-25T04:45:31Z
+**Event**: DECISION_RECORDED
+**Stage**: refined-mockups
+**Decision**: 呈現 refined-mockups 七題（D1–D7）定案摘要、四份產出規模、六項送審前自檢的逐項結果（共查出 8 處已全部修畢）、以及三件需使用者過目的事（upstream-coverage 首次空轉、/memory 不需新 story id 的查證、唯一新增 scope 項 N-9 與 stories.md 的刻意落差），請使用者確認
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T04:46:31Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-25T04:46:42Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: refined-mockups
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+**Questions SHA-256**: 1c070ae66c36df7f3f1a98cc136b9f6162184f7502194f97c84b02924469d2cd
+**Hash Scope**: confirmed-content-v1
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:46:54Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+**Context**: inception > refined-mockups > mockups.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:46:58Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+**Context**: inception > refined-mockups > mockups.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:06Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+**Context**: inception > refined-mockups > interaction-spec.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:11Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+**Context**: inception > refined-mockups > interaction-spec.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:19Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+**Context**: inception > refined-mockups > design-system-mapping.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:24Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+**Context**: inception > refined-mockups > design-system-mapping.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:32Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+**Context**: inception > refined-mockups > accessibility-checklist.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T04:47:37Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+**Context**: inception > refined-mockups > accessibility-checklist.md
+**Summary Authorization Id**: 0ec384e4bdb168ae632d7c4b5f531f850dead5a964e13c28e9b9b2d5dbba3085
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-25T04:47:43Z
+**Event**: REVIEW_REQUESTED
+**Stage**: refined-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:ba8d5d13dc49992735f2a56e02559b77daa6be9f4f766e360afc0c0b04f79cc0
+**Request Id**: review:247def319eb2b31fe0b94f94fb470f1a
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:48:38Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a39e6e26d4a2ab24a
+**Message**: 先 commit 起來
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:48:59Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ae06e53721be0c713
+**Message**: Verifying Ctrl+Enter citation in ChatBox.tsx
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:49:30Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a0358242df587bd70
+**Message**: Checking for later review iterations in reviews/
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:50:01Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a2d569e6d169d5ff7
+**Message**: Verifying FR1.8 RBAC story id claim
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:50:33Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: afeef4e18431184c5
+**Message**: Reading M0's RBAC justification in mockups.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:51:04Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ae88be0dbb77fffc3
+**Message**: Verifying M4/M5 build confirmation logic
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:51:34Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab49895b7494e9d63
+**Message**: Confirming capability 4 as Must
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:52:06Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a795fb37e35211b5d
+**Message**: Checking Assumptions for no-estimate-id reachability note
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:52:36Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ae16527d36ddbac18
+**Message**: Counting unique file:line citations across artifacts
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:53:07Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a4085ee45f3e475ac
+**Message**: Checking FR10 for estimate_id specification
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:53:39Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a5a16a803b195fb3b
+**Message**: Grepping for "誤建" disclosure phrase in artifacts
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:54:10Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a92da7053d71104a7
+**Message**: Checking D4's disclosure claim in mockups.md line 398
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:54:41Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7c22f913845f02d0
+**Message**: Creating review output directory
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-25T04:55:02Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/refined-mockups/stage/bb28d2206e402279/1.review.md
+**Context**: .aidlc-engine > reviews > refined-mockups > stage > bb28d2206e402279 > 1.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T04:55:10Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-product-lead-agent
+**Agent ID**: afdecbc3d0b1790c6
+**Message**: **Reviewer:** aidlc-product-lead-agent\n\nReview written to `aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/refined-mockups/stage/bb28d2206e402279/1.review.md`.\n\n**Verdict
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T04:55:10Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-25T04:55:59Z
+**Event**: REVIEW_COMPLETED
+**Stage**: refined-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 1
+**Verdict**: READY
+**Request Fingerprint**: sha256:ba8d5d13dc49992735f2a56e02559b77daa6be9f4f766e360afc0c0b04f79cc0
+**Artifact Fingerprint**: sha256:ba8d5d13dc49992735f2a56e02559b77daa6be9f4f766e360afc0c0b04f79cc0
+**Request Id**: review:247def319eb2b31fe0b94f94fb470f1a
+**Review Record**: .aidlc-engine/reviews/refined-mockups/stage/bb28d2206e402279/1.json
+**Review Record Digest**: sha256:6ea5f77d53c2a53fa03e8acf9d34ce6f2c4b4d4fa8cd79e1dc742a3dea25fa73
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-25T04:56:43Z
+**Event**: DECISION_RECORDED
+**Stage**: refined-mockups
+**Decision**: 呈現 refined-mockups 的 7 條學習候選（c1–c7，逐條為 memory.md 原文）供使用者勾選，並附必答的「下次還有什麼要補的嗎」。路由：c4、c5 → project.md ## Mandated（兩者皆為可執行的必做檢查），其餘 5 條 → ## Corrections；org.md 對應兩節皆空，admission 衝突檢查通過
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T05:01:17Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-25T05:01:33Z
+**Event**: QUESTION_ANSWERED
+**Stage**: refined-mockups
+**Details**: 使用者中斷學習候選的提問並指示繼續；本輪不寫入任何規則層學習。7 條候選（c1–c7）原文保留在 inception/refined-mockups/memory.md，隨 record 進版控
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: a45a5813
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: a45a5813
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+**Duration ms**: 54
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: a45a2915
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: a45a2915
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+**Duration ms**: 47
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 453916cb
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: 453916cb
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+**Duration ms**: 47
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: bcc3c037
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: bcc3c037
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+**Duration ms**: 51
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:35Z
+**Event**: SENSOR_FIRED
+**Fire id**: e88e7084
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:35Z
+**Event**: SENSOR_PASSED
+**Fire id**: e88e7084
+**Sensor ID**: required-sections
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+**Duration ms**: 50
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:35Z
+**Event**: SENSOR_FIRED
+**Fire id**: 6098fcce
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:35Z
+**Event**: SENSOR_PASSED
+**Fire id**: 6098fcce
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md
+**Duration ms**: 53
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:35Z
+**Event**: SENSOR_FIRED
+**Fire id**: 44971cc1
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:36Z
+**Event**: SENSOR_PASSED
+**Fire id**: 44971cc1
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/interaction-spec.md
+**Duration ms**: 54
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:36Z
+**Event**: SENSOR_FIRED
+**Fire id**: fb109433
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:36Z
+**Event**: SENSOR_PASSED
+**Fire id**: fb109433
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/design-system-mapping.md
+**Duration ms**: 50
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:36Z
+**Event**: SENSOR_FIRED
+**Fire id**: 08848620
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:36Z
+**Event**: SENSOR_PASSED
+**Fire id**: 08848620
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/accessibility-checklist.md
+**Duration ms**: 48
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T05:01:37Z
+**Event**: SENSOR_FIRED
+**Fire id**: fdc622e9
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T05:01:37Z
+**Event**: SENSOR_PASSED
+**Fire id**: fdc622e9
+**Sensor ID**: upstream-coverage
+**Stage slug**: refined-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/refined-mockups-questions.md
+**Duration ms**: 52
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-09-25T05:01:37Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: refined-mockups
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T05:10:08Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-09-25T05:10:23Z
+**Event**: GATE_APPROVED
+**Stage**: refined-mockups
+**User Input**: Approve
+**Review Finding Dispositions**: {"version":1,"dispositions":[{"artifact":"aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md","id":"R-01","fingerprint":"sha256:0107948aff62fbcc7e5708f259886057afb09618a127c12e76e3ada6ce34ca01","status":"Accepted risk"},{"artifact":"aidlc/spaces/default/intents/260920-orchestration-brain/inception/refined-mockups/mockups.md","id":"R-02","fingerprint":"sha256:96c5ce634ad37621285e8d2c8f2943907237e3a957088878ad03255289f85690","status":"Accepted risk"}]}
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-09-25T05:10:23Z
+**Event**: STAGE_COMPLETED
+**Stage**: refined-mockups
+**Validation Basis**: {"graphContract":"sha256:a24fe5e76e30a54250dff6f40ed7dd073597cbf8edbc2b452e33e3c0f0dcfd03","inputs":[{"artifact":"requirements","contentHash":"sha256:639af91b87f5ecc3788b5a3bbd06c9483a51cdc778130311604d41b32ccbc75f","instanceCount":1,"presentCount":1,"producer":"requirements-analysis","required":true,"structureHash":"sha256:016ad0ff85afc650932a7291cca9e838af98aecdb62b70a0854c3ab74f53f784"},{"artifact":"stories","contentHash":"sha256:fec4d7feeb2a1f77a291d5b8f6c5ec7ca4249936082ce7d273f6358ad2158391","instanceCount":1,"presentCount":1,"producer":"user-stories","required":false,"structureHash":"sha256:76f5a676742a508a3de3abf5b74038841ed045a689bc32528aa723fe5427de97"},{"artifact":"user-flow","contentHash":"sha256:189bf0a2f3e6d32858b3e02a568f027e482c2fefc0738f77447b4ef5a7d605ec","instanceCount":1,"presentCount":1,"producer":"rough-mockups","required":true,"structureHash":"sha256:d6218e9aed34286ae2eaf2b1af3e8839c1850fc19687d52961aa055702deafdf"},{"artifact":"wireframes","contentHash":"sha256:2b1706506d8a0ece969d9ed933ef0db2538bb67b29e91ef5abf8bbadb7c75e4b","instanceCount":1,"presentCount":1,"producer":"rough-mockups","required":true,"structureHash":"sha256:a150645b62364088961a855daadfdd7682b3f4f138ae619c16cbc625f83c733b"}],"outputs":[{"artifact":"accessibility-checklist","contentHash":"sha256:82115280fc70d50b8ace47d0af0fa85f51ac0632797ff6d43f4302122385d7dc","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:de4e410f39e503b1d000464bac614b2b11993a386e7aedda83a76d1115d32f10"},{"artifact":"design-system-mapping","contentHash":"sha256:c200d14986181969d119ecb512e4e4721eca3b5c2443529b2d35b8f09e762754","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:49d5bd1787be9419457d96d060c883912ac347efea643feca71370933deeff59"},{"artifact":"interaction-spec","contentHash":"sha256:2d589c540c968be6734a96a20d5208dea4103c1af32faa55e28e25357eafe448","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:88c02ef14da9fb716c663111adf9b2726f2d0e3d39675d218b741ba89dee2ba6"},{"artifact":"mockups","contentHash":"sha256:0ff31e2091a3b03ece68f2798e1412726797807f5c79bf74df559a4bfebceff2","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:612135c4f675aa74efb655b57cfd7481e66f4ee4ff27781906a842f7a01effe6"},{"artifact":"refined-mockups-questions","contentHash":"sha256:9cca1d960e6ea1fc1b0fd309f87b7fb07e0b556491eef5b59d88e1c073658611","instanceCount":1,"presentCount":1,"producer":"refined-mockups","required":true,"structureHash":"sha256:201f0fc72452dd5a5b3e05fb31e1828683c5eab000c89a18adefcb860866cd48"}],"projectType":"brownfield","schema":3}
+**Details**: Stage Refined Mockups approved by gate
+**Tokens In**: 324
+**Tokens Out**: 170783
+**Cache Read**: 56759585
+**Cache Write**: 505075
+**Cost USD**: 33.06
+**By Model**: opus-5=27.61; sonnet-5=5.45
+**By Agent**: main=27.61; aidlc-product-lead-agent=5.45
+**Tokens By Model**: opus-5=206/138.6k/43.6M/236.2k; sonnet-5=118/32.2k/13.2M/268.9k
+**Tokens By Agent**: main=206/138.6k/43.6M/236.2k; aidlc-product-lead-agent=118/32.2k/13.2M/268.9k
+
+---
+
+## Stage Start
+**Timestamp**: 2026-09-25T05:10:23Z
+**Event**: STAGE_STARTED
+**Stage**: domain-design
+**Agent**: aidlc-architect-agent
+
+---
