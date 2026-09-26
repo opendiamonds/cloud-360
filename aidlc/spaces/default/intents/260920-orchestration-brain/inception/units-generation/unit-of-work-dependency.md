@@ -50,10 +50,10 @@ units:
     depends_on: [memory-service, session-store]
   - name: work-orchestrator
     kind: service
-    depends_on: [session-store]
+    depends_on: [session-store, hierarchy-service]
   - name: brain-gateway
     kind: service
-    depends_on: [brain-ws-contract, intent-router, work-orchestrator]
+    depends_on: [brain-ws-contract, intent-router, work-orchestrator, session-store]
   - name: entry-page-ui
     kind: ui
     depends_on: [brain-ws-contract, brain-gateway, rbac-story-ids]
@@ -71,7 +71,7 @@ units:
 **well-formedness**（本站以腳本驗證，非目測）：17 個名稱唯一；每個
 `depends_on` 成員皆為已宣告單元；無單元依賴自己；**無環**（DFS 三色法）；
 每個 `kind` 皆為 `service｜spec｜ui｜packaging｜library` 五者之一。
-邊數 **23**。
+邊數 **25**。
 
 ## 依賴圖
 
@@ -106,9 +106,11 @@ graph TD
     U11 --> U8
     U11 --> U10
     U12 --> U10
+    U12 --> U7
     U13 --> U2
     U13 --> U11
     U13 --> U12
+    U13 --> U10
     U14 --> U2
     U14 --> U13
     U14 --> U3
@@ -123,9 +125,9 @@ graph TD
 U3 rbac-story-ids、U4 hierarchy-data。U5 memory-data 與 U6 embedding-port 依賴 U1；
 U7 hierarchy-service 依賴 U4 與 U3。U8 memory-service 依賴 U5 與 U6；U9 memory-purge
 依賴 U5；U10 session-store 依賴 U1 與 U7。U11 intent-router 依賴 U8 與 U10；
-U12 work-orchestrator 依賴 U10；U15 memory-page-ui 依賴 U8。U13 brain-gateway 依賴
-U2、U11、U12。U14 entry-page-ui 依賴 U2、U13、U3。U16 object-picker-ui 依賴 U7 與 U14；
-U17 a11y-gate 依賴 U14 與 U15。 -->
+U12 work-orchestrator 依賴 U10 與 U7；U15 memory-page-ui 依賴 U8。U13 brain-gateway
+依賴 U2、U11、U12 與 U10。U14 entry-page-ui 依賴 U2、U13、U3。U16 object-picker-ui
+依賴 U7 與 U14；U17 a11y-gate 依賴 U14 與 U15。 -->
 
 ## 整合點（逐邊）
 
@@ -143,9 +145,11 @@ U17 a11y-gate 依賴 U14 與 U15。 -->
 | `U11` `intent-router` | `U8` `memory-service` | 讀該使用者的語意與程序記憶以輔助意圖判定 |
 | `U11` `intent-router` | `U10` `session-store` | 讀當前作業對象與對話歷程以解析指涉詞 |
 | `U12` `work-orchestrator` | `U10` `session-store` | 工作項集合隨 session key 存放；讀作業對象決定交辦目標 |
+| `U12` `work-orchestrator` | `U7` `hierarchy-service` | **架構圖被異動時寫入 `DiagramChangeRecord`**（含來源需求摘要與輕量標籤）。**修訂 2 補入**——`components.md` 宣告 `WorkOrchestrator --sync--> ProjectHierarchy`，而本檔修訂 1 的 yaml 缺這條邊，同時本檔的風險註卻引用了它 |
 | `U13` `brain-gateway` | `U2` `brain-ws-contract` | 對外訊息一律依該型別來源編解，並受其 CI 一致性檢查 |
 | `U13` `brain-gateway` | `U11` `intent-router` | 把使用者輸入交給它判定意圖與信心值 |
 | `U13` `brain-gateway` | `U12` `work-orchestrator` | 取工作項集合以推送 `work_items` 訊息；轉送逐項更正 |
+| `U13` `brain-gateway` | `U10` `session-store` | 取出與更新該連線的作業對象與共享狀態。**修訂 2 補入**——`components.md` 宣告 `BrainGateway --sync--> SessionContext`，本檔修訂 1 亦缺此邊；**審查未發現這一條**，是本站把比對基準改為上游元件圖後自查出的 |
 | `U14` `entry-page-ui` | `U2` `brain-ws-contract` | 前端以同一份型別來源解讀 WS 訊息（含 `clarify` 候選） |
 | `U14` `entry-page-ui` | `U13` `brain-gateway` | 入口頁的唯一資料來源是這個 WebSocket |
 | `U14` `entry-page-ui` | `U3` `rbac-story-ids` | `DefaultRedirect` 的瀑布之首需要 `K1`；Sidebar 入口項的顯示條件同一個 |
@@ -166,6 +170,13 @@ U17 a11y-gate 依賴 U14 與 U15。 -->
 或一個等價的同進程授權呼叫）。**本站不改變該決定，只在受影響的兩條邊上標出它**，
 避免下游把這兩條邊讀成已解決。
 
+> **修訂 2 的更正**：修訂 1 時這段散文就引用了 `U12 work-orchestrator → U7`，
+> 但機讀邊塊裡**沒有那條邊**——散文斷言了一條 DAG 不存在的依賴。複審抓到這一點；
+> 本站把自檢 2 的比對基準改為**上游 `components.md` 的元件邊經映射後逐條核對**
+> （原本比對的是本檔 yaml 與本檔整合點表，而後者由前者生成、同源必然一致），
+> 於是又查出**第二條缺邊** `U13 brain-gateway → U10 session-store`。兩條皆已補入，
+> 邊數由 23 更正為 **25**。
+
 ## 可平行機會
 
 | 層 | 單元數 | 該層成員（層內無依賴，可互相平行） |
@@ -178,7 +189,7 @@ U17 a11y-gate 依賴 U14 與 U15。 -->
 | 5 | 1 | `U14` `entry-page-ui` |
 | 6 | 2 | `U16` `object-picker-ui`、`U17` `a11y-gate` |
 
-**完全互相獨立的單元對**（兩者之間沒有任何方向的依賴路徑）共 **56** 對。
+**完全互相獨立的單元對**（兩者之間沒有任何方向的依賴路徑）共 **56** 對（補兩條邊後重算，數值不變——兩條新邊連接的單元原本就有間接路徑相連）。
 這表示本 DAG 允許**多種**有效的拓樸序——選哪一種是 2.9 的事。
 
 **四個可平行根**（`depends_on: []`）：`U1` `brain-infra`、`U2` `brain-ws-contract`、
