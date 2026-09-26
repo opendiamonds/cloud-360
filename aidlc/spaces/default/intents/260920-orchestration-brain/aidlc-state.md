@@ -31,7 +31,7 @@
 - **In Progress**: units-generation
 
 ## Runtime State
-- **Revision Count**: 5
+- **Revision Count**: 6
 
 
 
@@ -68,7 +68,7 @@
 - [x] user-stories — EXECUTE
 - [x] refined-mockups — EXECUTE
 - [x] domain-design — EXECUTE
-- [-] units-generation — EXECUTE
+- [R] units-generation — EXECUTE
 - [ ] contract-design — EXECUTE
 - [ ] delivery-planning — EXECUTE
 
@@ -97,7 +97,7 @@ Per unit: [TBD]
 - **Current Stage**: units-generation
 - **Next Stage**: contract-design
 - **Status**: Running
-- **Last Updated**: 2026-09-25T16:05:39Z
+- **Last Updated**: 2026-09-26T00:08:52Z
 
 ## Session Resume Point
 - **Last Completed Stage**: domain-design

@@ -137,6 +137,10 @@
 
 - **`ADR-0006` 在本站兩份產出中出現 0 次，而它是 hard constraint**。`project.md` 逐字要求「對每一項變更檢查 ADR-0006 security baseline 的四個面向」且「涉及 IAM／權限矩陣／網路暴露／稽核記錄的變更，須在該 stage 產出中明列 security 影響與處置，不得僅以『已有 ADR-0006』帶過」。本站動到其中三個面向（`K1`／`K2` 是 IAM、記憶可見範圍與稽核是 audit logging、Redis ＋ Ollama 是 network exposure），卻一張表都沒有。**這與我在 user-stories 自己抓到的 PBT 缺口是同一類**——hard constraint 在某一站沒有落點，而該站的自檢清單裡沒有「逐一對照本專案的 hard constraint」這一項。六項自檢沒有這一條，所以兩次都是靠別人（或事後）發現。 (learned 2026-09-25) <!-- cid:260920-orchestration-brain:domain-design:a4846f1eba29265e50fee6bd2f22ffb4d4e236ce1027c077f97bf1d2cf0759a9 -->
 
+- **我把一條規則寫進 `project.md ## Mandated`，然後在下一站立刻違反同一條**。domain-design 的閘門上，審查 R-03 抓到「`ADR-0006` 零命中」，我把它升格為規則並逐字寫「逐一對照本專案的 hard constraint……給六項自檢加第七項」。那條規則在本站是**載入狀態**的（`load-steering` 交付了 9 段 memory 層，含 `project.md`），而本站五份產出對 `ADR-0006` 的命中數是 **0**——同一個缺口，隔一站再犯，而且這次是在明知規則存在的情況下。**根因不是不知道，是我的實際自檢程序沒有變**：我跑的仍是那六項，而我自己寫的那條說「六項裡沒有這一項」——我描述了缺口卻沒有把它加進我真正會執行的清單。可執行補強：把「逐項對照 ADR-0006 四面向 ＋ PBT hard constraint」當成**自檢第七項**，與前六項一起在摘要確認區塊逐項報告；沒有出現在那張表裡就等於沒跑。規則寫進 `## Mandated` 只保證它被載入，不保證它被執行。 (learned 2026-09-26) <!-- cid:260920-orchestration-brain:units-generation:da0f010a263206ce620f74031949937c420100d06976df7ff3b65828afb42cfe -->
+
+- **我揭露了較輕的阻塞、漏了較重的，而且兩者形狀相同**。本站明白寫出 `U9 memory-purge` 卡在 `OQ-13`（4 次命中），卻對 `U11 intent-router` 卡在 `OQ-10`／`OQ-4` 零提及——而後者更嚴重：`OQ-10` 質疑的是路由層**能不能產出可比較的信心值**，若不能，`U11` 責任裡寫成已定案的「0–1 信心值」與「門檻 0.7」兩句都要改寫，而 `OQ-4`／`OQ-10` 是上游標明**無自然承接站**的兩項（`OQ-13` 至少有 `infrastructure-design`）。可執行檢查：列完單元後，把 `requirements.md` 的每一個 `OQ-<n>` 逐一問「它未定案會讓哪個單元無法完成」，而不是只寫出自己剛好想到的那一個。 (learned 2026-09-26) <!-- cid:260920-orchestration-brain:units-generation:b0718371842caa9c3df80a771c94b082426eee6bac2ac9c82a6b2b1f71faa8d9 -->
+
 ## Corrections
 
 <!-- Project-specific corrections from human feedback. -->

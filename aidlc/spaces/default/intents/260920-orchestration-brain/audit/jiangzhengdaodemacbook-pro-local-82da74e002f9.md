@@ -11954,3 +11954,830 @@
 **Agent**: aidlc-architect-agent
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-25T16:37:27Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T17:26:43Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-25T17:27:35Z
+**Event**: QUESTION_ANSWERED
+**Stage**: units-generation
+**Details**: G1=A（中粒度約 12 個，軸為一種驗證方式 × 一個資料擁有者）、G2=A（基礎設施獨立為 brain-infra）、G3=A（WS 契約與兩個 schema 皆獨立為 spec 類可平行根）、G4=A（前端三個單元，axe 獨立為 packaging）、G5=A（OQ-1 定案：獨立那段保留但不併入共享流）。OQ-1 的路徑為 requirements-analysis 指派 domain-design → 該站未定案並以 H-2 轉移本站 → 本站定案，且不推翻 FR3.2 與 DD:E6
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T17:37:44Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T17:38:14Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log decision --checkpoint plan-approval --stage units-generation --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md --decision 呈現 17 個單元的分解計畫（4 個可平行根、23 條邊、無環、7 層）取得 Plan Approval，並揭露 G1 選項中「約 12 個」為我未實際枚舉的錯誤估計、17 超出本專案既有實務上界（5/9/12）、以及壓到 12 需要 5 次把兩種驗證方式塞進同一單元的合併
+**Error**: Plan Approval requires exactly one of --unit <unit> or --stage-level.
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T17:38:15Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log answer --checkpoint plan-approval --stage units-generation --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md --details Approve Plan
+**Error**: Plan Approval requires --session <id> from the invoking SessionStart context.
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T17:38:39Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log decision --checkpoint plan-approval --stage-level --stage units-generation --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md --decision 呈現 17 個單元的分解計畫（4 個可平行根、23 條邊、無環、7 層）取得 Plan Approval，並揭露 G1 選項中「約 12 個」為未實際枚舉的錯誤估計、17 超出本專案既有實務上界（5/9/12）、以及壓到 12 需要 5 次把兩種驗證方式塞進同一單元的合併
+**Error**: Code Generation approval authority does not match active directive stage "units-generation"
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T17:38:39Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log answer --checkpoint plan-approval --stage-level --session 4b51ae80-6080-4913-8397-36bcb9710d11 --stage units-generation --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md --details Approve Plan
+**Error**: Code Generation approval authority does not match active directive stage "units-generation"
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-25T17:38:39Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log answer --checkpoint plan-approval --stage-level --session 01a0bfd9-0e72-7d4d-be91-2b0ffb79c980 --stage units-generation --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md --details Approve Plan
+**Error**: Code Generation approval authority does not match active directive stage "units-generation"
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-25T17:38:53Z
+**Event**: DECISION_RECORDED
+**Stage**: units-generation
+**Decision**: Step 4 計畫核可：呈現 17 個單元的分解計畫（4 個可平行根、23 條邊、無環、7 層），並揭露三件事——G1 選項的「約 12 個」是我未實際枚舉的錯誤估計、17 超出本專案既有實務上界（5/9/12）、壓到 12 需要 5 次把兩種驗證方式塞進同一單元而那是使用者已拒絕的 G1 選項 B 的代價。註：plan-approval checkpoint 專屬 code-generation，本站以一般 decision/answer 記錄
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-25T17:38:53Z
+**Event**: QUESTION_ANSWERED
+**Stage**: units-generation
+**Details**: Approve Plan — 使用者在看過「估 12、實算 17」的落差與壓到 12 的具體代價後，選擇接受 17 個單元
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-25T17:47:33Z
+**Event**: DECISION_RECORDED
+**Stage**: units-generation
+**Decision**: 呈現 units-generation 五題定案、四份產出規模（17 單元／23 邊／4 可平行根／56 對獨立）、六項送審前自檢逐項結果（零新發現）、OQ-1 至此關閉的完整路徑，以及三件需使用者過目的事（選項標題的數字未算過、traceability sensor 的誤導性失敗訊息、U9 的單元層級阻塞 OQ-13），請使用者確認
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T17:48:20Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-25T17:48:34Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: units-generation
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md
+**Questions SHA-256**: f4e4ab9c5be52d7a0a20e78bd3df8856b91e3411e02e36e1a8a831a644112069
+**Hash Scope**: confirmed-content-v1
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:48:54Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Context**: inception > units-generation > unit-of-work.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:51:35Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Context**: inception > units-generation > unit-of-work.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:51:49Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Context**: inception > units-generation > unit-of-work-dependency.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:51:54Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Context**: inception > units-generation > unit-of-work-dependency.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:52:49Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Context**: inception > units-generation > unit-of-work-story-map.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:52:53Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Context**: inception > units-generation > unit-of-work-story-map.md
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:53:42Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Context**: inception > units-generation > traceability.json
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T17:53:42Z
+**Event**: SENSOR_FIRED
+**Fire id**: 900e4938
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T17:53:43Z
+**Event**: SENSOR_PASSED
+**Fire id**: 900e4938
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 123
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-25T17:54:04Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Context**: inception > units-generation > traceability.json
+**Summary Authorization Id**: 1c9a2b00a9de9baea2dcae67b8ee849bd20e1a1e040279fc40f2081b150e999b
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T17:54:04Z
+**Event**: SENSOR_FIRED
+**Fire id**: 9bf65839
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T17:54:04Z
+**Event**: SENSOR_PASSED
+**Fire id**: 9bf65839
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 121
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-25T17:54:12Z
+**Event**: REVIEW_REQUESTED
+**Stage**: units-generation
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:9395e5b2fca1adbe8ee84f4617b7d0b6621032735a651ca34262554ef66438ef
+**Request Id**: review:db6c277f71aaeed174ab2e35aa4e1051
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:55:20Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a68493a4818721340
+**Message**: Reading unit-of-work-story-map.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:55:53Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a1ae3ae76a2873f67
+**Message**: Verifying prior-intent unit counts (5/9/12)
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:56:25Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a1327032d8fe4fb40
+**Message**: Grepping for R-01/R-02/R-03 references
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:56:57Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: abdd8a66820b74ae7
+**Message**: Grepping unit-of-work.md for PBT mentions
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:57:30Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a568dd5c6b05c5f9d
+**Message**: Reading US9.1/US9.2 acceptance criteria
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:58:03Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7494e16588f36a0a
+**Message**: Grepping ContextBar ownership in components.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:58:36Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7c65c4d68128c29f
+**Message**: Verifying OQ-4/OQ-10/OQ-13 transfer targets
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T17:59:40Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a2d42a0b3281a7ed2
+**Message**: Grepping units-generation.md for OQ-4/OQ-10 mentions
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T18:00:12Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab4b568db2f40376e
+**Message**: Grepping components.md for DG-1 audit gap
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T18:01:07Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab161a21904c1f189
+**Message**: Running sensor checks via bash
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-25T18:01:57Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-architecture-reviewer-agent
+**Agent ID**: a3a3c9ec6c3f1e2d5
+**Message**: **Reviewer:** aidlc-architecture-reviewer-agent\n\nReview written to `aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/units-generation/stage/049dc9c87e8c1100/1.review.md`.\n
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-25T18:01:57Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-25T18:03:46Z
+**Event**: REVIEW_COMPLETED
+**Stage**: units-generation
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Iteration**: 1
+**Verdict**: NOT-READY
+**Request Fingerprint**: sha256:9395e5b2fca1adbe8ee84f4617b7d0b6621032735a651ca34262554ef66438ef
+**Artifact Fingerprint**: sha256:9395e5b2fca1adbe8ee84f4617b7d0b6621032735a651ca34262554ef66438ef
+**Request Id**: review:db6c277f71aaeed174ab2e35aa4e1051
+**Review Record**: .aidlc-engine/reviews/units-generation/stage/049dc9c87e8c1100/1.json
+**Review Record Digest**: sha256:8c256d41cad0c610b381634a26e2c83ea3544d38f7858695d71c985314cb277f
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-25T18:03:55Z
+**Event**: DECISION_RECORDED
+**Stage**: units-generation
+**Decision**: 呈現 units-generation 的學習候選供使用者勾選。最有價值的一條是 g1：把規則寫進 project.md ## Mandated 只保證載入、不保證執行——同一個 ADR-0006 缺口在寫下規則的下一站立刻再犯，因為我實際跑的自檢程序沒變。路由：g1、g2 → ## Mandated（可執行檢查），g3 → ## Corrections；org.md 對應兩節皆空，admission 衝突檢查通過
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:55Z
+**Event**: SENSOR_FIRED
+**Fire id**: 75c4653c
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_PASSED
+**Fire id**: 75c4653c
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Duration ms**: 45
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: 0b850207
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_PASSED
+**Fire id**: 0b850207
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Duration ms**: 44
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: 4efd0166
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_PASSED
+**Fire id**: 4efd0166
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Duration ms**: 45
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: f9bdf3e9
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_PASSED
+**Fire id**: f9bdf3e9
+**Sensor ID**: required-sections
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 44
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: a87df62a
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:57Z
+**Event**: SENSOR_PASSED
+**Fire id**: a87df62a
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Duration ms**: 46
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:57Z
+**Event**: SENSOR_FIRED
+**Fire id**: 787b5af6
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:57Z
+**Event**: SENSOR_PASSED
+**Fire id**: 787b5af6
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Duration ms**: 46
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:57Z
+**Event**: SENSOR_FIRED
+**Fire id**: 0f173d30
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:57Z
+**Event**: SENSOR_PASSED
+**Fire id**: 0f173d30
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Duration ms**: 47
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-25T18:03:58Z
+**Event**: SENSOR_FIRED
+**Fire id**: 758fd974
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-25T18:03:58Z
+**Event**: SENSOR_PASSED
+**Fire id**: 758fd974
+**Sensor ID**: upstream-coverage
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 47
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-09-25T18:03:58Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: units-generation
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-26T00:04:54Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-09-26T00:05:15Z
+**Event**: RULE_LEARNED
+**Stage**: units-generation
+**Candidate-ID**: c3
+**Content-Hash**: da0f010a263206ce620f74031949937c420100d06976df7ff3b65828afb42cfe
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Mandated
+**Source**: orchestrator
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-09-26T00:05:15Z
+**Event**: RULE_LEARNED
+**Stage**: units-generation
+**Candidate-ID**: c4
+**Content-Hash**: b0718371842caa9c3df80a771c94b082426eee6bac2ac9c82a6b2b1f71faa8d9
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Mandated
+**Source**: orchestrator
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-26T00:07:58Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-26T00:08:06Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state reject units-generation --user-input Request Changes — 四項 Major 皆成立：R-01 US3.1 漏列 U14（ContextBar 的擁有者）、R-02 U11 未揭露其建立在 OQ-4/OQ-10 未定案之上、R-03 DG-1/DG-2/DG-3 在四份產出中零提及、R-04 無 ADR-0006 四面向表（連續第二站） --project-dir <project-dir>
+**Error**: Refusing to reject "units-generation": received reply "Request Changes — 四項 Major 皆成立：R-01 US3.1 漏列 U14（ContextBar 的擁有者）、R-02 U11 未揭露其建立在 OQ-4/OQ-10 未定案之上、R-03 DG-1/DG-2/DG..." did not match an offered choice at the held gate. Re-present the original held gate with every offered choice and wait for the human to choose one.
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-26T00:08:27Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state reject units-generation --user-input Request Changes --project-dir <project-dir>
+**Error**: Refusing to reject "units-generation": Request Changes requires nonblank revision feedback in --feedback (or --reason through aidlc-orchestrate.ts report).
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-26T00:08:42Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state reject units-generation --user-input Request Changes --project-dir <project-dir>
+**Error**: Refusing to reject "units-generation": Request Changes requires nonblank revision feedback in --feedback (or --reason through aidlc-orchestrate.ts report).
+
+---
+
+## Gate Rejected
+**Timestamp**: 2026-09-26T00:08:52Z
+**Event**: GATE_REJECTED
+**Stage**: units-generation
+**Feedback**: 四項 Major 皆經複驗成立，且 R-01 比審查所述更大：除 US3.1 外，US2.1 也漏列 U14（其三條 AC 皆為脈絡列跨頁顯示）。R-02：U11 的 0-1 信心值與 0.7 門檻寫成已定案事實，而 OQ-10 質疑的正是前者能否成立，OQ-4/OQ-10 標明無自然承接站，比已揭露的 U9/OQ-13 更急迫卻零揭露。R-03：DG-1/DG-2/DG-3 在四份產出零提及，其中 DG-2 會打破 U4 自己引用的 AC9.1.4 不變量。R-04：無 ADR-0006 四面向表，連續第二站，且該規則已於上一站閘門寫入 project.md ## Mandated。
+
+---
+
+## Stage Revising
+**Timestamp**: 2026-09-26T00:08:52Z
+**Event**: STAGE_REVISING
+**Stage**: units-generation
+**Revision count**: 6
+**Feedback**: 四項 Major 皆經複驗成立，且 R-01 比審查所述更大：除 US3.1 外，US2.1 也漏列 U14（其三條 AC 皆為脈絡列跨頁顯示）。R-02：U11 的 0-1 信心值與 0.7 門檻寫成已定案事實，而 OQ-10 質疑的正是前者能否成立，OQ-4/OQ-10 標明無自然承接站，比已揭露的 U9/OQ-13 更急迫卻零揭露。R-03：DG-1/DG-2/DG-3 在四份產出零提及，其中 DG-2 會打破 U4 自己引用的 AC9.1.4 不變量。R-04：無 ADR-0006 四面向表，連續第二站，且該規則已於上一站閘門寫入 project.md ## Mandated。
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-26T00:11:23Z
+**Event**: DECISION_RECORDED
+**Stage**: units-generation
+**Decision**: 修訂 1 後重取摘要確認：呈現四個 Major 的修法與各自我自查出的額外部分（R-01 實際有兩列而非一列、R-03 的 DG-2 就地寫在引用 AC9.1.4 的同一格、R-04 的表中記下為何第一版沒有），以及送審前自檢本輪起擴為七項（新增逐項對照 hard constraint）
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-26T00:12:04Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-26T00:12:13Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: units-generation
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/units-generation-questions.md
+**Questions SHA-256**: 06f9cfca489d41098441e4a579a444b2329410f4c00f88be4d146516c4e7849e
+**Hash Scope**: confirmed-content-v1
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:18Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Context**: inception > units-generation > unit-of-work.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:23Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work.md
+**Context**: inception > units-generation > unit-of-work.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:27Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Context**: inception > units-generation > unit-of-work-story-map.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:31Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md
+**Context**: inception > units-generation > unit-of-work-story-map.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:35Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Context**: inception > units-generation > unit-of-work-dependency.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:40Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-dependency.md
+**Context**: inception > units-generation > unit-of-work-dependency.md
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-26T00:12:47Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log review --stage units-generation --reviewer aidlc-architecture-reviewer-agent --iteration 2
+**Error**: Cannot start review for "units-generation": this stage's output document <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json was last saved under a different summary confirmation. Save the document again, so its write descends from the current confirmation, then continue.\n{"kind":"ask","ask_type":"guard-recovery","response_route":"execute-remedy","question":"The next action for \"units-generation\" would be refused. Choose one authority-preserving recovery action.","stage":"units-generation","reason_codes":["SUMMARY_ARTIFACT_UNAUTHORIZED"],"remedies":[{"op":"redo-jump","action":"This stage is mid-revision; the way to restart it cleanly is a redo jump: /aidlc --stage units-generation (your recorded answers survive; you will re-confirm the summary once).","command":"bun .claude/tools/aidlc-orchestrate.ts next --stage units-generation","requiresHuman":true,"executableNow":true}]}
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:12:55Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Context**: inception > units-generation > traceability.json
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-26T00:12:55Z
+**Event**: SENSOR_FIRED
+**Fire id**: 4a95dd2c
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-26T00:12:56Z
+**Event**: SENSOR_PASSED
+**Fire id**: 4a95dd2c
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 122
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-26T00:13:00Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Context**: inception > units-generation > traceability.json
+**Summary Authorization Id**: 3f63c7842812547c75fc296cc097170a8f02dd9aade946e8316c2b6d58cd6745
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-26T00:13:00Z
+**Event**: SENSOR_FIRED
+**Fire id**: 7739cad7
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-26T00:13:00Z
+**Event**: SENSOR_PASSED
+**Fire id**: 7739cad7
+**Sensor ID**: traceability
+**Stage slug**: units-generation
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/traceability.json
+**Duration ms**: 143
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-26T00:13:05Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log review --stage units-generation --reviewer aidlc-architecture-reviewer-agent --iteration 2
+**Error**: Cannot start review iteration 2 for "units-generation" because the next iteration is 1. Retry with --iteration 1.
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-26T00:13:16Z
+**Event**: REVIEW_REQUESTED
+**Stage**: units-generation
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:6be439fc53e5b83bf158dacb59ed3ed9e207164779ce0b898fd5030755d45f64
+**Request Id**: review:d7074057fdf28b3878a7a8672be5d72a
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-26T00:14:06Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
