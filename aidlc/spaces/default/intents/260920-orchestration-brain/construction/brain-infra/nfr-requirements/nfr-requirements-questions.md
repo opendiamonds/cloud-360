@@ -397,4 +397,4 @@ Construction 階段的提問應是**例外而非常規**（stage-protocol §3）
 - Looks correct
 - Request changes
 
-[Answer]: Looks correct  <!-- answered 2026-09-27T01:59:51Z via picker；第四次取得：conductor 對 functional-design 執行了一次多餘的 redo jump（本意是為 nfr-design 取得新 attempt，但 nfr-design 自己的補救額度尚未用過，該跳躍不必要），重設了整個 construction 區塊的 attempt floor 並作廢本站已 commit（126af50）的收據。三份產出自該 commit 以來 git status 為空、內容逐位元未改 -->
+[Answer]: Looks correct  <!-- answered 2026-09-27T06:36:56Z via picker；重取：為取得 infrastructure-design 的新審查預算而執行的 redo jump 重設了整個 construction 區塊的 attempt floor。本站內容未改動（git status 對該目錄為空，已 commit） -->

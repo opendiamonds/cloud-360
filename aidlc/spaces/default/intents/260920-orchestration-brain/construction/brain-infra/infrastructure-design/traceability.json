@@ -1,0 +1,279 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "brain-infra",
+  "upstream_ids": [
+    "D-1",
+    "D-2",
+    "D-3",
+    "D-4",
+    "PROBE-CONTRACT",
+    "IAM-PG-SUPERUSER",
+    "AUDIT-CORRELATION-ID",
+    "TENSION-DISK-UNLOCK",
+    "S-6",
+    "S-7",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR6.1",
+    "NFR6.3",
+    "NFR7.1",
+    "NFR8.1",
+    "NFR8.4",
+    "NFR8.5",
+    "NFR8.7",
+    "NFR8.8",
+    "NFR8.9",
+    "NFR9.1",
+    "NFR6.2",
+    "NFR6.2a",
+    "NFR8.1a",
+    "NFR8.1b",
+    "NFR8.2",
+    "NFR8.3"
+  ],
+  "coverage": [
+    {
+      "id": "D-1",
+      "status": "OK",
+      "target": "主機層全碟加密。infrastructure-specification.md §一 的 Deployment 表把它列為「磁碟空間」那一列的並列前置條件，§四 的磁碟空間要求**刻意沿用 D-1 已列出的同一組四個掛載點**（/、/var/lib/docker、/home 或 $HOME 所在掛載點、自架 runner 工作目錄）——理由是 dump 檔在 $HOME、volume 在 /var/lib/docker，兩者可能在不同檔案系統上，加密與空間這兩件事要檢查的對象是同一組"
+    },
+    {
+      "id": "D-2",
+      "status": "OK",
+      "target": "容器間明文、信任邊界含 host-local 行程。本站不改變該決定；monitoring-design.md §三 承接它的一個後果——未授權的 Ollama 呼叫在記錄上不可辨識（NFR8.9 已接受），而本站不引入任何能辨識它的機制"
+    },
+    {
+      "id": "D-3",
+      "status": "OK",
+      "target": "networks: 分段。infrastructure-specification.md §一 的網路拓樸列原樣承接（兩個 bridge、不得設 internal: true）；cicd-pipeline.md §三 承接「test stack 也要分段，但理由不同——沒有 cloudflared、沒有現存威脅要擋，唯一理由是避免兩份 compose 形狀漂移」。本站另指出 D-3 是本單元會弄斷 backend→db 的那個變更，故 §二 的探測是必要的而非防禦性冗餘"
+    },
+    {
+      "id": "D-4",
+      "status": "OK",
+      "target": "dump 檔三條硬要求。本站不重述，但 §四 的磁碟空間要求把 dump 檔算進升版窗口的三份全庫明文副本之一，並明訂「空間不足時不得開始升版」——理由是七步程序中途耗盡空間會同時失去新 volume 與 dump，而 NFR6.3(b) 的回退路徑就是那份 dump"
+    },
+    {
+      "id": "PROBE-CONTRACT",
+      "status": "OK",
+      "target": "七條（P-1…P-7）原樣承接，本站不重新設計。cicd-pipeline.md §二 只說明它在管線裡的位置（deploy job 的獨立新步驟、rollback job 併入既有迴圈）、兩個 job 的形狀不可互抄、以及重試窗口的牆鐘上界（≈10 分鐘）與 rollback job 的 timeout-minutes: 20 之間餘裕不大、須實測。另補兩項本站的判定：探測不需任何 secret（P-3 的不存在使用者），故不觸及憑證規則；它落在純 Actions 步驟，符合 project.md 對無人值守自動化的承載要求"
+    },
+    {
+      "id": "IAM-PG-SUPERUSER",
+      "status": "N/A",
+      "target": "PostgreSQL 單一 superuser 連線。infrastructure-specification.md §二 的 db 列原樣記載它是**既有基線、最小權限拆分不在本單元範圍**，與 nfr-design 的判定一致。本站不改變它，也不新增任何緩解"
+    },
+    {
+      "id": "AUDIT-CORRELATION-ID",
+      "status": "Deferred",
+      "target": "correlation ID 的產生與傳遞。monitoring-design.md §五 的「分散式追蹤」段原樣承接：本單元無落點，承接點為 U13 brain-gateway（產生點）與 U12 work-orchestrator（傳遞點）的 nfr-design 迭代，且該站是 CONDITIONAL、condition 為連言，brain-infra 跑過不保證 U12／U13 會跑——屆時判定 skip 的執行者須重新提交使用者裁決"
+    },
+    {
+      "id": "TENSION-DISK-UNLOCK",
+      "status": "OK",
+      "target": "全碟加密的開機解鎖與斷電自動回復的張力。本站**加重了它的後果而非緩解**：§四 明訂空間不足時不得開始升版，而 infrastructure-specification.md §二 的 Redis 硬約束指出容器上限設錯會造成反覆 OOM kill 重啟——在一台需要解鎖才能開機的主機上，任何導致主機重開的失敗都比原本更難自動回復。DEPLOY.md 須同時記載解鎖方式（D-1 已要求）與這一層後果"
+    },
+    {
+      "id": "S-6",
+      "status": "OK",
+      "target": "把探測加進 deploy.yml 兩個 job。cicd-pipeline.md §二 完整承接，並在 §五 的改動清單列為第 1、2 項。**該清單本輪由十四項增為十七項**（審查 R-08 查出漏列三項：模型取得機制、兩個新服務的 depends_on／restart、maxmemory 的承載），但新增的三項不屬 S-6 的範圍——本站未擴大也未縮小 S-6 本身"
+    },
+    {
+      "id": "S-7",
+      "status": "OK",
+      "target": "DEPLOY.md 的全碟加密前置條件與四個掛載點。cicd-pipeline.md §五 第 13 項列出 DEPLOY.md 的完整必寫清單，其中含 S-7 的全部內容，並新增本站的四項（見 NFR8.5 列）。**本站另讓磁碟空間檢查沿用 S-7 已列出的同一組四個掛載點**，並為其中兩個給出個別門檻（審查 R-06）"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "Redis 的 ACL 專用使用者與憑證。infrastructure-specification.md §二 的 redis 列原樣承接（值不得為 default），並指出 healthcheck 的 redis-cli ping **不證明 ACL 使用者可用**（ping 在 default 下也會過，憑證錯誤會在 backend 連線時才以 WRONGPASS 出現）——這是 monitoring-design.md §六 明寫的界限。ACL 的確切指令與 key pattern 仍屬 U10 **本輪補上承載者（審查 R-38，Critical）**：初版只記「原樣承接」而沒有任何一處說明 ACL 使用者是**怎麼被建立**的——在四份產出中 users.acl／REDIS_USER／ACL SETUSER／--user 的命中數皆為 0，是「有讀者無寫者」。承載者現寫在 cicd-pipeline.md §五 第 17b 項：兩份 compose 各自的 ACL 設定資產（redis.conf／users.acl）或各自的 command: ACL SETUSER，兩份不得共用同一份檔（上游 security-requirements.md:95 的理由：ACL 檔不內插環境變數，共用只能靠把部署憑證寫進 public repo 或讓 test 用真憑證，兩者皆不可接受）。test stack 缺它的後果是每個 PR 的 ui-regression 都紅。"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "Redis AOF ＋ 具名 volume（僅 deploy stack）。本站補上它沒有涵蓋的部分：maxmemory ＋ allkeys-lru（[I1]=A，見 reverse 的 I1-REDIS-MAXMEMORY）、**maxmemory 的承載位置**（compose 的 command: 覆寫，見 I1-MAXMEMORY-CARRIER）、以及**容器上限與 maxmemory 的可判定關係式**（≥ maxmemory × 1.5 ＋ 256MB，見 REDIS-LIMIT-RELATION——初版只寫「必須明顯高於」，不可判定）。appendfsync 具體值仍屬 U10，且受 NFR4.2 原有的「所選值不得使 NFR3 的 P50 預算失守」約束——本站不放寬。另本輪補上 restart: unless-stopped，因為上述硬約束的論證明文依賴它（RESTART-POLICY） **本輪另補 appendonly 的承載（送審前自檢第 2 項）**：AOF 由 command: 的 --appendonly yes 開啟——映像預設為 appendonly no，不明寫則 AOF 不開而 redis-cli ping 照樣回 PONG、healthcheck 照樣過，NFR4.2 在執行期靜默失守。歸屬切分表另涵蓋 auto-aof-rewrite-*（U10 決定值與位置，但依 NFR4.2 不得關閉；預設即開啟故無靜默失敗路徑）。AOF 對 test stack 的豁免依據為 NFR4.2 本身的適用範圍條款（security-requirements.md:96 ＋ docker-compose.test.yml:22 的 isolated and disposable 註解），**不是 [I5]**（初版引錯題，審查 R-49）；同一張範圍表的 ACL 列**不豁免**。本站就 appendonly／maxmemory／maxmemory-policy 三項收窄 §五 交給 U10 的資產選擇，已列為 S-11 待回補。"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "Ollama 模型快取 volume。infrastructure-specification.md §一 的儲存策略列與 §四 的逐掛載點門檻各承接一面：前者是它作為第三個具名 volume 的位置，後者是它約 1.2GB 的空間佔用（算在 volume fs 那一列）。**本輪更正（審查 R-02／R-04）**：初版寫「/api/tags 不證明模型已下載完成（首次啟動會回空清單），故 start_period 必須涵蓋一次下載」——**兩處都錯**。官方映像啟動不會自動拉模型，所以空清單是**永久**而非過渡態（見 reverse 的 MODEL-ACQUISITION）；而模型下載改由部署後步驟承載、**不在啟動路徑上**，所以 start_period 不需要涵蓋它，只需涵蓋 ollama serve 自身的秒級啟動"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "本站在 §五 的改動清單第 7、8、9 項實作三份 compose 的映像變更，並在 §一 的儲存策略列記載 volume 改名（落點 5）——**狀態本輪由 N/A 更正為 OK（審查 R-08）**：本站的改動清單就在實作它，不是不適用。只在 §五 明記 repo 根那份**只改 db 映像**、D-3／S-8／S-9 刻意不適用於它。**另查出 pg16 陳舊引用的逐處清單**（components.md:215／:371／:444 三處，審查 R-10 補完 :444）"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "升版程序。本站不改七步程序，但 §四 的磁碟空間要求是它的新前置條件——升版窗口內同時存在三份全庫明文副本，而空間不足的失敗發生在中途、會同時失去新 volume 與 dump（而 NFR6.3(b) 的回退路徑就是那份 dump）。另 §五 列出 DEPLOY.md 必寫的「回退窗口結束時刪舊 volume」"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "加密承載面。手段已由 nfr-design D-1 定案為主機層全碟加密，本站不改變，只在 §四 讓磁碟空間檢查沿用 D-1 已列出的同一組四個掛載點"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "七個變數由 render-env.sh 寫入、deploy.yml 兩處同步。**狀態本輪由 N/A 更正為 OK（審查 R-08）**：cicd-pipeline.md §五 第 3、4 項就是在實作它。**本站刻意不新增任何 compose 消費的變數**——資源上限與 maxmemory 都硬寫（見 reverse 的 I2B-LIMITS-HARDCODED 與 I1-MAXMEMORY-CARRIER），所以九處同步點不變、NFR8.1 的作用域不被擴大 **本輪更正實作方式（審查 R-40，Critical）**：deploy.yml 兩處 env: 對照表**只新增 REDIS_PASSWORD 一項**，其餘六者為 render-env.sh 內的字面值（依 NFR4.1(c) 的 REDIS_USER 契約 security-requirements.md:111 逐字，以及 render-env.sh:73–90 的既有形狀）。初版寫「新增七個變數」，照字面實作會讓六個無對應 secret 的名字解析為空字串寫進 deploy/.env，其中 EMBEDDING_PROVIDER 依 K-01 required 且無預設，backend 會大聲失敗 → deploy 紅燈 → 觸發自動 rollback。另補 render-env.sh 的另兩處擴充（:44–49 必填檢查、:59 的 $ 擋阻名單，審查 R-39）與新增 secret 的 gh api 複查義務（第 4d 項，審查 R-41）。"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "LOCAL-DEV.md 同步。**狀態本輪由 N/A 更正為 OK（審查 R-08）**：cicd-pipeline.md §五 第 14 項就是在實作它、且自標 blocking。觸發原因是 backend/database.py 的 schema 補丁（第 12 項）與 .env.example 改動（第 10 項）。本站不新增其他觸發"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "DEPLOY.md 同步。本站在 nfr-design 的五項之上**再新增六項**（**計數本輪更正，審查 R-25**：初版寫「四項」並只列舉四項，漏算了 (8) 與 (11)）：(6) 磁碟空間的**逐掛載點**門檻 ＋ DBSIZE／DUMPSIZE 的量測指令（S-10 ＋ 審查 R-06／R-24）、(7) 記憶體上限的**暫定值與複量期限**（[I2b] 反轉後的形狀，見問題檔 I2b 的反轉紀錄）、(8) max-size／max-file 的值**與總量不超過 2GB 的上界**（審查 R-06(d)）、(9) rollback job 加上探測後的實際耗時、(10) **升版期間暫時提高 db 記憶體上限到一個明確的值、還原驗證後恢復並記錄「已恢復」**（審查 R-07／R-27）、(11) **maxmemory 的值與其與容器上限的關係式檢查結果**（審查 R-05）。完整的十一項清單在 cicd-pipeline.md §五 第 13 項"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "Redis 對外暴露面為零。infrastructure-specification.md §二 的 redis 列原樣承接。本站另補 healthcheck（[I3]=D），它不改變暴露面——healthcheck 在容器內執行、不需 host port"
+    },
+    {
+      "id": "NFR8.8",
+      "status": "OK",
+      "target": "Ollama 對外暴露面為零，且其存取控制只有那一層。本站原樣承接（含 nfr-design D-3 對「那一層」的更正），並在 monitoring-design.md §三 承接它的後果：未授權呼叫在記錄上不可辨識是已接受的代價，而本站不引入任何能辨識它的機制"
+    },
+    {
+      "id": "NFR8.9",
+      "status": "OK",
+      "target": "兩個新容器的記錄承載。本站**刻意超出其字面**：[I4]=A 把 logging: 的 max-size／max-file 加到兩份 compose 的**全部服務**（S-9），理由是照字面做會讓 backend 維持無界、而磁碟寫滿對全碟加密的主機是實際風險、且會讓 S-10 的空間前置條件在運行中被吃掉。具體值仍依 NFR8.9 由部署者定並記入 DEPLOY.md"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "本機 embedding 對外部花費的貢獻為零。**本站在兩處承接它**：(1) infrastructure-specification.md §二 的 ollama 列指出資源上限設錯會造成反覆重啟，而 Ollama 不可用時 embedding 會退回外部 API、NFR9.1 即失守；(2) cicd-pipeline.md §三 的 [I5]=A 讓 CI 走 stub 而非真實 Ollama——**這不影響 NFR9.1**，因為它的主張是「本機 embedding 的外部花費為零」，而 stub 的外部花費同樣是零"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "CREATE EXTENSION 的兩處承載。cicd-pipeline.md §五 第 11 項（schema_rbac.sql，blocking）與第 12 項（backend/database.py 的 _ensure_vector_extension，呼叫點在 create_all 之前）。**本輪補宣告（審查 R-08）**：它是 §五 兩項改動的逐字依據，卻未在 upstream_ids 內"
+    },
+    {
+      "id": "NFR6.2a",
+      "status": "OK",
+      "target": "本機建庫路徑的硬依賴（schema_rbac.sql 是單一交易，缺 pgvector 時整個交易中止）。同為 §五 第 11、12 項的依據——兩處承載缺一不可正是 NFR6.2a 的結論。**本輪補宣告（審查 R-08）**"
+    },
+    {
+      "id": "NFR8.1a",
+      "status": "OK",
+      "target": "deploy compose 的 backend.environment: 七個變數不得帶 :- fallback。cicd-pipeline.md §五 第 6 項。**本輪補宣告（審查 R-08）**。本站新增的 depends_on 與 restart 不影響該區塊"
+    },
+    {
+      "id": "NFR8.1b",
+      "status": "OK",
+      "target": "test compose 的 backend.environment: Redis 三者自帶測試預設值。cicd-pipeline.md §五 第 8 項，本站另在同一項加 EMBEDDING_PROVIDER: stub（[I5]=A）——依 NFR8.1b 的既有慣例自帶測試值。**本輪補宣告（審查 R-08）**"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "deploy/.env.example 列出七者。cicd-pipeline.md §五 第 5 項。**本輪補宣告（審查 R-08）**。本站不新增任何變數，故該檔的內容不因資源上限或 maxmemory 而改變"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "OK",
+      "target": "backend/.env.example 列出 backend 讀得到的變數。cicd-pipeline.md §五 第 10 項。**本輪補宣告（審查 R-08）**"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "I1-REDIS-MAXMEMORY",
+      "status": "N/A",
+      "target": "Redis 的 maxmemory ＋ maxmemory-policy allkeys-lru（[I1]=A）。**上游完全沒有任何一條碰到它**——NFR4.2 定了 AOF 與具名 volume、domain-design ADR-005 定了 TTL 24 小時續期，但記憶體上限與淘汰策略無人決定。兩種極端各有一個無聲面：不設上限則主機 OOM（OOM killer 挑誰不可預測，可能是 Postgres）；設了但沿用預設 noeviction 則寫入開始失敗而讀取照常，後果是「新 session 建不起來、舊 session 照常運作」而本 repo 沒有任何告警會說這件事。已接受的代價：高負載下使用者可能在不足 24 小時就失去脈絡，而**淘汰與 TTL 正常到期在使用者端無法區分**（見 monitoring-design.md §三）"
+    },
+    {
+      "id": "I2-RESOURCE-LIMITS",
+      "status": "N/A",
+      "target": "六個服務全部設記憶體上限（[I2]=C）＋ 設計只定推導方式不寫值（[I2b]=A）。**屬 §〇 的 S-8，需回補進 scope**——三份 compose 今日完全沒有資源限制（deploy:／resources:／limits:／mem_limit／cpus 零命中），這是本 repo 的新模式。**為何值不能猜**：repo 內沒有任何監控堆疊，db 與 backend 的實際用量沒有數字；db 上限猜低 → OOM kill → restart: unless-stopped → 重啟迴圈 → 站台掛掉，而全碟加密的主機重開還需解鎖。**硬約束**：Redis 的容器層上限必須明顯高於 maxmemory ＋ 開銷，否則容器在 Redis 有機會淘汰前就被 OOM kill——把優雅淘汰換成硬重啟，而後者只在核心日誌裡、比淘汰更難診斷。**後果**：量測成為 code-generation 的前置條件，不只是部署的"
+    },
+    {
+      "id": "I2B-LIMITS-HARDCODED",
+      "status": "N/A",
+      "target": "上限的值硬寫在 compose、不走環境變數（**本站定案，非選項之一**）。理由：走環境變數會讓同步點由九處變十五處，而「新增 compose 消費的變數」在本 repo 有 blocking 規則與**無聲失敗前例**——N8N_USER／N8N_PASSWORD 從未被寫入，導致每次部署的架構圖 icons 靜默退回灰底佔位圖；為六個容量數字承擔那個風險不值得。硬寫的代價（改上限要走 PR ＋ 部署）對容量決策而言是優點：它變成可審查、有版本、有 reviewer 的變更。無對應上游 id——本站自己的判斷，已在閘門前向使用者揭露理由與代價"
+    },
+    {
+      "id": "I3-NO-MONITORING-STACK",
+      "status": "N/A",
+      "target": "不引入監控堆疊 ＋ 為兩個新容器加 healthcheck（[I3]=D）。monitoring-design.md 的 metrics／alerts／SLI-SLO 三張表**刻意留空並指名承接站**為 Operations 的 observability-setup，而非照樣式填滿——照填會產出一份看起來完備、實際一項都不存在的文件。**查證依據**：prometheus／grafana／datadog／opentelemetry／sentry 在 deploy/／backend/／.github/ 的命中只有三處，全部是 wa_lens_engine.py:415–416 與 wa_rule_engine.py:375 用來偵測「使用者的架構有沒有提到監控」的關鍵字清單。**風險**：observability-setup 是否執行未確認，若被 skip 則本 intent 完全沒有 metrics 與告警。**healthcheck 的界限已明寫**：redis-cli ping 不證明 ACL 使用者可用（ping 在 default 下也會過），/api/tags 不證明模型已下載（首次啟動會回空清單而非錯誤）——刻意接受，因為更深的檢查需要憑證或觸發真實推論"
+    },
+    {
+      "id": "I4-LOGGING-ALL-SERVICES",
+      "status": "N/A",
+      "target": "logging: 的 max-size／max-file 加在兩份 compose 的全部服務（[I4]=A）。**屬 §〇 的 S-9，需回補進 scope**——NFR8.9 只要求兩個新容器，加到全部是刻意超出上游字面。理由：照字面做會讓 backend（本 repo 最多日誌的服務）維持無界，而磁碟寫滿對一台全碟加密的主機是實際風險，且會讓 S-10 的空間前置條件在運行中被慢慢吃掉。**成本遠低於資源上限**：設日誌上限不需要任何用量資料，沒有猜數字的問題。CI test stack 也加的唯一理由是避免兩份 compose 形狀漂移（效果上它每次重建、日誌隨 stack 消失）"
+    },
+    {
+      "id": "I5-CI-NO-OLLAMA",
+      "status": "N/A",
+      "target": "CI test stack 不起 Ollama、設 EMBEDDING_PROVIDER=stub（[I5]=A）。**這一項收斂了 nfr-requirements 留為待決的一個 Assumption**（「docker-compose.test.yml 是否需要 Ollama 取決於 U5／U6 的 CI 驗證形狀」）。既有先例：同檔 :35–37 逐字 `# A1 generation is out of scope for these tests; leave the key empty so / # the app boots but the LLM path stays untouched.` ＋ OPENROUTER_API_KEY: \"\"。enum 支援：K-01 的 allowed 已含 stub。**為何不能留空**：K-01 的 validation 逐字「值不在 allowed 內即啟動失敗並列出可選值」、required: true、無預設值，故留空會讓 ui-regression 全紅。**為何選 stub 而非 fulltext**：fulltext 的語意與向量檢索不同，e2e 斷言若依賴相似度排序會得到不同結果，比 stub 更容易寫出假綠燈；embedding 的真實行為由 U6 的單元測試（含 property-based）覆蓋"
+    },
+    {
+      "id": "S-10-DISK-SPACE",
+      "status": "N/A",
+      "target": "DEPLOY.md 新增磁碟空間前置條件。**由本站的覆蓋檢查查出，不是任何一題的答案，也無對應上游 id**——本單元新增 Ollama 模型（約 1.2GB）＋ Redis AOF，而 NFR6.3 的升版窗口內同時存在**三份全庫明文副本**（新 volume、保留中的舊 volume、dump 檔），而沒有任何一處檢查過主機有沒有空間。要求：升版前確認可用空間 ≥ 現有資料庫大小 × 3 ＋ 2GB，檢查對象是 D-1 已列出的同一組四個掛載點（因為 dump 在 $HOME、volume 在 /var/lib/docker，可能在不同檔案系統上），空間不足時不得開始升版。**沒有機械閘門**——CI 在 GitHub runner 上跑，對 192.168.10.10 的磁碟一無所知"
+    },
+    {
+      "id": "NO-GATE-ADDITIONS",
+      "status": "N/A",
+      "target": "本站新增四項沒有機械閘門的事（infrastructure-specification.md §六）：資源上限的存在與其值是否來自量測（validate_env_contract.py 不解析 deploy.resources，且因值硬寫在 compose、「這個數字是量測來的還是猜的」在檔案上看不出來，DEPLOY.md 的量測紀錄是唯一線索）、logging: 是否加在全部服務上、磁碟空間前置條件、healthcheck 是否真的反映服務可用。**補閘門的做法已具體提出**（不列為本單元交付）：nfr-design §四 已提議擴充 validate_env_contract.py 解析兩份 compose 的 networks:／ports:／volumes:，本站再加三項可納入同一次擴充——每個服務都有 deploy.resources.limits.memory、每個服務都有 logging.options 的 max-size 與 max-file、兩份 compose 的服務集合差異只有 cloudflared"
+    },
+    {
+      "id": "CI-YML-UNCHANGED",
+      "status": "N/A",
+      "target": "ci.yml 完全不需改動（**本站實地查證的結論，原本留為假設**）。docker-build job 只有兩個步驟：context: ./backend 與 context: ./frontend，皆 push: false 的純建置驗證；新增的 redis／ollama 用官方映像、不經 Dockerfile，不在它的作用域內。該 job 的註解逐字說明其目的：「Build only — the deploy job on the self-hosted runner is what actually ships. This exists so a broken Dockerfile fails the PR, not the deploy.」記在此處是因為「不需改」本身是一項需要被驗證的結論，不是預設"
+    },
+    {
+      "id": "TEST-COMPOSE-LIMITS-DIFFER",
+      "status": "N/A",
+      "target": "兩份 compose 的記憶體上限值**必然不同**（CI runner 與 192.168.10.10 的可用記憶體不同），所以「兩份 compose 保持一致」這個原則在**這一項上例外**。必須明寫，否則下一個做一致性比對的人會把它當成漂移——而本 session 已因兩份 compose 不一致抓到兩項發現（NFR8.1a／NFR8.1b），形狀漂移在本 repo 是有前例的真實問題。無對應上游 id——由 [I2]=C 套用到兩份 compose 時產生"
+    },
+    {
+      "id": "MODEL-ACQUISITION",
+      "status": "N/A",
+      "target": "**bge-m3 的取得機制（審查 R-02，Critical——初版完全沒有這一項）。** 官方 ollama/ollama 映像的 entrypoint 是 ollama serve，**不會自動拉任何模型**。初版三處主張（§四 的「首次啟動下載後常駐」、monitoring-design.md §六 的「期間回空清單」、§五 對 ollama 只寫新增服務／volume／healthcheck）全部建立在一個不存在的下載動作上。**若照初版實作**：/api/tags 永久回空清單、healthcheck 恆為健康且恆無模型、NFR9.1 執行期靜默失守、模型快取 volume 永遠是空的。**定案：部署後步驟**（deploy.yml 在 up -d 之後執行一次 ollama pull bge-m3，冪等，失敗讓部署紅燈），不採 entrypoint 覆寫／init 容器／自建映像——理由見 infrastructure-specification.md §二 的候選機制表。**與 healthcheck 的分工**：healthcheck 只宣稱 HTTP 服務在回應，模型就緒由 pull 步驟保證，故 ollama 不需要長 start_period"
+    },
+    {
+      "id": "DEPENDS-ON-TOPOLOGY",
+      "status": "N/A",
+      "target": "**兩個新服務的 depends_on 拓樸（審查 R-04——初版從未設計，卻在 monitoring-design.md 引用了一個依賴它的因果）。** 實測現況只有三條：deploy compose :63–65（backend → db, service_healthy）、:77–78（frontend → backend）、:92–93（cloudflared → frontend）。定案：backend → redis 用 **service_healthy**（redis-cli ping 數秒內就緒，等它安全，而不等的代價是啟動期連線錯誤變成使用者可見的 500）；backend → ollama 用 **service_started**（等 service_healthy 沒有好處——healthcheck 不等下載，真正決定可用性的是模型是否在 volume 裡、而那由部署後步驟保證；用 service_started 避免製造一個看起來在等就緒、實際等不到正確東西的邊）。不完全省略是因為省略則 compose 不保證順序，而 EMBEDDING_PROVIDER=ollama 之下 backend 啟動期就可能打它"
+    },
+    {
+      "id": "RESTART-POLICY",
+      "status": "N/A",
+      "target": "**兩個新服務的 restart 政策（審查 R-13b——初版從未指定，而 §二 的 Redis 硬約束論證明文依賴它對 redis 生效）。** 兩者皆 restart: unless-stopped，與既有四個服務一致。那個論證原本建立在一個沒寫下來的假設上"
+    },
+    {
+      "id": "I1-MAXMEMORY-CARRIER",
+      "status": "N/A",
+      "target": "**maxmemory 的承載位置（審查 R-05——[I1]=A 的選項原文說「由部署者依主機餘裕定」，而 [I2b] 明文反對新增 compose 消費的變數，兩者指向相反方向且初版未調和）。** 定案：compose 的 command: 覆寫（redis-server --maxmemory <值> --maxmemory-policy allkeys-lru），與記憶體上限同一個承載形狀，使兩個數字在**同一個服務區塊內**可對照。不採掛載 redis.conf（nfr-requirements §五 已把該選擇留給 U10，本站不預先綁死；唯一硬要求是 maxmemory 與容器上限必須在同一份 compose 裡可對照）。不採環境變數（牴觸 [I2b]）。**所以「由部署者定」在硬寫前提下的實際語意是「改 PR」**——必須明說，否則 DEPLOY.md 會寫成「可調」而實際調不了"
+    },
+    {
+      "id": "REDIS-LIMIT-RELATION",
+      "status": "N/A",
+      "target": "**容器上限與 maxmemory 的可判定關係式（審查 R-05——初版寫「必須明顯高於」，沒有比例、沒有計算式、沒有驗證方式，而 §六 第 1 項自己承認沒有閘門會檢查它；一個不可判定的成立條件等於沒有條件）。** 定案：**redis 容器記憶體上限 ≥ maxmemory × 1.5 ＋ 256MB**。× 1.5 的依據是 allocator 碎片（mem_fragmentation_ratio 一般 1.0–1.5）＋ 複製／輸出緩衝；＋256MB 是 AOF 重寫期的 copy-on-write 與 aof_rewrite_buffer（AOF 由 NFR4.2 要求開啟，故必存在）。**它的作用是讓關係式可被檢查，不是精確預測。** 因為兩個數字都硬寫在同一個服務區塊，這條可被人目視也可被腳本檢查——已列入 §六 補閘門做法的第 (d) 項"
+    },
+    {
+      "id": "DB-LIMIT-UPGRADE-WINDOW",
+      "status": "N/A",
+      "target": "**db 的記憶體上限在升版窗口內必須另行處置（審查 R-07）。** 初版正確指出**磁碟**不足的最糟時點是 NFR6.3 的升版窗口，卻沒對**記憶體**做同一個推導：dump/restore 是 db 容器生命週期中記憶體用量最異常的一段（大批 COPY、索引重建、maintenance_work_mem），而以「正常使用下的穩態峰值」得到的上限正是最可能在還原中途被突破的那一個——突破的後果是 OOM kill ＋ restart: unless-stopped 的重啟迴圈，發生在 NFR6.3(b) 的回退**依賴 dump 完整性**的那個窗口裡。定案：升版期間暫時提高或移除 db 的上限，還原與驗證通過後恢復原值並在升版紀錄寫下「已恢復」。不採「把上限設到足以涵蓋還原峰值」——那會讓正常運行期間的上限失去保護意義"
+    },
+    {
+      "id": "DISK-PER-MOUNTPOINT",
+      "status": "N/A",
+      "target": "**磁碟門檻改為逐掛載點（審查 R-06）。** 初版的單一公式「≥ 現有資料庫大小 × 3 ＋ 2GB」套在「承載 Docker volume 的檔案系統」上，而三份副本之一的 dump 依 D-4 第 2 條必須放 $HOME——於是該數字對 volume fs **高估**（多算一份 dump）、對 $HOME fs **完全沒有要求**。本輪定義兩個量（DBSIZE = PGDATA 目錄的 du -sb，**不是** pg_database_size，兩者因索引膨脹與 WAL 可差數倍；DUMPSIZE 假設 pg_dump 預設 plain 未壓縮格式，依 D-4 的範例檔名 .sql 推得）並給逐掛載點門檻：volume fs ≥ DBSIZE × 2 ＋ WAL 餘裕 ＋ 模型 ＋ 日誌預算；$HOME fs ≥ DUMPSIZE；runner 工作目錄無新增"
+    },
+    {
+      "id": "LOG-BUDGET-CAP",
+      "status": "N/A",
+      "target": "**日誌總量上界 2GB（審查 R-06(d)）。** 初版的「＋2GB 涵蓋 Ollama 模型與其他新增項」被 §三 的自由變數吃掉：日誌總量是 max-size × max-file × 服務數，而 §三 把兩個值完全交給部署者且未設上限——100m × 5 × 6 就是 3GB，單項吃掉整個餘裕。**一個公式的項由另一節的自由變數決定，等於公式沒有定義。** 定案：§三 新增「總量不得超過 2GB」的上界（例如 50m × 5 × 6 = 1.5GB），使 §四 公式的每一項都有來源。上界只約束 deploy stack，CI test 的日誌隨 stack 消失"
+    },
+    {
+      "id": "U6-DEPENDENCY-REASON-VOID",
+      "status": "Deferred",
+      "target": "**[I5]=A 使 U6 → brain-infra 依賴邊的上游理由不再成立（審查 R-09）。** unit-of-work.md:268 逐字記載「U6 的 depends_on: [brain-infra] 取的是『ollama 與 fastembed 兩個實作要能被驗證』」，而本站把 ollama 排除在 CI test stack 外（[I5]=A）、又以成本理由排除 fastembed（它雖不加服務，但會引入 ONNX 執行期並下載 multilingual-e5-large，對每個 PR 都跑的 ui-regression 是同一類成本）。於是那兩個實作在本 intent 的任何自動化層都沒有可執行的環境。**property-based 不補這個缺口**——它約束純函式，不驗證 provider 真的接得上。**本站不自行定案**，指名兩個承接者：U6 的 functional-design 確認驗證手段（mock 邊界夠不夠？或一次性手動驗證記入 DEPLOY.md？）、U6／U1 的 delivery 順序確認那條邊是否還需要。**本站不擅自移除已核可的依賴邊**，但必須指出它的理由變了"
+    }
+  ]
+}

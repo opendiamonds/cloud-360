@@ -239,4 +239,4 @@ job 的守門本來就不對稱（`rollback` 沒有等價的 required-secrets �
 - Looks correct
 - Request changes
 
-[Answer]: Looks correct  <!-- answered 2026-09-27T02:45:46Z via picker；Revision 2（R-18…R-23，含 G7 裁決）之後重新取得 -->
+[Answer]: Looks correct  <!-- answered 2026-09-27T11:08:09Z via picker；第三次取得。前兩次的經過如實記載：(1) 批次寫入時填了 06:36:56Z，但該回合的 log answer 被引擎以「一個 human turn 只能背書一次確認」拒絕；(2) 後續回合取得確認並登錄成功，但我隨即更正檔內那個對不上的時間戳，使收據 SUMMARY_CONTENT_STALE。本次先定稿檔案再取得確認。內容與 commit 918264b 逐位元相同，問題檔的唯一改動即此註解與時間戳 -->
