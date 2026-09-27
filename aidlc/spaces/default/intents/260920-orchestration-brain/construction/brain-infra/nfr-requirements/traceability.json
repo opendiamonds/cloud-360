@@ -1,0 +1,131 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "brain-infra",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率屬 U11 intent-router；量測機制落 build-and-test。brain-infra 不在該路徑上"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率屬 U10 session-store 的行為 ＋ build-and-test 的量測。brain-infra 只提供 Redis 容器本身"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "requirements.md NFR3 自己把 Redis 往返算進預算並逐字判定「在同一個 compose 網路內約 1ms，可忽略」；brain-infra 不新增任何請求處理。但本輪新增的 AOF 會改變該路徑的寫入成本，故已於 NFR4.2 補上 appendfsync 的選值約束（所選值不得使 NFR3 的 P50 預算失守）"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.1, NFR4.2, NFR4.3"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "WebSocket 契約閘門屬 U2 brain-ws-contract。brain-infra 不交付任何契約或 CI 檢查"
+    },
+    {
+      "id": "NFR6",
+      "status": "Deferred",
+      "target": "NFR6.1, NFR6.2, NFR6.2a, NFR6.3 覆蓋承載面（PG 18 ＋ pgvector 的五個落點（四處映像 ＋ volume 宣告改名）、CREATE EXTENSION 的兩處承載、本機建庫路徑的硬依賴、16→18 升版程序）。但 NFR6 的「其驗證」面目前不可滿足：上游 requirements.md NFR6 與 contract-summary.md K-05 verification.carrier 兩處逐字把該 CI job 的 service container 釘成 postgres:16-alpine，而 K-05 自己的 embedding vector(1024) 欄位在該映像上必然失敗；[N8]=B 之後此衝突由「同主版本不同變體」升級為「主版本不同」。該 job 是 U5 memory-data 的交付，其 service container 須與本單元的三處一致；U5 的迭代須就地確認。本站不回改已核可的上游"
+    },
+    {
+      "id": "NFR7",
+      "status": "Deferred",
+      "target": "NFR7.1 保證加密承載面（session 與記憶資料皆為具名 volume，不寫入容器可寫層）；加密手段本身是 OQ-3，承接站為 U5／U8 的 nfr-design 迭代。nfr-design 的 condition 是連言（NFR Requirements was executed AND NFR patterns need design）且 for_each: unit-of-work，故 brain-infra 執行過本站不構成該站會執行的保證；屆時判定 skip 的執行者須重新提交使用者裁決"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.1, NFR8.1a, NFR8.1b, NFR8.2, NFR8.3, NFR8.4, NFR8.5, NFR8.6, NFR8.7, NFR8.8, NFR8.9"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.1"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型可替換性屬 U11 intent-router；OQ-4 於 U11 的 nfr-requirements 迭代定案，尚未定案"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數屬 UI 單元 ＋ build-and-test 的量測。brain-infra 無使用者介面"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR4.2",
+      "status": "N/A",
+      "target": "本單元對已核可 NFR4 的字面範圍補足：原文只寫「重啟 backend 後可還原」，未涵蓋 Redis 容器自身重啟。無對應的新上游 id，依 project.md 規則不回改 requirements.md，就地於本單元收斂"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "N/A",
+      "target": "兩個新 volume 的「誰清」指名。Redis AOF volume 由 domain-design ADR-005 已定案的 24 小時 TTL（每次互動續期）自然回收；Ollama 模型快取有界不需清理。無對應上游 NFR id——OQ-9 已由 ADR-005 結案，此處為其在部署承載面的對應記載"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "補 contract-summary.md K-01 未指名的契約端點：images_and_services 只寫了 db image 換版，沒有指名誰執行 CREATE EXTENSION。此為契約端點三問裡「誰寫」缺一，由本單元以兩處承載（schema_rbac.sql ＋ 啟動補丁）"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "承載面要求（具名 volume、不寫入容器可寫層），非加密手段本身。手段留 OQ-3 → U5／U8 的 nfr-design 迭代"
+    },
+    {
+      "id": "NFR8.9",
+      "status": "N/A",
+      "target": "兩個新容器的記錄承載與保存期，以及「零認證前提下未授權的 Ollama 呼叫在記錄上不可辨識」這項已接受代價的明文記載。由 ADR-0006 Audit logging 面向本輪改判為適用而新增，無單一上游 NFR id 對應"
+    },
+    {
+      "id": "NFR4.1(b)",
+      "status": "N/A",
+      "target": "Redis 連線的最小權限（ACL 專用使用者，不共用 default）。requirements.md:451 的 ADR-0006 IAM 列逐字以「另：Redis 連線憑證須最小權限」結尾，但上游沒有任何 FR／NFR 承載它；本單元以此條承接，屬本階段新增工作量（S-3），需回補進 scope"
+    },
+    {
+      "id": "NFR6.2a",
+      "status": "N/A",
+      "target": "本機建庫路徑的硬依賴。schema_rbac.sql 是單一交易（:24 BEGIN; → :633 COMMIT;），缺 pgvector 時 CREATE EXTENSION 是硬 ERROR，整個交易中止、一張表都不建；且 U5 的 vector(1024) 欄位宣告本身在無 pgvector 的伺服器上同樣會中止交易，故把 CREATE EXTENSION 移出交易並不足夠。無對應上游 id——由審查查出、本單元承接"
+    },
+    {
+      "id": "NFR4.1(c)",
+      "status": "N/A",
+      "target": "NFR4.1(b) 的 ACL 使用者與 NFR4.2 的三組 AOF 設定的承載者指名：新增 REDIS_USER 變數（同步點六處→九處；另兩處為審查 R-30／R-36 查出的兩份 compose 的 backend.environment:，見 NFR8.1a／NFR8.1b）＋ ACL 承載者（redis.conf／users.acl，或 compose command: 覆寫）——**兩份 compose 都必須有**，但不會是同一份檔（Redis 設定檔不內插環境變數，而兩 stack 的 REDIS_PASSWORD 來源不同）。無對應上游 id——本單元自己新增的需求缺「誰寫」，由審查 R-23 查出。屬 S-5，需回補進 scope"
+    },
+    {
+      "id": "NFR6.3(b)",
+      "status": "N/A",
+      "target": "升版窗口內的三條排序不變量（順序與排他、窗口內自動 rollback 不可用＋窗口後必須以另一個 PR 復原 rollback job 並確認復原後首次部署有武裝、rollback 取出 commit 的映像主版本須與當前 PGDATA 相容）。由 [N8]=B 的主版本升級製造：deploy.yml 的自動自癒在窗口內會拿 PG 16 映像掛 PG 18 的 PGDATA，使站台維持中斷。無對應上游 id——屬 S-4，需回補進 scope"
+    },
+    {
+      "id": "NFR8.1a",
+      "status": "N/A",
+      "target": "deploy/docker-compose.deploy.yml 的 backend.environment: 區塊（:35–62）：七個變數必須加進去且不得帶 :- fallback。它既是變數送進 backend 容器的唯一路徑，也是 NFR8.1／NFR8.2 兩道閘門的成立前提——validate_env_contract.py 的 compose_variables() 把無 :- 預設的 ${...} 視為 required，帶 fallback 即靜默失去閘門。該檔 :39–40 的註解逐字記載了這件事。無對應上游 id——由審查 R-30 查出"
+    },
+    {
+      "id": "NFR8.1b",
+      "status": "N/A",
+      "target": "deploy/docker-compose.test.yml 的 backend.environment:（:32–39）：Redis 三者必須加進去並依該 stack 既有慣例自帶測試用預設值。本單元已在兩處無條件承諾 Redis 要進那份 compose（§三 的服務數表、NFR8.7 的「兩份 compose」判準），Redis 進去而 backend 收不到變數即為同一失敗模式；而 validate_env_contract.py:40 的 DEPLOY_COMPOSE 是該檔唯一的 compose 路徑，test compose 完全不在其作用域。無對應上游 id——由審查 R-36 查出"
+    }
+  ]
+}
