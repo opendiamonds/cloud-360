@@ -1,23 +1,55 @@
 # Cloud-360 deployment stack for 192.168.10.10.
 #
 # Public path:  internet -> Cloudflare tunnel -> frontend (nginx) -> backend
-# Only nginx is reachable from outside. backend and db have no host ports and
-# no tunnel ingress; they exist solely on the compose-internal network.
+# Only nginx is reachable from outside. backend, db, redis and ollama have no
+# host ports and no tunnel ingress; they exist solely on the compose networks
+# declared at the bottom of this file.
 #
 #   docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build
+#
+# ---------------------------------------------------------------------------
+# Memory limits: PROVISIONAL, DERIVED FROM PUBLIC BASELINES, NOT MEASURED.
+# ---------------------------------------------------------------------------
+# Every service carries deploy.resources.limits.memory. The numbers come from
+# public baselines (Postgres defaults, a Python/uvicorn process baseline, the
+# bge-m3 model size), NOT from `docker stats` on this host. DEPLOY.md records
+# that, and records the deadline for replacing them with measured values.
+#
+# They are hard-coded here rather than read from deploy/.env on purpose: an
+# extra compose-consumed variable adds a sync point, and this repo has a
+# silent-failure precedent for exactly that (N8N_USER / N8N_PASSWORD were never
+# written, so every deploy's architecture icons fell back to grey placeholders).
+# Changing a capacity number should be a reviewed PR, not an env edit.
+#
+# NOTE: these are per-container CAPS, not reservations -- their sum may exceed
+# host RAM and that is normal. The relationship that DOES have to hold is the
+# redis one, checked in that service's comment.
+#
+# No CI gate parses this file: scripts/validate_env_contract.py only reads
+# environment variables. `deploy.resources`, `logging:` and `networks:` are all
+# unguarded here -- see infrastructure-specification.md §六.
 
 name: cloud360
 
 services:
   db:
-    image: postgres:16-alpine
+    # PG 18 + pgvector. The `vector` type must exist before any table declaring
+    # a vector(1024) column is created (schema_rbac.sql / NFR6.2). NOTE the base
+    # image also changes from Alpine (musl) to Debian (glibc) -- that libc change
+    # is the reason the 16->18 upgrade needs the collation step in DEPLOY.md.
+    image: pgvector/pgvector:pg18
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - cloud360_db:/var/lib/postgresql/data
+      # Renamed from cloud360_db (NFR6.1 landing 5): the upgrade procedure has
+      # to bring PG 18 up on a NEW volume while KEEPING the old one until the
+      # restore is verified, and a single volume name cannot do both. The actual
+      # Docker volume is cloud360_db_pg18 (project name + declared name); the
+      # old one is cloud360_cloud360_db. See DEPLOY.md.
+      - db_pg18:/var/lib/postgresql/data
       # Runs only on an empty data volume. schema_rbac.sql is the full-environment
       # script (schema.sql is core DDL reference only) — see DEPLOY.md 2.1.
       - ../schema_rbac.sql:/docker-entrypoint-initdb.d/01-schema_rbac.sql:ro
@@ -26,6 +58,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: [internal]
+    logging: &json_file_bounded
+      driver: json-file
+      options:
+        # 50m x 5 x 6 services = 1.5GB, inside the 2GB total cap that the disk
+        # formula in infrastructure-specification.md §四 takes as an input.
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          # shared_buffers default 128MB + work_mem x connections + room for the
+          # OS page cache this container also benefits from. PROVISIONAL.
+          # The upgrade window needs this RAISED temporarily (dump/restore is the
+          # most memory-abnormal phase of this container's life) and restored
+          # afterwards -- procedure and the "restored" log entry in DEPLOY.md.
+          memory: 1g
 
   backend:
     build:
@@ -60,9 +109,204 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       GCP_BILLING_API_KEY: ${GCP_BILLING_API_KEY:-}
+      # --- brain-infra (U1), contract K-01 ------------------------------------
+      # All seven WITHOUT `:-` on purpose, for the reason spelled out above
+      # LLM_PROVIDER: no fallback is what makes validate_env_contract.py treat
+      # them as required and keep render-env.sh + deploy/.env.example honest.
+      # Adding a `:-` here does not just change a default, it REMOVES the gate.
+      REDIS_URL: ${REDIS_URL}
+      REDIS_USER: ${REDIS_USER}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL}
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        # service_healthy, not service_started: it proves the process answers.
+        # It does NOT prove the AOF dataset finished loading -- PING replies
+        # during loading, and other commands answer -LOADING until it is done.
+        # That is accepted (see infrastructure-specification.md §六 item 4c);
+        # the point of choosing it over service_started is that it is strictly
+        # stronger without introducing a blocking risk.
+        condition: service_healthy
+      ollama:
+        # service_started deliberately, NOT service_healthy. The healthcheck
+        # only proves the HTTP server answers; what actually decides whether
+        # embedding works is whether bge-m3 is in the model volume, and that is
+        # guaranteed by the post-deploy `ollama pull` step in deploy.yml, which
+        # runs AFTER `up -d`. Waiting for "healthy" would look like waiting for
+        # readiness while waiting for the wrong thing.
+        condition: service_started
+    # backend is the ONLY service on both networks: it is the bridge between the
+    # public side and the data plane.
+    networks: [edge, internal]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          # Python interpreter + dependencies are already a few hundred MB
+          # resident; times the given concurrency assumption (single uvicorn
+          # worker, single-digit concurrent LLM requests). This is the most
+          # variable of the six and the one most worth measuring first.
+          # PROVISIONAL.
+          memory: 2g
+
+  redis:
+    # Session store (5th service). No ports: -- reachable only as `redis` on the
+    # internal network (NFR8.7).
+    image: redis:8-alpine
+    restart: unless-stopped
+    # Everything about this container's persistence, eviction and identity lives
+    # in this one `command:`, on purpose:
+    #
+    #   * appendonly     -- the image default is `appendonly no`. Leaving it
+    #                       unstated means NFR4.2 fails silently: redis-cli ping
+    #                       still answers PONG, the healthcheck still passes, and
+    #                       sessions are simply gone after a restart.
+    #   * maxmemory/-policy -- kept here, never moved into a mounted redis.conf,
+    #                       so that the relationship below can be read off one
+    #                       screen. redis-server's CLI flags OVERRIDE same-named
+    #                       directives in a config file, silently, so the two
+    #                       carriers must not both own a value.
+    #   * user           -- NFR4.1(b)/(c): the app must not connect as `default`.
+    #                       The ACL user has to be CREATED somewhere, and the
+    #                       image reads no project config. A mounted users.acl
+    #                       cannot be used for this stack: acl files do NOT
+    #                       interpolate environment variables, so the password
+    #                       would have to be a literal in this repo -- and this
+    #                       repo is public. `command:` is the other carrier the
+    #                       design allows, and compose interpolates it per stack.
+    #                       Accepted cost: the value is visible in
+    #                       `docker inspect` / the host process list. Every
+    #                       host-local process is already inside this stack's
+    #                       trust boundary (security-design.md D-2, subject
+    #                       class 2), and POSTGRES_PASSWORD is equally visible
+    #                       via `docker inspect`, so this adds no new class of
+    #                       exposure -- it is recorded, not hidden.
+    #
+    # REQUIRED RELATIONSHIP (no CI gate checks it -- read it here):
+    #   container memory limit >= maxmemory x 1.5 + 256MB
+    #   256m x 1.5 + 256m = 640m  <=  768m limit below.  OK.
+    # Below that bound the container is OOM-killed BEFORE Redis gets a chance to
+    # evict, turning a graceful eviction into a hard restart -- and under
+    # `restart: unless-stopped` into a restart loop. An eviction is countable
+    # -- but NOT via `INFO evicted_keys` (review R-01): `INFO` is @slow
+    #    @dangerous, so NEITHER configured identity can run it (`default` holds
+    #    only @connection; the app user is +@all -@admin -@dangerous). The
+    #    reachable substitutes, neither of which is @dangerous, are
+    #    `MEMORY STATS` (as the app user) and host-side `docker stats` for the
+    #    container limit. An OOM kill only shows up in the kernel log.
+    #    Consequence, stated plainly so it is not discovered later: the three
+    #    settings on the `command:` below CANNOT be read back at runtime --
+    #    `CONFIG GET` and `ACL LIST` are both @admin @dangerous. What the
+    #    deploy-time step "Verify the Redis ACL actually took effect" proves is
+    #    (a) `default` really is narrowed, (b) the app user really is usable,
+    #    and (c) all three flags reached the container argv. Changing a value
+    #    still means editing this file and redeploying; see DEPLOY.md 5.11.
+    #
+    # `default` is left reachable but stripped to @connection so the healthcheck
+    # below still works while the account grants NO data and NO admin access.
+    #   * Why @connection and not just +ping: redis-cli issues `CLIENT SETINFO`
+    #     on connect (7.2+). Granting only +ping would have that denied on every
+    #     healthcheck probe. @connection covers PING/HELLO/AUTH/CLIENT SETINFO
+    #     and nothing that touches data -- the admin CLIENT subcommands (KILL,
+    #     LIST) are @admin/@dangerous and stay out.
+    #   * `~*` on default is moot (no data command is granted); it is kept
+    #     because a rule string without key patterns is one more thing that
+    #     would only fail at container start, and there is no CI gate here.
+    # The app user gets everything except the admin/dangerous categories, which
+    # is what makes the NFR4.1(b) criterion ("CONFIG GET * must be refused")
+    # true -- CONFIG, FLUSHALL and KEYS are all in @dangerous.
+    #   * Pub/sub channels are NOT granted (Redis 7+ defaults to
+    #     `resetchannels`, and `+@all` does not grant channels). If U10's session
+    #     store ever needs SUBSCRIBE/PUBLISH it must add `&<pattern>` here. That
+    #     failure is loud (NOPERM), which is why it is left ungranted.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --user
+      - default
+      - "on"
+      - nopass
+      - "~*"
+      - "+@connection"
+      - --user
+      - ${REDIS_USER}
+      - "on"
+      - ">${REDIS_PASSWORD}"
+      - "~*"
+      - "+@all"
+      - "-@admin"
+      - "-@dangerous"
+    volumes:
+      # NFR4.2: AOF on a NAMED volume. Without the volume, AOF writes land in
+      # the container's writable layer and vanish with the container, which is
+      # the same observable outcome as not enabling AOF at all.
+      - redis_aof:/data
+    healthcheck:
+      # Pipe through grep so a NOAUTH/ERR reply cannot be mistaken for success.
+      # KNOWN LIMIT: this does NOT prove the ACL user works (ping passes as
+      # `default`), and it passes during AOF loading. Both accepted --
+      # infrastructure-specification.md §六 item 4.
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  ollama:
+    # Local embedding provider (6th service). Zero authentication -- its ONLY
+    # access control is not being on `edge` and having no ports: (NFR8.8).
+    # &#9888; Tag NOT pinned, unlike the other two images this change touches
+    #   (pgvector/pgvector:pg18, redis:8-alpine are both major-pinned). Under
+    #   deploy-on-merge any redeploy may silently pull a different Ollama
+    #   version; no CI gate sees compose changes (see infrastructure-design
+    #   §6 nine ungated items). Pin a concrete version before relying on
+    #   reproducibility -- choosing one requires confirming bge-m3 (dense
+    #   1024) compatibility first, so this unit does not guess a number.
+    #   Tracked as OPEN-10 in this unit traceability.json.
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      # NFR4.3: model cache. The model does NOT arrive by starting this
+      # container -- the official entrypoint is `ollama serve` and it pulls
+      # nothing. deploy.yml runs `ollama pull` once after `up -d`; without that
+      # step /api/tags answers an empty list forever and the healthcheck below
+      # stays green while the service is unusable.
+      - ollama_models:/root/.ollama
+    healthcheck:
+      # This is the /api/tags call: the image ships no curl, and `ollama list`
+      # is that endpoint. It proves the HTTP server answers; it does NOT prove a
+      # model is present (no model => empty list, not an error). "Model present"
+      # is decided by the post-deploy pull step, which is also why no long
+      # start_period is needed here -- the download is not on the startup path.
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks: [internal]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          # bge-m3 is ~1.2GB on disk and the runtime resident set is commonly
+          # quoted at ~2GB; neither number has been measured on THIS host.
+          # PROVISIONAL, and the largest single consumer this unit adds.
+          memory: 4g
 
   frontend:
     build:
@@ -76,6 +320,15 @@ services:
       - "${FRONTEND_HOST_PORT}:80"
     depends_on:
       - backend
+    # edge only. nginx just reverse-proxies to `backend:8000`, which resolves on
+    # edge, so keeping it off `internal` means "nginx config is mis-edited or
+    # injected" does not become "the data plane is reachable".
+    networks: [edge]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -91,6 +344,41 @@ services:
       - ${CLOUDFLARED_CREDENTIALS_FILE}:/etc/cloudflared/creds.json:ro
     depends_on:
       - frontend
+    # edge ONLY, and this exclusion is the whole point of the split (D-3): this
+    # is the one container holding a permanent connection to the internet. On a
+    # flat network, compromising it reached the unauthenticated Ollama and the
+    # Redis holding every session directly. Do not add `internal` here.
+    networks: [edge]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+networks:
+  # Two plain user-defined bridges. `internal: true` is deliberately NOT set,
+  # and must not be "helpfully" added later: it severs the OUTBOUND path for
+  # services attached only to that network, and `ollama` is one of them -- the
+  # model pull would fail with a network error rather than a config error.
+  #
+  # It is also not needed for the segmentation this buys: a user-defined bridge
+  # has no host port mapping unless `ports:` says so, and Docker's isolation
+  # rules already block cross-bridge traffic. Membership is what narrows who can
+  # reach whom.
+  #
+  # What this does NOT isolate, stated so it is not read as stronger than it is:
+  #   * containers on the SAME network -- ICC defaults to on, so `internal`
+  #     members reach each other on every port. db being compromised still
+  #     reaches redis and ollama.
+  #   * host-local processes -- a bridge subnet is routable from the host, so
+  #     any process on 192.168.10.10 (including the self-hosted runner) reaches
+  #     redis:6379 and ollama:11434 with no ports: at all.
+  edge:
+  internal:
 
 volumes:
-  cloud360_db:
+  # Declared names; the actual Docker volumes carry the `cloud360_` project
+  # prefix (cloud360_db_pg18, cloud360_redis_aof, cloud360_ollama_models).
+  db_pg18:
+  redis_aof:
+  ollama_models:

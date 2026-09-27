@@ -9,6 +9,7 @@
 --   E) A3：architecture_reviews（評核結果）+ wa_lenses（Offline Lens 現行標準）
 --   C) RBAC：role_permissions + 預設矩陣（308 列）
 --   D) 不建立固定密碼管理員；bootstrap admin 由後端依環境變數建立
+--   X) 擴充：pgvector（`vector` 型別；U5 記憶表的 vector(1024) 欄位需要）
 --
 -- 執行（新環境可只跑這支）：
 --   psql "$DATABASE_URL" -f schema_rbac.sql
@@ -19,9 +20,22 @@
 --   - 不覆寫既有 admin 密碼
 --   - 矩陣來源：aidlc-docs/construction/plans/role-permission-design.md
 --   - A3：評核內容在 architecture_reviews；可編輯 Lens 在 wa_lenses.body_json
+--   - 本檔是**單一交易**（BEGIN … COMMIT）。伺服器沒有安裝 pgvector 時，
+--     下面那行 CREATE EXTENSION 會是硬 ERROR（could not open extension
+--     control file），整個交易中止 → 一張表都不會建。本機請先確認：
+--       psql "$DATABASE_URL" -c "SELECT * FROM pg_available_extensions WHERE name='vector'"
+--     必須有一列。詳見 LOCAL-DEV.md §2。
 -- =============================================================================
 
 BEGIN;
+
+-- ###########################################################################
+-- X) Extensions — 必須是 BEGIN 之後的第一條敘述
+-- ###########################################################################
+-- `vector` 型別必須先存在，任何宣告 vector 欄位的表才建得起來。後端啟動時的
+-- database._ensure_vector_extension() 涵蓋「既有非空 volume」那條路徑；本行
+-- 涵蓋「空 data volume 初始化」與「本機 psql」兩條路徑。兩者互補，不是二選一。
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ###########################################################################
 -- A) Core: users + architecture diagrams + shares

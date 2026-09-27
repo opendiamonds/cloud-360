@@ -115,24 +115,24 @@ GitHub Actions workflow 與兩份部署文件。`unit-of-work.md:63` 逐字寫�
 
 ### Step 1 — 確認測試執行器，記下本單元專屬命令
 
-- [ ] 確認 `python -m unittest` 可在 `backend/` 下執行（既有，`ci.yml` 已在用）
-- [ ] 把本單元專屬（非全專案）的測試命令寫進 `unit-test-instructions.md`
-- [ ] 確認 `python3 scripts/validate_env_contract.py` 與 `python3 scripts/validate_repo_contract.py` 可執行
+- [x] 確認 `python -m unittest` 可在 `backend/` 下執行（既有，`ci.yml` 已在用）
+- [x] 把本單元專屬（非全專案）的測試命令寫進 `unit-test-instructions.md`
+- [x] 確認 `python3 scripts/validate_env_contract.py` 與 `python3 scripts/validate_repo_contract.py` 可執行
 
 **依據**：Testing Contract `runner_ready_before_first_test: true`。本單元為 brownfield，
 執行器已存在，本步驟是**驗證**而非 bootstrap。
 
 ### Step 2 — Data model / database behavior：實作
 
-- [ ] `schema_rbac.sql` 加 `CREATE EXTENSION IF NOT EXISTS vector;`（清單第 11 項，**blocking**）
-- [ ] `backend/database.py` 新增 `_ensure_vector_extension()`，**呼叫點在 `Base.metadata.create_all()`（`:76`）之前**（清單第 12 項）
+- [x] `schema_rbac.sql` 加 `CREATE EXTENSION IF NOT EXISTS vector;`（清單第 11 項，**blocking**）
+- [x] `backend/database.py` 新增 `_ensure_vector_extension()`，**呼叫點在 `Base.metadata.create_all()`（`:76`）之前**（清單第 12 項）
 
 **這一步最容易做錯的地方**：既有六支 `_ensure_*_schema()` 全在 `create_all()` **之後**
 （`:78–83`），新的這一支方向相反。判準二元：呼叫必須出現在 `create_all()` 那一行**之前**。
 
 ### Step 3 — Data model / database behavior：寫測試並執行（test-after）
 
-- [ ] `backend/tests/test_vector_extension_bootstrap.py`（新檔，5–8 個測試）
+- [x] `backend/tests/test_vector_extension_bootstrap.py`（新檔，5–8 個測試）
 
 涵蓋：(1) `_ensure_vector_extension` 存在且可呼叫；(2) 以 `unittest.mock` 斷言
 `init_db()` 內的**呼叫順序**——`_ensure_vector_extension` 先於 `create_all`；(3) 該函式對
@@ -142,17 +142,17 @@ GitHub Actions workflow 與兩份部署文件。`unit-of-work.md:63` 逐字寫�
 vector extension 時，`DEPLOY.md` 也必須提到（把 `project.md ## Mandated` 的同步規則變成
 可執行的檢查，而不是只靠人記得）。
 
-- [ ] 執行並確認綠燈，記錄輸出
+- [x] 執行並確認綠燈，記錄輸出
 
 ### Step 4 — Environment/build configuration A：`deploy/render-env.sh`
 
-- [ ] `:44–49` 把 `REDIS_PASSWORD` 加入必填值檢查（清單第 4a 項）
-- [ ] `:59` 把 `REDIS_PASSWORD` 加入 `$` 擋阻名單（清單第 4b 項）
-- [ ] heredoc 寫出七個變數：六個字面值 ＋ `REDIS_PASSWORD` 走 `${REDIS_PASSWORD}`（清單第 4c 項）
+- [x] `:44–49` 把 `REDIS_PASSWORD` 加入必填值檢查（清單第 4a 項）
+- [x] `:59` 把 `REDIS_PASSWORD` 加入 `$` 擋阻名單（清單第 4b 項）
+- [x] heredoc 寫出七個變數：六個字面值 ＋ `REDIS_PASSWORD` 走 `${REDIS_PASSWORD}`（清單第 4c 項）
 
 ### Step 5 — `render-env.sh` 的測試（test-after）
 
-- [ ] `backend/tests/test_render_env_redis.py`（新檔，5–8 個測試）
+- [x] `backend/tests/test_render_env_redis.py`（新檔，5–8 個測試）
 
 以 `subprocess` 在暫存目錄執行 `bash deploy/render-env.sh`，沿用
 `test_repo_contract_production_paths.py` 的既有形狀（零新依賴）。涵蓋：(1) 空的
@@ -161,50 +161,50 @@ vector extension 時，`DEPLOY.md` 也必須提到（把 `project.md ## Mandated
 `deploy/.env` 含七個變數名；(4) 六個非機敏變數在輸出中為**字面值**，不是空字串
 （這正是審查 R-40 指出的失敗模式）；(5) `REDIS_PASSWORD` 的值等於傳入的 env 值。
 
-- [ ] 執行並確認綠燈，記錄輸出
+- [x] 執行並確認綠燈，記錄輸出
 
 ### Step 6 — Environment/build configuration B：`deploy/docker-compose.deploy.yml`
 
-- [ ] `backend.environment:` 七個變數，**不得帶 `:-` fallback**（清單第 6 項）
-- [ ] 新增 `redis`／`ollama` 服務、`networks:` 分段、三個 volume（含 PG volume 改名）、
+- [x] `backend.environment:` 七個變數，**不得帶 `:-` fallback**（清單第 6 項）
+- [x] 新增 `redis`／`ollama` 服務、`networks:` 分段、三個 volume（含 PG volume 改名）、
       全部服務的 `logging:` 與記憶體上限、兩個新 `healthcheck`（清單第 7 項）
-- [ ] 兩者的 `restart: unless-stopped` ＋ 兩條 `depends_on`（清單第 16a 項）
-- [ ] `redis` 的 `command:`：`--appendonly yes` ＋ `--maxmemory <值>` ＋
+- [x] 兩者的 `restart: unless-stopped` ＋ 兩條 `depends_on`（清單第 16a 項）
+- [x] `redis` 的 `command:`：`--appendonly yes` ＋ `--maxmemory <值>` ＋
       `--maxmemory-policy allkeys-lru`（清單第 17a 項）
-- [ ] `redis` 的 ACL 設定資產，deploy 側那一份（清單第 17b 項）
-- [ ] **`cloudflared` 必須排除在 `internal` 之外**（D-3 的核心理由）
+- [x] `redis` 的 ACL 設定資產，deploy 側那一份（清單第 17b 項）
+- [x] **`cloudflared` 必須排除在 `internal` 之外**（D-3 的核心理由）
 
 **記憶體上限的值**：依 `[I2b]` 的鬆綁定案，先以 `infrastructure-specification.md` `§二` 的
 公開基準設值，並在 `DEPLOY.md` 記為**暫定值 ＋ 複量期限**（Step 12）。**不得猜一個沒有依據的數字**。
 
 ### Step 7 — Environment/build configuration C：`deploy/docker-compose.test.yml`
 
-- [ ] 清單第 8 項全部（`backend.environment:` Redis 三者 ＋ `EMBEDDING_PROVIDER: stub`、
+- [x] 清單第 8 項全部（`backend.environment:` Redis 三者 ＋ `EMBEDDING_PROVIDER: stub`、
       `redis` 服務、`networks:` 分段、全部服務的 `logging:` 與記憶體上限、`redis` healthcheck、
       db 映像改 PG 18 ＋ pgvector、**`redis` 的 ACL 設定資產**）
-- [ ] 清單第 16b 項（**只有** `redis` 的 `restart: unless-stopped` ＋ **只有一條** `depends_on`）
+- [x] 清單第 16b 項（**只有** `redis` 的 `restart: unless-stopped` ＋ **只有一條** `depends_on`）
 
 **這個 stack 沒有 `ollama`**（`[I5]`=A）。**不設 `maxmemory`**、**不開 AOF**、**不用具名 volume**。
 ACL 資產**必須有，且不得與 deploy 共用同一份檔**。
 
 ### Step 8 — Environment/build configuration D：repo 根 `docker-compose.yml`
 
-- [ ] **只改 db 映像**為 PG 18 ＋ pgvector（清單第 9 項）。現值 `postgres:15-alpine`（`:3`）
-- [ ] **不套用** D-3／`S-8`／`S-9`（它 publish 端口是刻意的）
+- [x] **只改 db 映像**為 PG 18 ＋ pgvector（清單第 9 項）。現值 `postgres:15-alpine`（`:3`）
+- [x] **不套用** D-3／`S-8`／`S-9`（它 publish 端口是刻意的）
 
 `postgres_data` volume 與 PG 18 不相容的處置寫進 `LOCAL-DEV.md`（Step 13），不在這裡處理。
 
 ### Step 9 — Environment/build configuration E：兩份 `.env.example`
 
-- [ ] `deploy/.env.example` 列出七個新變數（清單第 5 項）
-- [ ] `backend/.env.example` 列出 backend 讀得到的新變數（清單第 10 項）
+- [x] `deploy/.env.example` 列出七個新變數（清單第 5 項）
+- [x] `backend/.env.example` 列出 backend 讀得到的新變數（清單第 10 項）
 
 ### Step 10 — Environment/build configuration F：`.github/workflows/deploy.yml`
 
-- [ ] `deploy` job 新增獨立探測步驟，結束碼表達結果（清單第 1 項）
-- [ ] `rollback` job 的健康檢查迴圈併入探測，`$GITHUB_OUTPUT` 表達結果、**不用 `exit`**（清單第 2 項）
-- [ ] 兩個 job 的 `env:` **只新增 `REDIS_PASSWORD` 一項**（清單第 3 項）
-- [ ] 部署後執行一次 `ollama pull bge-m3`，含 `docker compose exec -T`、兩情形判定（清單第 15 項）
+- [x] `deploy` job 新增獨立探測步驟，結束碼表達結果（清單第 1 項）
+- [x] `rollback` job 的健康檢查迴圈併入探測，`$GITHUB_OUTPUT` 表達結果、**不用 `exit`**（清單第 2 項）
+- [x] 兩個 job 的 `env:` **只新增 `REDIS_PASSWORD` 一項**（清單第 3 項）
+- [x] 部署後執行一次 `ollama pull bge-m3`，含 `docker compose exec -T`、兩情形判定（清單第 15 項）
 
 **三條硬約束**：(a) 探測的兩個判定命令**不得觸發 `set -e`**，最終結束碼由判定邏輯決定；
 (b) `/api/auth/login` 的「通」是 **HTTP 401** 不是 2xx；(c) `N`／`T` 須滿足
@@ -212,9 +212,9 @@ ACL 資產**必須有，且不得與 deploy 共用同一份檔**。
 
 ### Step 11 — Environment/build configuration：驗證
 
-- [ ] `python3 scripts/validate_env_contract.py` 綠
-- [ ] `python3 scripts/validate_repo_contract.py` 綠
-- [ ] `python -m unittest discover -s tests -v`（在 `backend/`）全綠——既有套件保持綠是
+- [x] `python3 scripts/validate_env_contract.py` 綠
+- [x] `python3 scripts/validate_repo_contract.py` 綠
+- [x] `python -m unittest discover -s tests -v`（在 `backend/`）全綠——既有套件保持綠是
       Testing Contract 的 `scope_floor` 要求
 
 **不新增** `infrastructure-specification.md` `§六` 的補閘門 (a)–(d)——該節已明文列為
@@ -222,20 +222,20 @@ ACL 資產**必須有，且不得與 deploy 共用同一份檔**。
 
 ### Step 12 — 文件：`DEPLOY.md`
 
-- [ ] 十一項必寫內容，寫進**中文半部**（清單第 13 項）
-- [ ] **例外**：第 11 項的 vector extension 屬「這支 SQL 會建立的物件」，
+- [x] 十一項必寫內容，寫進**中文半部**（清單第 13 項）
+- [x] **例外**：第 11 項的 vector extension 屬「這支 SQL 會建立的物件」，
       **中文 `### 2.` 與英文 `### Database` 兩處都要補**（blocking 規則的字面要求）
-- [ ] **不擴大**英文半部的其他落差，也**不宣稱**它是同步的
+- [x] **不擴大**英文半部的其他落差，也**不宣稱**它是同步的
 
 ### Step 13 — 文件：`LOCAL-DEV.md`（blocking）
 
-- [ ] 因 `database.py` schema 補丁與兩份 `.env.example` 而同步（清單第 14 項）
-- [ ] 本機 PostgreSQL 必須先裝 pgvector，附可執行前置檢查
-- [ ] `postgres_data` volume 在 PG 15 → 18 不相容的處置
+- [x] 因 `database.py` schema 補丁與兩份 `.env.example` 而同步（清單第 14 項）
+- [x] 本機 PostgreSQL 必須先裝 pgvector，附可執行前置檢查
+- [x] `postgres_data` volume 在 PG 15 → 18 不相容的處置
 
 ### Step 14 — 新增 secret 後的複查（清單第 4d 項，非檔案改動）
 
-- [ ] `gh api repos/<owner>/<repo>/actions/secrets` 與 `/variables` **各查一次**
+- [x] `gh api repos/<owner>/<repo>/actions/secrets` 與 `/variables` **各查一次**
 - [ ] 判準二元：`REDIS_PASSWORD` 須在 secrets、**不得**在 variables
 - [ ] 若曾誤存為 variable：**必須重新產生金鑰**，搬移不足以結案
 
@@ -244,9 +244,9 @@ ACL 資產**必須有，且不得與 deploy 共用同一份檔**。
 
 ### Step 15 — 追溯與清單
 
-- [ ] `source-manifest.json`：列出本單元建立／修改／刪除的每一個應用來源路徑
-- [ ] `traceability.json`：枚舉每個指派的 AC 與 `NFRx.y`，每個 `OK` 指向一個實際存在的檔
-- [ ] `code-summary.md`
+- [x] `source-manifest.json`：列出本單元建立／修改／刪除的每一個應用來源路徑
+- [x] `traceability.json`：枚舉每個指派的 AC 與 `NFRx.y`，每個 `OK` 指向一個實際存在的檔
+- [x] `code-summary.md`
 
 ## 四、Testing Contract 的逐層適用判定（省略必須附理由）
 

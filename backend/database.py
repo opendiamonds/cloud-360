@@ -73,6 +73,9 @@ def get_db():
 
 def init_db():
     logger.info("正在初始化資料庫與資料表...")
+    # U1：**必須早於 create_all**，方向與下面六支 _ensure_* 相反。理由見該函式的
+    # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
+    _ensure_vector_extension()
     Base.metadata.create_all(bind=engine)
     # A4／J5：既有 DB 補欄位／新表（create_all 不會 ALTER 舊表）
     _ensure_a4_schema()
@@ -180,6 +183,41 @@ def init_db():
         db.rollback()
     finally:
         db.close()
+
+
+def _ensure_vector_extension():
+    """確保 pgvector 擴充存在（U1 brain-infra／`NFR6.2`、`NFR6.2a`）。
+
+    契約（缺一不可）：
+
+    1. **呼叫點必須早於 `Base.metadata.create_all()`** —— 這是本檔 `_ensure_*`
+       家族的**唯一例外**，其餘六支全在 `create_all()` 之後。它們補的是
+       `create_all` 不會做的 `ALTER`；本支補的是 `create_all` **本身的前置
+       條件**：`vector` 型別不存在時，任何宣告 `vector` 欄位的表在
+       `create_all()` 裡就會以 `type "vector" does not exist` 失敗，而
+       `init_db()` 由 `main.py` 的 startup 事件同步呼叫 —— 那是**啟動失敗**，
+       uvicorn 不會進入服務狀態，`restart: unless-stopped` 之下變成重啟迴圈。
+    2. **涵蓋的是「既有非空 data volume」那條路徑。** 空 volume 初始化與本機
+       `psql` 兩條路徑由 `schema_rbac.sql` 的同一條敘述涵蓋（它在 db 容器的
+       initdb 階段執行，必然早於 backend 啟動）。兩者互補、不是二選一。
+    3. **失敗不在此拋出。** 沒有 pgvector 的伺服器上這裡只記 warning，真正的
+       大聲失敗留給下游的 `create_all()`（等 U5 的 `vector(1024)` 欄位落地後
+       它必然失敗，且錯誤訊息直接指出缺的是什麼）。在此拋出會讓**沒有任何
+       vector 欄位**的現況也無法啟動，而那是一個今天不存在的問題。
+       測試環境（in-memory SQLite）也走這條路：`CREATE EXTENSION` 在 SQLite
+       是語法錯誤，吞掉它才讓 `init_db()` 在測試下可執行。
+    4. **冪等** —— `IF NOT EXISTS`，重跑無副作用；與 `schema_rbac.sql` 那一處
+       同時生效亦無副作用。
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    except Exception as e:
+        # 不靜默：留下可搜尋的 warning。真正的阻斷由 create_all() 承擔（見 3.）。
+        logger.warning("vector extension 補丁略過/失敗: %s", e)
+    logger.info("vector extension 檢查完成")
 
 
 def _ensure_a4_schema():
