@@ -15,5 +15,7 @@ psycopg2-binary
 passlib[bcrypt]
 bcrypt
 pyjwt
-claude-agent-sdk
+langgraph
+langchain-core
+langchain-anthropic
 hypothesis
