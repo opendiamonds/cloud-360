@@ -90,8 +90,8 @@ Per unit: [TBD]
 
 ## Current Status
 - **Lifecycle Phase**: IDEATION
-- **Current Stage**: code-generation
-- **Next Stage**: build-and-test
+- **Current Stage**: build-and-test
+- **Next Stage**: tcms-test-cases
 - **Status**: Running
 - **Last Updated**: 2026-09-28T06:55:12Z
 

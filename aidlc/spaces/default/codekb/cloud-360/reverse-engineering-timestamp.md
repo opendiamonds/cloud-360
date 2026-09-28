@@ -7,18 +7,17 @@
 
 | 項目 | 值 |
 |---|---|
-| **日期** | 2026-08-17 |
-| **Commit** | `c3de2c8` |
-| **Commit 訊息** | `Merge pull request #502 from opendiamonds/danniel/docs/github-sync-adr` |
-| **Branch** | `danniel/fix/production-path-check-noop`（基於 `ut`） |
+| **日期** | 2026-09-28 |
+| **Commit** | `5106acd` |
+| **Commit 訊息** | `文件(aidlc): 完成 intent-capture 階段意圖捕捉問卷與文件` |
+| **Branch** | `doreen/feat/agent-langraph-migration` |
 | **Repository** | `cloud-360` |
 | **AIDLC stage** | `reverse-engineering`（inception 2.1，pipeline mode） |
-| **執行方式** | 兩環 pipeline：第一環 developer agent 掃描，第二環 architect agent 綜整 |
+| **執行方式** | 快速新鮮度驗證 (POC 意圖 `260928-poc`) |
 
-### 本次為完整重掃（非新鮮度驗證）
+### 本次為新鮮度驗證（非完整重掃）
 
-前一版 codekb 的基準為 commit `8c90f40`（2026-08-08，branch `ut`），並已於
-2026-08-11 自行標記為**過期**。本次是該標記後的首次完整重掃，**整份取代**前一版內容。
+本 codekb 於 2026-09-28 執行快速新鮮度驗證。針對將 Agent 框架從 Claude SDK 改成 LangGraph 的 POC (`260928-poc`)，我們驗證了現有的架構與元件盤點仍能正確反映當前分支的狀態，無須重新產生所有 9 份文件。
 
 觸發重掃的既有條件命中情形（對照前一版自訂的「觸發完整重跑」清單）：
 
@@ -32,8 +31,8 @@
 
 ### 工作目錄狀態註記
 
-掃描當下工作樹除 `aidlc/.../audit/` shard 外乾淨。**本 codekb 描述的是 commit `c3de2c8`
-於 branch `danniel/fix/production-path-check-noop` 的狀態。**
+掃描當下工作樹除 `aidlc/.../audit/` shard 外乾淨。**本 codekb 描述的是 commit `5106acd`
+於 branch `doreen/feat/agent-langraph-migration` 的狀態。**
 
 ## 跨分支狀態（本次基準的重要限制）
 
