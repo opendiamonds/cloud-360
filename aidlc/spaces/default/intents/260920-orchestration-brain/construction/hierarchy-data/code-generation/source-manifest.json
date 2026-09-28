@@ -1,0 +1,13 @@
+{
+  "stage": "code-generation",
+  "unit": "hierarchy-data",
+  "version": 1,
+  "writes": [
+    { "path": "schema_rbac.sql" },
+    { "path": "schema.sql" },
+    { "path": "DEPLOY.md" },
+    { "path": "backend/services/hierarchy_migration.py" },
+    { "path": "backend/scripts/run_hierarchy_migration.py" },
+    { "path": "backend/tests/test_hierarchy_migration.py" }
+  ]
+}

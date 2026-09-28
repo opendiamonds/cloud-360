@@ -15,9 +15,10 @@
 ## Scope Configuration
 - **Stages to Execute**: 0.1, 0.2, 0.3, 1.1, 1.3, 1.4, 1.6, 1.7, 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 4.3, 4.4, 4.6
 - **Stages to Skip**: 1.2 (market-research), 1.5 (team-formation), 2.2 (practices-discovery), 4.2 (environment-provisioning), 4.5 (incident-response), 4.7 (feedback-optimization)
-- **Depth**: Standard
+- **Depth**: Minimal
 - **Test Strategy**: Standard
-- **Review Override**: 
+- **Review Override**: advisory
+- **Summary Confirmation**: off (set by you)
 
 ## Workspace State
 - **Project Root**: .
@@ -40,6 +41,32 @@
 - **Unit Ownership**: solo
 
 - **Skeleton Stance**: off
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -117,7 +144,7 @@ Per unit: [TBD]
 - **Current Stage**: functional-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-09-27T14:48:03Z
+- **Last Updated**: 2026-09-28T11:58:14Z
 
 ## Session Resume Point
 - **Last Completed Stage**: delivery-planning

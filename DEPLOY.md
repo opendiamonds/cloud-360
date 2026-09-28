@@ -238,6 +238,8 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | C | `role_permissions` | 角色 × Story 的檢視／編輯／審核 |
 | F | **C1 退場** `archive_diagram_cost`／`archive_diagram_cost_line`／`archive_pricing_cache`／`archive_cost_audit_event` | **舊成本表（已 rename；應用零讀寫；≥90 天後另開 chore DROP）** |
 | G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
+| H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
+| H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
 | D | 預設使用者 `admin` | 見下方 |
 
 #### 2.2.4 C1 成本表退場（U3 `legacy-cost-retirement`）
@@ -314,6 +316,174 @@ psql "$DATABASE_URL" -c "SELECT extname, extversion FROM pg_extension WHERE extn
 # 應有一列。沒有的話先確認伺服器裝得到它：
 psql "$DATABASE_URL" -c "SELECT * FROM pg_available_extensions WHERE name='vector';"
 ```
+
+#### 2.2.7 U4 專案／系統階層表與一次性遷移（`hierarchy-data`）
+
+| 物件 | 說明 |
+|---|---|
+| `projects` | 階層最上層。`owner_user_id` FK → `users`；`is_default` 為**遷移冪等的承載**，每位使用者至多一列為真（部分唯一索引 `uq_projects_default_per_owner`）。刪除仍有 `systems` 的 Project 會被拒絕（`ON DELETE RESTRICT`） |
+| `systems` | 階層中間層。`project_id` FK → `projects`（`ON DELETE RESTRICT`）；`is_default` 每個專案至多一列為真（`uq_systems_default_per_project`——範圍是**專案**，不是擁有者） |
+| `user_diagrams.system_id` | **新增欄位，可為空**。架構圖歸屬的**權威來源**；`user_id` 只回答「誰建的」，不回答歸屬。FK → `systems` 且為 `ON DELETE RESTRICT`——刪除 System 時**拒絕刪除**而非把本欄設為 NULL |
+| `diagram_change_records` | 架構圖變更紀錄。**本輪只寫不讀**（沒有任何讀取端）。`source` 是封閉列舉、本輪唯一值 `brain_orchestration`；`actor_user_id` **必填**。保存期 90 天、以 `created_at` 為截止欄位（索引 `ix_diagram_change_records_created_at`），**但清除機制本輪尚未落地——這張表實際上不會被清除** |
+
+**「每位使用者至多一組預設專案／系統」不是單一約束**：資料庫只保證「每位使用者至多一個預設專案」與「每個專案至多一個預設系統」。「預設系統一定掛在該使用者的預設專案底下」**沒有任何約束擋住**，它由遷移程序（目前 `is_default` 的唯一寫入端）的執行順序供應。日後若出現第二個 `is_default` 寫入端，這個複合性質就不再自動成立。
+
+##### 前進步驟（既有環境的唯一路徑）
+
+`schema_rbac.sql` **只在空 data volume 執行**（兩份 compose 把它掛進 `/docker-entrypoint-initdb.d/`），所以既有的 `192.168.10.10` **不會**經過它。既有環境取得 H) 區塊的結構與完成資料遷移的唯一路徑是這支指令：
+
+```bash
+# 在 backend/ 目錄，且 DATABASE_URL 已指向目標資料庫
+cd backend
+python scripts/run_hierarchy_migration.py
+```
+
+預期輸出（三個計數即 `BR2.6` 要求的進度紀錄）：
+
+```
+hierarchy migration 完成：
+  處理的使用者數        users_processed       = <持有至少一張圖的使用者數>
+  新建的預設專案／系統組 default_pairs_created = <本次新建的組數>
+  改寫的架構圖數        diagrams_assigned     = <本次掛入的圖數>
+終檢通過：user_diagrams 中 system_id IS NULL 的列數為 0（AC9.1.4）。
+```
+
+**結束碼 0 才算成功。** 非零即代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 的六支 `_ensure_*` 補丁全部 `except Exception: logger.warning`，本指令不沿用那個形狀。
+
+指令**可重跑**：DDL 為 `IF NOT EXISTS` 形狀；資料面的冪等判準是 `system_id IS NOT NULL`（已掛好的圖不會被重新指派），預設專案／系統「存在就取用、不存在才建」。第二次跑的預期輸出是 `default_pairs_created = 0`、`diagrams_assigned = 0`，而 `users_processed` 仍為使用者數（它算的是走訪數，不是改動數）。
+
+驗證：
+
+```bash
+psql "$DATABASE_URL" -c "\d projects"
+psql "$DATABASE_URL" -c "\d systems"
+psql "$DATABASE_URL" -c "\d diagram_change_records"
+
+# 不變量（AC9.1.4）：必須為 0
+psql "$DATABASE_URL" -c "SELECT count(*) FROM user_diagrams WHERE system_id IS NULL;"
+
+# 每位持有圖的使用者恰好一組預設：兩個 count 應相等，且每一列都是 1
+psql "$DATABASE_URL" -c "
+  SELECT p.owner_user_id, count(*) AS default_projects
+  FROM projects p WHERE p.is_default GROUP BY 1 HAVING count(*) <> 1;"
+#   應回 0 列
+
+# 兩個部分唯一索引都在
+psql "$DATABASE_URL" -c "
+  SELECT indexname FROM pg_indexes
+  WHERE tablename IN ('projects','systems') AND indexname LIKE 'uq_%';"
+#   應有 uq_projects_default_per_owner 與 uq_systems_default_per_project
+```
+
+##### 靜止前置條件（**目前的管線做不到，必讀**）
+
+**遷移期間應用不得接流量。** 理由不是效能而是正確性：遷移進行中若有人透過既有 A1 頁面新建一張圖，那張圖不帶 `system_id`（既有儲存路徑不知道這一欄存在），終檢的計數就不為 0 —— 而那不是遷移的錯，卻會讓部署失敗。
+
+**這個有序窗口目前沒有承載者。** `.github/workflows/deploy.yml:121–124` 是單一個
+
+```
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build --remove-orphans
+```
+
+把整座 stack **一次**拉起來，`:126` 緊接著就開始等前端回應。**管線裡沒有任何一點是 db 起來而 backend 沒起來的**，所以容器重建造成的中斷是一個**無序的競爭窗口**，不是這裡需要的有序窗口。不要把它當成靜止已經生效。
+
+在管線補上有序步驟之前，本次遷移請以**手動**方式取得窗口：
+
+```bash
+# 1) 只起資料庫
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d db
+# 2) 確認 backend 沒有在跑（應無輸出）
+docker compose -f deploy/docker-compose.deploy.yml ps --status running --services | grep -x backend
+# 3) 跑遷移（在能連到該 DB 的環境，DATABASE_URL 指向它）
+cd backend && python scripts/run_hierarchy_migration.py
+# 4) 結束碼為 0 且上述不變量查詢回 0 之後，才把其餘服務拉起來
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build --remove-orphans
+```
+
+##### 中途失敗是**合法且可恢復**的狀態
+
+遷移的交易邊界是**逐使用者一個交易**：某位使用者的專案／系統建立與其圖的改寫要麼全成要麼全不成；跨使用者則可留下部分進度。所以中途失敗後資料庫會處在「**部分使用者已遷移**」的狀態。
+
+**這不是壞掉。** 處置方式是找出失敗原因、處置後**重跑同一支指令**——已完成的使用者會被原樣跳過，未完成的會被補上。看到下面這種混合狀態時不要試圖手動修補：
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT (SELECT count(*) FROM user_diagrams WHERE system_id IS NOT NULL) AS migrated,
+         (SELECT count(*) FROM user_diagrams WHERE system_id IS NULL)     AS pending;"
+```
+
+最常見的失敗原因是殘留列指向不存在的使用者（孤兒圖）。它們不會被遷移處理（遷移只走訪 `users` 裡真的存在的擁有者），因此會被計入殘留而讓終檢失敗——這是刻意的，孤兒列需要人工判斷：
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT d.id, d.user_id FROM user_diagrams d
+  LEFT JOIN users u ON u.id = d.user_id
+  WHERE d.system_id IS NULL AND u.id IS NULL;"
+```
+
+##### 回復程序（`decisions.md` ADR-002／ADR-003 逐字：清空 `system_id` 並刪除新建的 `projects`／`systems` 列）
+
+回復**不需要**刪除欄位或表——`system_id` 可為空，而既有頁面完全不讀它，所以清空即等於回到遷移前的可觀察行為。
+
+**先看一眼會動到什麼，再動手**（這一步不可省略——它是唯一能在變更前發現「使用者已自己搬過圖」的機會）：
+
+```bash
+psql "$DATABASE_URL" <<'SQL'
+SELECT
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE s.is_default)                                   AS will_be_cleared,
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE NOT s.is_default)                               AS on_user_made_systems,
+  (SELECT count(*) FROM systems  WHERE NOT is_default)     AS user_made_systems,
+  (SELECT count(*) FROM projects WHERE NOT is_default)     AS user_made_projects,
+  (SELECT count(*) FROM diagram_change_records)            AS change_records;
+SQL
+```
+
+- `on_user_made_systems` **不為 0**：使用者已把圖搬到自建系統上。那些歸屬**不是**遷移的產物，回復不得碰它們——下面的 SQL 也確實不會碰（它只清掛在**預設**系統上的）。
+- `user_made_systems` 不為 0：其中若有掛在預設專案底下的，第 3 步會被 `RESTRICT` 擋下，那個預設專案會**留著**並被第 4 步的檢查報出來。這是正確行為，不是失敗。
+- `change_records` 不為 0：見下方注意事項 3。
+
+```bash
+psql "$DATABASE_URL" <<'SQL'
+BEGIN;
+-- 1) 只清掛在**預設系統**上的歸屬。使用者搬到自建系統上的圖原樣不動。
+--    必須在刪 systems 之前——否則 ON DELETE RESTRICT 會擋住第 2 步。
+UPDATE user_diagrams SET system_id = NULL
+ WHERE system_id IN (SELECT id FROM systems WHERE is_default);
+-- 2) 刪除遷移建立的預設系統。此時它們之下已無圖，RESTRICT 不會擋。
+DELETE FROM systems WHERE is_default;
+-- 3) 刪除遷移建立的預設專案，但**只刪其下已無任何系統的**。
+--    使用者若在預設專案底下自建過系統，該專案留著——硬刪會被 RESTRICT 擋掉並中止整個交易。
+DELETE FROM projects p
+ WHERE p.is_default
+   AND NOT EXISTS (SELECT 1 FROM systems s WHERE s.project_id = p.id);
+-- 4) 確認。這四個數**可以不為 0**，各自有明確含義，見下表。
+SELECT
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE s.is_default)                               AS still_on_default_systems,
+  (SELECT count(*) FROM systems  WHERE is_default)     AS default_systems_left,
+  (SELECT count(*) FROM projects WHERE is_default)     AS default_projects_left,
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE NOT s.is_default)                           AS on_user_made_systems;
+COMMIT;
+SQL
+```
+
+第 4 步的四個數怎麼讀：
+
+| 欄 | 應為 | 不是的話代表什麼 |
+|---|---|---|
+| `still_on_default_systems` | **0** | 第 1 步沒清乾淨——**這是真正的失敗**，不要 `COMMIT`，回報後人工處置 |
+| `default_systems_left` | **0** | 第 2 步被擋——同上，真正的失敗 |
+| `default_projects_left` | 0 **或**使用者在其下自建過系統的那幾個 | 不為 0 時以 `SELECT p.id FROM projects p WHERE p.is_default AND EXISTS (SELECT 1 FROM systems s WHERE s.project_id = p.id);` 列出來人工判斷。**這是預期內的狀態，不是錯誤** |
+| `on_user_made_systems` | 與回復**前**那一次查詢的同名欄位相等 | 不相等代表本程序誤動了使用者的歸屬——**立刻 `ROLLBACK`** |
+
+三個注意事項：
+
+1. **步驟順序不可調換**：`user_diagrams.system_id` 與 `systems.project_id` 都是 `ON DELETE RESTRICT`，先刪 `systems` 會被拒絕。這正是 `BR1.2` 在保護的行為，不是障礙。
+2. **只碰遷移的產物**。初版的第 1 步寫成 `WHERE system_id IS NOT NULL`——那會連同使用者自己搬過的歸屬一起清掉，與本節第 2 點的宣稱直接矛盾；而初版第 4 步的檢查跑在那個清空之後，恆為 0，**是一個不可能失敗的檢查**（iteration 1 審查 R-02，Major）。現行版本改以「掛在預設系統上」為範圍，並把檢查拆成回復前後兩次比對。
+3. `diagram_change_records` **不在回復範圍內**：本輪它沒有任何寫入端上線（寫入端是後續單元），回復時表應為空。若不為空，那是稽核資料，刪除前須人工確認。另注意 `diagram_id` 是 `ON DELETE CASCADE`——刪除架構圖會連帶銷毀它的變更紀錄，這是已揭露並由人工裁決保留的取捨。
 
 #### 2.2.1 A3 `architecture_reviews`（DDL 摘要）
 
@@ -547,6 +717,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 6. 用既有管理員或 bootstrap admin 登入 → **立刻輪替臨時密碼／清除 bootstrap secret** → 調整角色權限
 7. 依第 3.4／3.5 節做 A1／A3／優化與成本頁煙測  
 8. **首次部署 brain-infra（Redis／Ollama／PG 18）之前，逐項做完第 5 節的前置條件**  
+9. **既有環境**（如 `192.168.10.10`）另跑一次性階層遷移：`cd backend && python scripts/run_hierarchy_migration.py`。**必須在應用未接流量的窗口內執行**，且結束碼為 0 才可繼續——步驟、驗證與回復程序見第 2.2.7 節
 
 ---
 

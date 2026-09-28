@@ -7,6 +7,8 @@
 --   B) A4：user_diagram_chats（聊天持久化）+ users.last_opened_diagram_id
 --      另含 users.last_activity_at（最後活動時間欄位）
 --   E) A3：architecture_reviews（評核結果）+ wa_lenses（Offline Lens 現行標準）
+--   H) U4：projects / systems / diagram_change_records 三表
+--      ＋ user_diagrams.system_id（歸屬的權威來源）＋ 兩個部分唯一索引
 --   C) RBAC：role_permissions + 預設矩陣（308 列）
 --   D) 不建立固定密碼管理員；bootstrap admin 由後端依環境變數建立
 --   X) 擴充：pgvector（`vector` 型別；U5 記憶表的 vector(1024) 欄位需要）
@@ -20,6 +22,11 @@
 --   - 不覆寫既有 admin 密碼
 --   - 矩陣來源：aidlc-docs/construction/plans/role-permission-design.md
 --   - A3：評核內容在 architecture_reviews；可編輯 Lens 在 wa_lenses.body_json
+--   - H)：本檔只在**空 volume** 執行，故既有環境不會經過它。既有環境取得 H) 的
+--     結構與資料遷移的唯一路徑是
+--       cd backend && python scripts/run_hierarchy_migration.py
+--     它自己以可重跑安全的方式建同一組物件（DDL 兩處並存，改一處必須改另一處）。
+--     詳見 DEPLOY.md 第 2.2.7 節。
 --   - 本檔是**單一交易**（BEGIN … COMMIT）。伺服器沒有安裝 pgvector 時，
 --     下面那行 CREATE EXTENSION 會是硬 ERROR（could not open extension
 --     control file），整個交易中止 → 一張表都不會建。本機請先確認：
@@ -308,6 +315,107 @@ CREATE TABLE IF NOT EXISTS advice (
 
 COMMENT ON TABLE estimate_sets IS 'U2: upload batch root; diagram_id is label only';
 COMMENT ON TABLE advice IS 'U7 owns advice body; U2 creates shell + thin GET';
+
+-- ###########################################################################
+-- H) U4 hierarchy-data: projects / systems / diagram_change_records
+--    對應 backend/services/hierarchy_migration.py 的 _ensure_hierarchy_schema()
+--    （該函式是既有非空 volume 的唯一演進路徑；本檔只在空 volume 執行）
+-- ###########################################################################
+
+CREATE TABLE IF NOT EXISTS projects (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  owner_user_id INTEGER NOT NULL REFERENCES users (id),
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT ck_projects_name_not_blank CHECK (length(trim(name)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_projects_owner_user_id ON projects (owner_user_id);
+
+-- BR1.3 (1)：每位使用者至多一個 is_default 為真的專案。
+-- 範圍只引用本表欄位（owner_user_id）——唯一性約束無法以另一張表 join 來的值
+-- 為範圍，所以 systems 那一層只能以 project_id 為範圍（見下方），不是以擁有者。
+CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_default_per_owner
+  ON projects (owner_user_id) WHERE is_default;
+
+COMMENT ON COLUMN projects.is_default IS
+  'U4/BR1.3: migration-idempotency carrier. At most one TRUE row per owner (uq_projects_default_per_owner). Written ONLY by services/hierarchy_migration.py; not a user-editable attribute.';
+COMMENT ON COLUMN projects.owner_user_id IS
+  'U4: who owns this project. Deletion behaviour of the referenced user is deliberately NOT decided (OQ-H1, landing U7) — no ON DELETE clause, same as user_diagrams.user_id.';
+
+CREATE TABLE IF NOT EXISTS systems (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE RESTRICT,
+  name VARCHAR(255) NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT ck_systems_name_not_blank CHECK (length(trim(name)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_systems_project_id ON systems (project_id);
+
+-- BR1.3 (2)：每個專案至多一個 is_default 為真的系統。範圍為 project_id。
+-- 「每位使用者至多一組預設專案／系統」是兩層的**遞移**結果，不是單一約束；
+-- 它另外依賴「預設 System 總是建在該使用者的預設 Project 底下」，而**沒有任何
+-- 約束擋住這一點**——那個耦合由遷移程序（BR2.5，唯一寫入端）供應。
+CREATE UNIQUE INDEX IF NOT EXISTS uq_systems_default_per_project
+  ON systems (project_id) WHERE is_default;
+
+COMMENT ON COLUMN systems.is_default IS
+  'U4/BR1.3: migration-idempotency carrier. At most one TRUE row per project (uq_systems_default_per_project). The composite "one default pair per user" also needs BR2.5 exclusive-writer discipline; no constraint enforces it.';
+
+-- BR1.2：user_diagrams.system_id —— 歸屬的權威來源（decisions.md ADR-002）。
+-- 可為空，因為欄位必須先加上去、再由遷移填滿；遷移跑完的那一刻它必須全部非空
+-- （BR2.1／AC9.1.4）。收成 NOT NULL 與 AC9.1.3 衝突，故不做（OQ-H2）。
+ALTER TABLE user_diagrams ADD COLUMN IF NOT EXISTS system_id INTEGER;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_user_diagrams_system'
+  ) THEN
+    ALTER TABLE user_diagrams
+      ADD CONSTRAINT fk_user_diagrams_system
+      FOREIGN KEY (system_id)
+      REFERENCES systems (id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS ix_user_diagrams_system_id ON user_diagrams (system_id);
+
+COMMENT ON COLUMN user_diagrams.system_id IS
+  'U4/ADR-002: AUTHORITATIVE source of ownership (which system this diagram belongs to). user_id answers "who created it", NOT belonging. Nullable by design; ON DELETE RESTRICT so deleting a System cannot orphan a diagram (BR1.2) — SET NULL would itself create the BR2.1 violation. Filled by services/hierarchy_migration.py.';
+
+CREATE TABLE IF NOT EXISTS diagram_change_records (
+  id SERIAL PRIMARY KEY,
+  diagram_id INTEGER NOT NULL REFERENCES user_diagrams (id) ON DELETE CASCADE,
+  source VARCHAR(32) NOT NULL,
+  actor_user_id INTEGER NOT NULL REFERENCES users (id),
+  requirement_summary TEXT NOT NULL,
+  requirement_label VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT ck_diagram_change_records_source
+    CHECK (source IN ('brain_orchestration')),
+  CONSTRAINT ck_diagram_change_records_summary_not_blank
+    CHECK (length(trim(requirement_summary)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_diagram_change_records_diagram_id
+  ON diagram_change_records (diagram_id);
+
+-- U4-R1：90 天保存期的清除查詢以 created_at 為截止欄位；沒有這個索引它是全表掃描，
+-- 而這張表**沒有任何讀取端**會順手建索引（本輪只寫不讀，Q2=A）。
+CREATE INDEX IF NOT EXISTS ix_diagram_change_records_created_at
+  ON diagram_change_records (created_at);
+
+COMMENT ON TABLE diagram_change_records IS
+  'U4: change records for diagrams. WRITE-ONLY this round (no reader exists). Coverage is declared by the source column, NOT by the table name — read source before presenting anything (BR3.1). Retention 90 days keyed on created_at (U4-R1); the purge mechanism itself is not in this repo (U4-R2).';
+COMMENT ON COLUMN diagram_change_records.source IS
+  'U4/BR3.1: closed enum declaring this table COVERAGE. Only legal value this round: brain_orchestration (brain-delegated changes). Edits made through the existing A1 page do NOT pass through the writer, so rows here are NOT a complete change history. Adding a future writer = add an enum value, no schema migration.';
+COMMENT ON COLUMN diagram_change_records.actor_user_id IS
+  'U4/SEC-4: WHO caused this change. NOT NULL on purpose — a record that says "the diagram changed" but not "who changed it" fails the audit-logging face. The writer (U12) must store the user who actually caused the change and must NOT default to the session owner (OQ-H3 still open).';
 
 -- ###########################################################################
 -- C) RBAC: role × story permissions (view / edit / review)
@@ -654,5 +762,16 @@ COMMIT;
 -- SELECT count(*) FROM diagram_shares;
 -- SELECT count(*) FROM user_diagram_chats;
 -- SELECT count(*) FROM architecture_reviews;
+-- -- H) U4 hierarchy-data：
+-- \d projects
+-- \d systems
+-- \d diagram_change_records
+-- SELECT column_name, data_type, is_nullable FROM information_schema.columns
+--   WHERE table_name = 'user_diagrams' AND column_name = 'system_id';
+--   -- 應為：system_id | integer | YES
+-- SELECT indexname FROM pg_indexes WHERE tablename IN ('projects', 'systems')
+--   AND indexname LIKE 'uq_%';
+--   -- 應有兩列：uq_projects_default_per_owner、uq_systems_default_per_project
+-- SELECT count(*) FROM user_diagrams WHERE system_id IS NULL;   -- 遷移後應為 0
 -- SELECT id, diagram_id, status, overall_score, archived FROM architecture_reviews ORDER BY id DESC LIMIT 5;
 -- SELECT id, lens_id, is_active, updated_at FROM wa_lenses ORDER BY id DESC LIMIT 5;

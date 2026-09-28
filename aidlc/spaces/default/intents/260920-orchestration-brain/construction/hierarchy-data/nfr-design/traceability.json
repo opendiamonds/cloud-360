@@ -1,0 +1,121 @@
+{
+  "stage": "nfr-design",
+  "unit": "hierarchy-data",
+  "upstream_ids": [
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "U4-V1",
+    "U4-V2",
+    "U4-V3",
+    "U4-V4",
+    "U4-V5",
+    "U4-V6",
+    "U4-R1",
+    "U4-R2",
+    "U4-R3",
+    "U4-R4",
+    "U4-D1"
+  ],
+  "coverage": [
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "§一 IAM 列 — 遷移模組只暴露一個可呼叫入口，模組內不含 HTTP 層與供他人呼叫的讀寫函式。**殘餘不是「無」**（iteration 1 審查 R-06）：unit-of-work.md 逐字記載 U7／U8 的授權只掛在 dependency 層、同進程直呼 service 函式會完整繞過 RBAC，且本 intent 的 U10／U12 → U7 兩條 sync 邊落在此風險上、已記為 Accepted risk 並指派 functional-design。本單元交付的三張表正是那條繞過路徑能讀寫的資料，殘餘存在但不歸本單元處置；SEC-3 的檢查證明的是本單元沒有再開第三條路"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "§一 IAM（特權操作）列 — 遷移讀取應用同一個 DATABASE_URL（compose 內插），不新增任何設定面。權限等級即該憑證既有等級：backend/database.py 的 _ensure_* 補丁一直用它做 DDL"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "§一 Network exposure 列 — 零端點、零連線、零對外介面；連線目標是 compose 內部服務名 db。機械檢查（import／decorator 形式）的檔案集合依賴 code-generation 的 source-manifest.json，屬對下游的要求而非本站可自驗，已於殘餘風險表記載"
+    },
+    {
+      "id": "SEC-4",
+      "status": "Deferred",
+      "target": "§一 Audit logging 列 ＋ §二 — **由 OK 改為 Deferred**（iteration 1 審查 R-02，Major）。上游 SEC-4 的條件有兩個要求：存進去的值必須指向真正造成異動的人，且不得預設填工作階段擁有者。Q3=A 只設計了「解不出來」那個分支（不寫紀錄、整體失敗）；「解出來了但解錯」那個分支沒被碰到，而「可信」二字的定義正是 OQ-H3 的內容、仍未定案。故第四處的稽核保證在 OQ-H3 定案前仍不成立，只是失敗面少了一種。初版宣稱「本站把它變強了」屬過度宣稱。前三處（BR2.1、BR2.6、U4-R3）不受影響"
+    },
+    {
+      "id": "U4-V1",
+      "status": "OK",
+      "target": "§三 — **框架已更正**（iteration 1 審查 R-03，Major）：這個 job 不是 U4 的。U4-V1 逐字要求共用既有的真實 PostgreSQL job 且「不另開第二個 job」，而 brain-infra 的 NFR6.1 落點 3 逐字說那是「N-2 的真實 PostgreSQL CI job」、狀態「尚未存在」，屬 U5 memory-data 的交付物。本站設計的是 U4 要往該共用 job 裡加的步驟，不擁有它、也不決定它何時存在。映像 pgvector/pgvector:pg18 沿用 brain-infra NFR6.1。上游另有未解衝突：brain-infra 記載該驗證載體「目前不可滿足」，因上游兩處把它逐字釘成 postgres:16-alpine"
+    },
+    {
+      "id": "U4-V2",
+      "status": "OK",
+      "target": "§三 步 2 — 寫入前置狀態：≥2 位持有圖的使用者、其圖 system_id 為空。前提是 system_id 可為空，此即 S-7 記載的與 OQ-H2 互相牽制之處"
+    },
+    {
+      "id": "U4-V3",
+      "status": "OK",
+      "target": "§三 步 4 — 查不變量（system_id IS NULL 列數為 0），不為 0 即 job 失敗"
+    },
+    {
+      "id": "U4-V4",
+      "status": "Deferred",
+      "target": "§三 末段 ＋ §三之三 — **行為面 Deferred，機械面有承載**（iteration 1 審查 R-08）。行為面：CI 刻意不設案例，因為在 BR2.2 的「取用既有」之下約束拒絕只在實作已寫錯時才可達，構造那種夾具等於測試一份不會被交付的程式。機械面：「不得吞掉」是可 grep 的——遷移模組的寫入路徑不得出現包住約束違反卻未重新拋出或未以非零結束碼收場的 except Exception／裸 except；落點為 code-generation 的 code review ＋ SEC-3 同一份 source-manifest.json 的檔案集合"
+    },
+    {
+      "id": "U4-V5",
+      "status": "OK",
+      "target": "§三 步 5 — 再呼叫一次遷移，斷言沒有第二組預設專案／系統、已掛好的圖沒有被重新指派"
+    },
+    {
+      "id": "U4-V6",
+      "status": "OK",
+      "target": "§三 末段 — CI job 內天然滿足（沒有應用在跑）；部署路徑上的承載是 S-9 的有序步驟"
+    },
+    {
+      "id": "U4-R1",
+      "status": "OK",
+      "target": "§三之二 — 由 N/A 改為 OK（iteration 1 審查 R-07）。保存期在資料面有兩個本站必須下的決定，而 spec 單元的 performance-design 被 produces_kinds 濾掉、它們沒有別的落點：(1) 截止欄位為 created_at（該表唯一的時間欄位，只寫不讀故無替代語意可選，但必須指名否則 S-5 的實作者得自己猜）；(2) created_at 需要索引，否則清除查詢是全表掃描，而這張表沒有任何讀取端會順手建立索引。不下的決定：批次大小、頻率、鎖策略——屬 S-5 的承載形式"
+    },
+    {
+      "id": "U4-R2",
+      "status": "N/A",
+      "target": "清除機制不得以 repo 內程式承載——這是承載形式的約束（gh-aw 或 Actions），屬 S-5 的獨立決定，本站確實無設計可加。與 U4-R1 不同：U4-R1 的截止欄位與索引是資料面決定、無其他落點，而本條是流程承載面決定、落點明確在 S-5"
+    },
+    {
+      "id": "U4-R3",
+      "status": "Deferred",
+      "target": "清除留計數 — §一 Audit logging 列已把它列為第三處，但它規範的機制（S-5）尚不存在，故在 S-5 落地前空轉。狀態記為 Deferred 並已記入殘餘風險表"
+    },
+    {
+      "id": "U4-R4",
+      "status": "OK",
+      "target": "§一 Encryption 列 — **判定為不做任何加密**（欄位級與傳輸皆不做），四條理由與一條界線並列寫出；殘餘（主機磁碟被取得即明文）記入 §五。本站是 OQ-3／S-4 的落點，該題在此結案"
+    },
+    {
+      "id": "U4-D1",
+      "status": "N/A",
+      "target": "部署資產同步（schema_rbac.sql ＋ DEPLOY.md 的前進／回復／部分狀態／靜止四項）是文件義務，不是本站的設計對象；本站只在 §三 說明 U4-V6 在部署路徑上的承載是 S-9。清單本身屬 nfr-requirements 與 code-generation"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "S-10",
+      "status": "N/A",
+      "target": "OQ-3 的 U5 那一半不受本站答案約束。episodic memory 的加密會在 U5 自己的 nfr-design 回合作答；若它答「加密」而本站答「不加密」，兩份同類資料會有兩種待遇——那不必然錯（量體與可識別程度不同），但必須是被看見之後的選擇。本階段新增需回補。落點 U5 的 nfr-design（3.3，CONDITIONAL）；若被 skip，OQ-3 的那一半連本站這種結案都沒有。無對應上游需求 id"
+    },
+    {
+      "id": "S-11",
+      "status": "N/A",
+      "target": "U12 在異動架構圖之前必須先解出行動者，解不出即中止整個異動；且改圖與寫變更紀錄必須在同一個交易內（否則會出現「圖改了但紀錄沒寫」或反之，而本單元不擁有那個交易）；另該失敗須呈現成可理解的訊息，形狀比照 BR3.2。由 Q3=A 產生。本階段新增需回補。落點 U12（OQ-H3 的落點）與 U16（訊息呈現）；U12 的 functional-design 為 CONDITIONAL，若被 skip 則與 OQ-H3 一起失去承接站。無對應上游需求 id"
+    },
+    {
+      "id": "encryption-boundary",
+      "status": "N/A",
+      "target": "§一 Encryption 判定的成立條件是環境性的：「db 不對外、與應用同主機」一旦改變即失效。本檔把它寫成界線而不是假設，但沒有任何機制會在條件改變時提醒。列在此處使這個缺口可被追蹤，不是宣稱本站處理了它。無對應上游需求 id"
+    },
+    {
+      "id": "S-6-disposition",
+      "status": "N/A",
+      "target": "S-6 的處置（iteration 1 審查 R-04，Major：S-6 的落點是 nfr-design 或 ci-pipeline，而初版全篇對 S-6 零命中，既沒結案也沒往前帶）。本站完成的部分：S-6 要求的範圍擴充已設計成 §三 的五個步驟（含 U4-V5 的重跑斷言）。本站無法完成的部分：那個 job 尚不存在且擁有者是 U5／N-2，所以把步驟真正寫進 CI 的動作不在本站，落點為 ci-pipeline（3.7，CONDITIONAL）或 U5 建立該 job 時。若 ci-pipeline 被 skip 且 U5 的 job 未建立，§三 的五個步驟沒有任何承載者、U4-V1–U4-V5 全部落空，屆時判定 skip 的人必須把 S-6 重新提交給使用者"
+    }
+  ],
+  "reverse_count": 4
+}
