@@ -74,10 +74,10 @@ Per unit: [TBD]
 - [ ] nfr-requirements — SKIP
 - [ ] nfr-design — SKIP
 - [ ] infrastructure-design — SKIP
-- [?] code-generation — EXECUTE
-- [ ] build-and-test — EXECUTE
+- [x] code-generation — EXECUTE
+- [x] build-and-test — EXECUTE
 - [ ] ci-pipeline — SKIP
-- [ ] tcms-test-cases — EXECUTE
+- [?] tcms-test-cases — EXECUTE
 
 ### OPERATION PHASE
 - [ ] deployment-pipeline — SKIP
@@ -90,10 +90,9 @@ Per unit: [TBD]
 
 ## Current Status
 - **Lifecycle Phase**: IDEATION
-- **Current Stage**: build-and-test
-- **Next Stage**: tcms-test-cases
-- **Status**: Running
-- **Last Updated**: 2026-09-28T06:55:12Z
+- **Current Stage**: [End of Phase]
+- **Status**: Completed
+- **Last Updated**: 2026-09-28T07:06:48Z
 
 ## Session Resume Point
 - **Last Completed Stage**: state-init

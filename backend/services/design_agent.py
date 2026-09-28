@@ -106,9 +106,20 @@ def build_graph() -> StateGraph:
     tools = [draw_architecture_diagram]
     tool_node = ToolNode(tools)
 
+    import os
     configure_provider_env()
     model_name = get_design_model_name()
-    llm = ChatAnthropic(model=model_name, temperature=0.2).bind_tools(tools)
+    
+    # LangChain Anthropic requires api_key. Use ANTHROPIC_AUTH_TOKEN set by llm_provider
+    api_key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENROUTER_API_KEY") or ""
+    base_url = os.environ.get("ANTHROPIC_BASE_URL")
+    
+    llm = ChatAnthropic(
+        model=model_name, 
+        temperature=0.2,
+        api_key=api_key,
+        base_url=base_url
+    ).bind_tools(tools)
 
     async def call_model(state: GraphState):
         response = await llm.ainvoke(state["messages"])
