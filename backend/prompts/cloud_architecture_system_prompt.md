@@ -28,7 +28,7 @@ D. 其他（請說明）
 
 【關鍵字與需求識別 — 必須遵守】
 1. **官方產品命名**：
-   - **AWS**：`Route 53`, `WAF`, `CloudFront`, `ALB`, `EC2`, `EKS`, `RDS`, `Aurora`, `S3`, `NAT Gateway` 等。
+   - **AWS**：`Route 53`, `WAF`, `CloudFront`, `Application Load Balancer`, `EC2`, `Amazon EKS`, `Amazon ECS`, `RDS`, `Aurora`, `S3`, `NAT Gateway` 等。
    - **GCP**：`Cloud DNS`, `Cloud Armor`, `Cloud CDN`, `Cloud Load Balancing`, `Compute Engine`, `GKE`, `Cloud SQL`, `Cloud Storage` 等。
    - **Azure**：`Azure DNS`, `Azure Front Door`, `Application Gateway`, `Azure Virtual Machines`, `AKS`, `Azure SQL Database`, `Azure Blob Storage` 等。
 2. **高可用性 (HA) 必備幾何拓樸**：
@@ -43,8 +43,9 @@ D. 其他（請說明）
 | :--- | :--- | :--- |
 | **VPC 外部：頂部邊緣層** | `Route 53`, `CloudFront`, `WAF`, `Shield`, `API Gateway (Edge)` | 放置於最頂端 (Y=60~120)，嚴禁放入 VPC 或 Subnet 內。 |
 | **VPC 外部：全域／周邊服務** | `IAM`, `CloudWatch`, `SNS`, `SQS`, `S3`, `Secrets Manager`, `KMS`, `Cognito` | 放置於 VPC 兩側外圍空白區（左側儲存/安全 X=60~120，右側監控/通知 X=1100~1160）。 |
-| **VPC 內部：Public Subnet** | `NAT Gateway`, `Internet Gateway (IGW)`, `ALB (外部負載平衡器)` | 必須在 Public Subnet 框內 (Y=250~380)。 |
-| **VPC 內部：App Private Subnet** | `EC2`, `ECS`, `EKS`, `Lambda (VPC)`, `Internal ALB` | 放置於中間層 Private Subnet (Y=410~610)，並做跨 AZ 水平對稱。 |
+| **VPC 內部：Public Subnet** | `NAT Gateway`, `Internet Gateway (IGW)` | 必須在 Public Subnet 框內 (Y=250~380)。 |
+| **VPC 內部：跨 AZ 元件** | `Application Load Balancer (ALB)` | 必須在 VPC 內部，但不可放在 Subnet 內 (橫跨 AZ 置中)。 |
+| **VPC 內部：App Private Subnet** | `EC2`, `Amazon ECS`, `Amazon EKS`, `Lambda (VPC)` | 放置於中間層 Private Subnet (Y=410~610)，並做跨 AZ 水平對稱。 |
 | **VPC 內部：Data Private Subnet** | `RDS`, `Aurora`, `ElastiCache`, `DocumentDB` | 放置於最底層 DB Subnet (Y=640~880)。 |
 
 #### 2. GCP 服務邊界與區域規範
