@@ -1,0 +1,778 @@
+name: AI-DLC Sync Reverse (impl)
+
+# 反向同步的**實作**（[ad:S-C reverse-sync]）。觸發設定在薄外層
+# aidlc-sync-reverse.yml；本檔只認 workflow_call，全部設定經 inputs 進來，
+# 一個值都不寫死（[ad:ADR-A10]）。
+#
+# 規格正本：
+#   aidlc/spaces/default/intents/260822-gh-projects-sync/construction/
+#     U-8-reverse-workflow/functional-design/business-rules.md        （R-1〜R-6 群）
+#     U-8-reverse-workflow/functional-design/business-logic-model.md  （序列與錯誤表）
+#     U-8-reverse-workflow/functional-design/domain-entities.md       （pending_reverse／D-1）
+#     U-8-reverse-workflow/nfr-requirements/*.md                      （P-1〜P-3、SEC）
+#
+# 它與 U-6／U-7 的**方向相反**：那兩者是 record → 看板，本單元是看板 → record。
+# 這個方向差異帶來一個結構性後果——**它是三支同步 workflow 中唯一會產生 PR 的**，
+# 因此也是唯一需要考慮「人要審這個東西」的。
+#
+# 憑證拓樸依 ADR-0016 §1：單一擁有者帳號 token（`project` ＋ `repo` scope），
+# 與 U-6／U-7 同一個 secret。開 PR 需要的 `Pull requests: write` 由 `repo` scope
+# 整包承載（ADR-0016 §2；ADR-0015 §8 的「四項」在新拓樸下不可分別授予）。
+#
+# 行為測試：.github/actions/aidlc-sync-reverse/run-reverse-tests.py
+#   （以 stub 取代三支 composite action ＋ gh／git shim，斷言呼叫序列、每次寫入的
+#     欄位集合、PR 的內容邊界，以及 R-6.3 的三種結局）
+#
+# ==========================================================================
+# 本檔實作時發現、交還 Bolt 3 gate 追認的四項（詳見 code-summary）
+# ==========================================================================
+# (1) **concurrency 依 `services.md:58` 回退為「與 S-B 同一組」**，不是本單元
+#     `nfr-requirements/performance-requirements.md` 的 P-2 所裁定的「自成第三組」。
+#     理由見薄外層的長註解與交還報告——`open-items.md` 的 **N:C-2**（Critical）判定
+#     那項本站裁定推翻了已過 gate 的 `services.md:58`，處置逐字為「**需 ADR 或
+#     回退**」，而本 intent 至今沒有為它開出 ADR。**這是本檔對已核可計畫 Step 10
+#     的唯一偏離**，且改回去只需改薄外層一行。
+# (2) **R-4c 的方法表列了兩個本單元結構上無法直接呼叫的方法**：`parse` 與
+#     `content_hash`（C-6）。U-3 的 `read_item` 回傳的 `ItemState` **只有五欄**
+#     （status／field_value／managed_block_hash／issue_number／issue_state），
+#     **不含 issue body**——沒有 body 就沒有東西可以 parse。實際上 `read_item` 內部
+#     已經呼叫 block.sh 的 parse ＋ hash 算好 `managed_block_hash`（board.sh 的
+#     compute_managed_hash）。**這不是缺陷，是 ADR-0015 §10 的等價不變式所要求的
+#     唯一正確形狀**：U-6 寫入後回讀取得的雜湊、U-7 的 R-6.8 回寫、與本單元的比對
+#     基準，三者必須走同一條回讀路徑。本檔因此**完全不引用 block.sh**，有一條靜態
+#     斷言鎖住它。
+# (3) **R-1 群沒有區分「儲存值為 null」與「儲存值不同」**。前者可達（U-6 的回寫
+#     遺失、或 Bolt 1 之前就綁定的 intent），而依 R-1.1／R-1.3 的字面它會被判為
+#     「有人為變更」並開一則反向 PR，`pending_reverse.observed_status` 記下的是
+#     機制自己寫的值而不是任何人的改動。**本檔照字面實作、不自創第三條規則**
+#     （`project.md` 的 `functional-design:c10`）。實務上的界限是 R-6.1：同一個
+#     intent 最多同時有一則開啟中的反向 PR，所以不會每天增生。修法屬上游。
+# (4) **U-5 的 FailureIdentity 以 `<intent_id>/<reason_code>` 為鍵，不含發動的
+#     workflow**。本檔開的通報 issue 會被 U-6／U-7 的 `resolve_if_open` 在它們成功
+#     處理同一個 intent 時關掉——即使本單元的失敗還沒解決。這是 U-5 既有的鍵設計，
+#     U-6 與 U-7 之間早已有同樣的交互，本檔只是第三個進入該鍵空間的呼叫者。記載，
+#     不在此修。
+
+on:
+  workflow_call:
+    inputs:
+      project_owner:
+        description: 'Project 擁有者 login。ADR-0016 §4.1：查詢根是 user(login:)，不是 organization(login:)'
+        required: true
+        type: string
+      project_number:
+        description: 'Project 編號（正整數）。**正式看板與測試看板的差別只有這個值**'
+        required: true
+        type: string
+      stage_field_name:
+        description: >-
+          承載 stage 的看板自訂欄位名稱（[req:FR-F1]）。與 U-6／U-7 同樣**刻意不給
+          預設值**：這個字面從未被上游任何一份已核可文件定案。本單元**一個字都不寫
+          自訂欄位**，但 U-3 的 read_item 仍以它解析欄位值，缺了會讓 read_item 介面
+          誤用。
+        required: true
+        type: string
+      trunk_ref:
+        description: >-
+          反向同步要讀的整合主幹 ref（本 repo 為 `ut`），同時是反向 PR 的 base。
+          **必填、無預設**——理由與 U-7 的 R-7.1 逐字相同（`open-items.md` 的
+          **A:M-5** 把「U-8 套用同一組分支落點規則」指派給本單元，卻掛在 U-7 的
+          Bolt 2 gate 上而無收件人；本檔就地承接）：`schedule` 只在預設分支觸發，
+          本 repo 實測為 `main`，而 `main` 落後於 `ut`。不釘的後果在本單元比在 U-7
+          更硬——比對基準（`sync-state.json` 的 `managed_block_hash`）會是過期的，
+          於是**在沒有任何人為變更的情況下開出反向 PR**，而且沒有任何錯誤。
+          它同時是 [req:FR-G1]／R-1.5 的 PR base：分叉點與 base 必須是同一個 ref，
+          否則 diff 會混進兩者之間的差異，[US:S-6 AC 2] 的「不含 aidlc-state.md 任何
+          一行」就不再結構性成立。
+        required: true
+        type: string
+      record_root:
+        description: 'record 根目錄；registry 為 <record_root>/intents.json，intent_id 由目錄名推導'
+        required: false
+        default: aidlc/spaces/default/intents
+        type: string
+      reverse_branch_prefix:
+        description: >-
+          反向 PR 的分支前綴（D-1 ＋ 本單元 tech-stack-decisions.md 的擴充）。實際
+          分支為 <prefix>/<intent_id>-<YYYY-MM-DD>。`<intent_id>` 是 E-2（一個 intent
+          一則 PR）的直接後果——D-1 原文只有 `<date>`，同一天兩個 intent 被改動就會
+          撞名。
+        required: false
+        default: aidlc-sync/reverse
+        type: string
+    secrets:
+      sync_token:
+        description: >-
+          同步身分的 token（ADR-0016 §1：擁有者帳號，scope 為 project ＋ repo）。
+          它同時是 checkout 的憑證（U-4 的 commit_and_push 沿用 persist-credentials）、
+          U-3／U-5 的 GH_TOKEN，以及本檔 `gh pr create`／`gh label` 的憑證。
+          **本單元不呼叫任何純函式元件**（不呼叫 U-1 的 map.sh、不呼叫 U-2 的
+          block.sh），故沒有 U-6／U-7 那個 `env -u GH_TOKEN` 的剝除包裝器——沒有
+          零 I/O 元件會看到它。
+        required: true
+
+# 本 workflow 自己的 GITHUB_TOKEN 只要讀。所有寫入（狀態檔、push、PR、通報 issue）
+# 都走 sync_token。
+permissions:
+  contents: read
+
+jobs:
+  reverse:
+    name: Daily reverse sync round
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # 與 U-7 的 R-7.1 同一條規則（A:M-5 的承接，見 trunk_ref 的說明）。
+      # token 必須是同步身分且 persist-credentials: true——U-4 的 action.yml 明訂
+      # 「U-6／U-7／U-8 必須以同步 token 做 checkout，否則 push 會以認證失敗收場」，
+      # 而本單元的 push 是反向 PR 的 payload 本身，push 失敗就沒有 PR 可開。
+      - name: Check out the integration trunk with the sync identity
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.trunk_ref }}
+          token: ${{ secrets.sync_token }}
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Orchestrate one reverse round
+        id: reverse
+        env:
+          # 本單元沒有零 I/O 元件，GH_TOKEN 在 step 層設定即可（U-3／U-5 由此繼承，
+          # gh pr／gh label 也用它）。U-6／U-7 的 SEC-1 剝除包裝器在此**不適用**，
+          # 而不是被省略——見 secrets.sync_token 的說明。
+          GH_TOKEN: ${{ secrets.sync_token }}
+          AIDLC_PROJECT_OWNER: ${{ inputs.project_owner }}
+          AIDLC_PROJECT_NUMBER: ${{ inputs.project_number }}
+          AIDLC_FIELD_NAME: ${{ inputs.stage_field_name }}
+          AIDLC_RECORD_ROOT: ${{ inputs.record_root }}
+          AIDLC_TRUNK_REF: ${{ inputs.trunk_ref }}
+          AIDLC_BRANCH_PREFIX: ${{ inputs.reverse_branch_prefix }}
+        run: |
+          # ===================================================================
+          # 一輪反向同步的編排（[ad:S-C reverse-sync]）
+          # ===================================================================
+          # 本步驟**不含商業邏輯**：看板在 U-3、持久化在 U-4、通報在 U-5。這裡的
+          # 內容是**順序、雜湊比對的分流、PR 的生命週期，與 R-6.3 的三種結局**。
+          #
+          # 為什麼是一整段 bash 而不是一連串 uses: 步驟——與 U-6／U-7 同一個理由：
+          # 選取是 registry 驅動的迴圈，GitHub Actions 無法對執行期才算出來的清單
+          # 重複 uses:。三支 action 的 action.yml 都自述「本檔只做介面轉接
+          # （inputs → 環境變數 → *.sh → $GITHUB_OUTPUT）」，本步驟沿用**同一條
+          # 介面**，不繞過也不複製任何一支的邏輯。
+          #
+          # -------------------------------------------------------------------
+          # `-e` 是**從外面帶進來的**，所以要明確關掉（不是「刻意不開」）
+          # -------------------------------------------------------------------
+          # ① GitHub Actions 對未指定 `shell:` 的 `run:` 步驟一律以 `bash -e {0}`
+          #    啟動。本檔全檔沒有 `shell:`，也沒有 `defaults.run.shell`，所以這段
+          #    腳本在真實 runner 上是**開著 errexit** 進來的。
+          # ② `set -uo pipefail` **加不掉**已經生效的 `-e`——`set -<flags>` 只開不關，
+          #    要關必須 `set +e`。本機可複驗：
+          #      bash -e -c 'set -uo pipefail; false; rc=$?; echo "REACHED rc=$rc"'
+          #    什麼都不會印，exit 1。
+          # ③ 因此這裡明確 `set +e`。錯誤表要求「單一 intent 失敗不中止整輪」，而三支
+          #    腳本以非零 exit 表達 ExternalError／Rejected；`-e` 之下第一個外部錯誤
+          #    會殺掉整個 step。對本單元尤其致命：R-6.3 的三種結局（PR 開不成 → 刪
+          #    分支 → 刪不掉 → 孤兒）**每一種都在 `rc=$?` 之後**，errexit 之下整條清
+          #    理路徑不存在。下方 5 處 `rc=$?` 全部依賴這一行才拿得到值。-u 保留，
+          #    pipefail 保留。
+          # ④ 測試 harness（.github/actions/aidlc-sync-reverse/run-reverse-tests.py）
+          #    已改成以 `bash -e` 啟動受測腳本，與 CI 同語意；在此之前它用不帶 `-e`
+          #    的 `bash`，兩邊對這些分支的判定相反。移除下面那行 `set +e`，該檔的
+          #    test_f5_actions_bash_e_does_not_abort_the_round 會紅。
+          set -uo pipefail
+          set +e
+          export LC_ALL=C
+
+          WORKSPACE="${GITHUB_WORKSPACE:-$PWD}"
+          ACTIONS_DIR="${WORKSPACE}/.github/actions"
+          BOARD_SH="${ACTIONS_DIR}/aidlc-sync-board/board.sh"
+          RECORD_SH="${ACTIONS_DIR}/aidlc-sync-record/record.sh"
+          NOTIFY_SH="${ACTIONS_DIR}/aidlc-sync-notify/notify.sh"
+          # U-6 的 impl：本檔從它推導反向 PR 的 label（見下方 REVERSE_PR_LABEL）。
+          FORWARD_IMPL="${WORKSPACE}/.github/workflows/aidlc-sync-forward-impl.yml"
+
+          # **block.sh 刻意不在清單內，而且這是正確性要求不是省略**：
+          # 本單元的比對基準是 `read_item` 回傳的 `managed_block_hash`，那一欄是
+          # board.sh 的 compute_managed_hash 內部呼叫 block.sh 的 parse ＋ hash 算出
+          # 來的。ADR-0015 §10 的等價不變式（U-6 記錄的值與本單元日後算出的值必須
+          # 逐位元組相等）**正是由「兩端走同一條回讀路徑」在構造上保證**——本檔若
+          # 自己再算一次雜湊，就是第二條路徑，而那條路徑一旦與 U-6 的有任何正規化
+          # 差異，後果是**每天為每個受管 intent 各開一則反向 PR**（ADR-A6 點名的最
+          # 危險失效模式）。
+          # 附帶：`read_item` 也不回傳 issue body，所以本檔連「自己 parse」的原料都
+          # 沒有——R-4c 方法表裡的 `parse` 與 `content_hash` 兩列**結構上無法由本
+          # 單元直接呼叫**，已列入交還報告的第 (2) 項。
+          for f in "$BOARD_SH" "$RECORD_SH" "$NOTIFY_SH" "$FORWARD_IMPL"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::找不到 ${f}——三支 composite action 與 U-6 的 impl 必須與本 workflow 同進 checkout"
+              exit 1
+            fi
+          done
+
+          RECORD_ROOT="${AIDLC_RECORD_ROOT%/}"
+          REGISTRY="${WORKSPACE}/${RECORD_ROOT}/intents.json"
+
+          # 同步標記**從 U-4 的 record.sh 推導**，不在這裡再抄一份：commit_and_push
+          # 的 require_message 要求訊息含它（R-3.3），而它同時是 U-6 防線②的依據。
+          # `[aidlc-sync]` 各抄一份的代價本 intent 已經付過（U-10a 的 MARKER-1）。
+          SYNC_MARKER="$(sed -n 's/^SYNC_MARKER="\(.*\)"$/\1/p' "$RECORD_SH" | head -n 1)"
+          if [ -z "$SYNC_MARKER" ]; then
+            echo "::error::在 ${RECORD_SH} 找不到 SYNC_MARKER 常數，推導不出同步標記——commit_and_push 會以介面誤用拒絕本輪全部回寫，中止"
+            exit 1
+          fi
+
+          # D-1（U-6 的 domain-entities.md，跨三單元契約）：反向 PR 的 label。
+          # **[Q1=A]（人工裁決）**：從 U-6 的 impl 推導，不在本檔抄第二份字面。
+          # U-6 的 impl 是它在程式中的第一個物化點，其註解逐字要求後續單元「上線時
+          # 必須從這裡取」；U-7 已於 reconcile-impl:222 照辦，本檔沿用同一條 sed。
+          #
+          # **這條裁決的代價要寫明**：真實來源落在**消費者**（U-6）而不是**產生者**
+          # （本單元）身上。本單元才是 D-1 說的「產生者」——它是唯一會把這個 label
+          # 掛到 PR 上的地方——而字面卻定義在讀它的人那裡。維持這個形狀的理由是
+          # 「全 repo 只有一份字面」比「字面放在語意正確的地方」更能防漂移；代價是
+          # U-6 的那一行變成三支 workflow 的共同相依，刪掉它會讓本單元與 U-7 同時
+          # 在啟動時中止（兩者都 fail-closed，不會靜默）。**已列入待 Bolt 3 gate
+          # 追認。**
+          REVERSE_PR_LABEL="$(sed -n 's/^ *REVERSE_PR_LABEL="\(.*\)"$/\1/p' "$FORWARD_IMPL" | head -n 1)"
+          if [ -z "$REVERSE_PR_LABEL" ]; then
+            echo "::error::在 ${FORWARD_IMPL} 找不到 REVERSE_PR_LABEL 常數——PR 掛不上 D-1 的標記，U-6 與 U-10b 都認不出本單元開的 PR，中止"
+            exit 1
+          fi
+
+          RUN_TMP="$(mktemp -d)"
+          trap 'rm -rf "$RUN_TMP"' EXIT
+          CALL_SEQ=0
+
+          # 本輪時刻。**整輪一個值**：pending_reverse.observed_at 與分支名的日期都
+          # 取自它，同一輪內不會因跨午夜而分裂成兩個日期。
+          ROUND_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ROUND_DATE="${ROUND_AT%%T*}"
+
+          # 對帳依據的版本（比照 U-7 的 R-7.3）。讓「本輪拿哪一版 record 的雜湊去比
+          # 看板」可被事後查核，也讓 trunk_ref 被繞過時看得出來（SHA 會是 main 的）。
+          TRUNK_SHA=""
+          if ! TRUNK_SHA="$(git -C "$WORKSPACE" rev-parse HEAD 2>&1)"; then
+            echo "::error::讀不到 HEAD SHA：${TRUNK_SHA}——本輪的比對基準版本無法查核，中止"
+            exit 1
+          fi
+
+          ROUND_RED=0
+
+          # ---- 報告的累計器 ------------------------------------------------
+          SCANNED=0            # registry 列出的 intent 數
+          UNBOUND=0            # 未綁定（尚未首建），不是錯誤
+          UNMANAGED=0          # read_item 回的 managed_block_hash 為 null（parse 回 null）
+          UNCHANGED=0          # R-1.2：雜湊未變
+          CHANGED=0            # 偵測到人為變更
+          PR_OPENED=0          # 實際開出的反向 PR
+          NL=$'\n'
+          L_PR_OPENED=""       # 本輪開出 PR 的 intent
+          L_ALREADY_OPEN=""    # R-6.1：已有開啟中反向 PR，本輪不開第二個
+          L_UNMANAGED=""       # 不受管（跳過）
+          L_FAILED=""          # 本輪失敗的 intent
+          L_ORPHAN=""          # R-6.3 第三種結局：孤兒分支
+
+          list_add() {
+            local __name="$1" id="$2" cur
+            eval "cur=\"\${$__name}\""
+            if [ -n "$cur" ] && printf '%s\n' "$cur" | grep -qxF -- "$id"; then
+              return 0
+            fi
+            eval "$__name=\"\${$__name}\${id}\${NL}\""
+          }
+
+          # -------------------------------------------------------------------
+          # 小工具（與 U-6／U-7 逐字相同——YAML 沒有 include，各帶一份是承載形式的
+          # 限制，不是「各抄一份常數」）
+          # -------------------------------------------------------------------
+
+          next_out() {
+            CALL_SEQ=$((CALL_SEQ + 1))
+            local f="${RUN_TMP}/out.${CALL_SEQ}"
+            : > "$f"
+            printf '%s' "$f"
+          }
+
+          out_get() {
+            awk -v want="$2" '
+              state == 1 {
+                if ($0 == delim) { state = 0; next }
+                if (keep) { if (n++ > 0) buf = buf "\n"; buf = buf $0 }
+                next
+              }
+              {
+                h = index($0, "<<"); e = index($0, "=")
+                if (h > 0 && (e == 0 || h < e)) {
+                  k = substr($0, 1, h - 1); delim = substr($0, h + 2); state = 1
+                  if (k == want) { keep = 1; found = 1; buf = ""; n = 0 } else { keep = 0 }
+                  next
+                }
+                if (e > 0) {
+                  k = substr($0, 1, e - 1)
+                  if (k == want) { found = 1; buf = substr($0, e + 1); n = 1 }
+                }
+              }
+              END { if (found) printf "%s", buf }
+            ' "$1"
+          }
+
+          # U-5 的 notify（**[Q2=A]，人工裁決**）。ADR-0015 §5 為反向路徑補上 C-5，
+          # 本單元的 R-4c 因此新增這個呼叫；沒有它，反向同步的外部失敗只會讓 workflow
+          # 紅燈而**不產生通報 issue**，[req:FR-E1]／[US:S-8 AC 1] 在這條路徑上不成立。
+          # **紅燈與通報是兩件事**（U-5 的 R-1.1）：本函式只負責通報那一欄，紅燈由
+          # 呼叫端各自設 ROUND_RED。
+          #
+          # **本單元不呼叫 resolve_if_open**：`open-items.md` 的 **B:M-3**（Major，
+          # 落點 code-generation）逐字指出「把 U-8 寫進 resolve_if_open 的呼叫者表」
+          # 是錯的——ADR-0015 §5 補的是**通報鏈**，本單元三份 functional-design 產出
+          # 對 resolve_if_open 零命中。本檔照該裁定辦，不自行擴充。
+          notify_failure() {
+            local intent_id="$1" reason="$2" stage="$3" detail="$4" out rc
+            out="$(next_out)"
+            AIDLC_OPERATION=notify \
+            AIDLC_INTENT_ID="$intent_id" \
+            AIDLC_REASON_CODE="$reason" \
+            AIDLC_STAGE="$stage" \
+            AIDLC_DETAIL="$detail" \
+            GITHUB_OUTPUT="$out" \
+              bash "$NOTIFY_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::warning::通報失敗（intent=${intent_id} reason=${reason} rc=${rc}）——原始失敗仍照常計入"
+            fi
+          }
+
+          # -------------------------------------------------------------------
+          # R-6.1：迴圈之前的**一次**開啟中反向 PR 查詢，fail-closed
+          # -------------------------------------------------------------------
+          # R-6.1 逐字：「開 PR 前以 label 查該 intent 是否已有**開啟中**的反向 PR，
+          # 有則不開第二個」，且**不看儲存欄位**——`pending_reverse` 是「PR 的內容」
+          # 不是「PR 是否存在」的證據，把兩者混為一談正是 functional-design
+          # iteration 1 那個 Critical 的成因。
+          #
+          # **fail-closed**（與 U-6 的 R-2.5、U-7 的 R-4.2 同一條紀律）：查不出來就
+          # 不知道該不該開，而錯誤方向不對稱——誤開會為同一個 intent 堆出多則內容
+          # 相同的 PR 要人去關，誤不開只是延到下一輪（下一輪會重新偵測到同樣的雜湊
+          # 差異）。**整輪中止且未對任何 intent 寫入。**
+          #
+          # `--state open` 而非 U-6／U-7 的 `--state all`：那兩者要 closedAt／mergedAt
+          # 算 reverse_rejected，本單元只問「現在有沒有開著的」。
+          PR_JSON=""
+          if ! PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                            --label "$REVERSE_PR_LABEL" --state open --limit 200 \
+                            --json number,files 2>&1)"; then
+            echo "::error::開啟中反向 PR 查詢失敗（R-6.1 fail-closed，整輪中止）：${PR_JSON}"
+            # FailureIdentity 需要一個 intent_id，而這是**整輪層級**的失敗，沒有任何
+            # 一個 intent 該為它負責。以本 workflow 自己的識別字當合成身分，與 U-6 的
+            # `aidlc-sync-forward`／U-7 的 `aidlc-sync-reconcile` 同一形狀。
+            notify_failure "aidlc-sync-reverse" "ExternalError" \
+              "reverse-sync/open-pr-query" \
+              "開啟中反向 PR 查詢（label ${REVERSE_PR_LABEL}）失敗，整輪中止且未對任何 intent 寫入（R-6.1）。gh 輸出：${PR_JSON}"
+            exit 1
+          fi
+
+          # 路徑 → intent id：取 record_root 底下的第一段（與 U-1 的 derive_intent_id
+          # ／U-6 的 R-2.2 ／U-7 的 R-4.2 同一條推導）。
+          #
+          # **這裡就是 over-suppression 的逐 intent 判定在反向側的落點**（[US:S-6
+          # AC 3] 的反例：X 在某則開啟中 PR 內、Y 不在 ⇒ 只有 X 被抑制，Y 照常開）。
+          # E-2 讓它從「推導出來的」變成「結構上就是」：本單元開的每一則 PR 只含一個
+          # intent 的路徑，所以每則 PR 只會貢獻一個 id。
+          OPEN_REVERSE=""
+          if ! OPEN_REVERSE="$(printf '%s' "$PR_JSON" | jq -r --arg root "$RECORD_ROOT" '
+                [ .[] | .files[]?.path
+                  | select(startswith($root + "/"))
+                  | (ltrimstr($root + "/") | split("/")[0])
+                  | select(. != "") ] | unique | .[]' 2>&1)"; then
+            echo "::error::開啟中反向 PR 清單解析失敗（R-6.1 fail-closed，整輪中止）：${OPEN_REVERSE}"
+            notify_failure "aidlc-sync-reverse" "ExternalError" \
+              "reverse-sync/open-pr-query" \
+              "開啟中反向 PR 清單解析失敗，整輪中止且未對任何 intent 寫入（R-6.1）。"
+            exit 1
+          fi
+          echo "已有開啟中反向 PR 的 intent（R-6.1，本輪不為它們開第二則）：$(printf '%s' "$OPEN_REVERSE" | tr '\n' ' ')"
+
+          # -------------------------------------------------------------------
+          # registry
+          # -------------------------------------------------------------------
+          if [ ! -f "$REGISTRY" ]; then
+            echo "::error::找不到 registry ${REGISTRY}——選取來源不存在，整輪中止"
+            notify_failure "aidlc-sync-reverse" "ExternalError" \
+              "reverse-sync/registry" "找不到 registry ${RECORD_ROOT}/intents.json，整輪中止。"
+            exit 1
+          fi
+          INTENT_DIRS=""
+          if ! INTENT_DIRS="$(jq -r '.[] | .dirName // empty' "$REGISTRY" 2>&1)"; then
+            echo "::error::registry 解析失敗：${INTENT_DIRS}"
+            notify_failure "aidlc-sync-reverse" "ExternalError" \
+              "reverse-sync/registry" "registry ${RECORD_ROOT}/intents.json 解析失敗，整輪中止。"
+            exit 1
+          fi
+
+          # -------------------------------------------------------------------
+          # label 的冪等建立（沿用 U-5 的 Plan Approval 裁決 3 的先例）
+          # -------------------------------------------------------------------
+          # repo 目前沒有 `aidlc-sync-reverse` 這個 label。`gh pr list --label` 對不
+          # 存在的 label 回空陣列且 exit 0，但 `gh pr create --label` 會失敗——而
+          # 失敗會把每一次真實的人為改動都推進 R-6.3 的刪分支路徑，症狀是「每天紅燈
+          # 但永遠開不出 PR」。**只在即將開第一則 PR 時呼叫**，沒有變更的日子不多發
+          # 一次寫入路徑的呼叫。
+          LABEL_READY=0
+          ensure_reverse_label() {
+            local names line out
+            [ "$LABEL_READY" -eq 0 ] || return 0
+            if ! out="$(gh label list --repo "$GITHUB_REPOSITORY" --json name --limit 200 2>&1)"; then
+              echo "::error::gh label list 失敗：${out}"
+              return 1
+            fi
+            names="$(printf '%s' "$out" | jq -r '.[].name' 2>/dev/null || true)"
+            while IFS= read -r line; do
+              if [ "$line" = "$REVERSE_PR_LABEL" ]; then
+                LABEL_READY=1
+                return 0
+              fi
+            done <<< "$names"
+            if ! out="$(gh label create "$REVERSE_PR_LABEL" --repo "$GITHUB_REPOSITORY" \
+                          --color "B60205" \
+                          --description "AI-DLC 反向同步：看板上的人為改動，待人裁決（U-8）" 2>&1)"; then
+              # 競態：另一個並行的 run 剛好在 list 與 create 之間建好了。目標狀態已
+              # 達成，不是失敗。
+              case "$out" in
+                *"already exists"*) LABEL_READY=1; return 0 ;;
+              esac
+              echo "::error::gh label create ${REVERSE_PR_LABEL} 失敗：${out}"
+              return 1
+            fi
+            LABEL_READY=1
+            echo "已建立 label ${REVERSE_PR_LABEL}"
+            return 0
+          }
+
+          # -------------------------------------------------------------------
+          # R-6.3：PR 開不成時的兩種收尾
+          # -------------------------------------------------------------------
+          # 依 R-6.0，`pending_reverse` 的寫入騎在反向分支上，PR 開不成時它**從未
+          # 進入 `ut`**——所以「狀態檔說有待處理、實際卻沒有 PR」這個跨輪的不一致
+          # 狀態**構造上不存在**。本函式做的是**清理與可見性**，不是正確性修復：
+          #   刪分支成功 → 紅燈 ＋ 通報，附 intent id 與分支名
+          #   刪分支失敗 → 保留孤兒分支，同樣紅燈 ＋ 通報，附 intent id、分支名與
+          #                「孤兒」字樣，讓人知道 repo 上多了一個要手動清的分支
+          # **兩種都在同一次執行內處理，不留給下一輪、不留給 U-7**（R-6.3 逐字；
+          # U-9 也已據此撤回對 U-7 的 A-5 指派）。
+          cleanup_branch() {
+            local intent_id="$1" branch="$2" detail="$3" out
+            if out="$(git -C "$WORKSPACE" push origin --delete "$branch" 2>&1)"; then
+              echo "::error::${intent_id}：PR 開啟失敗，已刪除分支 ${branch}（R-6.3）"
+              notify_failure "$intent_id" "ExternalError" "reverse-sync/pr-create" \
+                "反向 PR 開啟失敗，已刪除分支 ${branch}（R-6.3）。本輪這一筆人為改動沒有被送到任何人面前，下一輪會重新偵測並再試一次。原始錯誤：${detail}"
+              return 0
+            fi
+            list_add L_ORPHAN "${intent_id} (${branch})"
+            echo "::error::${intent_id}：PR 開啟失敗**且分支刪除也失敗**，${branch} 成為孤兒分支，需人工清除（R-6.3）"
+            notify_failure "$intent_id" "ExternalError" "reverse-sync/pr-create" \
+              "反向 PR 開啟失敗，且刪除分支 ${branch} 也失敗——**該分支成為孤兒，需人工清除**（R-6.3）。它未合併，故 ut 未被改動。開 PR 的錯誤：${detail}；刪分支的錯誤：${out}"
+            return 0
+          }
+
+          # -------------------------------------------------------------------
+          # 單一 intent 的反向同步
+          # -------------------------------------------------------------------
+          process_intent() {
+            local dir_name="$1"
+            local intent_id="$dir_name"
+            local record_path="${RECORD_ROOT}/${dir_name}"
+            local abs_record="${WORKSPACE}/${record_path}"
+            local out rc state_json binding stored_hash
+            local board_status board_hash
+            local branch patch title body pr_out
+
+            if [ ! -d "$abs_record" ]; then
+              echo "::warning::registry 列出的 ${record_path} 目錄不存在，本輪跳過該 intent"
+              return 0
+            fi
+
+            # ---- U-4 read_sync_state：本地檔案讀取，零 API -------------------
+            out="$(next_out)"
+            AIDLC_OPERATION=read_sync_state AIDLC_RECORD_PATH="$record_path" \
+            GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              echo "::error::${intent_id}：read_sync_state 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "reverse-sync/read_sync_state" \
+                "讀取 ${record_path}/sync-state.json 失敗（rc=${rc}），本輪未對該 intent 做任何動作。"
+              return 0
+            fi
+            state_json="$(out_get "$out" state_json)"
+            binding="$(out_get "$out" binding)"
+
+            if [ -z "$binding" ]; then
+              # 未綁定＝尚未首建，看板上沒有對應的 item 可讀。不是錯誤。
+              UNBOUND=$((UNBOUND + 1))
+              echo "${intent_id}: 未綁定 → 跳過（看板上沒有對應 item）"
+              return 0
+            fi
+
+            stored_hash="$(printf '%s' "$state_json" | jq -r '.managed_block_hash // ""')"
+
+            # ---- U-3 read_item：看板現況 ------------------------------------
+            # 回傳的 `managed_block_hash` **就是** R-1.1 比對的另一端；本檔不自己算，
+            # 理由見檔首的 block.sh 段（ADR-0015 §10 的等價不變式）。
+            out="$(next_out)"
+            AIDLC_OPERATION=read_item AIDLC_BINDING="$binding" \
+            GITHUB_OUTPUT="$out" bash "$BOARD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              echo "::error::${intent_id}：read_item 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "reverse-sync/read_item" \
+                "read_item 失敗（rc=${rc}）：$(out_get "$out" message)。本輪對該 intent 未做任何寫入，下一輪會重試。"
+              return 0
+            fi
+            board_status="$(out_get "$out" status)"
+            board_hash="$(out_get "$out" managed_block_hash)"
+
+            # ---- R-4c：`parse` 回 null ⇒ 該 item 不受管，**跳過** -------------
+            # `managed_block_hash` 為空字串即 U-2 的 parse 回了 found=false（無受管
+            # 標記／版本不可解析／版本較新），或 R-1.3 的零筆分支（issue 不在板上）。
+            # 兩種來源在此**處置相同**：都不是「人改掉了受管區塊」。
+            # 把不受管的 item 當成人為變更會製造大量假 PR（reliability-requirements.md
+            # 逐字），而那些 PR 的 `observed_status` 記的還會是空值。
+            if [ -z "$board_hash" ]; then
+              UNMANAGED=$((UNMANAGED + 1))
+              list_add L_UNMANAGED "$intent_id"
+              echo "${intent_id}: 看板上無可解析的受管區塊（parse 回 null）→ 跳過，不視為人為變更（R-4c）"
+              return 0
+            fi
+
+            # ---- R-1.2：雜湊未變 ⇒ **零 PR、零寫入** -------------------------
+            # 防迴圈第一道防線在反向側的體現：機制自己寫的區塊，雜湊與記錄相同，
+            # 因此不會把自己的寫入誤判為人為變更。這是多數日子的正常結果。
+            if [ "$board_hash" = "$stored_hash" ]; then
+              UNCHANGED=$((UNCHANGED + 1))
+              echo "${intent_id}: 受管區塊雜湊未變 → 無人為變更，跳過（R-1.2）"
+              return 0
+            fi
+
+            CHANGED=$((CHANGED + 1))
+            echo "${intent_id}: 受管區塊雜湊已變（記錄='${stored_hash}' 看板='${board_hash}'）→ 有人為變更"
+
+            # ---- R-6.1：已有開啟中的反向 PR ⇒ 不開第二個 ---------------------
+            # 判定依據是**迴圈之前那一次即時查詢**的結果，不是 `pending_reverse`。
+            if printf '%s\n' "$OPEN_REVERSE" | grep -qxF -- "$intent_id"; then
+              list_add L_ALREADY_OPEN "$intent_id"
+              echo "${intent_id}: 已有開啟中的反向 PR → 本輪不開第二則（R-6.1）；那則 PR 被合併或關閉後，下一輪會重新判定"
+              return 0
+            fi
+
+            branch="${AIDLC_BRANCH_PREFIX%/}/${intent_id}-${ROUND_DATE}"
+
+            # ---- E-1：寫 pending_reverse ------------------------------------
+            # [req:FR-G2] 的「同步專用檔案」定為 `sync-state.json` 的 `pending_reverse`
+            # 欄位（本單元的 E-1 裁定）。**PR 的 diff 因此結構上只含該檔**，[US:S-6
+            # AC 2] 的「不含 aidlc-state.md 任何一行」不靠紀律成立——record.sh 的
+            # commit_and_push 白名單（R-3.2）只接受 `<record_path>/sync-state.json`，
+            # 給第二個路徑會是介面誤用（exit 2）。
+            #
+            # **R-6.2：本機制不清除這個欄位**，也沒有任何一條路徑把它寫回 null。它
+            # 記的是「最近一次反向觀察」，隨下一次反向事件被覆寫（R-1.3）。沒有讀者
+            # 就沒有陳舊問題——R-6.1 用即時查詢、R-1.1 比的是 managed_block_hash、
+            # U-6 用的是每輪即時算出的 reverse_pending。
+            #
+            # observed_status 取 read_item 回的 Status 欄。**它記的是「人做了什麼」，
+            # 不是「機制該做什麼」**——後者由 PR 的合併／關閉決定（[req:FR-G3]）。
+            patch="$(jq -nc --arg st "$board_status" --arg at "$ROUND_AT" '{
+                  pending_reverse: {
+                    observed_status: (if $st == "" then null else $st end),
+                    observed_at: $at
+                  }
+                }')"
+            out="$(next_out)"
+            AIDLC_OPERATION=write_sync_state AIDLC_RECORD_PATH="$record_path" \
+            AIDLC_STATE_JSON="$patch" GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              echo "::error::${intent_id}：寫入 pending_reverse 失敗（rc=${rc}）"
+              notify_failure "$intent_id" "ExternalError" "reverse-sync/write_sync_state" \
+                "寫入 ${record_path}/sync-state.json 的 pending_reverse 失敗（rc=${rc}）；本輪未推送、未開 PR，下一輪會重試。"
+              return 0
+            fi
+
+            # ---- R-1.5：推**反向分支**，不得直推 ut --------------------------
+            # commit_and_push 的 branch 是參數（U-4 的 R-3.1 註記已定案：「只推觸發
+            # 分支」描述的是正向路徑的呼叫方式，不是方法的內建限制），而 record.sh
+            # 的 PROTECTED_BRANCHES 硬檔 ut／main——本單元傳的一律是新建的反向分支，
+            # 分支不存在時它以呼叫端 HEAD（＝ trunk_ref）為分叉點建立，所以 PR 的
+            # base 與分叉點是同一個 ref。
+            #
+            # commit 訊息含同步標記：這是 commit_and_push 的介面要求（R-3.3）。
+            #
+            # **它對 U-6 防線②的作用要寫準——先前這裡寫的「合併進 ut 之後防線②會把
+            # 那一輪整輪 skip」是錯的**（reviewer 以一行 git 指令推翻）。防線②
+            # （forward-impl 的 R-4.2）比對的是 `git log -1 --format=%B HEAD`，命中與否
+            # 取決於**那個事件 checkout 的是哪一個 commit**：
+            #   - `pull_request`（含 closed）：U-6 checkout 的是
+            #     `github.event.pull_request.head.sha`（forward-impl 的 checkout step），
+            #     也就是本反向分支的頂端 commit——**帶標記，防線②命中，該輪整輪 skip**。
+            #   - `push` 到 `ut`：HEAD 是合併產生的 commit，不是本分支那一個。它帶不帶
+            #     標記**不由本檔決定**，而由 repo 的合併訊息設定決定，而那個設定不在版
+            #     控裡、UI 可改：查詢當下 merge commit 為 `MERGE_MESSAGE` ＋ PR 標題
+            #     （**不含**標記，防線②不命中，該輪照常跑），squash 為
+            #     `COMMIT_OR_PR_TITLE` ＋ `COMMIT_MESSAGES`（內文含本分支的 commit 訊息，
+            #     故**含**標記）。
+            #
+            # **兩種結果都是已核可的行為，所以本單元不依賴哪一種**：依 R-3.3，PR 被合併
+            # **或關閉**之後該 intent 本來就恢復被正向同步覆寫，防線②只影響「恢復發生在
+            # 哪一輪」。這裡不得再寫成「合併後 U-6 會 skip 那一輪」——那是一句聽起來像
+            # 機制保證、實際只是某個 repo 設定的副作用的宣稱。
+            out="$(next_out)"
+            AIDLC_OPERATION=commit_and_push \
+            AIDLC_RECORD_PATH="$record_path" \
+            AIDLC_BRANCH="$branch" \
+            AIDLC_PATHS="${record_path}/sync-state.json" \
+            AIDLC_MESSAGE="雜項(aidlc-sync): 記錄 ${intent_id} 在看板上的人為改動 ${SYNC_MARKER}" \
+            GITHUB_OUTPUT="$out" bash "$RECORD_SH"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              if [ "$rc" -eq 3 ]; then
+                echo "::error::${intent_id}：commit_and_push 被拒（reason=$(out_get "$out" reason)）"
+                notify_failure "$intent_id" "Rejected" "reverse-sync/commit_and_push" \
+                  "反向分支推送被拒（branch=${branch} reason=$(out_get "$out" reason)）：$(out_get "$out" message)"
+              else
+                echo "::error::${intent_id}：commit_and_push 外部錯誤（rc=${rc}）"
+                notify_failure "$intent_id" "ExternalError" "reverse-sync/commit_and_push" \
+                  "反向分支推送失敗（branch=${branch} rc=${rc}）：$(out_get "$out" message)"
+              fi
+              # **推送失敗時不刪分支**：R-6.3 針對的是「已 commit 但 PR 開不成」。
+              # 推送本身失敗代表 origin 上沒有東西可刪，去刪一個不存在的分支只會
+              # 製造第二則假的失敗訊息。
+              return 0
+            fi
+            echo "${intent_id}: 已推送反向分支 ${branch}（sha=$(out_get "$out" commit_sha)）"
+
+            # ---- 開 PR（R-1.4／E-2：一個 intent 一則） ------------------------
+            if ! ensure_reverse_label; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              cleanup_branch "$intent_id" "$branch" "label ${REVERSE_PR_LABEL} 無法確保存在，未嘗試開 PR"
+              return 0
+            fi
+
+            title="雜項(aidlc-sync): ${intent_id} 的看板改動待裁決"
+            # PR 內文只放 id、狀態值與分支名——本 repo 為 public，PR 內文公開可讀
+            # （比照 U-7 的 SEC-2）。不放 record 內容片段、不放 API 回應 body。
+            body="$(printf '%s\n' \
+              "本 PR 由 AI-DLC 反向同步（U-8）自動開啟。" \
+              "" \
+              "有人在看板上改動了 \`${intent_id}\` 的受管區塊，機制**沒有**把它默默改回去，而是把它送到你面前。" \
+              "" \
+              "| 項目 | 值 |" \
+              "| --- | --- |" \
+              "| intent | \`${intent_id}\` |" \
+              "| 看板上目前的 Status | \`${board_status}\` |" \
+              "| 偵測時刻（UTC） | ${ROUND_AT} |" \
+              "| 比對基準（\`${AIDLC_TRUNK_REF}\` HEAD） | \`${TRUNK_SHA}\` |" \
+              "| 分支 | \`${branch}\` |" \
+              "" \
+              "### 這個 PR 只動一個檔" \
+              "" \
+              "diff 只含 \`${record_path}/sync-state.json\` 的 \`pending_reverse\` 欄位——**不含 \`aidlc-state.md\` 的任何一行**（[req:FR-G2]）。這是結構性的：機制唯一被允許寫的路徑就是那一個檔。" \
+              "" \
+              "### 合併與關閉的差別" \
+              "" \
+              "- **合併**：這次的人為改動被記錄下來。" \
+              "- **關閉（不合併）**：該 intent 恢復被正向同步覆寫，這次的改動最終會被輾回去（[req:FR-G3] 逐字：「直到對應 PR 被合併**或關閉**」）。這是已核可的行為邊界，不是缺陷。" \
+              "" \
+              "**在這則 PR 開啟期間，正向同步對 \`${intent_id}\` 的 Status 寫入會暫停**（逐 intent，不影響其他 intent）。" \
+              "" \
+              "分支命名不符 \`team.md\` 的 \`<uploader>/<type>/<slug>\`，依該規則「不適用於自動產生的分支」的豁免。")"
+
+            if ! pr_out="$(gh pr create --repo "$GITHUB_REPOSITORY" \
+                             --base "$AIDLC_TRUNK_REF" --head "$branch" \
+                             --title "$title" --body "$body" \
+                             --label "$REVERSE_PR_LABEL" 2>&1)"; then
+              ROUND_RED=1
+              list_add L_FAILED "$intent_id"
+              cleanup_branch "$intent_id" "$branch" "$(printf '%s' "$pr_out" | tr '\n' ' ')"
+              return 0
+            fi
+
+            PR_OPENED=$((PR_OPENED + 1))
+            list_add L_PR_OPENED "$intent_id"
+            echo "${intent_id}: 已開啟反向 PR（base=${AIDLC_TRUNK_REF} head=${branch} label=${REVERSE_PR_LABEL}）：$(printf '%s' "$pr_out" | tr '\n' ' ')"
+            return 0
+          }
+
+          # -------------------------------------------------------------------
+          # 迴圈本體（單一 intent 失敗不中止整輪）
+          # -------------------------------------------------------------------
+          while IFS= read -r dir_name; do
+            [ -n "$dir_name" ] || continue
+            SCANNED=$((SCANNED + 1))
+            process_intent "$dir_name"
+          done <<< "$INTENT_DIRS"
+
+          # -------------------------------------------------------------------
+          # 報告
+          # -------------------------------------------------------------------
+          # 只放 id 與數字（比照 U-7 的 SEC-2：本 repo 為 public、job summary 公開
+          # 可讀）。空清單渲染為「（無）」而非空白格——空白格看不出是「沒有」還是
+          # 「壞了」。
+          render_list() {
+            local v="$1"
+            if [ -z "$v" ]; then printf '（無）'; return 0; fi
+            printf '%s' "$v" | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 } END { if (!n) printf "（無）" }'
+          }
+          count_list() {
+            local v="$1"
+            [ -z "$v" ] && { printf '0'; return 0; }
+            printf '%s' "$(printf '%s' "$v" | sed '/^$/d' | wc -l | tr -d ' ')"
+          }
+
+          REPORT_FILE="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+          {
+            echo "## AI-DLC 反向同步報告（${ROUND_AT}）"
+            echo
+            echo "| 指標 | 值 |"
+            echo "| --- | --- |"
+            echo "| 比對基準（${AIDLC_TRUNK_REF} HEAD SHA） | \`${TRUNK_SHA}\` |"
+            echo "| registry 掃描的 intent | ${SCANNED} |"
+            echo "| 未綁定（看板上無對應 item） | ${UNBOUND} |"
+            echo "| 無可解析的受管區塊（parse 回 null，跳過） | ${UNMANAGED} |"
+            echo "| 受管區塊雜湊未變（無人為變更） | ${UNCHANGED} |"
+            echo "| 偵測到人為變更 | ${CHANGED} |"
+            echo "| **本輪開出的反向 PR** | **${PR_OPENED}** |"
+            echo
+            echo "| 清單 | 筆數 | intent |"
+            echo "| --- | --- | --- |"
+            echo "| 本輪開出 PR | $(count_list "$L_PR_OPENED") | $(render_list "$L_PR_OPENED") |"
+            echo "| 已有開啟中反向 PR，本輪不開第二則（R-6.1） | $(count_list "$L_ALREADY_OPEN") | $(render_list "$L_ALREADY_OPEN") |"
+            echo "| 不受管，跳過（R-4c） | $(count_list "$L_UNMANAGED") | $(render_list "$L_UNMANAGED") |"
+            echo "| 本輪失敗 | $(count_list "$L_FAILED") | $(render_list "$L_FAILED") |"
+            echo "| **孤兒分支，需人工清除（R-6.3）** | $(count_list "$L_ORPHAN") | $(render_list "$L_ORPHAN") |"
+            echo
+            echo "### 讀這份報告要知道的三件事"
+            echo
+            echo "1. **「雜湊未變」是最常見的正常結果**（R-1.2），不是錯誤——多數日子沒有人動看板。它同時是防迴圈第一道防線在反向側的體現：機制自己寫的區塊算出來的雜湊與記錄相同，不會被誤判成人為變更。"
+            echo "2. **PR 被關閉（未合併）也會恢復覆寫**（[req:FR-G3] 逐字）。在拒絕路徑上，人的改動最終仍被輾回去——[US:S-6] 的價值主張因此是「**送到人面前決定**」而不是「我的判斷會被保留」。這是已核可的邊界。"
+            echo "3. **孤兒分支那一列非空時需要人動手**（R-6.3 的第三種結局）：PR 開不成且分支刪除也失敗。它未合併，故 \`${AIDLC_TRUNK_REF}\` 未被改動；要做的只是刪掉那個分支。"
+          } >> "$REPORT_FILE"
+
+          echo "---- 本輪摘要 ----"
+          echo "比對基準：${AIDLC_TRUNK_REF} @ ${TRUNK_SHA}"
+          echo "掃描 ${SCANNED}；未綁定 ${UNBOUND}；不受管 ${UNMANAGED}；未變 ${UNCHANGED}；有變更 ${CHANGED}；開出 PR ${PR_OPENED}"
+          echo "已有開啟中 PR=$(count_list "$L_ALREADY_OPEN") 失敗=$(count_list "$L_FAILED") 孤兒分支=$(count_list "$L_ORPHAN")"
+
+          # 紅燈只留給真正的失敗（讀看板失敗、寫檔失敗、推送失敗、PR 開不成）。
+          # 「雜湊未變」「不受管」「已有開啟中 PR」都是機制的正常判斷，不紅燈。
+          if [ "$ROUND_RED" -eq 1 ]; then
+            echo "::error::本輪有失敗（詳見上方逐項訊息與通報 issue）"
+            exit 1
+          fi

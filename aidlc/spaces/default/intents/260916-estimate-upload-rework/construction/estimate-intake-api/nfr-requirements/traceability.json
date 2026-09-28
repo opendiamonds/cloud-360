@@ -1,0 +1,40 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "estimate-intake-api",
+  "note": "service NFR：上傳安全、同步延遲、enqueue 可靠、無 Redis、Audit＋log、BackgroundTasks。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR3",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "FR1.3",
+    "FR1.4",
+    "FR1.6",
+    "FR7.1",
+    "FR7.2",
+    "FR8.1",
+    "FR8.2"
+  ],
+  "coverage": [
+    { "id": "NFR3", "status": "OK", "target": "security-requirements.md" },
+    { "id": "NFR5", "status": "OK", "target": "observability-requirements.md" },
+    { "id": "NFR6", "status": "OK", "target": "tech-stack-decisions.md" },
+    { "id": "NFR7", "status": "OK", "target": "security-requirements.md NFR7.1" },
+    { "id": "NFR8", "status": "OK", "target": "tech-stack-decisions.md" },
+    { "id": "FR1.3", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR1.4", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR1.6", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR7.1", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR7.2", "status": "OK", "target": "security-requirements.md" },
+    { "id": "FR8.1", "status": "OK", "target": "observability-requirements.md" },
+    { "id": "FR8.2", "status": "OK", "target": "observability-requirements.md" },
+    { "id": "NFR1", "status": "PARTIAL", "target": "performance-requirements.md（同步 10s）；端到端建議時窗屬 U7" }
+  ],
+  "reverse": [
+    { "id": "NFR2", "status": "N/A", "target": "進度 UI 屬 U8／U9" },
+    { "id": "NFR4", "status": "N/A", "target": "PBT 屬 U1" },
+    { "id": "NFR9", "status": "N/A", "target": "目錄價憑證屬 U4／U5；本 unit 不讀金鑰" }
+  ]
+}

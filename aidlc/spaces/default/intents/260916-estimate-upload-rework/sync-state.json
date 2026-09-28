@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "binding": 644,
+  "last_status": "Done",
+  "last_field_value": "deployment-execution (260916-estimate-upload-rework)",
+  "last_reason_code": "mapped",
+  "managed_block_hash": "6b6719db1b577f3f460363fe85a18cfe854a8c571a70f6ea4cc044a06964b963",
+  "last_synced_at": "2026-09-20T07:45:26Z",
+  "last_written_status": "Done"
+}

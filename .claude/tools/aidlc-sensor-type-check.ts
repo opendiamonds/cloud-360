@@ -1,16 +1,15 @@
 // aidlc-sensor-type-check.ts — per-sensor script for the `type-check` sensor.
 //
 // Owns the type-check itself; the dispatcher (aidlc-sensor.ts) routes a
-// SENSOR fire to this script via the manifest's `command:` field. Self-
-// contained: no imports from sibling tools. Wraps `bunx tsc --project
-// <tsconfig> --noEmit --pretty false --incremental --tsBuildInfoFile
-// <path under the active record's .aidlc-sensors/>` and prints the locked stdout
-// JSON shape:
+// SENSOR fire to this script via the manifest's `command:` field. It uses the
+// shared project resolver to keep incremental state under the active record,
+// then wraps `bunx --package typescript@6 tsc --project <tsconfig> --noEmit
+// --pretty false --incremental --tsBuildInfoFile <record cache path>` and
+// prints the locked stdout JSON shape:
 //
 //   {"pass": <bool>, "errors": [{file, line, column, message}, ...]}
 //
-// Decisions (see tmp/v05-mr9-plan-draft.md § Per-sensor script contracts
-// → aidlc-sensor-type-check.ts):
+// Per-sensor script contract decisions:
 //
 // * Project root resolution: walk up from --file-path to nearest
 //   tsconfig.json. If absent → exit 1 with stderr "no-tsconfig-found".
@@ -31,13 +30,14 @@
 //   via stdout-line count, not exit code.
 //
 // * Why --incremental --tsBuildInfoFile: persist compile state across
-//   fires under the active record's .aidlc-sensors/.tsbuildinfo (gitignored by
-//   the framework). Subsequent fires re-check only changed files
-//   instead of the entire project. Doesn't fix cross-file attribution
-//   but cuts re-reporting noise — same un-introduced error doesn't spam
-//   SENSOR_FAILED on every Write.
+//   fires under the active record's .aidlc-engine/sensors/.tsbuildinfo-<sha256>.
+//   The hash is derived from the project-relative tsconfig path, so monorepo
+//   package configs do not overwrite one shared cache. Subsequent fires
+//   re-check only changed files instead of the entire project. This doesn't
+//   fix cross-file attribution, but it cuts re-reporting noise.
 //
-// * Tool-unavailable detection: probe `bunx tsc --version` once at
+// * Tool-unavailable detection: probe `bunx --package typescript@6 tsc
+//   --version` once at
 //   startup. `bunx <tool>` returns non-127 codes for several failure
 //   modes (network-fetch, package-resolution, registry timeout) so the
 //   dispatcher's `result.status === 127` won't catch them. On any
@@ -71,9 +71,10 @@
 //   127 tsc unresolvable
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { sensorsDir } from "./aidlc-lib.ts";
+import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { resolveProjectDir, sensorsDir } from "./aidlc-lib.ts";
 
 interface ParsedError {
 	file: string;
@@ -126,7 +127,7 @@ function parseArgs(argv: string[]): Args {
 function printHelp(): void {
 	process.stdout.write(
 		`Usage: aidlc-sensor-type-check --stage <slug> --file-path <path>\n\n` +
-			`Wraps \`bunx tsc --project <tsconfig> --noEmit --pretty false\` and\n` +
+			`Wraps \`bunx --package typescript@6 tsc --project <tsconfig> --noEmit --pretty false\` and\n` +
 			`prints {pass, errors[]} JSON to stdout (filtered to --file-path).\n`,
 	);
 }
@@ -149,12 +150,18 @@ function findTsconfig(filePath: string): string | null {
 
 // --- tsc subprocess wrappers ------------------------------------------------
 
-// Probe `bunx tsc --version`. `bunx <tool>` returns non-127 codes for
-// several failure modes (network-fetch, package-resolution, registry
-// timeout). The dispatcher's branch b (status === 127) won't catch
-// those — propagate by exiting 127 ourselves on any non-zero exit.
+// A bare `bunx tsc` installs the unrelated npm package named "tsc" when
+// the target project has no local TypeScript dependency. Name TypeScript
+// explicitly and pin its major, matching the linter sensor's deterministic
+// tool resolution.
+const TSC_ARGS = ["--package", "typescript@6", "tsc"] as const;
+
+// Probe the same TypeScript command used for the real compile. `bunx`
+// returns non-127 codes for several failure modes (network-fetch, package-
+// resolution, registry timeout). The dispatcher's branch b (status === 127)
+// won't catch those — propagate by exiting 127 ourselves on any non-zero.
 function probeTscAvailable(cwd: string): void {
-	const result = spawnSync("bunx", ["tsc", "--version"], {
+	const result = spawnSync("bunx", [...TSC_ARGS, "--version"], {
 		encoding: "utf-8",
 		timeout: 30_000,
 		cwd,
@@ -173,7 +180,7 @@ function runTsc(opts: {
 	const result = spawnSync(
 		"bunx",
 		[
-			"tsc",
+			...TSC_ARGS,
 			"--project",
 			opts.tsconfigPath,
 			"--noEmit",
@@ -264,18 +271,24 @@ export function main(argv: string[]): void {
 	}
 	const tsconfigDir = dirname(tsconfigPath);
 
-		// Use the tsconfig directory as the project anchor for resolving the
-		// active record's .aidlc-sensors/.tsbuildinfo. The .aidlc-sensors/
-		// directory is gitignored, so the tsbuildinfo never pollutes commits.
-	const sensorsBaseDir = sensorsDir(tsconfigDir);
+	// Keep every package's incremental state in the project record tree. Hashing
+	// the portable project-relative tsconfig path isolates monorepo caches while
+	// preserving the tsconfig directory as tsc's cwd below.
+	const projectDir = resolveProjectDir();
+	const relativeTsconfigPath = posix.normalize(
+		relative(projectDir, tsconfigPath).replaceAll("\\", "/"),
+	);
+	const tsconfigHash = createHash("sha256")
+		.update(relativeTsconfigPath, "utf-8")
+		.digest("hex");
+	const sensorsBaseDir = sensorsDir(projectDir);
 	try {
 		mkdirSync(sensorsBaseDir, { recursive: true });
 	} catch {
-		// If we can't mkdir (read-only fs etc.), proceed without
-		// --tsBuildInfoFile by pointing at a tmp path. tsc still works,
-		// just non-incremental on next run.
+		// Leave the requested cache path in place. tsc will report an unwritable
+		// path through the ordinary script-error status gate.
 	}
-	const tsBuildInfoFile = join(sensorsBaseDir, ".tsbuildinfo");
+	const tsBuildInfoFile = join(sensorsBaseDir, `.tsbuildinfo-${tsconfigHash}`);
 
 	// Probe tsc availability first. cwd doesn't matter for --version.
 	probeTscAvailable(tsconfigDir);

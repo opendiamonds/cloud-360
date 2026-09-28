@@ -1,0 +1,184 @@
+{
+  "stage": "code-generation",
+  "unit": "estimate-parser",
+  "note": "library：純函式 parse／validate／readers。覆蓋 FR2／FR4／FR9.6、BR1–BR4、NFR3／4／6。",
+  "upstream_ids": [
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR4.4",
+    "FR9.6",
+    "BR1.1",
+    "BR1.2",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR6.1"
+  ],
+  "coverage": [
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "scripts/validate_cost_calculator_boundary.py"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "backend/tests/test_estimate_parser.py"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "FR4.4",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "FR9.6",
+      "status": "OK",
+      "target": "scripts/validate_cost_calculator_boundary.py"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_readers.py"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "scripts/validate_cost_calculator_boundary.py"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/cost/estimate_validator.py"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "backend/cost/estimate_readers.py"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "backend/cost/estimate_parser.py"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/tests/test_estimate_parser.py"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/tests/test_estimate_validator.py"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "scripts/validate_cost_calculator_boundary.py"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "backend/cost/estimate_parser.py",
+      "status": "OK",
+      "target": "FR2.*; BR1.*; BR2.*; BR3.1; NFR3.*"
+    },
+    {
+      "id": "backend/cost/estimate_validator.py",
+      "status": "OK",
+      "target": "FR4.*; BR4.*"
+    },
+    {
+      "id": "backend/cost/estimate_readers.py",
+      "status": "OK",
+      "target": "BR1.*; NFR3.1"
+    },
+    {
+      "id": "scripts/validate_cost_calculator_boundary.py",
+      "status": "OK",
+      "target": "FR2.3; FR9.6; NFR6.1"
+    },
+    {
+      "id": "backend/tests/test_estimate_parser.py",
+      "status": "OK",
+      "target": "FR2.4; NFR4.1"
+    },
+    {
+      "id": "backend/tests/test_estimate_validator.py",
+      "status": "OK",
+      "target": "FR4.*; NFR4.1"
+    }
+  ]
+}

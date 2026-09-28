@@ -1,0 +1,104 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "langgraph-runtime",
+  "note": "library：僅 security + tech-stack。NFR7／NFR8／NFR9 為核心；NFR1／NFR2／NFR3／NFR4／NFR5／NFR6 對本 unit N/A 或外溢。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "FR10.1",
+    "FR10.2",
+    "FR10.3"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "端到端 3–5 分鐘屬上傳→建議整體；本 unit 僅釘單次推論 60s 逾時（見 NFR9.2）"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "進度 UI 屬前端／U7"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "上傳面檔案安全屬 U1／U2；本 unit 無檔案解析"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "估價表解析正確性屬 U1；本 unit 無 ParseResult"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "事件稽核屬 U2／U7"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "cost_router 三層錨點屬 U1／U2；本 unit 在 services/ 提供平行 LLM 路徑"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.1"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.1"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.1, NFR9.2"
+    },
+    {
+      "id": "FR10.1",
+      "status": "OK",
+      "target": "tech-stack langgraph"
+    },
+    {
+      "id": "FR10.2",
+      "status": "OK",
+      "target": "tech-stack langchain-openai／OpenRouter"
+    },
+    {
+      "id": "FR10.3",
+      "status": "OK",
+      "target": "tech-stack 保留 claude-agent-sdk"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "NFR7; Q6=A"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "NFR8; 無 Playwright／CLI 新依賴"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "NFR9; Q5=A"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "OK",
+      "target": "Q1=A, Q2=A 逾時／不重試"
+    }
+  ],
+  "confirmed": "Looks correct"
+}

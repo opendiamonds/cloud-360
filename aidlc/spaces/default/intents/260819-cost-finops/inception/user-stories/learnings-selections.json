@@ -1,0 +1,45 @@
+{
+  "stage_slug": "user-stories",
+  "selections": [
+    {
+      "candidate_id": "c30",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "User Stories 必做：C1 是使用者可見功能、三個已確認 persona、兩段 Must 增量。不 skip",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c31",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "可參考 baseline C 柱時沿用 C1 編號與 Alex／David／Hannah；C2／C3 不進本輪 backlog。C1 內文以該 intent 的 requirements.md 覆寫，不照抄 baseline 的時數預設、流量模型或 inbox",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c32",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "C1 入口故事過大時拆成入口擷取／官方價圓餅／產圖 CTA 三則 Must，其餘時數／覆寫／預算／超支順延編號；AC 前綴跟故事號走以免撞號",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c33",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "每日時數合法值為整數 0–24（含）；空白／非數字／非整數／區間外不送出並有文字錯誤；Hypothesis 的 h domain 同步鎖定",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c34",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "User Stories reviewer 的 Minor 在 READY 後可折入：Sidebar 標籤以畫面實文為準、涵蓋欄補齊已測 FR、無公開端點雲的官方價呼叫次數寫進 DoD；稽核 HTTP 路徑可留 application-design",
+      "source": "orchestrator"
+    }
+  ]
+}

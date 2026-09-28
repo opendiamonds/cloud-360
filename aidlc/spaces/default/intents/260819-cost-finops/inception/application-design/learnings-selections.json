@@ -1,0 +1,29 @@
+{
+  "stage_slug": "application-design",
+  "selections": [
+    {
+      "candidate_id": "c20",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Application Design 在已鎖定三層 cost 形狀時不重問風格；本站只凍結權限掛載、持久化表、價目快取、SKU 對照與稽核 HTTP",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c21",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "新增 story id 時不得依賴 ensure_role_permissions_seeded(force=False)：該函式在表非空時整段 no-op，必須另做只插入缺失 (role, story_id) 的 ensure",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c22",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "公開價目 Port 必須能區分「本輪無端點」（不發 HTTP、列未定價）與「有端點但失敗」（官方價取得失敗）；第一段不註冊超支橫幅路由",
+      "source": "orchestrator"
+    }
+  ]
+}

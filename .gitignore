@@ -12,6 +12,7 @@ logs/
 tmp/
 temp/
 .cache/
+backend/cost/.pricing_offer_cache/
 
 # Environment and secrets
 .env
@@ -53,6 +54,9 @@ aidlc/.aidlc-clone-id
 aidlc/.aidlc-sessions/
 aidlc/spaces/*/intents/*/runtime-graph.json
 aidlc/spaces/*/intents/*/.aidlc-*
+aidlc/spaces/*/intents/.aidlc-*
+aidlc/spaces/*/knowledge/documentkb/.journal/
+aidlc/spaces/*/knowledge/.sources.local.json
 aidlc/diagnostics/
 .claude/settings.local.json
 

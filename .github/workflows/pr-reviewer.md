@@ -4,6 +4,68 @@ description: "PR Reviewer — review pull requests against the Cloud-360 AIDLC c
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    # Excluded: the reverse-sync PR opened by the AIDLC <-> GitHub Projects sync
+    # mechanism (U-8, .github/workflows/aidlc-sync-reverse-impl.yml). That PR
+    # writes one field back into <record>/sync-state.json and opens a PR for it:
+    # a machine-authored, single-field data change this workflow has nothing to
+    # say about. Without this filter a reverse PR created SIX workflow runs,
+    # this one among them.
+    #
+    # SIX -- and the two that remain -- are counted by parsing on.pull_request
+    # out of every .yml/.lock.yml under .github/workflows, NOT by grepping the
+    # *.md sources. GitHub runs the .lock.yml, and two of the triggered
+    # workflows (ci.yml, aidlc-sync-forward.yml) are plain Actions with no .md
+    # at all. An earlier revision of this comment said "five" because it counted
+    # over the *.md set and then quoted a total meant to include them.
+    #
+    # WHAT STILL HAPPENS ON A REVERSE PR, with this filter in place:
+    #   * ci.yml -- A RUN IS CREATED. Its `pull_request:` is bare (see below),
+    #     so nothing filters it out. The `gate` job runs, reads the
+    #     [aidlc-sync] marker off the PR head commit and sets is_sync=true;
+    #     repo-contract / frontend / backend / docker-build then evaluate
+    #     `if: needs.gate.outputs.is_sync != 'true'` to false and show up as
+    #     Skipped. A ci.yml run with four Skipped jobs is the CORRECT outcome
+    #     here -- it is not a sign this exclusion failed.
+    #   * aidlc-sync-forward.yml -- A RUN IS CREATED (it filters on neither
+    #     paths nor branches). Its orchestration step then hits guard 2
+    #     (R-4.2 -- the same [aidlc-sync] marker) and exits 0 before it queries
+    #     or writes the board. That forward-runs-on-a-reverse-PR overlap is
+    #     open-items.md N:C-2 (Critical, unresolved, Bolt 2/3 gate); that item
+    #     owns the decision, so do NOT add a paths-ignore there to silence it.
+    #   * deploy.yml fires later, on merge (types: [closed], branches: [ut], no
+    #     path filter). Logged for the gate; not this unit's to change.
+    # These four -- ui-regression, pr-reviewer, lint-fix, contract-guard --
+    # create no run at all. That is the whole delta: six down to two.
+    #
+    # The glob below is the same literal ci.yml carries (there it sits on
+    # `on.push`; its pull_request side is deliberately bare). Read ci.yml's
+    # stated reason with one qualifier that neither it nor check-ci-yml.py
+    # carries: it argues -- and SEC-1d in that checker enforces as an absolute
+    # -- that a pull_request paths filter "can never hold, because a PR always
+    # contains other files". That is true of DEVELOPER PRs, which is what ci.yml
+    # is reasoning about. It is false for this machine PR, whose changed-file
+    # set is exactly one entry. Same glob: load-bearing on pull_request here,
+    # forbidden on pull_request there, and both are right.
+    # One mechanism, one glob -- change one, change both.
+    #
+    # THE ONE PREMISE THIS RESTS ON: `paths-ignore` skips a PR only when EVERY
+    # changed file matches the pattern. It is not a majority vote. The reverse
+    # PR touches exactly one file, and that is structural rather than lucky --
+    # the commit_and_push whitelist in .github/actions/aidlc-sync-record/record.sh
+    # accepts only <record_path>/sync-state.json, and aidlc-sync-reverse-impl.yml
+    # passes exactly that one path in AIDLC_PATHS. ADD A SECOND FILE TO THE
+    # REVERSE PR AND THIS EXCLUSION SILENTLY STOPS WORKING: no error, no failed
+    # check, these four simply start running again. The cause would be a
+    # change in U-8; the consequence lands here.
+    #
+    # A workflow filtered out this way is INVISIBLE, not marked skipped: GitHub
+    # creates no run at all, so the Actions page shows nothing for it -- which
+    # looks exactly like "this workflow was never configured". Do not read a
+    # missing run on a reverse-sync PR as a broken workflow. Contrast ci.yml
+    # above, which DOES appear and DOES show Skipped jobs: on a reverse PR you
+    # should see two runs, not zero.
+    paths-ignore:
+      - "aidlc/spaces/*/intents/*/sync-state.json"
   workflow_dispatch:
 
 permissions:

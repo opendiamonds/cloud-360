@@ -163,6 +163,139 @@ ALTER TABLE architecture_reviews ADD COLUMN IF NOT EXISTS xml_snapshot TEXT;
 ALTER TABLE wa_lenses ADD COLUMN IF NOT EXISTS provider VARCHAR(16) NOT NULL DEFAULT 'aws';
 
 -- ###########################################################################
+-- C1 Cost / FinOps tables — RETIRED (U3 legacy-cost-retirement)
+-- Live tables renamed to archive_*；應用零讀寫；保留 ≥90 天後另開 chore DROP。
+-- ###########################################################################
+
+CREATE TABLE IF NOT EXISTS archive_diagram_cost (
+  diagram_id INTEGER PRIMARY KEY REFERENCES user_diagrams (id) ON DELETE CASCADE,
+  pricing_region VARCHAR(64),
+  monthly_budget NUMERIC(12, 2),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS archive_diagram_cost_line (
+  diagram_id INTEGER NOT NULL REFERENCES user_diagrams (id) ON DELETE CASCADE,
+  mxcell_id VARCHAR(128) NOT NULL,
+  hours INTEGER NOT NULL DEFAULT 24,
+  sku_override VARCHAR(128),
+  hourly_override NUMERIC(12, 2),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (diagram_id, mxcell_id)
+);
+
+CREATE TABLE IF NOT EXISTS archive_pricing_cache (
+  cloud VARCHAR(16) NOT NULL,
+  sku VARCHAR(128) NOT NULL,
+  region VARCHAR(64) NOT NULL,
+  hourly NUMERIC(12, 6) NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (cloud, sku, region)
+);
+
+CREATE TABLE IF NOT EXISTS archive_cost_audit_event (
+  id SERIAL PRIMARY KEY,
+  diagram_id INTEGER NOT NULL REFERENCES user_diagrams (id) ON DELETE CASCADE,
+  field VARCHAR(32) NOT NULL,
+  mxcell_id VARCHAR(128),
+  old_value TEXT,
+  new_value TEXT NOT NULL,
+  actor_username VARCHAR(128) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_archive_cost_audit_event_diagram_created
+  ON archive_cost_audit_event (diagram_id, created_at DESC);
+
+COMMENT ON TABLE archive_diagram_cost IS 'C1 retired: archived per-diagram pricing region/budget; app must not read/write; drop after >=90d';
+COMMENT ON TABLE archive_diagram_cost_line IS 'C1 retired: archived hours/overrides; app must not read/write; drop after >=90d';
+COMMENT ON TABLE archive_pricing_cache IS 'C1 retired: archived price cache; app must not read/write; drop after >=90d';
+COMMENT ON TABLE archive_cost_audit_event IS 'C1 retired: archived cost audit; app must not read/write; drop after >=90d';
+
+-- ###########################################################################
+-- C1 Estimate intake (U2 /api/cost/v1) — EstimateSet tree + Advice shell
+-- ###########################################################################
+
+CREATE TABLE IF NOT EXISTS estimate_sets (
+  id SERIAL PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  diagram_id INTEGER,
+  note TEXT,
+  is_saved BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS ix_estimate_sets_owner
+  ON estimate_sets (owner_user_id);
+
+CREATE TABLE IF NOT EXISTS estimates (
+  id SERIAL PRIMARY KEY,
+  estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+  cloud VARCHAR(16) NOT NULL,
+  stated_total NUMERIC(18, 6),
+  currency VARCHAR(16),
+  parsed_line_count INTEGER NOT NULL DEFAULT 0,
+  unparsed_line_count INTEGER NOT NULL DEFAULT 0,
+  source_format VARCHAR(8) NOT NULL,
+  CONSTRAINT uq_estimates_set_cloud UNIQUE (estimate_set_id, cloud)
+);
+
+CREATE INDEX IF NOT EXISTS ix_estimates_set
+  ON estimates (estimate_set_id);
+
+CREATE TABLE IF NOT EXISTS estimate_line_items (
+  id SERIAL PRIMARY KEY,
+  estimate_id INTEGER NOT NULL REFERENCES estimates (id) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  item_name TEXT,
+  spec TEXT,
+  quantity NUMERIC(18, 6),
+  amount NUMERIC(18, 6),
+  currency VARCHAR(16),
+  parse_status VARCHAR(32) NOT NULL,
+  raw_text TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_estimate_line_items_estimate
+  ON estimate_line_items (estimate_id);
+
+CREATE TABLE IF NOT EXISTS estimate_shares (
+  estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (estimate_set_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS estimate_audit_events (
+  id SERIAL PRIMARY KEY,
+  actor_user_id INTEGER NOT NULL REFERENCES users (id),
+  estimate_set_id INTEGER NOT NULL REFERENCES estimate_sets (id) ON DELETE CASCADE,
+  event_type VARCHAR(64) NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  cloud VARCHAR(16),
+  parsed_line_count INTEGER,
+  unparsed_line_count INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS ix_estimate_audit_events_set
+  ON estimate_audit_events (estimate_set_id);
+
+CREATE TABLE IF NOT EXISTS advice (
+  estimate_set_id INTEGER PRIMARY KEY
+    REFERENCES estimate_sets (id) ON DELETE CASCADE,
+  status VARCHAR(32) NOT NULL DEFAULT 'generating',
+  saving_text TEXT,
+  comparison_text TEXT,
+  quality_text TEXT,
+  unavailable_reasons_json TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+
+COMMENT ON TABLE estimate_sets IS 'U2: upload batch root; diagram_id is label only';
+COMMENT ON TABLE advice IS 'U7 owns advice body; U2 creates shell + thin GET';
+
+-- ###########################################################################
 -- C) RBAC: role × story permissions (view / edit / review)
 -- ###########################################################################
 
@@ -263,16 +396,17 @@ INSERT INTO role_permissions (role, story_id, can_view, can_edit, can_review) VA
   ('Security_Reviewer', 'B3', true, true, false),
   ('Platform_Admin', 'B3', true, false, false),
   ('Platform_Owner', 'B3', true, false, false),
-  ('Project_Architect', 'C1', true, false, false),
+  -- C1: 上傳與檢視估價表（FR7.1；U2）。已移除 C1h／C1r／C1o／C1b。
+  ('Project_Architect', 'C1', true, true, false),
   ('Developer', 'C1', false, false, false),
-  ('Project_Editor', 'C1', true, false, false),
-  ('Project_Admin', 'C1', true, false, false),
+  ('Project_Editor', 'C1', true, true, false),
+  ('Project_Admin', 'C1', true, true, false),
   ('FinOps_Analyst', 'C1', true, true, false),
   ('SRE', 'C1', true, false, false),
   ('Ops_Lead', 'C1', true, false, false),
   ('Platform_Engineer', 'C1', false, false, false),
   ('Security_Reviewer', 'C1', false, false, false),
-  ('Platform_Admin', 'C1', true, false, false),
+  ('Platform_Admin', 'C1', true, true, false),
   ('Platform_Owner', 'C1', true, false, false),
   ('Project_Architect', 'C2', true, false, false),
   ('Developer', 'C2', false, false, false),
@@ -500,7 +634,7 @@ COMMIT;
 
 -- 驗證範例：
 -- \dt
--- SELECT count(*) FROM role_permissions;           -- 308
+-- SELECT count(*) FROM role_permissions;           -- 352
 -- SELECT username, role FROM users WHERE username = 'admin';
 -- SELECT count(*) FROM user_diagrams;
 -- SELECT count(*) FROM diagram_shares;

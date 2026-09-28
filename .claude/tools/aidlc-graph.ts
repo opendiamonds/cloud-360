@@ -1,5 +1,5 @@
 // Stage-graph library + CLI. Exports the 8-function API consumed by
-// the doctor handler (see aidlc-utility.ts handleDoctor) and the
+// the doctor collector (see aidlc-utility.ts collectDoctorReport) and the
 // runtime resolution layer (lib.ts's nextInScopeStage,
 // firstInScopeStageOfPhase, stagesInScope delegate here via lazy
 // require).
@@ -19,32 +19,35 @@
 //     (doctor consumes them) and for future scheduling; they do not
 //     gate runtime iteration today.
 //
-// Compile is the YAML -> JSON transform. It bootstraps number + name
-// from today's stage-graph.json so YAML stays the authored source of
-// truth for everything else while computed fields stay computed. number
-// and name are NOT authorable frontmatter keys (the stage schema rejects
-// them as unknown), they are derived, then pinned in the JSON so they
-// stay byte-stable across recompiles.
+// Compile is the YAML -> JSON transform. In an installed runtime it preserves
+// number + name from the existing stage-graph.json so composed plugin rows stay
+// pinned. A clean source package has no existing graph: core numbers derive
+// from requires_stage order, and display names come from authored `name:`
+// overrides or title-cased slugs. Numbers are ALWAYS assigned by the engine,
+// never claimed by authors — a plugin's authored `number:` is a
+// relative-ordering hint among its own new stages, its absolute value never
+// used, so uncoordinated plugins cannot collide.
 //
 // A NEW stage slug (a .md on disk with no row in stage-graph.json yet) is
-// auto-seeded on compile rather than rejected: its number is the next free
-// index in its phase (`<PHASES.indexOf(phase)>.<maxIndexInPhase + 1>`) and
-// its name defaults to the title-cased slug. Both are written into the
-// regenerated JSON, so the FIRST compile assigns them and every subsequent
-// compile harvests the pinned values, the assignment happens once and is
-// stable thereafter. An author who wants a hand-tuned display name (e.g.
-// "NFR Requirements", "CI Pipeline") edits that one JSON field after the
-// seeding compile; the next compile preserves it. Renumbering an existing
-// stage is still an explicit JSON edit. (Auto-seed only ever ADDS rows and
-// fills the next free per-phase index, it never renumbers a stage that
-// already has a row, so an in-flight workflow's slug-keyed state is safe.)
+// seeded on compile rather than rejected: each phase's batch of new
+// stages is ordered by its own requires_stage edges (Kahn's algorithm;
+// ties among independent stages break by the authored `number:` hint,
+// then slug), then assigned next-free contiguous indices
+// (`<PHASES.indexOf(phase)>.<maxIndexInPhase + 1>` onward); name comes
+// from authored `name:`, defaulting to the title-cased slug. Both are
+// written into the regenerated JSON. Installed compiles then preserve those
+// pinned rows. A core author who needs a hand-tuned display name writes `name:`
+// in stage frontmatter. (Seeding only ever ADDS rows, it never renumbers a
+// stage that already has a row, so an in-flight workflow's slug-keyed state is
+// safe.)
 //
 // See docs/reference/16-artifact-vocabulary.md for artifact naming.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  aidlcToolInvocation,
   resolveDistributionPath,
   resolveHarnessPath,
   runtimeProjectDir,
@@ -54,13 +57,15 @@ import {
   _resetHarnessDataForTests,
   _resetScopeMappingForTests,
   _resetStageGraphForTests,
-  activeSpace,
+  auditLockOwnedByProcess,
   type AgentMetadata,
   errorMessage,
+  refuseEngineObserverWrite,
   gridCostSummary,
   loadAgents,
   loadScopeMapping,
   loadScopeMetadata,
+  loadScopeMetadataAll,
   harnessDir,
   PHASES,
   type Phase,
@@ -73,7 +78,13 @@ import {
   mustShift,
   parseStageFrontmatter,
   planFilePath,
+  CHANGE_CONTROL_VALUES,
+  type ChangeControl,
+  changeControlMemoryStrictRefusal,
+  memoryChangeControlDeclarations,
+  parseChangeControl,
   resolveProjectDir,
+  resolveWorkflowSelection,
   type ScopeDefinition,
   type StageEntry,
   stageEnabledBySelection,
@@ -116,13 +127,15 @@ export interface RuleResolution {
 // Per-sensor resolution row baked into each stage's sensors_applicable.
 // Pull authoring: the stage's frontmatter `sensors: [<id>]` declares the
 // import; the resolver looks the manifest up by id and copies its
-// capability filter (matches) verbatim. matches is omitted when the
-// manifest declares no path filter (e.g., required-sections,
-// upstream-coverage). The PostToolUse hook reads the snapshotted matches
-// off the graph node — never re-opens the manifest at fire time.
+// dispatch policy and capability metadata verbatim. matches is omitted when
+// the manifest declares no path filter. Runtime dispatchers read this
+// snapshotted binding off the graph node — never re-open the manifest.
 export interface SensorResolution {
   id: string;
   path: string;
+  fire_on: "write" | "gate";
+  default_severity: "advisory" | "blocking";
+  category?: string;
   matches?: string;
 }
 
@@ -181,9 +194,20 @@ export interface GraphStage extends StageEntry {
   // Absent when no review step is configured. Parsed from stage frontmatter
   // `reviewer:` field and carried through to the run-stage directive.
   reviewer?: string;
+  // Required Markdown output that owns the appended reviewer section.
+  review_artifact?: string;
   // reviewer_max_iterations — review cycle cap before escalating to human.
   // Defaults to 2 when reviewer is present.
   reviewer_max_iterations?: number;
+  // review_class — how the review runs: "adversarial" (refute + fix loop up
+  // to the cap, §12a classic) or "advisory" (single pass, findings quoted at
+  // the human gate, no fix loop). Defaults to "adversarial" when a reviewer
+  // is present (the pre-class behavior). Absent when no reviewer. The
+  // EFFECTIVE class at runtime may be lowered by the scope's review_cap or a
+  // run override — resolveReviewClass in aidlc-lib.ts owns that resolution.
+  review_class?: "adversarial" | "advisory";
+  // Deterministic pre-generation consolidated-summary checkpoint policy.
+  summary_confirmation?: "required" | "if-present";
 }
 
 export interface ScopeValidation {
@@ -194,6 +218,17 @@ export interface ScopeValidation {
   // counts). The composer copies this into its proposal verbatim so the gate the
   // human sees leads with numbers the validator computed, not an LLM recount.
   summary?: ScopeCostSummary;
+  // Graph/plugin-authored stock scopes ranked by grid distance from the
+  // validated proposal; composer-authored entries are excluded. A front/report
+  // matched-vs-custom verdict routes on nearest_stock[0].diff (match when <= 2
+  // and depth is compatible), so the routing is the final validator's number,
+  // not an LLM recount or the earlier mechanical screen. In-flight treats the
+  // ranking as advisory and preserves the running plan.
+  nearest_stock?: Array<{ scope: string; diff: number; differs: string[] }>;
+  // The Change Control value the proposal carried (`--change-control` or the
+  // proposal's `changeControl` member), echoed once validated so the gate row
+  // the human sees is the validator's word.
+  change_control?: ChangeControl;
 }
 
 // --- Module-local state ---
@@ -310,7 +345,9 @@ function memoryDisplayPath(rel: string): string {
  *  `memorySegmentsForSpace`. (The TPL templates dir is this + "templates"; see
  *  `memoryTemplatesDir`.) */
 export function memoryDirFor(projectDir: string, space?: string): string {
-  return join(projectDir, ...memorySegmentsForSpace(space ?? activeSpace(projectDir)));
+  const resolvedSpace =
+    space ?? resolveWorkflowSelection(projectDir).space;
+  return join(projectDir, ...memorySegmentsForSpace(resolvedSpace));
 }
 
 /** The TPL template-override source-of-truth dir for a workspace:
@@ -322,7 +359,9 @@ export function memoryDirFor(projectDir: string, space?: string): string {
  *  gets teamB's templates. Kept here (not hardcoded in the dispatcher) so it
  *  stays byte-aligned with where the packager emits and the resolver reads. */
 export function memoryTemplatesDir(projectDir: string, space?: string): string {
-  return join(projectDir, ...memorySegmentsForSpace(space ?? activeSpace(projectDir)), "templates");
+  const resolvedSpace =
+    space ?? resolveWorkflowSelection(projectDir).space;
+  return join(projectDir, ...memorySegmentsForSpace(resolvedSpace), "templates");
 }
 
 /** The FRAMEWORK-DEFAULT templates dir — the read-only, engine-shipped middle
@@ -447,7 +486,10 @@ const FIELD_ORDER = [
   "sensors",
   "scopes",
   "reviewer",
+  "review_artifact",
   "reviewer_max_iterations",
+  "review_class",
+  "summary_confirmation",
   "inputs",
   "outputs",
   "rules_in_context",
@@ -757,7 +799,15 @@ export function resolveSensorsForStage(
           `Known ids: ${known}`,
       );
     }
-    const entry: SensorResolution = { id: sensor.id, path: sensor.path };
+    const entry: SensorResolution = {
+      id: sensor.id,
+      path: sensor.path,
+      fire_on: sensor.manifest.fire_on,
+      default_severity: sensor.manifest.default_severity,
+    };
+    if (sensor.manifest.category !== undefined) {
+      entry.category = sensor.manifest.category;
+    }
     if (sensor.manifest.matches !== undefined) {
       entry.matches = sensor.manifest.matches;
     }
@@ -806,6 +856,31 @@ export function consumersOf(artifact: string): GraphStage[] {
   );
 }
 
+/** Consumed artifacts with more than one loaded producer. Runtime resolution
+ *  selects the first producer by graph load order, so callers can surface this
+ *  ambiguous configuration before that implicit choice affects a workflow. */
+export function consumedArtifactProducerCollisions(): {
+  artifact: string;
+  producers: string[];
+  consumers: string[];
+}[] {
+  const consumedArtifacts = [
+    ...new Set(
+      loadGraph().flatMap((stage) =>
+        (stage.consumes ?? []).map((consume) => consume.artifact)
+      )
+    ),
+  ].sort();
+
+  return consumedArtifacts
+    .map((artifact) => ({
+      artifact,
+      producers: producersOf(artifact).map((stage) => stage.slug),
+      consumers: consumersOf(artifact).map((stage) => stage.slug).sort(),
+    }))
+    .filter(({ producers }) => producers.length >= 2);
+}
+
 /** TPL — the subset of a stage's `produces[]` eligible for a template
  *  override. The template-override layer keys a template off the
  *  output-filename stem (artifact X → X.md, per resolveArtifactPath's
@@ -815,7 +890,7 @@ export function consumersOf(artifact: string): GraphStage[] {
  *  would yield spurious missing-section findings. The per-sensor
  *  required-sections script gets only --stage/--output-path and so cannot know
  *  the stage's artifact set — the dispatcher (aidlc-sensor.ts) and the
- *  PostToolUse fire hook (aidlc-sensor-fire.ts) both hold the GraphStage and
+ *  PostToolUse fire hook (aidlc-run-sensors.ts) both hold the GraphStage and
  *  thread this filtered set so a resolved template applies ONLY to a
  *  declared-prose artifact. Lives here so both invocation sites derive it
  *  identically without importing the dispatcher (whose top-level main() would
@@ -985,11 +1060,42 @@ export function subgraphForScope(scope: string): GraphStage[] {
     .sort((a, b) => numericStageOrder(a.number, b.number));
 }
 
+/** Rank every graph/plugin-authored stock scope by grid distance from the given
+ *  EXECUTE/SKIP grid: `{scope, diff, differs}` sorted by diff then name.
+ *  Composer-authored entries appended to scope-grid.json are deliberately
+ *  excluded. Distance covers the union of proposal and stock keys, so missing
+ *  proposal stages and unknown extras are differences rather than invisible
+ *  overlap. Shared by `ars` (against the complete mechanical screen grid) and
+ *  `validate-grid` (against the composer's proposal); only the latter is a
+ *  front/report stock-match authority. */
+export function nearestStockScopes(
+  grid: Record<string, "EXECUTE" | "SKIP">
+): Array<{ scope: string; diff: number; differs: string[] }> {
+  const stockScopeNames = stageDeclaredScopeNames(loadGraph());
+  return Object.entries(loadScopeGrid())
+    // Composer-authored scopes are appended only to scope-grid.json; no stage
+    // declares them. They remain runnable but must never become stock-match
+    // candidates for an unrelated later composition.
+    .filter(([scope]) => stockScopeNames.has(scope))
+    .map(([scope, def]) => {
+      const differs: string[] = [];
+      const slugs = new Set([
+        ...Object.keys(def.stages),
+        ...Object.keys(grid),
+      ]);
+      for (const slug of slugs) {
+        if (grid[slug] !== def.stages[slug]) differs.push(slug);
+      }
+      return { scope, diff: differs.length, differs };
+    })
+    .sort((a, b) => a.diff - b.diff || a.scope.localeCompare(b.scope));
+}
+
 /** Resolve a scope's plan: the EXECUTE/SKIP slice over the full graph in
  *  numeric order, shaped `{slug, phase, action}` — byte-identical to
  *  lib.ts's stagesInScope() / the legacy scope-mapping-derived plan. The
- *  `aidlc-graph resolve` subcommand writes this to .aidlc-plan.json. The
- *  parity test asserts this matches the legacy plan across all 9 scopes. */
+ *  `aidlc-graph resolve` subcommand writes this to .aidlc-engine/plan.json. The
+ *  parity test asserts this matches the legacy plan across all 11 scopes. */
 export function resolvePlanForScope(
   scope: string
 ): Array<{ slug: string; phase: string; action: "EXECUTE" | "SKIP" }> {
@@ -1090,6 +1196,15 @@ export function validateGrid(
       );
     }
   }
+  const missingSlugs = graph
+    .map((stage) => stage.slug)
+    .filter((slug) => !(slug in grid));
+  if (missingSlugs.length > 0) {
+    errors.push(
+      `Grid is missing ${missingSlugs.length} compiled stage entr${missingSlugs.length === 1 ? "y" : "ies"}: ` +
+        `${missingSlugs.join(", ")}. Every compiled stage must be explicitly EXECUTE or SKIP.`,
+    );
+  }
 
   const onPath = new Set(
     Object.entries(grid)
@@ -1144,7 +1259,14 @@ export function validateGrid(
   const summary = gridCostSummary(
     grid as Record<string, "EXECUTE" | "SKIP">,
   );
-  return { valid: errors.length === 0, errors, advisories, summary };
+  // Distance to each stock scope travels with the validation for the same
+  // reason as summary: the match decision must ride the validator's numbers.
+  // Unknown and missing slugs already errored above; the ranking still counts
+  // them so an invalid partial grid can never look like an exact stock match.
+  const nearest_stock = nearestStockScopes(
+    grid as Record<string, "EXECUTE" | "SKIP">,
+  );
+  return { valid: errors.length === 0, errors, advisories, summary, nearest_stock };
 }
 
 /** Check proposed (granted-at-the-gate) keywords against the keywords the
@@ -1356,8 +1478,14 @@ export function canonicalScopeGridJson(grid: ScopeGrid): string {
  *  all-SKIP, an emptied plan with no diagnostic. Any on-disk entry whose
  *  scope name the transpose does not produce survives the recompile; keys
  *  re-sort so the canonical emitter stays deterministic. Unparseable or
- *  malformed on-disk grids contribute nothing (fresh wins). */
-export function mergeComposedScopes(fresh: ScopeGrid, onDiskJson: string | null): ScopeGrid {
+ *  malformed on-disk grids contribute nothing (fresh wins). When
+ *  `preserveNames` is supplied, an orphan grid column with no matching scope
+ *  identity file is dropped rather than mistaken for a composed scope. */
+export function mergeComposedScopes(
+  fresh: ScopeGrid,
+  onDiskJson: string | null,
+  preserveNames?: ReadonlySet<string>,
+): ScopeGrid {
   if (!onDiskJson) return fresh;
   let onDisk: unknown;
   try {
@@ -1369,6 +1497,7 @@ export function mergeComposedScopes(fresh: ScopeGrid, onDiskJson: string | null)
   const merged: ScopeGrid = { ...fresh };
   for (const [name, entry] of Object.entries(onDisk as Record<string, unknown>)) {
     if (name in merged) continue;
+    if (preserveNames !== undefined && !preserveNames.has(name)) continue;
     if (
       typeof entry === "object" && entry !== null && !Array.isArray(entry) &&
       typeof (entry as { stages?: unknown }).stages === "object"
@@ -1552,9 +1681,10 @@ export function selectionDroppedOrderingEdges(
   return dropped.sort();
 }
 
-/** Regenerate stage-graph.json from the 31 YAML stage files.
- *  Bootstraps number + name from the existing JSON (the "computed
- *  not authored" contract — see stage-definition.md). Asserts the
+/** Regenerate stage-graph.json from the YAML stage files.
+ *  Preserves pinned rows from an installed graph when present; a clean source
+ *  build derives core ordering and display names from stage frontmatter.
+ *  Asserts the
  *  edge-local invariant: every requires_stage edge points from a
  *  higher-numbered stage to a lower-numbered one. Also transposes each
  *  stage's `scopes:` into the compiled scope-grid.json (gridJson) — both
@@ -1569,10 +1699,13 @@ export function compileStageGraph(): {
   // as a single enabled freeform default, fail during compile.
   loadScopeMetadata();
 
-  // Harvest number + name mappings from existing JSON. A slug already in
-  // the JSON keeps its pinned number + name (the "computed not authored,
-  // stable thereafter" contract); a NEW slug is auto-seeded below.
-  const existing = loadStageGraphAll();
+  // Harvest number + name mappings from existing JSON. A slug already in the
+  // JSON keeps its pinned row; a NEW slug is auto-seeded below, with an
+  // authored name override when present.
+  // A source checkout has no compiled graph until packaging materializes one.
+  // Installed runtimes still preserve their pinned rows (including plugin
+  // stages), while a clean package build derives the core graph from YAML.
+  const existing = existsSync(stageGraphPath()) ? loadStageGraphAll() : [];
   const numberBySlug = new Map(existing.map((s) => [s.slug, s.number]));
   const nameBySlug = new Map(existing.map((s) => [s.slug, s.name]));
 
@@ -1590,10 +1723,16 @@ export function compileStageGraph(): {
       Math.max(maxIndexByPhasePrefix.get(prefix) ?? 0, index)
     );
   }
-
   const stages: GraphStage[] = [];
+  // NEW slugs (no pinned row yet), grouped by phase prefix for the
+  // topological number seed after the walk.
+  type NewStageSeed = { data: StageFrontmatter; phase: string; prefix: number; name: string };
+  const newByPrefix = new Map<number, NewStageSeed[]>();
   // Track slug-to-first-file so duplicate-slug errors name both files.
   const slugToFile = new Map<string, string>();
+  type StageDeclaration = { file: string; slug: string };
+  const artifactProducers = new Map<string, StageDeclaration[]>();
+  const artifactConsumers = new Map<string, StageDeclaration[]>();
 
   // Known agent slugs (the `name:` field of each .claude/agents/*.md), passed
   // to validateStageFrontmatter so a stage referencing a lead_agent or
@@ -1676,28 +1815,136 @@ export function compileStageGraph(): {
       }
       slugToFile.set(slug, filePath);
 
-      // Existing slug -> keep its pinned number + name. New slug -> auto-seed
-      // both: number = next free index in this phase, name = title-cased slug.
-      let number = numberBySlug.get(slug);
-      let name = nameBySlug.get(slug);
-      if (!number || !name) {
-        const prefix = PHASES.indexOf(phase as Phase);
-        if (prefix < 0) {
-          // A stage directory whose name is not one of the five canonical
-          // phases can't be placed on the numeric spine, fail loud rather
-          // than invent a prefix.
-          throw new Error(
-            `Stage "${slug}" (${filePath}) is in an unknown phase directory ` +
-              `"${phase}". Stage phase directories must be one of: ${PHASES.join(", ")}.`
-          );
-        }
-        const nextIndex = (maxIndexByPhasePrefix.get(prefix) ?? 0) + 1;
-        maxIndexByPhasePrefix.set(prefix, nextIndex);
-        number = number ?? `${prefix}.${nextIndex}`;
-        name = name ?? titleCaseSlug(slug);
+      const declaration = { file: filePath, slug };
+      // Match producersOf(): required and optional outputs share one artifact
+      // producer namespace. Set semantics avoid counting one stage twice if an
+      // author repeats a name across both lists.
+      for (const artifact of new Set([
+        ...(validation.data.produces ?? []),
+        ...(validation.data.optional_produces ?? []),
+      ])) {
+        const producers = artifactProducers.get(artifact) ?? [];
+        producers.push(declaration);
+        artifactProducers.set(artifact, producers);
+      }
+      for (const artifact of new Set(
+        (validation.data.consumes ?? []).map((consume) => consume.artifact),
+      )) {
+        const consumers = artifactConsumers.get(artifact) ?? [];
+        consumers.push(declaration);
+        artifactConsumers.set(artifact, consumers);
       }
 
-      stages.push(buildGraphStage(validation.data, phase, number, name));
+      // Existing slug -> keep its pinned number + name (the "computed once,
+      // stable thereafter" contract; a pinned row missing only its name
+      // seeds the name inline). New slug -> DEFER numbering to the per-phase
+      // topological seed after the file walk (below): with several new
+      // stages arriving in one compile (a multi-stage plugin), numbering
+      // them in file-walk (alphabetical) order can contradict their own
+      // requires_stage edges and fail the lower-numbered-dependency
+      // invariant, so the batch is ordered by its edges first.
+      const prefix = PHASES.indexOf(phase as Phase);
+      if (prefix < 0) {
+        // A stage directory whose name is not one of the five canonical
+        // phases can't be placed on the numeric spine, fail loud rather
+        // than invent a prefix.
+        throw new Error(
+          `Stage "${slug}" (${filePath}) is in an unknown phase directory ` +
+            `"${phase}". Stage phase directories must be one of: ${PHASES.join(", ")}.`
+        );
+      }
+      const number = numberBySlug.get(slug);
+      const name =
+        nameBySlug.get(slug) ?? validation.data.name ?? titleCaseSlug(slug);
+      if (number) {
+        stages.push(buildGraphStage(validation.data, phase, number, name));
+      } else {
+        newByPrefix.get(prefix)?.push({ data: validation.data, phase, prefix, name }) ??
+          newByPrefix.set(prefix, [{ data: validation.data, phase, prefix, name }]);
+      }
+    }
+  }
+
+  for (const [artifact, producers] of artifactProducers) {
+    if (producers.length < 2) continue;
+    const consumer = artifactConsumers.get(artifact)?.[0];
+    if (!consumer) continue;
+
+    // Shared artifact names are legal when unconsumed: traceability is
+    // produced by eight stages and consumed by none, so only consumed names
+    // require a unique producer.
+    const producerList = producers
+      .map(({ file, slug }) => `${file} (stage "${slug}")`)
+      .join(", ");
+    throw new Error(
+      `Duplicate producers for consumed artifact "${artifact}" in ${producerList} — ` +
+        `consumed by stage "${consumer.slug}" in ${consumer.file}. ` +
+        `Rename one produced artifact or update the consumer.`
+    );
+  }
+
+  // Per-phase topological seed for NEW slugs. Numbers are assigned by the
+  // ENGINE, never claimed by authors: within one phase's batch of new
+  // stages, order by the batch's own requires_stage edges (Kahn), breaking
+  // ties among independent stages by the authored `number:` hint (a
+  // relative-ordering hint only — its absolute value is never used) and
+  // then slug; assign next-free contiguous indices in that order. Edges to
+  // stages OUTSIDE the batch need no handling here: an already-pinned
+  // same-phase dependency is lower-numbered by construction (new indices
+  // start past the phase max), and cross-phase edges are ordered by the
+  // phase prefix — the edge-local invariant below still backstops all of
+  // it. Uncoordinated plugins therefore cannot collide on numbers, and a
+  // batch whose file order contradicts its flow order still seeds validly.
+  for (const prefix of [...newByPrefix.keys()].sort((a, b) => a - b)) {
+    const batch = newByPrefix.get(prefix)!;
+    const inBatch = new Map(batch.map((e) => [e.data.slug, e]));
+    // Dedupe each stage's edges: the decrement below fires once per
+    // dependent, so a duplicated requires_stage entry would strand the
+    // stage at indegree > 0 and misreport a copy-paste duplicate as a
+    // cycle (the schema shape-checks the list but does not dedupe it).
+    const indegree = new Map(batch.map((e) => [e.data.slug, 0]));
+    for (const e of batch) {
+      for (const dep of new Set(e.data.requires_stage ?? [])) {
+        if (inBatch.has(dep)) indegree.set(e.data.slug, (indegree.get(e.data.slug) ?? 0) + 1);
+      }
+    }
+    const hint = (e: NewStageSeed): number => {
+      const authored = e.data.number;
+      if (!authored) return Number.POSITIVE_INFINITY;
+      const idx = parseInt(authored.split(".")[1], 10);
+      return Number.isFinite(idx) ? idx : Number.POSITIVE_INFINITY;
+    };
+    const byHintThenSlug = (a: NewStageSeed, b: NewStageSeed): number =>
+      hint(a) - hint(b) || a.data.slug.localeCompare(b.data.slug);
+    const ready = batch.filter((e) => indegree.get(e.data.slug) === 0).sort(byHintThenSlug);
+    const seeded: NewStageSeed[] = [];
+    while (ready.length > 0) {
+      const e = ready.shift()!;
+      seeded.push(e);
+      for (const other of batch) {
+        if (!(other.data.requires_stage ?? []).includes(e.data.slug)) continue;
+        const d = (indegree.get(other.data.slug) ?? 0) - 1;
+        indegree.set(other.data.slug, d);
+        if (d === 0) {
+          ready.push(other);
+          ready.sort(byHintThenSlug);
+        }
+      }
+    }
+    if (seeded.length < batch.length) {
+      // The unseeded set = the cycle's members plus anything downstream of
+      // them, so name it "stuck", not "the cycle" — a stage can appear here
+      // solely because its dependency is cyclic.
+      const stuck = batch.filter((e) => !seeded.includes(e)).map((e) => e.data.slug);
+      throw new Error(
+        `Cannot seed stage numbers for phase "${batch[0].phase}": ` +
+          `requires_stage cycle among new stages (stuck: ${stuck.join(", ")}). Break the cycle.`
+      );
+    }
+    for (const e of seeded) {
+      const nextIndex = (maxIndexByPhasePrefix.get(prefix) ?? 0) + 1;
+      maxIndexByPhasePrefix.set(prefix, nextIndex);
+      stages.push(buildGraphStage(e.data, e.phase, `${prefix}.${nextIndex}`, e.name));
     }
   }
 
@@ -1717,8 +1964,9 @@ export function compileStageGraph(): {
   }
 
   // Resolve per-stage sensor imports. Pull authoring: each stage's
-  // sensors[] list is looked up against the manifest registry; matches
-  // is copied verbatim into the resolved entry. Unknown ids throw —
+  // sensors[] list is looked up against the manifest registry; dispatch
+  // policy, severity, category, and matches are copied into the resolved
+  // entry. Unknown ids throw —
   // authoring errors fail loud at compile, not at fire time.
   const sensorsById = loadSensors();
   for (const stage of stages) {
@@ -1789,7 +2037,12 @@ export function compileStageGraph(): {
     /* first compile: no grid on disk yet */
   }
   const selectedScopeNames = enabledScopeNames();
-  const composedNames = composedScopeNames(onDiskGrid, stockScopeNames);
+  const installedScopeNames = new Set(Object.keys(loadScopeMetadataAll()));
+  const composedNames = new Set(
+    [...composedScopeNames(onDiskGrid, stockScopeNames)].filter((name) =>
+      installedScopeNames.has(name),
+    ),
+  );
   const seededScopeNames =
     selectedScopeNames === null
       ? undefined
@@ -1804,6 +2057,7 @@ export function compileStageGraph(): {
             seededScopeNames,
           ),
           onDiskGrid,
+          composedNames,
         ),
         selectedScopeNames,
         composedNames,
@@ -1824,7 +2078,10 @@ function buildGraphStage(
   // (parseStageFrontmatter normalises empty).
   const support_agents = parsed.support_agents ?? [];
   const produces = parsed.produces ?? [];
-  const requires_stage = parsed.requires_stage ?? [];
+  // Dependency edges are set-valued. Normalize copy-paste duplicates here so
+  // every graph consumer, including topoSort's indegree accounting, observes
+  // the same edge cardinality as the compile-time number seeder.
+  const requires_stage = [...new Set(parsed.requires_stage ?? [])];
   const consumesRaw = parsed.consumes ?? [];
   const consumes: Consume[] = consumesRaw.map((c) => {
     const out: Consume = {
@@ -1885,6 +2142,7 @@ function buildGraphStage(
   }
   if (parsed.reviewer !== undefined) {
     stage.reviewer = parsed.reviewer;
+    stage.review_artifact = parsed.review_artifact;
     // Default the cap to 2 when a reviewer is declared but no explicit cap is
     // set. The parser (V1) now returns a real number and validateStageFrontmatter
     // (V2) rejects a non-positive-integer cap upstream, so this should always
@@ -1898,6 +2156,15 @@ function buildGraphStage(
       cap >= 1
         ? cap
         : 2;
+    // Default the class to "adversarial" (the pre-class behavior) when a
+    // reviewer is declared without one. Schema (V2) rejects any value other
+    // than adversarial/advisory upstream; keep the coercion defensive so a
+    // bad value degrades to the strict default rather than leaking through.
+    stage.review_class =
+      parsed.review_class === "advisory" ? "advisory" : "adversarial";
+  }
+  if (parsed.summary_confirmation !== undefined) {
+    stage.summary_confirmation = parsed.summary_confirmation;
   }
   return stage;
 }
@@ -1907,7 +2174,7 @@ function runCompileCheck(): void {
   const graphOnDisk = readFileSync(stageGraphPath(), "utf-8");
   if (json !== graphOnDisk) {
     console.error(
-      "stage-graph.json is out of date. Run `bun aidlc-graph.ts compile` to regenerate."
+      `stage-graph.json is out of date. Run \`${aidlcToolInvocation("graph", undefined, false)} compile\` to regenerate.`
     );
     process.exit(1);
   }
@@ -1937,7 +2204,7 @@ function runCompileCheck(): void {
   }
   if (gridJson !== gridOnDisk) {
     console.error(
-      "scope-grid.json is out of date. Run `bun aidlc-graph.ts compile` to regenerate."
+      `scope-grid.json is out of date. Run \`${aidlcToolInvocation("graph", undefined, false)} compile\` to regenerate.`
     );
     process.exit(1);
   }
@@ -2348,16 +2615,7 @@ export function computeArs(
   // Nearest stock scopes by grid diff count against the mechanical screen
   // grid. The composer's folded grid may differ - this is the deterministic
   // starting signal, not the proposal.
-  const nearestScopes = Object.entries(loadScopeGrid())
-    .map(([scope, def]) => {
-      const differs: string[] = [];
-      for (const [slug, action] of Object.entries(def.stages)) {
-        const mine = screenGrid[slug];
-        if (mine !== undefined && mine !== action) differs.push(slug);
-      }
-      return { scope, diff: differs.length, differs };
-    })
-    .sort((a, b) => a.diff - b.diff || a.scope.localeCompare(b.scope));
+  const nearestScopes = nearestStockScopes(screenGrid);
 
   const arsScores = [
     "| Component | Symbol | Score | Band |",
@@ -2547,8 +2805,43 @@ const COMMANDS: Record<string, Handler> = {
     if (kwRaw !== undefined) {
       const granted = kwRaw.split(",").map((k) => k.trim()).filter(Boolean);
       for (const err of keywordCollisions(granted)) r.errors.push(err);
-      r.valid = r.errors.length === 0;
     }
+    // The composer's Change Control proposal rides with the grid: `--change-control
+    // <value>` or a `changeControl` member beside `stages`. It must be one of the
+    // two values, and a memory layer that declares strict refuses a relaxed
+    // proposal here, before the gate, naming that file.
+    const ccIdx = args.indexOf("--change-control");
+    const ccRaw =
+      ccIdx >= 0
+        ? args[ccIdx + 1]
+        : typeof obj.changeControl === "string"
+          ? obj.changeControl
+          : undefined;
+    if (ccIdx >= 0 && (ccRaw === undefined || ccRaw.startsWith("--"))) {
+      console.error("validate-grid: --change-control requires <strict|relaxed>.");
+      process.exit(1);
+    }
+    if (ccRaw !== undefined) {
+      const changeControl = parseChangeControl(ccRaw);
+      if (changeControl === null) {
+        r.errors.push(
+          `Change Control must be one of: ${CHANGE_CONTROL_VALUES.join(", ")} (got "${ccRaw}").`,
+        );
+      } else {
+        r.change_control = changeControl;
+        if (changeControl === "relaxed") {
+          const projectDir = resolveProjectDir();
+          const intentIdx = args.indexOf("--intent");
+          const spaceIdx = args.indexOf("--space");
+          const memoryStrict = memoryChangeControlDeclarations(projectDir, {
+            intent: intentIdx >= 0 ? args[intentIdx + 1] : undefined,
+            space: spaceIdx >= 0 ? args[spaceIdx + 1] : undefined,
+          }).find((declaration) => declaration.value === "strict");
+          if (memoryStrict) r.errors.push(changeControlMemoryStrictRefusal(memoryStrict));
+        }
+      }
+    }
+    r.valid = r.errors.length === 0;
     process.stdout.write(`${JSON.stringify(r, null, 2)}\n`);
     if (!r.valid) process.exit(1);
   },
@@ -2565,14 +2858,29 @@ const COMMANDS: Record<string, Handler> = {
     // written under the one lock so they never diverge.
     const pd = resolveProjectDir();
     requireInstalledHarness(pd);
-    withAuditLock(pd, () => {
+    const writeCompiledGraph = (): void => {
       const { json, gridJson } = compileStageGraph();
       writeFileAtomic(mutableStageGraphPath(pd), json);
       writeFileAtomic(mutableScopeGridPath(pd), gridJson);
-    });
+    };
+    const inheritedOwnerRaw = process.env.AIDLC_WORKSPACE_LOCK_OWNER_PID;
+    if (inheritedOwnerRaw !== undefined) {
+      const inheritedOwner = Number(inheritedOwnerRaw);
+      if (
+        inheritedOwner !== process.ppid ||
+        !auditLockOwnedByProcess(pd, inheritedOwner)
+      ) {
+        throw new Error(
+          "Refusing inherited workspace lock: the declared owner is not this process's live parent lock holder."
+        );
+      }
+      writeCompiledGraph();
+    } else {
+      withAuditLock(pd, writeCompiledGraph);
+    }
   },
   resolve: (args) => {
-    // resolve <scope> — emit the active scope's plan (.aidlc-plan.json) to
+    // resolve <scope> - emit the active scope's plan (.aidlc-engine/plan.json) to
     // the project dir. The plan is the EXECUTE/SKIP slice for the scope,
     // derived from the compiled grid (the same transpose runtime reads).
     // Feature-flagged via AIDLC_GRAPH_RESOLVE=1 so it ships
@@ -2593,6 +2901,10 @@ const COMMANDS: Record<string, Handler> = {
       process.stdout.write(planJson);
       return;
     }
+    refuseEngineObserverWrite("writeFileAtomic");
+    if (process.env.AIDLC_PLAN_PATH === undefined) {
+      mkdirSync(dirname(outPath), { recursive: true });
+    }
     writeFileAtomic(outPath, planJson);
     console.log(outPath);
   },
@@ -2610,7 +2922,9 @@ const COMMANDS: Record<string, Handler> = {
       if (json !== expected) {
         console.error(
           `export --check: bundle drift vs ${fixturePath}. ` +
-            `Regenerate with: bun aidlc-graph.ts export > ${fixturePath}`
+            `Regenerate with: ${
+              aidlcToolInvocation("graph", undefined, false)
+            } export > ${fixturePath}`
         );
         process.exit(1);
       }
@@ -2662,7 +2976,7 @@ Common forms:
                                        two gate tables (data: tools/data/ars-priors.json)
   aidlc-graph compile                  Regenerate stage-graph.json + scope-grid.json from YAML
   aidlc-graph compile --check          CI drift guard (exit 1 on mismatch)
-  aidlc-graph resolve <name>           Emit .aidlc-plan.json for a scope (AIDLC_GRAPH_RESOLVE=1)
+  aidlc-graph resolve <name>           Emit .aidlc-engine/plan.json for a scope (AIDLC_GRAPH_RESOLVE=1)
   aidlc-graph export                   Emit designer-facing bundle (stdout)
   aidlc-graph export --check           CI drift guard against fixture
 

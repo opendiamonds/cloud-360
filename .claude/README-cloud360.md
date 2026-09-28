@@ -1,8 +1,8 @@
 # Cloud-360 對 AI-DLC v2 安裝的調整
 
-本目錄由 upstream [`awslabs/aidlc-workflows`](https://github.com/awslabs/aidlc-workflows) 的 `v2` 分支產出複製而來。除下列**兩處**外，內容與 upstream 一致。
+本目錄由 upstream [`awslabs/aidlc-workflows`](https://github.com/awslabs/aidlc-workflows) 的 `v2` 分支產出複製而來。除下列**三處**外，內容與 upstream 一致。
 
-版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.5.33**。初次並行安裝為 2.5.11（upstream commit `257b43a`，見 commit `4f2b626`）。
+版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.9.0**（ADR-0014）。升級歷程：2.5.11 並行安裝（upstream commit `257b43a`，見 commit `4f2b626`）→ 2.5.33（commit `f17c40f`，ADR-0011）→ 2.7.0（ADR-0013）→ 2.9.0。
 
 ## 調整 1：`settings.json` 移除環境相依設定
 
@@ -15,7 +15,7 @@ upstream 的 `settings.json` 是**進版控**的共享檔案，預設帶著 AWS 
 | `CLAUDE_CODE_USE_BEDROCK` | `1` | 強制走 Bedrock；本團隊未必都使用 |
 | `AWS_REGION` | `us-east-1` | 環境相依 |
 | `ANTHROPIC_DEFAULT_*_MODEL` | `global.anthropic.*` | Bedrock 專用 model ID，非 Bedrock 環境無效 |
-| `AWS_AIDLC_DEFAULT_SCOPE` | `workshop` | 教學用 scope，不適合真實功能開發；改為由 `/aidlc` 依描述自動偵測 |
+| `AWS_AIDLC_DEFAULT_SCOPE` | `classic`（2.6.18 前為 `workshop`） | 由 `/aidlc` 依描述自動偵測；未命中關鍵字時引擎的硬編碼 fallback 本來就是 `classic`，寫與不寫行為相同。隱含預設自 2.6.18 起由 `feature` 變為 `classic`，需要完整 Ideation 時明示 `--scope feature`（ADR-0013） |
 | `model` | `opus[1m]` | 個人偏好 |
 | `effortLevel` | `xhigh` | 個人偏好 |
 
@@ -53,7 +53,22 @@ cp .claude/settings.local.json.example .claude/settings.local.json
 1. 重新移除 `settings.json` 的環境相依鍵（或改以 `settings.local.json` 覆寫）。
 2. 重新套用 `ai-dlc-principles.md` 第 3 條的 artifacts 路徑修正 —— 先確認 upstream 是否已自行修好，若已修好則此項可刪。
 
-接著跑 `/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證。
+4. 跑 `bun .claude/tools/aidlc-utility.ts plugin-sync`（upstream 自 2.6.110 起要求每次升級後執行；tcms 目前不是 plugin root，會回 `no installed plugins; nothing to sync`、exit 0，這是正常的）。2.9.0 的 `doctor` 會另外把 `tcms:installed-missing` 列為 advisory warning，原因相同：stage graph 有 `plugin: tcms`，但本 repo 尚未把 tcms 整理成正式 plugin root；這不是 drift guard 失敗。
+5. 對照 upstream `CHANGELOG.md` 的 **Upgrade**／**Breaking** 段逐項檢查（minor roll-up 不取代中間版本的一次性動作）。2.7.0 → 2.9.0 實測需注意：
+   - **Runtime 複製來源**：2.9.0 的 manual-copy 路徑改為 release asset `aidlc-copy-runtime-2.9.0.tar.gz` 內的 `runtime/<harness>/`；從 source tag 升級時，需先以 upstream `bun scripts/package.ts claude` 產生 `dist/claude/.claude/`，再整棵替換本 repo 的 `.claude/`。
+   - **Classic scope 行為**：新建 Classic intent 改為 18-stage v1 flow，走到 Build and Test 即止；若需要 2.7.0 時 Classic 含 CI Pipeline 與 Operation 的圖，改用 `workshop` scope。既有 in-flight intent 保留其記錄圖。
+   - **Config / change-control 指令**：standalone `aidlc-utility.ts change-control` route 已移除，未知 `config-change` flags 會失敗；腳本若呼叫舊 route 必須改成新版 `/aidlc config` 或 `aidlc engine config set` 入口。
+   - **Record runtime 檔位置**：engine 檔改放 `<record>/.aidlc-engine/`；新版仍可讀舊路徑 fallback，但新規則與 `.gitignore` 要涵蓋此目錄。
+   - **Intent archive / attest**：新增 `/aidlc intent archive|unarchive`、`intent list --all`、`aidlc attest resolve|anchor`。2.9.0 前的 review 沒有 committed source evidence，attest 會回 `unverifiable`，直到下一次 per-Unit review。
+   - **Native / copy runtime 拆包**：native asset 是 `aidlc-runtime-2.9.0.tar.gz`，Bun-based copy runtime 是 `aidlc-copy-runtime-2.9.0.tar.gz`，不要混用。
+
+   2.5.33 → 2.7.0 實測踩到的四項，仍需保留在下次升級 checklist：
+   - **State Version**：`grep "State Version" aidlc/spaces/*/intents/*/aidlc-state.md`，比對 `aidlc-lib.ts` 的 `CURRENT_STATE_VERSION`。舊版 state 會被 doctor 與 `next`／`report` 拒絕，upstream 不提供遷移；處置見 ADR-0013 第 3 點。
+   - **規則層引用的 hook 檔名**：`grep -rn "\.claude/hooks/" aidlc/spaces/*/memory/`，被更名的 hook（如 `aidlc-mint-presence.ts` → `aidlc-record-human-turn.ts`）要同步改。
+   - **`.gitignore`**：比對 upstream `.claude/CLAUDE.md` 的 Git Integration 段與 CHANGELOG 的 gitignore 項，本 repo 的 `.gitignore` 是手動維護的。
+   - **殘留的舊 runner**：`git status` 應看到被更名 stage 的舊 `skills/aidlc-<old>/` 為 D；若用 `cp -R` merge copy 會留下，需手動刪。
+
+接著跑 `/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證。升級記錄寫入新 ADR（本次為 ADR-0014）。
 
 ## 現況
 

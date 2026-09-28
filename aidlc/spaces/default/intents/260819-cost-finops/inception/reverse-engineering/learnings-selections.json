@@ -1,0 +1,13 @@
+{
+  "stage_slug": "reverse-engineering",
+  "selections": [
+    {
+      "candidate_id": "c9",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "ALWAYS 權限種子或權限頁欄名可先於產品面存在（如 C1 view/edit）；codekb 與設計必須標明「矩陣領先實作」，不得把種子當成已有 router／頁／表",
+      "source": "orchestrator"
+    }
+  ]
+}

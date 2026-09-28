@@ -16,6 +16,7 @@ export const Sidebar: React.FC = () => {
   // 細項三旗標皆未勾選 → 不顯示該功能（can/canArch 的 view 已含 edit／review）
   const showArchWorkspace = canArch('view');
   const showAssessment = can('A3', 'view');
+  const showCost = can('C1', 'view');
   const showUsersAdmin = can('J3a', 'view');
   const showMatrixAdmin = can('J3b', 'view');
   const showCoreSection = showArchWorkspace || showAssessment;
@@ -23,6 +24,7 @@ export const Sidebar: React.FC = () => {
 
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
+  const [costOpen, setCostOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -171,8 +173,41 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
+        {showCost && (
+          <div className="mt-4 mb-2">
+            <button
+              type="button"
+              className={groupHeaderClass}
+              onClick={() => setCostOpen((o) => !o)}
+              aria-expanded={costOpen}
+            >
+              <span>成本</span>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${costOpen ? 'rotate-90' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+            {costOpen && (
+              <nav className="space-y-1 px-2 mt-1">
+                <NavLink to="/cost" className={linkClass}>
+                  預估成本
+                </NavLink>
+              </nav>
+            )}
+          </div>
+        )}
+
         {showAdminSection && (
-          <div className={showCoreSection ? 'mt-4' : ''}>
+          <div className={showCoreSection || showCost ? 'mt-4' : ''}>
             <button
               type="button"
               className={groupHeaderClass}

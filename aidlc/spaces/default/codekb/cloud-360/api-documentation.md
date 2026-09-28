@@ -1,10 +1,19 @@
 # API Documentation — Cloud-360
 
-> 逆向工程產出。基準 commit `c3de2c8`（branch `danniel/fix/production-path-check-noop`，2026-08-17）。
+> 逆向工程產出。**基準 commit `9307dbc`（2026-08-23）**；前一基準為 `c3de2c8`（2026-08-17）。
+> **本輪為兩區定向掃描 ＋ 差異標註，不是完整重掃**。節標題後的新鮮度標記：
+> **［本輪重寫］**｜**［本輪機械複驗］**｜**［差異標註］**｜**［沿用 `c3de2c8`］**。
+> 讀法與跨分支限制見 `reverse-engineering-timestamp.md`。
+>
+> **用詞提醒**：在標記為［沿用 `c3de2c8`］或［差異標註］的段落內，「本輪／本次」指的是
+> **`c3de2c8` 那一輪掃描**；在［本輪重寫］／［本輪機械複驗］段落內，以及任何加 **★** 的
+> 條目，指的才是本輪（`9307dbc`，2026-08-23）。
+>
 > 端點清單以 `python3` 解析 repo 根目錄的 `openapi.json` 取得精確計數，並回 router 原始碼
-> 逐條核對 guard。**36 paths / 45 operations / 29 schemas。**
+> 逐條核對 guard。**36 paths / 45 operations / 29 schemas** —— **本輪以同樣方式複驗，
+> 三個數字皆未變**；改變的是個別 schema 的欄位與約束（見「資料契約」）。
 
-## API 面總覽
+## API 面總覽 ［本輪機械複驗］
 
 | 介面類型 | 數量 | 位置 | 在 `openapi.json` 內？ | 對外 |
 |---|---|---|---|---|
@@ -35,7 +44,7 @@ Router 掛載（`backend/main.py`）：
 搭配 `frontend/src/config/api.ts` 的 `apiUrl()`／`wsUrl()`，手動組
 `Authorization: Bearer ${token}` header。共 **52 處呼叫點**散落在 10 支檔。
 
-## 規格檔與型別契約鏈
+## 規格檔與型別契約鏈 ［沿用 `c3de2c8`］
 
 這是本 API 面最重要的結構特徵，**前一版 codekb 尚未記載**：
 
@@ -56,21 +65,52 @@ Router 掛載（`backend/main.py`）：
 （`package.json` 的 `gen:types` 與 `frontend/scripts/check-api-types.mjs:21` 的 `GENERATOR`），
 **無機制鎖住一致**；腳本註解自承兩處不一致時 gate 會誤報。
 
-## 認證與授權契約
+## 認證與授權契約 ［本輪重寫］
 
 ### 認證
 
-- **機制**：JWT Bearer token，HTTP `Authorization: Bearer <token>` header。
+- **機制**：JWT Bearer token，HTTP `Authorization: Bearer <token>` header
+  （**WebSocket 例外**：以 query string `?token=` 傳遞，見下）。
 - **演算法**：HS256。
 - **效期**：8 小時（`ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8`）。
 - **payload**：`sub` 為 username，`exp` 為到期時間。
-- **驗證流程**（`auth.get_current_user`）：解 JWT → 取 `sub` → 查 `users` →
-  檢查 `is_active`（停用者 403）→ **呼叫 `activity.record_activity`（條件式寫入）** →
-  回傳 `User` 物件。JWT 無效或過期一律 401 並帶 `WWW-Authenticate: Bearer`。
 
-**重要副作用**：`get_current_user` **不是純讀取**。每個帶有效憑證的請求都會經過
-`record_activity`，距上次寫入超過 5 分鐘時 UPDATE `users.last_activity_at`。
-任何在請求鏈上新增行為的設計都要考慮與這條寫入路徑的交互。
+**簽章金鑰的解析已改為條件式 fail-fast（本輪更正）**。前一版記載「`JWT_SECRET` 未注入時
+靜默 fallback 到程式內預設字串」——**已失效**。現況（`auth.py:22`，本輪實讀）：
+
+```
+_resolve_secret_key():  JWT_SECRET 有值 → 用它
+                        無值 且 APP_ENV ∈ {local, test, ci} → 用 INSECURE_DEV_SECRET
+                        無值 且 其他 APP_ENV → raise RuntimeError（import 期即失敗）
+```
+
+**但 `APP_ENV` 本身沒有 fail-fast**：`os.environ.get("APP_ENV", "local")` 的預設是
+`"local"`，**忘記設等於宣告自己是 local**。詳見 `architecture.md` 的 `APP_ENV` 閘門一節。
+
+### 驗證流程已拆為兩層（本輪新增的公開函式）
+
+| 函式 | 簽章 | 用途 |
+|---|---|---|
+| **`get_user_from_token(token, db, *, record=True)`** | `auth.py:58` | **本輪新增的公開函式**。解 JWT → 取 `sub` → 查 `users` → 檢查 `is_active`（停用者 403）→ 依 `record` 決定是否呼叫 `activity.record_activity` |
+| `get_current_user(...)` | `auth.py:87` | 現在只是薄包裝：`return get_user_from_token(credentials.credentials, db)`（`record` 用預設 `True`） |
+
+JWT 無效或過期一律 401 並帶 `WWW-Authenticate: Bearer`。
+
+**`record` 參數是一個契約性的旋鈕**：`collab_router._authorize_ws_user()` 以
+`record=False` 呼叫它，**WebSocket 驗證因此不算入「帳號活動」**。
+下游若以「最後活動時間」判斷帳號是否在用，**必須知道長時間掛著的共編連線被排除在外**。
+
+**重要副作用（仍然成立）**：`get_current_user` **不是純讀取**。每個帶有效憑證的 HTTP 請求
+都會經過 `record_activity`，距上次寫入超過 5 分鐘時 UPDATE `users.last_activity_at`。
+另外 `login()` 現在也直接呼叫 `record_activity(db, user)` 並 `db.refresh(user)`。
+
+### 前端 token 儲存（本輪更正）
+
+前一版記載「token 存 `localStorage`」——**已失效**。
+`AuthContext.tsx` 現以 **`sessionStorage`** 存放 token，並在登入／登出／初始化三處呼叫
+`clearLegacyAuthStorage()`，主動移除四個舊的 `localStorage` key
+（`token`／`username`／`role`／`authorization_status`）。
+**語意變化**：關閉分頁即失去憑證，且不再跨分頁共用。
 
 ### 授權
 
@@ -96,9 +136,10 @@ Router 掛載（`backend/main.py`）：
 404 = 資源不存在或無權限存取（`get_accessible_diagram` 把「無權限」也回 404，避免資源探測）；
 **422 = 查詢參數不合法**（由 FastAPI `Query(ge=..., le=...)` 在進入 handler 前擋下）。
 
-## 端點完整清單（45 operations）
+## 端點完整清單（45 operations） ［差異標註］
 
-Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出。
+Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出（`c3de2c8` 時）。
+**本輪複驗了 operation 總數（仍為 45）與 WebSocket 的 guard，未逐條重核其餘 44 條的 guard。**
 
 ### 根與健康檢查（1）
 
@@ -206,9 +247,9 @@ Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出。
 | 需架構圖能力 | **14**（agent 2 + collab 12） |
 | 需 `J3a` 能力 | **7** |
 | 需 `J3b` 能力 | **3** |
-| **無任何 guard 的業務端點** | **1**（WebSocket，不計入 45） |
+| ~~**無任何 guard 的業務端點**~~ | ~~**1**（WebSocket，不計入 45）~~ **← 已失效**：WebSocket 自 PR #526 起需帶 `?token=` 並通過四道檢查（見「WebSocket 契約」）。**現在沒有任何無 guard 的業務端點** |
 
-## SSE 串流契約
+## SSE 串流契約 ［沿用 `c3de2c8`］
 
 四個 operation 回傳 `text/event-stream`：`generate`、`generate-wa-collab`、`reviews`(POST)、
 `retry-suggestions`。共同形狀：每個 chunk 為 `data: {JSON}\n\n`，JSON 一律含 `type` 欄位，
@@ -268,19 +309,49 @@ Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出。
 `frontend/nginx.conf` 為 SSE 特別設定：**`proxy_buffering off`** 與 **600 秒 timeout**。
 任何反向代理層變更都必須保留這兩項，否則串流會被緩衝或提前中斷。
 
-## WebSocket 契約
+## WebSocket 契約 ［本輪重寫］
+
+> **前一版記載「授權：無，是唯一無 guard 的業務端點」——該記載已於 PR #526 失效。**
+> 本輪逐行複驗 `collab_router.py:255-290`。
 
 - **路徑**：`/api/collab/ws/{workspace_id}`
 - **用途**：架構圖即時共編廣播（`ConnectionManager`）
-- **前端**：`frontend/src/hooks/useCollaboration.ts`（64 LOC）
+- **前端**：`frontend/src/hooks/useCollaboration.ts`（連線時帶上 token；**該檔的 diff 僅
+  由 diffstat 推得，未逐行核對**）
 - **nginx**：`/api/` location 已設 WS upgrade header
-- **授權**：**無**。連線層不做 JWT 檢查，是唯一無 guard 的業務端點
-- **機械檢查**：**無**。FastAPI 不把 WebSocket 路由寫進 OpenAPI 規格，
-  故三道規格衍生的檢查全部碰不到它
+- **機械檢查**：**仍然沒有**。FastAPI 不把 WebSocket 路由寫進 OpenAPI 規格，
+  故三道規格衍生的檢查（`dump_openapi.py --check`／`check-api-types.mjs`／
+  `tcms_validate.py`）全部碰不到它
 
-**兩件事疊加**：唯一無授權的端點，同時也在唯一的機械檢查盲區內。
+### 授權（現況）
 
-## 前端路由與權限對照
+| 環節 | 契約 |
+|---|---|
+| token 傳遞 | **query string** `?token=<jwt>`（WebSocket 握手無法帶自訂 header） |
+| 驗證函式 | `_authorize_ws_user(workspace_id, token, db)` → `auth.get_user_from_token(token, db, record=False)` |
+| 授權檢查 | ① token 存在 ② token 有效且使用者 `is_active` ③ 該使用者對 diagram 可存取 ④ 具架構圖編輯權 |
+| 缺 token | `HTTPException(401, "WebSocket 需要 token")` |
+| 拒絕方式 | close code **1008**（401／403 → policy violation）或 **1003** |
+| **活動記錄** | **`record=False`**——WebSocket 驗證**不**更新 `users.last_activity_at` |
+
+### Payload 驗證（本輪新增）
+
+| 限制 | 值 | 違反時 |
+|---|---|---|
+| 訊息大小上限 | **2 MB** | `close(1003)` |
+| 圖形 payload 必要標記 | 必須含 `<mxgraphmodel>` 或 `<mxfile>` | `close(1003, "WebSocket 只接受 draw.io XML")` |
+| 聊天訊息數 | 100 則 | `close(1003)` |
+| 單則聊天長度 | 8,000 字 | `close(1003)` |
+
+連線清理已移入 `finally`（`manager.disconnect`）。
+
+### 仍然疊加的兩件事（改寫後的正確說法）
+
+**洞補了，盲區沒補。** 這條端點現在有完整的授權鏈，但**授權鏈本身沒有任何自動化斷言**
+——本輪 grep `backend/tests/` 無 `websocket_connect` 命中，也無對應 e2e。
+授權邏輯若被改壞，所有既有檢查依舊全綠。
+
+## 前端路由與權限對照 ［沿用 `c3de2c8`］
 
 `frontend/src/App.tsx`：
 
@@ -301,7 +372,33 @@ Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出。
 
 `tcms_validate.py` 會把測案宣告的 UI 路徑與這張路由表機械比對 —— 寫了不存在的路徑會被擋下。
 
-## 資料契約
+## 資料契約 ［本輪機械複驗］
+
+> 本輪以 `python3` 重新解析 `openapi.json`：**paths／operations／schemas 三個數字皆未變
+> （36／45／29）**，但下列四處 schema 內容已改變。
+
+### 本輪的四項 schema 變更
+
+| Schema | 變更 | 動機 |
+|---|---|---|
+| **`MeResponse`** | 新增 **`last_opened_diagram_id: integer \| null`**。本輪實測欄位集合為 `authorization_status`／`id`／`is_active`／**`last_opened_diagram_id`**／`pending_request`／`permissions`／`role`／`username` | 修補 `spec-sync` #468 揭露的漂移：規格要求該欄位但回應模型漏了 |
+| `SaveChatRequest.messages` | 加上 `maxItems: 100` | PR #526 的輸入邊界收斂（與 WebSocket 的聊天上限同源） |
+| `SaveDiagramRequest.title` | 加上 `minLength: 1`、`maxLength: 200` | 同上 |
+| `SaveDiagramRequest.xml_data` | 加上 `minLength: 1`、`maxLength: 2097152`（2 MB） | 同上；與 WebSocket 的 2 MB 上限一致 |
+
+**兩點對下游的含義**：
+
+1. **請求約束以 pydantic／`Query` 的原生形式宣告，因此會出現在 `openapi.json`
+   並被兩道 gate 覆蓋**（規格漂移 gate ＋ 型別漂移 gate）。這延續了分頁參數
+   `ge`／`le` 已建立的形狀——**新增輸入邊界時沿用原生宣告，不要在 handler 內手寫檢查**。
+2. **REST 與 WebSocket 現在有兩份平行的上限**（2 MB、100 則、8,000 字）。
+   REST 那一份在規格內、被 gate 保護；**WebSocket 那一份在盲區內、沒有任何保護**。
+   兩者若漂移，只有人工比對會發現。
+
+**另一項與 pydantic 相關的變更**：`UserSchema` 與 `AuthorizationRequestSchema` 由
+pydantic v1 風格 `class Config: orm_mode = True` 改為 v2 的
+`model_config = ConfigDict(from_attributes=True)`
+（`technology-stack.md` 記載的「pydantic v1 風格殘留」**已解除**）。
 
 ### `UserSchema`（`user_router.py:112-126`）
 
@@ -351,18 +448,31 @@ Guard 欄位由 router 原始碼的 `Depends(...)` 逐條核出。
   （`sorted({row[1] for row in DEFAULT_ROLE_PERMISSIONS})`），非硬編碼。
   **改 seed 資料即改變全系統的 story 清單。**
 
-## API 面的已知缺口
+## API 面的已知缺口 ［本輪機械複驗］
 
-1. **HTTP 層測試只覆蓋 3/45 operation**。全 repo 唯一使用 `TestClient` 的測試檔是
-   `test_user_list_endpoint.py`，它涵蓋 `GET /api/auth/list`、`PUT /api/auth/{id}/active`、
-   `PUT /api/auth/{id}/role` 三個 operation。**其餘 42 個沒有任何 HTTP 層測試**
-   （`review_router` 9、`collab_router` 12、`lens_router` 5、`agent_router` 2、
-   `user_router` 其餘 13、root 1）。
+1. **HTTP 層測試覆蓋 5/45 operation**（`c3de2c8` 時為 3/45；本輪以
+   `grep -rl TestClient backend/tests/` ＋ 逐一核對呼叫點複驗）。
+   使用 `TestClient` 的測試檔現有三支：
+
+   | 測試檔 | 涵蓋的 operation |
+   |---|---|
+   | `test_user_list_endpoint.py` | `GET /api/auth/list`、`PUT /api/auth/{id}/active`、`PUT /api/auth/{id}/role` |
+   | **`test_me_endpoint.py`**（本輪新增，77 行） | `GET /api/auth/me` |
+   | **`test_auth.py`**（本輪擴充 +57 行） | `POST /api/auth/login` |
+
+   **其餘 40 個沒有任何 HTTP 層測試**（`review_router` 9、`collab_router` 12、
+   `lens_router` 5、`agent_router` 2、`user_router` 其餘 12、root 1）。
    採用成本已被證明為零（依賴齊備、`app.dependency_overrides` 可覆寫
    `get_db`／`get_current_user`、`TestClient(app)` 不觸發 `init_db()`），
    故這是「尚未擴散」而非「做不到」。
-2. **WebSocket 無驗證且在檢查盲區**（見上）。
-3. **SSE 事件契約無機械檢查**，且已實測出一個雙向皆死的契約（`unsupported`）。
+
+   **`test_me_endpoint.py` 的存在有特別意義**：`/me` 正是 `9307dbc` 這個 commit 修補的
+   漂移點（`MeResponse` 漏了 `last_opened_diagram_id`）。**缺陷與其回歸測試同批落地**，
+   這是 `team.md` 規則 B 的第二個實例。
+2. **WebSocket 已有驗證，但驗證本身無測試、且仍在檢查盲區**（見「WebSocket 契約」）。
+   ~~「無驗證」~~ 的舊記載已失效。
+3. **SSE 事件契約無機械檢查**，且 `c3de2c8` 已實測出一個雙向皆死的契約（`unsupported`）。
+   **本輪未複驗該死契約是否仍存在。**
 4. **公開端點可觸發 seed**：`roles_catalog`（公開無驗證）在回應前呼叫
    `ensure_role_permissions_seeded(db, force=False)` —— 匿名請求可觸發 seed 邏輯。
    實際影響有限（`force=False` 時表非空即 return），但這是一條匿名可達的寫入路徑。

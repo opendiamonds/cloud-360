@@ -1,13 +1,43 @@
 # Code Quality Assessment — Cloud-360
 
-> 逆向工程產出。基準 commit `c3de2c8`（branch `danniel/fix/production-path-check-noop`，2026-08-17）。
+> 逆向工程產出。**基準 commit `9307dbc`（2026-08-23）**；前一基準為 `c3de2c8`（2026-08-17）。
+> **本輪為兩區定向掃描 ＋ 差異標註，不是完整重掃**。節標題後的新鮮度標記：
+> **［本輪重寫］**｜**［本輪機械複驗］**｜**［差異標註］**｜**［沿用 `c3de2c8`］**。
+> 讀法與跨分支限制見 `reverse-engineering-timestamp.md`。
+>
+> **用詞提醒**：在標記為［沿用 `c3de2c8`］或［差異標註］的段落內，「本輪／本次」指的是
+> **`c3de2c8` 那一輪掃描**；在［本輪重寫］／［本輪機械複驗］段落內，以及任何加 **★** 的
+> 條目，指的才是本輪（`9307dbc`，2026-08-23）。
+>
 > 技術債以**根因叢集**組織，再以**嚴重度分級**排序 —— 不照掃描流水號排列，
 > 因為流水號不表達修復順序，而叢集會。
 >
-> **測試數字為靜態計數**（`grep -c`），本次未執行後端測試套件與 Playwright。
-> 哪些檢查真的跑過、哪些沒跑，逐項列在「本次實測方法」一節。
+> **測試數字為靜態計數**（`grep -c`）。**本輪未執行**後端測試套件、Playwright、
+> `eslint`、兩支 validator 或 `docker build`——`c3de2c8` 記載的
+> 「`0 errors, 3 warnings`」與兩支 validator「passed」**本輪未複驗**。
 
-## 評估摘要
+## 本輪的債務變動總覽 ［本輪重寫］
+
+`c3de2c8..9307dbc` 的 20 個 commit 對技術債登記簿造成六項變動。**這是本檔本輪唯一
+系統性更新的部分**；其餘各節為差異標註或沿用。
+
+| 項目 | 變動 | 依據 |
+|---|---|---|
+| **T-13**（production 路徑檢查在 CI 恆為 no-op） | **✅ 已解決** | `validate_repo_contract.py` 由 `git_diff_name_only()` 改為 `git_ls_files()` 全域掃描（issue #509），並新增回歸測試 `test_repo_contract_production_paths.py`(287)，在暫存 git repo 內以乾淨工作樹重現 CI 條件 |
+| **T-14**（JWT secret 有程式內預設值） | **⬇️ 由 P1 降為 P2，改列 T-14b** | `_resolve_secret_key()` 改為僅 `APP_ENV ∈ {local,test,ci}` 允許 fallback，否則 import 期 `RuntimeError`。**殘留風險轉移到 `APP_ENV` 本身沒有 fail-fast** |
+| **T-15**（預設帳號密碼寫死） | **⬇️ 由 P1 降為 P3** | persona 帳號只在 `APP_ENV=local` 建立；admin 密碼取自 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`；`schema_rbac.sql` 的 D) 區塊（含 `admin123` 的 bcrypt hash）**整段刪除**（531 → 510 行） |
+| **T-16**（WebSocket 端點無驗證） | **✅ 已解決；改列 T-16b** | `_authorize_ws_user()` 四道檢查 ＋ close code 1008／1003 ＋ payload 上限。**但該授權路徑本身沒有任何測試**，故轉為新的 P2 |
+| **T-23**（`@types/react-router-dom` 版本錯配） | **✅ 已解決** | 該套件已移除；`react-router-dom` 升至 `^7.18.2` |
+| **T-20**（deprecated API） | **⬇️ 部分解決** | `datetime.utcnow()` → `datetime.now(timezone.utc)`；pydantic v1 `orm_mode` → v2 `ConfigDict`。**殘留 `@app.on_event("startup")`** |
+| **T-25／T-26**（新增） | **➕ 兩項新債** | gh-aw 的 `.md` ↔ `.lock.yml` 無同步 gate；編譯器版本漂移無偵測。詳見叢集 C3 |
+
+**本輪未複驗的項目一律保留原級**：T-1／T-2／T-3／T-4／T-5／T-6／T-7／T-9／T-10／T-11／
+T-12／T-17／T-18／T-19／T-21／T-22／T-24。**「未複驗」不等於「仍然成立」**——
+只是本輪沒看。
+
+## 評估摘要 ［差異標註］
+
+> **下表為 `c3de2c8` 的評估。★ 本輪已變動的三列已就地標註；其餘本輪未複驗。**
 
 前一版 codekb 的一句話結論是：「這個 repo 的**知識**保存得很好，但**知識的自動執行**很弱 ——
 規則寫在文件裡而不是寫在檢查器裡。」
@@ -20,20 +50,26 @@
 | 程式碼衛生 | **優於一般水準** | 全 repo `TODO`／`FIXME`／`HACK`／`XXX` 標記數為 **0**；無被註解掉的死碼區塊 |
 | 流程護欄 | **顯著改善** | CI 由「4 job／約 6 個檢查」增為 **4 job／11 個實質檢查步驟**；新增規格漂移、型別漂移、環境設定契約、規格不得外洩四道 |
 | **跨語言契約** | **從無到有，但覆蓋 1/10** | `openapi.json → api.d.ts` 建置期契約鏈 + 兩道 CI gate。**但只有 `AdminPage.tsx` 消費** |
-| **HTTP 層測試** | **從零到有，但覆蓋 3/45** | `test_user_list_endpoint.py`(282 LOC／17 test) 證明 `TestClient` 採用成本為零 |
+| **HTTP 層測試** | 從零到有，★ **本輪覆蓋 5/45**（`c3de2c8` 為 3/45） | `test_user_list_endpoint.py`(282／17) ＋ ★ `test_me_endpoint.py`(77) ＋ ★ `test_auth.py` 的 login case。採用成本已證明為零 |
 | 架構清晰度 | 良好但不均勻 | `wa_*` 與 `review`／`lens` 家族分層乾淨；`user_router`／`collab_router` 仍無 service 層 |
 | **一致性機制** | **部分改善** | schema 三源、矩陣雙 seed、角色清單多副本**仍全靠人工**；但新欄位（`last_activity_at`）已正確落三處，證明規則可行 |
-| **測試涵蓋** | **不足但方向正確** | 42/45 operation 無 HTTP 層測試；無覆蓋率量測。e2e 由 6 增為 14 case 且已覆蓋 Admin 頁 |
+| **測試涵蓋** | **不足但方向正確** | ★ **40/45** operation 無 HTTP 層測試（`c3de2c8` 為 42/45）；無覆蓋率量測。e2e 仍為 3 describe／14 case（本輪複驗），已覆蓋 Admin 頁。★ 後端測試檔 21 → **25**、`def test_` 212 → **247** |
 | **靜態檢查** | **前後端仍不對等** | 前端 ESLint + `tsc` 且 CI 強制；後端**零** linter／formatter／type checker |
-| 安全預設值 | 需處理 | JWT secret 有程式內預設、預設帳號密碼寫死、一個業務端點無驗證 |
+| 安全預設值 | ★ **本輪大幅改善** | 三項 P1 全部處理（`APP_ENV` 閘門、bootstrap admin 需注入密碼、WebSocket 加上授權）。**殘留形狀不同**：`APP_ENV` 自己沒有 fail-fast（T-14b）、新授權路徑無測試（T-16b）。見叢集 C4 |
 
 **修正後的一句話結論**：這個 repo 已經開始**把知識寫進檢查器**，而且做得很正確
 （規格漂移、型別漂移、環境契約三道都是把過去只寫在文件裡的規則變成 gate）。
 **目前的主要問題不再是「沒有機制」，而是「機制已建好但尚未擴散」** ——
-型別鏈覆蓋 1/10、HTTP 層測試覆蓋 3/45。同時仍有一塊**結構性盲區**（WebSocket 與 SSE）
+型別鏈覆蓋 1/10、HTTP 層測試覆蓋 ★ 5/45。同時仍有一塊**結構性盲區**（WebSocket 與 SSE）
 是任何既有機制都碰不到的。
 
-## 本次實測方法（哪些是執行結果、哪些是靜態計數）
+★ **本輪要補上的一句**：這一輪（PR #526 等）把三項安全預設值缺陷處理掉了，
+但**沒有為新加上的保護建立斷言**——WebSocket 的授權鏈、`APP_ENV` 的閘門，
+兩者都具有與它們取代的缺陷相同的偵測特性（改壞了所有檢查全綠）。
+**這個 repo 的下一個瓶頸不是「有沒有保護」，而是「保護有沒有被保護」。**
+另外，開發流程層本身（gh-aw 的 `.md` ↔ `.lock.yml`）是本輪新發現的第三塊結構性盲區。
+
+## `c3de2c8` 的實測方法（哪些是執行結果、哪些是靜態計數） ［差異標註］
 
 ### 實際執行並取得結果（可引用為執行結果）
 
@@ -60,7 +96,7 @@
 **14 個 e2e `test()`**。正確說法是「repo 內有 212 個測試函式」，
 **不是**「212 個測試通過」。
 
-## 與 `team.md` 現行記載的落差（如實記載，不逕行修改規則層）
+## 與 `team.md` 現行記載的落差（如實記載，不逕行修改規則層） ［差異標註］
 
 > `aidlc/spaces/default/memory/team.md` 的「既成事實」段落有數項已被本次實測推翻。
 > **規則層的修訂須走 practices-discovery 的 affirmation gate，不由 reverse-engineering
@@ -93,7 +129,7 @@
 - 根目錄無 `.prettierrc`
 - secret 掃描與 production 路徑檢查的作用域落差（見叢集 C3）
 
-## 品質正面訊號
+## 品質正面訊號 ［差異標註］
 
 這些是需要**保護**的資產，不要在後續重構中弄丟：
 
@@ -106,6 +142,10 @@
    - `user_router.py` 解釋為何 `UserSchema` 的新欄位刻意不設預設值
    - `fetch_icon_from_n8n()` 逐字寫「這條路徑原本靜默 return，是最難查的一種降級」
    - `helpers.py` 解釋為何必須用 `StaticPool`
+   - ★ **`env_bootstrap.py`（本輪新增）** 記錄了「載到使用者家目錄 `.env`」的實際事故，
+     以及「只修 `main.py` 完全無效，因為 `database.py` 被更早匯入」這個非顯然的因果
+   - ★ `ui-regression.md` 的 frontmatter 註解記錄了 gh-aw v0.81.6 會**靜默丟棄**
+     `pre-agent-steps` 內 `timeout-minutes` 的實測（含一次跑了 5h59m24s 的事故）
 3. **模組級 docstring 載明契約**。`agent_router.py` 直接寫「契約（前端依賴，請勿變更）」
    並列出 request/response 形狀 —— 在 SSE 缺乏機械檢查的情況下，這是唯一的契約紀錄。
 4. **一致的降級策略，且降級留下訊號**。逾時落 `rules_only`、圖示失敗用 fallback **並記
@@ -118,13 +158,13 @@
 7. **`deploy.yml` 有完整 rollback 路徑**：失敗時還原 last-good、開 revert PR、
    dispatch Deploy Doctor workflow。
 
-## 測試現況
+## 測試現況 ［部分本輪機械複驗］
 
 ### 規模與工具
 
 | 側 | 位置 | 規模 | 框架 |
 |---|---|---|---|
-| Backend | `backend/tests/` | 21 測試檔 + `helpers.py` + `__init__.py`，**3,199 LOC**；**212 個 `def test_`（靜態計數）** | Python 內建 `unittest` + `hypothesis` + `unittest.mock` + **`starlette.testclient.TestClient`**（**未使用 pytest**） |
+| Backend | `backend/tests/` | ★ **25 測試檔**（本輪 `ls` 複驗；`c3de2c8` 為 21）+ `helpers.py` + `__init__.py`；LOC 未重量；★ **247 個 `def test_`（本輪 grep 靜態計數；`c3de2c8` 為 212）** | Python 內建 `unittest` + `hypothesis` + `unittest.mock` + **`starlette.testclient.TestClient`**（**未使用 pytest**） |
 | Frontend e2e | `frontend/tests/e2e/` | 1 檔 `regression.spec.ts`，**490 LOC**；3 describe／**14 個 `test()`（靜態計數）** | Playwright（chromium 單一 project） |
 | Frontend unit/component | — | **無** | 無 vitest、無 jest、無 `@testing-library/*` |
 
@@ -150,7 +190,7 @@
 
 ### Property-based 測試（ADR-0006 hard constraint）
 
-**現況：7 個檔、共 13 個 `@given`**（前一版為 5 檔 8 個）
+★ **本輪機械複驗：8 個檔、共 14 個 `@given`**（`c3de2c8` 為 7 檔 13 個；更早的 `team.md` 記載為 5 檔 8 個）。下表為 `c3de2c8` 的逐檔分布，**本輪未重新分檔統計**，新增的 1 個未定位。
 
 | 檔案 | `@given` 數 |
 |---|---|
@@ -204,12 +244,12 @@ CI 無 coverage 步驟、無門檻閘門。
 
 ### 最重要的測試缺口
 
-**42/45 operation 沒有 HTTP 層測試。**
+★ **本輪機械複驗：40/45 operation 沒有 HTTP 層測試**（`c3de2c8` 為 42/45）。
 
 | Router | operations | 有 HTTP 層測試 |
 |---|---|---|
-| `user_router` | 16 | **3**（`GET /list`、`PUT /{id}/active`、`PUT /{id}/role`） |
-| `collab_router` | 12 | 0 |
+| `user_router` | 16 | ★ **5**（`GET /list`、`PUT /{id}/active`、`PUT /{id}/role`、**`GET /me`**、**`POST /login`**） |
+| `collab_router` | 12 | 0（**含新加上授權的 WebSocket，亦無測試 → T-16b**） |
 | `review_router` | 9 | 0 |
 | `lens_router` | 5 | 0 |
 | `agent_router` | 2 | 0 |
@@ -226,7 +266,7 @@ CI 無 coverage 步驟、無門檻閘門。
 它是系統中唯一有明確狀態流轉、逾時分支與降級語意的元件，正是最需要測試的形狀 ——
 **而它的狀態機正好就是本次發現 `unsupported` 死契約的地方**（見 T-3）。
 
-## Linting 與靜態檢查
+## Linting 與靜態檢查 ［沿用 `c3de2c8`］
 
 | 側 | linter | formatter | type checker | CI 強制 |
 |---|---|---|---|---|
@@ -246,7 +286,7 @@ CI 無 coverage 步驟、無門檻閘門。
 
 **任何新增前端資料來源都必須沿用此形狀，否則 CI 紅燈。**
 
-## CI/CD 護欄
+## CI/CD 護欄 ［差異標註］
 
 ### `ci.yml` — 4 個 job、11 個實質檢查步驟
 
@@ -288,7 +328,7 @@ CI 無 coverage 步驟、無門檻閘門。
 僅 `ui-regression` 是阻擋型；其餘 10 組為提問／自動修／開 issue 型。
 完整清單見 `component-inventory.md`。
 
-## 文件品質
+## 文件品質 ［差異標註］
 
 | 文件 | LOC | 定位 |
 |---|---|---|
@@ -309,7 +349,7 @@ CI 無 coverage 步驟、無門檻閘門。
   該敘述已不在（`CLAUDE.md` 由 9,380 B 縮為 108 行）。
 - `DEPLOY.md` 的雙語分段 —— 本次未見中英並列的 H2 分段。
 
-## 技術債登記簿
+## 技術債登記簿 ［部分本輪重寫］
 
 ### 分級準則
 
@@ -319,7 +359,7 @@ CI 無 coverage 步驟、無門檻閘門。
 | **P2** | **侵蝕型**風險：不會馬上壞，但隨每次變更放大，且缺乏發現機制 |
 | **P3** | 衛生與局部問題：影響可讀性、一致性或單點行為，範圍可控 |
 
-### 叢集 C1 — 「多源真實」（仍是最重要的叢集，但已出現正確樣板）
+### 叢集 C1 — 「多源真實」（仍是最重要的叢集，但已出現正確樣板） ［沿用 `c3de2c8`，本輪未複驗］
 
 **根因：同一件事實有多份手寫來源，且沒有任何機制驗證它們一致。**
 
@@ -335,7 +375,8 @@ CI 無 coverage 步驟、無門檻閘門。
 #### 本輪出現的正確樣板（重要，改變了這個叢集的判斷）
 
 **`users.last_activity_at` 的加入有正確落三處**（ORM／`_ensure_last_activity_schema()`／
-`schema_rbac.sql`，後者由 523 行成長為 531 行）。
+`schema_rbac.sql`，後者由 523 行成長為 531 行；★ 本輪為 **510 行**，縮短是因 PR #526
+刪除 D) 區塊，非此處論點的反例）。
 
 這證明 `project.md` 的 blocking 同步規則**實務上可行**，
 **J5 是歷史欠帳而非結構性做不到**。同理，`openapi.json → api.d.ts` 這條鏈是
@@ -343,7 +384,7 @@ CI 無 coverage 步驟、無門檻閘門。
 
 **T-1 與 T-2 仍必須被視為一組**：修 T-1 需要重跑 `schema_rbac.sql`，而重跑會觸發 T-2。
 
-### 叢集 C2 — 「機制已建好但尚未擴散」（本輪的新叢集，投報率最高）
+### 叢集 C2 — 「機制已建好但尚未擴散」 ［部分本輪機械複驗］
 
 **根因：基礎設施已就位，邊際採用成本遠低於建立成本，但尚未推廣。**
 
@@ -356,7 +397,7 @@ CI 無 coverage 步驟、無門檻閘門。
 **這個叢集的特徵**：每一項的修法都是「多做幾次已經做過的事」，不需要新工具、新依賴或
 新決策。**投報率高於 C1 的逐項修補**。
 
-### 叢集 C3 — 「結構性驗證盲區」（無法用既有機制解決）
+### 叢集 C3 — 「結構性驗證盲區」（無法用既有機制解決） ［部分本輪重寫］
 
 **根因：既有機制的作用域小於規則所宣稱，或標的根本不在機制的輸入範圍內。**
 
@@ -365,30 +406,53 @@ CI 無 coverage 步驟、無門檻閘門。
 | **T-3** | **P2** | **WebSocket 與 SSE 契約無任何機械檢查，且已造成實際的死契約。** `/api/collab/ws/{workspaceId}` 與 10 種 SSE 事件名不在 `openapi.json`，故 `dump_openapi.py --check`／`check-api-types.mjs`／`tcms_validate.py` **三者皆碰不到**。**實測後果**：`AssessmentPage.tsx:632` 與 `:1195` 處理 `unsupported` 事件／狀態，但後端 `review_orchestrator` 的 status 賦值點只有 `pending`／`rules_complete`／`rules_only`／`complete` 四種，**從未寫入 `unsupported`，也從未發出該 SSE 事件**。前端兩段程式碼不可達，而所有檢查全綠 |
 | **T-9** | **P2** | **無覆蓋率量測。** `org.md` 的 80% 門檻是宣告而非閘門，既無法量測也無法強制 |
 | **T-10** | **P2** | **Python 側無 lint／format／type check。** 前端有 ESLint + `tsc` 且 CI 強制，後端完全沒有對等物 |
-| **T-12** | **P2** | **Secret 掃描看不到應用程式碼。** `validate_no_obvious_secrets()` 只讀 `contract_files()`（repo 層必要檔 + record 必要檔 + audit shard），**看不到 `backend/`、`frontend/`、`deploy/`、`schema_rbac.sql`、任何 `.env.example`**。本 repo 唯一的 secret 掃描器結構上看不到程式碼 |
-| **T-13** | **P2** | **禁止 production 路徑檢查在 CI 恆為 no-op。** `validate_no_production_config_added()` 以 `git diff --name-only`（unstaged ∪ staged）為輸入，CI 是乾淨 checkout，兩者皆空集合。**註記：目前 branch 名 `danniel/fix/production-path-check-noop` 顯示這一項正在被處理中** |
+| **T-12** | **P2** | **Secret 掃描看不到應用程式碼。** `validate_no_obvious_secrets()` 只讀 `contract_files()`（repo 層必要檔 + record 必要檔 + audit shard），**看不到 `backend/`、`frontend/`、`deploy/`、`schema_rbac.sql`、任何 `.env.example`**。本 repo 唯一的 secret 掃描器結構上看不到程式碼。**本輪未複驗** |
+| ~~**T-13**~~ | ~~P2~~ | ~~禁止 production 路徑檢查在 CI 恆為 no-op~~ **✅ 已解決**（★ 本輪）：`validate_no_production_config_added()` 的輸入由 `git_diff_name_only()` 改為 **`git_ls_files()`**（`git ls-files -z`，NUL 分隔以避開 `core.quotePath`），從 diff 基準改為**全域掃描**（issue #509）。並新增回歸測試 `backend/tests/test_repo_contract_production_paths.py`(287)，**在暫存 git repo 內以乾淨工作樹重現 CI 條件**——這是本輪唯一一項「缺陷、修法與能重現該缺陷的測試」三者同批落地的項目 |
+| **T-25** ★ | **P2** | **gh-aw 的 `.md` ↔ `.lock.yml` 沒有同步 gate。** GitHub Actions 只執行 `.lock.yml`；改了 `.md` 忘記 `gh aw compile`，**CI 全綠、PR 可合併、行為維持舊的**（反向亦然）。`ci.yml` 無此檢查，`validate_repo_contract.py` 的 `REQUIRED_FILES` 只列 `ci.yml`、不管 gh-aw 檔。**修法的材料已經在檔案裡**：每個 `.lock.yml` 前三行的 `frontmatter_hash`／`body_hash` 是 `.md` 兩半的 sha256，比對它們是一支腳本的工作量。**這與 T-3 同型**——標的不在任何既有檢查器的輸入範圍內 |
+| **T-26** ★ | **P3** | **gh-aw 編譯器版本漂移無偵測。** 本輪把 `9307dbc`（v0.81.6）與 `origin/ut`（v0.86.2）的同一個 `.lock.yml` 標頭並排，`frontmatter_hash` 與 `body_hash` **逐字相同**——證實那對雜湊涵蓋的是 `.md` 而非編譯輸出。因此 T-25 的修法**偵測不到「該用新編譯器重編了」**，那需要另外比對 `compiler_version` 字串 |
 
-**T-3 是這個叢集中最值得優先處理的**，因為它不是「規則沒被強制」而是
-**「已經真的壞了而且沒人知道」**。修法不能靠既有機制，需要新增：
-SSE 事件名的共用常數（前後端各一份 + 一致性測試）、或端點層的串流測試、或 e2e 斷言。
+**T-3 與 T-25 是同一個形狀，值得一起理解**：兩者都不是「規則沒被強制」，
+而是**標的根本不在任何檢查器的輸入範圍內**（SSE 事件名不在 `openapi.json`；
+gh-aw 的 `.md` 不在任何驗證腳本的檔案清單）。
 
-### 叢集 C4 — 「安全預設值與未受保護面」
+**T-3 仍是這個叢集中最值得優先處理的**，因為它不只是缺機制，而是
+**「已經真的壞了而且沒人知道」**（`c3de2c8` 實測；**本輪未複驗該死契約是否仍存在**）。
+修法不能靠既有機制，需要新增：SSE 事件名的共用常數（前後端各一份 + 一致性測試）、
+或端點層的串流測試、或 e2e 斷言。
 
-**根因：開發便利性的預設值被留在了會被部署的路徑上。**
+**T-25 的投報率特別高**：材料齊備、二元可判、一支腳本即可，且它保護的是
+**11 個 workflow 全部的行為正確性**——包含唯一的真閘門 `ui-regression`。
+
+### 叢集 C4 — 「安全預設值與未受保護面」 ［本輪重寫］
+
+**根因（原）：開發便利性的預設值被留在了會被部署的路徑上。**
+
+> **PR #526「強化認證與部署預設值」把這個叢集整組改寫了。** 三項 P1 中兩項解決、
+> 一項降級，但**產生了兩個形狀不同的殘留**：安全性現在集中依賴一個「未設定即取最寬鬆值」
+> 的環境變數，而新加的授權路徑本身沒有測試。
 
 | id | 級別 | 內容 |
 |---|---|---|
-| **T-14** | **P1** | **JWT secret 有可用的程式內預設值。** 未注入時**靜默**使用該固定字串簽 token —— 任何人都能偽造任意身分的 token。`deploy.yml` 有 secrets 檢查保護 **staging 這一條路徑**；**本機與 `docker-compose.test.yml` 無等價檢查**，且失敗模式是靜默的 |
-| **T-15** | **P1** | **預設帳號密碼寫死。** `database.py` 在空 DB 時建立 persona 帳號，密碼為 `<username>123`，**全部 `approved` 且帶正式角色**；另建 `admin`（`Platform_Admin`）。`schema_rbac.sql` 亦 commit 了其 bcrypt hash。任何新環境開機即帶多個可預測憑證的帳號，其中一個是最高權限 |
-| **T-16** | **P1** | **WebSocket 端點無驗證。** `/api/collab/ws/{workspace_id}` 是唯一沒有任何 `Depends` guard 的業務端點。連線層不檢查 JWT，任何知道 workspace id 的連線都能收到共編廣播。**且它同時在 T-3 的檢查盲區內** |
-| **T-11** | **P2** | **`deploy.yml` rollback job 權限較寬**：`contents: write` + `pull-requests: write` + `actions: write`，在 self-hosted runner 執行。功能上必要（要開 revert PR 並 dispatch workflow），**但可否縮窄（改用 GitHub App token，或把「開 revert PR」拆到最小權限獨立 job）尚未被評估過** —— 不記為已評估無虞 |
-| （附） | **P2** | **公開端點可觸發 seed**：`GET /api/auth/roles/catalog`（無驗證）在回應前呼叫 `ensure_role_permissions_seeded(db, force=False)`。實際影響有限（表非空即 return），但這是一條**匿名可達的寫入路徑** |
+| ~~**T-14**~~ | ~~P1~~ | ~~JWT secret 有可用的程式內預設值，未注入時靜默使用~~ **✅ 已解決**（`auth.py:22` `_resolve_secret_key()`：非 local/test/ci 環境缺 `JWT_SECRET` 直接 `RuntimeError`） |
+| **T-14b** ★ | **P2** | **安全性改為依賴 `APP_ENV`，而 `APP_ENV` 自己沒有 fail-fast。** `os.environ.get("APP_ENV", "local")` 的預設是**最寬鬆的一檔**——忘記設它、或 `.env` 沒被正確載入，等於宣告自己是 local 環境，於是已知的 `INSECURE_DEV_SECRET` 與（若同時 opt-in）固定密碼帳號全部重新啟用，**且沒有任何錯誤訊息**。失敗模式仍然是靜默的，只是**觸發條件從「忘記設 `JWT_SECRET`」變成「忘記設 `APP_ENV`」**。`env_bootstrap.py` 把 `.env` 路徑釘死已消除其中一條觸發路徑 |
+| ~~**T-15**~~ | ~~P1~~ | ~~預設帳號密碼寫死~~ **⬇️ 降為 P3**：persona 帳號（11 位，密碼 `<username>123`）現在只在 `APP_ENV=local` 或 `ALLOW_INSECURE_DEFAULT_PERSONAS` 時建立；`admin` 密碼取自 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`，未設且非 local/test/ci 時**不建立**並記 log；**`schema_rbac.sql` 的整個 D) 區塊已刪除**（不再 commit 任何 bcrypt hash）。**殘留**：機制本身仍存在，只是被 T-14b 那個閘門守著 |
+| ~~**T-16**~~ | ~~P1~~ | ~~WebSocket 端點無驗證~~ **✅ 已解決**（`?token=` ＋ `_authorize_ws_user()` 四道檢查 ＋ close code 1008／1003 ＋ payload 上限） |
+| **T-16b** ★ | **P2** | **新增的 WebSocket 授權路徑本身沒有任何測試。** 本輪 grep `backend/tests/` 無 `websocket_connect` 命中，e2e 亦無涵蓋。**且它仍在 T-3 的機械檢查盲區內**（不在 `openapi.json`）。這條授權鏈若被改壞，所有既有檢查依舊全綠——**與它取代的那個缺陷有相同的偵測特性** |
+| **T-16c** ★ | **P3** | **REST 與 WebSocket 有兩份平行的輸入上限**（2 MB／100 則／8,000 字）。REST 側以 pydantic 約束宣告，因此進 `openapi.json` 並被兩道 gate 保護；**WebSocket 側是手寫檢查，無保護**。兩者漂移只有人工比對會發現 |
+| **T-11** | **P2** | **`deploy.yml` rollback job 權限較寬**：`contents: write` + `pull-requests: write` + `actions: write`，在 self-hosted runner 執行。功能上必要（要開 revert PR 並 dispatch workflow），**但可否縮窄（改用 GitHub App token，或把「開 revert PR」拆到最小權限獨立 job）尚未被評估過** —— 不記為已評估無虞。**本輪未複驗** |
+| （附） | **P2** | **公開端點可觸發 seed**：`GET /api/auth/roles/catalog`（無驗證）在回應前呼叫 `ensure_role_permissions_seeded(db, force=False)`。實際影響有限（表非空即 return），但這是一條**匿名可達的寫入路徑**。**本輪未複驗** |
 
-**與 ADR-0006 security baseline 的關係**：該 ADR 把 IAM、encryption、network exposure、
-audit logging 列為 hard constraint。T-14／T-15／T-16 三項都落在 **IAM 與 network exposure**
-面向，是這條 hard constraint 目前最明確的未滿足處。
+**前端側的一項相關變更**：token 由 `localStorage` 改存 `sessionStorage`，
+並主動清除四個舊 `localStorage` key。**這縮短了憑證的暴露窗**（關閉分頁即失效），
+代價是不再跨分頁共用。
 
-### 叢集 C5 — 「衛生與局部」
+**與 ADR-0006 security baseline 的關係（更新）**：該 ADR 把 IAM、encryption、
+network exposure、audit logging 列為 hard constraint。
+原本落在 **IAM 與 network exposure** 的三項 P1 **已全部處理**；
+現在這條 hard constraint 最明確的未滿足處是 **T-14b（機密管理的閘門本身無保護）**
+與 **T-16b（授權變更無驗證斷言）**——**兩者都是「保護存在但沒有東西保護那個保護」的形狀**。
+
+### 叢集 C5 — 「衛生與局部」 ［差異標註］
 
 | id | 級別 | 內容 |
 |---|---|---|
@@ -401,17 +465,42 @@ audit logging 列為 hard constraint。T-14／T-15／T-16 三項都落在 **IAM 
 | **T-23** | **P3** | **`@types/react-router-dom@^5.3.3` 版本錯配**：搭 `react-router-dom@^6.22.0`；v6 起自帶型別，此套件多餘且描述 v5 API |
 | **T-24** | **P3** | **模組 docstring 缺 3 支關鍵基礎設施檔**：`main.py`、`database.py`、`auth.py` |
 
-### 級別索引
+### 級別索引 ［本輪重寫］
 
 | 級別 | 項目 | 數量 |
 |---|---|---|
-| **P1** | T-1、T-2、T-14、T-15、T-16 | 5 |
-| **P2** | T-3、T-4、T-5、T-6、T-7、T-9、T-10、T-11、T-12、T-13 | 10 |
-| **P3** | T-8、T-17、T-18、T-19、T-20、T-21、T-22、T-23、T-24 | 9 |
+| **P1** | T-1、T-2 | **2**（`c3de2c8` 為 5） |
+| **P2** | T-3、T-4、T-5、T-6、T-7、T-9、T-10、T-11、T-12、**T-14b**★、**T-16b**★、**T-25**★ | **12** |
+| **P3** | T-8、**T-15**（降級）、**T-16c**★、T-17、T-18、T-19、T-20（部分解決）、T-21、T-22、T-24、**T-26**★ | **11** |
+| **✅ 已解決** | **T-13**、**T-14**、**T-16**、**T-23** | **4** |
 
-## 修復順序建議
+**兩個 P1 都在叢集 C1（多源真實），且必須一起修**——本輪沒有觸及它們。
+
+### 已解決項目的清單（下游不要再引用）
+
+| id | 原內容 | 解法 |
+|---|---|---|
+| **T-13** | production 路徑檢查在 CI 恆為 no-op | `git ls-files` 全域掃描 ＋ 回歸測試（issue #509） |
+| **T-14** | JWT secret 有程式內預設值、靜默 fallback | `APP_ENV` 閘門 ＋ 非 local 環境 `RuntimeError`（**殘留 → T-14b**） |
+| **T-16** | WebSocket 端點無驗證 | `?token=` ＋ `_authorize_ws_user()`（**殘留 → T-16b／T-16c**） |
+| **T-23** | `@types/react-router-dom` 版本錯配 | 該套件已移除，`react-router-dom` 升 v7 |
+
+## 修復順序建議 ［本輪重寫］
 
 排序依據是「解鎖後續工作的能力」與「阻止債務再生」，不是嚴重度單一維度。
+**本輪的變動改變了第三梯次（安全預設值）——它原本有三項 P1，現在整梯次已完成，
+但生出兩項「保護沒有被保護」的新項目。**
+
+**第零梯次（★ 本輪新增，投報率最高）— 為剛加上的保護補上斷言**
+
+0-a. **T-16b**：為 WebSocket 授權路徑寫測試。**這是本輪最該做的一件事**——
+     PR #526 用一條新的授權鏈取代了一個已知缺陷，但新的鏈**具有與舊缺陷相同的偵測特性**
+     （改壞了所有檢查全綠）。`TestClient` 支援 `websocket_connect`，前置條件
+     （`StaticPool`、`dependency_overrides`）都已解決，採用成本同樣接近零。
+0-b. **T-25**：加一支比對 `.lock.yml` 標頭雜湊與 `.md` 實際 sha256 的 CI 步驟。
+     材料齊備、二元可判，保護 11 個 workflow 的行為正確性。
+0-c. **T-14b**：讓 `APP_ENV` 缺值時不再靜默取最寬鬆值——例如部署路徑要求明確設定，
+     或把「`APP_ENV` 未設」列入 `validate_env_contract.py` 的檢查。
 
 **第一梯次 — 已經壞了但沒人知道**
 
@@ -435,19 +524,23 @@ audit logging 列為 hard constraint。T-14／T-15／T-16 三項都落在 **IAM 
    `check-api-types.mjs` 是現成的樣板。
 6. **T-8**：把產生器版本字串收斂為單一來源（例如由 `package.json` 讀出）。
 
-**第三梯次 — 安全預設值**
+**第三梯次 — 安全預設值：★ 本輪已完成，改為維護殘留**
 
-7. **T-14**：移除 `JWT_SECRET` 的程式內預設值，改為缺少時**啟動失敗**（fail fast）。
-8. **T-15**：把 persona 帳號的 seed 改為需明確開關（環境變數）；`admin` 預設密碼改為
-   啟動時產生並要求首次登入變更，或同樣改為必須注入。
-9. **T-16**：為 WebSocket 端點加入 JWT 驗證（連線時以 query param 或 subprotocol 傳 token）
-   並檢查該使用者對 workspace 的存取權。**與 T-3 一併處理較經濟**（兩者標的相同）。
+7. ~~**T-14**：移除 `JWT_SECRET` 的程式內預設值，改為缺少時啟動失敗~~
+   **✅ 已完成**（條件式：非 local/test/ci 才 fail fast）。**後續 → 0-c（T-14b）**。
+8. ~~**T-15**：把 persona 帳號的 seed 改為需明確開關~~
+   **✅ 已完成**（`APP_ENV=local` 或 `ALLOW_INSECURE_DEFAULT_PERSONAS`；
+   `admin` 密碼改為必須注入 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`，
+   且 `schema_rbac.sql` 的 hash 已刪除）。
+9. ~~**T-16**：為 WebSocket 端點加入 JWT 驗證~~
+   **✅ 已完成**（query param 傳 token ＋ 四道檢查）。**後續 → 0-a（T-16b）與 T-16c**。
 
 **第四梯次 — 補上缺席的機制**
 
-10. **T-12 + T-13**：擴大 `validate_no_obvious_secrets()` 的作用域到應用程式碼；
-    修正 production 路徑檢查的 diff 基準使其在 CI 真的生效
-    （**後者似乎正在進行中**，見目前的 branch 名）。
+10. **T-12**：擴大 `validate_no_obvious_secrets()` 的作用域到應用程式碼。
+    （原本與此並列的 **T-13 已於本輪解決**——production 路徑檢查改為 `git ls-files`
+    全域掃描並附回歸測試。**T-13 的修法可作為 T-12 的樣板**：兩者是同一支腳本的
+    兩個作用域問題。）
 11. **T-10 + T-9**：加入 Ruff（lint + format）與 coverage 量測到 backend CI job。
     兩者都是設定檔層級的工作，成本低、立刻讓 `org.md` 的宣告變成可執行的閘門。
 12. **T-11**：評估 rollback job 的權限能否縮窄。

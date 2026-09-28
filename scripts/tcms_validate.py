@@ -76,7 +76,15 @@ API_LINE = re.compile(
     r"^-\s*API\s*[:：]\s*`(?P<method>[A-Z]+)\s+(?P<path>[^`]+)`\s*(?:->|→)\s*(?P<status>\d{3})"
 )
 UI_LINE = re.compile(r"^-\s*UI\s*[:：]\s*`(?P<path>[^`]+)`")
-TRACE_PATH = re.compile(r"`(?P<path>(?:backend|frontend|scripts|deploy|aidlc|\.claude)/[^`\s]+?)(?:::(?P<test>[^`]+))?`")
+# 第三種受測介面：GitHub Actions workflow／composite action。
+# 由來：intent 260822-gh-projects-sync 的交付物完全不在 web app 內（10 個 composite
+# action ＋ 7 支 workflow），既無 HTTP 端點也無前端路由，於是每一個手動案例都撞上
+# 「受測介面沒有列出任何 API 端點或 UI 路徑」。把假端點寫上去可以讓機械層過關，
+# 但那正是這道檢查存在的理由所要防的事。
+WORKFLOW_LINE = re.compile(
+    r"^-\s*Workflow\s*[:：]\s*`(?P<path>[^`]+)`\s*(?:->|→)\s*(?P<event>[^—-]+)"
+)
+TRACE_PATH = re.compile(r"`(?P<path>(?:backend|frontend|scripts|deploy|aidlc|\.claude|\.github)/[^`\s]+?)(?:::(?P<test>[^`]+))?`")
 
 
 @dataclass
@@ -95,6 +103,7 @@ class Target:
     steps: list[tuple[str, str]] = field(default_factory=list)
     apis: list[tuple[str, str, str]] = field(default_factory=list)  # method, path, status
     uis: list[str] = field(default_factory=list)
+    workflows: list[tuple[str, str]] = field(default_factory=list)  # path, event
     traces: list[tuple[str, str | None]] = field(default_factory=list)
     story: str = ""
     origin: str = ""
@@ -114,6 +123,34 @@ def load_api_index() -> dict[str, dict[str, set[str]]]:
             m.upper(): set(op.get("responses", {}).keys()) for m, op in ops.items()
         }
     return index
+
+
+def workflow_events(path: Path) -> set[str] | None:
+    """一支 workflow 宣告的觸發事件集合。
+
+    回 None 表示讀不到（PyYAML 缺席或解析失敗）——呼叫端只警告不阻擋，與 openapi
+    缺席時同一個立場。回空集合表示這個檔沒有 `on:`（composite action 就是這樣），
+    此時只驗檔案存在。
+    """
+    try:
+        import yaml  # 延後 import：沒有它時其餘檢查照常運作
+    except ImportError:
+        return None
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    # PyYAML 會把裸的 `on:` 解析成布林 True（YAML 1.1 的 on/off/yes/no）。
+    trig = doc.get("on", doc.get(True))
+    if isinstance(trig, dict):
+        return set(trig)
+    if isinstance(trig, list):
+        return set(trig)
+    if isinstance(trig, str):
+        return {trig}
+    return set()
 
 
 def load_routes() -> set[str]:
@@ -178,7 +215,7 @@ def parse_spec_file(path: Path) -> list[Target]:
             "背景": " ".join(spec.note),
             "前置條件": " ".join(spec.given),
             "通過條件": " ".join(spec.passes),
-            "受測介面": "有" if (t.apis or t.uis) else "",
+            "受測介面": "有" if (t.apis or t.uis or t.workflows) else "",
             "測試步驟": "有" if t.steps else "",
             "追溯": path.as_posix(),
         }
@@ -207,6 +244,10 @@ def _extract_common(t: Target) -> None:
         u = UI_LINE.match(line)
         if u:
             t.uis.append(u.group("path"))
+            continue
+        w = WORKFLOW_LINE.match(line)
+        if w:
+            t.workflows.append((w.group("path").strip(), w.group("event").strip()))
 
     trace_text = t.sections.get("追溯", "")
     for m in TRACE_PATH.finditer(trace_text):
@@ -276,8 +317,8 @@ def check(targets: list[Target]) -> list[Finding]:
             warn(t, "追溯沒有標註 User story")
 
         # 4. API / UI 比對實作
-        if not t.apis and not t.uis:
-            err(t, "「受測介面」沒有列出任何 API 端點或 UI 路徑")
+        if not t.apis and not t.uis and not t.workflows:
+            err(t, "「受測介面」沒有列出任何 API 端點、UI 路徑或 Workflow")
         for method, path, status in t.apis:
             if not api_index:
                 warn(t, "找不到 openapi.json，略過 API 比對")
@@ -307,6 +348,27 @@ def check(targets: list[Target]) -> list[Finding]:
                 break
             if ui not in routes:
                 err(t, f"UI 路徑不在 App.tsx 的路由表中：{ui}")
+        for wf_path, event in t.workflows:
+            if not wf_path.startswith(".github/"):
+                err(t, f"Workflow 路徑必須在 .github/ 之下：{wf_path}")
+                continue
+            wf_file = ROOT / wf_path
+            if not wf_file.exists():
+                err(t, f"Workflow 檔不存在：{wf_path}")
+                continue
+            declared = workflow_events(wf_file)
+            if declared is None:
+                warn(t, f"讀不到 {wf_path} 的觸發宣告（PyYAML 缺席或解析失敗），略過事件比對")
+                continue
+            # composite action 沒有 on:，只驗檔案存在。
+            if not declared:
+                continue
+            base = event.split()[0].strip("`") if event.split() else ""
+            if base and base not in declared:
+                err(
+                    t,
+                    f"{wf_path} 沒有宣告 {base} 觸發（已宣告：{'、'.join(sorted(declared))}）",
+                )
 
     return findings
 

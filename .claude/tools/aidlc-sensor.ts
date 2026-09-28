@@ -14,7 +14,8 @@
 //   4. Decide outcome via the truth table below (no lock held).
 //   5. If FAILED: write detail file via `wx`-flag + rename (race-free).
 //   6. Acquire lock → emit terminal row → release.
-//   7. Exit 0. (Sensor failure ≠ CLI failure.)
+//   7. Print one compact JSON verdict line for deterministic callers.
+//   8. Exit 0. (Sensor failure ≠ CLI failure.)
 //
 // Truth-table branch ordering — locked, branch a precedes branch 0:
 //   a) signal === "SIGTERM" AND elapsed ≥ timeout - GRACE  → BUDGET_OVERRIDE
@@ -46,23 +47,64 @@ import {
 	templateEligibleArtifacts,
 } from "./aidlc-graph.ts";
 import {
+	artifactFilename,
 	codekbDir,
 	errorMessage,
+	getField,
 	isoTimestamp,
 	isPlainObject,
+	KNOWN_CODEKB_STAGES,
+	readStateFile,
 	recordDir,
 	resolveProjectDir,
 	sensorsDir,
+	usesStageLevelPerUnitArtifacts,
 	withAuditLock,
 } from "./aidlc-lib.ts";
 import {
 	compiledExecutable,
 	resolveHarnessPath,
 } from "./aidlc-runtime-paths.ts";
+import { parseSensorManifest } from "./aidlc-sensor-schema.ts";
+import claimSourcesSensorSource from "../sensors/aidlc-claim-sources.md" with {
+	type: "text",
+};
+import linterSensorSource from "../sensors/aidlc-linter.md" with {
+	type: "text",
+};
+import requiredSectionsSensorSource from "../sensors/aidlc-required-sections.md" with {
+	type: "text",
+};
+import traceabilitySensorSource from "../sensors/aidlc-traceability.md" with {
+	type: "text",
+};
+import typeCheckSensorSource from "../sensors/aidlc-type-check.md" with {
+	type: "text",
+};
+import upstreamCoverageSensorSource from "../sensors/aidlc-upstream-coverage.md" with {
+	type: "text",
+};
 
 // --- Constants ---
 
 const DEFAULT_TIMEOUT_SECONDS = 60;
+const SENSOR_HELP_SOURCES = [
+	claimSourcesSensorSource,
+	linterSensorSource,
+	requiredSectionsSensorSource,
+	traceabilitySensorSource,
+	typeCheckSensorSource,
+	upstreamCoverageSensorSource,
+] as const;
+
+export function sensorHelpSummaries(): ReadonlyMap<string, string> {
+	return new Map(
+		SENSOR_HELP_SOURCES.map((source) => {
+			const manifest = parseSensorManifest(source);
+			return [`sensor-${manifest.id}`, manifest.description] as const;
+		}),
+	);
+}
 
 // Locked at 100ms in the truth table to disambiguate timeout-induced SIGTERM
 // from external-SIGTERM (parent kill, Ctrl-C). Anything within GRACE of the
@@ -70,11 +112,9 @@ const DEFAULT_TIMEOUT_SECONDS = 60;
 const DEFAULT_TIMEOUT_GRACE_MS = 100;
 
 // Resolve sibling per-sensor script paths relative to THIS file's location,
-// not cwd. Mirrors aidlc-bolt.ts:84's spawnSibling pattern. The manifest
-// `command:` is `bun <harness>/tools/aidlc-sensor-<id>.ts` — the dispatcher
-// extracts the basename and resolves it next to itself, then spawns bun
-// with cwd=projectDir so the script's own file I/O resolves under the
-// user's project.
+// not cwd. The copy projection names `bun <harness>/tools/aidlc-sensor-<id>.ts`;
+// the release projection names `aidlc engine sensor-<id>`. Both resolve to
+// the same bundled module identity.
 const __FILE_DIR = dirname(fileURLToPath(import.meta.url));
 
 // --- Types ---
@@ -98,6 +138,16 @@ interface FireContext {
 	scriptArgs: string[]; // CLI args appended to the script invocation
 	scriptAbsPath: string; // sibling-resolved absolute path
 	timeoutMs: number;
+}
+
+interface FireVerdict {
+	fire_id: string;
+	sensor_id: string;
+	stage: string;
+	output_path: string;
+	result: FireOutcome["kind"];
+	detail_path: string | null;
+	note?: string;
 }
 
 // --- Argv helpers ---
@@ -127,8 +177,8 @@ function dispatchError(msg: string): never {
 
 // --- Sibling-script resolver ---
 //
-// Manifest `command:` is `bun <harness>/tools/aidlc-sensor-<id>.ts`. The
-// dispatcher extracts the .ts basename and resolves it next to itself.
+// The dispatcher extracts either the .ts basename or the native delegate name
+// and resolves it next to itself.
 // This decouples script discovery from cwd — works in tests where
 // projectDir doesn't carry a .claude/tools/ tree, AND in production where
 // it does. Sibling resolution mirrors aidlc-bolt.ts:84.
@@ -144,14 +194,18 @@ function resolveScriptPath(command: string): string {
 	const tokens = command.trim().split(/\s+/);
 	// Find the first .ts token (drops the "bun" prefix or any flags).
 	const tsToken = tokens.find((t) => t.endsWith(".ts"));
-	if (!tsToken) {
+	const engineIndex = tokens.indexOf("engine");
+	const nativeDelegate = engineIndex >= 0 ? tokens[engineIndex + 1] : undefined;
+	if (!tsToken && !nativeDelegate?.startsWith("sensor-")) {
 		dispatchError(`manifest command lacks a .ts script: "${command}"`);
 	}
 	// String.split always returns a non-empty array, so the last element
 	// is always defined — indexed access keeps the basename typed as
 	// string without a non-null assertion.
-	const parts = tsToken.split("/");
-	const basename = parts[parts.length - 1];
+	const parts = tsToken?.split("/") ?? [];
+	const basename = nativeDelegate?.startsWith("sensor-")
+		? `aidlc-${nativeDelegate}.ts`
+		: parts[parts.length - 1];
 	const scriptDir = process.env.AIDLC_SENSOR_SCRIPT_DIR
 		?? (compiledExecutable() ? resolveHarnessPath(["tools"]) : __FILE_DIR);
 	return join(scriptDir, basename);
@@ -176,6 +230,7 @@ const BUNDLED_SENSOR_IDS = new Set([
 	"claim-sources",
 	"linter",
 	"required-sections",
+	"traceability",
 	"type-check",
 	"upstream-coverage",
 ]);
@@ -242,19 +297,16 @@ function handleDescribe(args: string[]): void {
 // producesDirsForStage / aidlc-orchestrate.ts's resolveArtifactPath seams:
 //   - codekb producers (reverse-engineering): glob every repo dir under the
 //     space-level codekb root.
-//   - per-unit Construction producers (for_each: unit-of-work): the unit is
-//     unknown here, so glob every <record>/construction/<unit>/<slug>/.
+//   - per-unit Construction producers (for_each: unit-of-work): use the
+//     stage-level directory when the effective plan skips Units Generation;
+//     otherwise glob every <record>/construction/<unit>/<slug>/.
 //   - everything else: <record>/<phase>/<slug>/<name>.md.
 //
 // Fail-open: when no intent record resolves (recordDir null — a bare test
-// fixture or a pre-birth shell), the workspace shape is unknowable, so the
+// fixture or a pre-creation shell), the workspace shape is unknowable, so the
 // full list threads unchanged. An orphan consume (no producer anywhere in
 // the graph) also threads unchanged — that is a graph defect the doctor
 // surfaces; hiding it here would mask it.
-
-const KNOWN_CODEKB_STAGES: ReadonlySet<string> = new Set([
-	"reverse-engineering",
-]);
 
 function artifactDirsForProducer(
 	pd: string,
@@ -277,6 +329,19 @@ function artifactDirsForProducer(
 	const rec = recordDir(pd);
 	if (rec === null) return [];
 	if (producer.for_each === "unit-of-work") {
+		try {
+			const stateContent = readStateFile(pd);
+			if (
+				usesStageLevelPerUnitArtifacts(
+					getField(stateContent, "Scope"),
+					stateContent,
+				)
+			) {
+				return [join(rec, producer.phase, producer.slug)];
+			}
+		} catch {
+			// Bare fixtures retain the existing directory-discovery fallback.
+		}
 		const ctorRoot = join(rec, "construction");
 		if (!existsSync(ctorRoot)) return [];
 		const dirs: string[] = [];
@@ -295,7 +360,7 @@ function presentConsumes(pd: string, slugs: string[]): string[] {
 		const producer = producersOf(name)[0];
 		if (!producer) return true;
 		for (const dir of artifactDirsForProducer(pd, producer)) {
-			if (existsSync(join(dir, `${name}.md`))) return true;
+			if (existsSync(join(dir, artifactFilename(name)))) return true;
 		}
 		return false;
 	});
@@ -431,7 +496,7 @@ function handleFire(args: string[]): void {
 	}
 
 	// --- 3. Pre-compute detail-file path (used only on FAILED) ---
-		// <record>/.aidlc-sensors/<stage-slug>/<sensor-id>-<fire-id>.md
+		// <record>/.aidlc-engine/sensors/<stage-slug>/<sensor-id>-<fire-id>.md
 
 	// required-sections additionally takes the TPL template seam: the
 	// templates source-of-truth dir + the stage's template-eligible artifact
@@ -513,10 +578,10 @@ function handleFire(args: string[]): void {
 		BUNDLED_SENSOR_IDS.has(ctx.sensor.id) &&
 		!process.env.AIDLC_SENSOR_SCRIPT_DIR;
 	const command = useBundledWorker
-		? [executable, "__sensor-script", ctx.sensor.id, ...ctx.scriptArgs]
-		: executable
-			? [executable, "__sensor-script-file", ctx.sensor.id, ...ctx.scriptArgs]
-			: [process.execPath, ctx.scriptAbsPath, ...ctx.scriptArgs];
+			? [executable, "engine", "__sensor-script", ctx.sensor.id, ...ctx.scriptArgs]
+			: executable
+				? [executable, "engine", "__sensor-script-file", ctx.sensor.id, ...ctx.scriptArgs]
+				: [process.execPath, ctx.scriptAbsPath, ...ctx.scriptArgs];
 	const result = spawnSync(command[0], command.slice(1), {
 		encoding: "utf-8",
 		timeout: timeoutMs,
@@ -550,7 +615,24 @@ function handleFire(args: string[]): void {
 		emitTerminal(ctx, finalOutcome, projectDir);
 	});
 
-	// --- 9. Process exit 0 ---
+	// --- 9. Machine-readable verdict for gate-boundary enforcement ---
+	const verdict: FireVerdict = {
+		fire_id: fireId,
+		sensor_id: id,
+		stage: stageSlug,
+		output_path: relativizePath(outputPath, projectDir),
+		result: finalOutcome.kind,
+		detail_path:
+			finalOutcome.kind === "failed"
+				? relativizePath(detailPath, projectDir)
+				: null,
+		...(finalOutcome.kind === "passed" && finalOutcome.note
+			? { note: finalOutcome.note }
+			: {}),
+	};
+	process.stdout.write(`${JSON.stringify(verdict)}\n`);
+
+	// --- 10. Process exit 0 ---
 	process.exit(0);
 }
 
@@ -800,7 +882,7 @@ function emitTerminal(
 	if (outcome.kind === "failed") {
 		// detailPath is absolute; emit it as the project-relative path for
 		// human readability. The audit-format spec calls for a relative
-			// path under the active record's .aidlc-sensors/ directory.
+			// path under the active record's .aidlc-engine/sensors/ directory.
 		const fields: Record<string, string> = {
 			...baseFields,
 			"Detail path": relativizePath(detailPath, projectDir),

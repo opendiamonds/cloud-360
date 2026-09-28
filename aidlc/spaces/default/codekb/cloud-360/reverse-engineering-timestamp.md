@@ -1,7 +1,8 @@
 # Reverse Engineering Timestamp — Cloud-360
 
 > 本檔是 `aidlc/spaces/default/codekb/cloud-360/` 這份程式碼知識庫的**新鮮度標記**。
-> 使用本 codekb 的任何 stage 都應先讀本檔，確認基準是否仍然有效。
+> 使用本 codekb 的任何 stage 都應**先讀本檔**，確認基準是否仍然有效，
+> 並確認你要引用的那一節屬於哪一種新鮮度等級。
 
 ## 掃描基準
 
@@ -19,186 +20,245 @@
 
 本 codekb 於 2026-09-28 執行快速新鮮度驗證。針對將 Agent 框架從 Claude SDK 改成 LangGraph 的 POC (`260928-poc`)，我們驗證了現有的架構與元件盤點仍能正確反映當前分支的狀態，無須重新產生所有 9 份文件。
 
-觸發重掃的既有條件命中情形（對照前一版自訂的「觸發完整重跑」清單）：
-
-| 觸發條件 | 命中情形 |
+| 範圍 | 處理方式 |
 |---|---|
-| `backend/services/` 新增或刪除模組 | **命中** —— 由 18 支增為 **22 支**（新增 `llm_provider.py`、`activity.py`、`prompt_guard.py`、`wa_score_service.py` 等） |
-| 新增或刪除 API 端點 | **命中** —— 前一版記載 46 個「端點」，本次以 `openapi.json` 精確計為 **36 paths / 45 operations**（另加 1 個不在規格內的 WebSocket） |
-| 資料表新增或刪除 | 未命中（仍為 7 實體 + 1 association table），但 `users` 表**新增 `last_activity_at` 欄位** |
-| 架構風格改變 | 未命中（仍為 Modular Monolith + SPA） |
-| 權限矩陣維度改變 | 未命中（仍為 11 角色 × 28 story = 308 列，已以 AST 實測確認） |
+| **Area 1 — AI-DLC 狀態表徵**（`intents.json`、6 個 `aidlc-state.md`、state 模板、`getField`／`setField` 語意、`.gitignore` 邊界、audit shard） | **實掃並全新撰寫** |
+| **Area 2 — gh-aw workflow 語料**（11 組 `.md` + `.lock.yml`、`agentics-maintenance.yml`、`ci.yml`／`deploy.yml` 共存面） | **實掃並全新撰寫** |
+| **其餘全部**（backend、frontend、schema、部署、測試、技術債……） | **未重新推導**。內容仍為 `c3de2c8` 的結論，逐節加上過期標註 |
 
-### 工作目錄狀態註記
+**新鮮度標記的讀法**（各 artifact 的節標題後會出現其中之一）：
 
 掃描當下工作樹除 `aidlc/.../audit/` shard 外乾淨。**本 codekb 描述的是 commit `5106acd`
 於 branch `doreen/feat/agent-langraph-migration` 的狀態。**
 
-## 跨分支狀態（本次基準的重要限制）
+**差異標註的證據強度分兩級，artifact 內會註明**：
 
-本 codekb 的基準分支**不含**下列已完成但尚未合併的工作。下游 stage 若在其他分支上作業，
-必須自行確認差異：
+- **已讀 diff**：link 1 實際看過該檔的逐行 diff。
+- **僅 diffstat**：link 1 只看了 `--stat` 與 commit 訊息，一行級描述是推得的。
+  下列檔案屬此級，**引用其描述時不得當成已核對過的事實**：`LOCAL-DEV.md`、`DEPLOY.md`、
+  `CLAUDE.md`、`useCollaboration.ts`、`LoginPage.tsx`、`WorkspacePage.tsx`、
+  `LastActivityCell.tsx`、`regression.spec.ts`、7 個後端測試檔。
 
-| 項目 | 狀態 | 所在分支 |
+## 差異總覽（`c3de2c8..9307dbc`）
+
+20 個 commit、71 個檔案。分為三類。
+
+### (a) 落在兩個掃描區內 —— 已完整重掃
+
+`intents.json`（新增 `260816-production-path-check` 一列）、
+`260816-production-path-check/aidlc-state.md`（走完 8 個 EXECUTE stage、`Status` 翻為 `Completed`）、
+兩個 audit shard、`ui-regression.md` 與其 `.lock.yml`（新增 `timeout-minutes` 警告註解、
+Playwright 瀏覽器快取 step、四處 `timeout(1)` 包裹）、`.github/aw/actions-lock.json`
+（新增 `actions/cache@v4`）、`deploy.yml`（兩個 job 的 `render-env.sh` 呼叫各補
+`CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`）。
+
+### (b) 掃描區外，但會使既有 codekb 內容過期
+
+**下表只指出過期點，本輪沒有重新推導這些 artifact 的內容。**
+
+| 變更 | 過期的 artifact 與節 | 證據強度 |
 |---|---|---|
-| `scripts/aidlc_sync_push.py`／`aidlc_sync_pull.py`／`aidlc_sync_buglist.py`（ADR-0012 階段 1／2／2.5） | **實作已完成，PR #508 待合併**（`state: OPEN`，base `ut`，`mergedAt: null`） | `danniel/feat/github-sync-phase1` |
+| `backend/services/auth.py` —— `JWT_SECRET` 硬編 fallback 改為僅 `APP_ENV ∈ {local,test,ci}` 允許、否則 `RuntimeError`；`datetime.utcnow()` → `datetime.now(timezone.utc)`；抽出 `get_user_from_token()` | `architecture.md` 橫切關注點、`component-inventory.md`、`code-quality-assessment.md` T-14／T-20、`dependencies.md` R-2 | 已讀 diff **＋ 本輪複驗** |
+| `backend/services/collab_router.py` —— WebSocket 由**無認證**改為必須帶 `?token=`（`_authorize_ws_user()`，失敗以 close code 1008／1003 斷線）；新增 payload 上限驗證 | `api-documentation.md` WebSocket 契約、`architecture.md` 張力四、`code-quality-assessment.md` T-16 | 已讀 diff **＋ 本輪複驗** |
+| `backend/database.py` —— 新增 `_allow_insecure_default_users()`／`_allow_insecure_default_personas()`／`_bootstrap_admin_password()`；persona demo 帳號只在 `APP_ENV=local` 建立；固定密碼僅 local/test/ci 或明確 opt-in | `architecture.md`、`dependencies.md`、`code-quality-assessment.md` T-15 | 已讀 diff **＋ 本輪複驗** |
+| `frontend/src/context/AuthContext.tsx` —— token 由 `localStorage` 改存 `sessionStorage`，並新增 `clearLegacyAuthStorage()` | `architecture.md`、`component-inventory.md`、`api-documentation.md` 認證契約 | 已讀 diff **＋ 本輪複驗** |
+| `schema_rbac.sql` —— **刪除整個 D) 區塊**（固定密碼 admin 的 INSERT／UPDATE）；531 → **510 行** | `architecture.md` 張力一、`dependencies.md` 三份 schema 來源、`code-quality-assessment.md` T-15 | 已讀 diff **＋ 本輪複驗** |
+| `backend/env_bootstrap.py`（**新檔**，36 行）＋ `main.py` —— `backend/.env` 的單一載入點，路徑釘死 `Path(__file__).resolve().parent / ".env"` | `code-structure.md` Backend 模組組織、`component-inventory.md`、`dependencies.md` | 已讀 diff **＋ 本輪複驗** |
+| `openapi.json` ＋ `user_router.py` ＋ `api.d.ts` —— `MeResponse` 新增 `last_opened_diagram_id`；request schema 加上 `maxItems`／`minLength`／`maxLength`；pydantic v1 `orm_mode` 改為 v2 `ConfigDict(from_attributes=True)`；`login()` 新增 `record_activity` | `api-documentation.md` 資料契約、`technology-stack.md` deprecated 清單 | 已讀 diff **＋ 本輪複驗** |
+| `scripts/validate_repo_contract.py` —— production 路徑檢查由 `git diff` 基準改為 `git ls-files` 全域掃描（issue #509） | `code-quality-assessment.md` T-13、`code-structure.md` | 已讀 diff |
+| `frontend/package.json` —— `react-router-dom` `^6.22.0` → **`^7.18.2`**（major bump）；移除 `@types/react-router-dom` | `technology-stack.md`、`dependencies.md`、`code-quality-assessment.md` T-23 | 已讀 diff **＋ 本輪複驗** |
+| `backend/tests/` —— 新增 4 檔（`test_dotenv_path.py`、`test_me_endpoint.py`、`test_database_security.py`、`test_repo_contract_production_paths.py`） | `code-quality-assessment.md` 測試現況、`component-inventory.md`、`api-documentation.md` 缺口 1 | 僅 diffstat **＋ 本輪機械複驗** |
+| `frontend/.env.example`、`vite-env.d.ts`、`LoginPage.tsx` —— 新增 `VITE_ENABLE_DEMO_QUICK_USERS` | `technology-stack.md`、`dependencies.md` | 已讀 diff（前二）／僅 diffstat（後一） |
+| `deploy/*`、`backend/.env.example` —— 三環境全部加入 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`；另加兩個 `ALLOW_INSECURE_*` 註解式 opt-in | `dependencies.md` 環境變數、`technology-stack.md` | 已讀 diff |
+| `CLAUDE.md`、`DEPLOY.md`、`LOCAL-DEV.md` | `business-overview.md`、`code-quality-assessment.md` 文件品質 | **僅 diffstat** |
+| `frontend/src/hooks/useCollaboration.ts`、`LastActivityCell.tsx`、`WorkspacePage.tsx`、`tests/e2e/regression.spec.ts` | `api-documentation.md`、`component-inventory.md`、`code-quality-assessment.md` | **僅 diffstat** |
 
-**這不是「規格與實作脫節」**。三支腳本的存在已用 `git log --all` 與
-`git branch --contains` 逐一確認（`aidlc_sync_push.py` 最新 commit `6438ffb`、
-`aidlc_sync_pull.py` `d2e40d5`、`aidlc_sync_buglist.py` `6295c69`，三者皆僅存在於
-`danniel/feat/github-sync-phase1` 與其 remote）。本基準分支看不到它們，純粹是分支拓撲的
-結果 —— `git merge-base --is-ancestor` 確認 `origin/ut` 尚未包含。
+**橫切主線**：這 20 個 commit 的主線是 **PR #526「強化認證與部署預設值」的安全硬化**
+（`b8d69a6`）加四個後續 fix，再加 `7cb6703`（`.env` 路徑）與 `9307dbc`（`/me` 補欄位）。
+**codekb 中所有描述「預設帳號 admin/admin123」「WebSocket 無認證」「token 存 localStorage」
+「`JWT_SECRET` 有硬編 fallback」的段落都已過期，本輪已逐處更正。**
 
-`aidlc/.../operation/github-sync-design.md` 與
-`aidlc/.../inception/decisions/0012-*.md` 對這三支腳本的引用因此是**正確的前瞻引用**，
-不是需要修補的文件漂移。
+### (c) 不相關
 
-## 分析範圍
+30 個 `aidlc/` 路徑（9 個 codekb 檔本身 ＋ 另一個 intent 的 stage artifact ＋ audit shard）。
+本 intent（`260822-gh-projects-sync`）今天寫的檔**完全不在這個 diff 內**，因為整個 record
+目錄仍未追蹤（見下）。
 
-### 已掃描
+## 跨分支狀態（本基準的重大限制）
 
-| 範圍 | 內容 |
+**本 codekb 的基準 `9307dbc` 已落後 `origin/ut`。** 本輪以 `git fetch origin ut` 實測，
+`origin/ut` 現為 `be73385`，含**三項本基準看不到的變更**，其中兩項直接影響本 codekb 的結論：
+
+| # | `origin/ut` 上的變更 | 對本 codekb 的影響 |
+|---|---|---|
+| 1 | `f4047a1`／PR #532 —— **gh-aw 由 `v0.81.6` 升級至 `v0.86.2`**，11 組 workflow 全部重新編譯；`copilot` engine `1.0.65` → **`1.0.79`**；`actions-lock.json` 由 5 筆減為 **4 筆**（`github/gh-aw-actions/setup-cli@v0.81.6` 消失、`setup@v0.86.2` 換新 SHA） | **Area 2 的每一項版本相關事實只對 `9307dbc` 成立**。尤其 `ui-regression.md` 記載的「gh-aw v0.81.6 會靜默丟棄 `pre-agent-steps` 內的 `timeout-minutes`」是**對 v0.81.6 的實測**，在 v0.86.2 上未複驗 |
+| 2 | `be73385`／PR #508 —— `scripts/` 由 4 支增為 **7 支**：`aidlc_sync_push.py`／`aidlc_sync_pull.py`／`aidlc_sync_buglist.py`（ADR-0012 階段 1／2／2.5） | `code-structure.md` 與 `component-inventory.md` 的 `scripts/` 清單在 `ut` 上已不正確。**且與 ADR-0013 及 `project.md ## Forbidden` 的新規則構成待解衝突**（見下） |
+| 3 | `fe798d3`／PR #533 —— 本分支自身的合併 | 無 |
+
+> **前一版 codekb 記載「PR #508 待合併（`state: OPEN`）」，該記載已過期。**
+> 本輪以 `gh pr view 508` 實測為 `state: MERGED`、`mergedAt: 2026-08-22T06:23:18Z`。
+> 三支腳本確實存在於 `origin/ut`（`git ls-tree origin/ut scripts/` 實測），
+> 只是不在本基準 commit 上。
+
+**升級 gh-aw 對 `.md` 雜湊的實測結論（新發現）**：`pr-reviewer.lock.yml` 在 v0.81.6 與
+v0.86.2 兩個版本下的 `frontmatter_hash` 與 `body_hash` **逐字相同**
+（`0a2a0f6e…` / `08111765…`），只有 `compiler_version` 與 `engine_versions` 改變。
+這證實兩件事：雜湊涵蓋的是 `.md` 的兩半而非編譯輸出，因此**可用來偵測 `.md` 漂移，
+但偵測不到「該用新編譯器重編了」**。
+
+## 工作目錄狀態（本輪的掃描對象包含未追蹤內容）
+
+掃描當下工作樹**非乾淨**：
+
+```
+ M .claude/tools/data/scope-grid.json
+ M aidlc/spaces/default/intents/260802-default/inception/decisions/0012-*.md
+ M aidlc/spaces/default/intents/intents.json
+ M aidlc/spaces/default/memory/project.md
+?? .claude/scopes/aidlc-aidlc-github-projects-sync.md
+?? aidlc/spaces/default/intents/260822-gh-projects-sync/
+```
+
+**判定（本 stage 作出，link 1 留給 link 2 決定）**：`260822-gh-projects-sync` 這個 record
+**納入 Area 1 的掃描對象**，因為它是六個 record 中**唯一**處於 `[-] in progress` 的實例，
+對狀態詞彙的分析不可或缺。但 `architecture.md` 對它的每一處引用都標註為
+**「工作樹狀態、尚未進版控」**，任何只看已提交內容的機制（例如跑在 GitHub Actions 上的
+同步 workflow）**看不到它**。
+
+同理，`intents.json` 的 `260822` 那一列與 `project.md` 的最新規則（2026-08-23 新增的
+`## Forbidden` 條款）目前也只存在於工作樹。
+
+## 本輪額外讀入的兩份 ADR（超出 link 1 的掃描邊界）
+
+link 1 依界線正確地未讀這兩份；link 2 讀了，因為它們是本 intent 的直接前案。
+**兩者已寫入 `architecture.md` 的「開發流程層架構」。**
+
+| ADR | 狀態 | 要點 |
+|---|---|---|
+| `260802-default/inception/decisions/0012-github-issues-projects-wiki-sync.md` | **Accepted 2026-08-16，部分經 ADR-0013 修訂** | AI-DLC ↔ GitHub Issues／Projects／Wiki 雙向同步；逐欄位切分真實來源；防迴圈三道防線；與主流程零耦合 |
+| `260822-gh-projects-sync/inception/decisions/0013-aidlc-projects-sync-scoping.md` | **Accepted 2026-08-23** | 修訂 0012 的第 1、5 點與階段表：映射改為 intent → Project #16 的一則 issue；承載改為 gh-aw safe-outputs、移除 `scripts/aidlc_sync_*.py`；階段順序重排 |
+
+**ADR-0012 不可獨立閱讀，必須與 ADR-0013 併讀。** ADR-0012 的 Status 行已加註修訂指標。
+
+**由此浮現的一項待解衝突（本 stage 只記載，不裁定）**：ADR-0013 把
+`scripts/aidlc_sync_*.py` 從設計中**移除**，且 `project.md ## Forbidden` 於 2026-08-23
+新增「不得以 repo 內新增的實作程式承載流程自動化與外部系統同步」；
+而 PR #508 已於 **2026-08-22**（規則生效前一天）把這三支腳本合併進 `ut`。
+規則字面寫「**新增**的實作程式」，這三支在規則生效時已存在，因此「既有豁免／遷移到
+gh-aw／收窄規則」三者之間需要一個明確決定。
+
+## 本輪實測方法與限制
+
+### 本輪**實際執行**並取得結果的檢查
+
+| 指令／方法 | 結果 |
 |---|---|
-| `backend/` | 全部：`main.py`、`models.py`、`database.py`、`services/`(22 支)、`lenses/`(3)、`prompts/`(6)、`tests/`(21 測試檔 + `helpers.py` + `__init__.py`)、`scripts/dump_openapi.py`、`Dockerfile`、`requirements.txt` |
-| `frontend/` | 全部：`src/`（8 頁面、12 元件、`types/api.d.ts`、context、config、hooks、utils）、`tests/e2e/`、`scripts/check-api-types.mjs`、`Dockerfile`、`nginx.conf`、全部設定檔 |
-| `scripts/` | 4 支：`validate_repo_contract.py`(405)、`tcms_sync.py`(515)、`tcms_validate.py`(360)、`validate_env_contract.py`(315) |
-| `deploy/` | `docker-compose.deploy.yml`、`docker-compose.test.yml`、`render-env.sh`、`cloudflared/config.yml` |
-| `.github/` | `workflows/ci.yml`、`workflows/deploy.yml`、11 組 gh-aw workflow、`agentics-maintenance.yml`、`copilot-setup-steps.yml` |
-| repo 根目錄 | `openapi.json`、`schema.sql`、`schema_rbac.sql`、`DEPLOY.md`、`LOCAL-DEV.md`、`TESTING.md`、`docker-compose.yml`、`CLAUDE.md`、`README.md`、`AGENTS.md` |
-| 規則層 | `aidlc/spaces/default/memory/` 的 `org.md`、`team.md`、`project.md`、`phases/inception.md` |
+| `git fetch origin ut` ＋ `git merge-base --is-ancestor` | 確認基準落後 `ut` 三個 commit，PR #508 已合併 |
+| `gh pr view 508 --json state,mergedAt` | `MERGED` / `2026-08-22T06:23:18Z` |
+| `python3` 解析 `openapi.json` | **36 paths / 45 operations / 29 schemas**（與前一基準相同，未變） |
+| `git ls-files` ＋ `wc -l` 於 `schema_rbac.sql` | **510 行**（前一基準 531） |
+| `grep -c` 於 `backend/tests/` | **25 個 `test_*.py`**（前一基準 21）、**247 個 `def test_`**、**14 個 `@given`**（8 檔） |
+| `grep -rl TestClient backend/tests/` | 4 檔（`helpers.py`、`test_auth.py`、`test_user_list_endpoint.py`、`test_me_endpoint.py`） |
+| `grep -c` 於 `regression.spec.ts` | **3 describe / 14 `test()`**（未變） |
+| `python3` 解析 `frontend/package.json` | `react-router-dom@^7.18.2`；`@types/react-router-dom` 已移除 |
+| 直接閱讀 `auth.py` / `collab_router.py` / `database.py` / `AuthContext.tsx` / `env_bootstrap.py` 的相關段落 | 逐一確認 PR #526 的四項硬化 |
 
-### 量化結果
+**測試數字仍為靜態計數，不是執行結果。** 本輪**未執行** `python -m unittest`、
+未執行 Playwright、未執行 `docker build`、未執行 `validate_repo_contract.py`
+與 `validate_env_contract.py`、未執行 `eslint`。前一基準記載的
+「`0 errors, 3 warnings`」與兩支 validator「passed」**本輪未複驗**，屬 ［沿用 `c3de2c8`］。
 
-所有數字皆為本次實測。**測試數字為靜態計數，非執行結果** —— 見下方「實測方法與限制」。
+### 未讀清單（link 1 的邊界，link 2 未補上者原樣保留）
 
-| 指標 | 數值 | 取得方式 |
-|---|---|---|
-| Backend 產品碼 | 8,775 LOC（git-tracked，排除 `tests/`） | `git ls-files` + `wc -l` |
-| Backend 測試碼 | 3,199 LOC（21 測試檔 + `helpers.py` + `__init__.py`） | 同上 |
-| Frontend `src/` | 10,539 LOC TS/TSX（40 檔） | 同上 |
-| Backend `services/` 模組 | **22** | `git ls-files` |
-| API paths / operations | **36 / 45** | `python3` 解析 `openapi.json` |
-| OpenAPI schemas | **29** | 同上 |
-| 非 REST 介面 | 1 WebSocket + 7 種 SSE 事件型別（**皆不在 `openapi.json`**） | 原始碼 grep |
-| 資料表 | 7 實體 + 1 association table | `models.py` |
-| 權限矩陣 | 11 角色 × 28 story = **308 列** | `ast.literal_eval` 解析 `rbac_seed_data.py` |
-| 前端頁面／元件 | 8／12 | `git ls-files` |
-| 前端 `fetch()` 呼叫點 | 52（10 支檔） | grep |
-| **產生型別檔採用率** | **1/10**（`api.d.ts` 2,385 行，僅 `AdminPage.tsx` import） | grep |
-| Backend 測試（靜態計數） | **212 個 `def test_`**，21 檔 | `grep -c` |
-| Property-based（`@given`，靜態計數） | **13 處**，7 檔 | `grep -c` |
-| E2E case（靜態計數） | **14 個 `test()`**，3 個 `describe()` | `grep -c` |
-| **HTTP 層測試涵蓋的 operation** | **3 / 45** | 逐一核對 `TestClient` 呼叫點 |
-| 模組級 docstring 覆蓋 | **22 / 25** | `ast.get_docstring` |
-| `ci.yml` job 數 | **4**（11 個實質檢查步驟） | 解析 `jobs:` 區塊 |
-| gh-aw agentic workflows | **11** | `ls .github/workflows/*.md` |
-| `TODO`／`FIXME`／`HACK`／`XXX` 標記 | **0** | grep |
+**下游不得假設下列任何一項已被涵蓋。**
 
-## 實測方法與限制
-
-### 本次**實際執行**並取得結果的檢查（可作為執行結果引用）
-
-| 指令 | 結果 |
-|---|---|
-| `python3 scripts/validate_repo_contract.py` | **passed**（exit 0） |
-| `python3 scripts/validate_env_contract.py` | **passed**（exit 0） |
-| `npx eslint .`（於 `frontend/`） | **0 errors, 3 warnings** |
-
-三個 warning 皆為 `react-hooks/exhaustive-deps`：`AssessmentPage.tsx:365`、
-`LoginPage.tsx:36`、`WorkspacePage.tsx:301`。
-
-### 本次**未執行**的檢查（數字為靜態計數，不得被引用為「通過」）
-
-| 項目 | 未執行原因 | 因此哪些數字是靜態計數 |
-|---|---|---|
-| `python -m unittest discover -s tests` | 掃描環境的 `.venv` 與系統 python3 皆缺 `fastapi`／`hypothesis`（17 個 import error）。**這是掃描環境限制，不是 repo 問題** —— CI 的 `backend` job 會安裝完整依賴 | **212 個 test、13 個 `@given`** 皆由 `grep -c "def test_"` 與 `grep -c "@given"` 得出。**不得寫成「212 個測試通過」** |
-| `npx playwright test` | 需 `docker-compose.test.yml` 起完整 stack | **14 個 e2e case** 為 `grep -c` 靜態計數 |
-| `docker build` | 未執行 | Dockerfile 分析為靜態閱讀 |
-
-### 範圍外項目
-
-以下項目**未被分析**，使用本 codekb 時不應假設它們已被涵蓋：
-
-| 項目 | 原因 |
-|---|---|
-| `.claude/` | AIDLC v2 upstream 框架檔，非本專案應用程式碼；僅做結構清點，未逐檔精讀 |
-| `aidlc/spaces/default/intents/` | AIDLC 工作產出（5 個 intent、數百檔），非程式碼；僅在需佐證跨分支狀態時 grep 引用 |
-| **執行期行為** | 本次為**靜態分析**。未啟動系統、未實測 API、未查詢資料庫 |
-| **staging 環境的實際 schema** | 未連線 `192.168.10.10` 查證；schema 描述來自 ORM／SQL 檔／DDL 補丁的靜態比對 |
-| **LLM agent 的實際輸出品質** | prompt 內容已讀，但未評估產圖或評核建議的品質 |
-| 效能與負載特性 | 未量測 |
-| 安全滲透測試 | 未執行；安全發現純由靜態閱讀得出 |
-| `danniel/feat/github-sync-phase1`（PR #508） | 不在本次基準分支上（見「跨分支狀態」） |
-
-## 與規則層記載的落差（如實記載，不逕行修改規則層）
-
-本次實測發現 `aidlc/spaces/default/memory/team.md` 的「既成事實」段落有數項已被推翻。
-**本 codekb 記載實測到的現況；規則層的修訂須走 practices-discovery 的 affirmation gate，
-不由 reverse-engineering stage 逕行變更。** 逐項對照見
-`code-quality-assessment.md` 的「與 `team.md` 現行記載的落差」與 `dependencies.md` 的
-「依賴釘選現況」。
-
-摘要（四項）：
-
-| # | `team.md` 現行記載 | 本次實測 |
-|---|---|---|
-| 1 | 「Backend 依賴 100% 未 pin、無 lockfile」 | `fastapi[standard]==0.141.1`、`pydantic==2.13.4` **已精確釘選**（12 條中 2 條） |
-| 2 | 「`tsc -b` 對前後端 schema 落差無效；`AdminPage.tsx` 的 `DbUser` 是手寫本地 interface」 | `AdminPage.tsx` 已改用產生型別；存在 `openapi.json → openapi-typescript → api.d.ts` 建置期契約鏈與**兩道 CI gate** |
-| 3 | 「零 HTTP 層測試，全 repo 無 `TestClient` 使用」 | `test_user_list_endpoint.py` 有 17 個 test、2 個 `TestClient(app)` 建構點 |
-| 4 | 「CI（`ci.yml`）四道關卡」 | job 數確實仍是 **4**，但**步驟清單已過時** —— 現為 11 個實質檢查步驟，新增 `validate_env_contract.py`、`check:types`、`dump_openapi.py --check`、spec-not-served 四道 |
+1. **11 個 `.lock.yml` 沒有任何一個被全讀**（各 1,500–1,700 行、101–111 KB 的生成檔）。
+   讀的是：`daily-digest.lock.yml` 前 70 行、`pr-reviewer.lock.yml` 的 per-job permissions、
+   11 檔的 `name`／`on`／`permissions`／`concurrency`／`jobs`／`runs-on` 結構 grep、
+   `ui-regression.lock.yml` 的 diff。**agent job 內部的 prompt 組裝、firewall 設定、
+   MCP server 啟動、safe-output 收集腳本，一行都沒看。**
+2. **gh-aw 的完整 `safe-outputs` 型別目錄未由本 stage 直接查證。** 本 repo 語料只用過 5 種
+   （`add-comment`／`create-issue`／`push-to-pull-request-branch`／`add-labels`／`close-issue`）。
+   **這 5 種是本 repo 的用量，不是框架的目錄。** ADR-0013 於 2026-08-23 查證官方文件確認框架
+   另有 `update-project`／`create-project`／`create-project-status-update` 與 `projects` toolset
+   ——**該事實的來源是 ADR-0013，不是本次掃描**，且是對 v0.86.2 世代文件的查證。
+3. **`agentics-maintenance.yml`（26,686 B）只讀了前 60 行**；**`copilot-setup-steps.yml`
+   （772 B）完全未讀**；**`.github/agents/agentic-workflows.md` 只 grep 了 safe-outputs 段落**，
+   未通讀（它含 gh-aw CLI 用法與 Dependabot 處理規則，對實作可能有用）。
+4. **`aidlc-state.ts`（3,503 行）未通讀。** `park`／`unpark` 對 `Parked` 欄位的完整寫入語意、
+   gate-start／approve／reject／revise 對 checkbox 的轉換規則，**只從欄位名與呼叫點推斷，
+   未逐行驗證**。
+5. **audit shard 內容未精讀。** 只做了事件型別統計（44 種）與一個 shard 的前 40 行取樣。
+   **每種事件帶哪些 `**Key**:` 欄位，未盤點。**
+6. **codekb 自身的 9 個 artifact，link 1 只讀了 H2 清單**（不含本檔前 40 行）。
+   (b) 表的「會使哪個 artifact 過期」是依 H2 標題對映的；link 2 已補上全文閱讀並逐節標註。
+7. **全 repo 巡覽未做**（Q3=A 明確排除）。`backend/services/` 的 ~20 支模組、
+   `frontend/src/pages/` 的其餘頁面、`scripts/` 的其他 3 支、`schema.sql`、`plugins/`、
+   `.claude/skills/` 全部未掃。
+8. **執行期行為未觀察**：未啟動系統、未實測 API、未查詢資料庫、未連線 `192.168.10.10`。
+9. **`origin/ut` 上的 v0.86.2 世代 workflow 未掃描**，只比對了 metadata 標頭與
+   `actions-lock.json`。
 
 ## 產出清單
 
-本次逆向工程共產出 **9 份 artifacts**，全部位於
-`aidlc/spaces/default/codekb/cloud-360/`：
+本輪共更新 **9 份 artifacts**，全部位於 `aidlc/spaces/default/codekb/cloud-360/`：
 
-| # | 檔案 | 內容 | 主要下游消費者 |
-|---|---|---|---|
-| 1 | `business-overview.md` | 業務領域、11 角色、28 story 能力表、四條業務主線、詞彙表 | requirements-analysis、user-stories |
-| 2 | `architecture.md` | 架構風格判定與替代方案、系統脈絡、分層、橫切關注點、**型別契約鏈**、**機械檢查盲區**、Interaction Diagrams、架構約束清單 | application-design、functional-design |
-| 3 | `code-structure.md` | 倉庫佈局、模組組織、程式碼模式、命名慣例 | code-generation |
-| 4 | `api-documentation.md` | 45 operation 完整清單、認證授權契約、SSE／WebSocket 契約、資料契約 | application-design、code-generation |
-| 5 | `component-inventory.md` | 全元件清單與職責、依賴摘要、`users` 表詳解 | application-design、units-generation |
-| 6 | `technology-stack.md` | 語言與框架版本、建置系統、版本治理現況 | infrastructure-design、code-generation |
-| 7 | `dependencies.md` | 外部依賴、外部服務、隱性硬依賴、內部依賴、schema 來源、風險登記 | application-design、infrastructure-design |
-| 8 | `code-quality-assessment.md` | 測試／lint／CI 現況、技術債叢集與分級、修復順序 | delivery-planning、requirements-analysis |
-| 9 | `reverse-engineering-timestamp.md` | 本檔 | 全部（先讀本檔確認新鮮度） |
+| # | 檔案 | 本輪處理 |
+|---|---|---|
+| 1 | `business-overview.md` | 開發流程層資產一節［本輪重寫］；其餘［沿用］加標註 |
+| 2 | `architecture.md` | **新增「開發流程層架構」兩大節（Area 1 + Area 2）與兩份 ADR 的落點**［本輪重寫］；安全硬化四處更正；其餘［差異標註］ |
+| 3 | `code-structure.md` | `.github/workflows/` 佈局與 `scripts/` 跨分支狀態［本輪重寫］；`env_bootstrap.py`、測試檔數［本輪機械複驗］ |
+| 4 | `api-documentation.md` | WebSocket 契約［本輪重寫］；`MeResponse`／請求約束／HTTP 層覆蓋［本輪機械複驗］；端點清單［差異標註］ |
+| 5 | `component-inventory.md` | gh-aw workflow 表［本輪重寫］；認證與 WebSocket 元件、`env_bootstrap`［本輪機械複驗］ |
+| 6 | `technology-stack.md` | gh-aw 版本與 runner［本輪重寫］；前端依賴［本輪機械複驗］；其餘［差異標註］ |
+| 7 | `dependencies.md` | GitHub 平台依賴與環境變數［本輪重寫／複驗］；R-2 已解除；其餘［差異標註］ |
+| 8 | `code-quality-assessment.md` | 安全叢集 C4 大幅改寫、T-13／T-23 已解決、新增 gh-aw 編譯漂移債［本輪重寫］；其餘［差異標註］ |
+| 9 | `reverse-engineering-timestamp.md` | 本檔，全面重寫 |
 
 **codekb 的層級**：本目錄位於 **space 層級**（`aidlc/spaces/default/codekb/`），
 是 `memory/`、`knowledge/`、`intents/` 的同層兄弟，**跨 intent 共用**。
 
-### 關於 `codekb/cloud/` 的裁定
+### 關於 codekb 目錄名（本輪的裁定，與前一版不同）
 
-`aidlc/spaces/default/codekb/` 下同時存在 `cloud-360/`（本目錄）與 `cloud/` 兩份 codekb，
-成因是 repo 名解析出兩個不同的 key。**本次 stage 的 `codekb-path` 解析結果為 `cloud-360`，
-故本次只更新本目錄，`cloud/` 未被觸碰。**
+`aidlc/spaces/default/codekb/` 下有兩份 codekb：`cloud-360/`（本目錄，3,000+ 行，最完整）
+與 `cloud/`（582 行，基準 `8c90f40`／2026-08-06，**已過期**）。
 
-`cloud/` 是另一個 intent（`260806-a1-a3-ux`）的產出，基準為 commit `8c90f40`
-（UTC 2026-08-06），**已過期**。下游 stage 應以本目錄為準；讀到 `cloud/` 時須先確認其
-基準日期。兩份 codekb 的收斂（合併或廢止其一）尚未定案，列為待處理項。
+**本輪的 clone 目錄名是 `chiton`**，而引擎的 `codekbRepoName` 由 `basename(projectDir)`
+推導，若照預設會為**同一個 repo** 開出**第三份** codekb（`codekb/chiton/`）。
+本 stage 已由人工裁定：**就地更新 `cloud-360/`，不建立 `chiton/`。**
+引擎的完成檢查對 `codekb/*/` 做 ANY-exists 判定，寫進 `cloud-360/` 即滿足。
+
+**刻意不去手改 `intents.json` 補上 repo 名**：一旦寫入 repo 名，swarm `prepare` 會去找
+一個不存在的同名兄弟目錄。兩份（潛在三份）codekb 的收斂仍是**未定案的待處理項**。
 
 ## 新鮮度與失效條件
 
-本 codekb 在下列任一情況發生時應重新產出或局部更新。
+### 本 codekb 目前已知的失效面（讀者必須先知道）
+
+1. **基準落後 `origin/ut` 三個 commit**，其中 gh-aw v0.86.2 升級與 PR #508 合併都會改變
+   本 codekb 的結論（見「跨分支狀態」）。**下一輪 reverse-engineering 應以 `ut` 為基準。**
+2. **本輪只重掃兩區**，其餘七成內容的實際新鮮度是 `c3de2c8`（2026-08-17）。
 
 ### 觸發完整重跑
 
-- `backend/services/` 新增或刪除模組（目前 **22** 支）
-- API operation 數改變（目前 **45**；以 `openapi.json` 為準，非人工計數）
-- 資料表新增或刪除（目前 7 實體 + 1 association table）
-- 架構風格改變（例如拆出獨立服務、引入訊息佇列或快取層）
+- `backend/services/` 新增或刪除模組（`c3de2c8` 時為 22 支，本輪未複驗）
+- API operation 數改變（**本輪複驗仍為 45**；以 `openapi.json` 為準，非人工計數）
+- 資料表新增或刪除（`c3de2c8` 時為 7 實體 + 1 association table）
+- 架構風格改變（拆出獨立服務、引入訊息佇列或快取層）
 - 權限矩陣維度改變（角色數不再是 11 或 story 數不再是 28）
-- **PR #508 合併** —— `scripts/` 由 4 支增為 7 支，且引入 GitHub Issues／Projects／Wiki
-  這條全新的對外整合面（見「跨分支狀態」）
+- **合併 `origin/ut`**（gh-aw v0.86.2 ＋ `scripts/` 4→7 兩項同時生效）
 
 ### 觸發局部更新
 
 | 變更 | 應更新的檔案 |
 |---|---|
+| gh-aw 版本升級或新增／刪除 workflow | `architecture.md`（開發流程層）、`component-inventory.md`、`technology-stack.md`、`dependencies.md` |
+| `aidlc-state.md` 模板或 stage graph 改變 | `architecture.md`（AI-DLC 狀態表徵）、`business-overview.md` |
+| `intents.json` 的 schema 或 `status` 值域改變 | `architecture.md`（AI-DLC 狀態表徵） |
 | `users` 表欄位變更 | `component-inventory.md`、`api-documentation.md`、`architecture.md` |
 | 依賴釘選範圍變更或引入 lockfile | `technology-stack.md`、`dependencies.md`、`code-quality-assessment.md` |
-| `api.d.ts` 採用率變化（目前 1/10） | `architecture.md`、`code-quality-assessment.md`、`code-structure.md` |
-| 新增 HTTP 層測試（目前涵蓋 3/45 operation） | `code-quality-assessment.md`、`api-documentation.md` |
+| `api.d.ts` 採用率變化（`c3de2c8` 時 1/10） | `architecture.md`、`code-quality-assessment.md`、`code-structure.md` |
+| 新增 HTTP 層測試（**本輪複驗為 5/45 operation**） | `code-quality-assessment.md`、`api-documentation.md` |
 | CI 步驟增減 | `code-quality-assessment.md`、`technology-stack.md` |
 | 部署拓撲變更（新容器、新環境） | `architecture.md`、`technology-stack.md`、`dependencies.md` |
 | 新 story 或新角色 | `business-overview.md`、`api-documentation.md` |

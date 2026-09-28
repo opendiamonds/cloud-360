@@ -7,6 +7,7 @@ keywords:
   - infra
 description: Infrastructure changes
 skeleton: on
+change_control: strict
 ---
 
 # infra scope
@@ -17,10 +18,12 @@ application-code construction stages, and instead runs practices-discovery,
 the NFR design pass, infrastructure-design, the CI pipeline, and the full
 deployment + observability set in operation.
 
+Change Control defaults to strict: provisioning and deployment inputs that move after approval are approved again.
+
 ## Why these stages, why skip those
 
 Infrastructure work is not about product features, so ideation,
-user-stories, application-design, units-generation, and code-generation
+user-stories, domain-design, units-generation, and code-generation
 are skipped. It is about how the system is provisioned and run, so the
 operation stages (deployment-pipeline, environment-provisioning,
 deployment-execution, observability-setup) plus the NFR and

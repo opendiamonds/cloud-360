@@ -1,0 +1,102 @@
+name: AI-DLC Sync Reverse
+
+# 反向同步的**薄外層**（[ad:ADR-A10]）：只負責觸發設定與 concurrency，實作全部在
+# aidlc-sync-reverse-impl.yml（on: workflow_call，全參數化）。本檔是這套機制在
+# **本 repo** 的組態；把它抄到另一個 repo 只需改下面 with: 的那幾個值。
+#
+# 規格正本：construction/U-8-reverse-workflow/functional-design/business-rules.md
+# 的 R-1 群（何時開 PR）與 R-2 群（PR 的內容邊界）。
+
+on:
+  # [ad:services.md] S-C：`schedule` ＋ `workflow_dispatch`（[req:FR-G1]）。
+  #
+  # cron 不得與**四個**既有排程碰撞——`agentics-maintenance`（`37 0 * * *`）、
+  # `daily-digest`（`0 23 * * 1-5`）、`release-watch`（`39 16 * * 1`），以及本
+  # intent 的 `aidlc-sync-reconcile`（`13 21 * * *`）。碰撞的後果不是失敗而是
+  # **資源競爭**：前三者皆為 gh-aw（`engine: copilot`，含 LLM agent step），同時
+  # 起跑會拉長彼此的 runner 排隊。
+  #
+  # 本檔取 `29 22 * * *`：分鐘 29 與四者（37／0／39／13）皆不同，故**永不同分鐘
+  # 起跑**；22:29 UTC ＝ 台北 06:29，反向 PR 在台灣工作日開始前就緒。
+  #
+  # **排在對帳（21:13 UTC）之後 76 分鐘是刻意的**：對帳的 R-6.8 會修復
+  # `managed_block_hash`，先跑可減少本單元的假陽性（拿舊雜湊比新區塊 ⇒ 在沒有人為
+  # 變更的情況下開 PR）。**但這個好處目前不成立**——U-7 的修復推在
+  # `aidlc-sync/reconcile/*` 分支上、沒有合併回 `ut` 的路徑（U-7 交還的缺口 (3)，
+  # 落點 Bolt 2 gate），所以本單元讀 `ut` 時看不到它。排序仍照此設定，該缺口關閉
+  # 後即自動生效。
+  #
+  # 這是**建置期**檢查，由 run-reverse-tests.py 的靜態斷言鎖住——它從全部 workflow
+  # 檔重新抓一次既有 cron，不在測試裡抄第二份。
+  schedule:
+    - cron: '29 22 * * *'
+  # [US:S-6] 的可展示性需要手動觸發。觸發權限由 repo 的 Actions 設定決定，不由本
+  # workflow 控制。嚴重度**高於**對帳：手動多跑一輪反向同步若遇上真的有人為變更，
+  # 會開出真實的 PR（本 repo 為 public，PR 編號是永久的）。不過 R-6.1 的即時查詢
+  # 讓同一個 intent 最多只有一則開啟中的 PR，所以連按不會堆出重複 PR。
+  workflow_dispatch:
+
+concurrency:
+  # ==========================================================================
+  # **與 U-7 的對帳同一組**——這是對已核可計畫 Step 10 的唯一偏離，理由如下
+  # ==========================================================================
+  # 本單元的 `nfr-requirements/performance-requirements.md` 的缺口 P-2 裁定「反向
+  # 同步自成第三組」，而已核可的 code-generation 計畫 Step 10 逐字沿用了它。
+  #
+  # **但 `construction/functional-design/open-items.md` 的 N:C-2 把那項裁定判為
+  # Critical**：它推翻了已過 gate 的 `application-design/services.md:58`（S-C 的
+  # concurrency 欄逐字「與 S-B **同一組**（兩者都是排程、都碰 record，不應並行）」），
+  # 而處置逐字為「**需 ADR 或回退**；Bolt 2／3 gate」。本 intent 至今**沒有**為它
+  # 開出 ADR（ADR-0015／0016 全文對反向同步的 concurrency 零命中）。
+  #
+  # 三個理由讓「回退」成為本檔的預設值：
+  #   1. `project.md` 明訂不得逕自推翻已核可上游，ADR 是唯一的承載形式——沒有 ADR
+  #      就只剩回退這一條路。
+  #   2. 兩邊的論證強度不對稱：`services.md` 的是**正確性**論證（兩者都碰 record，
+  #      不應並行），P-2 的是**便利性**論證（「共用一組會讓其中一個延後而無實益」）。
+  #   3. 已核可計畫的「查證 1」只盤點了 `open-items.md` 的四項（C-7.1／C-7.2／
+  #      M-7.1、M-7.2／#11），**N:C-2 與 N:M-5 都不在其中**——那份計畫在核可時沒有
+  #      把這個 Critical 呈現給人看，據以推翻上游不是知情核可。
+  #
+  # **改回「自成第三組」是本檔一行的改動**（把 group 換成
+  # `aidlc-sync-reverse-${{ github.repository }}`），一旦 Bolt 3 的 gate 為 P-2 開出
+  # ADR 即可。run-reverse-tests.py 有一條靜態斷言把本值鎖在「與對帳同群」上，改的
+  # 時候會紅燈提醒，不會靜默漂移。
+  #
+  # 實務影響很小：兩者的 cron 相距 76 分鐘、單輪上限各 30 分鐘，正常情況下不會排隊。
+  group: aidlc-sync-reconcile-${{ github.repository }}
+  # 排隊不取消：被取消的那一輪就是**今天沒有人在看板改動被送到任何人面前**。與對帳
+  # 同群時這一項尤其不能省——取消的是後到者，而後到者可能正是本單元。
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reverse:
+    name: Daily reverse sync
+    uses: ./.github/workflows/aidlc-sync-reverse-impl.yml
+    with:
+      # ADR-0016 §Context：opendiamonds 是**個人帳號**不是組織，查詢根為
+      # user(login:)。Project #16 的網址即 github.com/users/opendiamonds/projects/16。
+      project_owner: opendiamonds
+      # 正式看板。**測試看板是 #23**——兩者的差別只有這個值。
+      project_number: "16"
+      # 與 U-6／U-7 的薄外層同一個字面。【上游未定案】[req:FR-F1] 只說「以單一看板
+      # 自訂欄位承載目前 stage 的 slug ＋ 編號」，從未指名該欄位叫什麼；已列入待
+      # gate 追認的清單。本單元**一個字都不寫**該欄位，但 U-3 的 read_item 以它解析
+      # 欄位值。
+      stage_field_name: AI-DLC Stage
+      # 整合主幹，同時是反向 PR 的 base。`schedule` 只在預設分支（本 repo 為 `main`）
+      # 觸發，而 `main` 落後於 `ut`——不釘就會拿**過期的比對基準**去比看板，於是在
+      # 沒有任何人為變更的情況下開出反向 PR，且**不會有任何錯誤**。
+      trunk_ref: ut
+      record_root: aidlc/spaces/default/intents
+      # D-1 ＋ E-2：實際分支為 aidlc-sync/reverse/<intent_id>-<YYYY-MM-DD>。
+      # U-6 讀這個標記算 reverse_pending、U-10b 用它做排除（`paths-ignore`，不是
+      # `branches-ignore`——後者過濾的是 base 而反向 PR 的 base 一律 `ut`）。
+      reverse_branch_prefix: aidlc-sync/reverse
+    secrets:
+      # ADR-0016 §1：擁有者帳號 token，scope 為 project ＋ repo。與 U-6／U-7 同一個
+      # secret。開 PR 需要的 `Pull requests: write` 由 `repo` scope 整包承載。
+      sync_token: ${{ secrets.AIDLC_SYNC_TOKEN }}

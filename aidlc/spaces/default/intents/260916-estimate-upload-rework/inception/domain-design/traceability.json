@@ -1,0 +1,88 @@
+{
+  "stage": "domain-design",
+  "note": "user-stories 在本 scope 為 SKIP，stories.md 不存在，故依 stage 檔 Step 6 的 fallback 規則列舉 requirements.md 的每一條 FR。target 只能是 components.md 定義的元件或實體——本站的真實來源不命名服務或公開方法，那些由 contract-design 與 functional-design 釘選。GAP 者為純刪除或工具鏈維護項，不由任何構件實現，如實標記而非強行對應。",
+  "upstream_ids": [
+    "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR1.5", "FR1.6",
+    "FR2.1", "FR2.2", "FR2.3", "FR2.4",
+    "FR3.1", "FR3.2", "FR3.3",
+    "FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5",
+    "FR5.1", "FR5.2", "FR5.3", "FR5.4", "FR5.5", "FR5.6", "FR5.7", "FR5.8", "FR5.9", "FR5.10",
+    "FR6.1", "FR6.2", "FR6.3", "FR6.4", "FR6.5", "FR6.6",
+    "FR7.1", "FR7.2", "FR7.3",
+    "FR8.1", "FR8.2", "FR8.3",
+    "FR9.1", "FR9.2", "FR9.3", "FR9.4", "FR9.5", "FR9.6", "FR9.7", "FR9.8", "FR9.9", "FR9.10", "FR9.11",
+    "FR10.1", "FR10.2", "FR10.3", "FR10.4",
+    "FR11.1", "FR11.2", "FR11.3", "FR11.4"
+  ],
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "EstimateWorkspacePage" },
+    { "id": "FR1.2", "status": "OK", "target": "EstimateParser" },
+    { "id": "FR1.3", "status": "OK", "target": "EstimateIntakeService" },
+    { "id": "FR1.4", "status": "OK", "target": "EstimateIntakeService" },
+    { "id": "FR1.5", "status": "OK", "target": "EstimateParser" },
+    { "id": "FR1.6", "status": "OK", "target": "EstimateIntakeService" },
+
+    { "id": "FR2.1", "status": "OK", "target": "EstimateParser" },
+    { "id": "FR2.2", "status": "OK", "target": "EstimateLineItem" },
+    { "id": "FR2.3", "status": "OK", "target": "EstimateParser" },
+    { "id": "FR2.4", "status": "OK", "target": "EstimateParser" },
+
+    { "id": "FR3.1", "status": "OK", "target": "EstimateWorkspacePage" },
+    { "id": "FR3.2", "status": "OK", "target": "EstimateWorkspacePage" },
+    { "id": "FR3.3", "status": "OK", "target": "EstimateWorkspacePage" },
+
+    { "id": "FR4.1", "status": "OK", "target": "EstimateValidator" },
+    { "id": "FR4.2", "status": "OK", "target": "EstimateValidator" },
+    { "id": "FR4.3", "status": "OK", "target": "EstimateValidator" },
+    { "id": "FR4.4", "status": "OK", "target": "EstimateValidator" },
+    { "id": "FR4.5", "status": "OK", "target": "EstimateWorkspacePage" },
+
+    { "id": "FR5.1", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR5.2", "status": "OK", "target": "Advice" },
+    { "id": "FR5.3", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR5.4", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR5.5", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR5.6", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR5.7", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR5.8", "status": "GAP", "note": "憑證注入管線屬部署設定（GitHub Secrets → render-env.sh → deploy/.env），不由任何應用元件實現。PricingLookup 是消費端而非管線本身。落點在 infrastructure-design 與 deployment-pipeline。" },
+    { "id": "FR5.9", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR5.10", "status": "OK", "target": "PricingLookup" },
+
+    { "id": "FR6.1", "status": "OK", "target": "EstimateSet" },
+    { "id": "FR6.2", "status": "OK", "target": "EstimateSet" },
+    { "id": "FR6.3", "status": "OK", "target": "EstimateWorkspacePage" },
+    { "id": "FR6.4", "status": "OK", "target": "EstimateIntakeService" },
+    { "id": "FR6.5", "status": "OK", "target": "EstimateAccessControl" },
+    { "id": "FR6.6", "status": "OK", "target": "EstimateShare" },
+
+    { "id": "FR7.1", "status": "OK", "target": "IdentityAndRbac" },
+    { "id": "FR7.2", "status": "OK", "target": "IdentityAndRbac" },
+    { "id": "FR7.3", "status": "OK", "target": "EstimateAccessControl" },
+
+    { "id": "FR8.1", "status": "OK", "target": "EstimateAuditEvent" },
+    { "id": "FR8.2", "status": "OK", "target": "EstimateAuditLog" },
+    { "id": "FR8.3", "status": "OK", "target": "EstimateAuditLog" },
+
+    { "id": "FR9.1", "status": "OK", "target": "EstimateIntakeService" },
+    { "id": "FR9.2", "status": "OK", "target": "EstimateSet" },
+    { "id": "FR9.3", "status": "GAP", "note": "移除 Playwright Calculator 自動化三支模組、兩支 spike script 與 playwright 相依。純刪除，無新構件實現。" },
+    { "id": "FR9.4", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR9.5", "status": "OK", "target": "PricingLookup" },
+    { "id": "FR9.6", "status": "OK", "target": "EstimateParser" },
+    { "id": "FR9.7", "status": "GAP", "note": "scripts/warm_aws_pricing_cache.py 的修正屬工具鏈維護。它 import cost.price_cache，而該模組隨 pricing_cache 表退場。不由任何新元件實現。" },
+    { "id": "FR9.8", "status": "GAP", "note": "六個環境設定檔的增刪屬部署設定，由 validate_env_contract.py 反向強制。落點在 infrastructure-design 與 deployment-pipeline。" },
+    { "id": "FR9.9", "status": "GAP", "note": "e2e 回歸 regression.spec.ts:492 起的成本頁段落更新屬測試資產維護，落點在 build-and-test 與 tcms-test-cases。" },
+    { "id": "FR9.10", "status": "GAP", "note": "openapi.json dump 與 npm run gen:types 重產屬工具鏈維護，是 CI drift 閘門的要求。落點在 contract-design 與 ci-pipeline。" },
+    { "id": "FR9.11", "status": "GAP", "note": "backend/prompts/cost_pricing_agent_system.md 隨舊 agent 拆除後成為孤兒檔。純刪除或替換，CostAdviceAgent 會有自己的提示資產但那是新增而非實現此 FR。" },
+
+    { "id": "FR10.1", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR10.2", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR10.3", "status": "OK", "target": "CostAdviceAgent" },
+    { "id": "FR10.4", "status": "GAP", "note": "其餘五個 agent 模組的遷移明文不在本期範圍（IC-12）。此 FR 是範圍排除的宣告而非待實現的能力，本質上不應有 target。" },
+
+    { "id": "FR11.1", "status": "GAP", "note": "AWS 憑證傳遞管線重建（deploy.yml、render-env.sh、docker-compose.deploy.yml）屬部署設定。落點在 infrastructure-design 與 deployment-pipeline。" },
+    { "id": "FR11.2", "status": "GAP", "note": "validate_repo_contract.py 的 FORBIDDEN_CONTENT_PATTERNS 調整屬 CI 閘門維護。requirements.md OQ7 明載調整手法未定，落點在 nfr-requirements 或 devsecops 路徑。" },
+    { "id": "FR11.3", "status": "GAP", "note": "DEPLOY.md 與 LOCAL-DEV.md 的同步更新屬文件維護（project.md 的 schema↔deploy 同步為 blocking 規則）。" },
+    { "id": "FR11.4", "status": "OK", "target": "PricingLookup" }
+  ]
+}

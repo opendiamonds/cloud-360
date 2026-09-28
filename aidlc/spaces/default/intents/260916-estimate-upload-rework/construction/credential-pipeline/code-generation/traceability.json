@@ -1,0 +1,96 @@
+{
+  "stage": "code-generation",
+  "unit": "credential-pipeline",
+  "note": "packaging：無業務執行期碼。覆蓋 FR11 全條、FR5.8／FR5.9、NFR8.1／NFR9.1–9.3、ADR-0018 §5／§6。",
+  "upstream_ids": [
+    "FR5.8",
+    "FR5.9",
+    "FR11.1",
+    "FR11.2",
+    "FR11.3",
+    "FR11.4",
+    "NFR8.1",
+    "NFR9.1",
+    "NFR9.2",
+    "NFR9.3",
+    "ADR-0018-§5",
+    "ADR-0018-§6"
+  ],
+  "coverage": [
+    {
+      "id": "FR11.1",
+      "status": "OK",
+      "target": "deploy/render-env.sh"
+    },
+    {
+      "id": "FR11.1",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml"
+    },
+    {
+      "id": "FR11.1",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml"
+    },
+    {
+      "id": "FR5.8",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml"
+    },
+    {
+      "id": "FR5.9",
+      "status": "OK",
+      "target": "DEPLOY.md"
+    },
+    {
+      "id": "FR11.2",
+      "status": "OK",
+      "target": "scripts/validate_repo_contract.py"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "scripts/validate_repo_contract.py"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "backend/tests/test_repo_contract_secret_patterns.py"
+    },
+    {
+      "id": "FR11.3",
+      "status": "OK",
+      "target": "DEPLOY.md"
+    },
+    {
+      "id": "FR11.4",
+      "status": "OK",
+      "target": "LOCAL-DEV.md"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "deploy/render-env.sh"
+    },
+    {
+      "id": "NFR9.2",
+      "status": "OK",
+      "target": "DEPLOY.md"
+    },
+    {
+      "id": "NFR9.3",
+      "status": "OK",
+      "target": "LOCAL-DEV.md"
+    },
+    {
+      "id": "ADR-0018-§5",
+      "status": "OK",
+      "target": "deploy/render-env.sh"
+    },
+    {
+      "id": "ADR-0018-§6",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260916-estimate-upload-rework/inception/decisions/0018-catalog-price-api-credentials.md"
+    }
+  ]
+}

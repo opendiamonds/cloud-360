@@ -1,0 +1,163 @@
+name: AI-DLC Sync Notifier
+description: >-
+  失敗通報與其收斂（[ad:C-5 notifier]）。單一 action，以 operation 分派
+  component-methods.md §C-5 的兩個方法。本 action 的「記憶」就是 GitHub issue 本身
+  ——不新增任何持久狀態（[ad:decisions.md] ADR-A8 的 [Q5=A]）。它獨立於 U-3 的看板
+  客戶端：兩者都做 GitHub API I/O，但打的是不同 API 面（本 action 是 Issues REST，
+  U-3 是 Projects v2 GraphQL），且驗證對象是 issue 生命週期而非 Projects 欄位。
+  設計正本見 aidlc/spaces/default/intents/260822-gh-projects-sync/construction/
+  U-5-notifier/ 的 functional-design/{business-rules,business-logic-model,
+  domain-entities}.md 與 nfr-requirements/{security-requirements,
+  tech-stack-decisions}.md。
+
+
+  兩種操作的 inputs／outputs 是**聯集**，YAML 層看不出哪些組合合法，逐操作的合法
+  組合如下（沿用 U-2／U-3／U-4 慣例）：
+
+
+  operation: notify — 必要 input：intent_id、reason_code、stage。選填：detail、
+  label、alert_repo。有效 output：result（ok / external_error）、issue_number、
+  action（created / commented / deduplicated）、count（標題 ×N 的新值）、
+  closed_numbers（deduplicated 時被關閉的重複 issue，**空白分隔**）、closed
+  （其計數）、message。**reason_code 只接受五個失敗碼**（ExternalError / Rejected /
+  Aborted / CannotCreate / Failed）；五種正常判斷碼（suppressed / parked /
+  unparseable / whitelisted / undecidable）傳入即 exit 2——依 business-rules.md
+  的 R-1，它們**根本不該呼叫本方法**，靜默接受等於把呼叫端的 bug 變成一則假告警。
+
+
+  operation: resolve_if_open — 必要 input：keys（換行分隔，每行一個
+  `<intent_id>/<reason_code>`；一鍵即一行）。選填：label、alert_repo。有效
+  output：result、closed（關閉的 issue 數）、closed_numbers（**空白分隔**）、
+  message。keys 中沒有對應開啟中 issue 的鍵為 no-op（[ad:component-methods.md]
+  §C-5 逐字）；鍵不在 keys 內的通報 issue **一律不動**（R-3.2，涵蓋「仍失敗」與
+  「不屬本輪」兩種）。
+
+
+  operation 為其他值（含空值）時，本 action **以非零 exit 立即失敗**，不會靜默回空值。
+  exit code：0＝成功；1＝ExternalError（result=external_error 已寫出，供
+  if failure() 的步驟取用）；2＝介面誤用（不寫 result）。**本 action 沒有 exit 3**
+  ——它沒有「被拒絕但屬正常判斷」的結果型別。
+
+# 本 action 刻意**不宣告任何憑證型 input**（SEC-1，與 U-3 同一條規則）：input 是
+# action 的公開介面，把憑證放進介面等於邀請每一個呼叫端「傳一個你手上有的 token」。
+# 憑證一律由配置好的 workflow 以 env GH_TOKEN 傳入（repo 既有形狀；gh CLI 原生讀取
+# 它，不多一跳）。run-stub-tests.py 有一條機械斷言鎖住這件事——不要「順手」加一個
+# token input。
+#
+# 注意 keys 這個 input **不是**憑證：它是 FailureIdentity 的鍵清單
+# （`<intent_id>/<reason_code>`）。SEC-1 的機械斷言掃的是憑證形狀的名稱
+# （token／secret／password／credential／apikey），不掃 key 這個詞本身。
+#
+# **本 action 會關閉別人看得到的 issue**（SEC-1 of security-requirements.md）：
+# notify 的去重分支與 resolve_if_open 都是破壞性動作。關閉條件一律是「內文首行的
+# 機器可讀鍵**逐字相符**」，**不得**以標題比對——標題可被任何有 issue 權限的人編輯。
+# run-stub-tests.py 有兩條斷言鎖住這件事（標題被改仍命中、標題像但鍵不同不命中）。
+#
+# 全部邏輯在 notify.sh，本檔只做介面轉接（inputs → 環境變數 → notify.sh →
+# $GITHUB_OUTPUT）。run-stub-tests.py 以 PATH shim 偽裝 gh 直接呼叫 notify.sh，
+# 不必先起一個 workflow；run-live-tests.py 對真實 repo 跑 issue 生命週期。
+
+inputs:
+  operation:
+    description: >-
+      notify / resolve_if_open。**必填**，值不合法時立即非零 exit。
+    required: true
+
+  intent_id:
+    description: >-
+      （notify）失敗所屬的 intent 識別字，FailureIdentity 的前半。不得為空、不得含
+      空白或 < > 字元（它會成為內文首行機器可讀鍵的一部分，必須可逐字比對）
+    required: false
+    default: ''
+  reason_code:
+    description: >-
+      （notify）失敗碼，FailureIdentity 的後半。**只接受** ExternalError /
+      Rejected / Aborted / CannotCreate / Failed。五種正常判斷碼傳入 → exit 2
+    required: false
+    default: ''
+  stage:
+    description: >-
+      （notify）失敗發生的階段標識（[req:FR-E3] 三要素之一，與 intent 識別字、
+      ISO 8601 時間戳並列）。不得為空
+    required: false
+    default: ''
+  detail:
+    description: >-
+      （notify）給人看的細節。**會被寫進公開 issue**（本 repo 為 public，SEC-2）
+      ——呼叫端不得傳入完整 API 回應 body 或任何標頭。本 action 另做一層防禦性
+      清洗（遮罩 GitHub token 形狀字串與 Authorization 行、單行化、截 2000 字元），
+      但那是兜底，不是授權呼叫端亂傳
+    required: false
+    default: ''
+
+  keys:
+    description: >-
+      （resolve_if_open）**換行分隔**的待關閉鍵清單，每行一個
+      `<intent_id>/<reason_code>`（一鍵即一行）。reason_code 的值域與 notify 相同。
+      格式不合即 exit 2。這**不是憑證**——見本檔上方註解
+    required: false
+    default: ''
+
+  label:
+    description: >-
+      通報 issue 的單一 label（[Q2=A] 的「一次列舉全部通報 issue」靠它成為一次查詢）。
+      notify 在需要開新 issue 時會冪等建立它
+    required: false
+    default: 'aidlc-sync-alert'
+  alert_repo:
+    description: >-
+      通報 issue 所在的 repo（OWNER/REPO）。留空時取 runner 提供的
+      GITHUB_REPOSITORY。live 測試與未來搬遷用
+    required: false
+    default: ''
+
+outputs:
+  result:
+    description: >-
+      操作結果：ok（exit 0）/ external_error（exit 1，例外式，workflow 紅燈）。
+      介面誤用（exit 2）不寫本 output
+    value: ${{ steps.notify.outputs.result }}
+  issue_number:
+    description: >-
+      （notify）承載本次通報的 issue 編號。created 時是新開的、commented 時是既有
+      那一則、deduplicated 時是**編號最小者**（R-2.2）
+    value: ${{ steps.notify.outputs.issue_number }}
+  action:
+    description: >-
+      （notify）created（同鍵零筆，開了新的）/ commented（同鍵一筆，追加）/
+      deduplicated（同鍵多筆，追加最舊者並關閉其餘）
+    value: ${{ steps.notify.outputs.action }}
+  count:
+    description: >-
+      （notify）標題 ×N 的新值。**它是給人看的**，不是判定依據——判定依據永遠是
+      實際的 comment 數與 issue 開關狀態（domain-entities.md 逐字）
+    value: ${{ steps.notify.outputs.count }}
+  closed_numbers:
+    description: >-
+      被本次呼叫關閉的 issue 編號，**空白分隔的單行**（notify 的去重分支；
+      resolve_if_open 的關閉清單）。沒有關閉任何 issue 時為空字串
+    value: ${{ steps.notify.outputs.closed_numbers }}
+  closed:
+    description: 被本次呼叫關閉的 issue 數（closed_numbers 的計數；無則 0）
+    value: ${{ steps.notify.outputs.closed }}
+  message:
+    description: >-
+      說明文字：只含本 action 自己的定位文字與 gh 的錯誤訊息（單行化、截斷），
+      **不含完整回應 body、不含任何標頭**（SEC-2 的同一條清洗規則）
+    value: ${{ steps.notify.outputs.message }}
+
+runs:
+  using: composite
+  steps:
+    - id: notify
+      shell: bash
+      env:
+        AIDLC_OPERATION: ${{ inputs.operation }}
+        AIDLC_INTENT_ID: ${{ inputs.intent_id }}
+        AIDLC_REASON_CODE: ${{ inputs.reason_code }}
+        AIDLC_STAGE: ${{ inputs.stage }}
+        AIDLC_DETAIL: ${{ inputs.detail }}
+        AIDLC_KEYS: ${{ inputs.keys }}
+        AIDLC_LABEL: ${{ inputs.label }}
+        AIDLC_ALERT_REPO: ${{ inputs.alert_repo }}
+      run: bash "${GITHUB_ACTION_PATH}/notify.sh"

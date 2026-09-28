@@ -1,0 +1,17 @@
+{
+  "stage": "code-generation",
+  "unit": "estimate-workspace-ui",
+  "version": 1,
+  "writes": [
+    { "path": "frontend/src/pages/CostPage.tsx" },
+    { "path": "frontend/src/components/cost/types.ts" },
+    { "path": "frontend/src/components/cost/EstimateUploadZone.tsx" },
+    { "path": "frontend/src/components/cost/EstimateCloudCard.tsx" },
+    { "path": "frontend/src/components/cost/EstimateChecksPanel.tsx" },
+    { "path": "frontend/src/components/cost/EstimateHistoryDrawer.tsx" },
+    { "path": "frontend/src/components/cost/EstimateShareModal.tsx" },
+    { "path": "frontend/src/components/ShareModal.tsx" },
+    { "path": "frontend/tests/e2e/estimate-workspace.spec.ts" },
+    { "path": "frontend/tests/fixtures/aws-estimate.csv" }
+  ]
+}

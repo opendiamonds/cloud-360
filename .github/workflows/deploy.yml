@@ -97,6 +97,11 @@ jobs:
           N8N_USER: ${{ secrets.N8N_USER }}
           N8N_PASSWORD: ${{ secrets.N8N_PASSWORD }}
           APP_ENV: ${{ secrets.APP_ENV }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          COST_PRICING_USE_SDK: ${{ secrets.COST_PRICING_USE_SDK }}
+          GCP_BILLING_API_KEY: ${{ secrets.GCP_BILLING_API_KEY }}
         run: bash deploy/render-env.sh
 
       - name: Build and start the stack
@@ -194,6 +199,11 @@ jobs:
           N8N_USER: ${{ secrets.N8N_USER }}
           N8N_PASSWORD: ${{ secrets.N8N_PASSWORD }}
           APP_ENV: ${{ secrets.APP_ENV }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          COST_PRICING_USE_SDK: ${{ secrets.COST_PRICING_USE_SDK }}
+          GCP_BILLING_API_KEY: ${{ secrets.GCP_BILLING_API_KEY }}
         run: |
           set -euo pipefail
           LAST=$(cat "${HOME}/.cloud360/last-good-sha" 2>/dev/null || true)

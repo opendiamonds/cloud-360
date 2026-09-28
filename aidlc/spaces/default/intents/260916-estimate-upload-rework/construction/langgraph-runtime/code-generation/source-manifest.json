@@ -1,0 +1,11 @@
+{
+  "stage": "code-generation",
+  "unit": "langgraph-runtime",
+  "version": 1,
+  "writes": [
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/services/langgraph_runtime.py" },
+    { "path": "backend/tests/test_langgraph_runtime.py" },
+    { "path": "scripts/smoke_langgraph_openrouter.py" }
+  ]
+}

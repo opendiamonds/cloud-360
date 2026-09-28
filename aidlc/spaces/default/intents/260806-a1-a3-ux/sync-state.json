@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "binding": 570,
+  "last_status": "In review",
+  "last_field_value": "build-and-test (260806-a1-a3-ux)",
+  "last_reason_code": "mapped",
+  "managed_block_hash": "1056c3e0eaf4c348f2a608531386f6db19fe9141842dd25a59d7cc24df08b9b2",
+  "last_synced_at": "2026-09-06T08:47:29Z",
+  "last_written_status": "In review"
+}

@@ -1,11 +1,26 @@
 # Architecture — Cloud-360
 
-> 逆向工程產出。基準 commit `c3de2c8`（branch `danniel/fix/production-path-check-noop`，2026-08-17）。
+> 逆向工程產出。**基準 commit `9307dbc`（2026-08-23）**；前一基準為 `c3de2c8`（2026-08-17）。
+> **本輪為兩區定向掃描 ＋ 差異標註，不是完整重掃**（approval-handoff Q3=A）。
+> 節標題後的新鮮度標記：**［本輪重寫］** 實掃改寫｜**［本輪機械複驗］** 數字已重新量測｜
+> **［差異標註］** 未重新推導、只指出過期點｜**［沿用 `c3de2c8`］** 本輪未觸及。
+> 完整範圍、未讀清單與**跨分支限制（基準已落後 `origin/ut` 三個 commit）**見
+> `reverse-engineering-timestamp.md`。
+>
+> **用詞提醒**：在標記為［沿用 `c3de2c8`］或［差異標註］的段落內，「本輪／本次」指的是
+> **`c3de2c8` 那一輪掃描**；在［本輪重寫］／［本輪機械複驗］段落內，以及任何加 **★** 的
+> 條目，指的才是本輪（`9307dbc`，2026-08-23）。
+>
 > 每張 Mermaid 圖後方都附「文字 fallback」段落，內容與圖等價。
+>
+> **本檔涵蓋兩種架構**：`## 架構風格與判定依據` 到 `## 架構約束與已知張力` 描述**應用程式
+> 架構**；末段的 `## 開發流程層架構` 兩節描述 **AI-DLC ＋ gh-aw 這套開發流程機制自身的架構**
+> ——後者是本輪唯二實掃的範圍。
 
-## 架構風格與判定依據
+## 架構風格與判定依據 ［沿用 `c3de2c8`］
 
-**判定結論：Modular Monolith + SPA。**（與前一版判定相同，本次重新查證後維持。）
+**判定結論：Modular Monolith + SPA。**（與前一版判定相同，`c3de2c8` 重新查證後維持；
+本輪未再複驗，但 `c3de2c8..9307dbc` 的 20 個 commit 未新增服務邊界、佇列或快取層。）
 
 支撐這個判定的觀察事實：
 
@@ -26,9 +41,13 @@
   直接寫在 HTTP handler 內、沒有獨立 service 層。分層**不是全域一致的**，因此以「模組化單體」
   描述其邊界特性比以「分層」描述更貼近實況。
 
-## 本次掃描最值得下游注意的三件事
+## `c3de2c8` 掃描最值得下游注意的三件事 ［差異標註］
 
 這三件事對後續設計決策有直接影響，先於細節列出。
+**本輪未重新推導這三件事**；其中第三件所依據的 `diagram_builder.py` 未被本輪觸及，
+第一、二件的核心結論（型別鏈覆蓋 1/10、SSE 與 WebSocket 是機械檢查盲區）在
+`c3de2c8..9307dbc` 的 diff 中沒有反證，但**「WebSocket 無授權」這一項已在本輪被推翻**
+（見下方張力四）——盲區仍在，未受保護的部分已修。
 
 ### 一、跨語言型別契約鏈已建好，但採用率只有 1/10
 
@@ -347,7 +366,40 @@ RBAC 是全系統最重要的橫切關注點，同時出現在**四個地方**�
 **對下游的提醒**：`get_current_user` 已不是純讀取。任何「在請求鏈上再掛一個副作用」的
 設計提案，都要先確認它與這條既有寫入路徑的交互（交易邊界、失敗處理、節流視窗）。
 
-### 串流（SSE）
+### 認證機密與不安全預設值：`APP_ENV` 閘門（本輪重寫的橫切關注點）［本輪重寫］
+
+**PR #526「強化認證與部署預設值」引入了一個新的全域橫切概念：`APP_ENV`。**
+前一版 codekb 有四處記載已因此失效（預設帳號 `admin/admin123`、WebSocket 無認證、
+token 存 `localStorage`、`JWT_SECRET` 有硬編 fallback），**四處本輪皆已逐行複驗並更正**。
+
+`APP_ENV` 是一個**跨模組的環境閘門**，`LOCAL_APP_ENVS = {"local", "test", "ci"}`
+（`auth.py:15`）。它同時被 `auth.py` 與 `database.py` 讀取，決定「不安全的開發便利預設值
+是否允許生效」：
+
+| 面向 | 舊行為（`c3de2c8`） | 新行為（`9307dbc`，本輪實讀） |
+|---|---|---|
+| **JWT 簽章金鑰** | `JWT_SECRET` 未設時**靜默** fallback 到程式內固定字串 | `_resolve_secret_key()`（`auth.py:22`）：有值就用；無值且 `APP_ENV ∈ {local,test,ci}` 才允許 `INSECURE_DEV_SECRET`；**否則 `raise RuntimeError("JWT_SECRET is required outside local/test environments")`——在 import 期即失敗** |
+| **persona demo 帳號** | 空 DB 時無條件建立 11 個固定密碼帳號 | 僅 `APP_ENV=local`（或 `ALLOW_INSECURE_DEFAULT_PERSONAS` 明確 opt-in）才建立 |
+| **bootstrap admin** | 固定密碼 `admin123`，且 `schema_rbac.sql` 亦 commit 其 bcrypt hash | 密碼取自 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`；未設且非 local/test/ci 時**不建立**並記 log；`schema_rbac.sql` 的整個 D) 區塊已刪除（531 → **510 行**） |
+| **前端 token 儲存** | `localStorage`（跨分頁、關閉瀏覽器仍存在） | `sessionStorage`，並以 `clearLegacyAuthStorage()` 主動清除四個舊 `localStorage` key（`token`／`username`／`role`／`authorization_status`） |
+| **WebSocket** | 無 guard | `?token=` ＋ `_authorize_ws_user()`（見張力四） |
+
+**這個閘門的架構含義，下游必須知道兩點**：
+
+1. **失敗模式由「靜默」改為「fail fast」，但只在一半的維度上。** `JWT_SECRET` 缺值現在會
+   讓後端**啟動失敗**；但 `APP_ENV` 本身**沒有** fail-fast——`os.environ.get("APP_ENV", "local")`
+   的預設值是 `"local"`。也就是說**忘記設 `APP_ENV` 等於宣告自己是 local 環境**，
+   於是所有不安全預設值重新啟用而不會有任何錯誤。安全性現在取決於一個
+   **未設定即取最寬鬆值**的環境變數。
+2. **`.env` 的載入路徑已被釘死**（新模組 `backend/env_bootstrap.py`）。
+   舊的 `load_dotenv()` 會從 cwd 一路往上找第一份 `.env`，實際發生過「摸到使用者家目錄的
+   `.env`」的事故。新模組把路徑固定為 `Path(__file__).resolve().parent / ".env"`，
+   並成為 `main.py` 與 `database.py` 的**唯一**載入點。原因寫在模組 docstring：
+   `database.py` 是被 `main.py` 匯入的，比 `main.py` 自己那行更早跑，
+   **只修 `main.py` 完全無效**。回歸測試 `tests/test_dotenv_path.py` 守著這件事。
+   **這件事與 `APP_ENV` 直接相關**：`APP_ENV` 從哪份 `.env` 讀到，就決定了上表整欄的行為。
+
+### 串流（SSE） ［沿用 `c3de2c8`］
 
 兩條 SSE 管線（A1 產圖、A3 評核）是系統最複雜的部分，並對基礎設施產生要求：
 `frontend/nginx.conf` 為此特別關閉 `proxy_buffering` 並設 600 秒 timeout。
@@ -565,11 +617,17 @@ stateDiagram-v2
 
 ## 架構約束與已知張力
 
-### 張力一：Schema 的真實來源有三處，且不一致（最高優先，本輪部分緩解）
+### 張力一：Schema 的真實來源有三處，且不一致（最高優先） ［差異標註］
+
+> **本輪機械複驗**：`schema_rbac.sql` 現為 **510 行**（`c3de2c8` 時 531 行）。
+> 縮短的原因是 PR #526 **刪除了整個 D) 區塊**（原本 seed `admin` 帳號與 `admin123` 的
+> bcrypt hash 的 INSERT ＋ UPDATE），檔頭涵蓋清單同步改為「不建立固定密碼管理員；
+> bootstrap admin 由後端依環境變數建立」。實測現存區塊為 A)／B)／E)／C) 四段，**D) 已不存在**。
+> 本節其餘關於「三源不一致」與「J5 只存在於 runtime 補丁」的論述**本輪未重新推導**。
 
 | 來源 | 宣稱角色 | 實際地位 |
 |---|---|---|
-| `schema_rbac.sql`（531 行） | 新環境唯一要跑的完整部署腳本；掛為 initdb | **缺 J5 全部物件** |
+| `schema_rbac.sql`（**510** 行） | 新環境唯一要跑的完整部署腳本；掛為 initdb | **缺 J5 全部物件**；**且自 PR #526 起不再建立任何帳號** |
 | `backend/models.py` + `database.py` 的 4 支 `_ensure_*_schema()` | ORM 定義與啟動補丁 | **執行期的實際權威** |
 | `schema.sql`（78 行） | 精簡核心 DDL 參考 | 嚴重落後，缺 3 個表 |
 
@@ -579,7 +637,8 @@ stateDiagram-v2
 後端啟動時執行 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 與 `ALTER COLUMN role DROP NOT NULL`。
 
 **本輪的正面對照**：`users.last_activity_at` 的加入**有循 `project.md` 的 blocking 規則**
-落到 `schema_rbac.sql`（531 行，較前一版的 523 行成長），並新增了對應的
+落到 `schema_rbac.sql`（當時 531 行，較更早的 523 行成長；★ 本輪為 510 行，縮短是因
+PR #526 刪除 D) 區塊，與本節論點無關），並新增了對應的
 `_ensure_last_activity_schema()` 補丁。這是「三處同步」被正確執行的一個實例，
 與 J5 的既存違反形成對比 —— 亦即**規則本身可行，J5 是歷史欠帳而非結構性做不到**。
 
@@ -603,11 +662,30 @@ stateDiagram-v2
 見上方「三件事」之一。`AdminPage` 已接上產生型別鏈並有兩道 CI gate；
 **其餘 9 支做 `fetch()` 的檔仍是手寫鏡像**，漏改不會有任何工具報錯。
 
-### 張力四：一個未受保護的業務端點
+### 張力四：WebSocket 已補上認證，但仍在機械檢查的盲區內 ［本輪重寫］
 
-`/api/collab/ws/{workspace_id}` 是唯一沒有任何 `Depends` guard 的業務端點。
-WebSocket 連線層不做 JWT 檢查，任何知道 workspace id 的連線都能收到共編廣播。
-且如上所述，**它也在機械檢查的盲區內**，兩件事疊加。
+**前一版記載「`/api/collab/ws/{workspace_id}` 是唯一沒有任何 `Depends` guard 的業務端點、
+連線層不做 JWT 檢查」——該記載已於 PR #526 失效，本輪逐行複驗過原始碼。**
+
+現況（`collab_router.py:255-286`，本輪實讀）：
+
+| 環節 | 實作 |
+|---|---|
+| token 傳遞 | 以 **query string** `?token=` 帶入（`websocket.query_params.get("token")`）——WebSocket 握手無法帶自訂 header，這是既定作法 |
+| 驗證 | `_authorize_ws_user()` 呼叫 `auth.get_user_from_token(token, db, record=False)`，再檢查該使用者對 diagram 的可存取性與架構圖編輯權 |
+| 缺 token | `HTTPException(401, "WebSocket 需要 token")` |
+| 拒絕方式 | 以 close code **1008**（policy violation，對應 401／403）或 **1003** 斷線 |
+| payload 驗證 | 新增大小與形狀上限（2 MB；必須含 `<mxgraphmodel>`／`<mxfile>`；聊天 100 則 × 8000 字），違反者 `close(1003)` |
+| 連線清理 | `manager.disconnect` 移入 `finally` |
+
+**`record=False` 是一個刻意的架構決定**：WebSocket 驗證**不**觸發
+`activity.record_activity`。也就是說長時間掛著的共編連線不會被算成「帳號有活動」——
+下游若要以「最後活動時間」判斷帳號是否在用，必須知道這條路徑被排除在外。
+
+**仍然成立的部分**：WebSocket 依舊**不在 `openapi.json` 內**，
+`dump_openapi.py --check`／`check-api-types.mjs`／`tcms_validate.py` 三者依舊碰不到它。
+**盲區沒有消失，只是盲區裡的那個洞被補了。** 這條授權路徑本身沒有任何自動化斷言保護
+——本輪未發現對應的 HTTP／WebSocket 層測試（`grep websocket_connect backend/tests/` 無命中）。
 
 ### 張力五：`schema_rbac.sql` 與 `rbac_seed_data.py` 之外，`diagram_builder` 已成為新的體積焦點
 
@@ -639,3 +717,520 @@ WebSocket 連線層不做 JWT 檢查，任何知道 workspace id 的連線都能
    註冊頁目錄四處都要動。
 8. **若變更觸及 WebSocket 或 SSE 事件名**：**沒有任何機械檢查會保護你**。
    必須以人工審查 + e2e 斷言補上，並更新 `agent_router.py` 的 docstring 契約段。
+   （WebSocket 現已有授權，但**授權本身也沒有自動化斷言**——見張力四。）
+
+---
+
+# 開發流程層架構
+
+以下三節描述的**不是 Cloud-360 這個產品**，而是**維護它的那套機制**：AI-DLC 的狀態表徵、
+gh-aw 的 agentic workflow 語料，以及兩份規範它們與 GitHub 整合的 ADR。
+**這是本輪 reverse-engineering 唯二實掃的範圍**，內容全部在 `9307dbc` 上取得。
+
+## 開發流程層架構（一）：AI-DLC 狀態表徵 ［本輪重寫］
+
+一句話結論：**機器可讀的狀態欄位只在「章節齊全的 record」上成立，而 6 個 record 中有 1 個
+結構完全不同、1 個註冊表與狀態檔互相矛盾、stage 列的集合本身跨 record 不一致，
+且作用中 intent 的狀態檔目前完全未進版控。**
+
+任何要消費 AI-DLC 狀態的機制（例如 ADR-0013 的 Projects 同步）都必須先接受這四件事。
+
+### 兩個資料源與它們的關係
+
+```mermaid
+graph TD
+    REG["intents.json 註冊表 陣列 每列一個 intent"]
+    ST["每個 record 的 aidlc-state.md 9 個 H2 的狀態檔"]
+    AUD["每個 record 的 audit shard append-only 事件流"]
+    GF["getField 行錨定全檔搜尋 第一個 match 就回傳"]
+    GI["gitignore 排除 active-intent 游標"]
+    CONS["消費端 例如 Projects 同步 workflow"]
+
+    REG -->|"uuid slug dirName scope status"| CONS
+    ST -->|"Status Current Stage Lifecycle Phase 與 stage checkbox"| CONS
+    AUD -->|"何時變的 gate 被拒過幾次"| CONS
+    GF -.->|"解析語意 必須複製"| ST
+    GI -.->|"看不到哪個是作用中"| CONS
+    REG -.->|"實測已分岔 1 of 6"| ST
+```
+
+**文字 fallback（狀態表徵的資料源）**：AI-DLC 的狀態分散在三處。
+`intents.json` 是註冊表（一個 JSON 陣列，每列一個 intent，欄位為 `uuid`／`slug`／
+`dirName`／`scope`／`repos`／`status`）；每個 record 的 `aidlc-state.md` 是狀態檔
+（9 個 H2，含 `Status`、`Current Stage`、`Lifecycle Phase` 與逐 stage 的 checkbox 列）；
+每個 record 的 `audit/<host>-<clone8>.md` 是 append-only 的事件流，多出「什麼時候變的」
+與「gate 被拒過幾次」這兩種註冊表與狀態檔都沒有的資訊。任何消費端若要自行解析狀態檔，
+**必須複製 `getField()` 的行為**（見下）。`.gitignore` 排除 `active-intent` 游標，
+消費端因此無從得知哪個 intent 是作用中的。**註冊表與狀態檔實測已分岔（6 個中有 1 個）。**
+
+### `intents.json` 的欄位契約
+
+型別定義在 `.claude/tools/aidlc-lib.ts:1344` 的 `interface IntentRegistryEntry`。
+
+| 欄位 | 型別 | 必填 | 說明 |
+|---|---|---|---|
+| `uuid` | string | 是 | UUIDv7，出生時產生 |
+| `slug` | string | 是 | 無日期前綴的識別字 |
+| `dirName` | string? | **選填** | on-disk record 目錄名，逐字儲存。舊列（pre-spike）可能沒有，此時退回 `<slug>-<id8>` hex 比對（`recordDirMatches()`，`aidlc-lib.ts:1363`） |
+| `scope` | string? | 選填 | scope slug。**`260802-default` 該列沒有 `scope`** |
+| `repos` | string[]? | 選填 | 目前 6 列皆無 |
+| `status` | string | 是 | 見下 |
+
+**`status` 的值域只有兩個值，而且型別上沒有任何保護**：宣告為裸 `string`，
+**無 union 型別、無 runtime 驗證**。引擎實際只寫入：
+
+- `"in-flight"` —— 唯二寫入點 `aidlc-lib.ts:1698`（出生）與 `:1861`（migration 補列）
+- `"complete"` —— 唯二寫入點 `aidlc-state.ts:1886` 與 `:2490`，皆在 `complete-workflow` 路徑
+
+**沒有 `parked`／`abandoned`／`failed`。** `park` 只寫狀態檔的 `Parked` 欄位，
+**完全不碰 `intents.json`**。目前唯一的消費端是 `aidlc-utility.ts:688`
+（`intent.status === "complete" || !intent.dirName` → skip）。
+
+**註冊表沒有任何 per-intent 的衍生欄位**——不含 stage、phase、時間戳。
+要知道一個 intent 進行到哪，**只能讀 `aidlc-state.md`**。
+
+目前 6 列（本輪實測）：
+
+| dirName | scope | `intents.json` 的 status | 狀態檔的 `Status` | 一致？ |
+|---|---|---|---|---|
+| `260802-default` | *(無)* | `in-flight` | *(無此欄)* | 無法比對 |
+| `260802-last-login-column` | `feature` | `in-flight` | **`Completed`** | **❌ 分岔** |
+| `260806-a1-a3-ux` | `bugfix` | `in-flight` | `Running` | ✅ |
+| `260806-drawio-templates` | `bugfix` | `complete` | `Completed` | ✅ |
+| `260816-production-path-check` | `bugfix` | `complete` | `Completed` | ✅ |
+| `260822-gh-projects-sync` | `aidlc-github-projects-sync` | `in-flight` | `Running` | ✅（**整列與整個 record 皆未進版控**） |
+
+**分岔的成因不是 bug 而是機制**：`260802-last-login-column` 的狀態檔寫著
+`Status: Completed`、`Next Action: Workflow complete`、`Lifecycle Phase: OPERATION`，
+但註冊表列的翻轉**只發生在 `complete-workflow` 路徑**；該 intent 最後 7 個 operation stage
+是 `[S]`（被跳過）而非正常走完，註冊表因此從未被翻。
+
+> **對任何同步機制的直接含意**：`intents.json.status` 與狀態檔的 `Status`
+> **不是同一個事實的兩份拷貝**，實測已經分岔。必須挑一個作為單一來源並寫明；
+> 或同步兩者並在分岔時明確報告，**不得靜默取其一**。
+
+### `aidlc-state.md` 的章節契約與四項實質漂移
+
+模板在 `.claude/knowledge/aidlc-shared/state-template.md`（67 行），定義 9 個 H2：
+`Project Information`／`Scope Configuration`／`Workspace State`／`Execution Plan Summary`／
+`Runtime State`／`Phase Progress`／`Stage Progress`／`Current Status`／`Session Resume Point`。
+模板明確聲明**不得手列 stage**——stage 列由引擎依編譯後的 stage graph ＋ scope grid 產生。
+
+| record | H2 數 | `Status` | `Current Stage` | `Lifecycle Phase` | Stage 列數 | checkbox 分布 |
+|---|---|---|---|---|---|---|
+| `260802-default` | **1** | **欄位不存在** | **欄位不存在** | **欄位不存在** | **0** | 無 `Stage Progress` 區 |
+| `260802-last-login-column` | 9 | `Completed` | `feedback-optimization` | `OPERATION` | 32 | 21 `[x]` / 11 `[S]` |
+| `260806-a1-a3-ux` | 9 | `Running` | `build-and-test` | `CONSTRUCTION` | 32 | 6 `[x]` / 1 `[?]` / 25 `[ ]` |
+| `260806-drawio-templates` | 9 | `Completed` | `build-and-test` | `CONSTRUCTION` | 32 | 7 `[x]` / 25 `[ ]` |
+| `260816-production-path-check` | 9 | `Completed` | `tcms-test-cases` | `CONSTRUCTION` | **33** | 8 `[x]` / 25 `[ ]` |
+| `260822-gh-projects-sync` | 9 | `Running` | `reverse-engineering` | `INCEPTION` | **33** | 7 `[x]` / 1 `[-]` / 25 `[ ]` |
+
+**漂移一 —— `260802-default` 是結構性例外，不是「欄位空白」。**
+它**根本沒有** `## Current Status`、`## Stage Progress`、`## Scope Configuration`、
+`## Session Resume Point` 四個區塊；只有 `## Project Information` 一個 H2，
+其下是 `### Phase Tracking`（H3，emoji ＋ 自由文字，如 `reverse-engineering: ✅`）
+與 `### Construction Unit 驗收（A2）` 表。
+**任何 parser 對它的每一個機器欄位都會回 null**，這不是資料缺漏而是格式不同。
+
+該檔第 24–27 行有一段刻意的警告註解：人類可讀區改用「專案名稱／專案型態／AIDLC 版本」等
+**中文欄名**，就是為了避開引擎的 state 命名空間，「否則 `getField()` 會把這裡的中文散文
+當成機器欄位讀走」。**這條警告對任何新的同步機制同樣成立。**
+
+**漂移二 —— `Skeleton Stance` 欄位在三個 record 存在、兩個不存在、且不在模板裡。**
+（`260802-last-login-column:34` = `off`；`260806-a1-a3-ux:34` 與 `260806-drawio-templates:34`
+= `scope-dependent`；`260816`／`260822` 無此行。）它以**孤立 bullet** 的形式夾在
+`## Runtime State` 與 `## Phase Progress` 之間，不屬於任何區塊——因為
+`## Runtime State` 只有 `Revision Count` 一行，而 `set-skeleton-stance` 子命令會插入此欄。
+
+**漂移三 —— `Construction Autonomy Mode` 在模板裡（`state-template.md:61`），
+但 6 個 record 一個都沒有。** 這是有後果的：`aidlc-lib.ts:2698` 的 `isAutonomousMode()`
+與 `aidlc-state.ts:823` 讀這個欄位，缺欄位時一律 falsy → 判定為非 autonomous。
+而 `setFieldStrict()`（`aidlc-lib.ts:2728`）在欄位缺席時會 **throw**，
+`setField()` 則**靜默 no-op**。
+
+**漂移四 —— stage 列的集合跨 record 不一致，差異是 `tcms-test-cases`。**
+`260816` 與 `260822` 的 CONSTRUCTION 區有 8 列（含 `tcms-test-cases`）；
+`260802-last-login-column`、`260806-a1-a3-ux`、`260806-drawio-templates` 只有 7 列，
+**完全沒有這一行**。原因是 stage 列在 record 出生時依當時編譯的 stage graph 產生，
+`tcms` plugin 是後來才加入的。
+→ **任何以固定 stage 清單對映的機制會在舊 record 上錯位。**
+stage 集合必須從各 record 的檔案本身解析，或從 `.claude/tools/data/stage-graph.json` 讀，
+**不能寫死**。
+
+### 兩套狀態詞彙的語意差別（本節最重要的一點）
+
+**（a）per-stage checkbox — 六值。** 語意定義逐字寫在每個 record 的 `## Stage Progress`
+下方 HTML 註解：
+
+```
+[ ] not started, [-] in progress, [?] awaiting approval (gate open),
+[R] revising (user rejected gate), [x] completed, [S] skipped via --stage/--phase jump
+```
+
+（模板 `state-template.md:48` 的措辭較短：`[S] skipped`，缺 "via --stage/--phase jump"
+半句。**以 record 內的長版為準**——那才是引擎實際寫出去的。）
+
+**checkbox 之外，每列還有一個後綴 `— EXECUTE` 或 `— SKIP`，兩者正交。**
+這是最容易誤讀的一點：
+
+| 組合 | 語意 | 實例 |
+|---|---|---|
+| `[ ] xxx — SKIP` | 該 scope 根本不含此 stage，**從未打算跑** | `260822`：`- [ ] market-research — SKIP` |
+| `[S] xxx — EXECUTE` | 在 scope 內、本來要跑，**但被 `--stage`／`--phase` 跳過** | `260802-last-login-column`：`- [S] nfr-design — EXECUTE` |
+| `[ ] xxx — EXECUTE` | 在 scope 內、**尚未輪到** | `260822`：`- [ ] requirements-analysis — EXECUTE` |
+
+三者都是「沒打勾」，但一個是不適用、一個是被跳過的欠債、一個是待辦。
+**把三者一律映成同一個看板狀態會抹掉真實資訊。**
+
+**（b）top-level `Status` — 只有兩值**：`Running` / `Completed`
+（`state-template.md:60`；實測 6 個 record 也只出現這兩值）。
+
+**兩套詞彙的三處實測落差**：
+
+1. **`Status` 沒有「等待核准」這個值。** `260806-a1-a3-ux` 的 `build-and-test` checkbox 是
+   `[?]`（gate 開著、等人核准），但 `Status: Running`。
+   → **看板若要有 "In review" 這一格，來源必須是 checkbox，不可能是 `Status`。**
+2. **`Status: Completed` 不代表所有 in-scope stage 都跑過。**
+   `260802-last-login-column` 是 `Completed`，但 11 個 `— EXECUTE` 的 stage 是 `[S]`，
+   `Completed: 21` / `Total Stages: 32`。
+3. **`Next Stage` 不可靠。** `260806-a1-a3-ux` 是 `Status: Running`、
+   `Current Stage: build-and-test`，卻寫 `Next Stage: none`。
+
+### 欄位解析語意（自行 parse 時必須複製這個行為）
+
+`getField()`（`aidlc-lib.ts:2676`）：
+
+```ts
+new RegExp(`^- \\*\\*${escapeRegex(field)}\\*\\*:[ \\t]*(.*)$`, "m")
+```
+
+- **行錨定、全檔搜尋、無區塊界定**——它不知道自己在哪個 H2 底下，**第一個 match 就回傳**。
+- 刻意用 `[ \t]*` 而非 `\s*`，讓空值回傳 `""` 而非吃掉下一行。
+- 找不到時回傳 **`null`（≠ `""`）**。
+
+**後果**：`Status`、`Current Stage`、`Project` 這些欄名若在檔內任何地方以 `- **X**: `
+形式再次出現且位置在前，就會被讀走。`260802-default` 的作者已察覺並以中文欄名迴避
+——這是**既有的、被記錄下來的地雷**。
+
+`setField()`（`:2710`）欄位不存在時**靜默回傳原內容**；`setFieldStrict()`（`:2728`）則 throw。
+
+### 版控邊界：只看得到已 commit 的內容（結構性限制）
+
+`.gitignore` 第 44–54 行（來源為 upstream v2 的 `dist/claude/.gitignore`，
+本輪以 `git check-ignore -v` 實測四條）：
+
+| 樣式 | 涵蓋 |
+|---|---|
+| `aidlc/active-space` | 已忽略 |
+| `aidlc/spaces/*/intents/active-intent` | **已忽略——遠端無從得知哪個 intent 是作用中的** |
+| `aidlc/.aidlc-clone-id`、`aidlc/.aidlc-sessions/` | 已忽略 |
+| `aidlc/spaces/*/intents/*/runtime-graph.json` | 已忽略 |
+| `aidlc/spaces/*/intents/*/.aidlc-*` | 涵蓋 `.aidlc-sensors/`、`.aidlc-steering-token-key`、`.aidlc-hooks-health` |
+
+`aidlc-state.md` 與 `intents.json` 本身**不在**忽略清單，是「應該」進版控的。
+**但實測工作樹揭露更尖銳的問題**：作用中 intent 的整個 record 目錄
+（`260822-gh-projects-sync/`，含它的 `aidlc-state.md`、audit shard 與 31 個 ideation 產出）
+**目前是 untracked**，`intents.json` 的對應新列也只存在於工作樹。
+
+> **這對任何 GitHub 側的同步機制是結構性的**：一個跑在 GitHub Actions 上、checkout 預設
+> 分支的 workflow，看到的是**已合併到 `ut`／`main` 的狀態快照**。in-flight intent 在被
+> commit 並合併之前對它**不存在**——而「in-flight」正是看板最需要即時反映的那一段
+> （Ready → In progress → In review）。
+> **同步的更新頻率不由 cron 決定，由「人什麼時候 commit 並合併 record」決定。**
+
+另外，`active-intent` 被忽略意味著遠端若要判定「作用中」，只能從 `intents.json` 的
+`status: "in-flight"` 推——而該欄實測已與狀態檔分岔，且可能同時有 **3 列**是 `in-flight`。
+
+### audit shard（相鄰資料源）
+
+`<record>/audit/<host>-<clone8>.md`，**已追蹤、per-clone 分片**。
+6 個 record 共 6 個 shard、**35,672 行**（最大 27,747 行 = `260802-last-login-column`）。
+格式為 H2 標題 ＋ `**Key**: value` 行，`---` 分隔。事件型別實測 **44 種**，
+與 stage 進度直接相關的計數：
+
+`STAGE_STARTED`(84)／`STAGE_COMPLETED`(65)／`STAGE_AWAITING_APPROVAL`(56)／
+`GATE_APPROVED`(50)／`STAGE_SKIPPED`(13)／`STAGE_REVISING`(5)／`GATE_REJECTED`(5)／
+`STAGE_JUMPED`(4)／`PHASE_STARTED`(22)／`PHASE_VERIFIED`(20)／`PHASE_COMPLETED`(20)／
+`PHASE_SKIPPED`(7)／`WORKFLOW_STARTED`(5)／`WORKFLOW_COMPLETED`(3)／`WORKFLOW_PARKED`(4)／
+`WORKFLOW_UNPARKED`(4)
+
+**shard 是唯一帶時間戳的來源**，也是唯一說得出「gate 被拒過幾次」的來源
+（`STAGE_AWAITING_APPROVAL` 56 次對上 `GATE_APPROVED` 50 次、`GATE_REJECTED` 5 次）。
+但它同樣受上述 commit 邊界限制，且**檔名含 host ＋ clone id**——一個 intent 若跨機器工作
+會有多個 shard（目前每個 record 恰好 1 個，但 `260806-a1-a3-ux` 與
+`260806-drawio-templates` 的 shard 來自不同人的機器，**多機情境是真實的**）。
+
+**未讀**：shard 內容未精讀，**每種事件帶哪些 `**Key**:` 欄位未盤點**（見時間戳檔）。
+
+## 開發流程層架構（二）：gh-aw workflow 語料 ［本輪重寫］
+
+> **版本警告**：本節全部內容基於 **gh-aw `v0.81.6`**（基準 `9307dbc`）。
+> `origin/ut` 已升級至 **`v0.86.2`**（`copilot` engine `1.0.65` → `1.0.79`），
+> **本節的版本相關事實在 `ut` 上需重新查證**。詳見 `reverse-engineering-timestamp.md`。
+
+### 語料範圍
+
+`.github/workflows/` 共 **27 個檔**，**全部已追蹤進版控**（`.md` 與 `.lock.yml` 皆然）：
+
+- **11 組 gh-aw agentic workflow**（`.md` ＋ `.lock.yml` 成對，22 檔）
+- `agentics-maintenance.yml` —— gh-aw 自動產生的維護 workflow，cron `37 0 * * *`，**無對應 `.md`**
+- `copilot-setup-steps.yml`（772 B，**未讀**）
+- `ci.yml`、`deploy.yml` —— 手寫的傳統 workflow
+
+另有 `.github/aw/actions-lock.json`（action SHA pin 表，`9307dbc` 上 5 筆）
+與 `.github/agents/agentic-workflows.md`（gh-aw 使用指引，**只 grep 未通讀**）。
+**沒有 `.github/workflows/aw.json`**。
+
+### 11 組 workflow 逐項盤點
+
+| # | `.md` | 顯示名稱（＝body 第一個 H1） | `on:` | `.md` 宣告的 `permissions:` | timeout | `tools:` github toolsets | `safe-outputs:` |
+|---|---|---|---|---|---|---|---|
+| 1 | `code-drift-alert` | Code Drift Alert | PR[3] ＋ **paths**（`backend/main.py`、`backend/services/**`、`backend/models.py`、`schema_rbac.sql`、`schema.sql`）＋ dispatch | contents:read, pull-requests:read | 15 | context, repos, pull_requests | `add-comment` max 1 |
+| 2 | `contract-guard` | Contract Guard | PR[3] ＋ dispatch | contents:read, pull-requests:read | 20 | context, repos, pull_requests | `add-comment` max 1；`push-to-pull-request-branch` max 1 |
+| 3 | `daily-digest` | Daily Digest | `schedule` cron `0 23 * * 1-5` ＋ dispatch | contents/issues/pull-requests/actions: read | 20 | context, repos, issues, pull_requests, actions | `create-issue` max 1 labels[digest]；`close-issue` max 1 |
+| 4 | `deploy-doctor` | Deploy Doctor | **`workflow_dispatch` only**，inputs `run_id`(required)/`pr_number`/`failure_log` | contents/actions/issues: read | 15 | context, repos, actions, issues | `create-issue` max 1 labels[deploy-failure] |
+| 5 | `issue-triage` | Issue Triage | `issues`[opened,reopened] ＋ dispatch | contents/issues: read | 15 | context, repos, issues | `add-comment` max 1；`add-labels` max 3 ＋ 10 項 allowlist |
+| 6 | `lint-fix` | Lint Fixer | PR[3] ＋ dispatch | contents/pull-requests: read | 25 | **無** | `add-comment` max 1；`push-to-pull-request-branch` max 1 |
+| 7 | `local-dev-drift` | Local Dev Drift | PR[3] ＋ **paths**（`backend/database.py`、`deploy/nginx.conf`、`deploy/render-env.sh`、三個 `.env.example`）＋ dispatch | contents/pull-requests: read | 15 | context, repos, pull_requests | `add-comment` max 1 |
+| 8 | `pr-reviewer` | PR Reviewer | PR[3] ＋ dispatch | contents/pull-requests: read | 20 | context, repos, pull_requests | `add-comment` max 1 |
+| 9 | `release-watch` | Release Watch | **`schedule: weekly on monday`**（gh-aw 的模糊排程語法，非 cron）＋ dispatch | contents/issues: read | 25 | context, repos, issues | `create-issue` max 1 labels[dependencies] |
+| 10 | `spec-sync` | Spec Sync | **`push` to `ut`** ＋ **paths**（`aidlc/spaces/*/intents/*/inception/application-design/frontend-backend-specification.md`、`.../construction/database-schema.md`）＋ dispatch | contents/issues: read | 20 | context, repos, issues | `create-issue` max 1 labels[spec-drift] |
+| 11 | `ui-regression` | UI Regression Reporter | PR[3] ＋ dispatch | contents/pull-requests: read | 30（見警告） | **無** | `add-comment` max 1 |
+
+（PR[3] = `pull_request` types `[opened, synchronize, reopened]`。）
+
+**全部 11 支共通**：`engine: copilot`、`network: defaults`。
+兩支帶 `edit:` bash 權限（`contract-guard`、`lint-fix`）。
+
+**`name:` 從哪來**：11 個 `.md` **都沒有** `name:` frontmatter key；
+`.lock.yml` 的 `name:` 取自 **`.md` body 的第一個 H1**。
+實證：`lint-fix.md` → `Lint Fixer`、`ui-regression.md` → `UI Regression Reporter`，
+兩者都與檔名不同。**新增 workflow 時，body H1 必須與現有 11 個不同**——它同時決定
+concurrency group（見下）。
+
+### `safe-outputs`：**本 repo 用過 5 種，這不是框架的目錄**
+
+觀察到的型別：`add-comment`(7)、`create-issue`(4)、`push-to-pull-request-branch`(2)、
+`add-labels`(1)、`close-issue`(1)。
+
+> **這 5 種是本 repo 的用量，不是 gh-aw 支援的完整型別目錄。**
+> 完整目錄在 upstream `github/gh-aw` 的文件，repo 內**沒有副本**，本次掃描**未連外查證**。
+> **不得把這 5 種當成「gh-aw 只支援這些」。**
+>
+> 已知的反例來自另一個來源：**ADR-0013（2026-08-23 查證官方文件）確認框架另有
+> `update-project`、`create-project`、`create-project-status-update` 三個 safe-output，
+> 以及供讀取的 `projects` toolset。** 這正好推翻了 ADR-0012 據以要求提權的前提。
+> **該事實的來源是 ADR-0013，不是本次掃描。**
+
+### `.md` ↔ `.lock.yml`：可機械偵測，但**沒有守門員**
+
+**產生方式**：`gh aw compile [workflow-name]`。每個 `.lock.yml` 前三行是機器可讀的溯源標頭：
+
+```
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"<sha256>","body_hash":"<sha256>",
+#                  "compiler_version":"v0.81.6","strict":true,"agent_id":"copilot",
+#                  "engine_versions":{"copilot":"1.0.65"}}
+# gh-aw-manifest: {"version":1,"secrets":[...],"actions":[{repo,sha,version}...],"containers":[...]}
+# This file was automatically generated by gh-aw (v0.81.6). DO NOT EDIT.
+```
+
+`frontmatter_hash` 與 `body_hash` 是 **`.md` 兩半各自的 sha256**——**理論上可以機械偵測 drift**。
+
+**本輪的補充實測（新發現）**：把 `9307dbc`（v0.81.6）與 `origin/ut`（v0.86.2）的
+`pr-reviewer.lock.yml` 標頭並排，`frontmatter_hash`（`0a2a0f6e…`）與
+`body_hash`（`08111765…`）**逐字相同**，只有 `compiler_version` 與 `engine_versions` 改變。
+這證實這對雜湊**涵蓋的是 `.md`，不是編譯輸出**：
+- ✅ 可偵測「改了 `.md` 卻沒重編」
+- ❌ **偵測不到「該用新版編譯器重編了」**——後者只能比對 `compiler_version`
+
+**但沒有任何守門員**：
+- GitHub Actions **只執行 `.lock.yml`**，`.md` 對 runtime 完全惰性。
+- 全 repo grep `gh aw compile` 只命中 4 處，全是敘述性文字（ADR-0011、`ui-regression.md`
+  的驗證提示、`.github/agents/agentic-workflows.md`、`agentics-maintenance.yml` 的標頭註解）。
+- **`ci.yml` 沒有任何 compile-drift 檢查**；`validate_repo_contract.py` 的 `REQUIRED_FILES`
+  只列 `.github/workflows/ci.yml`，不管 gh-aw 檔。
+
+> **因此這是一條真實存在、無自動化防護的失效路徑**：改了 `.md` 卻忘記 `gh aw compile`，
+> **CI 全綠、PR 可合併、行為維持舊的**；改了 `.lock.yml` 而沒改 `.md`，同樣無人察覺。
+> **新增 workflow 一併繼承這條路徑。** 修法的材料已經在檔案裡（那兩個雜湊）。
+
+### 編譯後的 job 拓撲：**權限提升由編譯器注入，作者不寫**
+
+```mermaid
+graph TD
+    MD["workflow.md frontmatter 的 permissions 只設定 agent job"]
+    COMP["gh aw compile v0.81.6"]
+    LOCK["workflow.lock.yml 頂層 permissions 清空"]
+    PRE["pre_activation ubuntu-slim"]
+    ACT["activation ubuntu-slim"]
+    AG["agent ubuntu-latest 這裡套用 md 宣告的 permissions"]
+    DET["detection ubuntu-latest"]
+    CON["conclusion ubuntu-slim issues write 與 pull-requests write"]
+    SO["safe_outputs ubuntu-slim issues write 與 pull-requests write"]
+
+    MD --> COMP --> LOCK
+    LOCK --> PRE --> ACT --> AG --> DET --> CON
+    AG --> SO
+    COMP -.->|"依 safe-outputs 宣告注入寫入權限"| CON
+    COMP -.->|"依 safe-outputs 宣告注入寫入權限"| SO
+```
+
+**文字 fallback（gh-aw 的 job 拓撲與權限）**：作者寫 `.md`，`gh aw compile` 產出
+`.lock.yml`。`.lock.yml` 的**頂層 `permissions: {}` 被清空**，權限改為 per-job 宣告。
+編譯後固定產生 5–6 個命名固定的 job：`pre_activation`（僅 PR／issue／push 觸發型有）、
+`activation`、`agent`、`detection`、`conclusion`、`safe_outputs`。
+`activation`／`conclusion`／`pre_activation`／`safe_outputs` 跑在 **`ubuntu-slim`**，
+`agent`／`detection` 跑在 **`ubuntu-latest`**；**沒有任何 gh-aw workflow 使用 self-hosted
+runner**。`.md` 裡宣告的 `permissions:` **只會套到 `agent` job**；寫入權限由編譯器
+**依 `safe-outputs:` 的宣告**注入到 `conclusion` 與 `safe_outputs` 兩個 job。
+
+以 `pr-reviewer.lock.yml` 為例（`.md` 只宣告 `contents: read` ＋ `pull-requests: read`）：
+
+| job | permissions |
+|---|---|
+| `activation` | actions:read, contents:read |
+| `agent` | contents:read, pull-requests:read ←（等於 `.md` 宣告的） |
+| `detection` | contents:read |
+| `conclusion` | contents:read, **issues:write**, **pull-requests:write** |
+| `safe_outputs` | contents:read, **issues:write**, **pull-requests:write**（timeout-minutes: 45） |
+
+> **這是新 workflow 作者最容易踩的一個坑**：想讓 workflow 寫 Projects 而在 `.md` 裡寫
+> `projects: write`，那個 key **只會落到 `agent` job 上，而 `agent` job 不是執行寫入的那個
+> job**。正確做法是宣告對應的 `safe-outputs:` 型別，讓編譯器把權限注入到
+> `safe_outputs`／`conclusion`。
+
+其他編譯後事實：
+
+- **concurrency group** 由編譯器決定，形狀依觸發型別而異：
+  PR 觸發 → `gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}`，
+  **`cancel-in-progress: true`**；issue 觸發 → `…-${{ github.event.issue.number || github.run_id }}`，
+  **無** cancel；push 觸發 → `…-${{ github.ref || github.run_id }}`，**無** cancel；
+  schedule／dispatch-only → `gh-aw-${{ github.workflow }}`，**無** cancel。
+- `workflow_dispatch` 一律被注入一個 `aw_context` input。
+- 所有 action 被 **SHA pin**（`actions/checkout@34e11487… # v4`），容器 image 被 **digest pin**
+  （`ghcr.io/github/gh-aw-firewall/*:0.27.11@sha256:…`、`ghcr.io/github/github-mcp-server:v1.4.0@…`、
+  `ghcr.io/github/gh-aw-mcpg:v0.3.30@…`）。
+- 使用的 secret 列在標頭：`COPILOT_GITHUB_TOKEN`、`GH_AW_GITHUB_MCP_SERVER_TOKEN`、
+  `GH_AW_GITHUB_TOKEN`、`GITHUB_TOKEN`。
+
+**未讀**：11 個 `.lock.yml` 沒有一個被全讀（各 1,500–1,700 行的生成檔）。
+**agent job 內部的 prompt 組裝、firewall 設定、MCP server 啟動、safe-output 收集腳本，
+一行都沒看。**
+
+### `pre-agent-steps` / `post-steps`：只有一支在用，且踩過三個坑
+
+只有 `ui-regression.md` 同時使用 `pre-agent-steps:`（7 個 step：checkout、setup-node、
+compose up、等 8090、cache Playwright browsers、install、run suite、報 Kiwi TCMS）
+與 `post-steps:`（teardown ＋ 依 `pw-report.json` 的 `.stats.unexpected` 重新拉紅）。
+其餘 10 支都是純 agent workflow。
+
+它的 frontmatter 註解記載了三個對新 workflow 直接有用的**實測**事實：
+
+1. **`timeout-minutes:` 只約束 agent 執行步驟**（Copilot CLI 那一步）——gh-aw 把它編到該
+   step 上而非 job 上。**`pre-agent-steps` 不受它保護**，繼承 GitHub 的 360 分鐘預設。
+   PR #510 實測撞過：一次卡住的瀏覽器下載跑了 **5h59m24s**。
+2. **gh-aw v0.81.6 會靜默丟棄 `pre-agent-steps` 內的 `timeout-minutes:`**
+   （`env`／`id`／`if`／`uses`／`with`／`working-directory`／`continue-on-error` 都會保留），
+   **且回報 0 errors / 0 warnings**。該檔因此改用 `run:` 內的 `timeout(1)` 指令。
+   驗證方式：`gh aw compile ui-regression` 後 `grep timeout-minutes` 在 `.lock.yml` 上。
+   **（此為對 v0.81.6 的實測；`ut` 上的 v0.86.2 未複驗。）**
+3. **不要在 `pre-agent-steps` 加第二次 checkout**（`lint-fix.md` 的註解）：會與 gh-aw 自己的
+   PR-branch checkout 打架，讓 `push-to-pull-request-branch` 對 base 算 patch，
+   進而觸發 protected-files guard。
+
+### GitHub Projects 在現有語料中完全不存在
+
+實測：11 個 `.md` 中 `projects` 一詞只出現 1 次（`ui-regression.md:172` 的英文散文
+「This Kiwi instance is shared across projects」，與 GitHub Projects 無關）；
+11 個 `.lock.yml` 中 10 個為 0、`ui-regression.lock.yml` 為 1（同一句註解被編譯進去）。
+
+**沒有任何 workflow 宣告 `projects: read`／`projects: write`；沒有任何 workflow 使用
+`projects` github toolset；沒有任何 `safe-outputs` 型別與 Projects 相關。**
+
+> 現有 11 支的形狀全部是「讀 repo ＋ 產生 issue／comment／label／push」，
+> **沒有一支寫過 Projects v2**。而 Projects v2 是組織層資源，`GITHUB_TOKEN` 預設不涵蓋
+> ——**這條路徑在本 repo 沒有先例可抄**。
+
+### 與 `ci.yml` / `deploy.yml` 的共存面
+
+**`ci.yml`**（`name: CI`）：`on: pull_request`（全部）＋ `push` to
+`main`／`ut`／`danniel/**`／`chore/**`；`permissions: contents: read`；
+`concurrency: ci-${{ github.workflow }}-${{ github.ref }}`，`cancel-in-progress: true`；
+4 個 job（皆 `ubuntu-latest`，**無 `needs`，並行**）：`repo-contract`／`frontend`／
+`backend`／`docker-build`。**檔名是 load-bearing**（在 `REQUIRED_FILES` 內，改名會讓它
+自己強制的 contract 紅燈）。
+
+**`deploy.yml`**（`name: Deploy (ut → 192.168.10.10)`）：
+`on: pull_request` types `[closed]` branches `[ut]` ＋ `workflow_dispatch`（**不是 push**）；
+`permissions: contents: read`（頂層）；`concurrency: deploy-10-10`，
+`cancel-in-progress: false`；3 個 job：`deploy`（self-hosted `[self-hosted, linux, x64, cloud360]`，
+30 min）／`rollback`（同 self-hosted，20 min，job 層提權為 contents:write ＋
+pull-requests:write ＋ actions:write）／`notify`（`ubuntu-latest`，5 min）。
+
+**新 workflow 需要避開的碰撞面**：
+
+| 面向 | 現況 | 約束 |
+|---|---|---|
+| concurrency 命名空間 | gh-aw 用 `gh-aw-<workflow name>`；ci 用 `ci-CI-<ref>`；deploy 用 `deploy-10-10` | gh-aw 的 group 由編譯器產生，**不會撞**；但 `name`（＝body H1）必須與現有 11 個不同 |
+| job 名稱 | gh-aw 固定 6 個，跨 workflow 重複但分屬不同 workflow | 無需迴避 |
+| `push` 到 `ut` | 目前只有 `spec-sync`（有 paths 過濾）＋ `ci.yml` | 新 workflow 若也 `on: push: branches: [ut]`，會與這兩者同時起 |
+| `pull_request: types: [closed]` | 只有 `deploy.yml` | 想在「merge 後同步」可共用，但要注意 `deploy-10-10` 的 `cancel-in-progress: false`（部署可能仍在跑） |
+| self-hosted runner | 只有 `deploy.yml` 的兩個 job | gh-aw 一律 GitHub-hosted，**不會佔用 self-hosted runner** |
+| 排程時段 | `daily-digest` cron `0 23 * * 1-5`；`release-watch` `weekly on monday`（gh-aw 模糊排程，分鐘由 gh-aw 打散）；`agentics-maintenance` cron `37 0 * * *` | 新的定時同步應避開這三段，或直接用 gh-aw 的模糊排程語法 |
+
+## 開發流程層架構（三）：AI-DLC ↔ GitHub 整合的架構決策 ［本輪重寫］
+
+> **ADR-0012 與 ADR-0013 必須併讀。** ADR-0012 的 Status 行已加註修訂指標；
+> 單讀 ADR-0012 會得到已被推翻的結論。
+
+| ADR | 路徑 | 狀態 |
+|---|---|---|
+| **ADR-0012** AI-DLC 與 GitHub Issues／Projects／Wiki 的雙向同步 | `aidlc/spaces/default/intents/260802-default/inception/decisions/0012-github-issues-projects-wiki-sync.md` | Accepted 2026-08-16，**第 1、5 點與階段表經 ADR-0013 修訂** |
+| **ADR-0013** AI-DLC ↔ GitHub Projects 同步的映射層級、承載形式與階段順序 | `aidlc/spaces/default/intents/260822-gh-projects-sync/inception/decisions/0013-aidlc-projects-sync-scoping.md` | Accepted 2026-08-23 |
+
+### 現行有效的架構決定（兩份合讀後）
+
+| 面向 | 現行決定 | 出處 |
+|---|---|---|
+| **映射層級** | intent → **Project #16 的一則 issue**（不是「intent → 一整個 Project」）。Project #16 是需求清單的正本 | ADR-0013 §1（**修訂** 0012 §1） |
+| `story → Issue` | **保留為未來方向，非否決**。本次不涉及 story 層 | ADR-0013 §1 |
+| **真實來源逐欄位切分** | **狀態**（open/closed、看板欄位、assignee、labels、iteration）歸 **GitHub**；**內容**（story 標題敘述、AC、unit 定義、決策內文）歸 **repo**；**討論**（comments）歸 GitHub 且單向不回寫 | ADR-0012 §2（**未修訂**） |
+| **受管區塊** | issue 內文以 `<!-- aidlc:managed -->` ／ `<!-- /aidlc:managed -->` 夾住的部分由 repo 覆寫；標記外的人寫內容永不觸碰 | ADR-0012 §2（**未修訂**） |
+| **反向同步** | **納入範圍**（推翻本 intent ideation 原本列入 Won't Have 的決定）。一律開 PR，**不直接推 `ut`** | ADR-0013 §2 採納 ADR-0012 |
+| **承載形式** | **gh-aw safe-outputs（`update-project` 等）**；**移除** ADR-0012 指定的 `scripts/aidlc_sync_*.py` | ADR-0013 §3（**修訂** 0012 §5） |
+| **防迴圈三道防線** | ①受管區塊內容雜湊比對 ②commit 訊息帶 `[aidlc-sync]` 且反向同步排除這類 commit ③狀態欄位單向 | ADR-0012 §4（**未修訂**） |
+| **同步狀態記錄** | `<record>/.aidlc-sync-state.json`（**需進版控**才能跨 runner 比對） | ADR-0012 §4（未修訂） |
+| **與主流程零耦合（硬約束）** | **不得在 `.claude/` 下新增任何檔案**；觸發是 `on: push`，不是 stage 或 hook | ADR-0012 §6（**未修訂**） |
+| **Wiki** | 單向鏡像（repo → Wiki），只放已核可 artifacts ＋ 根層文件；不在本 intent 範圍 | ADR-0012 §3（未修訂） |
+| **token 隔離** | Projects token 存為獨立 secret、不重用既有的；同步 workflow 與其他 agentic workflow 分離不共用 token | ADR-0012 §5 的殘餘控制（ADR-0013 明示維持） |
+
+### 兩項讓 ADR-0012 局部失效的前提變化
+
+1. **gh-aw 現已提供 Projects 的 safe-outputs。** ADR-0012 記載「safe-outputs 只支援 5 種、
+   沒有 Projects 操作」並據此推論「**必須提權讓 workflow 直接呼叫 `gh` CLI／GraphQL**」。
+   ADR-0013 於 2026-08-23 查證官方文件確認框架已有 `update-project`
+   （例：`{"type":"update_project","content_type":"issue","content_number":N,"fields":{"Status":"In progress"}}`）、
+   `create-project`、`create-project-status-update` 與 `projects` toolset。
+   **提權論證因此不再成立**，寫入改由框架的受管輸出代理。
+2. **`project.md ## Forbidden` 於 2026-08-23 新增禁令**：不得以 repo 內新增的實作程式
+   （例如 `scripts/` 下的 Python）承載流程自動化與外部系統同步，此類機制一律以 gh-aw
+   或 GitHub Actions workflow 承載。該規則與 ADR-0012 指定的 `scripts/aidlc_sync_*.py`
+   **直接衝突**，是 ADR-0013 §3 的另一個修訂理由。
+   規則本身附帶一條重要限定：**gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo
+   三塊結構性盲區的「所有 LLM 路徑」那一塊——決定性的映射邏輯應優先放在純 Actions 步驟，
+   判斷性的工作才交給 gh-aw。**
+
+### 一項待解衝突（本 stage 只記載，不裁定）
+
+**PR #508 已於 2026-08-22 合併進 `ut`**（本輪 `gh pr view 508` ＋ `git ls-tree origin/ut`
+實測），把 `scripts/aidlc_sync_push.py`／`aidlc_sync_pull.py`／`aidlc_sync_buglist.py`
+三支腳本帶進 repo，`scripts/` 由 4 支變 7 支。而**一天後**（2026-08-23）：
+ADR-0013 把這三支從設計中移除，`project.md` 新增禁止 repo 內腳本承載同步的規則。
+
+規則字面寫的是「**新增**的實作程式」，這三支在規則生效時已存在。
+因此需要一個明確決定：**既有豁免／遷移到 gh-aw／收窄規則**——三者擇一。
+本 codekb 只記載衝突與其時間軸，不代為選擇。
+
+**（注意本基準 `9307dbc` 上看不到這三支腳本，`scripts/` 仍是 4 支。**
+`code-structure.md` 與 `component-inventory.md` 的清單反映的是本基準，
+在 `ut` 上已不正確。）

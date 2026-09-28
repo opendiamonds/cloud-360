@@ -1,0 +1,12 @@
+{
+  "stage": "functional-design",
+  "unit": "advice-presentation-ui",
+  "coverage": [
+    { "id": "FR5.1", "status": "OK" },
+    { "id": "FR5.2", "status": "OK" },
+    { "id": "FR5.3", "status": "OK" },
+    { "id": "FR4.5", "status": "OK", "note": "AI disclaimer + distinct section" },
+    { "id": "C3", "status": "OK", "target": "SSE subscribe" },
+    { "id": "M5", "status": "OK" }
+  ]
+}

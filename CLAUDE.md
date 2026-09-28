@@ -102,7 +102,7 @@ Cloud-360 是 AI-native multi-cloud architecture & operations platform，支援 
 ### 7. AIDLC 升級
 
 - 升級時對照 `https://github.com/awslabs/aidlc-workflows/releases`，把 upstream `dist/claude/` 重新複製到 `.claude/`，並確認 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION` 與 upstream 一致。
-- `.claude/` 內的客製調整（目前僅 `settings.json` 移除環境相依設定，見 [`.claude/README-cloud360.md`](.claude/README-cloud360.md)）在覆蓋前要先備份、覆蓋後再放回。
+- `.claude/` 內的客製調整（`settings.json` 移除環境相依設定、`ai-dlc-principles.md` 路徑修正、`tcms-test-cases` stage 與 `tcms-verify` skill 三處，見 [`.claude/README-cloud360.md`](.claude/README-cloud360.md)）在覆蓋前要先備份、覆蓋後再放回。
 - `aidlc/` 工作區（memory、intents、knowledge、codekb）**整個保留**，永不被 upstream 覆蓋。新增的專案規則一律放 `aidlc/spaces/<space>/memory/{team,project}.md`，不要加到 `.claude/` 內。
-- 升級後跑 `/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證。
+- 升級後跑 `bun .claude/tools/aidlc-utility.ts plugin-sync`、`/aidlc --doctor` 與 `python3 scripts/validate_repo_contract.py` 驗證，並對照 upstream CHANGELOG 的 Upgrade／Breaking 段（state version、hook 更名、`.gitignore`）——checklist 在 `README-cloud360.md`。
 - 升級記錄寫入新 ADR。

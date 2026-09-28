@@ -1,0 +1,206 @@
+name: AI-DLC Sync Board Client
+description: >-
+  看板客戶端（[ad:C-3 board-client]）。單一 action，以 operation 分派**七個**方法
+  （component-methods.md §C-3 的六個 ＋ ADR-0015 §11 增設的 write_body）。
+  本 action 是整個同步機制中**唯一**碰 Projects v2 與 GitHub Issues API 的地方——
+  它做真實網路 I/O、持有憑證，因此獨立於 U-1／U-2 的純函式 action
+  （tech-stack-decisions.md：混入會讓 fixture 驅動的前提消失）。設計正本見
+  aidlc/spaces/default/intents/260822-gh-projects-sync/construction/U-3-board-client/
+  的 functional-design/{business-rules,business-logic-model,domain-entities}.md。
+
+
+  **設定（Config）不走 input，走呼叫端 workflow 的 env**（code-generation plan 定案）：
+  AIDLC_PROJECT_OWNER（Project 擁有者 login；查詢根為 user(login:)，ADR-0016 §4.1）、
+  AIDLC_PROJECT_NUMBER（Project 編號，正整數）、AIDLC_FIELD_NAME（自訂欄位名稱）。
+  憑證一律經 env GH_TOKEN 傳入（SEC-1，見下方註解）；issue 所在 repo 取自 runner 的
+  GITHUB_REPOSITORY。七種操作的 inputs／outputs 是**聯集**，YAML 層看不出哪些組合
+  合法，逐操作的合法組合如下（沿用 U-2 的慣例，這份清單就是該代價的承接方式）：
+
+
+  operation: read_item — 必要 input：binding。必要 env：Config 三項。有效 output：
+  status、field_value、managed_block_hash、issue_number、issue_state。issue 不在
+  Config 指定的 Project 上時 status／field_value／managed_block_hash 皆為空字串
+  （R-1.3 的零筆分支，不是錯誤）；同一 Project 內多於一筆 item 時以非零 exit 收場
+  （R-1.4 的 ExternalError）。
+
+
+  operation: create_item — 必要 input：intent_id（existing_binding 非空時可省）。
+  選填 input：existing_binding（R-3.1：非空即不建、原值回傳，**不發任何 API 呼叫**）、
+  issue_title（預設 intent_id 原文；標題慣例的正式決定屬 U-6）。有效 output：
+  binding、created。首建前會解析 Config 指定的 Project 並驗證可寫（R-3.2），
+  不符即非零 exit。**不回寫綁定編號**——那是 U-4 的職責（R-3.3）。
+
+
+  operation: write_status — 必要 input：binding、desired_status。選填 input：
+  expected_status（**空值＝期望「未設值」**；只比對 Status 欄位，Plan Approval 定案）。
+  有效 output：result（written / aborted）、actual_status、expected_status、message。
+  **必先回讀**（R-2.1）；aborted 有兩種來源——回讀不符（actual_status 為回讀現值），
+  或 item 不在 Config 指定的 Project 上（R-1.3 零筆：actual_status 為空；綁定過期或
+  item 已被移出看板）——兩者都**不送出寫入、不開 issue、不紅燈**（R-2.2／R-2.3），
+  且 message 在 aborted 時有值（說明中止原因，供 C-5 直接引用）。本 operation
+  **不產生 result=failed**（Failed 為 write_field／write_body 專屬）。寫入以執行期
+  解析的 option id 送出（R-4.4／R-4.5，大小寫敏感精確比對）；欄位解析在回讀之前
+  完成，回讀與 mutation 之間沒有其他呼叫（R-2.4 揭露的視窗量級）。
+
+
+  operation: write_field — 必要 input：binding、field_value。有效 output：
+  result（written / failed）、http_status、message。欄位不存在時嘗試建立（TEXT）；
+  建立或寫入失敗 → result=failed，**不連坐 Status 寫入、不紅燈**（R-4.1）。
+
+
+  operation: ensure_field — 無必要 input（吃 Config env）。有效 output：
+  result（ok / cannot_create）、field_id、field_created、reason。兩種可達失敗前提
+  （憑證缺 Projects 寫入權／同名欄位型別不同）回 result=cannot_create（exit 0，
+  交 C-5 通報「需人工建立欄位」；ADR-0016 §1 已裁定「組織政策阻擋」不可達，不實作）。
+
+
+  operation: read_issue_state — 必要 input：binding。有效 output：issue_state
+  （open / closed，[US:S-9 AC 5] 的 issue 開關偵測）。
+
+
+  operation: write_body — 必要 input：binding、block_text（U-2 render 的輸出）。
+  有效 output：result（written / failed）、http_status、message。受管區塊**唯一的
+  持久化路徑**（R-6 群）：無標記附加、有標記整段替換（R-6.3）；標記損壞（有 BEGIN 無
+  END 或順序顛倒）→ result=failed，不猜、不附加（R-6.6）；不做長度截斷（R-6.5）。
+  受管標記常數於**執行期自 U-2 block.sh 萃取**（單一真實來源在 U-2，萃取失敗即
+  非零 exit）。
+
+
+  operation 為其他值（含空值）時，本 action **以非零 exit 立即失敗**，不會靜默回空值。
+  任何 operation 都可能因 API 呼叫失敗以**非零 exit** 收場（ExternalError 是例外式
+  而非回傳值——[ad:component-methods.md] 對 read_item 的「拋」；此時 result=
+  external_error、http_status、message 三個 output 已先寫出，供 if failure() 的
+  通報步驟取用）。
+
+# 本 action 刻意**不宣告任何憑證型 input**（SEC-1）：input 是 action 的公開介面，把
+# 憑證放進介面等於邀請每一個呼叫端「傳一個你手上有的 token」。憑證一律由配置好的
+# workflow 以 env GH_TOKEN 傳入（repo 既有形狀；gh CLI 原生讀取它，不多一跳）。
+# run-stub-tests.py 有一條機械斷言鎖住這件事——不要「順手」加一個 token input。
+#
+# R-5 權限邊界（business-rules.md）：本 action **不提供**任何「推 commit」或「改
+# record 目錄以外的檔案」的 operation。但「介面不提供」與「嘗試時回 403」是兩件事
+# （security-requirements.md SEC-2）——憑證本身帶 repo 寫入權，介面約束只能靠
+# code review 與 run-stub-tests.py 的 dispatch 斷言維持。
+#
+# 全部邏輯在 board.sh，本檔只做介面轉接（inputs → 環境變數 → board.sh →
+# $GITHUB_OUTPUT）。run-stub-tests.py 以 PATH shim 偽裝 gh 直接呼叫 board.sh，
+# 不必先起一個 workflow。
+
+inputs:
+  operation:
+    description: >-
+      read_item / create_item / write_status / write_field / ensure_field /
+      read_issue_state / write_body。**必填**，值不合法時立即非零 exit。
+    required: true
+
+  binding:
+    description: 'issue 編號（正整數）。read_item / write_status / write_field / read_issue_state / write_body 必要'
+    required: false
+    default: ''
+  intent_id:
+    description: '（create_item）intent 識別字。existing_binding 為空時必要；亦為 issue 標題的預設值'
+    required: false
+    default: ''
+  existing_binding:
+    description: >-
+      （create_item）record 既有的綁定編號，由呼叫端把 U-4 read_binding 的結果傳入
+      （R-3.1 的承接方式，Plan Approval 定案：U-3 不碰 record 目錄）。非空即不建、
+      原值回傳，不發任何 API 呼叫
+    required: false
+    default: ''
+  issue_title:
+    description: '（create_item）issue 標題，選填。預設 intent_id 原文——標題格式的正式決定留給 U-6（它擁有呼叫端）'
+    required: false
+    default: ''
+  expected_status:
+    description: >-
+      （write_status）呼叫端預期的看板 Status 現值。**空字串＝期望「未設值」**。
+      只比對 Status 欄位（Plan Approval 定案：比對整個 ItemState 會讓無關的並行變更
+      永久 Abort 一次合法寫入）
+    required: false
+    default: ''
+  desired_status:
+    description: '（write_status）要寫入的 Status 值（選項名稱，執行期解析為 option id）。必要且不得為空——「決定不寫」不會走到本 operation'
+    required: false
+    default: ''
+  field_value:
+    description: '（write_field）要寫入自訂欄位的文字值。長度約束（≤50 字元）由組裝方（U-6）負責，本 action 不截斷'
+    required: false
+    default: ''
+  block_text:
+    description: '（write_body）U-2 render 輸出的受管區塊全文（含首尾標記）。必要且不得為空——R-6 群沒有「刪除區塊」的語意'
+    required: false
+    default: ''
+
+outputs:
+  result:
+    description: >-
+      操作結果：written / aborted / failed / ok / cannot_create / external_error。
+      aborted／failed／cannot_create 是**回傳值**（exit 0，不紅燈）；external_error
+      是**例外式**（已寫出本 output 後以非零 exit 收場，workflow 紅燈）
+    value: ${{ steps.board.outputs.result }}
+  http_status:
+    description: '（失敗時）HTTP 狀態碼。GraphQL 層錯誤（HTTP 200 帶 errors）時為 200；無法判定時為空'
+    value: ${{ steps.board.outputs.http_status }}
+  message:
+    description: >-
+      （失敗時，以及 write_status result=aborted 時）**SEC-4 清洗後**的訊息：只含
+      GraphQL errors[].message（或 REST 的 message 欄位）與本 action 自己的定位文字，
+      不含完整請求／回應 body、不含任何標頭。此值會被交給 C-5 開公開 issue，清洗
+      規則不得放寬
+    value: ${{ steps.board.outputs.message }}
+  status:
+    description: '（read_item）看板 Status 現值；空字串＝null（欄位未設值，或 R-1.3 的零筆分支）'
+    value: ${{ steps.board.outputs.status }}
+  field_value:
+    description: '（read_item）自訂欄位現值；空字串＝null。null 與空值的區分語意見 domain-entities.md（[Q6=A]）'
+    value: ${{ steps.board.outputs.field_value }}
+  managed_block_hash:
+    description: >-
+      （read_item）issue body 受管區塊的 content_hash，由 U-2 的 parse ＋ hash 產生
+      （**不是本 action 算的**——自算即第二份格式物化）；空字串＝null（該 item 不受管）
+    value: ${{ steps.board.outputs.managed_block_hash }}
+  issue_number:
+    description: '（read_item）即 binding'
+    value: ${{ steps.board.outputs.issue_number }}
+  issue_state:
+    description: '（read_item／read_issue_state）open / closed'
+    value: ${{ steps.board.outputs.issue_state }}
+  binding:
+    description: '（create_item）綁定的 issue 編號。existing_binding 非空時原值回傳'
+    value: ${{ steps.board.outputs.binding }}
+  created:
+    description: '（create_item）true＝本次真的開了 issue；false＝R-3.1 攔截、回既有值'
+    value: ${{ steps.board.outputs.created }}
+  actual_status:
+    description: '（write_status，result=aborted 時）回讀到的看板現值；空字串＝未設值'
+    value: ${{ steps.board.outputs.actual_status }}
+  expected_status:
+    description: '（write_status，result=aborted 時）呼叫端傳入的預期值原樣回照'
+    value: ${{ steps.board.outputs.expected_status }}
+  field_id:
+    description: '（ensure_field，result=ok 時）欄位的 node id（FieldRef）'
+    value: ${{ steps.board.outputs.field_id }}
+  field_created:
+    description: '（ensure_field）true＝本次建立；false＝既有欄位，未重建'
+    value: ${{ steps.board.outputs.field_created }}
+  reason:
+    description: '（ensure_field，result=cannot_create 時）兩種可達前提之一：憑證缺 Projects 寫入權／同名欄位型別不同'
+    value: ${{ steps.board.outputs.reason }}
+
+runs:
+  using: composite
+  steps:
+    - id: board
+      shell: bash
+      env:
+        AIDLC_OPERATION: ${{ inputs.operation }}
+        AIDLC_BINDING: ${{ inputs.binding }}
+        AIDLC_INTENT_ID: ${{ inputs.intent_id }}
+        AIDLC_EXISTING_BINDING: ${{ inputs.existing_binding }}
+        AIDLC_ISSUE_TITLE: ${{ inputs.issue_title }}
+        AIDLC_EXPECTED_STATUS: ${{ inputs.expected_status }}
+        AIDLC_DESIRED_STATUS: ${{ inputs.desired_status }}
+        AIDLC_FIELD_VALUE: ${{ inputs.field_value }}
+        AIDLC_BLOCK_TEXT: ${{ inputs.block_text }}
+      run: bash "${GITHUB_ACTION_PATH}/board.sh"

@@ -1,0 +1,67 @@
+{
+  "stage": "code-generation",
+  "unit": "pricing-lookup-port",
+  "coverage": [
+    {
+      "id": "FR5.5",
+      "status": "OK",
+      "target": "pricing_client.fetch_hourly"
+    },
+    {
+      "id": "FR5.6",
+      "status": "OK",
+      "target": "pricing_sdk + bulk/gcp/azure"
+    },
+    {
+      "id": "FR5.7",
+      "status": "OK",
+      "target": "no billing APIs; boundary hosts"
+    },
+    {
+      "id": "FR5.9",
+      "status": "OK",
+      "target": "SDK path + ADR-0018 consumer"
+    },
+    {
+      "id": "FR5.10",
+      "status": "OK",
+      "target": "degrade tests"
+    },
+    {
+      "id": "FR9.4",
+      "status": "OK",
+      "target": "pricing_sdk retained"
+    },
+    {
+      "id": "FR9.5",
+      "status": "OK",
+      "target": "survival set"
+    },
+    {
+      "id": "FR9.7",
+      "status": "OK",
+      "target": "warm/price_cache deleted (U3)"
+    },
+    {
+      "id": "BR5.7",
+      "status": "OK",
+      "target": "validate_pricing_lookup_boundary.py"
+    },
+    {
+      "id": "BR5.8",
+      "status": "OK",
+      "target": "intake import ban"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "sdk log + tests"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "boundary + unittest"
+    }
+  ],
+  "plan_fingerprint": "sha256:7b6c11970013b8e6f5494792462e92daae3cfaafe36e1d0e04bc175fc6804666"
+}

@@ -1,0 +1,44 @@
+# 估價區域清單（C1 依架構圖雲別篩選）
+by_cloud:
+  aws:
+    - us-east-1
+    - us-west-2
+    - eu-west-1
+    - ap-northeast-1
+    - ap-southeast-1
+    - ap-east-2
+  gcp:
+    - us-central1
+    - us-east1
+    - europe-west1
+    - asia-east1
+    - asia-northeast1
+    - asia-southeast1
+  azure:
+    - eastus
+    - westus2
+    - westeurope
+    - japaneast
+    - southeastasia
+    - eastasia
+
+# 扁平清單（暖庫／相容）；與 by_cloud 同步維護
+regions:
+  - us-east-1
+  - us-west-2
+  - eu-west-1
+  - ap-northeast-1
+  - ap-southeast-1
+  - ap-east-2
+  - us-central1
+  - us-east1
+  - europe-west1
+  - asia-east1
+  - asia-northeast1
+  - asia-southeast1
+  - eastus
+  - westus2
+  - westeurope
+  - japaneast
+  - southeastasia
+  - eastasia

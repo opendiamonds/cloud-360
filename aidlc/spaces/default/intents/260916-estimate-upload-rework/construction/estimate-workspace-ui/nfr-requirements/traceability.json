@@ -1,0 +1,22 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "estimate-workspace-ui",
+  "coverage": [
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "NFR2.1"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "Q5=A"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "tech-stack"
+    }
+  ],
+  "confirmed": "Looks correct"
+}

@@ -1,9 +1,17 @@
 # Code Structure — Cloud-360
 
-> 逆向工程產出。基準 commit `c3de2c8`（branch `danniel/fix/production-path-check-noop`，2026-08-17）。
+> 逆向工程產出。**基準 commit `9307dbc`（2026-08-23）**；前一基準為 `c3de2c8`（2026-08-17）。
+> **本輪為兩區定向掃描 ＋ 差異標註，不是完整重掃**。節標題後的新鮮度標記：
+> **［本輪重寫］**｜**［本輪機械複驗］**｜**［差異標註］**｜**［沿用 `c3de2c8`］**。
+> 讀法與跨分支限制見 `reverse-engineering-timestamp.md`。
+>
+> **用詞提醒**：在標記為［沿用 `c3de2c8`］或［差異標註］的段落內，「本輪／本次」指的是
+> **`c3de2c8` 那一輪掃描**；在［本輪重寫］／［本輪機械複驗］段落內，以及任何加 **★** 的
+> 條目，指的才是本輪（`9307dbc`，2026-08-23）。
+>
 > 本檔描述程式碼「放在哪、怎麼分類、寫成什麼形狀」。元件職責見 `component-inventory.md`。
 
-## 倉庫頂層結構
+## 倉庫頂層結構 ［差異標註］
 
 ```
 cloud-360/
@@ -16,7 +24,7 @@ cloud-360/
 ├── aidlc/                AIDLC 工作區（memory、knowledge、codekb、intents）
 ├── openapi.json          OpenAPI 3.1.0 規格（2,709 行）— 跨語言契約鏈的中樞
 ├── schema.sql            精簡核心 DDL 參考（78 行，已落後）
-├── schema_rbac.sql       宣稱的完整部署腳本（531 行）
+├── schema_rbac.sql       宣稱的完整部署腳本（510 行 ← 本輪複驗；c3de2c8 為 531）
 ├── docker-compose.yml    本機開發（postgres 15 + adminer）
 ├── DEPLOY.md             部署手冊（450 行）
 ├── LOCAL-DEV.md          本機開發（361 行）— 唯一記載兩個隱性硬依賴之處
@@ -30,23 +38,47 @@ cloud-360/
 （後端 → 規格 → 前端型別），且兩端各有 CI gate。見 `architecture.md` 的「型別契約鏈」。
 CI 另有一道檢查確保它**不會被靜態服務出去**（`find dist -name 'openapi*'` 非空即 fail）。
 
-## Backend 模組組織
+## Backend 模組組織 ［差異標註］
 
-`backend/` 共 **8,775 LOC 產品碼 + 3,199 LOC 測試**（git-tracked），Python 3.12。
+`backend/` 在 `c3de2c8` 時為 **8,775 LOC 產品碼 + 3,199 LOC 測試**（git-tracked），
+Python 3.12。**LOC 數本輪未重新量測**；模組清單與測試檔數已複驗。
 
 ```
 backend/
 ├── main.py                  55 LOC   entry point：app 建立、CORS、掛 5 router、startup
+│                                     ★ 已改用 env_bootstrap.load_backend_dotenv(override=True)
+├── env_bootstrap.py         36 LOC   ★ 本輪新增：backend/.env 的唯一載入點（路徑釘死）
 ├── models.py               175 LOC   SQLAlchemy declarative Base，7 實體 + 1 association table
 ├── database.py             366 LOC   engine／SessionLocal／get_db；init_db；4 支啟動期 schema 補丁
+│                                     ★ 新增 APP_ENV 閘門三函式（見下）
 ├── Dockerfile                        python:3.12-slim + Node 22 + 全域 Claude Code CLI
 ├── requirements.txt                  12 條依賴（2 條精確釘選）
-├── services/                         22 支模組（全部業務邏輯）
+├── services/                         22 支模組（全部業務邏輯；本輪未逐一複驗）
 ├── scripts/dump_openapi.py  90 LOC   由程式碼 dump OpenAPI 規格；--check 供 CI 比對
 ├── lenses/                           3 個 JSON 資料資產（AWS／GCP／Azure）
 ├── prompts/                          6 個資料資產（3 system prompt + 3 draw.io 模板）
-└── tests/                            21 測試檔 + helpers.py + __init__.py
+└── tests/                            25 測試檔 ← 本輪複驗（c3de2c8 為 21）+ helpers.py + __init__.py
 ```
+
+### `env_bootstrap.py` —— 本輪新增的模組（★ 本輪機械複驗，全文已讀）
+
+36 行，`backend/.env` 的**單一載入點**。它的存在理由值得完整保留，
+因為它示範了本 repo 「註解解釋為什麼」的最高標準：
+
+- `load_dotenv()` 不給路徑時會 `find_dotenv()`，從**當前工作目錄**一路往上找第一份 `.env`。
+  從 `backend/` 以外的目錄啟動 uvicorn 時，它會安靜地載入樹上任何一份不相干的 `.env`
+  ——**實際發生過一次，摸到了使用者家目錄的 `.env`**，於是 `backend/.env` 明明寫著
+  `LLM_PROVIDER=cli`，API 卻回報「尚未設定 `OPENROUTER_API_KEY`」。
+- **失敗是安靜的**：載到的不是「沒有設定」而是「別人的設定」，錯誤離肇因三層遠。
+- **為何必須是單一載入點**：原本 `main.py` 與 `database.py` 各自呼叫 `load_dotenv()`，
+  而 `database.py` 是被 `main.py` 匯入的、**比 `main.py` 自己那行更早跑**，
+  所以只修 `main.py` 完全無效。
+- 現在路徑固定為 `Path(__file__).resolve().parent / ".env"`；
+  `override` 預設 `False`（讓 shell 與容器注入的值優先），僅 `main.py` 用 `override=True`。
+- **檔案不存在不是錯誤**：部署容器直接注入環境變數，根本沒有 `backend/.env`。
+- 回歸測試 `tests/test_dotenv_path.py`（101 行）守著這件事。
+
+**新增任何讀環境變數的後端模組時，一律經由 `env_bootstrap`，不要自呼 `load_dotenv()`。**
 
 ### `backend/services/` 的四種模組類型
 
@@ -93,7 +125,7 @@ backend/
 修改 `user_router.py`／`collab_router.py` 就地沿用既有形狀，不趁機夾帶 service 層抽取
 （前置條件是先有端點測試）；不得在這兩支之外新建「router 直寫商業邏輯」的模組。
 
-## Frontend 模組組織
+## Frontend 模組組織 ［差異標註］
 
 `frontend/src/` 共 **10,539 LOC TS/TSX**（40 個 git-tracked 檔），TypeScript 6 + React 19。
 
@@ -152,7 +184,7 @@ frontend/
 | `DiagramPreviewPanel.tsx` | 53 | |
 | `Layout.tsx` | 21 | |
 
-## 程式碼模式
+## 程式碼模式 ［沿用 `c3de2c8`］
 
 ### 後端模式
 
@@ -290,7 +322,7 @@ def record_activity(db, user, now=None) -> bool: # 唯一碰 DB 的函式
 `ProtectedRoute`（登入與否）與 `CapabilityRoute storyId=... action=...`（能力）
 組合使用；`DefaultRedirect` 依序試 pending → `canArch('view')` → `A3` → `J3a` → `J3b` → `/403`。
 
-## 命名與檔案分類慣例
+## 命名與檔案分類慣例 ［沿用 `c3de2c8`］
 
 | 慣例 | 規則 | 例外／備註 |
 |---|---|---|
@@ -305,7 +337,7 @@ def record_activity(db, user, now=None) -> bool: # 唯一碰 DB 的函式
 | `HTTPException` 呼叫風格 | 已知不一致（具名 vs 位置引數混用） | 不強制統一；新程式碼沿用所在函式鄰近寫法 |
 | 註解與 docstring 語言 | 繁體中文為主 | 與 ADR-0009 一致 |
 
-## `scripts/` 目錄（4 支，1,595 LOC）
+## `scripts/` 目錄（本基準 4 支，1,595 LOC；**`ut` 上已 7 支**）［本輪機械複驗］
 
 | 腳本 | LOC | 職責 | CI 中執行？ |
 |---|---|---|---|
@@ -314,11 +346,58 @@ def record_activity(db, user, now=None) -> bool: # 唯一碰 DB 的函式
 | `tcms_validate.py` | 360 | 四類機械檢查：必填欄位、空洞預期結果、追溯目標存在、API/UI 比對 `openapi.json` 與 `App.tsx` | ✗ 人工（`/tcms-verify` gate） |
 | `validate_env_contract.py` | 315 | 三環境設定分離與完整性（六項檢查） | ✓ `repo-contract` job |
 
-**跨分支註記**：ADR-0012 的 `aidlc_sync_push.py`／`aidlc_sync_pull.py`／
-`aidlc_sync_buglist.py` **實作已完成但在 PR #508 待合併**，不在本基準分支上。
-合併後本目錄將由 4 支增為 7 支。詳見 `reverse-engineering-timestamp.md`。
+**`validate_repo_contract.py` 的一項本輪變更**（已讀 diff）：production 路徑檢查的輸入由
+`git_diff_name_only()` 改為 **`git_ls_files()`**（`git ls-files -z`，用 NUL 分隔以避開
+`core.quotePath`），從 diff 基準改為**全域掃描**（issue #509）。
+新增回歸測試 `backend/tests/test_repo_contract_production_paths.py`（287 行，
+在暫存 git repo 內以乾淨工作樹重現 CI 條件）。
 
-## 結構性風險
+> **跨分支狀態已改變（更正前一版）。** 前一版記載「PR #508 待合併」——
+> 本輪實測為 **`MERGED`（2026-08-22）**，`origin/ut` 的 `scripts/` 已含
+> `aidlc_sync_push.py`／`aidlc_sync_pull.py`／`aidlc_sync_buglist.py`，共 **7 支**。
+> **但 ADR-0013（2026-08-23）已把這三支從設計中移除**，且 `project.md ## Forbidden`
+> 同日新增「不得以 repo 內新增的實作程式承載流程自動化與外部系統同步」。
+> 三支腳本的去留是**待解衝突**，見 `architecture.md` 的「一項待解衝突」。
+> **本節維持描述本基準 `9307dbc`（4 支）。**
+
+## `.github/` 目錄結構 ［本輪重寫］
+
+`.github/workflows/` 共 **27 個檔，全部已追蹤進版控**：
+
+```
+.github/
+├── workflows/
+│   ├── <11 組 gh-aw>.md          作者手寫的來源檔（frontmatter + body）
+│   ├── <11 組 gh-aw>.lock.yml    gh aw compile 的產物，1,500–1,700 行／101–111 KB
+│   │                             ★ Actions 只執行 .lock.yml；.md 對 runtime 完全惰性
+│   ├── agentics-maintenance.yml  gh-aw 自動產生的維護 workflow（cron 37 0 * * *，無對應 .md）
+│   ├── copilot-setup-steps.yml   772 B（本輪未讀）
+│   ├── ci.yml                    手寫；4 job／11 個實質檢查步驟。★ 檔名 load-bearing
+│   └── deploy.yml                手寫；3 job（deploy / rollback / notify）
+├── aw/actions-lock.json          action SHA pin 表（本基準 5 筆；ut 上 4 筆）
+└── agents/agentic-workflows.md   gh-aw 使用指引（本輪只 grep 未通讀）
+```
+
+**這個目錄的結構性特徵，寫程式的人必須知道兩件事**：
+
+1. **`.md` ↔ `.lock.yml` 是一對來源／產物，而 repo 沒有任何守門員檢查它們同步。**
+   改了 `.md` 忘記 `gh aw compile`，CI 全綠、PR 可合併、**行為維持舊的**。
+   材料已在檔案裡（`.lock.yml` 前三行的 `frontmatter_hash`／`body_hash` 是 `.md` 兩半的
+   sha256），但沒有人在用。詳見 `architecture.md`。
+2. **`.md` 沒有 `name:` frontmatter key**——`.lock.yml` 的 `name:` 取自 **body 的第一個 H1**，
+   而該名稱同時決定 concurrency group。新增 workflow 時 H1 必須與現有 11 個不同。
+
+**11 組 gh-aw 的檔名**：`code-drift-alert`、`contract-guard`、`daily-digest`、
+`deploy-doctor`、`issue-triage`、`lint-fix`、`local-dev-drift`、`pr-reviewer`、
+`release-watch`、`spec-sync`、`ui-regression`。
+
+**只有 `ui-regression.md` 使用 `pre-agent-steps:` 與 `post-steps:`**（7 個 pre step ＋
+teardown ＋ 依 `pw-report.json` 重新拉紅）；其餘 10 支是純 agent workflow。
+它的 frontmatter 註解是本 repo 對 gh-aw 行為的唯一實測紀錄（`timeout-minutes` 只約束
+agent step、v0.81.6 會靜默丟棄 `pre-agent-steps` 內的 `timeout-minutes`、
+不要加第二次 checkout）——**改動該檔時不要刪掉那些註解**。
+
+## 結構性風險 ［差異標註］
 
 1. **三個超大檔**：`diagram_builder.py`(1,818)、`AssessmentPage.tsx`(1,861)、
    `WorkspacePage.tsx`(1,193)，加上 `wa_rule_engine.py`(973) 與 `user_router.py`(884)。

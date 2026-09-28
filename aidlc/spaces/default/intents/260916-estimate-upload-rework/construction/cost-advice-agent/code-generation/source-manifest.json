@@ -1,0 +1,37 @@
+{
+  "stage": "code-generation",
+  "unit": "cost-advice-agent",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/cost/advice_orchestrator.py"
+    },
+    {
+      "path": "backend/cost/cost_advice_agent.py"
+    },
+    {
+      "path": "backend/cost/advice_stream_router.py"
+    },
+    {
+      "path": "backend/cost/estimate_intake_service.py"
+    },
+    {
+      "path": "backend/cost/estimate_intake_router.py"
+    },
+    {
+      "path": "backend/main.py"
+    },
+    {
+      "path": "backend/tests/test_cost_advice_agent.py"
+    },
+    {
+      "path": "backend/tests/test_estimate_intake_api.py"
+    },
+    {
+      "path": "openapi.json"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
+    }
+  ]
+}

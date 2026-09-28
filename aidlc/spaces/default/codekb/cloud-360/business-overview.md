@@ -1,10 +1,18 @@
 # Business Overview — Cloud-360
 
-> 逆向工程產出。基準 commit `c3de2c8`（branch `danniel/fix/production-path-check-noop`，2026-08-17）。
+> 逆向工程產出。**基準 commit `9307dbc`（2026-08-23）**；前一基準為 `c3de2c8`（2026-08-17）。
+> **本輪為兩區定向掃描 ＋ 差異標註，不是完整重掃**。節標題後的新鮮度標記：
+> **［本輪重寫］**｜**［本輪機械複驗］**｜**［差異標註］**｜**［沿用 `c3de2c8`］**。
+> 讀法與跨分支限制見 `reverse-engineering-timestamp.md`。
+>
+> **用詞提醒**：在標記為［沿用 `c3de2c8`］或［差異標註］的段落內，「本輪／本次」指的是
+> **`c3de2c8` 那一輪掃描**；在［本輪重寫］／［本輪機械複驗］段落內，以及任何加 **★** 的
+> 條目，指的才是本輪（`9307dbc`，2026-08-23）。
+>
 > 本檔描述系統「在做什麼、服務誰、產生什麼價值」，不描述實作。實作見
 > `architecture.md`、`code-structure.md`、`api-documentation.md`。
 
-## 系統定位
+## 系統定位 ［沿用 `c3de2c8`］
 
 Cloud-360 是 **AI-native multi-cloud architecture & operations platform**，方法論基礎為
 Spec-Driven Development（SRS、user stories、architecture、ADRs）。定位來源為 ADR-0001，
@@ -25,7 +33,7 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 下有 AWS／GCP／Azure 三份 lens 定義，評核可切換 provider；但基礎設施產出（Terraform／IaC）
 對應的業務能力（見下方能力表 D 群）尚無實作模組。
 
-## 服務對象與角色
+## 服務對象與角色 ［沿用 `c3de2c8`］
 
 系統有 **11 個正式角色**（canonical roles，定義於 `backend/services/rbac.py:23`）。角色不是
 單純的權限桶，而是對應到不同的雲端工作職能：
@@ -50,7 +58,7 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 角色的中文顯示名來源為 `backend/services/user_router.py` 的 `ROLE_DISPLAY_NAMES`；正規化規則
 來源為 `rbac.py` 的 `ROLE_ALIASES`。
 
-## 核心業務能力
+## 核心業務能力 ［沿用 `c3de2c8`］
 
 系統以 **story id** 為業務能力的單位。權限矩陣涵蓋 **28 個 story**，其顯示名定義於
 `backend/services/user_router.py` 的 `STORY_FEATURE_LABELS`（該對照表同時餵給註冊頁的
@@ -104,7 +112,7 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 但**不在 28 個 story id 之列**，也沒有專屬權限旗標。它的權限實際掛在 `J3a`
 （授權申請的核准／駁回端點 guard 為 `J3a.edit`）。
 
-## 業務流程主線
+## 業務流程主線 ［差異標註］
 
 ### 主線一：帳號取得與授權
 
@@ -166,7 +174,7 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 節流機制是刻意的取捨：以「最後活動時間的精度」換「每個請求不都變成一次資料庫寫入」。
 下游若需要更高精度的稽核（例如逐次登入紀錄），那是**新的能力**，不是現有欄位的調參。
 
-## 業務邊界與非目標
+## 業務邊界與非目標 ［沿用 `c3de2c8`］
 
 依 `project.md` 的 `## Scope Overrides`：
 
@@ -179,10 +187,13 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 （`wa_rule_engine.py` 與 `wa_lens_engine.py` 都是純函式，不連外、不讀 DB），
 因此不需要任何雲端憑證即可運作。這是刻意的設計，與「production 憑證在範圍外」一致。
 
-## 開發流程層的業務資產
+## 開發流程層的業務資產 ［本輪重寫］
 
 這些不是產品功能，但是本專案業務價值的一部分（「開發面的 AI-native」），
-且已有可執行的實作：
+且已有可執行的實作。**這一層是本輪 reverse-engineering 唯二實掃的範圍**，
+架構細節見 `architecture.md` 的三節「開發流程層架構」。
+
+### 驗證與同步腳本（本基準 `9307dbc` 上為 4 支）
 
 | 資產 | 落點 | 說明 |
 |---|---|---|
@@ -192,10 +203,48 @@ AI agent 產生改善建議；圖與評核結果都掛在一個以角色為基�
 | 測案機械驗證 | `scripts/tcms_validate.py`（360 LOC） | 必填欄位、空洞預期結果、追溯目標存在、API/UI 比對 `openapi.json` 與 `App.tsx` |
 | 測案撰寫標準 | `TESTING.md`（242 LOC） | 測試案例格式的唯一真實來源 |
 
-**待合併**：ADR-0012 的 GitHub Issues／Projects／Wiki 同步（階段 1／2／2.5）實作在
-PR #508，尚未進 `ut`。詳見 `reverse-engineering-timestamp.md` 的「跨分支狀態」。
+> **`origin/ut` 上已是 7 支。** 前一版 codekb 記載「ADR-0012 的同步實作在 PR #508 尚未進
+> `ut`」——**該記載已過期**：本輪以 `gh pr view 508` 實測為 `MERGED`（2026-08-22），
+> `git ls-tree origin/ut scripts/` 確認 `aidlc_sync_push.py`／`aidlc_sync_pull.py`／
+> `aidlc_sync_buglist.py` 三支已在 `ut` 上。**但它們與 ADR-0013 及
+> `project.md ## Forbidden` 的新規則構成待解衝突**（見 `architecture.md` 的
+> 「一項待解衝突」）——這三支的去留尚未定案，因此本節不把它們列為既定資產。
 
-## 詞彙表
+### 11 組 gh-aw agentic workflow
+
+開發流程本身由 11 組 LLM 驅動的 agentic workflow 維護（`engine: copilot`，
+gh-aw 編譯器 `v0.81.6`；`origin/ut` 已升至 `v0.86.2`）。
+**只有 `ui-regression` 是真閘門**，其餘 10 組是提問／自動修／開 issue 型：
+
+| 型態 | workflow | 業務作用 |
+|---|---|---|
+| **阻擋型（1）** | `ui-regression` | 對短生命週期 stack 跑 Playwright、回報 Kiwi TCMS；`.stats.unexpected` 非 0 即擋 |
+| PR 上提問（4） | `pr-reviewer`／`code-drift-alert`／`local-dev-drift`／`contract-guard` | 分別審 PR 慣例、契約性程式改了 spec 沒跟、`LOCAL-DEV.md` 前置條件漂移、repo contract |
+| PR 上自動修（1） | `lint-fix` | 只修機械性、零判斷的 lint error |
+| 開 issue（4） | `spec-sync`／`daily-digest`／`release-watch`／`deploy-doctor` | spec 漂移、每日匯總、上游 release 追蹤、部署失敗自癒 |
+| issue 上分類（1） | `issue-triage` | 分類、貼標、追問缺漏 |
+
+**分界原則與 repo 既有實務一致**（ADR-0012 引為判準）：`deploy-doctor` 只診斷不修
+（明文寫「so a human can fix」）、`lint-fix` 自動修但僅限機械性問題。
+
+### AI-DLC 自身的狀態，是一份可被消費的資產（也是一份有坑的資產）
+
+AI-DLC 把每個 intent 的進度寫在 `<record>/aidlc-state.md`、註冊在 `intents.json`、
+把事件流寫進 `<record>/audit/` 的 per-clone shard。這讓「做到哪、卡在哪」成為可程式化
+消費的資料——**ADR-0012／ADR-0013 的 GitHub 同步構想正是建立在這上面。**
+
+但本輪實掃揭露四件消費者必須先知道的事（細節見 `architecture.md`）：
+
+1. `intents.json` 的 `status` 只有 `in-flight`／`complete` 兩值，**沒有 parked／failed**，
+   且與狀態檔的 `Status` **實測已分岔 1/6**——兩者不是同一事實的兩份拷貝。
+2. `Status` 只有 `Running`／`Completed`，**沒有「等待核准」這個值**。
+   看板若要有 "In review"，來源只能是 stage checkbox。
+3. `[ ] — SKIP`（不適用）、`[S] — EXECUTE`（被跳過的欠債）、`[ ] — EXECUTE`（待辦）
+   **是三種語意，但都長得像「沒打勾」**。
+4. **作用中 intent 的 record 目前完全未進版控**，而 `active-intent` 游標永遠被 gitignore。
+   任何只看已提交內容的機制，**更新頻率由人什麼時候 commit 並合併 record 決定**，不由排程決定。
+
+## 詞彙表 ［本輪擴充］
 
 | 詞 | 意義 |
 |---|---|
@@ -213,3 +262,16 @@ PR #508，尚未進 `ut`。詳見 `reverse-engineering-timestamp.md` 的「跨�
 | **BR-04** | 核准權限限制規則：`Project_Admin` 不可核准平台級角色 |
 | **prompt guard** | 進 agent 前的平台自我竄改預檢；命中即不呼叫 LLM |
 | **LLM provider** | LLM 存取模式，`openrouter`（部署預設）或 `cli`（本機已登入的 claude CLI） |
+
+### 開發流程層詞彙（本輪新增）
+
+| 詞 | 意義 |
+|---|---|
+| **intent** | AI-DLC 的一個需求生命週期。在 `intents.json` 有一列、在 `aidlc/spaces/<space>/intents/<record>/` 有一個 record 目錄 |
+| **record** | 某個 intent 的產出目錄，含 `aidlc-state.md`、各 stage artifact 與 `audit/` shard |
+| **stage checkbox** | `aidlc-state.md` 的逐 stage 進度標記，六值：`[ ]`／`[-]`／`[?]`／`[R]`／`[x]`／`[S]` |
+| **EXECUTE／SKIP 後綴** | 與 checkbox **正交**的一維：`SKIP` = 該 scope 不含此 stage；`EXECUTE` = 在 scope 內 |
+| **audit shard** | `<record>/audit/<host>-<clone8>.md`，append-only 的事件流。唯一帶時間戳、唯一說得出 gate 被拒過幾次的來源 |
+| **gh-aw** | GitHub Agentic Workflows。作者寫 `.md`，`gh aw compile` 產出 `.lock.yml`；**Actions 只執行後者** |
+| **safe-outputs** | gh-aw 的受管輸出機制。agent 本身不持有寫入權限，寫入由框架以受限形狀代理 |
+| **受管區塊** | issue 內文中 `<!-- aidlc:managed -->` 夾住的部分，由 repo 覆寫；標記外的人寫內容永不觸碰（ADR-0012） |

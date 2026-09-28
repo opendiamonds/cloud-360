@@ -1,0 +1,27 @@
+{
+  "stage": "functional-design",
+  "unit": "estimate-parser",
+  "note": "上游為指派給 U1 的 FR（user-stories SKIP）。OK target 為 rules.md 的 BRx.y。",
+  "upstream_ids": [
+    "FR1.2", "FR1.5",
+    "FR2.1", "FR2.2", "FR2.3", "FR2.4",
+    "FR4.1", "FR4.2", "FR4.3", "FR4.4",
+    "FR9.6"
+  ],
+  "coverage": [
+    { "id": "FR1.2", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.5", "status": "OK", "target": "BR1.2" },
+    { "id": "FR2.1", "status": "OK", "target": "BR2.1" },
+    { "id": "FR2.2", "status": "OK", "target": "BR2.2" },
+    { "id": "FR2.3", "status": "OK", "target": "BR2.3" },
+    { "id": "FR2.4", "status": "OK", "target": "BR2.4" },
+    { "id": "FR4.1", "status": "OK", "target": "BR4.1" },
+    { "id": "FR4.2", "status": "OK", "target": "BR4.2" },
+    { "id": "FR4.3", "status": "OK", "target": "BR4.3" },
+    { "id": "FR4.4", "status": "OK", "target": "BR4.4" },
+    { "id": "FR9.6", "status": "OK", "target": "BR9.1" }
+  ],
+  "reverse": [
+    { "id": "BR3.1", "status": "N/A", "target": "functional-design Q3 定案；補強 FR1.5 毀損檔路徑，無獨立 FR 編號" }
+  ]
+}

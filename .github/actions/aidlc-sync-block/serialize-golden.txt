@@ -1,0 +1,20 @@
+<!-- R-4.4 序列化 golden — 由 run-fixtures.py 的 test_r4_4 逐位元比對。
+     這一份鎖的是 content_hash 的**實際輸入**（canonical serialization），
+     不是 render 的 markdown 輸出。兩者是不同的表面：R-4.1 改了 render 會紅，
+     但改 serialize_block 的欄序／分隔符／跳脫規則，R-4.1～R-4.3 一道都不會紅，
+     而那正是會讓全部既有 item 的雜湊改變、反向同步大規模誤判的變更。
+     產生方式（刻意的動作，不要自動重生）：
+       python3 -c "..." > serialize-golden.txt  # 見 code-summary 的 R-4.4 段
+     發現來源：reviewer(code-generation) Critical，2026-08-30T12:29:02Z -->
+
+=== golden-mapped-with-rejection.md ===
+sha256: ad8a47ad940bffd86c96740f1f333234ab4d957c54740e6ba17fd6b13e4885ef
+format_version=1\nstatus=Ready\ntraceable_row=R-3.6 no-in-scope-stage-touched\nreason_category=\ndecided_at=\nscope_note=skipped-in-scope: none; out-of-scope: none\nrejection_closed_at=2026-08-29T10:11:12Z\n
+
+=== golden-mapped.md ===
+sha256: 2f1712e63619277fb7f05aa55ad65992cf67399ea7b068fdd496c8b1fe2fc957
+format_version=1\nstatus=Ready\ntraceable_row=R-3.6 no-in-scope-stage-touched\nreason_category=\ndecided_at=\nscope_note=skipped-in-scope: none; out-of-scope: none\nrejection_closed_at=\n
+
+=== golden-unmapped.md ===
+sha256: 4f1657570f51be8a2dd9fdd5ec8c796c8b1a4900a2569683f912d057dbedd566
+format_version=1\nstatus=\ntraceable_row=\nreason_category=parked\ndecided_at=2026-08-30T07:00:00Z\nscope_note=skipped-in-scope: functional-design; out-of-scope: market-research, team-formation\nrejection_closed_at=\n

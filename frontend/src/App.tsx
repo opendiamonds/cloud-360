@@ -12,6 +12,7 @@ import { ForbiddenPage } from './pages/ForbiddenPage';
 import { WaitingApprovalPage } from './pages/WaitingApprovalPage';
 import { AuthorizationRequestsPage } from './pages/AuthorizationRequestsPage';
 import { AssessmentPage } from './pages/AssessmentPage';
+import { CostPage } from './pages/CostPage';
 
 /** 依權限導向第一個可用頁；pending → 等待授權；皆無則 403 */
 const DefaultRedirect: React.FC = () => {
@@ -20,6 +21,7 @@ const DefaultRedirect: React.FC = () => {
   if (isPending) return <Navigate to="/waiting-approval" replace />;
   if (canArch('view')) return <Navigate to="/workspace" replace />;
   if (can('A3', 'view')) return <Navigate to="/assessment" replace />;
+  if (can('C1', 'view')) return <Navigate to="/cost" replace />;
   if (can('J3a', 'view')) return <Navigate to="/admin/users" replace />;
   if (can('J3b', 'view')) return <Navigate to="/admin/role-permissions" replace />;
   return <Navigate to="/403" replace />;
@@ -61,6 +63,19 @@ function App() {
                 <CapabilityRoute storyId="A3" action="view">
                   <Layout>
                     <AssessmentPage />
+                  </Layout>
+                </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cost"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="C1" action="view">
+                  <Layout>
+                    <CostPage />
                   </Layout>
                 </CapabilityRoute>
               </ProtectedRoute>

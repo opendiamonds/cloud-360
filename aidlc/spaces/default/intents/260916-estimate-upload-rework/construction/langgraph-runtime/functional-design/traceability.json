@@ -1,0 +1,65 @@
+{
+  "stage": "functional-design",
+  "unit": "langgraph-runtime",
+  "note": "上游為指派給 U6 的 FR10.*（user-stories SKIP）。OK target 為 rules.md 的 BRx.y。FR10.4 為範圍排除宣告。",
+  "upstream_ids": [
+    "FR10.1",
+    "FR10.2",
+    "FR10.3",
+    "FR10.4"
+  ],
+  "coverage": [
+    {
+      "id": "FR10.1",
+      "status": "OK",
+      "target": "BR10.1"
+    },
+    {
+      "id": "FR10.2",
+      "status": "OK",
+      "target": "BR10.2"
+    },
+    {
+      "id": "FR10.3",
+      "status": "OK",
+      "target": "BR10.3"
+    },
+    {
+      "id": "FR10.4",
+      "status": "N/A",
+      "target": "其餘五個 agent 遷移明文不在本期；無本 Unit 實作義務"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR10.4",
+      "status": "N/A",
+      "target": "Q5=A／B2 DoD 定案；補強缺金鑰行為，無獨立 FR 編號"
+    },
+    {
+      "id": "BR10.5",
+      "status": "N/A",
+      "target": "U6 boundaries／Q3=A；圖所有權邊界"
+    },
+    {
+      "id": "BR10.6",
+      "status": "N/A",
+      "target": "Q4=A／B2 DoD；CI 與真實推論分離"
+    },
+    {
+      "id": "BR10.7",
+      "status": "N/A",
+      "target": "金鑰不外洩；承接 Q5 與安全基線"
+    },
+    {
+      "id": "BR10.8",
+      "status": "N/A",
+      "target": "審閱 R-01：釘死 invoke 回傳 InvokeOutcome"
+    },
+    {
+      "id": "BR10.9",
+      "status": "N/A",
+      "target": "審閱 R-02：async／sync 串流雙入口"
+    }
+  ]
+}

@@ -51,7 +51,7 @@
 | 欄位 | 必要 | 內容 | 檢查方式 |
 |---|---|---|---|
 | **目的** | ✅ | 這個案例保護什麼，一到兩句 | 非空 |
-| **受測介面** | ✅ | 碰到的 API 端點與 UI 路徑 | **比對 `openapi.json` 與 `App.tsx` 路由表** |
+| **受測介面** | ✅ | 碰到的 API 端點、UI 路徑或 workflow | **比對 `openapi.json`、`App.tsx` 路由表與 `.github/` 下的實際檔案** |
 | **前置條件** | ✅ | 步驟 1 之前需要的一切，可複製貼上 | 非空 |
 | **測試步驟** | ✅ | 操作 ↔ 預期結果的表格 | 每列都要有操作與預期；預期不得是「正常」「成功」這類無法判定的詞 |
 | **通過條件** | ✅ | 二元可判的判準 | 非空 |
@@ -99,7 +99,21 @@
 
 - API: `POST /api/auth/login` → 200 — 帳密驗證，成功時回 access_token
 - UI: `/admin/users` — 使用者角色指派頁：表格、分頁導覽區
+- Workflow: `.github/workflows/ci.yml` → pull_request — 四個 job 的執行與跳過
 - 外部相依: <非本系統的依賴，如 n8n webhook；沒有就刪掉這行>
+
+三種介面行別**至少要有一個**；`- 外部相依:` 不算，它描述的是依賴而不是受測面。
+
+| 行別 | 比對對象 | 什麼時候用 |
+|---|---|---|
+| `- API:` | `openapi.json`（path、method 存在即硬錯誤；status 未宣告只警告） | 案例會打到後端端點 |
+| `- UI:` | `frontend/src/App.tsx` 的路由表 | 案例會操作前端頁面 |
+| `- Workflow:` | `.github/` 下的實際檔案；宣告的事件要真的在該檔的 `on:` 裡 | **受測對象是 GitHub Actions workflow 或 composite action**，既無端點也無前端路由 |
+
+`- Workflow:` 是為了 intent `260822-gh-projects-sync` 新增的：它的交付物是 10 個
+composite action 與 7 支 workflow，完全不在 web app 內，於是每一個手動案例都會撞上
+「沒有列出任何 API 端點或 UI 路徑」。**正確的處置不是填一個假端點讓機械層過關**——
+那正是這道檢查存在的理由所要防的事（見 `project.md` 的 `tcms-test-cases:c20`）。
 
 ### 前置條件
 

@@ -1,0 +1,7 @@
+coverage:
+  - cloud: aws
+    mode: official_list
+  - cloud: gcp
+    mode: official_list
+  - cloud: azure
+    mode: official_list

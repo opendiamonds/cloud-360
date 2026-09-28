@@ -1,0 +1,37 @@
+{
+  "stage": "functional-design",
+  "unit": "estimate-workspace-ui",
+  "coverage": [
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "M1/CostPage"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "EstimateCloudCard"
+    },
+    {
+      "id": "FR4.5",
+      "status": "OK",
+      "target": "EstimateChecksPanel"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "HistoryDrawer"
+    },
+    {
+      "id": "FR6.5",
+      "status": "OK",
+      "target": "PrivacyBadge"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "C1 gate on CostPage"
+    }
+  ],
+  "confirmed": "Looks correct"
+}

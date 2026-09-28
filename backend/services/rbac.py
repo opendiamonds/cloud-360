@@ -81,6 +81,36 @@ def ensure_role_permissions_seeded(db: Session, force: bool = False) -> int:
     return len(DEFAULT_ROLE_PERMISSIONS)
 
 
+def ensure_missing_role_permissions(db: Session) -> int:
+    """
+    只 INSERT 缺失的 (role, story_id)；不 UPDATE／DELETE 既有列（ADR-C1-02）。
+    """
+    inserted = 0
+    for role, story_id, can_view, can_edit, can_review in DEFAULT_ROLE_PERMISSIONS:
+        exists = (
+            db.query(RolePermission)
+            .filter(RolePermission.role == role, RolePermission.story_id == story_id)
+            .first()
+        )
+        if exists:
+            continue
+        db.add(
+            RolePermission(
+                role=role,
+                story_id=story_id,
+                can_view=can_view,
+                can_edit=can_edit,
+                can_review=can_review,
+                updated_by="system_seed",
+            )
+        )
+        inserted += 1
+    if inserted:
+        db.commit()
+        logger.info("ensure_missing_role_permissions: inserted %d rows", inserted)
+    return inserted
+
+
 def get_permission_row(
     db: Session, role: str, story_id: str
 ) -> Optional[RolePermission]:

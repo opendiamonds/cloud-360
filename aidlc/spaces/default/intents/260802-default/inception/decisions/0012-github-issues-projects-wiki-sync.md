@@ -1,6 +1,6 @@
 # ADR 0012: AI-DLC 與 GitHub Issues／Projects／Wiki 的雙向同步
 
-- Status: Accepted（設計；實作分階段，見「分階段落地」）
+- Status: Accepted，**部分經 ADR-0013 修訂（2026-08-23）** —— 第 1 點的映射層級、第 5 點的承載形式與提權論證、以及「分階段落地」表已被修訂；第 2、3、4、6 點與其餘 Consequences 維持有效。閱讀本 ADR 時必須併讀 `../../260822-gh-projects-sync/inception/decisions/0013-aidlc-projects-sync-scoping.md`。
 - Date: 2026-08-16
 - Related: ADR-0011（採用 AI-DLC v2）、ADR-0008（Construction↔Operations 連續模型）、ADR-0009（文件一律繁體中文）、`.github/workflows/spec-sync.md`、`.github/workflows/issue-triage.md`
 

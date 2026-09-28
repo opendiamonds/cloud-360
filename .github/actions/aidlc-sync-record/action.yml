@@ -1,0 +1,185 @@
+name: AI-DLC Sync Record Store
+description: >-
+  record 回寫與同步狀態（[ad:C-4 binding-store]）。單一 action，以 operation 分派
+  component-methods.md §C-4 的五個方法。本 action 是整個同步機制中**唯一會寫回 repo**
+  的地方——它做檔案系統與 git I/O，因此獨立於 U-1／U-2 的純函式 action（fixture 驅動
+  的前提）與 U-3 的看板客戶端（驗證方式分別是「④git 與 repo 行為」與「③真實 Projects
+  v2 API」，併成一支會讓完成判準同時指涉兩種不可互換的驗證）。設計正本見
+  aidlc/spaces/default/intents/260822-gh-projects-sync/construction/U-4-binding-store/
+  的 functional-design/{business-rules,business-logic-model,domain-entities}.md 與
+  nfr-requirements/{security-requirements,tech-stack-decisions}.md。
+
+
+  四個存取器操作的是**同一份檔案** <record_path>/sync-state.json（缺口 L-1 定案）；
+  read_binding／write_binding 是它 binding 欄位的投影，不是第二份資料。本 action
+  不使用 gh、不讀任何 token（SEC-1，見下方註解）。五種操作的 inputs／outputs 是
+  **聯集**，YAML 層看不出哪些組合合法，逐操作的合法組合如下（沿用 U-2／U-3 慣例）：
+
+
+  operation: read_binding — 必要 input：record_path。有效 output：binding
+  （空字串＝null，觸發首建，R-1.1）。檔案或欄位缺席都不是錯誤。
+
+
+  operation: write_binding — 必要 input：record_path、issue_number（正整數）。
+  有效 output：result（written）、state_json、binding。等同 write_sync_state 帶
+  {binding: N}。檔案寫入失敗 → 非零 exit（R-1.2 的 ExternalError）。
+
+
+  operation: read_sync_state — 必要 input：record_path。有效 output：state_json
+  （完整物件，單行 JSON）、binding。檔案缺席 → 全部預設值；欄位缺席 → 補預設；
+  **未知欄位原樣保留在 state_json 內**（R-2.3 讀取半邊）；schema_version 高於本
+  action 的版本 → 不拒絕、原樣帶出（R-2.4）；JSON 損壞或 schema_version／binding
+  型別不對 → 非零 exit（ExternalError，那是損壞不是舊格式）。
+
+
+  operation: write_sync_state — 必要 input：record_path、state_json（**部分物件**，
+  只給要改的欄位；Plan Approval 裁決 5）。有效 output：result（written）、state_json
+  （寫入後的完整物件）、binding。read-modify-write：未知欄位保留（R-2.3 寫入半邊）、
+  pending_reverse 以整個鍵為單位覆寫、schema_version 只增不減、已知欄位補預設、
+  原子替換。state_json 不是 JSON 物件 → exit 2（呼叫端 bug）。
+
+
+  operation: commit_and_push — 必要 input：record_path、branch、paths、message。
+  選填 input：git_user_name、git_user_email（SEC-4 的同步身分，預設值即顯式值）。
+  有效 output：result（pushed / rejected）、reason（rejected 時：policy /
+  branch_protection / non_fast_forward_exhausted）、attempts、commit_sha、message。
+  **前置檢查全部在任何 git 動作之前**：branch 為 ut 或 main → result=rejected、
+  reason=policy、exit 3（R-3.1；**ut 的分支保護 enforce_admins 為 false，平台不會擋
+  擁有者 token 的直推，本檢查是唯一防線**）；message 缺 [aidlc-sync] → exit 2
+  （R-3.3）；paths 任一項不等於 <record_path>/sync-state.json → exit 2（R-3.2）。
+  commit 在暫存 git worktree 內完成，呼叫端 checkout 一個檔案都不動；每一次嘗試
+  都以三方鍵層合併（base＝呼叫端 HEAD 的版本、ours＝工作樹現檔、theirs＝origin 上
+  最新版本）套用本輪變更，並行寫入者的欄位不會被抹掉。push 失敗時解析 stderr：
+  非快轉 → 重取重合併重推，push 總次數上限 3；分支保護 → 立即 rejected；其餘 →
+  非零 exit（ExternalError）。attempts=0 且 result=pushed 是合法組合：工作樹內容
+  與 origin/<branch> 已一致、無需新 commit（冪等重跑），commit_sha 為既有 HEAD。
+
+
+  operation 為其他值（含空值）時，本 action **以非零 exit 立即失敗**，不會靜默回空值。
+  exit code：0＝Pushed／讀寫成功；1＝ExternalError（result=external_error 已寫出）；
+  2＝介面誤用（不寫 result）；3＝Rejected（result=rejected、reason 已寫出）。
+
+# 本 action 刻意**不宣告任何憑證型 input**（SEC-1）：input 是 action 的公開介面，把
+# 憑證放進介面等於邀請每一個呼叫端「傳一個你手上有的 token」。本 action 不讀任何
+# token——push 走 origin，沿用呼叫端 actions/checkout 已持久化的憑證。**接線要求**：
+# U-6／U-7／U-8 必須以同步 token 做 checkout（token: 明訂、persist-credentials: true），
+# 否則 push 會以認證失敗收場（ExternalError）。run-stub-tests.py 有一條機械斷言
+# 鎖住「無憑證型 input」——不要「順手」加一個 token input。
+#
+# paths 白名單是**介面約束，不是權限約束**（security-requirements.md SEC-1）：憑證
+# 本身帶整個 repo 的內容寫入權，白名單擋的是本 action 的正確實作，靠 code review
+# 與 run-stub-tests.py 的越界斷言維持。
+#
+# 全部邏輯在 record.sh，本檔只做介面轉接（inputs → 環境變數 → record.sh →
+# $GITHUB_OUTPUT）。run-stub-tests.py 在暫存目錄以本機 bare repo 當 origin 直接
+# 呼叫 record.sh，不必先起一個 workflow。
+
+inputs:
+  operation:
+    description: >-
+      read_binding / write_binding / read_sync_state / write_sync_state /
+      commit_and_push。**必填**，值不合法時立即非零 exit。
+    required: true
+
+  record_path:
+    description: >-
+      record 目錄，相對 repo 根，形狀必須是 aidlc/spaces/<space>/intents/<slug>/
+      （尾端斜線可省）且目錄必須存在。五種操作都必要——commit_and_push 用它推導
+      paths 白名單
+    required: true
+  issue_number:
+    description: '（write_binding）綁定的 issue 編號，正整數'
+    required: false
+    default: ''
+  state_json:
+    description: >-
+      （write_sync_state）要合併進 sync-state.json 的**部分物件**（JSON 文字，只給要改
+      的欄位）。未知欄位保留、pending_reverse 整鍵覆寫、schema_version 不降版。
+      空物件請傳 '{}'
+    required: false
+    default: ''
+  branch:
+    description: >-
+      （commit_and_push）push 目標分支的純名稱（不含 refs/ 前綴）。ut／main 一律
+      rejected／policy（R-3.1）。正向同步（U-6）傳觸發分支；對帳（U-7）與反向同步
+      （U-8）傳各自的自建分支——分支不存在於 origin 時以呼叫端 HEAD 為分叉點建立
+    required: false
+    default: ''
+  paths:
+    description: >-
+      （commit_and_push）要回寫的檔案清單，空白或換行分隔。**每一項都必須逐字等於
+      <record_path>/sync-state.json**（R-3.2；L-1 併檔後白名單只有這一個檔），不合
+      即 exit 2
+    required: false
+    default: ''
+  message:
+    description: >-
+      （commit_and_push）commit 訊息，**必含 [aidlc-sync]**（R-3.3——U-6 整輪 skip 的
+      唯一依據）。SEC-3：不得含 Status 以外的 record 內容摘要；本 action 不加料
+    required: false
+    default: ''
+  git_user_name:
+    description: '（commit_and_push）同步身分的 user.name（SEC-4，顯式設定；不得為空）'
+    required: false
+    default: 'aidlc-sync'
+  git_user_email:
+    description: '（commit_and_push）同步身分的 user.email（SEC-4，顯式設定；不得為空）'
+    required: false
+    default: 'aidlc-sync@users.noreply.github.com'
+
+outputs:
+  binding:
+    description: >-
+      （read_binding / read_sync_state / write_binding / write_sync_state）綁定的
+      issue 編號；**空字串＝null**（檔案或欄位缺席，觸發首建）
+    value: ${{ steps.record.outputs.binding }}
+  state_json:
+    description: >-
+      （read_sync_state / write_sync_state / write_binding）sync-state.json 的完整物件，
+      單行 JSON。已知欄位缺席時已補預設；未知欄位原樣在內
+    value: ${{ steps.record.outputs.state_json }}
+  result:
+    description: >-
+      操作結果：written（寫入層）/ pushed / rejected / external_error。pushed 為
+      exit 0；rejected 為 exit 3（紅燈，交 C-5）；external_error 為 exit 1（例外式，
+      紅燈）。介面誤用（exit 2）不寫本 output
+    value: ${{ steps.record.outputs.result }}
+  reason:
+    description: >-
+      （commit_and_push，result=rejected 時）policy（branch 為 ut／main，介面層擋下）/
+      branch_protection（平台拒絕，不重試）/ non_fast_forward_exhausted（非快轉重試
+      用罄）。pushed 時為空字串
+    value: ${{ steps.record.outputs.reason }}
+  attempts:
+    description: >-
+      （commit_and_push）push 的總次數（含首次）。pushed 時 1〜3；0 表示無需新
+      commit（內容已與 origin 一致）；rejected／policy 時為 0
+    value: ${{ steps.record.outputs.attempts }}
+  commit_sha:
+    description: >-
+      （commit_and_push，result=pushed 時）推上去的 commit SHA；attempts=0 時為
+      origin/<branch> 既有的 HEAD。rejected 時為空字串
+    value: ${{ steps.record.outputs.commit_sha }}
+  message:
+    description: >-
+      （commit_and_push，以及 external_error 時）說明文字：只含本 action 自己的定位
+      文字與 push stderr 中 remote:／! 起頭的行（單行化、截斷 300 字元），不含本機
+      路徑、不含完整 stderr。此值會被交給 C-5 開公開 issue
+    value: ${{ steps.record.outputs.message }}
+
+runs:
+  using: composite
+  steps:
+    - id: record
+      shell: bash
+      env:
+        AIDLC_OPERATION: ${{ inputs.operation }}
+        AIDLC_RECORD_PATH: ${{ inputs.record_path }}
+        AIDLC_ISSUE_NUMBER: ${{ inputs.issue_number }}
+        AIDLC_STATE_JSON: ${{ inputs.state_json }}
+        AIDLC_BRANCH: ${{ inputs.branch }}
+        AIDLC_PATHS: ${{ inputs.paths }}
+        AIDLC_MESSAGE: ${{ inputs.message }}
+        AIDLC_GIT_USER_NAME: ${{ inputs.git_user_name }}
+        AIDLC_GIT_USER_EMAIL: ${{ inputs.git_user_email }}
+      run: bash "${GITHUB_ACTION_PATH}/record.sh"

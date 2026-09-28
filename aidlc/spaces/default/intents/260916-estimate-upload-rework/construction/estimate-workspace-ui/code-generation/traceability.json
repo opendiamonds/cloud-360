@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "estimate-workspace-ui",
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "EstimateUploadZone" },
+    { "id": "FR3.1", "status": "OK", "target": "EstimateCloudCard" },
+    { "id": "FR3.2", "status": "OK", "target": "EstimateChecksPanel" },
+    { "id": "FR4.1", "status": "OK", "target": "EstimateHistoryDrawer" },
+    { "id": "FR4.2", "status": "OK", "target": "EstimateShareModal" },
+    { "id": "FR6.1", "status": "OK", "target": "CostPage privacy badge" },
+    { "id": "C", "status": "OK", "target": "estimate-workspace.spec.ts" }
+  ],
+  "plan_fingerprint": "sha256:97c3571c38d69fb8aaa9e184a6ed6beb2ac97c6fa50ddb462be6e4ebf020b556"
+}

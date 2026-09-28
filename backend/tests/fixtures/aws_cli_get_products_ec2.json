@@ -1,0 +1,5 @@
+{
+  "PriceList": [
+    "{\"product\":{\"productFamily\":\"Compute Instance\",\"attributes\":{\"instanceType\":\"t3.micro\",\"operatingSystem\":\"Linux\",\"tenancy\":\"Shared\",\"preInstalledSw\":\"NA\",\"capacitystatus\":\"Used\",\"location\":\"US East (N. Virginia)\"},\"sku\":\"CRAJUW7BTXFMT2UJ\"},\"terms\":{\"OnDemand\":{\"CRAJUW7BTXFMT2UJ.JRTCKXETXF\":{\"priceDimensions\":{\"CRAJUW7BTXFMT2UJ.JRTCKXETXF\":{\"unit\":\"Hrs\",\"pricePerUnit\":{\"USD\":\"0.0104000000\"}}}}}}}"
+  ]
+}

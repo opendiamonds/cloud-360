@@ -1,0 +1,85 @@
+name: AI-DLC Sync Map
+description: >-
+  把一個 AI-DLC record 的文字（aidlc-state.md ＋ intents.json）變成一個看板決定：
+  Status、自訂欄位值、reason_code、可追溯的對照表列，以及 [S]／— SKIP 的差別（scope_note）。
+  全程零 I/O——不讀檔、不呼叫 API。設計正本見
+  aidlc/spaces/default/intents/260822-gh-projects-sync/construction/U-1-map-parse-action/
+  的 functional-design/{business-rules,business-logic-model,domain-entities}.md。
+
+# 本 action 刻意**不宣告任何 secret 型 input**（security-requirements.md 的 IAM 判定）：
+# 它不持有憑證。若下一個人為了讓它「順便查一下 Projects」而給它 token，本單元的零 I/O
+# 性質與 [US:S-10 AC 1] 的 fixture 驅動就同時失效。
+#
+# 全部解析與判定邏輯在 map.sh，本檔只做介面轉接（inputs → 環境變數 → map.sh →
+# $GITHUB_OUTPUT）。這讓「零 I/O」成為**可測的事實**而非宣稱：fixtures/ 與
+# run-fixtures.py 以 env 直接呼叫 map.sh，不必先起一個 workflow。
+
+inputs:
+  state_md:
+    description: 'record 的 aidlc-state.md 全文'
+    required: true
+  intents_json:
+    description: >-
+      intents.json 全文。目前 map.sh 不消費它（綁定編號的鍵名上游未指定，且五個 output
+      沒有一個承載 binding）——保留在介面上是為了不讓呼叫端在缺口補上後還要改簽章。
+    required: false
+    default: ''
+  record_path:
+    description: 'record 目錄路徑；intent_id 由它推導，不從狀態檔內文取'
+    required: true
+  record_root:
+    description: >-
+      record 根目錄（例：aidlc/spaces/default/intents）。參數化而非寫死（[F1=A]）；
+      record_path 不在它底下時，intent_id 退回取 record_path 的 basename。
+    required: false
+    default: ''
+  field_max_length:
+    description: '自訂欄位長度上限。前綴與 (<編號>) 永不截斷，故結果可能刻意超限（R-5.4）'
+    required: false
+    default: '50'
+  whitelist:
+    description: >-
+      已知結構性例外的 intent id 集合（[req:FR-J5]）。**換行分隔**，空字串為空集合。
+      只對 Unparseable 生效，不影響可解析 record 的判定（R-4.3）。
+    required: false
+    default: ''
+  reverse_pending:
+    description: >-
+      有未處理反向紀錄的 intent id 集合（[req:FR-G3]）。**換行分隔**，空字串為空集合。
+      由呼叫端在逐 record 迴圈**之前**組出——本 action 自己不做任何 I/O（[Q2=A]）。
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Ready / In progress / In review / Done，或**空字串**代表決定不寫'
+    value: ${{ steps.map.outputs.status }}
+  field_value:
+    description: '自訂欄位值，可為空字串'
+    value: ${{ steps.map.outputs.field_value }}
+  reason_code:
+    description: 'mapped / parked / suppressed / undecidable / unparseable / whitelisted。**一律非空**'
+    value: ${{ steps.map.outputs.reason_code }}
+  traceable_row:
+    description: '命中的對照表列識別字，或不寫的理由。**一律非空**'
+    value: ${{ steps.map.outputs.traceable_row }}
+  scope_note:
+    description: >-
+      "skipped-in-scope: <slugs>; out-of-scope: <slugs>"，空類寫 none。
+      不進 Decision——[req:FR-B3] 明訂 [S]／— SKIP 對 Status 無影響。
+    value: ${{ steps.map.outputs.scope_note }}
+
+runs:
+  using: composite
+  steps:
+    - id: map
+      shell: bash
+      env:
+        AIDLC_STATE_MD: ${{ inputs.state_md }}
+        AIDLC_INTENTS_JSON: ${{ inputs.intents_json }}
+        AIDLC_RECORD_PATH: ${{ inputs.record_path }}
+        AIDLC_RECORD_ROOT: ${{ inputs.record_root }}
+        AIDLC_FIELD_MAX_LENGTH: ${{ inputs.field_max_length }}
+        AIDLC_WHITELIST: ${{ inputs.whitelist }}
+        AIDLC_REVERSE_PENDING: ${{ inputs.reverse_pending }}
+      run: bash "${GITHUB_ACTION_PATH}/map.sh"

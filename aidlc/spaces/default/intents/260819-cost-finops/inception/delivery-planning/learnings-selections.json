@@ -1,0 +1,13 @@
+{
+  "stage_slug": "delivery-planning",
+  "selections": [
+    {
+      "candidate_id": "c20",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Delivery Planning 不重問 practices-discovery 已核可的 walking-skeleton 立場。第一段可單獨上線的故事應把 OpenAPI 契約與 UI 消費端捆進同一 Bolt（deploy-on-merge 同批）；單拆 schema 或 library 若湊不出可展示的信心假說則不合閘",
+      "source": "orchestrator"
+    }
+  ]
+}

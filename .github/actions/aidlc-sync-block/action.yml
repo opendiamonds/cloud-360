@@ -1,0 +1,194 @@
+name: AI-DLC Sync Managed Block
+description: >-
+  受管區塊的渲染、讀回與雜湊。單一 action，以 operation 分派三個操作（[Q1=A]）。
+  全程零 I/O——不讀檔、不呼叫 API。設計正本見
+  aidlc/spaces/default/intents/260822-gh-projects-sync/construction/U-2-managed-block/
+  的 functional-design/{business-rules,business-logic-model,domain-entities}.md。
+
+
+  **四種**操作的 inputs／outputs 是**聯集**，YAML 層看不出哪些組合合法（[Q1=A] 選項
+  本文已載明的代價）。四種＝[Q1=A] 定案的 render／parse／hash，加上 ADR-0015 §6 修法 (b)
+  增設、並於 code-generation 的 Plan Approval 裁定採用的 has_marker。
+  逐操作的合法組合如下——這份清單就是該代價的承接方式：
+
+
+  operation: render — 必要 input：scope_note；status 非空時另需 traceable_row，
+  status 為空時另需 reason_code 與 decided_at；rejection_closed_at 選填（為空即不渲染
+  該段）。有效 output：block_text。其餘 output 不設值。
+
+
+  operation: parse — 必要 input：issue_body。有效 output：found、has_marker、
+  block_format_version、block_status、block_traceable_row、block_reason_category、
+  block_decided_at、block_scope_note、block_rejection_closed_at。block_text 不設值。
+
+
+  operation: hash — 必要 input：block_format_version、block_status、
+  block_traceable_row、block_reason_category、block_decided_at、block_scope_note、
+  block_rejection_closed_at（欄名與 parse 的 output 完全一致，可直接對接）。
+  有效 output：content_hash。其餘 output 不設值。
+
+
+  operation: has_marker — 必要 input：issue_body。有效 output：has_marker。
+  其餘 output 不設值。
+
+
+  operation 為其他值（含空值）時，本 action **以非零 exit 立即失敗**，不會靜默回空值。
+
+# 本 action 刻意**不宣告任何 secret 型 input**（security-requirements.md 的 IAM 判定）：
+# 它不持有憑證、不呼叫 API。與 U-1 同——若下一個人為了讓它「順便去看一下 issue」而給它
+# token，本單元的零 I/O 性質與 fixture 驅動的驗證方式就同時失效。
+#
+# 全部邏輯在 block.sh，本檔只做介面轉接（inputs → 環境變數 → block.sh →
+# $GITHUB_OUTPUT）。這讓「零 I/O」成為**可測的事實**而非宣稱：fixtures/ 與
+# run-fixtures.py 以 env 直接呼叫 block.sh，不必先起一個 workflow。
+#
+# 受管區塊的**格式**（標記語法、欄位標籤、FORMAT_VERSION）全部在 block.sh，受
+# business-rules.md R-4 群的 CI 互鎖約束（R-4.1～R-4.5 共五道）。不要在本檔或任何 workflow 裡複製一份
+# 標記字串——那會產生第二份格式知識，而它落在互鎖之外（domain-entities.md
+# 「受管標記」節逐字警告過這件事）。
+
+inputs:
+  operation:
+    description: >-
+      render / parse / hash / has_marker。**必填**，值不合法時立即非零 exit。
+      has_marker 是 ADR-0015 §6 修法 (b) 增設的廉價述詞，用來讓呼叫端在 parse 回 null
+      時分辨「完全沒有受管區塊」與「有區塊但版本較新／格式壞掉」——後者**不得覆寫**。
+    required: true
+
+  # ---- render 的輸入（Decision 的四欄之三 ＋ Context 的三欄）----------------
+  # 命名刻意不加 block_ 前綴：這些是 Decision／Context 的欄位，不是 Block 的欄位。
+  # 兩者的差別是本單元最容易搞混的地方（reason_code 一律非空，reason_category 只在
+  # status 為 null 時非空），見 block.sh 的 derive_block_from_decision。
+  status:
+    description: 'Decision.status。Ready / In progress / In review / Done，或**空字串**代表機制決定不寫'
+    required: false
+    default: ''
+  traceable_row:
+    description: 'Decision.traceable_row。只在 status 非空時被渲染（Block.traceable_row 在另一支為 null）'
+    required: false
+    default: ''
+  reason_code:
+    description: >-
+      Decision.reason_code，一律非空（mapped / parked / suppressed / undecidable /
+      unparseable / whitelisted）。只在 status 為空時被渲染成 Block.reason_category
+    required: false
+    default: ''
+  scope_note:
+    description: >-
+      Context.scope_note，即 U-1 composite action 的第五個 output
+      "skipped-in-scope: <slugs>; out-of-scope: <slugs>"。**必須能原樣被 parse 取回**
+      （ADR-0015 §10 的雜湊等價不變式依賴它），故不得含換行
+    required: false
+    default: ''
+  decided_at:
+    description: >-
+      Context.decided_at（ISO 8601），由 U-6 取本輪當前時間。**只在 status 為空時被
+      渲染**——[US-OQ-3] 的必載內容原文用「或」，時間戳只掛在「決定不寫」那一支
+    required: false
+    default: ''
+  rejection_closed_at:
+    description: >-
+      Context.rejection_notice.closed_at（ISO 8601），[US:S-6 AC 5] 的告示。
+      **空字串代表 null，此時完全不渲染該段**（R-1.5）
+    required: false
+    default: ''
+
+  # ---- parse / has_marker 的輸入 -------------------------------------------
+  issue_body:
+    description: 'issue body 全文。無受管標記／版本不可解析／版本高於當前渲染器時，parse 回 found=false'
+    required: false
+    default: ''
+
+  # ---- hash 的輸入（Block 七欄，欄名與 parse 的 output 一致）---------------
+  block_format_version:
+    description: 'Block.format_version。**在雜湊涵蓋範圍內**（R-2.4）——bump 版本會讓所有既有 item 的雜湊改變'
+    required: false
+    default: ''
+  block_status:
+    description: 'Block.status。空字串代表 null'
+    required: false
+    default: ''
+  block_traceable_row:
+    description: 'Block.traceable_row。空字串代表 null（status 為 null 時必為 null）'
+    required: false
+    default: ''
+  block_reason_category:
+    description: 'Block.reason_category。空字串代表 null（status 非 null 時必為 null）'
+    required: false
+    default: ''
+  block_decided_at:
+    description: >-
+      Block.decided_at。**在雜湊涵蓋範圍內**（R-2.3，[Q2=A]）。空字串代表 null；
+      status 非 null 時必為 null
+    required: false
+    default: ''
+  block_scope_note:
+    description: 'Block.scope_note。恆非 null'
+    required: false
+    default: ''
+  block_rejection_closed_at:
+    description: 'Block.rejection_notice.closed_at。空字串代表 null'
+    required: false
+    default: ''
+
+outputs:
+  block_text:
+    description: '（render）受管區塊文字，多行，以一個換行結尾。由 U-3 的 write_body 寫進 issue body'
+    value: ${{ steps.block.outputs.block_text }}
+  found:
+    description: '（parse）true / false。false 代表這個 issue body 沒有本機制認得的受管區塊——是正常判定結果，不是錯誤'
+    value: ${{ steps.block.outputs.found }}
+  has_marker:
+    description: >-
+      （parse／has_marker）true / false。**found=false 且 has_marker=true 時不得覆寫**：
+      那代表有另一個版本的機制在寫同一個 item（R-3.4）
+    value: ${{ steps.block.outputs.has_marker }}
+  block_format_version:
+    description: '（parse）Block.format_version'
+    value: ${{ steps.block.outputs.block_format_version }}
+  block_status:
+    description: '（parse）Block.status，空字串代表 null'
+    value: ${{ steps.block.outputs.block_status }}
+  block_traceable_row:
+    description: '（parse）Block.traceable_row，空字串代表 null'
+    value: ${{ steps.block.outputs.block_traceable_row }}
+  block_reason_category:
+    description: '（parse）Block.reason_category，空字串代表 null'
+    value: ${{ steps.block.outputs.block_reason_category }}
+  block_decided_at:
+    description: '（parse）Block.decided_at，空字串代表 null'
+    value: ${{ steps.block.outputs.block_decided_at }}
+  block_scope_note:
+    description: '（parse）Block.scope_note'
+    value: ${{ steps.block.outputs.block_scope_note }}
+  block_rejection_closed_at:
+    description: '（parse）Block.rejection_notice.closed_at，空字串代表 null'
+    value: ${{ steps.block.outputs.block_rejection_closed_at }}
+  content_hash:
+    description: >-
+      （hash）Block 的正規化序列化的 sha256。**這不是安全控制**（SEC-1）——它是變更
+      偵測裝置，與 ETag／checksum 同類，不提供任何防竄改保證，不得當作授權判斷
+    value: ${{ steps.block.outputs.content_hash }}
+
+runs:
+  using: composite
+  steps:
+    - id: block
+      shell: bash
+      env:
+        AIDLC_OPERATION: ${{ inputs.operation }}
+        AIDLC_STATUS: ${{ inputs.status }}
+        AIDLC_TRACEABLE_ROW: ${{ inputs.traceable_row }}
+        AIDLC_REASON_CODE: ${{ inputs.reason_code }}
+        AIDLC_SCOPE_NOTE: ${{ inputs.scope_note }}
+        AIDLC_DECIDED_AT: ${{ inputs.decided_at }}
+        AIDLC_REJECTION_CLOSED_AT: ${{ inputs.rejection_closed_at }}
+        AIDLC_ISSUE_BODY: ${{ inputs.issue_body }}
+        AIDLC_BLOCK_FORMAT_VERSION: ${{ inputs.block_format_version }}
+        AIDLC_BLOCK_STATUS: ${{ inputs.block_status }}
+        AIDLC_BLOCK_TRACEABLE_ROW: ${{ inputs.block_traceable_row }}
+        AIDLC_BLOCK_REASON_CATEGORY: ${{ inputs.block_reason_category }}
+        AIDLC_BLOCK_DECIDED_AT: ${{ inputs.block_decided_at }}
+        AIDLC_BLOCK_SCOPE_NOTE: ${{ inputs.block_scope_note }}
+        AIDLC_BLOCK_REJECTION_CLOSED_AT: ${{ inputs.block_rejection_closed_at }}
+      run: bash "${GITHUB_ACTION_PATH}/block.sh"

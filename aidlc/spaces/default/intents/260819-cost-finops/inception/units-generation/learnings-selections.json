@@ -1,0 +1,37 @@
+{
+  "stage_slug": "units-generation",
+  "selections": [
+    {
+      "candidate_id": "c20",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Units Generation 在新 bounded context（新表、library、HTTP、頁、第二段 UI）時必做 DAG；本站只定拓樸與可平行根（depends_on: []），不推薦施工順序",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c21",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "同時含第二段 HTTP 與 Layout DOM 的 unit 可省略 kind（完整設計矩陣）；API／UI 契約以 OpenAPI dump 與 generated api.d.ts 為準。初選手寫型別若與 CI drift 閘衝突，必須追問覆寫，不得讓兩種契約並存",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c22",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "units-generation 的 yaml 邊只列本 intent 待建 unit；已存在的 brownfield 模組寫在散文前提、不進 compiler。AC 數對上游標題列重數",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c23",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "2.7 約束表須就地註明非 Bolt 順序；上游 AC 跳號在 story-map 註明且不回改已核可 stories；跨 unit DOM 擴充機制留給 functional-design",
+      "source": "orchestrator"
+    }
+  ]
+}

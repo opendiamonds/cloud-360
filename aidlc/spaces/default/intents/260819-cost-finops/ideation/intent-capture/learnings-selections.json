@@ -1,0 +1,13 @@
+{
+  "stage_slug": "intent-capture",
+  "selections": [
+    {
+      "candidate_id": "c5",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "[desc] 同時寫出完整故事柱與 first-pass MVP 時，intent-capture 必須另問本輪產品切片，不得把整柱寫進 intent-statement。",
+      "source": "orchestrator"
+    }
+  ]
+}

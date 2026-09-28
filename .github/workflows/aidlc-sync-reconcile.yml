@@ -1,0 +1,84 @@
+name: AI-DLC Sync Reconcile
+
+# 每日對帳的**薄外層**（[ad:ADR-A10]）：只負責觸發設定與 concurrency，實作全部在
+# aidlc-sync-reconcile-impl.yml（on: workflow_call，全參數化）。本檔是這套機制在
+# **本 repo** 的組態；把它抄到另一個 repo 只需改下面 with: 的那幾個值。
+#
+# 規格正本：construction/U-7-reconcile-workflow/functional-design/business-rules.md
+# 的 R-5（排程不碰撞）與 R-7 群（分支落點）。
+
+on:
+  # [ad:services.md] S-B：每日一次（[req:NFR-P2]）。
+  #
+  # R-5：cron 不得與三個既有排程碰撞——`daily-digest`（`0 23 * * 1-5`）、
+  # `agentics-maintenance`（`37 0 * * *`）、`release-watch`（`39 16 * * 1`）。
+  # 碰撞的後果不是失敗而是**資源競爭**：三者皆為 gh-aw（`engine: copilot`，含 LLM
+  # agent step），同時起跑會拉長彼此的 runner 排隊，而本 repo 的 runner 用量不是
+  # 可以忽略的變數（`ui-regression` 曾在單一 PR 燒掉約 6 小時）。
+  #
+  # 本檔取 `13 21 * * *`：與三者的（分, 時）兩兩相異，故永不同分鐘起跑；
+  # 21:13 UTC ＝ 台北 05:13，報告在台灣工作日開始前就緒。
+  # **這是建置期檢查**（`stories.md` 全域 DoD 如此分類），由
+  # run-reconcile-tests.py 的靜態斷言鎖住——它從全部 workflow 檔重新抓一次三個
+  # 既有 cron，不在測試裡抄第二份。
+  schedule:
+    - cron: '13 21 * * *'
+  # [US:S-7] 的可展示性需要手動觸發。SEC-4：觸發權限由 repo 的 Actions 設定決定，
+  # 不由本 workflow 控制；嚴重度低——對帳是冪等且只做補平的操作，手動多跑幾輪的
+  # 後果只是多幾次 API 呼叫。
+  workflow_dispatch:
+
+concurrency:
+  # 自成一組，**與 U-6 的 `aidlc-sync-event-*` 不同群**：[req:NFR-P3] 明文允許
+  # 對帳與事件同步並行。對帳每日一次、單輪最長 30 分鐘，不會與自己重疊；群組
+  # 仍然設定，是為了擋掉「排程與人工 workflow_dispatch 同時進來」。
+  group: aidlc-sync-reconcile-${{ github.repository }}
+  # 排隊不取消：被取消的那一輪就是**今天沒有人在看**，而本單元的失敗沒有下游兜底。
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: Daily reconcile
+    uses: ./.github/workflows/aidlc-sync-reconcile-impl.yml
+    with:
+      # ADR-0016 §Context：opendiamonds 是**個人帳號**不是組織，查詢根為
+      # user(login:)。Project #16 的網址即 github.com/users/opendiamonds/projects/16。
+      project_owner: opendiamonds
+      # 正式看板。**測試看板是 #23**——兩者的差別只有這個值。
+      project_number: "16"
+      # 與 U-6 的薄外層同一個字面。【上游未定案】[req:FR-F1] 只說「以單一看板自訂
+      # 欄位承載目前 stage 的 slug ＋ 編號」，從未指名該欄位叫什麼；已列入待 gate
+      # 追認的清單。本單元只讀不寫該欄位，寫錯不會在看板上多開一個欄位，但會讓
+      # read_item 讀不到值。
+      stage_field_name: AI-DLC Stage
+      # R-7.1：整合主幹。`schedule` 只在預設分支（本 repo 為 `main`）觸發，而 `main`
+      # 落後於 `ut`——不釘就會拿過期的 record 對帳且**不會有任何錯誤**。
+      trunk_ref: ut
+      # 【上游未定案，本檔是它第一個落地的數字】R-3.3 逐字「上限的實際值待 PRE-1
+      # 第 2 項實測 C-T5（框架單次操作次數上限）後定，本站不臆測一個數字」。
+      # 這裡取 50 是為了讓 workflow 今天跑得起來，且**明顯高於現況**（registry 目前
+      # 6 個 record，每個約 4 次 API 呼叫，一輪上界 26 次）——今天不會被觸發，因此
+      # 不會靜默截斷。PRE-1 出爐後以實測值取代。**已列入待 Bolt 2 gate 追認。**
+      reconcile_batch_size: "50"
+      record_root: aidlc/spaces/default/intents
+      # [req:FR-J5]／[US:S-3 AC 6]：已知的結構性例外須以白名單明列。與 U-6 同值。
+      whitelist: 260802-default
+      # 2026-09-06 由 50 改為 80。50 是 [US-OQ-4] 定案的預設值，實測把
+      # `skipped feedback-optimization (260802-last-login-column)`（56 字）截成
+      # `skipped feedback-optimi (260802-last-login-column)`，讀起來像壞掉。現有
+      # 最長合法組合實算：前綴 `parked @ `（9）＋最長 stage slug
+      # `environment-provisioning`（24）＋` (`＋最長 record 編號
+      # `260816-production-path-check`（28）＋`)` ＝ 64，80 讓全部現有組合不截斷；
+      # U-1 的 R-5 截斷規則維持為超長時的保底。兩個薄外層必須同值。
+      field_max_length: "80"
+      # R-7.2：從 `ut` 分叉的自建分支，比照 U-8 的 `aidlc-sync/reverse/*` 形狀。
+      # 實際分支為 aidlc-sync/reconcile/<YYYY-MM-DD>。
+      # **這個分支目前沒有合併回 `ut` 的路徑**——見 impl 的 push_state 註解與交還
+      # 報告的缺口 (3)。
+      reconcile_branch_prefix: aidlc-sync/reconcile
+    secrets:
+      # ADR-0016 §1：擁有者帳號 token，scope 為 project ＋ repo。與 U-6 同一個 secret。
+      sync_token: ${{ secrets.AIDLC_SYNC_TOKEN }}

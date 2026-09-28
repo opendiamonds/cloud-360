@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "estimate-parser",
+  "version": 1,
+  "writes": [
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/cost/estimate_readers.py" },
+    { "path": "backend/cost/estimate_parser.py" },
+    { "path": "backend/cost/estimate_validator.py" },
+    { "path": "scripts/validate_cost_calculator_boundary.py" },
+    { "path": "backend/tests/test_estimate_parser.py" },
+    { "path": "backend/tests/test_estimate_validator.py" }
+  ]
+}
