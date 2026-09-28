@@ -4,6 +4,7 @@ from env_bootstrap import BACKEND_DIR, load_backend_dotenv
 import logging
 import os
 from services.agent_router import router as agent_router
+from services.brain_router import router as brain_router
 from services.user_router import router as user_router
 from services.collab_router import router as collab_router
 from services.review_router import router as review_router
@@ -56,6 +57,9 @@ app.include_router(user_router, prefix="/api/auth")
 app.include_router(collab_router, prefix="/api/collab")
 app.include_router(estimate_intake_router, prefix="/api/cost/v1")
 app.include_router(advice_stream_router, prefix="/api/cost/v1")
+# DEMO SCOPE：大腦 gateway 的最小垂直切片，非 U13 的正式交付。
+# 移除方式：刪 backend/services/brain_router.py 並移除下面兩行。
+app.include_router(brain_router, prefix="/api/brain")
 
 @app.get("/")
 def read_root():
