@@ -18,8 +18,23 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsUrl } from '../config/api';
+import type { components } from '../types/ws-contract';
 
 const PROTOCOL_VERSION = 1;
+
+/**
+ * `NFR5.4` 的消費端——**本頁是這條保護的第一個真實消費端**。
+ *
+ * subprotocol 的名稱與分隔字元由產生的型別取值，不寫死字串。後端把
+ * `WsSubprotocol.scheme` 改成別的字面值時，重 dump ＋ 重產型別檔之後下面兩行
+ * 立即是型別錯誤、`npm run build` 紅燈——那是這條保護**唯一真正成立**的形狀。
+ * 寫死 `` [`bearer.${token}`] `` 時型別層完全碰不到它，而失敗是靜默的：
+ * 握手全面失敗而四道閘門全綠。另有一條 error 級 ESLint 規則
+ * （`ADR-0019 §5`，`eslint.config.js`）機械地禁止那種寫法。
+ */
+type WsSubprotocol = components['schemas']['WsSubprotocol'];
+const SUBPROTOCOL_SCHEME: WsSubprotocol['scheme'] = 'bearer';
+const SUBPROTOCOL_SEPARATOR: WsSubprotocol['separator'] = '.';
 
 type Candidate = {
   id: string;
@@ -79,8 +94,10 @@ export function BrainPage() {
 
     let cancelled = false;
 
-    // token 走 subprotocol，不進 query string（AC8.1.3）
-    const ws = new WebSocket(wsUrl('/api/brain/ws'), [`bearer.${token}`]);
+    // token 走 subprotocol，不進 query string（AC8.1.3）；格式由契約型別決定（NFR5.4）
+    const ws = new WebSocket(wsUrl('/api/brain/ws'), [
+      SUBPROTOCOL_SCHEME + SUBPROTOCOL_SEPARATOR + token,
+    ]);
     wsRef.current = ws;
 
     ws.onopen = () => {

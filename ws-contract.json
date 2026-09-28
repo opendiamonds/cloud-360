@@ -1,0 +1,733 @@
+{
+  "components": {
+    "schemas": {
+      "ClarifyCandidate": {
+        "additionalProperties": false,
+        "description": "一個候選判讀。`ClarifyPayload` 的組成元素。",
+        "properties": {
+          "capability": {
+            "description": "該候選會交辦給哪一個能力。",
+            "title": "Capability",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "BR2.4：定義域 0–1（含端點）的信心值，可與門檻比較。**選填且不得改為必填**（BR2.3）——OQ-10 質疑路由層能否產出可比較的信心值，容許 null 使該 OQ 若收斂為「不能」時本型別不需改動。門檻判斷本身在 U11，不在本契約。",
+            "title": "Confidence"
+          },
+          "id": {
+            "description": "候選的識別。唯一的讀取端是 SelectClarifyCandidatePayload.candidateId。",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "給使用者看的候選說明。",
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "capability"
+        ],
+        "title": "ClarifyCandidate",
+        "type": "object"
+      },
+      "ClarifyPayload": {
+        "additionalProperties": false,
+        "description": "信心值低於門檻時列出的候選判讀（`AC1.2.1`–`AC1.2.3` 的傳輸面）。",
+        "properties": {
+          "candidates": {
+            "description": "BR2.2：**不得為空陣列**。空陣列在語意上無意義——若無候選則不應送 clarify（改送 error 或依 U11 的規格處置）。使用者看到「請選一個」卻沒有可選項是本規則要防的畫面。",
+            "items": {
+              "$ref": "#/components/schemas/ClarifyCandidate"
+            },
+            "minItems": 1,
+            "title": "Candidates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidates"
+        ],
+        "title": "ClarifyPayload",
+        "type": "object"
+      },
+      "CorrectWorkItemPayload": {
+        "additionalProperties": false,
+        "description": "逐項更正一個工作項（[RA:FR1.4]）。其餘工作項不受影響；**冪等**（已停掉者再更正為 no-op）。",
+        "properties": {
+          "workItemId": {
+            "description": "要更正的工作項。",
+            "title": "Workitemid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId"
+        ],
+        "title": "CorrectWorkItemPayload",
+        "type": "object"
+      },
+      "CostCardPayload": {
+        "additionalProperties": false,
+        "description": "成本卡片。",
+        "properties": {
+          "comparisonText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "比較說明；null 表示沒有可說的。",
+            "title": "Comparisontext"
+          },
+          "costPageUrl": {
+            "description": "連回成本頁的路徑。",
+            "title": "Costpageurl",
+            "type": "string"
+          },
+          "estimateSetId": {
+            "description": "BR2.11：**必填整數**，K-02 X-01 的不變量。改為選填即違反上游——成本卡片會無法連回估價集合。",
+            "title": "Estimatesetid",
+            "type": "integer"
+          },
+          "qualityText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "品質說明；null 表示沒有可說的。",
+            "title": "Qualitytext"
+          },
+          "savingText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "節省說明；null 表示沒有可說的。",
+            "title": "Savingtext"
+          },
+          "unavailableReasons": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "無法取價的原因物件；null 表示全部可取價。形狀由 K-02 留為開放物件。",
+            "title": "Unavailablereasons"
+          }
+        },
+        "required": [
+          "estimateSetId",
+          "savingText",
+          "comparisonText",
+          "qualityText",
+          "unavailableReasons",
+          "costPageUrl"
+        ],
+        "title": "CostCardPayload",
+        "type": "object"
+      },
+      "DonePayload": {
+        "additionalProperties": false,
+        "description": "終止事件——成功產出可呈現的回覆。",
+        "properties": {
+          "turnId": {
+            "description": "BR1.5：必須等於其 envelope 的 turnId。這是 turnId 在終止事件上的**第二份物化**（沿用 K-02:267／:269 的原形狀），兩份一致由 WsEnvelope 的 validator 鎖住——team.md 的「單一真實來源」要求無法避免的副本必須在同一個 PR 內附上鎖住一致性的測試。",
+            "title": "Turnid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turnId"
+        ],
+        "title": "DonePayload",
+        "type": "object"
+      },
+      "ErrorPayload": {
+        "additionalProperties": false,
+        "description": "終止事件——未能產出可呈現的回覆。",
+        "properties": {
+          "code": {
+            "description": "BR2.8：**封閉列舉**。各值的判準——EMPTY_RESPONSE ＝ 上游結束但無有效回覆（BR2.6，不得改送 done）；INVALID_REQUEST ＝ 客戶端請求本身不合法（作業對象三層解析不出、階層不一致、candidateId 格式錯誤、客戶端偷帶 turnId 等），**不得**把使用者輸入問題報成 INTERNAL_ERROR；UNAUTHORIZED ＝ 有權限問題但連線仍在（連線建立期的無權限走 4403 關閉，不走這裡）；INTERNAL_ERROR ＝ 以上皆非的伺服器端失敗。新增一個 code 必須改本模組、重跑 dump、重產型別檔、兩道閘門通過——前端的窮盡 switch 會立刻因缺分支而 tsc -b 紅燈，那是封閉列舉的價值。",
+            "enum": [
+              "EMPTY_RESPONSE",
+              "INTERNAL_ERROR",
+              "UNAUTHORIZED",
+              "INVALID_REQUEST"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "description": "BR2.9：人類可讀的說明，**不得包含內部實作細節**（堆疊、SQL、內部路徑、模組名）。**型別擋不住字串內容**——`message: str` 無論如何都通過，所以這條的落點是伺服器端的 error 構造（U13），本契約只寫下要求。",
+            "title": "Message",
+            "type": "string"
+          },
+          "turnId": {
+            "description": "BR1.5：必須等於其 envelope 的 turnId（同 DonePayload）。",
+            "title": "Turnid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "turnId"
+        ],
+        "title": "ErrorPayload",
+        "type": "object"
+      },
+      "HelloPayload": {
+        "additionalProperties": false,
+        "description": "握手後**首則**訊息，承載協定版本（`K-12` x-handshake.step_2）。",
+        "properties": {
+          "v": {
+            "const": 1,
+            "description": "與 WsClientEnvelope.v 同值同型別；不相容的入站 hello 見 WsUnvalidatedEnvelope。**token 不在此處**——走 Sec-WebSocket-Protocol 標頭（見 WsSubprotocol）。**界線**：本 payload 不含 token 欄位，只排除了「token 放在訊息內」這一條路徑；它對 query string **零約束**（query string 在 URL，不在 envelope 內，本契約的型別碰不到它）。實際擋住 AC8.1.3 的是 K-12 的 x-hard-constraints.token_transport，落點 U13。",
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v"
+        ],
+        "title": "HelloPayload",
+        "type": "object"
+      },
+      "ReadyPayload": {
+        "additionalProperties": false,
+        "description": "握手完成訊號（`K-12` x-handshake.step_3：版本相容時回 `ready`）。",
+        "properties": {
+          "protocolVersion": {
+            "const": 1,
+            "description": "伺服器接受的協定版本。帶它而非用空 payload 的理由：空 payload 會讓「ready 到了」與「ready 的內容正確」無法區分。**BR3.5 要求前端必須核對它**——不核對就會讓本欄位成為無讀取端的欄位。",
+            "title": "Protocolversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocolVersion"
+        ],
+        "title": "ReadyPayload",
+        "type": "object"
+      },
+      "SelectClarifyCandidatePayload": {
+        "additionalProperties": false,
+        "description": "選定一個候選判讀。`ClarifyCandidate.id` 的唯一讀取端。",
+        "properties": {
+          "candidateId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "**非 null** 表示選定該候選（值必須是同一輪 clarify 送出的某個 ClarifyCandidate.id），伺服器依該候選交辦（AC1.2.2）。**null** 表示「都不是，我再講一次」（AC1.2.3）：該輪結束，伺服器**不送 work_target、不送 work_items、不送任何終止事件**（BR2.14）。**已知的可區分性缺陷（BR2.14 逐字記載）**：一欄兩義使「使用者按了都不是」與「客戶端把欄位序列化成 null」在傳輸上完全不可區分，而 null 在本契約其他各處一貫表示「沒有值／尚未設定」。前提：客戶端不得在使用者未做選擇時送出本訊息。**本契約不驗證 candidateId 是否屬於當前輪次**——那需要 session 狀態持有上一輪的候選集合，屬 U13。",
+            "title": "Candidateid"
+          }
+        },
+        "required": [
+          "candidateId"
+        ],
+        "title": "SelectClarifyCandidatePayload",
+        "type": "object"
+      },
+      "SetSharingModePayload": {
+        "additionalProperties": false,
+        "description": "把「改為獨立對話」的選擇傳到伺服器。",
+        "properties": {
+          "mode": {
+            "description": "要切換到的模式。",
+            "enum": [
+              "shared",
+              "isolated"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SetSharingModePayload",
+        "type": "object"
+      },
+      "SetWorkTargetPayload": {
+        "additionalProperties": false,
+        "description": "把選定的作業對象傳到伺服器。",
+        "properties": {
+          "diagramId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示清除該層的選定。",
+            "title": "Diagramid"
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示清除該層的選定。",
+            "title": "Projectid"
+          },
+          "systemId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示清除該層的選定。",
+            "title": "Systemid"
+          }
+        },
+        "required": [
+          "projectId",
+          "systemId",
+          "diagramId"
+        ],
+        "title": "SetWorkTargetPayload",
+        "type": "object"
+      },
+      "SharingModePayload": {
+        "additionalProperties": false,
+        "description": "當前共享模式。狀態訊息，會扇出；亦於連線建立時推送。",
+        "properties": {
+          "mode": {
+            "description": "共享或獨立對話。",
+            "enum": [
+              "shared",
+              "isolated"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SharingModePayload",
+        "type": "object"
+      },
+      "TokenPayload": {
+        "additionalProperties": false,
+        "description": "內容 token。串流回覆的最小單位。",
+        "properties": {
+          "text": {
+            "description": "BR2.1：**非空白**字串。空白 token 不算內容，送出它會讓「已產出內容」的判定失真，進而繞過 BR2.6（零內容不得以 done 結束）。",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TokenPayload",
+        "type": "object"
+      },
+      "UserMessagePayload": {
+        "additionalProperties": false,
+        "description": "使用者送出的一句需求。**非冪等**——每則觸發一輪分類與可能的交辦（BR3.4）。",
+        "properties": {
+          "text": {
+            "description": "使用者輸入的原文。",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "UserMessagePayload",
+        "type": "object"
+      },
+      "WorkItem": {
+        "additionalProperties": false,
+        "description": "一個工作項。`WorkItemsPayload` 的組成元素。",
+        "properties": {
+          "capability": {
+            "description": "承接這個工作項的能力。",
+            "title": "Capability",
+            "type": "string"
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示未失敗；status 為「失敗」時應為非 null（BR2.5，同上的型別層限制）。",
+            "title": "Failurereason"
+          },
+          "label": {
+            "description": "給使用者看的工作項說明。",
+            "title": "Label",
+            "type": "string"
+          },
+          "sideEffect": {
+            "description": "副作用描述，含兩個哨兵值（BR2.10，不得合併或省略其語意）：\"none\" 表示確定沒有副作用；\"unknown\" 是**合法值**且語意明確——系統誠實地不知道，**不是「還沒填」**（components.md 逐字「系統不承諾停掉時不留半成品」）；其餘任意字串為副作用的描述文字。把 unknown 當成 none 處理，等於對使用者宣稱「停掉不留半成品」，而系統並不承諾那件事。**本段說明是 BR4.4 斷言的對象**：TypeScript 會把 `\"none\" | \"unknown\" | string` 塌縮為 `string`，IDE 不提示那兩個字面值，所以這兩個哨兵值的語意只能靠產生的型別檔保留本註解來傳達。拿掉本 description= 會讓註解在 ws-contract.d.ts 靜默消失——`npm run check:ws-types` 的 BR4.4 斷言就是為此存在。",
+            "title": "Sideeffect",
+            "type": "string"
+          },
+          "status": {
+            "description": "工作項狀態。五值為下限（[RA:FR1.2]），新增成員須改契約並重跑兩道閘門。",
+            "enum": [
+              "處理中",
+              "等待中",
+              "完成",
+              "失敗",
+              "已停掉"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "waitingOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示未等待任何東西；status 為「等待中」時應為非 null（BR2.5）。**BR2.5 在型別層無法強制**（需要相依型別），它是伺服器端的驗證責任；且「等待中」狀態的可達性本身是未解的 H-3，落點 U12／K-11。",
+            "title": "Waitingon"
+          },
+          "workItemId": {
+            "description": "工作項的識別；correct_work_item 以它指定對象。",
+            "title": "Workitemid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workItemId",
+          "label",
+          "status",
+          "capability",
+          "waitingOn",
+          "failureReason",
+          "sideEffect"
+        ],
+        "title": "WorkItem",
+        "type": "object"
+      },
+      "WorkItemsPayload": {
+        "additionalProperties": false,
+        "description": "工作項集合的**當前狀態**。狀態訊息，狀態改變時扇出給同一 session key 的全部存活連線。",
+        "properties": {
+          "items": {
+            "description": "空陣列合法（尚無工作項），與 clarify 的 candidates 不同。",
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "WorkItemsPayload",
+        "type": "object"
+      },
+      "WorkTargetPayload": {
+        "additionalProperties": false,
+        "description": "當前作業對象（專案／系統／架構圖三層）。狀態訊息，會扇出；亦於連線建立時推送。",
+        "properties": {
+          "diagramId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示尚未選定。**三層之間的階層一致性規則不由本契約定義**（例如 systemId 非 null 時 projectId 是否必須非 null）——那是 U7 hierarchy-service 的責任。這是刻意的界線，不是遺漏。",
+            "title": "Diagramid"
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示尚未選定。",
+            "title": "Projectid"
+          },
+          "systemId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null 表示尚未選定。",
+            "title": "Systemid"
+          }
+        },
+        "required": [
+          "projectId",
+          "systemId",
+          "diagramId"
+        ],
+        "title": "WorkTargetPayload",
+        "type": "object"
+      },
+      "WsClientEnvelope": {
+        "additionalProperties": false,
+        "description": "**客戶端→伺服器**訊息的外層封包。\n\n**刻意沒有 turnId 欄位**（`BR2.13`）：turnId 由伺服器產生（`U13`），客戶端\n沒有任何合法理由寫它。配上 `extra=\"forbid\"`，客戶端偷帶 turnId 會直接\n`ValidationError` 而不是被靜默忽略——**靜默忽略比拒絕更糟**，客戶端會以為\n自己成功指定了輪次。伺服器對這種訊息的對外回應是\n`error(code: INVALID_REQUEST)`，落點 `U13`。\n\n同一個 `extra=\"forbid\"` 也是 `BR2.12`（客戶端訊息不得攜帶身分）的第一層：\n`userId`／`role`／`token`／`actor`／`onBehalfOf` 一律不可構造。\nprincipal 綁在**連線**上（握手時由 `Sec-WebSocket-Protocol` 的 token 建立）。\n第二層是 `dump_ws_contract.py` 的白名單斷言（`NFR5.7`）——它擋的是\n「契約自己悄悄長出一個身分欄位」，那是 review 抓不到的那一半。",
+        "properties": {
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HelloPayload"
+              },
+              {
+                "$ref": "#/components/schemas/UserMessagePayload"
+              },
+              {
+                "$ref": "#/components/schemas/SelectClarifyCandidatePayload"
+              },
+              {
+                "$ref": "#/components/schemas/CorrectWorkItemPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SetSharingModePayload"
+              },
+              {
+                "$ref": "#/components/schemas/SetWorkTargetPayload"
+              }
+            ],
+            "description": "形狀由 type 唯一決定（BR1.2）。",
+            "title": "Payload"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WsClientMessageType",
+            "description": "判別欄位。值域為 WsClientMessageType 的六值。"
+          },
+          "v": {
+            "const": 1,
+            "description": "同 WsEnvelope.v；不相容的入站 hello 見 WsUnvalidatedEnvelope。",
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "payload"
+        ],
+        "title": "WsClientEnvelope",
+        "type": "object"
+      },
+      "WsClientMessageType": {
+        "description": "客戶端→伺服器的 type 值域（**六值**）。\n\n`K-02:270–305` 逐字列舉五個；`select_clarify_candidate` 為\n`functional-design` 審查 R-02 新增（`AC1.2.2`／`AC1.2.3` 在原契約下傳輸面\n不可構造——五個既有 type 沒有一個能承載候選的 id）。**此擴充超出 `K-02`\n的條款，由 `ADR-0019` 作為上游追認的載體。**",
+        "enum": [
+          "hello",
+          "user_message",
+          "select_clarify_candidate",
+          "correct_work_item",
+          "set_sharing_mode",
+          "set_work_target"
+        ],
+        "title": "WsClientMessageType",
+        "type": "string"
+      },
+      "WsEnvelope": {
+        "additionalProperties": false,
+        "description": "**伺服器→客戶端**訊息的外層封包（`K-02:215` 逐字 `direction: server_to_client`）。\n\n客戶端方向見 `WsClientEnvelope`——它**沒有** turnId（`BR2.13`）。",
+        "properties": {
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadyPayload"
+              },
+              {
+                "$ref": "#/components/schemas/TokenPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ClarifyPayload"
+              },
+              {
+                "$ref": "#/components/schemas/WorkItemsPayload"
+              },
+              {
+                "$ref": "#/components/schemas/CostCardPayload"
+              },
+              {
+                "$ref": "#/components/schemas/SharingModePayload"
+              },
+              {
+                "$ref": "#/components/schemas/WorkTargetPayload"
+              },
+              {
+                "$ref": "#/components/schemas/DonePayload"
+              },
+              {
+                "$ref": "#/components/schemas/ErrorPayload"
+              }
+            ],
+            "description": "形狀由 type 唯一決定（BR1.2）；對應關係由本模型的 validator 鎖住。",
+            "title": "Payload"
+          },
+          "turnId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BR1.6：**欄位必存在，但值可為 null**。輪次訊息（token／clarify／cost_card／done／error）必為非 null，同一輪的所有訊息共用同一個值（BR1.3）；非輪次訊息（ready／sharing_mode／work_target／work_items）必為 null。**本契約不定義它的產生方式**，也**無法強制「同一輪相同」**（那是執行期性質）——兩者皆屬 U13。",
+            "title": "Turnid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WsServerMessageType",
+            "description": "判別欄位。值域為 WsServerMessageType 的九值。"
+          },
+          "v": {
+            "const": 1,
+            "description": "BR1.1：協定版本的**字面值**，由 K-02 的 `type: integer` 收窄而來。收窄的理由：相容判準是「完全相等」，而完全相等在型別層的忠實表達就是字面值；且它讓「當前協定版本是 1」只存在於契約一處。升版時把字面值改為 2 會讓所有仍寫 1 的消費端立即成為型別錯誤——那正是選字面型別的整個目的。不符本版的**入站**訊息在本型別下不可表示，見 WsUnvalidatedEnvelope。",
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "turnId",
+          "payload"
+        ],
+        "title": "WsEnvelope",
+        "type": "object"
+      },
+      "WsServerMessageType": {
+        "description": "伺服器→客戶端的 type 值域（**九值**）。\n\n`K-02:215–269` 逐字列舉八個；`ready` 為 `functional-design` 審查 R-01 新增\n（`K-12:948` 要求版本相容時回 `ready`，而 `K-02` 的清單沒有它——兩個已核可\n契約直接矛盾）。九值須與 `_SERVER_PAYLOAD_BY_TYPE` 一一對應（`BR1.4`）。",
+        "enum": [
+          "ready",
+          "token",
+          "clarify",
+          "work_items",
+          "cost_card",
+          "sharing_mode",
+          "work_target",
+          "done",
+          "error"
+        ],
+        "title": "WsServerMessageType",
+        "type": "string"
+      },
+      "WsSubprotocol": {
+        "additionalProperties": false,
+        "description": "握手用 subprotocol 的格式；實際值為 ``f\"{scheme}{separator}{token}\"``。\n\n為何它在契約檔內：`K-12:876` 只規定「token 走 `Sec-WebSocket-Protocol`\n標頭」，**全檔未定其值格式**。它是前後端必須逐字一致的共用字串，而在納入\n契約之前它既不在任何規格檔（無漂移閘門）、也沒有任何契約明文擁有它——\n前端改了格式而後端沒跟上時，**握手直接失敗且沒有任何閘門會紅燈**\n（`functional-spec.md §八` 第四列逐字稱它是最靜默的一個）。\n\n兩個欄位為字面型別，所以前端只要以\n``const SCHEME: Sub['scheme'] = 'bearer'`` 的形狀取值，後端改值即 `tsc -b`\n紅燈。**這條保護只在前端真的由型別取值時成立**——寫死\n``[`bearer.${token}`]`` 時型別層碰不到它，故另有一條 error 級 ESLint 規則\n（`ADR-0019 §5`）禁止 `new WebSocket` 的第二引數出現字串／模板字面量。\n\n**實作陷阱（落點 `U13`）**：JWT 本身以 ``.`` 分三段，所以 ``bearer.<jwt>``\n的解析必須以**第一個** ``.`` 切分（``split('.', 1)``），不得 ``split('.')``\n取兩段——後者在任何真實 token 上都會拿到四段。",
+        "properties": {
+          "scheme": {
+            "const": "bearer",
+            "description": "subprotocol 的前綴，與 HTTP 的 Bearer 慣例一致。",
+            "title": "Scheme",
+            "type": "string"
+          },
+          "separator": {
+            "const": ".",
+            "description": "前綴與 token 之間的分隔字元。",
+            "title": "Separator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scheme",
+          "separator"
+        ],
+        "title": "WsSubprotocol",
+        "type": "object"
+      },
+      "WsUnvalidatedEnvelope": {
+        "description": "任一方在**信任邊界**上解析入站訊息所用的寬鬆封包。\n\n它是 `BR1.1` 的**明文例外**：`v` 刻意是 `int` 而非字面 `1`、`type` 刻意是\n`str` 而非列舉，因為它存在的目的就是表示**不符本版**的值。\n\n伺服器側：讓不相容的 `hello` 能被反序列化，使 `U13` 取得 `K-12` 的 `4400`\n關閉所要求的 `received`。\n客戶端側：讓 `BR3.2`（未知 type 安全忽略）與 `BR3.5`（核對\n`ready.protocolVersion`）有型別承載——那兩條規則的處置**本身就發生在驗證\n失敗的分支上**，必須讀得到未驗證的值。\n\n**只用於入站解析的第一步**，不得用於構造出站訊息。驗證通過即轉為\n`WsEnvelope` 或 `WsClientEnvelope`。\n\n**轉換時必須把原始的 dict 餵給 `WsClientEnvelope`，不得以本模型的欄位子集\n重建**：本模型是寬鬆的，客戶端偷帶的 `turnId` 在這裡會被丟掉，若之後用\n「本模型的欄位」重組一個 dict 再驗證，`WsClientEnvelope` 的\n`extra=\"forbid\"` 就永遠看不到那個欄位，`BR2.13` 的執行期拒絕隨即失效。\n\n`expected`／`received` 兩個欄位**沒有型別承載**：`K-12:991` 要求 `4400`\n關閉「帶 expected 與 received」，但那是**關閉訊框的原因字串**，不是訊息\npayload。落點 `U13`／`K-12`。",
+        "properties": {
+          "payload": {
+            "additionalProperties": true,
+            "description": "未經驗證的原始物件；驗證通過後才轉為具體 payload 型別。",
+            "title": "Payload",
+            "type": "object"
+          },
+          "type": {
+            "description": "**寬鬆字串，不收窄為列舉**——收窄會讓「未知 type」在型別層不可表示，而 BR3.2 正需要能表示它。",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "description": "**整數，不收窄為字面值**——這正是它與 WsClientEnvelope 的差別。",
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "payload"
+        ],
+        "title": "WsUnvalidatedEnvelope",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Brain WS Contract",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {}
+}

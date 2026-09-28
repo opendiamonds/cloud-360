@@ -197,6 +197,18 @@ jobs:
       - name: API type contract drift
         run: npm run check:types
 
+      # WS drift gate 2 of 2 (the spec's gate is in the backend job below).
+      # WebSocket needs its own pair because FastAPI does not register websocket
+      # routes: /api/collab/ws/... is absent from openapi.json's 42 paths, so the
+      # two gates above are structurally blind to it -- not under-covered, but
+      # with no assertion at all on that change path (ADR-0019 / NFR5.1).
+      # This step also carries the BR4.4 assertion: the generated .d.ts must keep
+      # the JSDoc that explains WorkItem.sideEffect's two sentinel values, because
+      # TypeScript collapses `"none" | "unknown" | string` to `string` and the
+      # sentinels' meaning survives nowhere else.
+      - name: WS contract type drift
+        run: npm run check:ws-types
+
       # `npm run build` is `tsc -b && vite build`, so this covers typecheck too.
       - name: Typecheck and build
         run: npm run build
@@ -258,6 +270,17 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud360
           JWT_SECRET: ci_only_not_a_real_secret
         run: python scripts/dump_openapi.py --check
+
+      # WS drift gate 1 of 2 (the type file's gate is in the frontend job above).
+      # Re-dumps ws-contract.json from services/brain_ws_contract.py and fails if
+      # the committed file differs. Deliberately has NO env block: unlike
+      # dump_openapi.py this script does not import `main`, so it needs neither a
+      # DATABASE_URL nor a psycopg2 stub. That is the point (ADR-0019 D-4) -- a red
+      # light here means the contract itself drifted, never that some unrelated
+      # router failed to import. pydantic is pinned to an exact version in
+      # requirements.txt so the output stays byte-deterministic.
+      - name: WS contract spec drift
+        run: python scripts/dump_ws_contract.py --check
 
       # Unit suite (SQLite in-memory; psycopg2 mocked in tests/helpers.py)
       - name: Run unit tests
