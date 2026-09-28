@@ -29726,3 +29726,1207 @@
 **New Override**: cleared (stage defaults apply)
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T14:50:53Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7018c09a6d376bc9
+**Message**: 繼續走 functional-design
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T15:04:45Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-design-questions.md
+**Context**: construction > brain-ws-contract > functional-design > functional-design-questions.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-27T16:02:16Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-27T16:02:44Z
+**Event**: QUESTION_ANSWERED
+**Stage**: functional-design
+**Details**: Q1=A（error.code 封閉列舉，初版 EMPTY_RESPONSE／INTERNAL_ERROR／UNAUTHORIZED）；Q2=A（v: 1，相容判準為完全相等）；Q3=A（sideEffect 保留原形狀，兩個哨兵值＋自由文字）；Q4=A（ws-contract.json 只放訊息型別，關閉碼與端點路徑不進）；Q5=A（不改 mockups.md，J-10 的實質內容寫進 functional-spec.md 並標明 H-7 仍為舊描述）
+**Unit**: brain-ws-contract
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-27T16:23:39Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-27T16:23:50Z
+**Event**: QUESTION_ANSWERED
+**Stage**: functional-design
+**Details**: Q6=A（v 的型別由 integer 收窄為字面型別 1；值住在型別裡、型別住在契約裡，兩道 gate 自動保護，不新增常數欄位，Q4-A 範圍不變）
+**Unit**: brain-ws-contract
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-27T16:23:58Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log decision --stage functional-design --checkpoint summary-confirmation --session 4b51ae80-6080-4913-8397-36bcb9710d11 --questions-file aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-design-questions.md --decision U2 brain-ws-contract 的 functional-design 六項定案彙整是否正確？ --options Looks correct,Request changes --unit brain-ws-contract
+**Error**: Summary confirmation section in aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-design-questions.md must contain exactly one `[Answer]:` line with a blank value before this command runs.
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-27T16:24:34Z
+**Event**: DECISION_RECORDED
+**Stage**: functional-design
+**Decision**: U2 brain-ws-contract 的 functional-design 六項定案彙整是否正確？
+**Options**: Looks correct,Request changes
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-design-questions.md
+**Unit**: brain-ws-contract
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-27T16:25:09Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-27T16:25:18Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: functional-design
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-design-questions.md
+**Questions SHA-256**: 5678cfdd44ed7388ea285eca1d82d1f5aad389d316108f0f0b7299db998aa4b8
+**Hash Scope**: confirmed-content-v1
+**Unit**: brain-ws-contract
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T16:26:40Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Context**: construction > brain-ws-contract > functional-design > entities.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T16:29:01Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Context**: construction > brain-ws-contract > functional-design > rules.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T16:31:03Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Context**: construction > brain-ws-contract > functional-design > functional-spec.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: aacdc8b6
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:33:33Z
+**Event**: SENSOR_PASSED
+**Fire id**: aacdc8b6
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 46
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: fa7e51af
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-27T16:33:33Z
+**Event**: SENSOR_FAILED
+**Fire id**: fa7e51af
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/functional-design/upstream-coverage-fa7e51af.md
+**Findings count**: 3
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: eb134a3b
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: eb134a3b
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 50
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: f9b84486
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_FAILED
+**Fire id**: f9b84486
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/functional-design/upstream-coverage-f9b84486.md
+**Findings count**: 3
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 78f52253
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: 78f52253
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 45
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 70d66206
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-09-27T16:33:35Z
+**Event**: SENSOR_FAILED
+**Fire id**: 70d66206
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/functional-design/upstream-coverage-70d66206.md
+**Findings count**: 3
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:33:35Z
+**Event**: SENSOR_FIRED
+**Fire id**: 9af38873
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:33:35Z
+**Event**: SENSOR_PASSED
+**Fire id**: 9af38873
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+**Duration ms**: 170
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:34:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: fb898b10
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:34:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: fb898b10
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 56
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:34:21Z
+**Event**: SENSOR_FIRED
+**Fire id**: 6bc4ab7a
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:34:21Z
+**Event**: SENSOR_PASSED
+**Fire id**: 6bc4ab7a
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 52
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T16:34:21Z
+**Event**: SENSOR_FIRED
+**Fire id**: ef69964a
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T16:34:21Z
+**Event**: SENSOR_PASSED
+**Fire id**: ef69964a
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 53
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-27T16:38:22Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log review --stage functional-design --unit brain-ws-contract --reviewer aidlc-architecture-reviewer-agent --iteration 1
+**Error**: Cannot start review for "functional-design": this stage's output document <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json has no recorded write. Save the document again, so its write descends from the current confirmation, then continue.\n{"kind":"ask","ask_type":"guard-recovery","response_route":"execute-remedy","question":"The next action for \"functional-design\" would be refused. Choose one authority-preserving recovery action.","stage":"functional-design","unit":"brain-ws-contract","reason_codes":["SUMMARY_ARTIFACT_UNAUTHORIZED"],"remedies":[{"op":"reconfirm-summary","action":"Present the current consolidated summary, record the human's confirmation, then regenerate or re-save the produced artifacts.","requiresHuman":true,"executableNow":true},{"op":"request-changes","action":"Ask \"What should change?\" for stage \"functional-design\" and end the turn. After the human answers, submit Request Changes with their exact text unchanged as the report reason; that unlocks revision and a fresh review.","requiresHuman":true,"executableNow":true}]}
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T16:39:09Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+**Context**: construction > brain-ws-contract > functional-design > traceability.json
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-27T16:39:09Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Context**: construction > brain-ws-contract > functional-design > entities.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-27T16:39:09Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Context**: construction > brain-ws-contract > functional-design > rules.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-27T16:39:09Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Context**: construction > brain-ws-contract > functional-design > functional-spec.md
+**Summary Authorization Id**: 1d1690eb314aef4019f1b13736a85a4c51f68064009b6385527658fb740a93e7
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-27T16:39:21Z
+**Event**: REVIEW_REQUESTED
+**Stage**: functional-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: brain-ws-contract
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:24189180281ebbeacaa55f11ca5f0592d7bb69733fd79b3719a539ab0bbd36dc
+**Request Id**: review:25578fc07c2b0a11d66dab0a9f21c46a
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:41:13Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a11507691fb0df5ad
+**Message**: Reading brain-ws-contract design artifacts
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:41:14Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a59eaf4d6fb6fad56
+**Message**: 繼續
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:42:48Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ae8cc6161f48fe765
+**Message**: Opening contract-summary.md K-02 section
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:43:23Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a320c088d0754071d
+**Message**: Reading rules.md BR1–BR4 definitions
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:43:58Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a34f567341da5798d
+**Message**: Reading K-12 handshake in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:44:34Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a59669b61de600dda
+**Message**: Checking x-close-codes against ErrorPayload
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:45:09Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a1d705d968551849f
+**Message**: Grepping DG-1/DG-3 in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:45:45Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a967f81537090d4ec
+**Message**: Reading AC1.2.x in stories.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:46:20Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ada2abffbe2673147
+**Message**: Reading K-10 clarify contract in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:46:53Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: aa1da28047f63bcc1
+**Message**: Reading Q4–Q6 in functional-design-questions.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:50:28Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a01c0f90f6e0c24fc
+**Message**: Verifying Q6 literal narrowing against K-02 envelope
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T16:52:02Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a3d0029cbaa2cb64d
+**Message**: Counting entity names in entities.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T17:01:44Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7b81258b934a3fe3
+**Message**: Writing 1.review.md findings table
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T17:02:21Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a36e15afbfe95ef68
+**Message**: Creating reviews/brain-ws-contract slot directory
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-27T17:04:05Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/functional-design/units/brain-ws-contract/49533cb835d434de/1.review.md
+**Context**: .aidlc-engine > reviews > functional-design > units > brain-ws-contract > 49533cb835d434de > 1.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T17:04:23Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-architecture-reviewer-agent
+**Agent ID**: ac8d9447410c027bb
+**Message**: **Reviewer:** aidlc-architecture-reviewer-agent\n\n**判定：NOT-READY**（Critical 3、Major 6、Minor 4）\n\n審查已寫入 `<project-dir>/aidlc/spaces/default/intents/260920-orchestr
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-27T17:04:23Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-27T17:04:31Z
+**Event**: REVIEW_COMPLETED
+**Stage**: functional-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: brain-ws-contract
+**Iteration**: 1
+**Verdict**: NOT-READY
+**Request Fingerprint**: sha256:24189180281ebbeacaa55f11ca5f0592d7bb69733fd79b3719a539ab0bbd36dc
+**Artifact Fingerprint**: sha256:24189180281ebbeacaa55f11ca5f0592d7bb69733fd79b3719a539ab0bbd36dc
+**Request Id**: review:25578fc07c2b0a11d66dab0a9f21c46a
+**Review Record**: .aidlc-engine/reviews/functional-design/units/brain-ws-contract/49533cb835d434de/1.json
+**Review Record Digest**: sha256:478cf92fc2d6a7e0b6ff502c82c50924aab4084f4887e08d8b4c00bfd8a04121
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:14Z
+**Event**: SENSOR_FIRED
+**Fire id**: 480b6e8d
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:14Z
+**Event**: SENSOR_PASSED
+**Fire id**: 480b6e8d
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 48
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:14Z
+**Event**: SENSOR_FIRED
+**Fire id**: 7f94d0b3
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:14Z
+**Event**: SENSOR_PASSED
+**Fire id**: 7f94d0b3
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 56
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_FIRED
+**Fire id**: 80378bcf
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_PASSED
+**Fire id**: 80378bcf
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 46
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_FIRED
+**Fire id**: 47e461d3
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_PASSED
+**Fire id**: 47e461d3
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 53
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_FIRED
+**Fire id**: 52c3b5cc
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:15Z
+**Event**: SENSOR_PASSED
+**Fire id**: 52c3b5cc
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 45
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:16Z
+**Event**: SENSOR_FIRED
+**Fire id**: c606d967
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:16Z
+**Event**: SENSOR_PASSED
+**Fire id**: c606d967
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 52
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-27T17:34:16Z
+**Event**: SENSOR_FIRED
+**Fire id**: a47cff43
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-27T17:34:16Z
+**Event**: SENSOR_PASSED
+**Fire id**: a47cff43
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+**Duration ms**: 139
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-27T17:34:50Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: af14f1159f1b22026
+**Message**: 派第二輪審查
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-28T00:21:55Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-28T00:22:13Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:23:24Z
+**Event**: SENSOR_FIRED
+**Fire id**: 51230716
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:23:24Z
+**Event**: SENSOR_PASSED
+**Fire id**: 51230716
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 46
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:23:24Z
+**Event**: SENSOR_FIRED
+**Fire id**: a3963035
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:23:25Z
+**Event**: SENSOR_PASSED
+**Fire id**: a3963035
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+**Duration ms**: 158
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-28T00:23:34Z
+**Event**: REVIEW_REQUESTED
+**Stage**: functional-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: brain-ws-contract
+**Iteration**: 2
+**Artifact Fingerprint**: sha256:193f88216f14b679645eca2df50c7cbd6d368b39b4d87e9552f8699d0db31aef
+**Request Id**: review:c480005ce5fcfa668932e5166bf8c4f4
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:27:22Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a0ec5d954fe6e0bca
+**Message**: Reading dispatch brief for brain-ws-contract review
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:28:25Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a45bb4a7f4d865035
+**Message**: Reading entities.md source-of-truth yaml
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:28:58Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a6907f72e7f680047
+**Message**: Verifying entity counts and ready type additions
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:29:31Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a38d26dd56858c0f8
+**Message**: Reading functional-spec.md state machines
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:30:15Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab82af0822dff795d
+**Message**: Reading traceability.json coverage entries
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:30:47Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a4f68981ccad5f8bc
+**Message**: Verifying contract-summary.md envelope quotes
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:31:52Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: aff18bc93144304d8
+**Message**: Grepping "後端通道" in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:32:34Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab37d6b9dcecb3676
+**Message**: Reading J-row handoff table in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:33:20Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: af77a03ea92fb8d11
+**Message**: Verifying J-3 handoff row for H-3
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:34:02Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7807dc4df1c428c3
+**Message**: Counting entities and rule categories in rules.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:34:34Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: af852401768854816
+**Message**: Grepping stale numbers in functional-spec.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:35:37Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: af7673bb952c77173
+**Message**: Reading x-handshake in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:36:39Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a297cecbf8e147ee1
+**Message**: Verifying x-close-codes in contract-summary.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:37:25Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ad6e46240f26116a1
+**Message**: Grepping Q5 answers in functional-design-questions.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:38:42Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a17bff9c02976a256
+**Message**: Grepping applies_to fields in rules.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:39:15Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a6ac6db7740bd6c79
+**Message**: Reading prior findings in review-01.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:40:18Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ad275f764f4abac6c
+**Message**: Creating review directory for 2.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:43:59Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a3a8d76dfa382ade6
+**Message**: Writing 25 findings to 2.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:44:38Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: abc65ef4447a368f9
+**Message**: Verifying verdict line in 2.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:44:42Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-architecture-reviewer-agent
+**Agent ID**: a3edd83105169507b
+**Message**: **Reviewer:** aidlc-architecture-reviewer-agent\n\n**判定：NOT-READY**（Critical 3、Major 6、Minor 8；審查檔已寫入 `<project-dir>/aidlc/spaces/default/intents/260920-orchestra
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-28T00:44:42Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-28T00:44:49Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log review --stage functional-design --unit brain-ws-contract --reviewer aidlc-architecture-reviewer-agent --iteration 2 --verdict NOT-READY
+**Error**: Refusing REVIEW_COMPLETED for "functional-design": construction/brain-ws-contract/functional-design/functional-spec.md#R-19: row has 7 cells, header declares 6: 1 unexpected extra cell(s).
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-28T00:45:10Z
+**Event**: REVIEW_COMPLETED
+**Stage**: functional-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: brain-ws-contract
+**Iteration**: 2
+**Verdict**: NOT-READY
+**Request Fingerprint**: sha256:193f88216f14b679645eca2df50c7cbd6d368b39b4d87e9552f8699d0db31aef
+**Artifact Fingerprint**: sha256:193f88216f14b679645eca2df50c7cbd6d368b39b4d87e9552f8699d0db31aef
+**Request Id**: review:c480005ce5fcfa668932e5166bf8c4f4
+**Review Record**: .aidlc-engine/reviews/functional-design/units/brain-ws-contract/49533cb835d434de/2.json
+**Review Record Digest**: sha256:8416437583d6edba70f8add0243f8f48173763d409bbdc32ff2eb401bda55f43
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:18Z
+**Event**: SENSOR_FIRED
+**Fire id**: 0266a848
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:18Z
+**Event**: SENSOR_PASSED
+**Fire id**: 0266a848
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 62
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:18Z
+**Event**: SENSOR_FIRED
+**Fire id**: 33f6b2ee
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:19Z
+**Event**: SENSOR_PASSED
+**Fire id**: 33f6b2ee
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/entities.md
+**Duration ms**: 56
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:19Z
+**Event**: SENSOR_FIRED
+**Fire id**: 1a77c9ff
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:19Z
+**Event**: SENSOR_PASSED
+**Fire id**: 1a77c9ff
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 55
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:19Z
+**Event**: SENSOR_FIRED
+**Fire id**: fcae91b4
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:19Z
+**Event**: SENSOR_PASSED
+**Fire id**: fcae91b4
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 67
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 6a309c62
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 6a309c62
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 55
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 2a7e9f69
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 2a7e9f69
+**Sensor ID**: upstream-coverage
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 65
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:21Z
+**Event**: SENSOR_FIRED
+**Fire id**: c4eb6ef8
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:21Z
+**Event**: SENSOR_PASSED
+**Fire id**: c4eb6ef8
+**Sensor ID**: traceability
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/traceability.json
+**Duration ms**: 252
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:46Z
+**Event**: SENSOR_FIRED
+**Fire id**: 786fb9cf
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:46Z
+**Event**: SENSOR_PASSED
+**Fire id**: 786fb9cf
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/rules.md
+**Duration ms**: 49
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-09-28T00:49:47Z
+**Event**: SENSOR_FIRED
+**Fire id**: 8e24eb05
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-28T00:49:47Z
+**Event**: SENSOR_PASSED
+**Fire id**: 8e24eb05
+**Sensor ID**: required-sections
+**Stage slug**: functional-design
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-ws-contract/functional-design/functional-spec.md
+**Duration ms**: 52
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-28T00:53:52Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a0e4d24888ed57812
+**Message**: 正在跑 U2 brain-ws-contract 的 functional-design；兩輪審查都已修完並登記收據，產出七道 sensor 全綠。下一步是進核可關卡，把三項需你裁決的 open items 呈給你，或先 commit 一個乾淨節點。
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-28T01:55:29Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
