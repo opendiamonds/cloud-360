@@ -10,7 +10,14 @@ pydantic==2.13.4
 uvicorn
 httpx
 python-dotenv
-sqlalchemy
+# 釘版原因（2026-09-27 實測）：SQLAlchemy 2.1 把 postgresql:// 的預設 DBAPI 由
+# psycopg2 改為 psycopg(v3)，而本 repo 裝的是 psycopg2-binary，於是全新 build 的
+# backend 會以 ModuleNotFoundError: No module named 'psycopg' 啟動失敗。
+# 這不是本 intent 的改動造成的，是未 pin 的套件在上游發版後自行漂移——team.md
+# `## Code Style` 逐字記載過這個風險（CI／Docker build／staging 三處各自解析當下最新版）。
+# 正解是把 DATABASE_URL 寫成 postgresql+psycopg2://（顯式指定 driver），
+# 但那要同時改兩份 compose 與 LOCAL-DEV.md；此處先以釘版恢復綠燈。
+sqlalchemy<2.1
 psycopg2-binary
 passlib[bcrypt]
 bcrypt
