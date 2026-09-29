@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "binding": 648,
-  "last_status": "In progress",
-  "last_field_value": "functional-design (260920-orchestration-brain)",
-  "last_reason_code": "mapped",
-  "managed_block_hash": "121711f77145da4a72735f15e2fa70190a1d4478ba4d89991974c2c00a35a46b",
-  "last_synced_at": "2026-09-28T15:05:46Z",
+  "last_status": null,
+  "last_field_value": "parked @ rough-mockups (260920-orchestration-brain)",
+  "last_reason_code": "parked",
+  "managed_block_hash": "5cb16594dc7e213d96bc2d71cbc2305eec2799032104b49518e0a45096a6a41c",
+  "last_synced_at": "2026-09-29T14:36:39Z",
   "last_written_status": "In progress"
 }
