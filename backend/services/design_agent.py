@@ -122,7 +122,18 @@ def build_graph() -> StateGraph:
     ).bind_tools(tools)
 
     async def call_model(state: GraphState):
-        response = await llm.ainvoke(state["messages"])
+        msgs = state["messages"]
+        system_msgs = [m for m in msgs if isinstance(m, SystemMessage)]
+        non_system_msgs = [m for m in msgs if not isinstance(m, SystemMessage)]
+        
+        # Anthropic API requires at most one system message at the top of the conversation.
+        # When using memory checkpoints across turns, use the latest system prompt.
+        if system_msgs:
+            formatted_msgs = [system_msgs[-1]] + non_system_msgs
+        else:
+            formatted_msgs = non_system_msgs
+
+        response = await llm.ainvoke(formatted_msgs)
         return {"messages": [response]}
 
     def should_continue(state: GraphState):
