@@ -318,12 +318,15 @@ async def run_wa_collab(
     """
     yield {
         "type": "progress",
-        "content": "需求收集中…",
+        "content": (
+            f"啟動 Design ↔ Review 協作（目標：消除 HIGH_RISK 且分數 ≥ {TARGET_SCORE}，"
+            f"最多 {MAX_ROUNDS} 輪）"
+        ),
     }
 
     # —— Round 1：Design 產圖／改圖 ——
+    yield {"type": "progress", "content": "第 1 輪：Design Agent 產圖中…", "round": 1}
     xml_r1: Optional[str] = None
-    first_event = True
     async for ev in _remap_design_events(messages, current_xml, round_no=1):
         if ev.get("type") == "_internal_xml":
             xml_r1 = ev.get("content")
@@ -331,9 +334,6 @@ async def run_wa_collab(
         if ev.get("type") == "error":
             yield ev
             return
-        if first_event and ev.get("type") == "progress":
-            yield {"type": "progress", "content": "第 1 輪：Design Agent 產圖中…", "round": 1}
-            first_event = False
         yield ev
 
     if not xml_r1:
@@ -347,15 +347,6 @@ async def run_wa_collab(
             "message": "尚未產圖，協作評核未啟動。",
         }
         return
-
-    yield {
-        "type": "progress",
-        "content": (
-            f"啟動 Design ↔ Review 協作（目標：消除 HIGH_RISK 且分數 ≥ {TARGET_SCORE}，"
-            f"最多 {MAX_ROUNDS} 輪）"
-        ),
-        "round": 1,
-    }
 
     yield {
         "type": "message",
@@ -462,10 +453,7 @@ async def run_wa_collab(
         f"然後呼叫 draw_architecture_diagram 改圖。\n\n"
         f"【必須優先處理的高風險】\n{high_json}\n\n"
         f"【Review Agent 發言】\n{review_text}\n\n"
-        f"【全部 findings】\n{findings_json}\n\n"
-        f"【改圖座標注意事項】\n"
-        f"請務必保留原本 AZ 與 Subnet 內主要運算節點的 (x, y) 座標，"
-        f"新增的輔助元件（如 CloudWatch, SNS, IAM）請依規範放置在左右兩側外掛槽位（CloudWatch/SNS 置於右側 x=1060；IAM/S3 置於左側 x=80），嚴禁改動既有節點位置造成重疊。"
+        f"【全部 findings】\n{findings_json}"
     )
     round2_messages = list(messages) + [
         {"role": "assistant", "content": review_text or "（Review 無文字）"},

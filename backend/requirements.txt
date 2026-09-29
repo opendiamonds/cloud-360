@@ -5,10 +5,6 @@
 # 且該紅燈與「真的漂移了」在訊號上不可區分。
 # 升版這兩支時，必須在**同一個 PR 內**重新 dump openapi.json 並重產前端型別檔。
 # 相容釋出形式（~=）仍會在次版本線上浮動，形式選錯等於沒釘 —— 故用 ==。
-# 2026-09-29 還原為 0.141.1：#656 把它降到 0.111.0 但未在同一個 PR 內重新 dump
-# openapi.json，使規格漂移檢查紅燈——而這正是下方註解逐字警告的事。實測：
-# 還原版本後 `dump_openapi.py --check` 立刻回「規格檔與後端程式碼一致」，
-# 故 committed 的 openapi.json 一直是對的，錯的是相依。
 fastapi[standard]==0.141.1
 pydantic==2.13.4
 uvicorn
@@ -27,9 +23,9 @@ psycopg[binary]
 passlib[bcrypt]
 bcrypt
 pyjwt
-langgraph
-langchain-core
-langchain-anthropic
+claude-agent-sdk
+langgraph==1.2.11
+langchain-openai==1.6.2
 hypothesis
 openpyxl==3.1.5
 PyYAML>=6.0

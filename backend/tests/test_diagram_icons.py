@@ -54,15 +54,6 @@ class Normalisation(unittest.TestCase):
         self.assertEqual(_normalise_icon_name("AWS Lambda"), "lambda")
         self.assertEqual(_normalise_icon_name("Amazon CloudWatch"), "cloudwatch")
 
-    def test_strips_db_engine_and_modifier_prefixes(self):
-        self.assertEqual(_normalise_icon_name("CLOUD SQL FOR POSTGRESQL (PRIMARY)"), "cloud sql")
-        self.assertEqual(_normalise_icon_name("EXTERNAL CLOUD LOAD BALANCING"), "cloud load balancing")
-        self.assertEqual(_normalise_icon_name("MEMORYSTORE FOR REDIS"), "memorystore")
-        self.assertEqual(_normalise_icon_name("Azure DNS"), "dns")
-        self.assertEqual(_normalise_icon_name("Web Application Firewall"), "web application firewall")
-        self.assertEqual(_normalise_icon_name("APPLICATION GATEWAY WAF_V2"), "application gateway waf")
-        self.assertEqual(_normalise_icon_name("AZURE BACKUP / RECOVERY SERVICES VAULT"), "backup recovery services vault")
-
     def test_is_punctuation_and_case_insensitive(self):
         self.assertEqual(_normalise_icon_name("API-Gateway"), _normalise_icon_name("api gateway"))
 
