@@ -16,7 +16,6 @@ from services.llm_provider import (
     OPENROUTER,
     auth_error_message,
     configure_provider_env,
-    get_design_model_name,
     get_model_name,
     get_provider,
     get_review_model_name,
@@ -33,7 +32,6 @@ MANAGED = (
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
     "LLM_MODEL",
-    "DESIGN_LLM_MODEL",
     "REVIEW_LLM_MODEL",
 )
 
@@ -194,10 +192,8 @@ class AuthReadiness(unittest.TestCase):
 class ModelSelection(unittest.TestCase):
     def test_provider_specific_defaults(self):
         with env(LLM_PROVIDER="openrouter"):
-            self.assertEqual(get_design_model_name(), "google/gemini-2.5-flash")
             self.assertEqual(get_model_name(), "google/gemini-3.7-flash")
         with env(LLM_PROVIDER="cli"):
-            self.assertEqual(get_design_model_name(), "sonnet")
             self.assertEqual(get_model_name(), "sonnet")
 
     def test_explicit_model_wins(self):
@@ -206,7 +202,7 @@ class ModelSelection(unittest.TestCase):
 
     def test_cli_ignores_a_gateway_slug(self):
         """A slug left over from openrouter mode would fail at the CLI."""
-        with env(LLM_PROVIDER="cli", LLM_MODEL="google/gemini-2.5-flash"):
+        with env(LLM_PROVIDER="cli", LLM_MODEL="anthropic/claude-sonnet-4.6"):
             with self.assertLogs("cloud360.llm_provider", level="INFO"):
                 self.assertEqual(get_model_name(), "sonnet")
 
@@ -240,7 +236,7 @@ class ModelSelection(unittest.TestCase):
         with env(LLM_PROVIDER="cli"):
             self.assertEqual(get_review_model_name(), "haiku")
         with env(LLM_PROVIDER="openrouter"):
-            self.assertEqual(get_review_model_name(), "google/gemini-3.7-flash")
+            self.assertEqual(get_review_model_name(), "anthropic/claude-3.5-haiku")
 
 
 if __name__ == "__main__":

@@ -46,12 +46,54 @@ cp .claude/settings.local.json.example .claude/settings.local.json
 
 > ⚠️ upstream README 指出 v2 在 **Claude Opus 4.8** 上表現最佳；較弱的模型可能讓 conductor 跳過 reviewer pass 或 learnings ritual、草率通過 approval gate。若要固定模型，請寫在自己的 `settings.local.json`。
 
+## 調整 3：新增 `tcms` plugin 的 `tcms-test-cases` stage
+
+**這是新增檔案，不是修改 upstream 檔**，但它位於 `.claude/` 之下，因此同樣會被升級時的整批複製波及。
+
+| 項目 | 路徑 | 性質 |
+|---|---|---|
+| Stage 檔（**手寫，需備份**） | `.claude/aidlc-common/stages/construction/tcms-test-cases.md` | 手寫來源 |
+| 驗證 skill（**手寫，需備份**） | `.claude/skills/tcms-verify/SKILL.md` | 手寫來源，`/tcms-verify` |
+| Runner skill | `.claude/skills/tcms-test-cases/` | 由 `aidlc-runner-gen.ts write` 產生 |
+| 編譯產物 | `.claude/tools/data/stage-graph.json`、`scope-grid.json` | 由 `aidlc-graph.ts compile` 產生 |
+
+兩個手寫檔需要保存；runner skill 與編譯產物都能從 stage 檔重新產生。
+
+`aidlc-runner-gen.ts check` 只管它自己產生的 runner 集合，多一個手寫的
+`tcms-verify` skill 不會讓 drift guard 紅燈（已實測）。
+
+**不在 `.claude/` 之下、因此不受升級影響**（不需備份）：
+
+- 撰寫標準：`aidlc/spaces/default/knowledge/aidlc-quality-agent/test-case-authoring.md`
+- Blocking 規則：`aidlc/spaces/default/memory/project.md` 的 `## Mandated`
+- 同步工具：`scripts/tcms_sync.py`
+
+之所以把 stage 檔放在 upstream 目錄，是因為 stage graph 的編譯器**只掃描** `.claude/aidlc-common/stages/<phase>/`（`aidlc-graph.ts` 的 `stagesDir()`；`AIDLC_STAGES_DIR` 是測試用的 seam，不是安裝點）。沒有第二個位置可放。
+
 ## 重新安裝或升級時
 
-從 upstream 重新複製 `dist/claude/` 會**覆蓋**上述兩處調整。覆蓋後請：
+從 upstream 重新複製 `dist/claude/` 會**覆蓋**上述調整。覆蓋後請：
 
 1. 重新移除 `settings.json` 的環境相依鍵（或改以 `settings.local.json` 覆寫）。
 2. 重新套用 `ai-dlc-principles.md` 第 3 條的 artifacts 路徑修正 —— 先確認 upstream 是否已自行修好，若已修好則此項可刪。
+3. 放回 `tcms-test-cases.md` stage 檔，然後重新產生它的衍生物：
+   ```bash
+   bun .claude/tools/aidlc-graph.ts compile
+   bun .claude/tools/aidlc-runner-gen.ts write
+   ```
+   驗證兩道 drift guard 皆為 exit 0：
+   ```bash
+   bun .claude/tools/aidlc-graph.ts compile --check
+   bun .claude/tools/aidlc-runner-gen.ts check
+   ```
+   並確認 stage 有進 graph（`/aidlc --doctor` 應列出 34 個 stage：aidlc 30、bootstrap 3、tcms 1，其中 `tcms-test-cases` 的 `plugin` 為 `tcms`）。upstream 若要求 reviewer stage 宣告 `review_artifact:`（2.6.121 起），tcms stage 無 `reviewer:`，不受影響。
+
+   兩種漏做各有守門機制，不必靠記憶：
+
+   | 漏掉什麼 | 誰會抓到 |
+   |---|---|
+   | stage 檔沒放回 | `scripts/validate_repo_contract.py`（已列入 `REQUIRED_FILES`）→ CI 紅燈 |
+   | 放回了但沒重新編譯 | `/aidlc --doctor` 的 `Uncompiled stage files` 檢查 |
 
 4. 跑 `bun .claude/tools/aidlc-utility.ts plugin-sync`（upstream 自 2.6.110 起要求每次升級後執行；tcms 目前不是 plugin root，會回 `no installed plugins; nothing to sync`、exit 0，這是正常的）。2.9.0 的 `doctor` 會另外把 `tcms:installed-missing` 列為 advisory warning，原因相同：stage graph 有 `plugin: tcms`，但本 repo 尚未把 tcms 整理成正式 plugin root；這不是 drift guard 失敗。
 5. 對照 upstream `CHANGELOG.md` 的 **Upgrade**／**Breaking** 段逐項檢查（minor roll-up 不取代中間版本的一次性動作）。2.7.0 → 2.9.0 實測需注意：

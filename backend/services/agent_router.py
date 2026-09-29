@@ -122,7 +122,7 @@ async def chat_and_generate(
     logger.info("收到畫圖/對話請求（Agent SDK 路徑），user=%s", current_user.username)
 
     async def event_generator():
-        async for event in run_design_agent(payload, request.current_xml, thread_id=f"user-{current_user.id}-design"):
+        async for event in run_design_agent(payload, request.current_xml):
             chunk = json.dumps(event, ensure_ascii=False)
             yield f"data: {chunk}\n\n"
 

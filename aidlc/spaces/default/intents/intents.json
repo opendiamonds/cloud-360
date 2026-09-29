@@ -34,10 +34,31 @@
     "status": "complete"
   },
   {
-    "uuid": "01a0e6ab-10df-79ff-a8dd-010ebdf2ab32",
-    "slug": "poc",
-    "dirName": "260928-poc",
-    "scope": "poc",
+    "uuid": "01a01805-ccba-748e-b9b8-b74c99c838c4",
+    "slug": "cost-finops",
+    "dirName": "260819-cost-finops",
+    "scope": "mvp",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "01a02bca-9920-7d25-bcac-1c67e36d0462",
+    "slug": "gh-projects-sync",
+    "dirName": "260822-gh-projects-sync",
+    "scope": "aidlc-github-projects-sync",
+    "status": "complete"
+  },
+  {
+    "uuid": "01a0a835-ff67-765a-a9ef-88cd96f4d4d1",
+    "slug": "estimate-upload-rework",
+    "dirName": "260916-estimate-upload-rework",
+    "scope": "c1-estimate-upload-rework",
+    "status": "complete"
+  },
+  {
+    "uuid": "01a0bfd9-0e72-7d4d-be91-2b0ffb79c980",
+    "slug": "orchestration-brain",
+    "dirName": "260920-orchestration-brain",
+    "scope": "agent-orchestration-brain",
     "status": "in-flight"
   }
 ]
