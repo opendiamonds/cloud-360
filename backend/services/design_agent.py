@@ -66,10 +66,14 @@ async def draw_architecture_diagram(provider: str, groups: list[dict[str, Any]],
     """當架構需求釐清後，呼叫此工具來產生雲端架構圖。
     
     Args:
-        provider: 雲端供應商平台 (AWS, GCP, Azure)
-        groups: 架構圖上的框架/區域陣列
-        nodes: 要畫在圖表上的雲端元件節點陣列
-        edges: 節點間的連線陣列
+        provider: 雲端供應商平台 ("AWS", "GCP", "Azure")
+        groups: 架構圖上的框架/區域陣列。每個物件包含：
+            - id: 框架唯一識別碼 (如 "g_cloud", "g_vpc", "g_az1", "g_pub1", "g_priv1")
+            - name: 框架顯示名稱 (如 "AWS Cloud", "VPC", "Availability Zone 1", "Public Subnet 1", "Private Subnet 1", "DB Subnet 1")
+            - type: 框架類型（必須對齊模板樣式，AWS: "aws_cloud", "vpc", "az", "public_subnet", "private_subnet"; GCP: "gcp_cloud", "gcp_region", "gcp_zone", "gcp_vpc", "gcp_subnet"; Azure: "azure_cloud", "azure_vnet", "azure_az", "azure_subnet", "azure_resource_group"）
+            - x, y, width, height: 絕對座標與尺寸
+        nodes: 要畫在圖表上的雲端元件節點陣列。每個物件包含 id, name (官方全名), x, y
+        edges: 節點間的連線陣列。每個物件包含 source (起點 node id), target (終點 node id)
     """
     global _last_xml
 

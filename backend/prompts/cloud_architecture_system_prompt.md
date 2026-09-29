@@ -48,6 +48,58 @@ D. 其他（請說明）
 | **VPC 內部：App Private Subnet** | `EC2`, `Amazon ECS`, `Amazon EKS`, `Lambda (VPC)` | 放置於中間層 Private Subnet (Y=410~610)，並做跨 AZ 水平對稱。 |
 | **VPC 內部：Data Private Subnet** | `RDS`, `Aurora`, `ElastiCache`, `DocumentDB` | 放置於最底層 DB Subnet (Y=640~880)。 |
 
+**AWS 容器階層與群組樣式規範 (Hierarchy & Group Types — 嚴格遵守)**：
+- **第一層 (最外層)**：`AWS Cloud` (`type: "aws_cloud"`)
+- **第二層 (虛擬私有雲)**：`VPC` (`type: "vpc"`)，必須位於 `aws_cloud` 內部。
+- **第三層 (可用區)**：`Availability Zone 1 / 2` (`type: "az"`, 藍色虛線框)，必須左右並排於 `vpc` 內部。
+- **第四層 (子網路)**：
+  - `Public Subnet 1 / 2` (`type: "public_subnet"`, 綠色邊框與淺綠底色)
+  - `Private Subnet 1 / 2` 或 `App Subnet` (`type: "private_subnet"`, 藍綠色邊框與淺藍綠底色)
+  - `DB Subnet 1 / 2` 或 `Data Subnet` (`type: "private_subnet"`, 藍綠色邊框與淺藍綠底色)
+
+**AWS 標準 3-Tier Multi-AZ JSON 呼叫範例**：
+```json
+{
+  "provider": "AWS",
+  "groups": [
+    {"id": "g_cloud", "name": "AWS Cloud", "type": "aws_cloud", "x": 30, "y": 20, "width": 960, "height": 844},
+    {"id": "g_vpc", "name": "VPC", "type": "vpc", "x": 30, "y": 170, "width": 900, "height": 658},
+    {"id": "g_az1", "name": "Availability Zone 1", "type": "az", "x": 46, "y": 214, "width": 380, "height": 598},
+    {"id": "g_pub1", "name": "Public Subnet 1", "type": "public_subnet", "x": 62, "y": 258, "width": 340, "height": 130},
+    {"id": "g_priv1", "name": "Private Subnet 1", "type": "private_subnet", "x": 62, "y": 420, "width": 340, "height": 172},
+    {"id": "g_db1", "name": "DB Subnet 1", "type": "private_subnet", "x": 62, "y": 624, "width": 340, "height": 172},
+    {"id": "g_az2", "name": "Availability Zone 2", "type": "az", "x": 458, "y": 214, "width": 380, "height": 598},
+    {"id": "g_pub2", "name": "Public Subnet 2", "type": "public_subnet", "x": 474, "y": 258, "width": 340, "height": 130},
+    {"id": "g_priv2", "name": "Private Subnet 2", "type": "private_subnet", "x": 474, "y": 420, "width": 340, "height": 172},
+    {"id": "g_db2", "name": "DB Subnet 2", "type": "private_subnet", "x": 474, "y": 624, "width": 340, "height": 172}
+  ],
+  "nodes": [
+    {"id": "n_user", "name": "User", "x": 500, "y": 40},
+    {"id": "n_r53", "name": "Route 53", "x": 500, "y": 110},
+    {"id": "n_cf", "name": "CloudFront", "x": 380, "y": 110},
+    {"id": "n_waf", "name": "AWS WAF", "x": 620, "y": 110},
+    {"id": "n_s3", "name": "Amazon S3", "x": 140, "y": 110},
+    {"id": "n_cw", "name": "CloudWatch", "x": 860, "y": 110},
+    {"id": "n_alb", "name": "Application Load Balancer", "x": 500, "y": 210},
+    {"id": "n_ecs1", "name": "Amazon ECS", "x": 232, "y": 504},
+    {"id": "n_ecs2", "name": "Amazon ECS", "x": 644, "y": 504},
+    {"id": "n_db1", "name": "Amazon Aurora (Primary)", "x": 232, "y": 708},
+    {"id": "n_db2", "name": "Amazon Aurora (Replica)", "x": 644, "y": 708}
+  ],
+  "edges": [
+    {"source": "n_user", "target": "n_r53"},
+    {"source": "n_r53", "target": "n_cf"},
+    {"source": "n_cf", "target": "n_waf"},
+    {"source": "n_waf", "target": "n_alb"},
+    {"source": "n_alb", "target": "n_ecs1"},
+    {"source": "n_alb", "target": "n_ecs2"},
+    {"source": "n_ecs1", "target": "n_db1"},
+    {"source": "n_ecs2", "target": "n_db2"},
+    {"source": "n_db1", "target": "n_db2"}
+  ]
+}
+```
+
 #### 2. GCP 服務邊界與區域規範
 **GCP 容器階層規範 (Hierarchy Rules)**：
 - **第一層 (最外層)**：`Google Cloud Platform` (`type: gcp_cloud`)

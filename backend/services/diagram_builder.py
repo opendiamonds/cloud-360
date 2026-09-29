@@ -131,6 +131,119 @@ GROUP_STYLES = {
 }
 
 
+def normalize_group_type(g: dict[str, Any], provider: str = "AWS") -> str:
+    """正規化群組類型或依據名稱/ID 進行啟發式推導，確保套用正確的模板色彩與圖示樣式。"""
+    raw_type = str(g.get("type") or "").strip().lower().replace("-", "_").replace(" ", "_")
+    name = str(g.get("name") or "").strip().lower()
+    gid = str(g.get("id") or "").strip().lower()
+    prov = (provider or "AWS").upper()
+
+    if raw_type in GROUP_STYLES:
+        return raw_type
+
+    type_aliases: dict[str, str] = {
+        # AWS
+        "cloud": "aws_cloud" if prov == "AWS" else ("gcp_cloud" if prov == "GCP" else "azure_cloud"),
+        "aws": "aws_cloud",
+        "aws_cloud": "aws_cloud",
+        "region": "gcp_region" if prov == "GCP" else "aws_cloud",
+        "vpc": "gcp_vpc" if prov == "GCP" else "vpc",
+        "az": "azure_az" if prov == "AZURE" else "az",
+        "availability_zone": "azure_az" if prov == "AZURE" else "az",
+        "zone": "gcp_zone" if prov == "GCP" else ("azure_az" if prov == "AZURE" else "az"),
+        "public": "public_subnet",
+        "public_subnet": "public_subnet",
+        "private": "private_subnet",
+        "private_subnet": "private_subnet",
+        "db_subnet": "private_subnet",
+        "app_subnet": "gcp_subnet" if prov == "GCP" else ("azure_subnet" if prov == "AZURE" else "private_subnet"),
+        "data_subnet": "gcp_subnet" if prov == "GCP" else ("azure_subnet" if prov == "AZURE" else "private_subnet"),
+        "compute_subnet": "private_subnet",
+        "database_subnet": "private_subnet",
+        "subnet": "gcp_subnet" if prov == "GCP" else ("azure_subnet" if prov == "AZURE" else "private_subnet"),
+        # GCP
+        "gcp": "gcp_cloud",
+        "gcp_cloud": "gcp_cloud",
+        "gcp_region": "gcp_region",
+        "gcp_zone": "gcp_zone",
+        "gcp_vpc": "gcp_vpc",
+        "gcp_subnet": "gcp_subnet",
+        "gcp_firewall": "gcp_firewall",
+        "gcp_instance_group": "gcp_instance_group",
+        "mig": "gcp_instance_group",
+        "gcp_k8s_cluster": "gcp_k8s_cluster",
+        "gke": "gcp_k8s_cluster",
+        "gcp_pod": "gcp_pod",
+        "gcp_account": "gcp_account",
+        # Azure
+        "azure": "azure_cloud",
+        "azure_cloud": "azure_cloud",
+        "azure_vnet": "azure_vnet",
+        "vnet": "azure_vnet",
+        "azure_az": "azure_az",
+        "azure_subnet": "azure_subnet",
+        "azure_resource_group": "azure_resource_group",
+        "resource_group": "azure_resource_group",
+        "rg": "azure_resource_group",
+    }
+
+    if raw_type in type_aliases:
+        return type_aliases[raw_type]
+
+    search_text = f"{raw_type} {name} {gid}".lower()
+
+    if prov == "GCP":
+        if "firewall" in search_text:
+            return "gcp_firewall"
+        if any(k in search_text for k in ("instance_group", "instance group", "mig")):
+            return "gcp_instance_group"
+        if any(k in search_text for k in ("k8s", "gke", "cluster")):
+            return "gcp_k8s_cluster"
+        if "pod" in search_text:
+            return "gcp_pod"
+        if any(k in search_text for k in ("account", "project")):
+            return "gcp_account"
+        if "subnet" in search_text:
+            return "gcp_subnet"
+        if "zone" in search_text or re.search(r"\bzone\b", search_text):
+            return "gcp_zone"
+        if "region" in search_text:
+            return "gcp_region"
+        if any(k in search_text for k in ("vpc", "network")):
+            return "gcp_vpc"
+        if any(k in search_text for k in ("cloud", "gcp", "google")):
+            return "gcp_cloud"
+        return "gcp_vpc"
+
+    elif prov == "AZURE":
+        if any(k in search_text for k in ("cloud", "azure", "microsoft")):
+            return "azure_cloud"
+        if any(k in search_text for k in ("resource_group", "resource group", "rg", "storage tier", "management tier")):
+            return "azure_resource_group"
+        if any(k in search_text for k in ("vnet", "virtual network", "application tier")):
+            return "azure_vnet"
+        if any(k in search_text for k in ("availability zone", "availability_zone")) or re.search(r"\baz\d*\b", search_text):
+            return "azure_az"
+        if any(k in search_text for k in ("subnet", "tier", "pipeline")):
+            return "azure_subnet"
+        return "azure_vnet"
+
+    else:  # AWS / Default
+        if "public" in search_text:
+            return "public_subnet"
+        if any(k in search_text for k in ("private", "db", "database", "data", "app", "compute", "backend")):
+            return "private_subnet"
+        if "subnet" in search_text:
+            return "public_subnet" if "pub" in search_text else "private_subnet"
+        if any(k in search_text for k in ("availability", "zone")) or re.search(r"\baz\d*\b", search_text):
+            return "az"
+        if "vpc" in search_text:
+            return "vpc"
+        if any(k in search_text for k in ("cloud", "aws", "region")):
+            return "aws_cloud"
+        return "vpc"
+
+
 def is_inside(child: dict[str, Any], parent: dict[str, Any]) -> bool:
     """判斷 child 的邊界盒是否完全落在 parent 內（節點預設 40x40）。"""
     cw = child.get("width", 40)
@@ -1819,36 +1932,29 @@ async def build_mxgraph_xml(
       4. 為 nodes 找最小包覆 group
       5. 輸出 group / node（含 n8n icon）/ orthogonal edge cells
     """
-    groups = list(groups or [])
-    nodes = list(nodes or [])
-    edges = list(edges or [])
-    normalize_diagram_layout(groups, nodes)
-    # 同層 icon 不互疊；被多餘邊線壓到的 icon 在同 layer 內挪到較少過線處
-    relieve_icon_edge_congestion(groups, nodes, edges)
+    groups = [dict(g) for g in (groups or [])]
+    nodes = [dict(n) for n in (nodes or [])]
+    edges = [dict(e) for e in (edges or [])]
 
     if not provider:
-        # 根據群組的類型自動偵測雲端平台供應商
-        g_types = {g.get("type") for g in groups if g}
-        if any(t in ("azure_cloud", "azure_vnet", "azure_resource_group", "azure_subnet") for t in g_types):
+        # 根據群組與節點內容自動偵測雲端平台供應商
+        g_texts = " ".join(f"{g.get('type', '')} {g.get('name', '')} {g.get('id', '')}" for g in groups if g).lower()
+        n_texts = " ".join(f"{n.get('name', '')}" for n in nodes if n).lower()
+        combined_texts = f"{g_texts} {n_texts}"
+        if any(t in combined_texts for t in ("azure", "vnet", "virtual network", "resource group", "blob storage")):
             provider = "Azure"
-        elif any(
-            t in (
-                "gcp_cloud",
-                "gcp_region",
-                "gcp_zone",
-                "gcp_vpc",
-                "gcp_subnet",
-                "gcp_firewall",
-                "gcp_instance_group",
-                "gcp_k8s_cluster",
-                "gcp_pod",
-                "gcp_account",
-            )
-            for t in g_types
-        ):
+        elif any(t in combined_texts for t in ("gcp", "google", "gke", "bigquery", "spanner", "memorystore", "cloud storage")):
             provider = "GCP"
         else:
             provider = "AWS"
+
+    # 先將所有 group 的 type 正規化
+    for g in groups:
+        g["type"] = normalize_group_type(g, provider=provider)
+
+    normalize_diagram_layout(groups, nodes)
+    # 同層 icon 不互疊；被多餘邊線壓到的 icon 在同 layer 內挪到較少過線處
+    relieve_icon_edge_congestion(groups, nodes, edges)
 
     if not nodes and not groups:
         raise ValueError("groups 與 nodes 皆為空，無法產圖")
@@ -1898,8 +2004,12 @@ async def build_mxgraph_xml(
     for g in groups_sorted:
         gid = g["id"]
         gname = g.get("name", "")
-        gtype = g.get("type", "gcp_vpc" if provider == "GCP" else "vpc")
-        fallback_style = GROUP_STYLES["gcp_vpc"] if provider == "GCP" else GROUP_STYLES["vpc"]
+        gtype = normalize_group_type(g, provider=provider)
+        fallback_style = (
+            GROUP_STYLES["gcp_vpc"]
+            if provider == "GCP"
+            else (GROUP_STYLES["azure_vnet"] if provider == "Azure" else GROUP_STYLES["vpc"])
+        )
         style = GROUP_STYLES.get(gtype, fallback_style)
         w, h = g.get("width", 200), g.get("height", 200)
         pid = g["parent_id"]
