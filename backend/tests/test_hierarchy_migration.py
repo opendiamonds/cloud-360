@@ -40,7 +40,7 @@
 依 `project.md` 的既有更正「受測對象既無端點也無 UI 時寧可缺、不得捏造」。
 """
 
-import tests.helpers  # noqa: F401  -- installs the psycopg2 stub before services import
+import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 import re
 import unittest

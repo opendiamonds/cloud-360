@@ -12,7 +12,7 @@
   1. **閘門的訊號變乾淨**：應用程式任何 import 失敗（新依賴沒裝、某支 router 打
      字錯）都不會讓本閘門連帶紅燈。紅燈只代表**契約本身**漂移了。
   2. **不需要 DB 樁**：`dump_openapi.py:36` 得先
-     `sys.modules.setdefault("psycopg2", MagicMock())`，本腳本不需要。
+     `sys.modules.setdefault("psycopg", MagicMock())`，本腳本不需要。
   3. **契約的邊界更誠實**：模型定義了即進契約，與它有沒有被某支 router 用到無關
      ——對一個 `spec` 單元而言這是對的，`U2` 交付的就是型別本身。
 

@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-# 必須早於任何 DB import：helpers 在 import 時 mock 掉 psycopg2 並設好 sys.path。
+# 必須早於任何 DB import：helpers 在 import 時 mock 掉 psycopg 並設好 sys.path。
 from tests.helpers import close_session  # noqa: F401  (import for its side effects)
 
 import database

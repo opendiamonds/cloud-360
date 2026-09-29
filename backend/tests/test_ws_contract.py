@@ -5,7 +5,7 @@
 `BR2.13`（客戶端封包不得攜帶 turnId）與 `WsSubprotocol` 的字面型別（`NFR5.4`）。
 
 **本檔不需要任何 mock**：契約模組是純 Pydantic 模型，無 I/O、無 DB、無網路。
-`import tests.helpers` 放在**第一個 import**（它在任何 DB import 之前裝 psycopg2
+`import tests.helpers` 放在**第一個 import**（它在任何 DB import 之前裝 psycopg
 樁），形狀比照 `test_database_security.py`／`test_diagram_icons.py`／
 `test_llm_provider.py`／`test_wa_rule_engine.py` 四個既有先例：docstring 在前、
 該 import 為首個 import。本單元的契約模組其實不 import 任何 DB——沿用以免例外。
@@ -18,7 +18,7 @@
 時寧可缺、不得捏造」。
 """
 
-import tests.helpers  # noqa: F401  -- installs the psycopg2 stub before services import
+import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 import unittest
 from typing import get_args

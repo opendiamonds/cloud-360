@@ -20,7 +20,7 @@
 也無頁面，依 `project.md` 的既有更正「寧可缺、不得捏造」。
 """
 
-import tests.helpers  # noqa: F401  -- installs the psycopg2 stub before services import
+import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 import contextlib
 import copy
