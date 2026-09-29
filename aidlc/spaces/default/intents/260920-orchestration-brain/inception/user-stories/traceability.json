@@ -1,0 +1,440 @@
+{
+  "stage": "user-stories",
+  "upstream_ids": [
+    "FR1",
+    "FR2",
+    "FR3",
+    "FR4",
+    "FR5",
+    "FR6",
+    "FR7",
+    "FR8",
+    "FR9",
+    "FR10",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR1.4",
+    "FR1.5",
+    "FR1.6",
+    "FR1.7",
+    "FR1.8",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR4.3a",
+    "FR4.3b",
+    "FR4.4",
+    "FR4.5",
+    "FR4.5a",
+    "FR4.6",
+    "FR4.7",
+    "FR5.1",
+    "FR5.2",
+    "FR6.1",
+    "FR7.1",
+    "FR7.2",
+    "FR7.3",
+    "FR7.4",
+    "FR8.1",
+    "FR8.2",
+    "FR8.3",
+    "FR8.4",
+    "FR8.5",
+    "FR9.1",
+    "FR9.2",
+    "FR9.3",
+    "FR9.4",
+    "FR9.5",
+    "FR10.1",
+    "FR10.2",
+    "FR10.3",
+    "FR10.4",
+    "FR10.5",
+    "FR10.6",
+    "FR10.7",
+    "FR10.8",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "US1.1, US1.2, US1.3, US1.4, US5.1, US6.1",
+      "note": "群組層彙總；8 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "US2.1, US2.2",
+      "note": "群組層彙總；3 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "US3.1, US6.1",
+      "note": "群組層彙總；3 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "US4.1, US4.2, US4.3, US4.4, US4.5",
+      "note": "群組層彙總；10 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "US1.3, US5.1",
+      "note": "群組層彙總；2 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "US6.1",
+      "note": "群組層彙總；1 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "US7.1",
+      "note": "群組層彙總；4 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR8",
+      "status": "OK",
+      "target": "US8.1",
+      "note": "群組層彙總；5 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR9",
+      "status": "OK",
+      "target": "US9.1, US9.2",
+      "note": "群組層彙總；5 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR10",
+      "status": "OK",
+      "target": "US10.1, US10.2",
+      "note": "群組層彙總；8 條子需求逐條列於下方"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "US1.1, US5.1"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "US1.2, US6.1"
+    },
+    {
+      "id": "FR1.4",
+      "status": "OK",
+      "target": "US1.3"
+    },
+    {
+      "id": "FR1.5",
+      "status": "OK",
+      "target": "US1.1"
+    },
+    {
+      "id": "FR1.6",
+      "status": "OK",
+      "target": "US1.2"
+    },
+    {
+      "id": "FR1.7",
+      "status": "OK",
+      "target": "US1.2"
+    },
+    {
+      "id": "FR1.8",
+      "status": "OK",
+      "target": "US1.4"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "US2.1, US2.2"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "US2.1, US2.2"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "US2.1"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "US3.1"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "US3.1, US6.1"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "US3.1"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "US4.1, US4.5"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "US4.1"
+    },
+    {
+      "id": "FR4.3a",
+      "status": "OK",
+      "target": "US4.4",
+      "note": "子需求 id 的字母後綴落在框架 id 文法外（會被解析成 FR4），個別追溯在機械層不可見；不回改已核可的上游，列為交接事項"
+    },
+    {
+      "id": "FR4.3b",
+      "status": "OK",
+      "target": "US4.3, US4.4",
+      "note": "同 FR4.3a：字母後綴在機械層不可見"
+    },
+    {
+      "id": "FR4.4",
+      "status": "OK",
+      "target": "US4.5"
+    },
+    {
+      "id": "FR4.5",
+      "status": "OK",
+      "target": "US4.2"
+    },
+    {
+      "id": "FR4.5a",
+      "status": "OK",
+      "target": "US4.2",
+      "note": "同 FR4.3a；本條要求 90 天清理須由 gh-aw／Actions workflow 承載，該落點由 US4.2 的 DoD 記載"
+    },
+    {
+      "id": "FR4.6",
+      "status": "OK",
+      "target": "US4.2"
+    },
+    {
+      "id": "FR4.7",
+      "status": "OK",
+      "target": "US4.2, US4.3"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "US5.1"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "US1.3, US5.1"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "US6.1"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "US7.1"
+    },
+    {
+      "id": "FR7.2",
+      "status": "OK",
+      "target": "US7.1"
+    },
+    {
+      "id": "FR7.3",
+      "status": "OK",
+      "target": "US7.1"
+    },
+    {
+      "id": "FR7.4",
+      "status": "OK",
+      "target": "US7.1"
+    },
+    {
+      "id": "FR8.1",
+      "status": "OK",
+      "target": "US8.1"
+    },
+    {
+      "id": "FR8.2",
+      "status": "OK",
+      "target": "US8.1"
+    },
+    {
+      "id": "FR8.3",
+      "status": "OK",
+      "target": "US8.1"
+    },
+    {
+      "id": "FR8.4",
+      "status": "OK",
+      "target": "US8.1"
+    },
+    {
+      "id": "FR8.5",
+      "status": "OK",
+      "target": "US8.1"
+    },
+    {
+      "id": "FR9.1",
+      "status": "OK",
+      "target": "US9.1"
+    },
+    {
+      "id": "FR9.2",
+      "status": "OK",
+      "target": "US9.1"
+    },
+    {
+      "id": "FR9.3",
+      "status": "OK",
+      "target": "US9.1"
+    },
+    {
+      "id": "FR9.4",
+      "status": "OK",
+      "target": "US9.1"
+    },
+    {
+      "id": "FR9.5",
+      "status": "OK",
+      "target": "US9.2"
+    },
+    {
+      "id": "FR10.1",
+      "status": "OK",
+      "target": "US10.1"
+    },
+    {
+      "id": "FR10.2",
+      "status": "OK",
+      "target": "US10.1, US10.2"
+    },
+    {
+      "id": "FR10.3",
+      "status": "OK",
+      "target": "US10.2"
+    },
+    {
+      "id": "FR10.4",
+      "status": "OK",
+      "target": "US10.2"
+    },
+    {
+      "id": "FR10.5",
+      "status": "OK",
+      "target": "US10.2"
+    },
+    {
+      "id": "FR10.6",
+      "status": "OK",
+      "target": "US10.1"
+    },
+    {
+      "id": "FR10.7",
+      "status": "OK",
+      "target": "US10.1"
+    },
+    {
+      "id": "FR10.8",
+      "status": "OK",
+      "target": "US10.2"
+    },
+    {
+      "id": "NFR1",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）— 意圖識別準確率 ≥ 80% 的量測機制；本站只交付 M-1 標註集，門檻本身不以故事承載"
+    },
+    {
+      "id": "NFR2",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）— 脈絡保留率 ≥ 95% 的量測腳本；本站只交付 M-2 情境清單。量測方式受限於「自行計數、不得使該 test 被判為失敗」"
+    },
+    {
+      "id": "NFR3",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）— 首字 P50 的伺服器端計時；其順序性質（先有事件才有內容）由 AC8.1.1 承載"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "US2.1"
+    },
+    {
+      "id": "NFR5",
+      "status": "Deferred",
+      "target": "contract-design（2.5，CONDITIONAL）— WS 訊息型別契約與其 CI 一致性檢查；該站 skip 時轉 tcms-test-cases（3.x，ALWAYS）"
+    },
+    {
+      "id": "NFR6",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）— 真實 PostgreSQL 的 CI job；其使用者可見面由 US4.5 的三條 AC 承載"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "US4.2, US4.3"
+    },
+    {
+      "id": "NFR8",
+      "status": "Deferred",
+      "target": "infrastructure-design（3.x，CONDITIONAL）— Redis 連線設定與 render-env.sh／deploy/.env.example 的同批更新；無使用者可見行為故無故事。該站 skip 時轉 build-and-test"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "本 intent 不建自身 LLM 花費的計量機制（[F13]＝A，上限由 OpenRouter 後台承載）；「盡量省」為設計原則而非可量測門檻，故既無故事亦無後續站承載。此為已核可的範圍決定，不是缺口"
+    },
+    {
+      "id": "NFR10",
+      "status": "Deferred",
+      "target": "nfr-requirements（2.x，CONDITIONAL）— 路由層模型定案。**無自然承接站**：nfr-design 的執行條件依賴 nfr-requirements 已執行，故兩站會一併 skip；屆時判定 skip 的人須把本項重新提交給使用者，不得靜默落空"
+    },
+    {
+      "id": "NFR11",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）— 頁面切換次數與人工清點基準的比較；本站只交付 M-3 情境集合"
+    }
+  ]
+}

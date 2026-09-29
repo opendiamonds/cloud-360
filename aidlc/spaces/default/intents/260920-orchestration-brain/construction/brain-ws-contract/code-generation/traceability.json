@@ -1,0 +1,284 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-ws-contract",
+  "upstream_ids": [
+    "AC1.2.1",
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC1.2.4",
+    "AC8.1.1",
+    "AC8.1.2",
+    "AC8.1.3",
+    "AC8.1.4",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR5.7",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR1.6",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR2.6",
+    "BR2.7",
+    "BR2.8",
+    "BR2.9",
+    "BR2.10",
+    "BR2.11",
+    "BR2.12",
+    "BR2.13",
+    "BR2.14",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR4.6"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.2.1",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "AC1.2.2",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "AC1.2.4",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "AC8.1.1",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "AC8.1.2",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "AC8.1.3",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "AC8.1.4",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "frontend/package.json"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "scripts/validate_repo_contract.py"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "backend/scripts/dump_ws_contract.py"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "ws-contract.json"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "Deferred",
+      "target": "建置期那一層已交付：backend/scripts/dump_ws_contract.py 的白名單斷言逐一比對七個客戶端物件的欄位名集合，使任何未宣告欄位（含叫別的名字的身分等價欄位）在建置期紅燈；backend/services/brain_ws_contract.py 使 WsClientEnvelope 與六個 client payload 在型別上不可構造身分或 turnId 欄位。但 security-requirements.md:275-276 逐字把本條分兩層——「型別上不可構造是第一層，伺服器收到即回 error(INVALID_REQUEST)（而非靜默忽略）是第二層，屬 U13」——第二層本單元無法承載。標 Deferred 與 BR2.13 一致（code-generation 審查 R-04：初版標純 OK，是 R-01 同型的兄弟缺陷，修 R-01 時未一併掃出）。落點 U13。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR1.3",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/scripts/dump_ws_contract.py"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/tests/test_ws_contract.py"
+    },
+    {
+      "id": "BR1.6",
+      "status": "OK",
+      "target": "backend/tests/test_ws_contract.py"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.5",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR2.6",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR2.7",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR2.8",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.9",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR2.10",
+      "status": "OK",
+      "target": "frontend/scripts/check-ws-types.mjs"
+    },
+    {
+      "id": "BR2.11",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "id": "BR2.12",
+      "status": "OK",
+      "target": "backend/scripts/dump_ws_contract.py"
+    },
+    {
+      "id": "BR2.13",
+      "status": "Deferred",
+      "target": "型別層已交付：WsClientEnvelope 與六個 client payload 皆無 turnId 欄位，backend/services/brain_ws_contract.py 使它在型別上不可構造，backend/tests/test_ws_contract.py 的 (6) 斷言之，backend/scripts/dump_ws_contract.py 的白名單斷言在建置期鎖住它。但 BR2.13 的 statement 有第二半——「伺服器收到即視為協定違規：拒絕該訊息並回 error(INVALID_REQUEST)，不得靜默忽略」——那是執行期行為，屬 U13 brain-gateway，本單元無法承載。標 Deferred 與結構相同的 BR1.3／BR2.5 一致（code-generation 審查 R-01：初版標純 OK，會讓 U13 讀 traceability.json 時認定此條無須處理，而執行期拒絕隨之靜默消失）。落點 U13。"
+    },
+    {
+      "id": "BR2.14",
+      "status": "Deferred",
+      "target": "U13 brain-gateway"
+    },
+    {
+      "id": "BR3.1",
+      "status": "Deferred",
+      "target": "U14 entry-page-ui"
+    },
+    {
+      "id": "BR3.2",
+      "status": "Deferred",
+      "target": "U14 entry-page-ui"
+    },
+    {
+      "id": "BR3.3",
+      "status": "Deferred",
+      "target": "U14 entry-page-ui"
+    },
+    {
+      "id": "BR3.4",
+      "status": "Deferred",
+      "target": "U14 entry-page-ui"
+    },
+    {
+      "id": "BR3.5",
+      "status": "Deferred",
+      "target": "U14 entry-page-ui"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/tests/test_dump_ws_contract.py"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/tests/test_dump_ws_contract.py"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "frontend/scripts/check-ws-types.mjs"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "frontend/package.json"
+    },
+    {
+      "id": "BR4.6",
+      "status": "OK",
+      "target": "backend/scripts/dump_ws_contract.py"
+    }
+  ]
+}

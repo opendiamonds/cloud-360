@@ -15,9 +15,10 @@
 ## Scope Configuration
 - **Stages to Execute**: 0.1, 0.2, 0.3, 1.1, 1.3, 1.4, 1.6, 1.7, 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 4.3, 4.4, 4.6
 - **Stages to Skip**: 1.2 (market-research), 1.5 (team-formation), 2.2 (practices-discovery), 4.2 (environment-provisioning), 4.5 (incident-response), 4.7 (feedback-optimization)
-- **Depth**: Standard
+- **Depth**: Minimal
 - **Test Strategy**: Standard
-- **Review Override**: 
+- **Review Override**: advisory
+- **Summary Confirmation**: off (set by you)
 
 ## Workspace State
 - **Project Root**: .
@@ -31,7 +32,69 @@
 - **In Progress**: rough-mockups
 
 ## Runtime State
-- **Revision Count**: 0
+- **Revision Count**: 14
+
+
+
+- **Construction Iteration**: unit-major
+
+- **Unit Ownership**: solo
+
+- **Skeleton Stance**: off
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- **Parked**: 2026-09-29T01:31:59Z
+
+- **Parked At Stage**: rough-mockups
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -95,7 +158,7 @@ Per unit: [TBD]
 - **Current Stage**: rough-mockups
 - **Next Stage**: approval-handoff
 - **Status**: Running
-- **Last Updated**: 2026-09-21T07:19:30Z
+- **Last Updated**: 2026-09-29T01:31:59Z
 
 ## Session Resume Point
 - **Last Completed Stage**: scope-definition

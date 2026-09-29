@@ -1,0 +1,192 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "hierarchy-data",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "本單元不滿足 NFR6。它的範圍逐字限於「FR4.2 的『獨立 schema』……範圍限於：schema 建立、grant 邊界、跨 schema 查詢」，講的是 U5 的記憶層獨立 schema；本單元的三張表在預設 schema。Q1=A 讓 U4 的遷移驗證共用那個 job，但「共用一個 job」不等於「滿足那條 NFR」——範圍擴充本身是本站新增，已具名 S-6。本站真正產出的驗證需求為 U4-V1–U4-V5，列於 reverse（iteration 1 審查 R-01：初版把它們掛在 NFR6 底下並標 OK）"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "本單元不滿足 NFR7。它的主體逐字是「episodic memory 為 by-user 的對話歷程」，其保存 90 天（FR4.5）與刪除稽核（FR4.7）都是對那份資料的規則；DiagramChangeRecord 不是 episodic memory，本站自己的安全需求檔也寫明「不主張本表就是 episodic memory」。借用它的 90 天數值不等於繼承它的 id。本站產出的保存期需求為 U4-R1–U4-R4，列於 reverse（iteration 1 審查 R-01）"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "本單元不滿足 NFR8。它的前提子句逐字是「Redis 作為第 5 個容器引入時，其新增的環境變數必須在同一個 PR 內讓 deploy/render-env.sh 寫它、deploy/.env.example 列它」——本單元不引入容器也不引入任何環境變數（SEC-2 與 tech-stack-decisions.md §三 皆明文），前提為假。原本掛在它底下的 NFR8.1 指的是 project.md ## Mandated 的 schema_rbac.sql／DEPLOY.md 同步，那是另一條規則，連 render-env.sh 與 .env.example 都沒提到。改編號為 U4-D1 並列於 reverse（iteration 1 審查 R-01）"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "本單元交付 PostgreSQL 的資料模型與一次性遷移，不持有任何 session 或工作狀態。NFR4 的主體是「大腦的 session 與工作狀態一律放 Redis、不得放行程記憶體」，其承載為 U10 session-store。本單元既不讀也不寫 Redis"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "本單元交付零 WebSocket、零端點。NFR5 的主體是新 WebSocket 的前後端共用訊息型別契約與 CI 一致性檢查，承載為 U2 brain-ws-contract"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "本單元沒有任何 LLM 呼叫、沒有任何外部計費依賴。NFR9 是編排層的成本設計原則，承載為 U11／U12"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型的可替換性屬 U11 intent-router。**必須明講的一件事**：OQ-4（路由層模型定案）的落點逐字是 nfr-requirements（3.2），也就是本 stage——但它會在 U11 的本站回合定案，不在 U4 這一回合。本單元不得被讀成已經處理了 OQ-4。requirements.md:598 另記載 OQ-4「CONDITIONAL，無自然承接站，skip 時須重新提交使用者」"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率。本單元不做任何意圖識別，承載為 U11；其量測機制落點 build-and-test（3.6）"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率。本單元交付零畫面、零 session，承載為 U10／U14"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "首字回應時間。本單元不在任何使用者請求的回應路徑上——遷移在部署路徑執行一次，而 U7 的 facade 才是執行期的讀寫路徑"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數。本單元交付零畫面"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "U4-V1",
+      "status": "N/A",
+      "target": "共用那個真實 PostgreSQL CI job，不另開第二個；映像為 pgvector/pgvector:pg16 而非 postgres:16-alpine——K-01 images_and_services 逐字要求該替換，理由是 U5 的 vector(1024) 需要 pgvector，而 U5 是這個共用 job 的同居者；該映像對本單元的三張表是超集（iteration 1 審查 R-05）。**但本站不釘死它（iteration 2 審查 R-10）**：K-01 該句帶 scope 子句「deploy/docker-compose.deploy.yml 與 deploy/docker-compose.test.yml 兩處」，講的是部署與測試 compose、沒提 CI job；**關係更正（iteration 3 審查 R-15）**：不是三方矛盾——requirements.md:377 與 K-05 的 verification.carrier 彼此一致，K-01 被自己的 scope 子句排除在 CI job 之外。真正的問題是沒有任何一份上游說過這個共用 job 該用哪個映像，而 U5 的 vector(1024) 使 postgres:16-alpine 對同居者不足。映像決定權歸 S-6。觸發 Q1=A。無 inception NFR 父項 **更正（nfr-design 站查出）**：brain-infra 的 nfr-requirements 自己的 NFR6.1 逐字把「N-2 的真實 PG CI job service container」列為映像必須一致的四個落點之一，映像 pgvector/pgvector:pg18；deploy/docker-compose.deploy.yml:40 現況亦然。故映像已由上游定案、U4 沿用，不歸 S-6。本站初版宣稱「沒有任何一份上游說過」是錯的——只讀了 K-01 而未讀兄弟單元的 NFR 產出。"
+    },
+    {
+      "id": "U4-V2",
+      "status": "N/A",
+      "target": "該 job 必須在跑遷移之前寫入前置狀態：至少兩位持有圖的使用者、其圖 system_id 為空。理由是 stories.md:413-419 逐字記載 AC9.1.2 的 Given 在每個自動化環境都不可達（每個環境的 DB 都是新的）。不造前置狀態，遷移只證明得了不變量在空資料上成立。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-V3",
+      "status": "N/A",
+      "target": "遷移後執行不變量查詢（system_id IS NULL 的列數為 0），不為 0 時讓 job 失敗。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-V4",
+      "status": "N/A",
+      "target": "BR1.3 的唯一約束拒絕寫入時，該失敗必須以非零結束碼收場，不得被 except/logger.warning 吞掉。**可達性更正（iteration 2 審查 R-11）**：初版宣稱「Q2=A 之後剩下有人手動跑兩次」可達，那個推理錯了——BR2.2 的 logic 逐字是「IF 該使用者已有預設專案／系統 THEN 取用既有的」，手動跑第二次根本不執行插入，約束永不被碰到；加上 Q2=A 已移除並行，這個拒絕只在實作本身已寫錯時才可達。本條的價值是保護一個實作缺陷不要以「成功」收場，不是保護正常路徑。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-V5",
+      "status": "N/A",
+      "target": "該 job 必須在已遷移的前置狀態上再跑一次遷移，並斷言沒有產生第二組預設專案／系統、已掛好的圖沒有被重新指派。由 iteration 1 審查 R-02 升格：BR2.2（冪等，violation 為「一個看起來成功的錯誤結果」）與 U4-V4 兩條規則都在保護重跑那條路，而 U4-V2／U4-V3 規定的執行次數是一次——本 intent 最在意的失敗模式在驗證計畫裡沒有對應動作。且資料庫接不住：rules.md §三 逐字寫複合性質「不能單靠約束」。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-V6",
+      "status": "N/A",
+      "target": "遷移期間應用不得接流量（靜止）。由 iteration 2 審查 R-12 逼出並經人工裁決：S-8 的逐使用者交易讓遷移跨越多個 commit，於是出現上游從未討論的「應用 vs 遷移」競爭（既有的並行敘述全部在講遷移與它自己）。遷移進行中經既有 A1 頁面新建的圖不帶 system_id，BR2.1 的終檢計數即不為 0，而那不是遷移的錯。靜止讓 AC9.1.4 無限定範圍的字面說法成立，故該 AC 不需改寫。**承載者是 S-9 的有序部署步驟，不是 DEPLOY.md 的一行散文**（iteration 3 審查 R-14）：deploy.yml:121-124 一次拉起整座 stack，容器重建的中斷是無序競爭窗口而非有序窗口。落點：S-9（ci-pipeline 或 deployment-pipeline）＋ U4-D1（文件）＋ CI job 內天然滿足。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-R1",
+      "status": "N/A",
+      "target": "DiagramChangeRecord 的列保存 90 天，與 episodic memory（FR4.5）同值。本單元只定規則不實作清除。觸發 Q3=A。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-R2",
+      "status": "N/A",
+      "target": "清除機制不得以 repo 內實作程式承載（project.md ## Forbidden 的無人值守條款），必須走 gh-aw 或 Actions；形式未定，具名 S-5。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-R3",
+      "status": "N/A",
+      "target": "清除的每次執行須留計數紀錄，形狀比照 BR2.6。**在 S-5 落地之前是前向義務**——它規範的機制尚不存在，不是死碼但確實空轉，已於安全需求檔就地標明。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-R4",
+      "status": "N/A",
+      "target": "requirement_summary／requirement_label 的靜態與傳輸加密，落點 nfr-design，已具名 S-4，本站不另造 id。對應 ADR-0006 的 encryption 面向。無 inception NFR 父項"
+    },
+    {
+      "id": "U4-D1",
+      "status": "N/A",
+      "target": "部署資產同步（blocking）：schema_rbac.sql 的 DDL ＋ DEPLOY.md 的前進步驟、回復程序與部分狀態說明。回復程序逐字取自 decisions.md:90／:126「清空 system_id 並刪除新建的 projects／systems 列」；理由是 Q2=A 讓它成為特權的部署期 DDL ＋ 跨使用者資料寫入，而 org.md ## Deployment 對 high-risk action 要求 rollback，而 team.md 記載的 deploy.yml rollback job 只還原程式碼、碰不到這次資料寫入（iteration 1 審查 R-03）。無 inception NFR 父項"
+    },
+    {
+      "id": "S-7",
+      "status": "N/A",
+      "target": "OQ-H2 的定案必須連帶回答它對 U4-V2 測試夾具的影響——夾具只有在 system_id 可為空時造得出來，收緊為 NOT NULL 之後 CI job 必須在同一次執行內先插入再收緊。由 iteration 1 審查 R-08 升格：初版只寫在散文與本檔，沒有 id、不在回補表、無落點風險註記，與 S-4／OQ-H3 當初被判為缺口的形狀相同。落點 U7／U16（OQ-H2 的落點），兩者 functional-design 皆為 CONDITIONAL，若被 skip 則與 OQ-H2 一起失去承接站"
+    },
+    {
+      "id": "S-8",
+      "status": "N/A",
+      "target": "遷移的交易邊界定為逐使用者一個交易，且「部分使用者已遷移」為合法可恢復的中間狀態，須寫進 DEPLOY.md。上游無任何一處說明交易邊界；本站的推導依據是已核可規則自己預設了部分失敗會發生（BR2.2 的 violation_behaviour 談「部分失敗後的重跑」、BR2.6 要求留計數以「判斷做到哪」）——若整個遷移是單一交易，部分失敗在定義上不可能存在，那兩條規則有一半會變成空轉。本階段新增需回補，落點 code-generation（實作）＋ U4-D1（文件）。由 iteration 1 審查 R-02 逼出 **兩個後果（iteration 2 審查 R-12／R-13）**：(1) 應用與遷移之間的競爭浮現，經人工裁決要求靜止，具名 U4-V6；(2) BR2.2 的 source 所舉的「預設專案已建、圖只掛了一半」這個使用者內部的部分狀態，在逐使用者交易下不可達——這不是衝突而是更強的保證，但必須寫下來，否則下一個讀 BR2.2 的人會去防一個防不到的東西。本站不回改已核可的 rules.md。"
+    },
+    {
+      "id": "S-9",
+      "status": "N/A",
+      "target": "部署序列必須提供一個有序的靜止窗口：先只起資料庫、跑遷移指令、確認不變量、再把其餘服務拉起來。由 iteration 3 審查 R-14 逼出並經本站實查複驗：.github/workflows/deploy.yml:121-124 用單一 `docker compose ... up -d --build --remove-orphans` 一次拉起整座 stack、:126 立刻等前端，管線裡沒有任何一點是 db 起來而 backend 沒起來的；同檔 :451 標明該步耗時 NOT MEASURED。容器重建造成的中斷是無序的競爭窗口，不是 U4-V6 需要的有序窗口，所以 U4-V6 目前沒有承載者、管線預設違反它。本站初版把成本寫成「實際為零」，那句話是錯的。落點 ci-pipeline（3.7）或 deployment-pipeline（4.1），兩者皆 CONDITIONAL；若都被 skip，U4-V6 就只是一句沒有人執行的話，判定 skip 的人必須重新提交給使用者"
+    },
+    {
+      "id": "SEC-1",
+      "status": "N/A",
+      "target": "本單元不得交付任何 router、service 層讀寫函式或可從 HTTP 觸達的入口——以交付面上不可構造的方式滿足 [RA:FR9.5] 的「不得有任何繞過 require_story_action 的路徑，含同進程直呼 service 層」。無對應 inception NFR——它源自 ADR-0006 的 IAM 面向（project.md hard constraint），不是 NFR{n}。落點：本單元自身"
+    },
+    {
+      "id": "SEC-2",
+      "status": "N/A",
+      "target": "遷移為特權操作（DDL ＋ 跨使用者資料寫入），必須沿用部署既有的資料庫憑證，不得引入第二個憑證或任何新環境變數。無對應 inception NFR（ADR-0006 IAM 面向）。**已知缺口**：沒有機械檢查直接斷言這一條，只由 validate_env_contract.py 與 code review 間接覆蓋，已記入安全需求檔 §五 的殘餘風險表"
+    },
+    {
+      "id": "SEC-3",
+      "status": "N/A",
+      "target": "零新增網路暴露面。**可執行檢查已改寫**（iteration 1 審查 R-06）：初版的「五個裸字串命中數為零」跑不起來——本單元的產出沒有定義「交付的檔案」是哪些（D-2 把檔名留給 code-generation），且 requests／websocket 會在 docstring 的一般敘述上誤報。改為：檢查對象是 code-generation 的 source-manifest.json 所列且屬本單元的檔案（該清單是前提，本站定不了），檢查形式為 import 與 decorator 而非裸子字串。因此本條是對下游的要求，不是本站可自驗的檢查。無對應 inception NFR（ADR-0006 network exposure 面向，判定為不適用並附理由）**iteration 2 審查 R-06 主張 source-manifest.json 在本工作流程不存在，本站不接受**：它的依據是 stage graph 的 0 命中與 code-generation 的宣告 produces，但該檔是 workspace_requires 階段的引擎層產物（stage-protocol-reviewer.md 明文要求交給 reviewer），非階段宣告產出；本 intent 已有兩份實體（construction/brain-ws-contract/code-generation/ 與 construction/brain-infra/code-generation/ 各一）。該審查亦自行標明它碰不到 code-generation 的階段檔。錨點有效，不改。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "N/A",
+      "target": "稽核記錄四處（遷移失敗大聲＝BR2.1／AC9.1.4、遷移計數＝BR2.6、90 天清除計數＝U4-R3、DiagramChangeRecord 自身含 actor_user_id）。**第四處目前是有條件的**（iteration 1 審查 R-07）：entities.md:196 把 actor_user_id 定為 required: true，而 OQ-H3 逐字說多參與者下「行動者是哪一位」不屬本單元、本站不定案。必填＋取值未定＝一定會被填進某個值而填錯無徵兆。本站因此不宣稱稽核面向已滿足，並對 OQ-H3 追加一條 U12 必須滿足的約束：存進去的值必須指向真正造成異動的人，不得預設填工作階段擁有者。無對應 inception NFR（ADR-0006 audit logging 面向）"
+    },
+    {
+      "id": "S-5",
+      "status": "N/A",
+      "target": "一個承載 90 天清除的 gh-aw 或 GitHub Actions workflow（形式未定）與它的計數紀錄。本階段新增、已核可 scope 未涵蓋，需回補。觸發 Q3=A ＋ project.md ## Forbidden 的無人值守條款。**本 intent 結束時這張表實際上不會被清除**——這是已接受的狀態，已記入殘餘風險表"
+    },
+    {
+      "id": "S-6",
+      "status": "N/A",
+      "target": "NFR6 的 CI job 範圍需擴及 U4 的遷移、前置狀態寫入與不變量查詢。本階段新增、需回補。觸發 Q1=A。落點 nfr-design（3.3）或 ci-pipeline（3.7），兩者 execution 皆為 CONDITIONAL；若兩者都被 skip 則本項無承接站，屆時判定 skip 的人必須重新提交給使用者。與 S-4 同一個形狀：上游 NFR 自身文字不涵蓋本單元，故不得默認涵蓋 **並擁有該 CI job 的映像決定權**（iteration 2 審查 R-10）：requirements.md §NFR6、K-01 的 scope 子句、K-05 的 verification.carrier 三處對映像各說各話且互不引用。 **更正（nfr-design 站查出）**：brain-infra 的 nfr-requirements 自己的 NFR6.1 逐字把「N-2 的真實 PG CI job service container」列為映像必須一致的四個落點之一，映像 pgvector/pgvector:pg18；deploy/docker-compose.deploy.yml:40 現況亦然。故映像已由上游定案、U4 沿用，不歸 S-6。本站初版宣稱「沒有任何一份上游說過」是錯的——只讀了 K-01 而未讀兄弟單元的 NFR 產出。"
+    },
+    {
+      "id": "OQ-H2-fixture",
+      "status": "N/A",
+      "target": "U4-V2 的前置狀態與 OQ-H2 的收緊方向互相牽制——本站自檢查出。U4-V2 要求 CI job 先插入 system_id 為空的既有圖；而該插入只有在欄位可為空時才構造得出來。若 OQ-H2 日後定案為遷移後收成 NOT NULL，收緊之後的 CI job 就無法再構造這份夾具，除非同一次執行內先插入再收緊。兩者不矛盾但有先後順序。指派：解 OQ-H2 的單元（U7／U16）必須連帶回答這一條，不得只答執行期那一面。本站不修改已核可的 functional-design 產出，故以本檔傳遞。無對應 inception NFR **已於 iteration 1 審查 R-08 後升格為具名回補項 S-7**，本條保留為它的推導紀錄。"
+    },
+    {
+      "id": "AC9.1.3-ci-gap",
+      "status": "N/A",
+      "target": "AC9.1.3（遷移不改變既有頁面行為）在 CI 上沒有任何斷言。U4-V2 的前置狀態讓 AC9.1.2 變成可驗，但 AC9.1.3 驗的是既有頁面，需要前端 e2e，而本單元交付零畫面。落點：U16 或既有 Playwright 層。列在此處是為了讓覆蓋檢查的殘餘可被追蹤，不是宣稱本單元處理了它"
+    },
+    {
+      "id": "D-4-revisit",
+      "status": "N/A",
+      "target": "不引入 migration 框架（Alembic 等）的重新評估觸發條件三項：累積到第三個改既有資料的遷移、出現回滾單一 schema 變更的需求、database.py 的 _ensure_* 家族要被整批移除時。寫成具名項而非散文，理由與 BR2.6 升格同一個：無 id 的旁述沒有人會回頭看"
+    }
+  ],
+  "reverse_count": 23
+}

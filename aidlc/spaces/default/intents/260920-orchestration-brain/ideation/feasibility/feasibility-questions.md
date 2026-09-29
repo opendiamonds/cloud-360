@@ -16,16 +16,28 @@ regulatory requirements, or significant technical uncertainty」。逐項判定�
 
 三款有兩款明確成立 → 本 stage **EXECUTE**。
 
+> **修訂 1 註（依 `functional-design:c22`：理由部分被推翻但判定不變）**：
+> 上表「顯著技術不確定性」列所引的「LangGraph 引用為 0（S6）」對 LangGraph
+> 已不成立（見 V8：已釘選並在部署環境運行）。**但本 stage 的 EXECUTE 判定
+> 不受影響**——Redis 仍為 0（V9），三種記憶、推播、專案／系統階層亦皆無
+> 前例，且「整合約束」一款獨立成立。原文不改，就地標註。
+
 ## 已由上游定案、本站不重問
 
 依 `scope-definition:260822-c5`，每一項都附可引用的定案原文：
 
 - **作業對象的綁定層級** — intent-capture [Q5]=B：「本次一併建立專案／系統
   階層：把『專案 → 系統 → 架構圖』做成正式資料模型，大腦綁到這三層。」
-- **編排對象與成本能力範圍** — [Q6]=C：「既有能力 ＋ 成本 agent 的空殼：
-  先定義成本 agent 的介面與交接方式，但不實作真正的成本計算。」
-  ＋ [Q11]=B：「空殼要能回『我還不知道』：大腦能正確把成本問題路由到成本
-  agent，由它回覆一個明確的『尚未提供』而非答錯或沉默。」
+- **編排對象與成本能力範圍** — [Q12]=A：「編排既有的真實成本 agent：大腦把
+  成本類問題路由到既有 `/api/cost/v1`，使用者真的問得到成本答案；不新建成本
+  能力。」＋ [Q14]=A：「就地在入口頁呈現：大腦把成本 agent 的串流轉送到
+  入口頁，使用者不離開入口頁就看到答案。」
+  （修訂 1：本項原引用 [Q6]=C「成本 agent 的空殼」＋ [Q11]=B「空殼回
+  『尚未提供』」。兩題的前提「成本能力不存在」已被推翻，上游已標示 Q6／Q11
+  由 Q12 取代，故本清單改引用 Q12／Q14。）
+- **編排執行層的落位** — [Q13]=B：「大腦自建獨立 runtime：大腦有自己的
+  LangGraph 執行層，與成本 agent 那份並行、互不影響。」（修訂 1 新增；
+  既有 `services/langgraph_runtime.py` 於出題當時尚未被本 intent 查證到。）
 - **共享工作階段的涵蓋頁面** — [Q7]=A：「只有入口頁 ＋ `/workspace` ＋
   `/assessment`：實際會用到 AI 的頁面。」
 - **決策者與組織阻礙** — [Q8]=A：「單一決策者（你），無其他關係人：範圍、
@@ -63,6 +75,9 @@ are currently in use?」：本 repo 部署目標只有自有 staging（ADR-0007�
 - [S6] **Redis 在 repo 內只作為「架構圖詞彙」出現**（`wa_rule_engine.py`、
   `wa_lens_engine.py`、AWS 架構提示詞中的 ElastiCache/Redis 服務名），
   不存在任何執行期依賴、容器或設定。LangGraph 引用為 0。
+  **（修訂 1 更正：Redis 半邊仍成立 [V9]；LangGraph 半邊已不成立——
+  `langgraph==1.2.11` 已釘選且 `services/langgraph_runtime.py` 在用 [V8]。
+  原文保留，因為它記載的是出題當時為真的事實。）**
 - [S7] CI 的 Python 版本為 `3.12`（另有一處 `3.x`）。
 - [S9] **pgvector 不在現用映像內**：`db` 服務為官方 `postgres:16-alpine`，
   不含 pgvector；repo 內無任何 `CREATE EXTENSION` 或向量欄位。語意記憶若要
@@ -176,6 +191,12 @@ openrouter／cli 雙模式切換（預設 openrouter）。
 
 LangGraph 與 Redis 在 repo 內完全沒有前例（S6），三種記憶與推播亦然。
 `phases/ideation.md` 要求可行性評估必須保守並明確標示假設。
+
+> **修訂 1 註**：本題幹的「LangGraph 完全沒有前例」已不成立 [V8]，故其
+> 選項 A 所述的試探已被 repo 內的可運行前例部分回答。**F6 的作答不改**
+> （試探仍要做），但該試探的範圍已在 `feasibility-assessment.md` 的驗證
+> 計畫表中收窄為本 intent 獨有的部分：多意圖分支結構、session 注入、
+> 以及自建 runtime [Q13] 與既有那份的一致性。
 
 - A. **LangGraph 的編排模型**：它能不能乾淨地包住既有那些以 SSE 回應的
   agent 端點，是整個架構的地基。建議先做 spike。
@@ -323,6 +344,16 @@ F11 選了「硬性月費上限，有明確數字」但未附數值。沒有數�
   已定案「成本／FinOps 能力只做交接介面的空殼，不實作真正的成本計算」。
   兩者不能同時成立——這是一個跨階段矛盾，不是細節。
 
+  > **修訂 1 註（依 `functional-design:c22`：理由被推翻但決定不變，原文不改
+  > 只就地標註）。適用範圍為 F13 全題——本條 [S13] 以及下方選項 A、B 中每一
+  > 處 [Q6]=C／[Q11]=B 的引用**：這些引用已由 [Q12]=A 取代，成本能力
+  > 確實存在。**但 F13 的決定不受影響**，因為兩者談的不是同一種成本：
+  > `backend/cost/` 計的是**使用者雲端架構的估價**，本系統仍然沒有任何
+  > 「自身 LLM 花費」的計量機制（`llm_limits.py` 管的是單次請求的 token
+  > 上限，非花費）。故「強制月費上限的前提不成立」這個結論原樣成立，
+  > F13=A（上限改由 OpenRouter 後台承載）維持不變。不得因為「成本能力已
+  > 存在」就推論本系統能計量自身花費——這正是本註記要防的誤讀。
+
 此外，「admin 可設定的成本上限」不在 intent-capture 已核可的能力清單內。
 
 - A. **上限不由本系統承載**：改在 OpenRouter 後台設定支出上限。本 intent 不做
@@ -339,6 +370,83 @@ F11 選了「硬性月費上限，有明確數字」但未附數值。沒有數�
 
 [Answer]: A  <!-- 2026-09-21T02:41:14Z | Mode: guided -->
 
+## 修訂 1 的查證更新（2026-09-21）
+
+上游 intent-capture 以 Modify 模式修訂後（Q12=A 編排既有的真實成本 agent、
+Q13=B 大腦自建獨立 runtime、Q14=A 成本答案就地在入口頁呈現），本站以
+Modify 模式重新開啟。下列查證於 2026-09-21 對本分支工作樹重跑：
+
+- V-F1 — **成本 agent 的回覆是非同步 job，其「串流」是狀態輪詢而非 token
+  串流**。`backend/cost/advice_orchestrator.py` 以 `ThreadPoolExecutor`
+  排程（`enqueue_advice_job`／`_job`），狀態機含 `generating`；
+  `backend/cost/advice_stream_router.py` 每 1 秒（`asyncio.sleep(1.0)`）
+  查 DB，送出的事件型別為 `progress`／`completed`／`timeout`／`failed`／
+  `heartbeat`。取得方式：實讀兩支模組。
+- V-F2 — **成本端點的授權是 FastAPI dependency**：
+  `advice_stream_router.py:165` 為 `Depends(require_story_action("C1","view"))`，
+  `estimate_intake_router.py:52` 為 `Depends(require_story_action("C1","edit"))`。
+  另有 `estimate_audit_events` 稽核表（`schema_rbac.sql`／`backend/models.py`）。
+  取得方式：實讀 router 與 models。
+- V-F3 — **C-T9 重查**：`/api/cost/v1` 的 10 條端點中無設定類端點
+  （`settings`／`config`／`budget` 在 `backend/cost/` 的 router 層 0 命中），
+  故 C-T9「repo 內不存在任何設定類端點」的主張仍成立。惟該句原寫於成本
+  能力不存在時，本輪為重新查證後的確認，非沿用。取得方式：端點清單 grep。
+
+**對上游已核可 artifact 的影響（依 `team.md ## Corrections` 不回改上游）**：
+`intent-statement.md` 的 Assumptions 第 5 條把巢狀串流的處置寫成「逐字轉送、
+彙整後再送、或兩者並存」，該三個選項預設成本端是 token 級串流；V-F1 顯示
+實為狀態事件流，故該框架不成立。上游檔案不回改，以本站的 F15 定案向下游
+傳遞。
+
+## F14. 大腦要以哪種方式呼叫既有的成本能力？
+
+本題由上游 Q12=A 逼出，且直接決定 `intent-statement.md` 的假設⑧（既有成本
+授權不得被繞過）與⑨（稽核的行為主體認定）如何收斂。依 V-F2，授權掛在
+FastAPI dependency 上——呼叫方式不同，這道檢查會不會執行也不同。
+
+- A. **HTTP 呼叫自己的 `/api/cost/v1`，帶使用者的 token**：
+  `require_story_action` 真的執行，授權無法被繞過；稽核記的是使用者本人。
+- B. **同進程直接呼叫 service 層**：少一跳，但 dependency 不執行，授權須在
+  大腦側自行重做，稽核主體須自行決定。
+- C. **讀走 service、寫走 HTTP**：兩條路徑的授權語意不一致。
+- D. 尚未定義。
+- X. Other（請說明）
+
+[Answer]: A  <!-- 2026-09-21T10:09:50Z | Mode: guided | 修訂 1 -->
+
+採 A 的後果：`intent-statement.md` 的假設⑧與⑨**在本站收斂為已定案**——
+授權沿用既有 dependency、稽核主體為使用者本人，兩者皆不需新機制。代價為
+同一服務內多一跳本機 HTTP。
+
+## F15. 成本 agent 的狀態事件流要怎麼呈現給使用者？
+
+依 V-F1，成本端送的是 job 狀態事件而非 token 串流。
+
+- A. **轉譯狀態事件進大腦的訊息流**：`progress` 轉為進度訊息，`completed`
+  後給結果；`timeout`／`failed` 各有對應訊息。
+- B. **等 job 完成才開始回覆**：不轉送中間狀態。
+- C. **先給確認訊息，完成再追一則**：中間的 `progress` 不轉送。
+- D. 尚未定義。
+- X. Other（請說明）
+
+[Answer]: A  <!-- 2026-09-21T10:09:50Z | Mode: guided | 修訂 1 -->
+
+採 A 的理由與代價：B 會讓成本類提問的首字等到 job 跑完，與 intent 已核可的
+成功指標「首字回應時間」直接矛盾；C 的中間長時間無訊息使「還在跑」與
+「卡死了」不可區分，且既有的 `heartbeat` 事件等於浪費。A 的代價是進度文字
+與兩種終態（`timeout`／`failed`）的訊息設計屬下游工作。
+
+## 本站不重問的已定案項（修訂 1）
+
+下列在修訂前已定案且與成本前提變動無關，本輪不重問：F1–F7（含三個成功
+指標的門檻定案站）、F8（時程與預算約束）、F9（記憶層授權模型）、F10（既有
+資料遷移的驗證手段）、F11（成本上限形狀＝B，無硬數字、原則盡量省）、
+F12（硬性月費上限）、F13（admin 設定成本上限＝A，不做）。
+
+F11–F13 談的是**本專案自身的 LLM 用量成本上限**（OpenRouter 後台），與
+上游 Q12 談的「成本／FinOps 產品能力」是兩件不同的事，不因本輪前提變動而
+受影響。
+
 ## Consolidated Summary Confirmation
 
 Does this all look correct before I generate the artifact?
@@ -346,4 +454,6 @@ Does this all look correct before I generate the artifact?
 - Looks correct
 - Request changes
 
+<!-- 修訂 1（2026-09-21T10:09:50Z）於本確認之後新增 F14／F15，依 project.md
+     `requirements-analysis:260822-ra-L3` 清空並重新取得確認。 -->
 [Answer]: Looks correct

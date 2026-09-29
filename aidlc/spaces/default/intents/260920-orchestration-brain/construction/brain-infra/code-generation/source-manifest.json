@@ -1,0 +1,20 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-infra",
+  "version": 1,
+  "writes": [
+    { "path": "schema_rbac.sql" },
+    { "path": "backend/database.py" },
+    { "path": "backend/tests/test_vector_extension_bootstrap.py" },
+    { "path": "backend/tests/test_render_env_redis.py" },
+    { "path": "backend/.env.example" },
+    { "path": "deploy/render-env.sh" },
+    { "path": "deploy/.env.example" },
+    { "path": "deploy/docker-compose.deploy.yml" },
+    { "path": "deploy/docker-compose.test.yml" },
+    { "path": "docker-compose.yml" },
+    { "path": ".github/workflows/deploy.yml" },
+    { "path": "DEPLOY.md" },
+    { "path": "LOCAL-DEV.md" }
+  ]
+}

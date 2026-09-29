@@ -27,6 +27,13 @@
     "aws-serverless": {
       "command": "uvx",
       "args": ["awslabs.aws-serverless-mcp-server@latest"]
+    },
+    "mermaid": {
+      "type": "http",
+      "url": "https://mcp.mermaid.ai/mcp",
+      "headers": {
+        "Authorization": "${MERMAID_API_KEY}"
+      }
     }
   }
 }

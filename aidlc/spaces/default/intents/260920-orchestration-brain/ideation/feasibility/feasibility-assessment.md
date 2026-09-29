@@ -10,8 +10,12 @@
 本 stage 消費 `<record>/ideation/intent-capture/intent-statement.md`：其
 Problem Statement、Target Customer、Success Metrics、Initiative Trigger 與
 Initial Scope Signal 五段皆為本評估的前提，其中作業對象採「專案 → 系統 →
-架構圖」三層 [Q5]、成本能力只做交接介面 [Q6][Q11]、共享工作階段涵蓋統一
-入口與兩個功能頁 [Q7]，本評估不改動這些已核可的決定。
+架構圖」三層 [Q5]、**編排既有的真實成本能力** [Q12]、共享工作階段涵蓋統一
+入口與兩個功能頁 [Q7]、成本答案就地在入口頁呈現 [Q14]，本評估不改動這些
+已核可的決定。
+
+（修訂 1：本段原寫「成本能力只做交接介面 [Q6][Q11]」，其前提「成本能力
+不存在」已被上游推翻，Q6／Q11 已由 Q12 取代，改以 [Q12][Q14] 為準。）
 
 ## Go / No-Go 判定
 
@@ -24,10 +28,28 @@ Initial Scope Signal 五段皆為本評估的前提，其中作業對象採「�
 WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture 查證]。
 本 intent 在這兩件事上是「選用哪一種」而非「能不能做」。
 
-**第二層：新引入的元件各自成熟，但本 repo 皆無前例。** LangGraph 與 Redis
-在 repo 內引用為 0 [S6]。兩者都是成熟技術，風險不在技術本身，而在「它們
-與本 repo 既有形狀的接合面」——這正是本站決定以兩個技術試探處理的部分
-[F6]。
+**第二層：新引入的元件各自成熟；其中 LangGraph 在本 repo 已有可運行前例，
+Redis 仍無。** 修訂 1 重新查證後，這一層的事實與原評估不同，且方向是**信心
+上調**而非下調：
+
+- **LangGraph 已非新引入**。`backend/requirements.txt` 已釘選
+  `langgraph==1.2.11` 與 `langchain-openai==1.6.2`，`services/langgraph_runtime.py`
+  已提供 OpenRouter 版的 invoke/stream/astream，`cost/cost_advice_agent.py`
+  已以它建 `StateGraph` 並在部署環境運行 [V8]。原評估所依據的「引用為 0」
+  [S6] 對 LangGraph 已不成立。
+- **Redis 仍為 0** [V9]。`backend/`／`deploy/` 的 `redis` 命中皆為
+  Well-Architected 規則引擎中的雲端服務名稱字串與定價表資料，非實際依賴。
+  這一半的原評估維持成立。
+
+逐項對照可行性面向後，修訂 1 的三項新決定（[Q12] 編排既有成本能力、
+[Q13] 自建編排層、[Q14] 就地呈現）**未引入任何新服務、新依賴、新基礎設施
+或新技術層**：成本能力已存在且以 HTTP 呼叫 [F14]，LangGraph 已是釘選依賴，
+狀態事件轉譯不需要新機制 [F15]。故 GO 維持，且本層的信心較原評估**提高**。
+
+<!-- 修訂 1 存檔於 2026-09-21，對應 feasibility 的 Consolidated Summary
+     Confirmation 收據。本檔的修訂範圍：前提段的成本能力引用、能力表的
+     成本／串流／自建 runtime 三列、Go/No-Go 第二層、驗證計畫的 LangGraph
+     試探收窄。 -->
 
 **第三層：最大的不確定性不是新技術，而是既有資料。** 上游 [Q5] 已把
 「建立專案 → 系統 → 架構圖 階層」定為第一級範圍項，而既有架構圖直接掛在
@@ -48,7 +70,9 @@ WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture �
 | 記憶層的授權 | 可行 | 記憶層內建最小權限模型（擁有者與可見範圍欄位），介接的應用系統以自身角色對應映射到這組欄位 [F9]。DB 層邊界則由「grant 只鎖到記憶 schema」承載 [F3] |
 | 串流回覆與主動推播 | 可行 | 改用 WebSocket [F4]，既有共編 WebSocket 為可參照的前例 [S4]。代價：既有 3 個 SSE 端點維持不動，系統內將有兩種串流機制並存 |
 | 專案 → 系統 → 架構圖 階層 | 可行，風險集中在遷移 | 新資料模型本身無技術障礙；困難在既有資料的歸屬與既有頁面的相容（見上方第三層與 RAID R-1） |
-| 成本／FinOps 交接介面 | 可行 | 只做介面與明確的「尚未提供」回覆 [Q6][Q11]，不需成本計量 |
+| 編排既有的成本／FinOps 能力 | 可行 | 該能力已存在（`backend/cost/`，`/api/cost/v1` 下 10 條端點）[Q12]。大腦以 HTTP 帶使用者 token 呼叫，既有的 `require_story_action("C1",…)` dependency 照常執行，授權不可被繞過、稽核主體為使用者本人 [F14][V-F2]。本 intent 不新建成本計量 |
+| 成本回覆的串流交接 | 可行，且比預期簡單 | 成本端的「串流」實為 job 狀態輪詢（每秒查 DB，送 `progress`／`completed`／`timeout`／`failed`／`heartbeat`），非 token 級串流 [V-F1]。大腦把狀態事件轉譯進自己的訊息流即可，不需要逐 token 轉送 [F15]。代價：進度文字與 `timeout`／`failed` 兩種終態的訊息設計屬下游 |
+| 大腦自建獨立的編排執行層 | 可行，但引入一致性負債 | 既有 `services/langgraph_runtime.py` 已提供 OpenRouter 版 invoke/stream/astream 並為成本 agent 所用 [V8]；使用者知情選擇自建而非沿用 [Q13]。後果是系統內並存兩份 OpenRouter 客戶端與兩套串流事件語意，正是 `team.md` `## Code Style` 單一真實來源規則管制的形狀。緩解方向為「鎖住兩者一致性的驗證」，具體手段不在本站預選（見 RAID） |
 
 ## 驗證計畫（技術試探）
 
@@ -56,7 +80,7 @@ WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture �
 
 | 試探 | 要回答的問題 | 不做的話會怎樣 |
 |---|---|---|
-| LangGraph 編排模型 | LangGraph 能否乾淨地包住既有那些以 SSE 回應的 agent 端點 | 這是整個架構的地基；假設錯誤時，後續全部設計都建立在錯的前提上 |
+| LangGraph 編排模型（**修訂 1 已收窄**） | 原問題為「LangGraph 能否乾淨地包住既有那些以 SSE 回應的 agent 端點」。該問題**已由 repo 內的可運行前例回答**：`cost/cost_advice_agent.py` 正是「LangGraph 圖 ＋ 以 SSE 對外」的形狀且已在部署環境運行 [V8][V-F1]。收窄後要回答的是本 intent 獨有的部分：**多意圖識別的分支結構、session 資訊如何注入圖、以及大腦自建的 runtime [Q13] 與既有那份要如何維持一致** | 收窄前的版本會重複驗證一件 repo 已經證明的事；收窄後未做的話，R-8 的一致性負債沒有任何早期訊號 |
 | 記憶層資料模型 | 三種記憶各自的形狀與查詢方式，以及換映像取得向量檢索的代價 [S9] | 資料模型錯誤會同時波及 schema、查詢與部署拓樸三處 |
 
 試探不進正式程式碼、不求品質，只為回答上述問題；答案取得後即丟棄。

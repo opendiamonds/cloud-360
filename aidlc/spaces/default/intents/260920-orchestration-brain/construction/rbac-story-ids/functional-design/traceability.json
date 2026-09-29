@@ -1,0 +1,108 @@
+{
+  "stage": "functional-design",
+  "unit": "rbac-story-ids",
+  "reverse_count": 11,
+  "upstream_ids": [
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.4.1",
+      "status": "Deferred",
+      "target": "BR1.1 — 本單元讓八個角色持有 K1，使這條 AC 的 Given（我持有入口頁的 story 權限）可構造。Then（落在入口頁）需要 / 路由存在且 DefaultRedirect 把 K1 判斷置於權限瀑布之首，兩者皆屬 U14 entry-page-ui。本單元交付零端點零畫面（BR1.4），故不宣稱滿足這條 AC——只宣稱它在本單元之後變成可構造、可測"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "Deferred",
+      "target": "BR1.3 — 這是本單元唯一真正決定成敗的一條：若 K1 給滿 11 個角色，這條 AC 的 Given（不持有入口頁權限但持有架構圖權限）永遠無法構造，AC 成為不會失敗的死碼。BR1.1 讓 SRE／Ops_Lead／Platform_Engineer 三者不持有 K1，而本站實讀 DEFAULT_ROLE_PERMISSIONS 複驗三者皆有 A1 view，故 Given 成立。Then（落 /workspace 且 Sidebar 不顯示入口項）屬 U14。來源是 user-stories 審查 R-01 的 seed guard，該建議未落入 US1 的 DoD，本單元是它的落點"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "Deferred",
+      "target": "BR1.4 — 本單元不新增任何授權判定路徑。既有 require_story_action（rbac.py:255–262）在權限判定之前先檢查 authorization_status，故新增 K1 不會製造繞過 isPending 的新路徑。但這條 AC 的 Then 講的是 DefaultRedirect 的分支順序（App.tsx:22 的 isPending 必須在 K1 判斷之前），那是 U14 的實作決定，本單元無法保證"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "Deferred",
+      "target": "BR1.1、BR1.3 — Given 是「某角色的權限矩陣被調整為不具任何落地權限」，那是執行期由管理者在權限頁造出的狀態（stories.md:107–112 逐字說明它為何改寫成這個形狀）。本單元保證 K1 不是強制持有、且預設值不會讓該狀態變得不可達。Then（落 /403）屬 U14 的瀑布末端"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "Deferred",
+      "target": "BR2.2 — 本單元讓四個角色持有 K2.edit，使 Given（我具備建立權限）可構造。Then（建立的專案出現在可選的作業對象中）需要建立端點（U7 hierarchy-service）與作業對象選單（U16 object-picker-ui），兩者皆不在本單元"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "Deferred",
+      "target": "BR2.2 — 同 AC9.2.1：四個角色持有 K2.edit 使 Given（我具備建立權限）可構造。Then（該系統歸屬於該專案、且可被選為作業對象）需要建立端點（U7 hierarchy-service）與作業對象選單（U16 object-picker-ui），兩者皆不在本單元"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "Deferred",
+      "target": "BR2.2、BR2.3 — 七個角色不具 K2.edit，使 Given（我不具備該權限）可構造；BR2.3 確保建立／修改／刪除共用同一個閘門，故 Then 的「經由既有的 require_story_action 路徑」不會有第二條旁路。拒絕行為本身由 U7 的端點實作，本單元無端點可測"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.2",
+      "status": "N/A",
+      "target": "K1 的 can_edit／can_review 恆 false。無對應 AC——上游 FR1.8 與 US1.4 四條 AC 全部只談「持不持有入口頁權限」，沒有任何一處要求唯讀／編輯雙態。本規則是本站 Q1 人工裁決（把 Figma 由約束降為參考）的落點，其反面（是否要雙態）記為交接事項 H-1／OQ-K1 交給 U14"
+    },
+    {
+      "id": "BR2.1",
+      "status": "N/A",
+      "target": "K2.can_view 給全部 11。它支撐的是脈絡列顯示三元組（US2 整群，AC2.1.1–AC2.1.4），而 story map 把 US2 指給其他單元，不在本單元的 upstream_ids 內。本單元提供其資料面前提"
+    },
+    {
+      "id": "BR2.4",
+      "status": "N/A",
+      "target": "K2 的 can_review 恆 false。防的是挪用既有審核語意（矩陣中唯一 can_review = true 的列是 A3 的 Security_Reviewer），屬設計一致性約束，無對應的使用者可觀察行為"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "寫入端必須是 ensure_missing_role_permissions。技術規則：它的違反是靜默的（user_can 對缺列回 false，現象是「所有人都沒有入口頁權限」而非錯誤），無對應 AC。本站查證該函式已存在且已被 database.py:171–175 呼叫"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "禁止依賴 ensure_role_permissions_seeded(force=False)。該函式在表非空時整段 no-op（rbac.py:63–65），對既有環境新增 story id 永遠無效。技術規則，無對應 AC"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "寫入冪等且不覆寫既有列。保護的是管理者在權限頁做過的調整不被重啟靜默還原，屬既有函式的性質而非本單元新增的行為，無對應 AC"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "完成後恰 330 列且組合完整。這是交付驗證項（會寫成測試），不是使用者可觀察行為。ADR-0006 的 PBT hard constraint 對本單元判定為 N/A：rules.md 實算 calculation 類規則為 0，且該約束點名的三個模組不含本單元"
+    },
+    {
+      "id": "BR4.1",
+      "status": "N/A",
+      "target": "schema_rbac.sql 同步。project.md ## Mandated 的 blocking 交付條件，非 AC。方向必須是先改 SQL 再重新產生 rbac_seed_data.py（該檔檔頭逐字禁止手改）"
+    },
+    {
+      "id": "BR4.2",
+      "status": "N/A",
+      "target": "DEPLOY.md 同步。同 BR4.1，blocking 交付條件，非 AC"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "補 STORY_FEATURE_LABELS 兩個標籤。本站查證 user_router.py:60–88 得到的相依，上游三份文件（ADR-004、K-03、unit-of-work.md）皆未記載。違反不會報錯，只是權限頁出現無名稱的列，無對應 AC"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "同一個 PR 必須新增測試鎖住 schema_rbac.sql 與 rbac_seed_data.py 兩份 seed 副本逐列等值。team.md ## Code Style 的「單一真實來源」逐字要求跨語言邊界的副本附一致性測試，而本站查證 backend/tests/ 目前零測試做這件事。屬交付條件，非使用者可觀察行為，故無對應 AC。本條為審查後由本站自查補入，審查未提出"
+    }
+  ]
+}

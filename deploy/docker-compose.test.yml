@@ -1,18 +1,54 @@
 # Ephemeral stack for UI regression tests. Same topology as the deploy stack
-# minus the Cloudflare tunnel: the browser reaches nginx directly on
-# localhost:8090, and nginx reverse-proxies /api to the backend.
+# minus the Cloudflare tunnel AND minus Ollama: the browser reaches nginx
+# directly on localhost:8090, and nginx reverse-proxies /api to the backend.
 #
 # The database is created fresh every run (no volume). The backend runs with
 # APP_ENV=test, so its local/test-only seed creates admin / admin123 for UI
 # regression; this stack never touches production data.
 #
 #   docker compose -f deploy/docker-compose.test.yml up -d --build
+#
+# ---------------------------------------------------------------------------
+# HOW THIS FILE DIFFERS FROM docker-compose.deploy.yml, AND WHY
+# ---------------------------------------------------------------------------
+# The service-set difference is exactly {cloudflared, ollama} -- four services
+# here, six there. Every other difference below is deliberate; if you are doing
+# a consistency comparison, this list is the answer to "is that a drift?".
+#
+#   * NO ollama. EMBEDDING_PROVIDER is `stub` instead. ui-regression is a real
+#     gate that runs on EVERY PR, and pulling a ~1.2GB model on every PR would
+#     enlarge both the cost and the failure surface. `stub` is the only
+#     zero-download option (`fastembed` avoids a container but downloads a model
+#     into the backend image's runtime, which is the same cost in a different
+#     place). CONSEQUENCE, stated plainly: CI exercises NO embedding path at
+#     all. The four EmbeddingPort implementations are covered only by U6's unit
+#     tests -- there is no second line of defence there.
+#   * NO maxmemory / NO AOF / NO named volume on redis. This stack is rebuilt
+#     every run, so an eviction policy has nothing to act on and "sessions
+#     survive a restart" is not a meaningful invariant here. (The ACL user is
+#     NOT exempt -- see the redis service.)
+#   * `restart: unless-stopped` ONLY on redis, and only ONE depends_on edge on
+#     backend. There is no ollama service here, so `backend depends_on ollama`
+#     would be an undefined-service config error and every PR would go red.
+#   * Memory limits are SMALLER and derived differently: this stack runs on a
+#     GitHub-hosted `ubuntu-latest` runner whose specification is public and
+#     fixed, so no host measurement applies. The deploy stack's numbers are
+#     sized for 192.168.10.10 and must not be copied here.
+#   * `networks:` and `logging:` ARE mirrored even though neither is needed
+#     here (no cloudflared to keep off the data plane; logs die with the stack).
+#     The only reason is to stop the two files drifting in shape -- this repo
+#     has already had two "the two composes disagree" defects found by review.
 
 name: cloud360test
 
 services:
   db:
-    image: postgres:16-alpine
+    # Must match the deploy stack's major version and carry pgvector: this stack
+    # goes through the EMPTY-VOLUME init path on every PR, which is exactly the
+    # path that executes schema_rbac.sql -- and that script's first statement is
+    # `CREATE EXTENSION IF NOT EXISTS vector`. A plain postgres image fails it,
+    # the whole single transaction aborts, and not one table gets created.
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
@@ -25,21 +61,104 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks: [internal]
+    logging: &json_file_bounded
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   backend:
     build:
       context: ../backend
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-testpass}@db:5432/cloud360
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-testpass}@db:5432/cloud360
       JWT_SECRET: ${JWT_SECRET:-test_jwt_secret_not_for_production}
       # A1 generation is out of scope for these tests; leave the key empty so
       # the app boots but the LLM path stays untouched.
       OPENROUTER_API_KEY: ""
       APP_ENV: test
       CORS_ORIGINS: http://localhost:8090
+      # --- brain-infra (U1) ---------------------------------------------------
+      # Self-defaulted, following this stack's existing convention (JWT_SECRET
+      # above). Redis is in this stack, so the backend must be able to reach it:
+      # a redis service the backend has no URL for is the same silent failure
+      # shape as the deploy stack's missing variables, and there is NO guard on
+      # this side at all -- validate_env_contract.py only ever reads
+      # docker-compose.deploy.yml.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_USER: ${REDIS_USER:-cloud360test}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-test_redis_password_not_for_production}
+      # `stub` -- see the header. Leaving this EMPTY is not an option: the
+      # contract makes it required with no default and requires a loud startup
+      # failure when no provider is detected, so an empty value turns every PR
+      # red. `fulltext` is rejected for a different reason: its semantics are
+      # not vector retrieval, so an e2e assertion resting on similarity order
+      # would pass while testing something the product does not do.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-stub}
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      # NO `ollama:` edge here. See the header.
+    networks: [edge, internal]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  redis:
+    image: redis:8-alpine
+    # The only service in this stack with a restart policy: it is the only one
+    # whose loss mid-run would fail the suite in a way a restart can fix.
+    restart: unless-stopped
+    # NO --appendonly, NO --maxmemory: this stack has no persistence by design
+    # (see the header). The ACL user, however, is NOT exempt -- and it has to be
+    # its own asset, not the deploy stack's:
+    #   * Without an ACL user this stack is unwinnable. Connecting as a
+    #     non-`default` user gives WRONGPASS; connecting as `default` is what
+    #     NFR4.1(c) forbids. Either way every PR's ui-regression goes red.
+    #   * It cannot share a file with the deploy stack. Redis binds the password
+    #     to the user line, and redis.conf/aclfile do NOT interpolate
+    #     environment variables -- so one shared file would mean either putting
+    #     the DEPLOY credential into this public repo, or letting CI use the
+    #     production credential. Both are unacceptable. Carrying it in
+    #     `command:` lets compose interpolate it per stack, with the test-only
+    #     value defaulted inline exactly like JWT_SECRET above.
+    # The value below is a test-only string, never a real credential.
+    command:
+      - redis-server
+      - --user
+      - default
+      - "on"
+      - nopass
+      - "~*"
+      - "+@connection"
+      - --user
+      - ${REDIS_USER:-cloud360test}
+      - "on"
+      - ">${REDIS_PASSWORD:-test_redis_password_not_for_production}"
+      - "~*"
+      - "+@all"
+      - "-@admin"
+      - "-@dangerous"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   frontend:
     build:
@@ -50,3 +169,17 @@ services:
       - "8090:80"
     depends_on:
       - backend
+    # edge only: Playwright reaches it from the host through the published port.
+    networks: [edge]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+networks:
+  # Mirrors the deploy stack's shape. `internal: true` is deliberately NOT set
+  # here either -- same reason, and keeping the two declarations identical is
+  # the entire point of having them here at all.
+  edge:
+  internal:

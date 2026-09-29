@@ -16,6 +16,7 @@
 #
 #   POSTGRES_PASSWORD  required   database superuser password
 #   JWT_SECRET         required   signs every login token
+#   REDIS_PASSWORD     required   Redis ACL password for the REDIS_USER below
 #   CLOUD360_BOOTSTRAP_ADMIN_PASSWORD optional one-time admin bootstrap password
 #   OPENROUTER_API_KEY optional   A1 design agent; empty disables generation
 #   N8N_WEBHOOK_URL    optional   dynamic architecture icons
@@ -35,6 +36,17 @@
 # mode (cli) needs an interactively logged-in claude CLI, which a container
 # does not have.
 #
+# The brain-infra (U1) variables below are LITERALS, not secrets, and therefore
+# deliberately do NOT arrive through the environment: REDIS_USER,
+# EMBEDDING_PROVIDER, REDIS_URL, OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL and
+# FASTEMBED_MODEL. Routing them through deploy.yml's `env:` map would need six
+# repository secrets that do not exist, so each would resolve to the EMPTY
+# STRING and be written as such -- and EMBEDDING_PROVIDER is required with no
+# default (contract K-01: "偵測不到選定提供者時須大聲失敗"), so the backend
+# would refuse to start, the deploy would go red, and the automatic rollback
+# plus revert PR would fire on a perfectly good merge. Only REDIS_PASSWORD is a
+# credential and only it comes from the environment.
+#
 # Usage: deploy/render-env.sh [output-path]   (default: deploy/.env)
 
 set -euo pipefail
@@ -44,6 +56,13 @@ OUT="${1:-deploy/.env}"
 missing=""
 [ -n "${POSTGRES_PASSWORD:-}" ] || missing="${missing} POSTGRES_PASSWORD"
 [ -n "${JWT_SECRET:-}" ] || missing="${missing} JWT_SECRET"
+# REDIS_PASSWORD has no fallback anywhere: the deploy compose reads it without
+# `:-`, and the ACL user it belongs to is the only identity the app may connect
+# as. An empty value does not fail loudly on its own -- it would render an ACL
+# user with an empty password -- so it must be refused here. This is also the
+# ONLY missing-value guard on the rollback path: that job has no equivalent of
+# the deploy job's "Require the secrets that must not default" step.
+[ -n "${REDIS_PASSWORD:-}" ] || missing="${missing} REDIS_PASSWORD"
 if [ -n "${missing}" ]; then
   echo "render-env.sh: missing required value(s):${missing}" >&2
   exit 1
@@ -56,7 +75,11 @@ fi
 # password. Refuse the value instead of shipping a weakened one.
 # Access Key IDs are normally AKIA… alphanumerics (no '$'), but include them
 # in the same guard as secrets so a malformed secret paste cannot truncate.
-for name in POSTGRES_PASSWORD JWT_SECRET N8N_PASSWORD GCP_BILLING_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+# REDIS_PASSWORD belongs here for exactly the reason in the paragraph above, and
+# its failure is even quieter than the database one: Redis accepts the truncated
+# password as the ACL user's password, `redis-cli ping` still answers PONG, the
+# healthcheck still passes, and the session store runs on "ab".
+for name in POSTGRES_PASSWORD JWT_SECRET REDIS_PASSWORD N8N_PASSWORD GCP_BILLING_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   eval "value=\${${name}:-}"
   case "${value}" in
     *'$'*)
@@ -95,4 +118,11 @@ AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
 AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
 GCP_BILLING_API_KEY=${GCP_BILLING_API_KEY:-}
+REDIS_URL=redis://redis:6379/0
+REDIS_USER=cloud360
+REDIS_PASSWORD=${REDIS_PASSWORD}
+EMBEDDING_PROVIDER=ollama
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_EMBED_MODEL=bge-m3
+FASTEMBED_MODEL=multilingual-e5-large
 EOF

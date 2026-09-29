@@ -72,15 +72,20 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
         run: |
           set -euo pipefail
           missing=""
           [ -n "${POSTGRES_PASSWORD}" ] || missing="${missing} POSTGRES_PASSWORD"
           [ -n "${JWT_SECRET}" ] || missing="${missing} JWT_SECRET"
+          [ -n "${REDIS_PASSWORD}" ] || missing="${missing} REDIS_PASSWORD"
           if [ -n "${missing}" ]; then
             echo "::error::Missing required repository secret(s):${missing}" >&2
             echo "JWT_SECRET signs every login token. Without it auth.py uses the" >&2
             echo "public fallback key and anyone can forge an admin session." >&2
+            echo "REDIS_PASSWORD is the password of the Redis ACL user the app" >&2
+            echo "connects as; empty means an ACL user with an empty password," >&2
+            echo "which Redis accepts silently." >&2
             echo "Generate one with: openssl rand -hex 32" >&2
             exit 1
           fi
@@ -91,6 +96,15 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          # brain-infra (U1) adds SEVEN variables to deploy/.env, but only this
+          # ONE goes through `env:`. The other six (REDIS_USER,
+          # EMBEDDING_PROVIDER, REDIS_URL, OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL,
+          # FASTEMBED_MODEL) are literals inside render-env.sh. Adding them here
+          # would map six names with no corresponding secret to the EMPTY
+          # STRING -- and EMBEDDING_PROVIDER is required with no default, so the
+          # backend would refuse to start, this job would go red, and the
+          # rollback job plus a revert PR would fire on a good merge.
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
@@ -113,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:8090/; then
+            if curl -fsS -o /dev/null --connect-timeout 5 --max-time 10 http://127.0.0.1:8090/; then
               echo "frontend up on 8090"
               exit 0
             fi
@@ -124,11 +138,223 @@ jobs:
           docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env logs --tail=80
           exit 1
 
+      # The official ollama/ollama entrypoint is `ollama serve` and it pulls
+      # NOTHING. Without this step /api/tags answers an empty list forever, the
+      # ollama healthcheck stays green because an empty list is not an error,
+      # the model cache volume stays empty, and every embedding call fails --
+      # all of it silent.
+      #
+      # Runs INSIDE the container: the only service with a host port is
+      # frontend, so the runner cannot reach ollama over HTTP. `exec -T` is
+      # mandatory -- this runner has no TTY and `docker compose exec` without
+      # it fails with "the input device is not a TTY".
+      #
+      # Placed after the frontend wait (so ollama has had time to come up) and
+      # BEFORE the data-plane probe, so "the model is not ready" surfaces before
+      # "the data plane is not connected". The two have no data dependency; the
+      # order is fixed only to remove ambiguity.
+      # ---------------------------------------------------------------------
+      # Redis ACL reverse probe (review R-02, Major).
+      #
+      # WHY THIS EXISTS. The ACL is this unit's central new security control
+      # (NFR4.1(b)/(c): the app must not connect as `default`, and `default` is
+      # narrowed to +@connection). Before this step NOTHING verified it:
+      #   * the two new unit tests assert render-env.sh string behaviour and the
+      #     _ensure_vector_extension() call order -- neither touches the ACL;
+      #   * validate_env_contract.py reads env vars only -- deleting the whole
+      #     `--user` block does not turn it red;
+      #   * the `redis-cli ping` healthcheck passes AS `default`, so it is
+      #     orthogonal to whether the ACL took effect.
+      #
+      # THE FAILURE MODE IS SILENT. If redis-server de-duplicated the repeated
+      # `--user` flag and kept only the last one, `default` would retain its
+      # built-in FULL ACCESS, the app user would still be created, the container
+      # would start and the healthcheck would go green -- a silent
+      # over-permission. And per review R-01 no configured identity can run
+      # `ACL LIST` (@admin @dangerous), so that state is undetectable at
+      # runtime. This step is the only thing that makes it loud.
+      #
+      # Both assertions use commands that ARE reachable for the identity used:
+      #   * `SET` as `default` must be refused (NOPERM) -- `default` holds only
+      #     @connection.
+      #   * `ACL WHOAMI` is @slow (not @dangerous), so the app user -- which has
+      #     +@all -@admin -@dangerous -- can run it.
+      # Together they exclude both "default was not narrowed" and "the app user
+      # was never created".
+      #
+      # `docker inspect` additionally proves the OTHER two settings on the same
+      # `command:` were at least PASSED to the server. It cannot prove the
+      # server accepted them (CONFIG GET is @admin @dangerous, see R-01), but
+      # since the ACL portion of that same argv demonstrably took effect, a
+      # passed-but-rejected flag is not a live hypothesis.
+      #
+      # exec -T: no TTY on the self-hosted runner. Every value-taking command
+      # runs in `if` condition position or with an explicit fallback, so none of
+      # them aborts the step under `set -e`; the exit code is decided by the
+      # assertions below, never by an intermediate command.
+      - name: Verify the Redis ACL actually took effect
+        run: |
+          set -euo pipefail
+          COMPOSE=(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env)
+          # Read both values from deploy/.env, which render-env.sh just wrote.
+          # Do NOT restate them here: REDIS_USER is a literal owned by
+          # render-env.sh (NFR4.1(c) deliberately keeps it out of this
+          # workflow's `env:`), and a second copy in this file would be a new
+          # sync point nothing keeps aligned -- what team.md's
+          # single-source-of-truth rule forbids.
+          REDIS_USER="$(grep -E '^REDIS_USER=' deploy/.env | head -1 | cut -d= -f2-)"
+          REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' deploy/.env | head -1 | cut -d= -f2-)"
+          if [ -z "${REDIS_USER}" ] || [ -z "${REDIS_PASSWORD}" ]; then
+            echo "::error::REDIS_USER or REDIS_PASSWORD is missing from deploy/.env, so the ACL cannot be verified. render-env.sh should have refused earlier -- investigate that step first." >&2
+            exit 1
+          fi
+
+          # 1. `default` must be refused a data command.
+          OUT="$("${COMPOSE[@]}" exec -T redis redis-cli set __acl_probe__ 1 2>&1 || true)"
+          case "${OUT}" in
+            *NOPERM*)
+              echo "default is narrowed: SET refused with NOPERM" ;;
+            *)
+              echo "::error::Redis ACL did NOT take effect. As the default user, SET returned: ${OUT}. Expected a NOPERM refusal. The app would be running against a Redis whose default user still has full access (NFR4.1(b)/(c) silently failed open)." >&2
+              "${COMPOSE[@]}" logs redis --tail=60 || true
+              exit 1 ;;
+          esac
+
+          # 2. The app user must exist and be usable.
+          WHO="$("${COMPOSE[@]}" exec -T redis redis-cli --user "${REDIS_USER}" --pass "${REDIS_PASSWORD}" --no-auth-warning acl whoami 2>&1 || true)"
+          if [ "${WHO}" = "${REDIS_USER}" ]; then
+            echo "app ACL user is usable: ACL WHOAMI returned ${WHO}"
+          else
+            echo "::error::the application Redis user is not usable. ACL WHOAMI returned: ${WHO} (expected ${REDIS_USER}). Every backend Redis call would fail with WRONGPASS or NOPERM." >&2
+            "${COMPOSE[@]}" logs redis --tail=60 || true
+            exit 1
+          fi
+
+          # 3. The other two settings on the same `command:` were passed.
+          ARGS="$(docker inspect --format '{{json .Config.Cmd}}' "$("${COMPOSE[@]}" ps -q redis)" 2>/dev/null || echo '[]')"
+          for FLAG in '--appendonly' '--maxmemory' '--maxmemory-policy'; do
+            case "${ARGS}" in
+              *"${FLAG}"*) ;;
+              *)
+                echo "::error::${FLAG} is absent from the running redis container argv: ${ARGS}. NFR4.2 (AOF) or the maxmemory relationship is not in effect." >&2
+                exit 1 ;;
+            esac
+          done
+          echo "appendonly / maxmemory / maxmemory-policy are all present in the running argv"
+
+      - name: Pull the embedding model into the Ollama volume
+        env:
+          MODEL: bge-m3
+        run: |
+          set -euo pipefail
+          COMPOSE=(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env)
+
+          # `ollama pull` is NOT a no-op when the model is already present: it
+          # still contacts the registry to compare the manifest, so a transient
+          # registry outage fails it. Failing the deploy for that would turn a
+          # good merge into an automatic rollback plus a revert PR while the
+          # service is perfectly usable. So: decide by whether the model is
+          # ALREADY in the volume, which /api/tags answers authoritatively.
+          #
+          # BOTH probe commands must take their value in a form `set -e` does
+          # not abort on (assignment inside an `if` condition is exempt). A bare
+          # `TAGS=$(...)` would end the step on the first non-zero exit and the
+          # two-case decision below would never run -- inverting its meaning
+          # into "any hiccup is a red deploy".
+          TAGS=""
+          if OUT=$("${COMPOSE[@]}" exec -T ollama ollama list 2>/dev/null); then
+            TAGS="${OUT}"
+          fi
+          PRESENT=no
+          case "${TAGS}" in
+            *"${MODEL}"*) PRESENT=yes ;;
+          esac
+          echo "model already in volume: ${PRESENT}"
+
+          if "${COMPOSE[@]}" exec -T ollama ollama pull "${MODEL}"; then
+            echo "${MODEL} is present in the model volume"
+          elif [ "${PRESENT}" = "yes" ]; then
+            echo "::warning::ollama pull ${MODEL} failed, but the model is already in the volume (likely a transient registry outage). Continuing." >&2
+          else
+            echo "::error::ollama pull ${MODEL} failed and the model is NOT in the volume -- every embedding call would fail." >&2
+            "${COMPOSE[@]}" logs ollama --tail=60 || true
+            exit 1
+          fi
+
+      # The two curl checks around this one both request `/`, which
+      # frontend/nginx.conf answers from `try_files` -- they never touch the
+      # backend, let alone the database. `deploy.yml` had ZERO requests to /api
+      # before this step existed, so a broken backend->db path deployed GREEN:
+      # the home page served fine while every database-backed feature was dead.
+      # This unit is what makes that reachable -- it moves `db` onto a separate
+      # compose network.
+      #
+      # Why THIS endpoint and why 401 is the PASS (PROBE-CONTRACT P-1..P-3):
+      #   * POST /api/auth/login hits nginx's `location /api/` and is proxied to
+      #     the backend, so a 401 proves frontend->backend.
+      #   * its handler queries Postgres for the username BEFORE comparing any
+      #     password, so a 401 also proves backend->db.
+      #   * the username is a fixed value that CANNOT exist, so the handler
+      #     returns 401 before writing anything: no account, no audit row, and
+      #     no secret needed by this step.
+      # A 2xx would mean the probe is WRONG (it actually logged in), so testing
+      # for 2xx would give a check that can never pass.
+      #
+      # Diagnostics, not pass conditions: a persistent 502 points at
+      # backend->db (init_db runs in the startup event, so uvicorn never serves);
+      # 500/504/timeout points at backend->redis or backend->ollama (not on the
+      # startup path, so the app serves and fails mid-request); a 200 with HTML
+      # means the request fell through to `try_files`, i.e. /api routing broke.
+      - name: Probe the data plane through /api (frontend -> backend -> db)
+        env:
+          # Must not exist. A real account would reach the password comparison.
+          PROBE_USERNAME: __cloud360_deploy_probe_no_such_user__
+          # Bounded retry: the window exists to tell "backend is still running
+          # init_db()" apart from "the data plane is actually severed", so it
+          # must not be shortened just to make deploys finish sooner. nginx's
+          # proxy_read_timeout is 600s, and cross-network isolation DROPs rather
+          # than rejects, so without --max-time a single hung request would burn
+          # ten minutes. Worst case here: 30 x (10 + 5) = 450s = 7.5 min, inside
+          # this job's 30-minute budget.
+          ATTEMPTS: "30"
+          CONNECT_TIMEOUT: "5"
+          MAX_TIME: "10"
+        run: |
+          set -euo pipefail
+          CODE=000
+          for _ in $(seq 1 "${ATTEMPTS}"); do
+            # Assignment inside the `if` condition: `set -e` exempts it, so a
+            # connection-layer failure (curl 7 / 28) does not abort the step.
+            # `code=$(curl ...)` on its own line WOULD abort it -- that is
+            # PROBE-CONTRACT P-5, and it has already been hit once in this repo.
+            if OUT=$(curl -s -o /dev/null -w '%{http_code}' \
+                  --connect-timeout "${CONNECT_TIMEOUT}" --max-time "${MAX_TIME}" \
+                  -X POST http://127.0.0.1:8090/api/auth/login \
+                  -H 'Content-Type: application/json' \
+                  -d "{\"username\":\"${PROBE_USERNAME}\",\"password\":\"probe\"}"); then
+              CODE="${OUT}"
+            else
+              CODE=000
+            fi
+            if [ "${CODE}" = "401" ]; then
+              echo "data plane healthy: /api/auth/login answered 401"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::the data-plane probe never saw 401 (last HTTP ${CODE}). The site may still serve its home page while every database-backed feature is broken." >&2
+          echo "502 throughout -> backend cannot reach db (check the networks: membership in deploy/docker-compose.deploy.yml)" >&2
+          echo "500/504/000     -> backend cannot reach redis or ollama" >&2
+          echo "200 with HTML   -> the request fell through to try_files; /api routing is broken" >&2
+          docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env ps
+          docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env logs --tail=80
+          exit 1
+
       - name: Wait for the public hostname to answer through the tunnel
         run: |
           set -euo pipefail
           for _ in $(seq 1 24); do
-            if curl -fsS -o /dev/null https://cloud360.danniel.cc/; then
+            if curl -fsS -o /dev/null --connect-timeout 5 --max-time 10 https://cloud360.danniel.cc/; then
               echo "public: https://cloud360.danniel.cc"
               exit 0
             fi
@@ -193,6 +419,13 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          # Same one-variable rule as the deploy job above: only the credential
+          # travels through `env:`; the other six brain-infra variables are
+          # literals in render-env.sh. NOTE this job has no equivalent of the
+          # deploy job's "Require the secrets that must not default" step, so
+          # render-env.sh's own required-value check is the ONLY missing-value
+          # guard on the rollback path.
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
@@ -204,6 +437,22 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           COST_PRICING_USE_SDK: ${{ secrets.COST_PRICING_USE_SDK }}
           GCP_BILLING_API_KEY: ${{ secrets.GCP_BILLING_API_KEY }}
+          # Must not exist -- same fixed value and same reason as the deploy job.
+          PROBE_USERNAME: __cloud360_deploy_probe_no_such_user__
+          # FEWER attempts than the deploy side, on purpose. This job's budget is
+          # 20 minutes (not 30) and it also contains an UNBOUNDED `up -d --build`
+          # plus three `if: always()` steps afterwards. Each iteration now makes
+          # TWO requests, so the worst case is 18 x (10 + 10 + 5) = 450s = 7.5
+          # min -- the same ceiling as the deploy side, reached with fewer
+          # attempts rather than by shortening per-request timeouts (shortening
+          # those is what would cost the window its ability to tell "still
+          # starting" from "actually severed"). Note this is MORE patient in wall
+          # clock than the 30 x 5s = 150s loop it replaces.
+          # ⚠ NOT MEASURED: `up -d --build` on the self-hosted runner is
+          # unbounded and has not been timed. See DEPLOY.md item (9).
+          ATTEMPTS: "18"
+          CONNECT_TIMEOUT: "5"
+          MAX_TIME: "10"
         run: |
           set -euo pipefail
           LAST=$(cat "${HOME}/.cloud360/last-good-sha" 2>/dev/null || true)
@@ -225,12 +474,47 @@ jobs:
           # Slack message must not claim the site was restored when it never
           # came back up. Written once, so it does not rely on a later
           # $GITHUB_OUTPUT line overriding an earlier one.
+          #
+          # The data-plane probe is MERGED INTO this loop rather than added as a
+          # separate step, and it expresses its result through RESTORED, never
+          # through `exit`. Copying the deploy job's shape here breaks two
+          # things: `exit 1` (or a `set -e` abort on the first connection
+          # failure) skips the `echo "restored=..."` line below, `restored`
+          # arrives empty, and the notify job's `case` falls through to
+          # "回滾: 結果未知" -- the probe's real conclusion is lost.
+          #
+          # `/` and `/api/auth/login` must BOTH pass to call it healthy, and
+          # "pass" means different things: 2xx for `/` (a static file via
+          # try_files), 401 for the login probe (a fixed username that cannot
+          # exist, so 401 is the proof that the backend is up AND can query the
+          # database). Without the /api half, "rolled back and healthy on 8090"
+          # says nothing about the data plane -- and rollback is the path a
+          # failed probe takes, which is exactly when that matters most.
+          #
+          # No fourth status value is introduced: `notify` only understands
+          # healthy / unhealthy / none, and adding one without amending its
+          # `case` would degrade to "unknown", which is worse than coarse.
           RESTORED=unhealthy
-          for _ in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:8090/; then
-              echo "rolled back and healthy on 8090"
-              RESTORED=healthy
-              break
+          for _ in $(seq 1 "${ATTEMPTS}"); do
+            if curl -fsS -o /dev/null \
+                 --connect-timeout "${CONNECT_TIMEOUT}" --max-time "${MAX_TIME}" \
+                 http://127.0.0.1:8090/; then
+              # Assignment inside the `if` condition so `set -e` cannot end the
+              # step here; that would skip the $GITHUB_OUTPUT write below.
+              CODE=000
+              if OUT=$(curl -s -o /dev/null -w '%{http_code}' \
+                    --connect-timeout "${CONNECT_TIMEOUT}" --max-time "${MAX_TIME}" \
+                    -X POST http://127.0.0.1:8090/api/auth/login \
+                    -H 'Content-Type: application/json' \
+                    -d "{\"username\":\"${PROBE_USERNAME}\",\"password\":\"probe\"}"); then
+                CODE="${OUT}"
+              fi
+              if [ "${CODE}" = "401" ]; then
+                echo "rolled back and healthy on 8090 (frontend 2xx + /api/auth/login 401)"
+                RESTORED=healthy
+                break
+              fi
+              echo "frontend answers but the data plane does not (HTTP ${CODE}); retrying"
             fi
             sleep 5
           done

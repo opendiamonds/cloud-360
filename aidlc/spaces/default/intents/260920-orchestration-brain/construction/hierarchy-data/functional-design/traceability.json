@@ -1,0 +1,115 @@
+{
+  "stage": "functional-design",
+  "unit": "hierarchy-data",
+  "reverse_count": 16,
+  "upstream_ids": [
+    "AC9.1.1",
+    "AC9.1.2",
+    "AC9.1.3",
+    "AC9.1.4"
+  ],
+  "coverage": [
+    {
+      "id": "AC9.1.1",
+      "status": "OK",
+      "target": "BR3.3 — 資料模型面：Project → System → ArchitectureDiagram 三層與 system_id 作為歸屬權威來源，使三層路徑可被表達與查詢。界線：脈絡列的畫面呈現屬 U14，作業對象的持有與切換屬 U10；本單元只提供使它可被表達的資料模型，不提供任何讀取端點"
+    },
+    {
+      "id": "AC9.1.2",
+      "status": "OK",
+      "target": "BR2.3, BR2.4, BR2.5 — 遷移只寫 system_id、不動任何既有欄位（BR2.3），故圖仍能開啟並編輯；遷移為每位持有圖的使用者建立預設專案／系統並把圖掛入（BR2.5）；遷移有可被測試程式匯入呼叫的入口（BR2.4），使這條 AC 在自動化環境可驗——stories.md:413-419 逐字記載它原本不可驗且失敗是靜默的"
+    },
+    {
+      "id": "AC9.1.3",
+      "status": "OK",
+      "target": "BR2.3 — 遷移不修改架構圖的任何既有欄位（owner_user_id、title、xml_data、updated_at），既有頁面讀寫的每一個欄位都沒有被碰。Q4=A 亦直接保護這一條：選「在既有 A1 儲存路徑加寫入」會動到既有行為"
+    },
+    {
+      "id": "AC9.1.4",
+      "status": "OK",
+      "target": "BR2.1, BR1.2 — BR2.1 是遷移終檢的不變量（system_id 為空的列數為 0，不為 0 大聲失敗、不得以警告帶過），而本 AC 的 Given 逐字是「遷移已執行」，問的正是那一刻的列數，故 BR2.1 直接滿足它。BR1.2 讓「刪 System 造成懸空」這一條路在執行期也關著（拒絕刪除，而非把 system_id 設空）——那是 DG-2 原本的範圍（domain-design 的 decisions.md:134–137 逐字「本 ADR 只保證遷移程序本身，不保證遷移之後的維持」，該處討論的懸空來自刪除）。**界線（iteration 2 審查 R-08）**：BR1.2 只關刪除那一條；「把已掛好的圖改回空」與「新插入的圖不帶 system_id」兩條路本單元未禁止（本欄永遠可為空），處置為 OQ-H2、落點 U7／U16。這不影響本 AC 的成立，但初版 SM-1 把它寫成「Assigned 永不回到 Unassigned＝DG-2 的解」，那是過度宣稱，已收窄"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "N/A",
+      "target": "Project 層的刪除約束（其下仍有 System 時拒絕刪除）。無對應 AC——四條 AC 都在架構圖與遷移的層次，沒有一條描述 Project 的刪除。本規則是 BR1.2 的上層同型處置：若只鎖 System 層，刪 Project 時 System 連帶消失仍會讓其下的圖懸空。Q1=A 的完整實施必須涵蓋兩層"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "每位使用者至多一組預設專案／系統的唯一性約束。無對應 AC——它是 BR2.2（冪等）的資料庫層承載，屬實作不變量而非使用者可觀察的行為。本站新增（S-1），上游未要求"
+    },
+    {
+      "id": "BR2.2",
+      "status": "N/A",
+      "target": "遷移冪等（重跑時已掛好的圖不得被重新指派）。無對應 AC——AC9.1.2/AC9.1.4 只描述遷移成功後的狀態，沒有一條描述部分失敗後重跑的行為。K-04 retry_and_idempotency 逐字要求冪等但未定義判準，判準由 Q3=A 定為 system_id IS NOT NULL"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "讀取 DiagramChangeRecord 者必須先讀 source，不得當成完整變更歷程。無對應 AC——本 intent 內該表沒有任何讀取端（Q2=A，DG-3 的處置），故沒有使用者可觀察的行為可寫成 AC。本規則存在是為了讓未來接上讀取端的人有一份可引用的來源。落點：未來的讀取端"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "刪除被 BR1.1／BR1.2 拒絕時必須回傳可理解的錯誤並指出下一步。無對應 AC——US9.2（建立／修改／刪除）由 story map 指給 U7／U16／U3，不是 U4，故其 AC 不在本單元的 upstream_ids 內。這是 Q1=A 製造的新交接義務，屬本階段新增需回補（S-3）。落點 U7（介面面）與 U16（畫面面）"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "歸屬的權威來源是 system_id 而非 owner_user_id。已於 AC9.1.1 的 target 引用為資料模型面的承載；在此另列為 reverse 是因為它同時是一條跨單元的消費端義務（U7／U10／U14 判斷歸屬時皆適用），其適用範圍大於 AC9.1.1 一條"
+    },
+    {
+      "id": "BR2.4",
+      "status": "N/A",
+      "target": "遷移必須有可被測試程式匯入並呼叫的入口。已於 AC9.1.2 的 target 引用；在此另列是因為它的理由獨立於任何 AC——K-04 migration.entrypoint 逐字要求它，而 stories.md:413-419 說明沒有它時 AC9.1.2 在每個自動化環境裡的 Given 都不可達"
+    },
+    {
+      "id": "OQ-H1",
+      "status": "N/A",
+      "target": "刪除使用者時其擁有的 Project 怎麼辦——本站新發現的開放問題，不定案。Q1=A 讓這個既有缺口浮上來：架構圖對使用者的既有外鍵連刪除行為都沒有定義，而本單元新增 Project.owner_user_id。設拒絕則刪使用者被專案擋住；設連帶刪除則專案下的系統若還有圖又被 BR1.2 擋住。落點 U7。無對應 AC，且在 Q1 定案之前不存在"
+    },
+    {
+      "id": "OQ-H2",
+      "status": "N/A",
+      "target": "遷移之後誰保證新建的圖有 system_id——本站新發現的開放問題，不定案。system_id 永遠可為空，而 BR1.2 只擋刪除，故「把已掛好的圖改回空」與「新插入的圖不帶本欄」兩條路無人擋；後者正是既有 A1 儲存路徑的行為（它不知道這一欄存在）。收成 NOT NULL 能一次關兩條，但與 AC9.1.3（遷移不改變既有頁面的使用方式）直接衝突，前置條件是每一個寫入端都先供值。落點 U7（生命週期與 facade：是否開出取消歸屬操作、新建圖是否強制供值）與 U16（畫面面：新建圖時的歸屬選擇）。無對應 AC——四條 AC 都在遷移的層次，沒有一條描述遷移之後的寫入路徑；且它在 Q1=A 把 DG-2 收窄成「刪除」之前看不出來。由審查 R-08 升格"
+    },
+    {
+      "id": "OQ-H3",
+      "status": "N/A",
+      "target": "共享工作階段有多位參與者時 actor_user_id 填誰——本站新發現的開放問題，不定案。該欄為必填，寫入端是 U12 WorkOrchestrator，但「行動者是哪一位」取決於 WorkOrchestrator 的內部設計，不屬本單元。落點 U12 的 functional-design（execution 為 CONDITIONAL，若被 skip 則本項無承接站，須重新提交給使用者）。無對應 AC——US9.1 的四條 AC 都不描述變更紀錄的欄位。由審查 R-11 升格：原本只以散文寫在 entities.md 的欄位註解裡，而 U12 沒有理由會打開 U4 的 entities.md，與 S-4 當初被升格的缺口同一個形狀"
+    },
+    {
+      "id": "S-1",
+      "status": "N/A",
+      "target": "Project／System 各多一個 is_default 欄位與一個部分唯一約束。本階段新增、已核可 scope 未涵蓋，需回補。觸發 Q3=A"
+    },
+    {
+      "id": "S-2",
+      "status": "N/A",
+      "target": "DiagramChangeRecord 多一個必填 source 封閉列舉欄位。本階段新增、需回補。觸發 Q4=A 的承載形式——使用者選「讓表名說真話」，本站改以資料自我宣告取代改名，理由是改實體表名會牴觸 K-04 已核可的 tables 清單；此具體化已於彙整摘要揭露並獲確認"
+    },
+    {
+      "id": "S-3",
+      "status": "N/A",
+      "target": "U7 多兩項義務：刪除被拒時的可理解錯誤、刪除前置動作的使用者路徑。本階段新增、需回補。觸發 Q1=A。與 BR3.2 同一件事，在此以 S 項編號另列，使回補清單與規則清單各自完整"
+    },
+    {
+      "id": "BR2.6",
+      "status": "N/A",
+      "target": "遷移的執行必須留下可據以判斷進度的計數紀錄（處理幾位使用者、建立幾組預設專案／系統、改寫幾張圖）。無對應 AC——四條 AC 都描述遷移完成後的狀態，沒有一條描述執行過程要留下多少資訊。由審查 R-04 升格：初版只是 functional-spec.md §六 裡一句無 id、無落點、不在回補表內的旁述。落點 code-generation（遷移的實作者）"
+    },
+    {
+      "id": "S-4",
+      "status": "N/A",
+      "target": "OQ-3 的範圍需擴及 U4 的 requirement_summary／requirement_label。OQ-3 在 requirements.md:597 的自身文字只涵蓋 episodic memory（U5 的記憶內容），而這兩欄同樣承載使用者輸入的需求文字。本站無法修改已核可的 requirements.md，故列為具名待補項。落點 nfr-design（OQ-3 的承接站），需在解 OQ-3 時一併涵蓋或明確排除並說明理由。由審查 R-03 查出：初版只在 U4 自己的 functional-spec 寫一句「也適用」，而 nfr-design 沒有理由會讀到它"
+    },
+    {
+      "id": "AC9.1.x-actor",
+      "status": "N/A",
+      "target": "DiagramChangeRecord.actor_user_id 的還原。無對應 AC——US9.1 的四條 AC 都不描述變更紀錄的欄位。上游 components.md 的 Entity Ownership 表逐字把 actorUserId 列為本實體欄位，初版靜默漏掉（審查 R-02，Critical），已還原；連帶把初版未揭露的 label→requirement_label 改名還原為上游命名，並把 changeRecordId→id／occurredAt→created_at 的命名慣例對齊列進 entities.md §三 的揭露表"
+    }
+  ]
+}

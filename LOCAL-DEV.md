@@ -19,6 +19,9 @@
 | **A3「優化」（Design↔Review 協作）** | 同上 | 失敗 |
 | **Offline Lens agent 填答** | 同上 | 降級為規則啟發式（會寫 WARNING log） |
 | 動態 SVG 圖示 | n8n webhook（**選填**，見下方「圖示目錄」） | 用灰底 fallback 圖示，不中斷 |
+| **建庫本身（全部功能的前提）** | PostgreSQL ＋ **pgvector 擴充**（見第 2 節 H4） | `schema_rbac.sql` 整個交易中止，**一張表都建不出來** |
+| 大腦編排的 session 還原（跨頁脈絡） | **Redis**（見第 1 節的 `redis-cli ping`） | session 相關功能不可用 |
+| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節） | 選 `fulltext`／`stub` 時不需任何外部服務 |
 
 ### 兩個「不在 requirements.txt 裡」的硬依賴
 
@@ -72,10 +75,21 @@ claude -p "回一個字：好"      # 有回應 = 登入可用
 psql --version                      # 需要 PostgreSQL client
 pg_isready -h localhost -p 5432     # 需要一個跑著的 server
 
+# ⚠ pgvector：本機建庫的硬依賴（見第 2 節 H4）。必須有一列，否則 schema_rbac.sql
+#   會整個交易中止、一張表都建不出來。
+psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+  -c "SELECT name, default_version FROM pg_available_extensions WHERE name='vector';"
+
+# Redis：session store（第 5 服務）。沒有它，大腦編排的 session 相關功能不可用。
+redis-cli ping                      # 應回 PONG；沒有的話 brew install redis / apt install redis
+
 # LLM 鏈路（A1／A3 必要）
 node -v                             # 18+，Dockerfile 用 22
 command -v claude && claude --version
 # 沒有的話：npm install -g @anthropic-ai/claude-code
+
+# 選用：本機 embedding。只有 EMBEDDING_PROVIDER=ollama 時才需要（見第 3 節）
+# command -v ollama && ollama list | grep bge-m3
 
 # Python
 python3 --version                   # CI 用 3.12
@@ -84,7 +98,7 @@ python3 --version                   # CI 用 3.12
 ### 先確認 port 沒被佔用
 
 ```bash
-for p in 5432 8000 5173; do
+for p in 5432 6379 8000 5173; do
   lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1 \
     && echo ":$p 被佔用 → $(lsof -nP -iTCP:$p -sTCP:LISTEN | awk 'NR==2{print $1}')" \
     || echo ":$p 可用"
@@ -97,12 +111,71 @@ done
 
 ## 2. 資料庫
 
+### ⚠️ H4：本機 PostgreSQL 必須先裝 pgvector（不裝就一張表都建不出來）
+
+**這一步是必做前置，不是附註。** `schema_rbac.sql` 在 `BEGIN;` 之後的第一條敘述是
+`CREATE EXTENSION IF NOT EXISTS vector;`（U5 記憶表的 `vector(1024)` 欄位需要它）。
+
+而本機走的是**主機安裝的 PostgreSQL**，不是 compose 的 db 容器——所以那個容器映像帶不帶
+pgvector 跟你無關，重要的是**你主機上那顆 PostgreSQL**有沒有裝。
+
+**不裝的後果比想像的大**：`IF NOT EXISTS` 只抑制「擴充已存在」；伺服器**沒有安裝**
+pgvector 時是 `could not open extension control file` 這個**硬 ERROR**。`schema_rbac.sql`
+是**單一交易**（`BEGIN` … `COMMIT`），交易一旦中止，之後每一條敘述都以
+`current transaction is aborted` 失敗、`COMMIT` 退化為 ROLLBACK ——結果是**一張表都沒建**
+（全部資料表、308 列 RBAC 預設矩陣全沒有），**不論你碰不碰記憶功能**。
+
+```bash
+# 前置檢查：必須有一列
+psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+  -c "SELECT name, default_version FROM pg_available_extensions WHERE name='vector';"
+```
+
+沒有那一列時，二擇一：
+
+| 做法 | 指令 |
+|---|---|
+| **裝到主機的 PostgreSQL 上**（建議，維持既有的 bare-metal 流程） | macOS：`brew install pgvector`；Debian／Ubuntu：`apt install postgresql-17-pgvector`（版號跟著你的 server 走）；或由原始碼 `make && make install` |
+| **改用 repo 根的 compose 提供 db** | `docker compose up -d db`（該檔的 db 映像已是 `pgvector/pgvector:pg18`，publish `5432`，連線字串不變） |
+
+### ⚠️ H5：既有的 `postgres_data` volume 與 PG 18 不相容
+
+repo 根 `docker-compose.yml` 的 db 映像由 `postgres:15-alpine` 改為
+`pgvector/pgvector:pg18`——**跨三個大版本**。PGDATA 的格式不跨大版本相容，而該檔掛的是
+具名 volume `postgres_data` 且 `restart: always`：**既有 volume 會讓容器進入重啟迴圈**
+（日誌寫 `database files are incompatible with server`）。**沒有任何 CI 閘門涵蓋這條路徑。**
+
+若你之前用過那個 compose 起 db，二擇一：
+
+```bash
+# (a) 本機資料可丟：移除 volume 重建（最快）
+docker compose down
+docker volume rm cloud-360_postgres_data 2>/dev/null || docker volume ls | grep postgres_data
+docker compose up -d db
+psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
+
+# (b) 要保留資料：先以舊映像 dump，再以新映像 restore
+#     （把 image 暫時改回 postgres:15-alpine → pg_dump → 改回 pg18 → 移除 volume → restore）
+```
+
+> volume 的實際名稱帶 compose 專案名前綴，而根 compose 沒有 `name:`，所以前綴是**目錄名**
+> ——在 `cloud-360/` 下是 `cloud-360_postgres_data`，在名為 `chiton` 的 worktree 下會是
+> `chiton_postgres_data`。用 `docker volume ls | grep postgres_data` 確認實際名稱再刪。
+
+### 建庫
+
 ```bash
 createdb -U postgres -h localhost cloud360
 psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 ```
 
-`schema_rbac.sql` 會建立全部資料表、308 列 RBAC 預設矩陣，以及預設帳號 **`admin` / `admin123`**。
+`schema_rbac.sql` 會建立 `vector` 擴充、全部資料表，以及 308 列 RBAC 預設矩陣。
+
+> **它不建立固定密碼管理員。** （這一行先前寫「以及預設帳號 `admin` / `admin123`」，與
+> `schema_rbac.sql:11` 逐字的「不建立固定密碼管理員；bootstrap admin 由後端依環境變數
+> 建立」直接矛盾，且該檔全檔唯一的 `INSERT INTO` 是 `role_permissions`。已更正。）
+> 本機的 `admin / admin123` 是**後端啟動時**建的：`APP_ENV=local`／`test`／`ci` 之下
+> `init_db()` 會建 bootstrap admin，`local` 另外建 11 位 persona demo 帳號。
 
 ### ⚠️ 兩條 schema 演進路徑（踩過就會懂）
 
@@ -112,6 +185,13 @@ psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 | `backend/database.py` 的 `_ensure_*_schema()` | **每次後端啟動** | 這才是既有環境真正的遷移機制 |
 
 **實務結論**：改了 `schema_rbac.sql` 卻只重啟容器 → 不生效。反過來，多數欄位新增只要**重啟後端**就會被 `_ensure_*_schema()` 的 `ALTER TABLE ... IF NOT EXISTS` 補上。
+
+**一個例外，改 `database.py` 時要知道**：`init_db()` 裡的 `_ensure_*` 現在有**七支**，
+其中六支在 `Base.metadata.create_all()` **之後**（它們補 `create_all` 不會做的 `ALTER`），
+而 **`_ensure_vector_extension()` 在它之前**——`vector` 型別必須先存在，否則宣告 `vector`
+欄位的表在 `create_all()` 裡就會以 `type "vector" does not exist` 失敗，而那是**啟動失敗**
+（`init_db()` 由 startup 事件同步呼叫）。新增補丁時照既有形狀擺在後面是對的；**唯獨擴充類
+必須在前面**。這條順序由 `backend/tests/test_vector_extension_bootstrap.py` 守著。
 
 要整個重來：
 
@@ -139,7 +219,7 @@ cp backend/.env.example backend/.env
 ```bash
 cat > backend/.env <<'EOF'
 APP_ENV=local
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cloud360
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
@@ -153,6 +233,27 @@ OPENROUTER_API_KEY=
 # 留空即依供應商取預設（cli → sonnet）
 LLM_MODEL=
 
+# --- brain-infra（U1）：Redis ＋ embedding ---
+# 本機用 localhost；部署 stack 用 compose 服務名（redis／ollama），由 deploy/.env
+# 決定，兩者不共用設定。
+REDIS_URL=redis://localhost:6379/0
+# 不得為 `default`（最小權限）。本機若跑的是沒設 ACL 的 Redis，自己建一個：
+#   redis-cli ACL SETUSER cloud360 on '>本機密碼' '~*' '+@all' '-@admin' '-@dangerous'
+REDIS_USER=cloud360
+REDIS_PASSWORD=
+# 允許值：ollama｜fastembed｜fulltext｜stub。required、**無預設**——值不在清單內
+# 或缺值時會啟動失敗並列出可選值（不會靜默降級）。
+#   ollama    需主機跑著 ollama 且已 `ollama pull bge-m3`（約 1.2GB）
+#   fastembed 不另起服務，但**首次使用會下載**模型（ONNX，行程內執行）
+#   fulltext  不做向量檢索，退回全文搜尋（零下載、零額外服務）
+#   stub      完全不算 embedding；CI 的 ui-regression stack 用的就是它
+EMBEDDING_PROVIDER=fulltext
+# 只有 EMBEDDING_PROVIDER=ollama 時才用到。維度須為 1024（對齊 vector(1024)）
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBED_MODEL=bge-m3
+# 只有 EMBEDDING_PROVIDER=fastembed 時才用到。維度亦須 1024
+FASTEMBED_MODEL=multilingual-e5-large
+
 # --- 選填 ---
 # N8N_WEBHOOK_URL=https://.../webhook/get-icon
 # N8N_USER=
@@ -165,6 +266,10 @@ LLM_MODEL=
 # 禁止把真金鑰寫進版控檔；log／錯誤訊息不得含 secret 值（變數名可出現）。
 EOF
 ```
+
+> **`+psycopg` 這個後綴只給應用程式用**，因為它是 SQLAlchemy 的 driver 指定語法。
+> 上面用 `psql` 建庫的指令**不能**加它——`psql` 不認得這個形式，會直接連線失敗。
+> 兩處刻意不同：`psql` 用裸的 `postgresql://`，`backend/.env` 用 `postgresql+psycopg://`。
 
 > `JWT_SECRET` 未設時會**靜默 fallback 到程式碼內的預設字串**（依賴風險 R2），不會報錯。本機無所謂，但要知道它不會提醒你。
 
@@ -184,6 +289,15 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> **從既有環境升上來的人必看**：PostgreSQL 驅動已由 `psycopg2-binary` 換成
+> `psycopg[binary]`（v3）。兩者是**不同套件**，舊環境不會自動換掉，必須重跑一次
+> 上面的 `pip install -r requirements.txt`。沒裝 psycopg v3 時，`import main`
+> 會以 `ModuleNotFoundError: No module named 'psycopg'` 失敗。
+>
+> 單元測試大多不受影響（`tests/helpers.py` 在偵測到沒裝時會 stub 掉），但
+> `tests/test_dotenv_path.py` 的兩個案例是**開子行程**跑 `import main`，
+> stub 進不到子行程裡，所以那兩個案例真的需要驅動裝好才會綠。
 
 ### 啟動
 
@@ -293,7 +407,8 @@ UPDATE users SET last_activity_at = NULL WHERE username='demo2';
 ## 7. 跑測試（開發時最有用的迴圈）
 
 ```bash
-# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg2 被 mock 掉）
+# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg 被 mock 掉）
+# 但驅動本身要裝（見上節）：有兩個案例開子行程，mock 進不去
 cd backend && python -m unittest discover -s tests -v
 
 # 前端 lint + 型別 + build
@@ -354,6 +469,10 @@ docker compose -f deploy/docker-compose.test.yml down -v
 | A1 回 402 | OpenRouter 額度或 `max_tokens` 預扣 | 儲值，或調低 `LLM_MAX_OUTPUT_TOKENS` |
 | 端點測試 `no such table` | 測試用 in-memory SQLite 需 `StaticPool` | 用 `tests/helpers.py` 的 `make_session()` |
 | 手機寬度版面爆掉 | 側邊欄 `w-64` 無斷點折疊（既有問題，全 app） | 已知；由 `260806-a1-a3-ux` intent 處理中 |
+| `psql -f schema_rbac.sql` 一張表都沒建，訊息一堆 `current transaction is aborted` | 主機的 PostgreSQL **沒有 pgvector**，第一條 `CREATE EXTENSION` 是硬 ERROR，單一交易整個回滾（H4） | 裝 pgvector 或改用 root compose 的 db，見第 2 節 H4 |
+| root compose 的 db 容器反覆重啟，日誌寫 `database files are incompatible with server` | 既有 `postgres_data` volume 是 PG 15 的，映像已改 PG 18（H5） | 移除該 volume 重建，或先 dump 再 restore，見第 2 節 H5 |
+| 後端啟動就掛，訊息提到 `EMBEDDING_PROVIDER` | 它是 required、**無預設**，缺值或值不在 `ollama/fastembed/fulltext/stub` 內就大聲失敗 | 在 `backend/.env` 設一個；本機用 `fulltext` 最省事 |
+| session／跨頁脈絡相關功能連不上 | 本機沒跑 Redis，或 `REDIS_USER` 用了 `default`／ACL 使用者沒建 | `redis-cli ping` 應回 PONG；ACL 建法見第 3 節的 `.env` 註解 |
 
 ---
 

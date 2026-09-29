@@ -1,0 +1,176 @@
+{
+  "stage": "functional-design",
+  "unit": "brain-ws-contract",
+  "upstream_ids": [
+    "AC1.2.1",
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC1.2.4",
+    "AC8.1.1",
+    "AC8.1.2",
+    "AC8.1.3",
+    "AC8.1.4"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.2.1",
+      "status": "OK",
+      "target": "BR2.2, BR2.3, BR2.4",
+      "note": "型別面：clarify 的 candidates 結構（BR2.2 禁空陣列）＋ confidence 的選填性（BR2.3）與 0–1 定義域（BR2.4）。**行為面（門檻 0.7 的判斷、以及「不建立任何工作項」）在 U11 intent-router**，本單元不宣稱滿足它。"
+    },
+    {
+      "id": "AC1.2.2",
+      "status": "OK",
+      "target": "BR1.2, BR2.14",
+      "note": "**本輪由 Deferred 改為 OK（審查 R-02，Critical）。** 初版標 Deferred 並在 target 寫「走既有 user_message 或 U11 定義的路徑」——那條路徑不存在：五個既有 client type 沒有一個能承載候選的 id（UserMessagePayload 只有 text），而 K-12:920 一帶逐字寫 U14 的唯一後端通道是本端點。Deferred 把一個契約缺口寫成了單純的分工。本輪新增 select_clarify_candidate client type，candidateId 非 null 即表示選定；BR1.2（payload 形狀由 type 唯一決定）使它成為一個獨立可判別的分支。**依該候選交辦的實際行為在 U11。** **第二輪補入 BR2.14**（candidateId 非 null 時依該候選交辦的伺服器處置）。"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "OK",
+      "target": "BR1.2, BR2.14",
+      "note": "**本輪修正依據（審查 R-02）。** 初版標 OK 但當時沒有任何傳輸面可承載「選都不是」。本輪以 select_clarify_candidate 的 candidateId 為 null 表達它；BR1.2 使「不送 work_target」成為「脈絡列與作業對象不變」的精確表達——若脈絡列的值混在其他訊息裡就無法表達「不變」。**畫面行為在 U14、不送狀態訊息在 U13。** **第二輪審查 R-15 後補入 BR2.14**：初版只指向 BR1.2，而「選都不是」在 SM-2 上沒有任何離開路徑、伺服器處置未定義。BR2.14 明訂伺服器不送任何狀態訊息與終止事件，使「脈絡列不變」成為可實作的行為。"
+    },
+    {
+      "id": "AC1.2.4",
+      "status": "OK",
+      "target": "BR2.3, BR2.4",
+      "note": "型別面：confidence 為 number|null 且定義域 0–1，使「可與門檻比較」在型別上成立。**真的產出那個值在 U11**；OQ-10 若收斂為「路由層無法產出」，本型別不需改動（已容許 null）。"
+    },
+    {
+      "id": "AC8.1.1",
+      "status": "OK",
+      "target": "BR2.1, BR2.6, BR2.7, BR3.3",
+      "note": "型別面：token 為串流最小單位且 text 非空白（BR2.1），終止語意使「整段完成」有明確界線（BR2.6 禁零內容 done、BR2.7 每輪至多一個終止事件）。BR3.3 是同一條界線的消費端半邊——零內容 done 若被當成成功，AC8.1.1 的「出現第一個字」就可以被一個空白畫面假裝滿足。**真的逐 token 送出在 U13**。"
+    },
+    {
+      "id": "AC8.1.2",
+      "status": "Deferred",
+      "target": "本單元完全無貢獻——活動記錄由握手時以 record=True 呼叫 get_user_from_token 承擔，屬 U13 brain-gateway 與 K-12 的 x-hard-constraints.activity_record。本單元對此無型別手段（握手不經任何訊息 payload）。",
+      "note": "標 OK 才是不誠實的那一邊：本單元沒有任何規則碰到活動記錄。ADR-0006 的 audit logging 面判定見 functional-spec.md §七之二。"
+    },
+    {
+      "id": "AC8.1.3",
+      "status": "Deferred",
+      "target": "本單元只擋了一半，不足以宣稱覆蓋——BR2.12 與 HelloPayload 不含 token 欄位排除了「token 放在訊息內」，但 AC8.1.3 的 Then 逐字是「token 不出現在 query string 內」，而 query string 在 URL、不在 envelope 內，本契約的型別對它零約束。實際擋它的是 K-12 的 x-hard-constraints.token_transport（contract-summary.md:876–880，屬 U13）。",
+      "note": "**本輪由 OK 改為 Deferred（審查 R-06，Major）。** 初版的 OK 依據逐字寫「兩者合起來使 token 走標頭在型別上是唯一可構造的形狀」——**那句是假的**。這是一條安全面（ADR-0006 network exposure）的 AC，錯誤的型別保證感比沒有保證更危險。"
+    },
+    {
+      "id": "AC8.1.4",
+      "status": "Deferred",
+      "target": "本單元完全無貢獻——既有 5 個 SSE 端點不在本單元的變更面內，由「不改」滿足；須由 U13 在其交付中確認未觸及。",
+      "note": "如實標 Deferred。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "N/A",
+      "target": "協定版本的字面值不變量。沒有使用者可見的 AC——使用者不會「看到版本正確」，只會在版本錯時被 4400 關閉（那個行為屬 U13）。本規則保護的是型別層不可構造錯誤版本。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "turnId 的必填與一致性不變量。純技術性：使用者不會觀察 turnId。本單元只能強制「必填」（且僅對伺服器方向，客戶端方向為選填——審查 R-05），「同一輪相同」是 U13 的執行期責任。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "N/A",
+      "target": "兩個 type 列舉與 payload 集合等勢同名。本站新增的機械可驗證不變量，防止「加了 type 沒加 payload」。純建置期性質，無 AC。審查 R-01／R-02 新增兩個 type 後它立刻起了作用。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "N/A",
+      "target": "終止事件 payload 的 turnId 必須等於 envelope 的 turnId。審查 R-12 新增，修的是「同一事實兩份物化而無一致性鎖」——team.md 的單一真實來源條款要求副本必須有鎖住一致的測試。純技術性，無 AC。"
+    },
+    {
+      "id": "BR2.5",
+      "status": "N/A",
+      "target": "status 與 waitingOn／failureReason 的欄位相依。它支撐畫面能說出「在等什麼」與「為何失敗」，但那些畫面元素屬 US5.1／US1.1 的 AC，不在本單元承載的兩則故事內。另：其觸發條件（「等待中」可達性）本身是未解的 H-3，見該規則 source（審查 R-10）。"
+    },
+    {
+      "id": "BR2.8",
+      "status": "N/A",
+      "target": "error.code 的封閉四值與各值判準。它是本站補上的懸空引用（K-02 的 :269 與 :308 兩處指向 K-12 而 K-12 只定關閉碼），是契約結構而非使用者可見行為；前端對各 code 的處置由 BR3.1 承載。"
+    },
+    {
+      "id": "BR2.9",
+      "status": "N/A",
+      "target": "error.message 不得含內部實作細節。安全性規則——ADR-0006 network exposure 面的處置之一（見 functional-spec.md §七之二），非功能性 AC。"
+    },
+    {
+      "id": "BR2.10",
+      "status": "N/A",
+      "target": "sideEffect 兩個哨兵值的語意不得被合併。它保護 components.md 的誠實立場（系統不承諾停掉不留半成品），對應的使用者可見行為屬 US1.4／US5.1 的 AC，不在本單元承載的兩則故事內。"
+    },
+    {
+      "id": "BR2.11",
+      "status": "N/A",
+      "target": "cost_card.estimateSetId 必填。成本卡片的 AC 屬能力 C 的故事，不在本單元承載的兩則故事內；本規則只保住 K-02 X-01 的不變量。"
+    },
+    {
+      "id": "BR2.12",
+      "status": "N/A",
+      "target": "客戶端訊息不得攜帶身分。它是 ADR-0006 IAM 面的主要處置（見 §七之二），防的是授權繞過。**它對 AC8.1.3 只提供一半**（排除「token 在訊息內」，不碰 query string），故 AC8.1.3 標 Deferred 而非以本規則為 OK 依據——審查 R-06。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "前端對 error.code 窮盡處理。本單元承載的八條 AC 沒有任何一條描述錯誤顯示行為——US1.2 講信心值低時的反問、US8.1 講串流與活動記錄。這條規則的使用者可見面沒有對應 AC，屬上游的 AC 覆蓋缺口而非本站遺漏。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "未知 type 安全忽略。本站新增的防禦性規則——契約上不可能發生（版本相等即型別相同），所以不可能有 AC 描述它。其型別承載是 WsInboundEnvelope 的寬鬆 type（審查 R-03 的連帶）。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "不自動重送未收到終止事件的 user_message。它防的是重複交辦，對應的使用者可見行為（重複工作項）沒有被任何 AC 描述——K-12 的 [C5]=B 是設計決定，不是 AC。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "N/A",
+      "target": "衍生物不得手改。建置期規則，無使用者可見行為。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "N/A",
+      "target": "dump 輸出與 dict 插入順序無關。建置期規則；它防的是「閘門在程式碼沒變時紅燈」而導致閘門被繞過。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "兩道閘門都必須存在。建置期規則，也是本單元存在的理由本身（N-12）。無 AC 因為 CI 閘門不是使用者可見行為。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "型別檔必須保留 sideEffect 註解。本站新增；它是 Q3=A（型別會塌縮為 string）的直接後果，屬建置期產生器的要求。"
+    },
+    {
+      "id": "BR4.5",
+      "status": "N/A",
+      "target": "型別產生器釘版。建置期規則，防「不同機器產生不同型別檔」造成假紅燈。"
+    },
+    {
+      "id": "BR4.6",
+      "status": "N/A",
+      "target": "dump 與型別產生冪等。建置期規則，使 CI 可重跑。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "N/A",
+      "target": "前端驗證 ready.protocolVersion。本站自檢第 2 項查出 protocolVersion 無讀取端後補入的消費端義務；握手層的行為沒有任何 AC 描述（US1.2／US8.1 皆不涉握手），故無對應 AC。落點 U14。"
+    },
+    {
+      "id": "BR1.6",
+      "status": "N/A",
+      "target": "伺服器訊息 turnId 的兩類判準（輪次訊息非 null／非輪次訊息為 null）。審查 R-14 新增。純技術性不變量——使用者不觀察 turnId，且四種非輪次訊息本來就不該有它。可機械斷言（集合互斥且窮盡）。"
+    },
+    {
+      "id": "BR2.13",
+      "status": "N/A",
+      "target": "客戶端訊息不得攜帶 turnId，伺服器收到即拒絕。審查 R-20 新增。它關閉的是「客戶端可寫一個它不該持有的伺服器端識別」這個缺口，屬協定衛生，無使用者可見行為。"
+    }
+  ]
+}

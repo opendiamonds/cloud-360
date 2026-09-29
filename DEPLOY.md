@@ -89,7 +89,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | 變數 | 本機常見值 | 新環境建議 |
 |---|---|---|
 | `APP_ENV` | `local` | `staging`／實際環境名（勿用路徑含 `prod`／`production` 的目錄名，見 repo contract） |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/cloud360` | 改成該環境 PostgreSQL 連線字串 |
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/cloud360` | 改成該環境 PostgreSQL 連線字串。**必須保留 `+psycopg` 後綴**——它顯式指定 driver 為 psycopg v3，不寫就退回 SQLAlchemy 的隱含預設，而那個預設會隨版本改變（2.0 是 psycopg2、2.1 是 psycopg）|
 | `JWT_SECRET` | 範本預設字串 | **務必更換**成長隨機字串 |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | 改成**前端實際網址**（逗號分隔，勿結尾斜線）例：`https://app.example.com` |
 | `OPENROUTER_API_KEY` | 本機金鑰 | 該環境專用金鑰（勿提交進 git） |
@@ -176,9 +176,24 @@ COST_PRICING_USE_SDK=0
 
 # C1 — GCP Catalog（要估 GCP 架構圖時必填）
 GCP_BILLING_API_KEY=
+
+# brain-infra（U1）— 七個變數，compose 引用時皆**無 `:-` fallback**，故全部 required。
+# 只有 REDIS_PASSWORD 是憑證；其餘六個是固定值，`render-env.sh` 直接寫出。
+REDIS_URL=redis://redis:6379/0
+REDIS_USER=cloud360
+REDIS_PASSWORD=                      # openssl rand -hex 32；**不得含 `$`**
+EMBEDDING_PROVIDER=ollama            # ollama｜fastembed｜fulltext｜stub
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_EMBED_MODEL=bge-m3
+FASTEMBED_MODEL=multilingual-e5-large
 ```
 
 Azure Retail Prices **不需**寫入金鑰。改完後 `docker compose … up -d`（必要時 `--force-recreate backend`）。
+
+**brain-infra 的七個變數少寫任一個，`python3 scripts/validate_env_contract.py` 就紅燈**
+（那正是它們刻意不帶 fallback 的用途）。反過來，在 compose 那邊補上 `:-` 不只是「加了
+預設值」，是**把這道閘門拿掉**——變數變空字串、服務照常啟動、功能靜默降級。首次部署前
+請先讀第 5 節的前置條件（主機加密、磁碟、記憶體、新 secret）。
 
 ---
 
@@ -199,6 +214,8 @@ schema_rbac.sql
 
 ```bash
 # 先設好該環境的 DATABASE_URL
+# 注意：這一份是給 psql 用的，**不能**帶 `+psycopg` 後綴——psql 不認得該形式。
+# backend/.env 裡給應用程式用的那一份才需要 `postgresql+psycopg://`（見上表）。
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DBNAME'
 
 psql "$DATABASE_URL" -f schema_rbac.sql
@@ -211,6 +228,7 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 
 | 區塊 | 物件 | 用途 |
 |---|---|---|
+| X | **擴充 `vector`（pgvector）** | `CREATE EXTENSION IF NOT EXISTS vector;`，**`BEGIN;` 之後的第一條敘述**。U5 記憶表的 `vector(1024)` 欄位需要它。見 2.2.6 |
 | A | `users` | 帳號、角色、啟用狀態 |
 | A | `user_diagrams` | 架構圖 XML |
 | A | `diagram_shares` | 圖分享（多對多） |
@@ -222,6 +240,8 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | C | `role_permissions` | 角色 × Story 的檢視／編輯／審核 |
 | F | **C1 退場** `archive_diagram_cost`／`archive_diagram_cost_line`／`archive_pricing_cache`／`archive_cost_audit_event` | **舊成本表（已 rename；應用零讀寫；≥90 天後另開 chore DROP）** |
 | G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
+| H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
+| H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
 | D | 預設使用者 `admin` | 見下方 |
 
 #### 2.2.4 C1 成本表退場（U3 `legacy-cost-retirement`）
@@ -258,6 +278,214 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions WHERE story_id LI
 | `advice` | 建議空殼；`estimate_set_id` UNIQUE／PK；正文屬 U7 |
 
 **既有環境升級**：`database._ensure_estimate_intake_schema()` 於啟動時 `CREATE IF NOT EXISTS`；新環境亦可由 `schema_rbac.sql` 建立。RBAC：`C1`＝上傳與檢視；**已無** `C1h`／`C1r`／`C1o`／`C1b`。
+
+#### 2.2.6 pgvector 擴充（U1 `brain-infra`）
+
+`schema_rbac.sql` 在 `BEGIN;` 之後的第一條敘述是：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**為什麼是第一條**：本檔是**單一交易**（`BEGIN` … `COMMIT`）。`vector` 型別必須在任何
+宣告 `vector(N)` 欄位的表被建立之前存在；而伺服器**沒有安裝** pgvector 時，這一行是
+`could not open extension control file` 這個**硬 ERROR**，交易一旦中止，之後每一條敘述
+都以 `current transaction is aborted` 失敗、`COMMIT` 退化為 ROLLBACK ——結果是**一張表
+都沒建**，不論你有沒有要用記憶功能。
+
+**由兩處承載，互補而非二選一**（`NFR6.2`）：
+
+| 承載 | 涵蓋的環境 | 為什麼另一處涵蓋不到 |
+|---|---|---|
+| `schema_rbac.sql` 的上述敘述 | **空 data volume 初始化**（兩份 compose 都把本檔掛進 `/docker-entrypoint-initdb.d/`）＋**本機 `psql` 手動建庫** | 這兩條路徑都在 backend 啟動**之前**執行 |
+| `backend/database.py` 的 `_ensure_vector_extension()` | **既有非空 volume** | 既有 volume 不會重跑 initdb 腳本 |
+
+**`_ensure_vector_extension()` 的呼叫位置是一條硬約束**：它在
+`Base.metadata.create_all()` **之前**，與其餘六支 `_ensure_*_schema()` 方向相反（那六支
+都在 `create_all()` 之後，因為它們補的是 `create_all` 不會做的 `ALTER`）。放錯邊的後果
+不是「少一個擴充」，是 **uvicorn 啟動失敗**（`init_db()` 由 startup 事件同步呼叫），
+在 `restart: unless-stopped` 之下變成重啟迴圈。這條順序由
+`backend/tests/test_vector_extension_bootstrap.py` 守著。
+
+**映像前置**：三份 compose 的 db 映像皆為 `pgvector/pgvector:pg18`。**基底映像同時由
+Alpine（musl）換成 Debian（glibc）**——這不是附帶細節，它就是下面第 5.4 節升版程序需要
+處理 collation 的唯一理由。
+
+驗證：
+
+```bash
+psql "$DATABASE_URL" -c "SELECT extname, extversion FROM pg_extension WHERE extname='vector';"
+# 應有一列。沒有的話先確認伺服器裝得到它：
+psql "$DATABASE_URL" -c "SELECT * FROM pg_available_extensions WHERE name='vector';"
+```
+
+#### 2.2.7 U4 專案／系統階層表與一次性遷移（`hierarchy-data`）
+
+| 物件 | 說明 |
+|---|---|
+| `projects` | 階層最上層。`owner_user_id` FK → `users`；`is_default` 為**遷移冪等的承載**，每位使用者至多一列為真（部分唯一索引 `uq_projects_default_per_owner`）。刪除仍有 `systems` 的 Project 會被拒絕（`ON DELETE RESTRICT`） |
+| `systems` | 階層中間層。`project_id` FK → `projects`（`ON DELETE RESTRICT`）；`is_default` 每個專案至多一列為真（`uq_systems_default_per_project`——範圍是**專案**，不是擁有者） |
+| `user_diagrams.system_id` | **新增欄位，可為空**。架構圖歸屬的**權威來源**；`user_id` 只回答「誰建的」，不回答歸屬。FK → `systems` 且為 `ON DELETE RESTRICT`——刪除 System 時**拒絕刪除**而非把本欄設為 NULL |
+| `diagram_change_records` | 架構圖變更紀錄。**本輪只寫不讀**（沒有任何讀取端）。`source` 是封閉列舉、本輪唯一值 `brain_orchestration`；`actor_user_id` **必填**。保存期 90 天、以 `created_at` 為截止欄位（索引 `ix_diagram_change_records_created_at`），**但清除機制本輪尚未落地——這張表實際上不會被清除** |
+
+**「每位使用者至多一組預設專案／系統」不是單一約束**：資料庫只保證「每位使用者至多一個預設專案」與「每個專案至多一個預設系統」。「預設系統一定掛在該使用者的預設專案底下」**沒有任何約束擋住**，它由遷移程序（目前 `is_default` 的唯一寫入端）的執行順序供應。日後若出現第二個 `is_default` 寫入端，這個複合性質就不再自動成立。
+
+##### 前進步驟（既有環境的唯一路徑）
+
+`schema_rbac.sql` **只在空 data volume 執行**（兩份 compose 把它掛進 `/docker-entrypoint-initdb.d/`），所以既有的 `192.168.10.10` **不會**經過它。既有環境取得 H) 區塊的結構與完成資料遷移的唯一路徑是這支指令：
+
+```bash
+# 在 backend/ 目錄，且 DATABASE_URL 已指向目標資料庫
+cd backend
+python scripts/run_hierarchy_migration.py
+```
+
+預期輸出（三個計數即 `BR2.6` 要求的進度紀錄）：
+
+```
+hierarchy migration 完成：
+  處理的使用者數        users_processed       = <持有至少一張圖的使用者數>
+  新建的預設專案／系統組 default_pairs_created = <本次新建的組數>
+  改寫的架構圖數        diagrams_assigned     = <本次掛入的圖數>
+終檢通過：user_diagrams 中 system_id IS NULL 的列數為 0（AC9.1.4）。
+```
+
+**結束碼 0 才算成功。** 非零即代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 的六支 `_ensure_*` 補丁全部 `except Exception: logger.warning`，本指令不沿用那個形狀。
+
+指令**可重跑**：DDL 為 `IF NOT EXISTS` 形狀；資料面的冪等判準是 `system_id IS NOT NULL`（已掛好的圖不會被重新指派），預設專案／系統「存在就取用、不存在才建」。第二次跑的預期輸出是 `default_pairs_created = 0`、`diagrams_assigned = 0`，而 `users_processed` 仍為使用者數（它算的是走訪數，不是改動數）。
+
+驗證：
+
+```bash
+psql "$DATABASE_URL" -c "\d projects"
+psql "$DATABASE_URL" -c "\d systems"
+psql "$DATABASE_URL" -c "\d diagram_change_records"
+
+# 不變量（AC9.1.4）：必須為 0
+psql "$DATABASE_URL" -c "SELECT count(*) FROM user_diagrams WHERE system_id IS NULL;"
+
+# 每位持有圖的使用者恰好一組預設：兩個 count 應相等，且每一列都是 1
+psql "$DATABASE_URL" -c "
+  SELECT p.owner_user_id, count(*) AS default_projects
+  FROM projects p WHERE p.is_default GROUP BY 1 HAVING count(*) <> 1;"
+#   應回 0 列
+
+# 兩個部分唯一索引都在
+psql "$DATABASE_URL" -c "
+  SELECT indexname FROM pg_indexes
+  WHERE tablename IN ('projects','systems') AND indexname LIKE 'uq_%';"
+#   應有 uq_projects_default_per_owner 與 uq_systems_default_per_project
+```
+
+##### 靜止前置條件（**目前的管線做不到，必讀**）
+
+**遷移期間應用不得接流量。** 理由不是效能而是正確性：遷移進行中若有人透過既有 A1 頁面新建一張圖，那張圖不帶 `system_id`（既有儲存路徑不知道這一欄存在），終檢的計數就不為 0 —— 而那不是遷移的錯，卻會讓部署失敗。
+
+**這個有序窗口目前沒有承載者。** `.github/workflows/deploy.yml:121–124` 是單一個
+
+```
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build --remove-orphans
+```
+
+把整座 stack **一次**拉起來，`:126` 緊接著就開始等前端回應。**管線裡沒有任何一點是 db 起來而 backend 沒起來的**，所以容器重建造成的中斷是一個**無序的競爭窗口**，不是這裡需要的有序窗口。不要把它當成靜止已經生效。
+
+在管線補上有序步驟之前，本次遷移請以**手動**方式取得窗口：
+
+```bash
+# 1) 只起資料庫
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d db
+# 2) 確認 backend 沒有在跑（應無輸出）
+docker compose -f deploy/docker-compose.deploy.yml ps --status running --services | grep -x backend
+# 3) 跑遷移（在能連到該 DB 的環境，DATABASE_URL 指向它）
+cd backend && python scripts/run_hierarchy_migration.py
+# 4) 結束碼為 0 且上述不變量查詢回 0 之後，才把其餘服務拉起來
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build --remove-orphans
+```
+
+##### 中途失敗是**合法且可恢復**的狀態
+
+遷移的交易邊界是**逐使用者一個交易**：某位使用者的專案／系統建立與其圖的改寫要麼全成要麼全不成；跨使用者則可留下部分進度。所以中途失敗後資料庫會處在「**部分使用者已遷移**」的狀態。
+
+**這不是壞掉。** 處置方式是找出失敗原因、處置後**重跑同一支指令**——已完成的使用者會被原樣跳過，未完成的會被補上。看到下面這種混合狀態時不要試圖手動修補：
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT (SELECT count(*) FROM user_diagrams WHERE system_id IS NOT NULL) AS migrated,
+         (SELECT count(*) FROM user_diagrams WHERE system_id IS NULL)     AS pending;"
+```
+
+最常見的失敗原因是殘留列指向不存在的使用者（孤兒圖）。它們不會被遷移處理（遷移只走訪 `users` 裡真的存在的擁有者），因此會被計入殘留而讓終檢失敗——這是刻意的，孤兒列需要人工判斷：
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT d.id, d.user_id FROM user_diagrams d
+  LEFT JOIN users u ON u.id = d.user_id
+  WHERE d.system_id IS NULL AND u.id IS NULL;"
+```
+
+##### 回復程序（`decisions.md` ADR-002／ADR-003 逐字：清空 `system_id` 並刪除新建的 `projects`／`systems` 列）
+
+回復**不需要**刪除欄位或表——`system_id` 可為空，而既有頁面完全不讀它，所以清空即等於回到遷移前的可觀察行為。
+
+**先看一眼會動到什麼，再動手**（這一步不可省略——它是唯一能在變更前發現「使用者已自己搬過圖」的機會）：
+
+```bash
+psql "$DATABASE_URL" <<'SQL'
+SELECT
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE s.is_default)                                   AS will_be_cleared,
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE NOT s.is_default)                               AS on_user_made_systems,
+  (SELECT count(*) FROM systems  WHERE NOT is_default)     AS user_made_systems,
+  (SELECT count(*) FROM projects WHERE NOT is_default)     AS user_made_projects,
+  (SELECT count(*) FROM diagram_change_records)            AS change_records;
+SQL
+```
+
+- `on_user_made_systems` **不為 0**：使用者已把圖搬到自建系統上。那些歸屬**不是**遷移的產物，回復不得碰它們——下面的 SQL 也確實不會碰（它只清掛在**預設**系統上的）。
+- `user_made_systems` 不為 0：其中若有掛在預設專案底下的，第 3 步會被 `RESTRICT` 擋下，那個預設專案會**留著**並被第 4 步的檢查報出來。這是正確行為，不是失敗。
+- `change_records` 不為 0：見下方注意事項 3。
+
+```bash
+psql "$DATABASE_URL" <<'SQL'
+BEGIN;
+-- 1) 只清掛在**預設系統**上的歸屬。使用者搬到自建系統上的圖原樣不動。
+--    必須在刪 systems 之前——否則 ON DELETE RESTRICT 會擋住第 2 步。
+UPDATE user_diagrams SET system_id = NULL
+ WHERE system_id IN (SELECT id FROM systems WHERE is_default);
+-- 2) 刪除遷移建立的預設系統。此時它們之下已無圖，RESTRICT 不會擋。
+DELETE FROM systems WHERE is_default;
+-- 3) 刪除遷移建立的預設專案，但**只刪其下已無任何系統的**。
+--    使用者若在預設專案底下自建過系統，該專案留著——硬刪會被 RESTRICT 擋掉並中止整個交易。
+DELETE FROM projects p
+ WHERE p.is_default
+   AND NOT EXISTS (SELECT 1 FROM systems s WHERE s.project_id = p.id);
+-- 4) 確認。這四個數**可以不為 0**，各自有明確含義，見下表。
+SELECT
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE s.is_default)                               AS still_on_default_systems,
+  (SELECT count(*) FROM systems  WHERE is_default)     AS default_systems_left,
+  (SELECT count(*) FROM projects WHERE is_default)     AS default_projects_left,
+  (SELECT count(*) FROM user_diagrams d JOIN systems s ON s.id = d.system_id
+     WHERE NOT s.is_default)                           AS on_user_made_systems;
+COMMIT;
+SQL
+```
+
+第 4 步的四個數怎麼讀：
+
+| 欄 | 應為 | 不是的話代表什麼 |
+|---|---|---|
+| `still_on_default_systems` | **0** | 第 1 步沒清乾淨——**這是真正的失敗**，不要 `COMMIT`，回報後人工處置 |
+| `default_systems_left` | **0** | 第 2 步被擋——同上，真正的失敗 |
+| `default_projects_left` | 0 **或**使用者在其下自建過系統的那幾個 | 不為 0 時以 `SELECT p.id FROM projects p WHERE p.is_default AND EXISTS (SELECT 1 FROM systems s WHERE s.project_id = p.id);` 列出來人工判斷。**這是預期內的狀態，不是錯誤** |
+| `on_user_made_systems` | 與回復**前**那一次查詢的同名欄位相等 | 不相等代表本程序誤動了使用者的歸屬——**立刻 `ROLLBACK`** |
+
+三個注意事項：
+
+1. **步驟順序不可調換**：`user_diagrams.system_id` 與 `systems.project_id` 都是 `ON DELETE RESTRICT`，先刪 `systems` 會被拒絕。這正是 `BR1.2` 在保護的行為，不是障礙。
+2. **只碰遷移的產物**。初版的第 1 步寫成 `WHERE system_id IS NOT NULL`——那會連同使用者自己搬過的歸屬一起清掉，與本節第 2 點的宣稱直接矛盾；而初版第 4 步的檢查跑在那個清空之後，恆為 0，**是一個不可能失敗的檢查**（iteration 1 審查 R-02，Major）。現行版本改以「掛在預設系統上」為範圍，並把檢查拆成回復前後兩次比對。
+3. `diagram_change_records` **不在回復範圍內**：本輪它沒有任何寫入端上線（寫入端是後續單元），回復時表應為空。若不為空，那是稽核資料，刪除前須人工確認。另注意 `diagram_id` 是 `ON DELETE CASCADE`——刪除架構圖會連帶銷毀它的變更紀錄，這是已揭露並由人工裁決保留的取捨。
 
 #### 2.2.1 A3 `architecture_reviews`（DDL 摘要）
 
@@ -450,6 +678,17 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 部署 **C1 FinOps** 時：確認上列 AWS／GCP secrets 已設，且 backend 出站可達官方價目 host；煙測成本頁對 AWS／GCP／Azure 圖各查一次價。
 
+部署 **brain-infra（U1：Redis／Ollama／PG 18）** 時：
+
+- **新增一個 secret `REDIS_PASSWORD`**（`openssl rand -hex 32`，值不得含 `$`）。它是
+  `deploy` job 的「Require the secrets that must not default」步驟與 `render-env.sh` 都會
+  檢查的必填值，缺了就不會部署。**其餘六個 brain-infra 變數不要加成 secret**——見第
+  5.10 節，把它們做成 `env:` 會讓 backend 拒絕啟動。
+- 新增後實地查證它落在 **secrets** 而不是 variables（兩次 `gh api`，指令見第 5.10 節）。
+- **PG 16 → 18 是破壞性升版**，不能只靠 merge 觸發自動部署：先走第 5.4 節的七步程序，
+  再合併。反向順序會**靜默成功**（首頁正常、資料面全壞）。
+- 首次部署後補實測值回第 5.6 節（記憶體）與第 5.9 節（rollback 耗時）。
+
 #### 3.4 本次功能升級檢查清單（A1↔A3 優化）
 
 - [ ] Backend image **重建**（含 `@anthropic-ai/claude-code`）  
@@ -479,10 +718,514 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 5. 設定前端 `VITE_API_BASE_URL` 後 build／部署  
 6. 用既有管理員或 bootstrap admin 登入 → **立刻輪替臨時密碼／清除 bootstrap secret** → 調整角色權限
 7. 依第 3.4／3.5 節做 A1／A3／優化與成本頁煙測  
+8. **首次部署 brain-infra（Redis／Ollama／PG 18）之前，逐項做完第 5 節的前置條件**  
+9. **既有環境**（如 `192.168.10.10`）另跑一次性階層遷移：`cd backend && python scripts/run_hierarchy_migration.py`。**必須在應用未接流量的窗口內執行**，且結束碼為 0 才可繼續——步驟、驗證與回復程序見第 2.2.7 節
 
 ---
 
-### 5. 相關文件
+### 5. brain-infra（U1）：前置條件、容量與 PG 16→18 升版
+
+本節是 `Redis`（第 5 個服務）、`Ollama`（第 6 個服務）與 PG 18 ＋ pgvector 落地所需的
+**部署環境前置條件與運維程序**。
+
+> **本節每一項都沒有機械閘門。** `scripts/validate_env_contract.py` 只解析環境變數，
+> 不解析 compose 的 `deploy.resources`、`logging:` 或 `networks:`；CI 跑在 GitHub runner
+> 上，對 `192.168.10.10` 的磁碟、記憶體與加密狀態一無所知。這些事只能靠 code review
+> 與運維紀律，所以**寫在這裡就是它唯一的存在形式**。
+
+#### 5.1 主機全碟加密（前置條件，不是 compose 設定）
+
+`192.168.10.10` 的系統碟必須啟用全碟加密（LUKS 或等價機制）。理由：本單元讓主機上同時
+落地 Redis 的完整 session 上下文、資料庫 volume（`users` 全表含 `password_hash`、全部
+RBAC 矩陣、三種記憶）、升版期的**全庫明文 dump**、以及部署窗口內的 `deploy/.env`。
+
+**選全碟而不是「只加密 Docker 資料目錄」**：後者需要維護一張「哪些目錄在範圍內」的清單，
+而那張清單每新增一個服務、每新增一個落地檔就會漏一項，且**沒有任何機械閘門會發現漏項**。
+全碟是唯一不需要維護清單的形狀。
+
+**這個決定保護什麼、不保護什麼**（不要讀成比實際更強）：
+
+- **保護**：磁碟離線曝露——磁碟遭竊、主機報廢未清碟、備份介質外流、快照被複製。
+- **不保護**：**任何在主機執行中時的曝露**。作業系統一旦掛載，加密對執行中的行程完全
+  透明。取得主機 root、或取得任一容器執行權並讀得到 volume 掛載點的人，讀到的是明文。
+
+**要逐一檢查的四個掛載點**（任一若為獨立掛載，就對它重複下面的判定）：
+
+| 掛載點 | 為什麼它在清單上 |
+|---|---|
+| `/` | 基準 |
+| `/var/lib/docker` | 三個具名 volume 的實體位置。搬到獨立的未加密資料碟是常見做法 |
+| `/home`（或 `$HOME` 所在掛載點） | 升版 dump 放在 `$HOME/cloud360-upgrade/`（見 5.3） |
+| 自架 runner 的工作目錄 | `deploy/.env` 在部署窗口內落在這裡，且部署失敗時會留存到下一次成功部署 |
+
+漏掉其中任一項，會讓「系統碟已加密」與「那份最集中的明文資料其實沒加密」同時為真。
+
+**判定方式（可二元判定）。注意 `lsblk` 的輸出形狀**：LUKS 之下，掛載點所在裝置的
+`FSTYPE` 是 `ext4`／`xfs`（那是解密後的映射裝置），`crypto_LUKS` 出現在它的**祖先**上。
+**不要**斷言「上一層就是 `crypto_LUKS`」——三大發行版的引導式 FDE 產生 LVM-on-LUKS，
+直接父層的 `FSTYPE` 是 `LVM2_member`，那樣寫會在一台正確加密的主機上判成失敗。
+
+```bash
+# 對上表每一個掛載點跑一次（以 / 為例）
+DEV=$(findmnt -no SOURCE /)            # 先取裝置，避開 MOUNTPOINTS 欄位名的版本差異
+                                       # （MOUNTPOINTS 需 util-linux >= 2.37）
+lsblk -s -o NAME,FSTYPE "$DEV"         # 反向列出祖先鏈
+# 判定 1：鏈中出現 crypto_LUKS 即通過（不必是上一層）
+lsblk -s -no FSTYPE "$DEV" | grep -qx crypto_LUKS && echo "LUKS: yes" || echo "LUKS: not found"
+
+# 判定 2：映射裝置為 active 的 LUKS1／LUKS2
+cryptsetup status "$(basename "$DEV")" | grep -E 'type:|status:'
+```
+
+**ZFS 原生加密是合格但不會出現 `crypto_LUKS` 的情形**，判定 1、2 對它不適用，**不得因此
+判為未加密**；改以下列判定，值不為 `off` 即通過：
+
+```bash
+zfs get -H -o value encryption <dataset>
+```
+
+#### 5.2 解鎖方式，以及它與斷電自動回復的張力
+
+| 解鎖方式 | 對斷電自動回復的後果 |
+|---|---|
+| **Passphrase** | **主機不會自動回復。** 斷電或重開後開機停在解鎖提示，必須有人到場（或走 KVM／IPMI）輸入。在那之前站台全黑，且 `deploy.yml` 的自架 runner 也不在線——**連回滾都跑不了** |
+| **TPM 自動解鎖**（如 `systemd-cryptenroll --tpm2-device=auto`） | 自動回復恢復，代價是**加密對「整台機器被搬走」的防護降級**：碟與 TPM 一起被帶走時可自行解鎖。它仍防「只把碟拆走」 |
+
+**這是一個要做的決定，不是實作者可以順手挑的。** 請在此記下本主機實際採用哪一種，以及
+若採 passphrase，誰負責到場：
+
+```text
+本主機採用的解鎖方式：____________（passphrase／TPM）
+採 passphrase 時的到場負責人與聯絡方式：____________
+最後確認日期：____________
+```
+
+#### 5.3 升版 dump 檔的三條硬要求（缺一不可）
+
+升版走 dump/restore，而 dump 是**全庫明文**。本 repo 的兩道掃描對它**結構上無效**：
+`validate_no_obvious_secrets()` 只讀 contract 檔清單（工作區內的任意 `.sql` 不在其中），
+而 `validate_no_production_config_added()` 做 `prod`／`production`／`secrets` 的 path-part
+精確比對，`cloud360-dump-20260927.sql` 三者皆不命中。所以一份放在 repo 工作區的 dump，
+`git add -A` 會把它撈進去，**兩道檢查都不會響**——而本 repo 是 **public**。
+
+| # | 要求 | 做法 | 通過條件 |
+|---|---|---|---|
+| 1 | 建立時即 owner-only | 先 `umask 077` 再執行 `pg_dump`（**不是事後 `chmod`**——事後改之前存在一個 world-readable 的時間窗） | `stat -c '%a %U' <dump>` 回 `600` ＋ 執行者帳號 |
+| 2 | 只准放 `$HOME` 下的專用目錄 | `$HOME/cloud360-upgrade/`，該目錄本身 `700`。**不得放在 repo 工作區或其任何子目錄** | `realpath <dump>` 的前綴為該目錄；且 dump 存在期間 `git -C <repo> status --porcelain` **不出現任何 `.sql`** |
+| 3 | 驗證通過後立即刪除並記錄 | 七步程序的最後一步刪除 dump | 該目錄下無殘留 `.sql`；升版紀錄有刪除時間 |
+
+```bash
+mkdir -p "$HOME/cloud360-upgrade" && chmod 700 "$HOME/cloud360-upgrade"
+( umask 077; docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env \
+    exec -T db pg_dump -U postgres cloud360 > "$HOME/cloud360-upgrade/cloud360-dump-$(date +%Y%m%d).sql" )
+stat -c '%a %U' "$HOME/cloud360-upgrade/"*.sql     # 必須是 600 ＋ 你的帳號
+git -C "$(pwd)" status --porcelain | grep -c '\.sql' # 必須是 0
+```
+
+**不加密 dump 檔本身**是刻意的：多一個金鑰要管，而升版窗口正是最不該增加失敗模式的時候
+——回退路徑就是那份 dump，金鑰遺失等於備份等於沒有。它的離線面由 5.1 的全碟加密涵蓋，
+5.3 管的是**線上**面（主機執行中時誰讀得到它、它會不會被誤推進版控）。兩者不可互相替代。
+
+#### 5.4 PG 16 → 18 升版程序（手動路徑；七步）
+
+**只走 dump/restore。** `pg_upgrade` 需要舊（16）與新（18）兩套 binaries 連同舊 data
+directory，本部署形狀下沒有承載者。
+
+**開始之前必須先過 5.5 的磁碟門檻與 5.6 的記憶體處置。空間不足時不得開始升版**——
+七步程序在中途耗盡空間，會同時失去「新 volume 建好」與「dump 檔完整」兩者，而回退路徑
+**就是那份 dump**。
+
+| 步 | 動作 | 注意 |
+|---|---|---|
+| 1 | 量 `DBSIZE`／`DUMPSIZE`，核對 5.5 的逐掛載點門檻 | **量的是舊 volume**（現名見步 4） |
+| 2 | 停 `backend`（`docker compose stop backend`） | 步 4 有一條硬條件依賴它：backend 必須是停止的 |
+| 3 | 依 5.3 產生 dump（`umask 077`，放 `$HOME/cloud360-upgrade/`） | 三條要求缺一不可 |
+| 4 | 以 **新 volume** 起 PG 18 | 見下方兩條硬條件 |
+| 5 | 還原 dump，並處理 collation | 基底映像由 musl 換 glibc，text 欄位的既有索引排序與新 libc 不一致：還原後執行 `REINDEX DATABASE cloud360;` |
+| 6 | 啟 `backend`，跑 5.7 的手動探測 | 探測回 401 才算通 |
+| 7 | 舊 volume ＋ dump **保留至驗證通過**；窗口結束時刪除並記錄 | 見 5.8 |
+
+**步 4 的兩條硬條件**：(a) **不得掛 initdb 目錄**——`/docker-entrypoint-initdb.d/` 內的
+`schema_rbac.sql` 會在空 volume 上執行，把即將被還原覆蓋的表先建一遍並重播
+`role_permissions`；(b) **backend 必須是停止的**——它的 startup 會跑 `init_db()`（`create_all`
+＋ 七支 `_ensure_*`），在還原中途動 schema。
+
+**採用哪一種做法，兩者代價不對稱，請記下實際選的那一個**：
+
+| 做法 | 代價 |
+|---|---|
+| **裸映像還原**（`docker run` 一個 `pgvector/pgvector:pg18`，只掛新 volume，不用 compose） | 要另寫一次連線參數；但**結構上不可能誤掛 initdb 目錄** |
+| **暫移 compose 的 initdb 掛載**（註解掉那一行，還原後復原） | 少一組參數；但**復原那一行是一個人可以忘記的步驟**，忘了之後下一個空 volume 部署就會少掉 schema |
+
+```text
+本次升版採用的做法：____________　執行者：____________　日期：____________
+```
+
+**volume 命名的完整值**（compose 專案名為 `cloud360`，故具名 volume 的實際名稱是
+`cloud360_<宣告名>`）：
+
+| | 宣告名（compose 檔內） | 實際 Docker volume |
+|---|---|---|
+| 舊（PG 16） | `cloud360_db` | **`cloud360_cloud360_db`** |
+| 新（PG 18） | `db_pg18` | **`cloud360_db_pg18`** |
+
+```bash
+docker volume ls | grep cloud360      # 兩者在回退窗口內應同時存在
+```
+
+**為什麼要改名**：步 4 要求以**新 volume** 起 PG 18，步 7 又承諾**舊 volume** 保留至驗證
+通過。在單一 volume 名稱下兩者不可能同時成立——不改名就必須先毀掉舊的，步 7 的回退面
+就只剩備份檔一條腿。
+
+**三條排序不變量**（`NFR6.3(b)`）：
+
+1. **先做資料轉換，後合併觸發自動部署。** 反向順序會**靜默成功**：合併先落地會讓
+   `deploy.yml` 以 PG 18 映像對**舊 PGDATA** 啟動容器，postgres 拒絕啟動並進入重啟迴圈，
+   而站台首頁（靜態檔）仍然正常——第 5.7 節的探測正是為了讓這件事不再靜默。
+2. **回滾的覆蓋範圍不對稱。** `deploy.yml` 的 `rollback` job 還原的是**程式碼**
+   （last-good commit），它**不會**還原 PGDATA。所以升版窗口內一次自動回滾會讓 PG 16 的
+   映像對著 PG 18 的 volume。三個處置選項：(a) 升版窗口內**暫時停用** rollback job；
+   (b) 讓它只還原程式碼並接受上述不相容（現況）；(c) 在該窗口內改為人工部署。
+   **請記下採用哪一個**，以及若採 (a)，窗口結束後以另一個 PR 復原它，並確認復原後的
+   第一次部署真的有 rollback 武裝：
+
+   ```text
+   本次升版採用的 rollback 處置：____（a／b／c）
+   若採 (a)：復原 PR 連結 ____________　復原後第一次部署 run 連結 ____________
+   ```
+3. **相容性前置檢查在 `deployment-pipeline` 落地之前只是人工前置。** 即「回滾取出的
+   commit 其映像主版本須與當前 PGDATA 相容」目前沒有任何機械檢查，只有本節這段文字。
+
+#### 5.5 磁碟空間門檻（逐掛載點）
+
+**沒有任何一處檢查過主機的磁碟空間，而本單元同時增加三個消費者**：Ollama 模型快取
+（`bge-m3` 約 1.2GB，**由部署後的 `ollama pull` 取得後常駐**，不在容器啟動路徑上）、
+Redis AOF（隨 session 量成長，受 `maxmemory` 間接約束）、以及升版窗口內的資料庫副本。
+
+**先定義兩個量，否則門檻寫不出來**：
+
+| 量 | 定義與量測 |
+|---|---|
+| **`DBSIZE`** | **PGDATA 目錄的實際大小**，**不是** `pg_database_size()`（後者不含索引膨脹、不含 WAL、不含其他 database，兩者可差數倍）。**需 root**（`/var/lib/docker` 預設 `0710 root:root`），且**升版前要量的是舊 volume**（改名前／用舊名） |
+| **`DUMPSIZE`** | 假設 `pg_dump` 的**預設 plain 格式、未壓縮**。以 `DBSIZE` 為上界估算；**不假設它比較小**——無壓縮的文字輸出對寬表可能更大 |
+
+```bash
+sudo du -sb /var/lib/docker/volumes/cloud360_cloud360_db/_data   # DBSIZE（舊 volume）
+df -h / /var/lib/docker "$HOME"                                  # 逐掛載點的可用空間
+```
+
+| 掛載點 | 升版前所需可用空間 | 涵蓋什麼 |
+|---|---|---|
+| 承載 Docker volume 的檔案系統（通常 `/var/lib/docker`） | **≥ `DBSIZE` × 2 ＋ max(`DBSIZE` × 0.5, `max_wal_size` 的生效值) ＋ 1.5GB ＋ 2GB** | 新 volume ＋ 保留中的舊 volume（**兩份，不是三份**——dump 在 `$HOME`）；還原期 WAL；模型 volume（含餘裕）；日誌預算上界（見 5.6） |
+| `$HOME` 所在檔案系統 | **≥ `DUMPSIZE`** | dump **一份**（5.3 要求它放這裡） |
+| 自架 runner 的工作目錄所在檔案系統 | 既有需求，無新增 | `deploy/.env` 極小；`up -d --build` 的建置快取是既有消費 |
+| `/`（若上列任一未獨立掛載） | 取該掛載點所涵蓋各項之和 | — |
+
+**還原期 WAL 餘裕為何取「兩者中的大者」**：匯入期間 WAL 的產生量與匯入資料量同級，但
+checkpoint 會回收，故比例式餘裕取 `DBSIZE × 0.5`；**但 `max_wal_size` 的預設值就是 1GB**，
+所以 `DBSIZE` 小於 2GB 時比例式會低於 WAL 實際可累積的量——故取大者，小型資料庫的下界
+即 1GB 而非比例值。
+
+#### 5.6 記憶體上限與日誌上限（本輪為**暫定值**）
+
+**六個服務全部設了 `deploy.resources.limits.memory`，值寫在 `deploy/docker-compose.deploy.yml`
+裡（不走環境變數）。** 硬寫的理由是：新增一個 compose 消費的變數就多一個同步點，而本 repo
+有這件事的**無聲失敗前例**（`N8N_USER`／`N8N_PASSWORD` 從未被寫入，導致每次部署的架構圖
+icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量要走 PR，變成可審查、有版本的變更。
+**所以「由部署者依主機餘裕定」的實際語意是「改 PR」**，不是改一個環境變數。
+
+> **⚠ 這一組值是依公開基準推導的暫定值，不是在 `192.168.10.10` 上量出來的。**
+>
+> | 服務 | 暫定上限 | 依據（公開基準） |
+> |---|---|---|
+> | `db` | `1g` | `shared_buffers` 預設 128MB ＋ `work_mem` × 連線數 ＋ OS 快取需求 |
+> | `backend` | `2g` | Python／uvicorn 行程基線（解譯器＋相依套件本身即數百 MB）× 併發假設 |
+> | `redis` | `768m` | 由 `maxmemory` 反推，見下方關係式 |
+> | `ollama` | `4g` | `bge-m3` 約 1.2GB ＋ runtime 常駐約 2GB × 安全係數（**兩個數字取自一般認知，未在本主機實測**） |
+> | `frontend` | `128m` | nginx 常駐極小 |
+> | `cloudflared` | `128m` | tunnel client 常駐極小 |
+>
+> **兩項給定假設**（本設計給定，可日後複量推翻）：(1) 單主機 staging、單一 uvicorn
+> worker、同時處理的 LLM 請求數上限為**個位數**；(2) 同時活躍的 session 數為**個位數到
+> 低兩位數**。
+>
+> **這些是 per-container 上限，不是保留量**，總和超過主機記憶體是正常的。
+>
+> **這是交付後的 blocking 前置，不是「有空再填」（審查 R-06 定案）**
+>
+> **觸發條件（二元可判）**：`REDIS_PASSWORD` secret 建立 → 首次部署成功 → **自該次部署起七日內**。
+> 在此之前無法量測，因為部署尚未發生、沒有任何真實流量可量（這也是本輪不填一個猜測日期的理由：
+> 猜的日期會讓下一個人以為它被評估過）。
+>
+> **負責人**：Danniel（`REDIS_PASSWORD` 的建立者即量測者——建立 secret 的人是唯一知道首次部署何時
+> 發生的人，把兩件事綁在同一個人身上才不會互相等）。
+>
+> **量測方式（不需放寬任何 ACL，見 §5.11）**：主機上 `docker stats --no-stream` 取六個容器的穩態用量；
+> Redis 另以 app 使用者執行 `MEMORY STATS`（`INFO` 不可達，審查 R-01）。
+>
+> **未完成的後果**：十個記憶體上限與 `maxmemory` 全部停留在「以公開基準推導的暫定值」，
+> 而 `OPEN-4` 自己寫明「沒有日期的限期複量會退化成永遠暫定」。**本節被填完之前，
+> 不得把這些數字當成已驗證的容量規劃依據。**
+>
+> **複量期限與擁有者（首次部署後七日內填完）**：
+>
+> ```text
+> 複量負責人：Danniel（已指定，見上）
+> 複量期限（日期）：首次部署成功日 + 7 日（實際日期：____________）
+> 複量方式：部署後在正常負載下取 `docker stats` 的穩態峰值，改 PR 更新這六個數字
+> 複量完成日期與所得數字：____________
+> ```
+
+**CI test stack 的值另循一條路**：`deploy/docker-compose.test.yml` 跑在 GitHub-hosted
+`ubuntu-latest` 上，其規格是公開文件化的固定值，**不適用主機量測程序**；那四個值只需
+保證總和不超過 runner 記憶體並留餘裕（現為 `1g`＋`2g`＋`512m`＋`256m` ≈ 3.75GB）。
+**兩份 compose 的記憶體上限值必然不同，這是本項的刻意例外，不是漂移。**
+
+**`maxmemory` 與容器上限的關係式（必須成立，沒有閘門會檢查它）**：
+
+> **`redis` 容器的記憶體上限 ≥ `maxmemory` × 1.5 ＋ 256MB**
+>
+> 本輪的值：`maxmemory 256mb` → 下界 `256 × 1.5 + 256 = 640m` ≤ 上限 `768m`。**成立。**
+
+| 項 | 依據 |
+|---|---|
+| × 1.5 | Redis 的 `used_memory` 之外還有 allocator 碎片（`mem_fragmentation_ratio` 一般 1.0–1.5）與輸出緩衝。1.5 是實務的保守下界，**作用是讓關係式可被檢查，不是精確預測** |
+| ＋ 256MB | AOF 重寫期間的 copy-on-write 與 `aof_rewrite_buffer`。AOF 由 `NFR4.2` 要求開啟，故此項必存在 |
+
+**關係式不成立的後果**：容器會在 Redis 有機會執行 `allkeys-lru` 淘汰之前就被 OOM kill
+——把一個優雅的淘汰換成硬重啟，而硬重啟在 `restart: unless-stopped` 之下變成反覆重啟，
+且它比淘汰難診斷得多（OOM kill 只在核心日誌裡）。**注意訊號的可達性（審查 R-01）**：淘汰計數雖然在 `INFO` 裡有 `evicted_keys`，但 `INFO` 的 ACL 分類是 `@slow @dangerous`，**本專案設定的兩個身分都不能執行它**——`default` 只有 `@connection`，app 使用者是 `+@all -@admin -@dangerous`。實際可用的替代訊號是以 app 使用者執行 `MEMORY STATS`，以及在主機上跑 `docker stats` 看容器層用量；兩者都不需要放寬任何 ACL。
+
+**`maxmemory 256mb` 的暫定依據**（與六個上限同一形狀：公開基準 ＋ 限期複量）：單一 session
+的 key 大小上界（`BrainSession` 除 `messageHistory` 外全是識別碼與短字串，量級由
+`messageHistory` 決定）× 24 小時內活躍 session 數上界（TTL 24 小時、每次互動續期）×
+安全係數。**一項待確認**：`messageHistory` 若沒有截斷策略，單一 session 可無限成長，
+這個推導就不成立，必須反過來以 `maxmemory` 約束 `messageHistory`（`U10` 確認）。
+
+**`maxmemory`／`maxmemory-policy`／`appendonly` 三項一律住在 compose 的 `command:`，
+不得移入掛載的 `redis.conf`**：`redis-server` 的 CLI 旗標會**靜默覆寫**檔內同名指令，
+兩處都寫會讓檔內那份無聲失效；且兩個數字在同一個服務區塊內才能一眼核對上面的關係式。
+
+**日誌上限（`logging.options`）**：現值 `max-size: 50m`、`max-file: "5"`，加在**兩份
+compose 的全部服務**上。
+
+> **總量上界：`max-size` × `max-file` × 服務數 不得超過 2GB。**
+> 本輪：`50m × 5 × 6 = 1.5GB`，成立。這個上界是 5.5 磁碟公式裡「日誌預算」那一項的值
+> ——若這兩個值完全自由，該項就是一個無界的自由變數（`100m × 5 × 6` 就是 3GB，單這一項
+> 吃掉整個餘裕），公式會失去定義。
+>
+> 上界**只約束 deploy stack**；CI test 的日誌隨 stack 消失。
+
+**方向要寫對**：今天的無界 `json-file` 並不是「保留無限」，而是「保留到**磁碟寫滿**、
+然後全站與全部日誌一起失去」。改為有界**移除了一條會摧毀全部證據的路徑**，代價只落在
+長回溯調查。另外 `max-size × max-file` 的乘積是**容量**上限而非保留**期**；保留期 =
+容量 ÷ 寫入速率，而速率未知且逐服務不同（`backend` 遠高於 `cloudflared`）。
+
+#### 5.6.1 升版窗口內必須另行處置 `db` 的記憶體上限
+
+`db` 的容器記憶體上限在升版窗口內同樣生效，而 **dump/restore 是該容器生命週期中記憶體
+用量最異常的一段**（大批 `COPY`、索引重建、`maintenance_work_mem`）。以「正常使用下的
+穩態峰值」得到的值，正是**最可能在還原中途被突破**的那一個——而突破的後果是 OOM kill
+＋ `restart: unless-stopped` 的重啟迴圈，發生在回退**依賴 dump 完整性**的那個窗口裡。
+
+**處置：升版期間暫時提高到一個明確的值（不是移除），還原與驗證通過後恢復原值，並在升版
+紀錄寫下「已恢復」。**
+
+**為何是「提高到明確值」而不是「移除」**：移除上限之後，升版期的 `db` 若吃光主機記憶體，
+受害者是**同一台主機上的其他五個容器**，而 5.1 的全碟加密使主機重開需要解鎖（見 5.2）。
+
+**為何不把上限常設為足以涵蓋還原峰值**：那會讓正常運行期間的上限失去保護意義——上限的
+目的就是擋住失控的那一個容器。
+
+```text
+升版期間 db 的暫時上限：____________（例：4g）
+還原與驗證通過日期：____________
+**已恢復**原值（1g）日期與 PR／commit：____________
+```
+
+#### 5.7 資料面探測（手動升版路徑那一份）
+
+`deploy.yml` 的自動部署路徑已內建這個探測（`deploy` job 一個獨立步驟，`rollback` job
+併入其健康檢查迴圈）。**手動升版路徑不經 `deploy.yml`**，所以步 6 要自己跑一次：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  --connect-timeout 5 --max-time 10 \
+  -X POST http://127.0.0.1:8090/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"__cloud360_deploy_probe_no_such_user__","password":"probe"}'
+```
+
+**通過條件是 `401`，不是 2xx。** 使用者名稱刻意是一個**不存在**的固定值：`login` 的處理
+在任何密碼比對之前先查資料庫，所以 401 同時證明 `frontend → backend` 與 `backend → db`
+都通。**2xx 反而代表探測寫錯了**（真的登入成功），所以「回 2xx 才算通」會是一個永遠不會
+通過的檢查。它不建帳號、不留稽核列、不需要任何憑證。
+
+**為什麼既有的檢查不夠**：`deploy.yml` 原本的兩個 `curl` 都打 `/`，由 nginx 的
+`try_files` 回靜態檔——不經 `location /api/`、不碰 backend、更不碰 db；`db` 的
+`pg_isready` 在**容器內部**執行；`depends_on: service_healthy` 只管啟動順序。所以
+`backend → db` 斷掉時部署會**綠燈通過**，站台首頁正常而所有需要資料庫的功能全壞。
+而把 `db` 移進 `internal` 網段的正是本單元。
+
+**診斷指向（不是通過條件）**：
+
+| 回應 | 指向 |
+|---|---|
+| `401` | 兩段都通 |
+| `502`（持續整個重試窗口） | 最可能是 `backend → db` 斷掉（`create_all` 與七支 `_ensure_*` 都在 startup 路徑上，db 不可達時 uvicorn 不進入服務狀態並反覆重啟）。次要可能：backend 映像本身起不來 |
+| `500`／`504`／curl 逾時（`000`） | `backend → redis` 或 `backend → ollama` 斷掉——這兩段**不在** startup 路徑上，所以 backend 會正常服務、在請求處理中才失敗或掛住 |
+| `200` 且回 HTML | `/api/` 路由或 `frontend → backend` 斷（落到 `try_files`） |
+
+#### 5.8 回退窗口結束時刪除舊 volume 與 dump，並記錄
+
+回退窗口內舊 volume 與 dump 同時保留。**窗口結束時必須刪除並記錄，否則它們會無限期留著**
+——而它們是兩份全庫明文副本。
+
+```text
+回退窗口保留期限（自升版完成起）：____________（建議 7 天）
+舊 volume（cloud360_cloud360_db）刪除時間：____________
+dump 檔刪除時間：____________
+```
+
+```bash
+docker volume rm cloud360_cloud360_db
+rm -f "$HOME/cloud360-upgrade/"*.sql
+ls -la "$HOME/cloud360-upgrade/"      # 應無殘留 .sql
+```
+
+#### 5.9 `rollback` job 加上探測後的實際耗時
+
+| 項目 | 值 | 狀態 |
+|---|---|---|
+| `deploy` job 逾時 | 30 分鐘 | 既有 |
+| `rollback` job 逾時 | **20 分鐘** | 既有 |
+| `deploy` 側探測 | `N=30`、間隔 5s、單次 `--connect-timeout 5 --max-time 10` → 最壞 `30 × (10+5) = 450s ≈ 7.5 分` | 本輪設定 |
+| `rollback` 側探測（併入既有迴圈，每輪兩個 request） | `N=18`、間隔 5s、同樣的單次逾時 → 最壞 `18 × (10+10+5) = 450s ≈ 7.5 分` | 本輪設定 |
+| `rollback` job 的其餘既有消費 | checkout ＋ `render-env.sh` ＋ **無界的 `up -d --build`** ＋ 該步驟之後三個 `if: always()` 步驟 | — |
+
+**約束式**：`N × (T + 間隔) ≤ 1200s −（`up -d --build` 實測）−（三個 `if: always()` 步驟
+實測）−（checkout ＋ render 實測）− 安全餘裕。
+
+> **⚠ 這條式子的右側本輪未實測，`up -d --build` 是其中的無界項。** 選 `N=18` 而非 30 是
+> 為了留出餘裕（450s 之後仍有 750s 給其餘各項），但**這不是一個量出來的結論**。逾時的
+> 後果是 **rollback 本身被砍掉**：站台留在壞版本、revert PR 沒開。
+>
+> **首次部署後請實測並填回這裡**：
+>
+> ```text
+> up -d --build 實測耗時：____________
+> 三個 if: always() 步驟合計：____________
+> checkout ＋ render-env.sh：____________
+> rollback job 總耗時：____________　（逼近 20 分鐘時：縮短窗口或提高 timeout-minutes，
+>                                    兩者都是需要決定的事，不是實作者可以順手挑的）
+> ```
+
+**為何以 `N` 而非 `T` 吸收差額**：`T` 壓太小會讓探測失去區分「backend 還在跑
+`init_db()`」與「資料面真的斷了」的能力，而那正是這個窗口存在的理由。附帶：`N=18` 配
+上每輪最壞 25s，在**牆鐘**上比它取代的 `30 × 5s = 150s` 迴圈更有耐心，不是更沒耐心。
+
+#### 5.9.1 `deploy` job 的耗時預算（審查 R-03 補入；上一版只算了 rollback）
+
+`deploy` job 的 `timeout-minutes` 是 **30**（`deploy.yml:28`），比 `rollback` 的 20 寬鬆，
+但本輪加進這一側的東西**比 rollback 多**，而原本只在探測步驟的註解裡算了自己那一步
+（`30 × (10 + 5) = 450s`）——**右側從來沒有列出來**。逾時的後果比 rollback 更糟：
+`deploy` job 被砍會被視為部署失敗，於是在一次**好的**合併上觸發自動 `rollback` ＋ revert PR。
+
+同一個 job 內的五項消費，以及哪幾項有界：
+
+| 項目 | 上界 | 有界？ |
+|---|---|---|
+| `up -d --build` | 取決於 Docker layer cache 與映像下載 | **無界，必須實測** |
+| 等待 frontend 迴圈 | `30 × (10 + 5) = 450s` | 有界（本輪為 `curl` 補了 `--max-time 10`；在此之前**無界**） |
+| `ollama pull bge-m3` | 首次約 1.2GB 下載；之後為一次 registry 往返 | **無界，必須實測（首次／後續分開記）** |
+| Redis ACL 反向探測 | 三個 `exec`／`inspect`，數秒 | 有界 |
+| 資料面探測 | `30 × (10 + 5) = 450s` | 有界 |
+| 等待 tunnel 迴圈 | `24 × (10 + 5) = 360s` | 有界（同樣是本輪補 `--max-time` 才有界） |
+
+**約束式**：`450 + 450 + 360 + (up -d --build 實測) + (ollama pull 實測) + 數秒 ≤ 1800s`。
+已知有界部分合計 **1260s**，所以兩個無界項合計必須 **≤ 540s（9 分鐘）**。
+
+**必填欄位（實測後補上，留空等於沒有預算）**：
+
+- `up -d --build` 實測耗時（冷快取／熱快取）: ____ / ____
+- `ollama pull` 實測耗時（首次下載／模型已在 volume）: ____ / ____
+- 兩者合計是否 ≤ 540s: ____
+- 量測日期與量測者: ____
+
+**若合計超過 540s**，處置是降低探測的重試次數（`N`）而不是延長 `timeout-minutes`——
+把逾時放寬會同時延長「站台已經壞掉但 job 還在等」的時間。
+
+#### 5.9.2 Ollama 的版本不可重現（審查 R-05）
+
+`deploy/docker-compose.deploy.yml` 的 `ollama` 服務用 **`ollama/ollama:latest`**，
+**沒有釘版本**——而同一輪改動的另兩個映像都釘了主版本（`pgvector/pgvector:pg18`、
+`redis:8-alpine`）。本專案是 deploy-on-merge，所以**任何一次重新部署都可能靜默拉到不同的
+Ollama 版本**，而 compose 的改動沒有任何 CI 閘門看得到（見 `infrastructure-design` `§六`
+的九項無閘門項目）。模型快取 volume `ollama_models` 會留存，但 runtime 版本變動可能改變
+embedding 行為，或讓以 `ollama list` 為基礎的 healthcheck 語意改變。
+
+**為什麼本輪不逕自釘一個版本號**：要挑版本必須先確認它與 `bge-m3`（dense 1024）相容；
+憑猜寫一個數字會讓下一個人以為那個版本被驗證過，比不釘更糟。
+
+**處置（依賴可重現性之前必做）**：確認相容版本後把 `:latest` 換成具體 tag，並把該版本與
+相容性確認結果記在這一節。負責人與期限: ____
+
+
+#### 5.10 新增的 GitHub secret
+
+本單元新增**一個**憑證型 secret：**`REDIS_PASSWORD`**。
+
+```bash
+openssl rand -hex 32     # 產生它。值不得含 `$`（見下）
+```
+
+- **必須落在 secrets，不得落在 variables。** Actions variables 為明文、UI 可回讀、且在
+  workflow log 中**不遮罩**，而本 repo 為 public、Actions log 公開可讀——一次意外 echo
+  即等同公開發布。新增後實地查證兩次：
+
+  ```bash
+  gh api repos/<owner>/<repo>/actions/secrets   --jq '.secrets[].name'
+  gh api repos/<owner>/<repo>/actions/variables --jq '.variables[].name'
+  # REDIS_PASSWORD 必須出現在第一份、且不得出現在第二份
+  ```
+
+  **若曾誤存為 variable，僅搬移不足以結案，必須重新產生金鑰**——「應該沒人看過」是沒有
+  證據的假設。
+- **值不得含 `$`**：docker compose 會對 `--env-file` 的值做內插，`ab$cd` 被**無聲截斷**成
+  `ab`，Redis 照樣接受該 ACL 密碼、`redis-cli ping` 照樣回 PONG、healthcheck 照樣過。
+  `deploy/render-env.sh` 會擋下這種值（以及空值）。
+- **其餘六個 brain-infra 變數不是 secret**，也**不要**為它們新增 secret：它們是
+  `render-env.sh` 內的字面值。把它們做成 `deploy.yml` 的 `env:` 會讓六個沒有對應 secret
+  的名字解析成**空字串**，而 `EMBEDDING_PROVIDER` 缺值會讓 backend 拒絕啟動 → 部署紅燈
+  → 觸發自動 rollback ＋ revert PR。
+
+#### 5.11 Redis ACL 與網段分段：兩件不要「順手修正」的事
+
+1. **`deploy/docker-compose.deploy.yml` 的 `networks:` 一律不帶 `internal: true`。**
+   它會斷開該網段的**對外出口**，而 `ollama` 只掛在 `internal` 上——模型永遠拉不下來，
+   且失敗形式是啟動時的網路錯誤，不是設定錯誤訊息。分段本身不需要它：一個普通的
+   user-defined bridge 沒有 `ports:` 就沒有 host 端口映射，跨 bridge 流量本就被 Docker
+   的隔離規則阻擋。
+2. **`cloudflared` 不得加進 `internal`。** 它是本 stack 唯一對網際網路持續開著連線的
+   容器；把它移出資料面（3 → 0 個可直達的資料面服務）就是分段的主要價值。
+
+**分段隔離什麼、不隔離什麼**（不要讀成比實際更強）：同一網段的成員彼此可達**全部端口**
+（ICC 預設開啟），所以 `internal` 上的 `db` 若被攻陷，它**仍然**碰得到 Redis 的全部
+session 與零認證的 Ollama；而 bridge 網段的 subnet 從 host 直接可路由，所以
+`192.168.10.10` 上的**任何行程**（包含自架 runner）都能以容器 IP 直連 `redis:6379` 與
+`ollama:11434`，**完全不需要 `ports:`**。分段隔離的是容器之間，不隔離 host 與容器。
+
+**三個 healthcheck 的已知盲點（刻意接受，不是漏洞）**：
+
+| healthcheck | 不證明什麼 |
+|---|---|
+| `redis-cli ping` | **不證明 ACL 使用者可用**——`ping` 在 `default` 下也會過；且它在 AOF 載入期間即可回應，所以 `service_healthy` 通過之後、資料集載入完成之前，其他指令會回 `LOADING` |
+| `ollama list`（即 `/api/tags`） | **不證明模型存在**——無模型時回空清單而非錯誤。「模型在不在」由部署後的 `ollama pull` 步驟保證 |
+| `pg_isready` | 在 **db 容器內部**執行，不證明 `backend` 連得到它。那由 5.7 的探測負責 |
+
+---
+
+### 6. 相關文件
 
 | 文件 | 說明 |
 |---|---|
@@ -529,8 +1272,18 @@ No new SQL is required for the A1↔A3 optimize feature; schema remains `schema_
 psql "$DATABASE_URL" -f schema_rbac.sql
 ```
 
-Creates: `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`, **`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`, plus `last_opened_diagram_id`.  
+Creates: the **`vector` extension** (`CREATE EXTENSION IF NOT EXISTS vector`, the first
+statement after `BEGIN;`), `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`,
+**`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`,
+plus `last_opened_diagram_id`.  
 Seeds ~**308** `role_permissions` rows. It does **not** create a fixed-password admin user.
+
+The whole script is ONE transaction, so a server without pgvector aborts it and creates
+**no tables at all** — not just the memory tables. The db image must be
+`pgvector/pgvector:pg18` in all three composes. Details, the second carrier
+(`backend/database.py::_ensure_vector_extension()`, which must run BEFORE
+`Base.metadata.create_all()`), and the verification commands are in §2.2.6 of the
+Chinese half above.
 
 **A3** `architecture_reviews` stores review scores/findings/suggestions. **`wa_lenses`** stores the active Custom Lens JSON editable by users with **A3.review** (default: Security_Reviewer VER; reviews resolve DB-first, then file fallback). Existing DBs: re-run `schema_rbac.sql` (`IF NOT EXISTS`) or rely on backend `_ensure_a3_schema()` on startup.
 
