@@ -219,7 +219,7 @@ cp backend/.env.example backend/.env
 ```bash
 cat > backend/.env <<'EOF'
 APP_ENV=local
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cloud360
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
@@ -267,6 +267,10 @@ FASTEMBED_MODEL=multilingual-e5-large
 EOF
 ```
 
+> **`+psycopg` 這個後綴只給應用程式用**，因為它是 SQLAlchemy 的 driver 指定語法。
+> 上面用 `psql` 建庫的指令**不能**加它——`psql` 不認得這個形式，會直接連線失敗。
+> 兩處刻意不同：`psql` 用裸的 `postgresql://`，`backend/.env` 用 `postgresql+psycopg://`。
+
 > `JWT_SECRET` 未設時會**靜默 fallback 到程式碼內的預設字串**（依賴風險 R2），不會報錯。本機無所謂，但要知道它不會提醒你。
 
 要改用 OpenRouter 的話，把 `LLM_PROVIDER` 改成 `openrouter` 並填入 `OPENROUTER_API_KEY` 即可，其餘不用動——所有 `ANTHROPIC_*` 變數都由程式依模式自動處理（openrouter 模式自動填寫，cli 模式主動刪除，見第 0 節 H1 的表）。
@@ -285,6 +289,15 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> **從既有環境升上來的人必看**：PostgreSQL 驅動已由 `psycopg2-binary` 換成
+> `psycopg[binary]`（v3）。兩者是**不同套件**，舊環境不會自動換掉，必須重跑一次
+> 上面的 `pip install -r requirements.txt`。沒裝 psycopg v3 時，`import main`
+> 會以 `ModuleNotFoundError: No module named 'psycopg'` 失敗。
+>
+> 單元測試大多不受影響（`tests/helpers.py` 在偵測到沒裝時會 stub 掉），但
+> `tests/test_dotenv_path.py` 的兩個案例是**開子行程**跑 `import main`，
+> stub 進不到子行程裡，所以那兩個案例真的需要驅動裝好才會綠。
 
 ### 啟動
 
@@ -394,7 +407,8 @@ UPDATE users SET last_activity_at = NULL WHERE username='demo2';
 ## 7. 跑測試（開發時最有用的迴圈）
 
 ```bash
-# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg2 被 mock 掉）
+# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg 被 mock 掉）
+# 但驅動本身要裝（見上節）：有兩個案例開子行程，mock 進不去
 cd backend && python -m unittest discover -s tests -v
 
 # 前端 lint + 型別 + build

@@ -9,7 +9,7 @@ import os
 import unittest
 from contextlib import contextmanager
 
-import tests.helpers  # noqa: F401  -- installs the psycopg2 stub before services import
+import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 from services.llm_provider import (
     CLI,

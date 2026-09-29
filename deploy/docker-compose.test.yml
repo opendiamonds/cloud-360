@@ -76,7 +76,7 @@ services:
     build:
       context: ../backend
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-testpass}@db:5432/cloud360
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-testpass}@db:5432/cloud360
       JWT_SECRET: ${JWT_SECRET:-test_jwt_secret_not_for_production}
       # A1 generation is out of scope for these tests; leave the key empty so
       # the app boots but the LLM path stays untouched.

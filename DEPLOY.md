@@ -89,7 +89,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | 變數 | 本機常見值 | 新環境建議 |
 |---|---|---|
 | `APP_ENV` | `local` | `staging`／實際環境名（勿用路徑含 `prod`／`production` 的目錄名，見 repo contract） |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/cloud360` | 改成該環境 PostgreSQL 連線字串 |
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/cloud360` | 改成該環境 PostgreSQL 連線字串。**必須保留 `+psycopg` 後綴**——它顯式指定 driver 為 psycopg v3，不寫就退回 SQLAlchemy 的隱含預設，而那個預設會隨版本改變（2.0 是 psycopg2、2.1 是 psycopg）|
 | `JWT_SECRET` | 範本預設字串 | **務必更換**成長隨機字串 |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | 改成**前端實際網址**（逗號分隔，勿結尾斜線）例：`https://app.example.com` |
 | `OPENROUTER_API_KEY` | 本機金鑰 | 該環境專用金鑰（勿提交進 git） |
@@ -214,6 +214,8 @@ schema_rbac.sql
 
 ```bash
 # 先設好該環境的 DATABASE_URL
+# 注意：這一份是給 psql 用的，**不能**帶 `+psycopg` 後綴——psql 不認得該形式。
+# backend/.env 裡給應用程式用的那一份才需要 `postgresql+psycopg://`（見上表）。
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DBNAME'
 
 psql "$DATABASE_URL" -f schema_rbac.sql

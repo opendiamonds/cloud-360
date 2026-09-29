@@ -254,7 +254,11 @@ jobs:
       # covers behaviour; this step still catches breakage the suite never imports.
       - name: Import FastAPI app
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud360
+          # 顯式指定 driver（psycopg v3），與 backend/database.py、兩份 compose、
+          # backend/.env.example 同一形式。裸 postgresql:// 會回頭依賴 SQLAlchemy 的
+          # 隱含預設，而那個預設在 2.1 由 psycopg2 改為 psycopg——CI 這兩步正是最早
+          # 會踩到它的地方。
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
           JWT_SECRET: ci_only_not_a_real_secret
         run: python -c "import main; print('app:', main.app.title)"
 
@@ -267,7 +271,11 @@ jobs:
       # drifts across them.
       - name: OpenAPI spec drift
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloud360
+          # 顯式指定 driver（psycopg v3），與 backend/database.py、兩份 compose、
+          # backend/.env.example 同一形式。裸 postgresql:// 會回頭依賴 SQLAlchemy 的
+          # 隱含預設，而那個預設在 2.1 由 psycopg2 改為 psycopg——CI 這兩步正是最早
+          # 會踩到它的地方。
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
           JWT_SECRET: ci_only_not_a_real_secret
         run: python scripts/dump_openapi.py --check
 
@@ -282,7 +290,7 @@ jobs:
       - name: WS contract spec drift
         run: python scripts/dump_ws_contract.py --check
 
-      # Unit suite (SQLite in-memory; psycopg2 mocked in tests/helpers.py)
+      # Unit suite (SQLite in-memory; psycopg mocked in tests/helpers.py)
       - name: Run unit tests
         env:
           JWT_SECRET: ci_only_not_a_real_secret
