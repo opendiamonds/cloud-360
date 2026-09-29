@@ -335,3 +335,118 @@ Does this all look correct before I generate the artifact?
 <!-- 修訂 1（2026-09-21T10:31:44Z）於本確認之後新增 S11，依 project.md
      `requirements-analysis:260822-ra-L3` 清空並重新取得確認。 -->
 [Answer]: Looks correct
+
+---
+
+# 修訂 2（2026-09-29 會議結論）
+
+**觸發**：使用者於 Construction 進行中帶入會議定案——Cloud-360 改以**專案為管理中心**，
+新增「專案系統資訊需求頁」，並引入 **per-project 成員角色**。依 `project.md` 的
+既有規則（推翻已核可定案時須由使用者裁決落回方式），使用者選擇**回跳本站以
+Modify 模式重走**。回跳已執行，12 站被重置（本站起至 `functional-design`）。
+
+## 會議結論原文（逐字，供下游引用）
+
+> 針對專案、系統、架構關係，原先有個需求部分，我們會建立一個專案系統資訊需求頁面，
+> 負責建立專案、系統等記錄所有其他功能性 agent 的所需要的需求匯整地方，是為整個系統
+> 的長期記憶部分，共享給其他子功能 Agent 使用，其他子功能 agent 的記憶都會被摘要並
+> 彙整於此功能頁面做呈現，也可以作為專案儀表板及專案系統需求來源，例如：成本所需要的
+> SLA、TPS、使用客群等資訊都會透過大腦根據成本 agent 或架構 agent 需要與使用者溝通時，
+> 透過 mcp 更新並取得相關資訊，查詢、新增或更新都於資料庫，成本 agent 可以透過 mcp
+> 去更新及調用專案系統資訊，所以系統資訊整個 cloud360 會以專案角度進行管理，專案創建者
+> 為 project_owner，是為 project_admin，可以指定其他加入專案的成員角色給予權限，
+> project_admin 可以多個人，當 project_owner 帳號被移除時，可自動選其他人變為
+> project_admin，而 system_admin 為整個系統的 Super admin，他是可以管理所有專案的存在
+
+## 已於本輪裁決、不重問
+
+| 事項 | 定案 |
+|---|---|
+| 新的專案長期記憶 vs 已核可能力 4（`U5`／`U8` per-user 語意記憶） | **兩件事，並存**。`U5`／`U8` 照原設計做 |
+| per-project 角色與全域 RBAC 的關係 | **兩層串聯**：全域 `role_permissions` 管「能不能用這個功能」，新成員表管「能不能碰這個專案的資料」，兩者都要過；既有 308 列矩陣不動 |
+| 落回流程的方式 | 回跳本站，Modify 模式 |
+
+## 本站查證到的八處衝突（供題幹引用，非上游來源）
+
+1. `Project_Admin` **已是既有全域角色**（`rbac.py:33`、`:288` 的「Project_Admin 不可核准 Plat/Owner」），與新的 per-project `project_admin` 同名不同義。
+2. `users.role` 是**單一字串欄位**（`models.py:40`），`require_story_action` 只認 `(user.role, story_id)`——**沒有任何地方能表達 per-project 角色**。
+3. 已核可的 `K2`（ADR-004）把 projects／systems 的建改刪定為**全域角色**權限，與「誰建立誰是該專案 owner」相斥。
+4. `projects` 只有單一 `owner_user_id`，而 `project_admin` 可多人；且該 FK 無 `ON DELETE` 子句（`schema_rbac.sql:328`）——**今天刪除持有專案的使用者會 FK 違規失敗**，「owner 被移除時自動改選」連執行機會都沒有。
+5. 已核可記憶模型為 `ownerUserId` ＋ `visibilityScope`、預設最窄、放寬僅 `Platform_Admin`／`Platform_Owner`（ADR-006），與 per-project 共享不同模型。
+6. 已核可 `FR10.2` 逐字要求「一律走 HTTP 帶使用者 token，**不得同進程繞過** `require_story_action`」，而本 repo 既有 MCP 是 `design_agent.py` 的 **in-process** SDK server。
+7. 新頁面不在 10 項能力、不在已核可 mockups、不在 17 個單元內。
+8. `system_admin` 與既有 `Platform_Admin`／`Platform_Owner` 的對應未定。
+
+受影響已發出 ADR：**ADR-003**、**ADR-004**、**ADR-006**。
+
+---
+
+## S12. 新能力與既有能力 9 的關係，以及它的分級
+
+既有能力 9 為「專案 → 系統 → 架構圖 階層」，`requirements.md` 明確指它是**資料模型**
+（`scope-document.md` 能力 9 逐字只有六個字）。新頁面是一個完整的管理與彙整介面。
+
+- **A**：新增為**能力 11（Must）**，能力 9 維持原樣。兩者並列，能力 9 是資料模型、能力 11 是其上的管理面。
+- **B**：**取代能力 9**——把階層資料模型吸收進新能力，總數仍為 10 項。
+- **C**：**擴充能力 9 的定義**，不新增編號。
+- **D**：新增為**能力 11 但列 Should**，本輪不保證交付。
+
+[Answer]: A — 新增為能力 11（Must），能力 9 維持原樣
+
+**作答後果**：能力總數由 10 增為 **11**，Must 由 9 項增為 **10 項**（Must 佔比 10/11 ＝ 91%）。
+能力 9 的定義**不動**（仍是資料模型），故 `US9.1`／`US9.2` 兩則已核可故事與 `U4` 已交付的
+三張表**保持有效、不需重新掛點**。能力 11 是其上的管理與彙整介面，含建立專案／系統、
+需求欄位的查詢新增更新、子 agent 記憶的摘要彙整呈現、專案儀表板。
+`org.md` 建議 Must 不超過 60%，本專案的偏離已於修訂 1 記載並被接受，本輪延續同一記載方式。
+
+---
+
+## S13. Agent 取用專案系統資訊的通道
+
+會議結論逐字說「透過 mcp 更新並取得相關資訊」「成本 agent 可以透過 mcp 去更新及調用」。
+已核可的 `FR10.2` 逐字禁止同進程繞過 `require_story_action`。兩者要調和。
+
+- **A**：MCP 只是**大腦端的工具封裝**，底下仍走 HTTP 帶使用者 token。`FR10.2` 不變。
+- **B**：**in-process MCP 直接讀寫資料庫**，沿用 `design_agent.py` 的既有形狀。**推翻 `FR10.2`**。
+- **C**：MCP server 跑**獨立進程**，對外仍帶 token 呼叫既有 API。
+- **D**：本輪不定案，列為設計階段的開放決策。
+
+[Answer]: A — MCP 是大腦端的工具封裝，底下仍走 HTTP 帶使用者 token
+
+**作答後果**：**`FR10.2` 維持有效、不推翻**。對 agent 而言介面是 MCP tool，實作是呼叫既有 API，
+故授權仍只有 `require_story_action` 一個入口——這也讓 S14 定案的兩層串聯權限不會被同一條路徑繞過。
+代價是多一層封裝。`design_agent.py` 的 in-process MCP 形狀**不作為本能力的前例**。
+
+---
+
+## S14. `project_admin` 與既有全域 `Project_Admin` 的命名撞車
+
+- **A**：**新的改名**（例如成員角色叫 `owner`／`admin`／`member`，只在專案成員表內有意義，不進 `CANONICAL_ROLES`）。既有 11 個全域角色一字不動。
+- **B**：**既有全域 `Project_Admin` 改名**，把 `project_admin` 讓給新的 per-project 角色。
+- **C**：兩者同名但**以所在表區分命名空間**，文件上註明。
+
+[Answer]: A — 新的改名，不進 `CANONICAL_ROLES`
+
+**作答後果**：專案成員角色（`owner`／`admin`／`member` 一類）只在新的專案成員表內有意義，
+**不進 `CANONICAL_ROLES`、不進 `role_permissions`**。既有 11 個全域角色與 330 列矩陣一字不動，
+`Project_Admin` 的既有全域語意（`rbac.py:288`）不受影響。與本輪已定案的「兩層串聯」一致：
+全域矩陣管功能、成員表管專案資料。具體角色名稱留 `domain-design` 定。
+
+---
+
+## S15. `system_admin` 對應既有哪個角色
+
+既有 `CANONICAL_ROLES` 有 `Platform_Admin` 與 `Platform_Owner`，且 `rbac.py:284` 的
+`RESTRICTED_APPROVAL_ROLES` 已把這兩個視為受限的高權限角色。
+
+- **A**：`system_admin` ＝ 既有 **`Platform_Admin`**，不新增角色，只是在新頁面的敘述中用這個既有名字。
+- **B**：`system_admin` ＝ **`Platform_Owner`**。
+- **C**：`Platform_Admin` 與 `Platform_Owner` **兩者皆是**全系統 super admin。
+- **D**：**新增第三個全域角色**。
+
+[Answer]: A — `system_admin` 就是既有的 `Platform_Admin`
+
+**作答後果**：**不新增全域角色**，矩陣維持 11 × N。所有下游文件一律寫 `Platform_Admin`，
+**不得**再出現 `system_admin` 這個別名（否則就是本輪剛避免掉的同名異義問題換個位置再來一次）。
+依據：`rbac.py:298` 已有「Platform_Admin 可核准全部」的先例；而 `Platform_Owner` 在 28 個
+story id 上全為 `v--`（全域唯讀，本站實算複驗），與 super admin 的寫入語意相反。

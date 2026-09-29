@@ -84,6 +84,8 @@
 - **NEVER** 把 RBAC 種子或權限頁的 C1 欄當成已有 cost router／Cost 頁 (affirmed 2026-08-19)
 - **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`；**ADR-0018 §1**：`pricing_client` 可對接的端點集合擴大至目錄價類的需憑證端點，httpx 不得直打的規定不變)
 - NEVER 以 repo 內新增的實作程式（例如 `scripts/` 下的 Python）承載**無人值守的**流程自動化與外部系統同步；此類機制一律以 gh-aw 或 GitHub Actions workflow 承載。**邊界以觸發來源判定**：由事件或排程觸發、無人在迴圈內的（`on: push`／`pull_request`／`schedule`／`workflow_dispatch` 等）屬本條禁止範圍；由 stage 檔或 slash command 觸發、須有人執行才會跑的工具**不在此限**——既有先例為 `tcms` plugin 的 `scripts/tcms_validate.py` 與 `scripts/tcms_sync.py`，兩者只被 `.claude/aidlc-common/stages/construction/tcms-test-cases.md` 呼叫，`.github/` 下無任何 workflow 呼叫它們。注意 gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo 三塊結構性盲區的「所有 LLM 路徑」那一塊，決定性的映射邏輯應優先放在純 Actions 步驟，判斷性的工作才交給 gh-aw (learned 2026-08-23；2026-08-24 收窄為「無人值守」並寫明觸發來源判準——原文的「與外部系統同步」會讓 `## Mandated` 強制要求的 tcms 流程技術性違反本條，該矛盾由使用者裁決收窄規則文字而非增列例外) <!-- cid:intent-capture:260822-c1 -->
+- NEVER 因為「A 讓 B 更有用」就在 A 與 B 之間列依賴邊——依賴的判準是「B 沒有 A 就不成立」，不是「B 有了 A 更完整」。憑空多出的邊會被下游當成不可覆寫的 DAG 約束而綁死排序。本輪實例：會議結論說成本 agent 要取用能力 11 的 SLA／TPS，但能力 10 的定義逐字是「辨識成本需求、路由到既有端點、狀態事件轉譯」，不需要那些欄位就成立，故刻意不列依賴並在產出內寫明理由。 (learned 2026-09-28) <!-- cid:260920-orchestration-brain:scope-definition:d6a3f07d78618f6ce6544c072b69e7efad148666521995ca0cdb674f49a43576 -->
+
 ## Mandated
 
 - ALWAYS 在 commit 前執行 `python3 scripts/validate_repo_contract.py`。違反 repo contract = CI 紅燈。contract 涵蓋 repo 層必要文件（`REQUIRED_FILES`／`REQUIRED_TEXT`）、record 層 baseline artifacts（`REQUIRED_RECORD_FILES`／`REQUIRED_RECORD_TEXT`，執行時動態解析 record 目錄）、文件語言（record 內不得有 `## English Version`）、禁止路徑與禁止內容。
@@ -142,6 +144,8 @@
 - **我揭露了較輕的阻塞、漏了較重的，而且兩者形狀相同**。本站明白寫出 `U9 memory-purge` 卡在 `OQ-13`（4 次命中），卻對 `U11 intent-router` 卡在 `OQ-10`／`OQ-4` 零提及——而後者更嚴重：`OQ-10` 質疑的是路由層**能不能產出可比較的信心值**，若不能，`U11` 責任裡寫成已定案的「0–1 信心值」與「門檻 0.7」兩句都要改寫，而 `OQ-4`／`OQ-10` 是上游標明**無自然承接站**的兩項（`OQ-13` 至少有 `infrastructure-design`）。可執行檢查：列完單元後，把 `requirements.md` 的每一個 `OQ-<n>` 逐一問「它未定案會讓哪個單元無法完成」，而不是只寫出自己剛好想到的那一個。 (learned 2026-09-26) <!-- cid:260920-orchestration-brain:units-generation:b0718371842caa9c3df80a771c94b082426eee6bac2ac9c82a6b2b1f71faa8d9 -->
 
 - ALWAYS 在 Bolt 計畫寫完後，**實算**每個 Bolt 完整交付幾則使用者故事（判定方式：該故事的**最後**一個單元落在哪個 Bolt），把分佈寫成表放進產出，並確認表內總數等於故事總數。照單元與契約推導出來的 Bolt 序列**不算完成**。理由：那樣推導出的序列在依賴圖上可以完全合規，卻把大部分使用者可見價值壓在單一 Bolt 上，而這個事實在單元層級的任何檢查裡都看不到。本輪實例：九個 Bolt 全部照單元與契約推導，20 則故事有 **13 則（65%）**集中在 B6、另有四個 Bolt 各 0 則——這是 `upstream-coverage` sensor 回報 `stories` 與 `unit-of-work-story-map` 從未被引用之後才回頭算出來的，不是規劃時想到的；它隨即成為本計畫最大的風險項 (learned 2026-09-26) <!-- cid:260920-orchestration-brain:delivery-planning:bcd2e92c67dd1d50b1d2164195faba42dfbc43df388c964e643d20528034cf9c -->
+
+- ALWAYS 在把會議結論或口頭新需求寫進需求之前，先對它點名的每一個識別字（角色名、欄位名、函式名）在 repo 內查證是否已被佔用、以及既有語意是什麼。本輪實例：會議結論的 project_admin 與既有全域角色 Project_Admin 同名不同義（rbac.py:33、:288），若照字面寫進需求，要到 domain-design 才會撞上，而那時 11 個角色與 330 列矩陣都已被下游引用。查證成本是幾次 grep，不查的成本是一次回跳。 (learned 2026-09-28) <!-- cid:260920-orchestration-brain:scope-definition:71cb0eeb4f3a1467f1212da1d5d4988621dc314dcfb00dbae2c0d07e31767a60 -->
 
 ## Corrections
 
