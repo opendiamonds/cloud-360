@@ -189,6 +189,15 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> **從既有環境升上來的人必看**：PostgreSQL 驅動已由 `psycopg2-binary` 換成
+> `psycopg[binary]`（v3）。兩者是**不同套件**，舊環境不會自動換掉，必須重跑一次
+> 上面的 `pip install -r requirements.txt`。沒裝 psycopg v3 時，`import main`
+> 會以 `ModuleNotFoundError: No module named 'psycopg'` 失敗。
+>
+> 單元測試大多不受影響（`tests/helpers.py` 在偵測到沒裝時會 stub 掉），但
+> `tests/test_dotenv_path.py` 的兩個案例是**開子行程**跑 `import main`，
+> stub 進不到子行程裡，所以那兩個案例真的需要驅動裝好才會綠。
+
 ### 啟動
 
 ```bash
@@ -298,6 +307,7 @@ UPDATE users SET last_activity_at = NULL WHERE username='demo2';
 
 ```bash
 # 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg 被 mock 掉）
+# 但驅動本身要裝（見上節）：有兩個案例開子行程，mock 進不去
 cd backend && python -m unittest discover -s tests -v
 
 # 前端 lint + 型別 + build

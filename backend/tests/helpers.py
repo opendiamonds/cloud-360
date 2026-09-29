@@ -16,6 +16,9 @@ from unittest.mock import MagicMock
 # 這是本次遷移實跑時抓到的（21 個 error），不是推論。
 if importlib.util.find_spec("psycopg") is None:  # pragma: no cover - 取決於環境
     _psycopg_stub = MagicMock()
+    # dialect 建構時會對 `psycopg.__version__` 跑 re.match 取版號；MagicMock 對
+    # dunder 名一律丟 AttributeError，不給它就是 21 個 loader error。
+    _psycopg_stub.__version__ = "3.2.0"
     sys.modules.setdefault("psycopg", _psycopg_stub)
     # dialect 建構時會走到的子模組，需一併登錄才不會在 import 階段失敗。
     for _sub in ("adapt", "pq", "types", "rows"):
