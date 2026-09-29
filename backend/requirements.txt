@@ -5,7 +5,7 @@
 # 且該紅燈與「真的漂移了」在訊號上不可區分。
 # 升版這兩支時，必須在**同一個 PR 內**重新 dump openapi.json 並重產前端型別檔。
 # 相容釋出形式（~=）仍會在次版本線上浮動，形式選錯等於沒釘 —— 故用 ==。
-fastapi[standard]==0.141.1
+fastapi==0.111.0
 pydantic==2.13.4
 uvicorn
 httpx
@@ -15,9 +15,9 @@ psycopg2-binary
 passlib[bcrypt]
 bcrypt
 pyjwt
-claude-agent-sdk
-langgraph==1.2.11
-langchain-openai==1.6.2
+langgraph
+langchain-core
+langchain-anthropic
 hypothesis
 openpyxl==3.1.5
 PyYAML>=6.0

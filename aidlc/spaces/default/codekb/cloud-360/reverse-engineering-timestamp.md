@@ -8,19 +8,17 @@
 
 | 項目 | 值 |
 |---|---|
-| **日期** | 2026-08-23 |
-| **Commit** | `9307dbc` |
-| **Commit 訊息** | `修正(api): /me 回應補上規格要求的 last_opened_diagram_id` |
-| **Branch** | `danniel/fix/me-last-opened-diagram-id` |
-| **前一基準** | `c3de2c8`（2026-08-17，branch `danniel/fix/production-path-check-noop`） |
-| **Repository** | `opendiamonds/cloud-360`（本 clone 的目錄名為 `chiton`，見「關於 codekb 目錄名」） |
-| **AIDLC stage** | `reverse-engineering`（inception 2.1，`mode: pipeline`） |
-| **執行方式** | 兩環 pipeline：link 1 developer agent 掃描、link 2 architect agent 綜整與寫檔 |
+| **日期** | 2026-09-28 |
+| **Commit** | `5106acd` |
+| **Commit 訊息** | `文件(aidlc): 完成 intent-capture 階段意圖捕捉問卷與文件` |
+| **Branch** | `doreen/feat/agent-langraph-migration` |
+| **Repository** | `cloud-360` |
+| **AIDLC stage** | `reverse-engineering`（inception 2.1，pipeline mode） |
+| **執行方式** | 快速新鮮度驗證 (POC 意圖 `260928-poc`) |
 
-### 本輪是**兩區定向掃描 ＋ 差異標註**，不是完整重掃
+### 本次為新鮮度驗證（非完整重掃）
 
-這是本檔最重要的一句話。**approval-handoff Q3 選了 A**，把本 stage 的範圍界定為兩區；
-完整全 repo 重掃已被提出並**明確否決**。因此：
+本 codekb 於 2026-09-28 執行快速新鮮度驗證。針對將 Agent 框架從 Claude SDK 改成 LangGraph 的 POC (`260928-poc`)，我們驗證了現有的架構與元件盤點仍能正確反映當前分支的狀態，無須重新產生所有 9 份文件。
 
 | 範圍 | 處理方式 |
 |---|---|
@@ -30,12 +28,8 @@
 
 **新鮮度標記的讀法**（各 artifact 的節標題後會出現其中之一）：
 
-| 標記 | 意義 | 可信度 |
-|---|---|---|
-| **［本輪重寫］** | 本輪在 `9307dbc` 上實掃並改寫 | 高 |
-| **［本輪機械複驗］** | 本輪未做深度掃描，但以 grep／解析器等機械方式重新量測過該節引用的數字 | 高（僅限被複驗的那個數字） |
-| **［差異標註］** | 本輪**未重新推導**，只依 `c3de2c8..9307dbc` 的 diff 指出哪裡已過期 | 中：指出的過期點可信，未指出處不代表沒過期 |
-| **［沿用 `c3de2c8`］** | 本輪完全未觸及 | 以 `c3de2c8` 為準，可能已漂移 |
+掃描當下工作樹除 `aidlc/.../audit/` shard 外乾淨。**本 codekb 描述的是 commit `5106acd`
+於 branch `doreen/feat/agent-langraph-migration` 的狀態。**
 
 **差異標註的證據強度分兩級，artifact 內會註明**：
 
