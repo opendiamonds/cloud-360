@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import importlib.util
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -31,9 +32,16 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_DIR.parent
 SPEC_PATH = REPO_ROOT / "openapi.json"
 
-# 與 tests/helpers.py 相同的前置：CI 與部分主機沒有 psycopg2 驅動，而本腳本
+# 與 tests/helpers.py 相同的前置：CI 與部分主機沒有 psycopg 驅動，而本腳本
 # 只需要 import 應用、不需要真的連線。
-sys.modules.setdefault("psycopg2", MagicMock())
+# 只在真的沒裝時才 stub——無條件 setdefault 會把真模組遮掉，而 SQLAlchemy 的
+# psycopg dialect 建構時要 `from psycopg.adapt import AdaptersMap`，MagicMock
+# 不是 package，滿足不了子模組 import。與 tests/helpers.py 同一形狀。
+if importlib.util.find_spec("psycopg") is None:  # pragma: no cover - 取決於環境
+    _psycopg_stub = MagicMock()
+    sys.modules.setdefault("psycopg", _psycopg_stub)
+    for _sub in ("adapt", "pq", "types", "rows"):
+        sys.modules.setdefault(f"psycopg.{_sub}", getattr(_psycopg_stub, _sub))
 for path in (BACKEND_DIR, BACKEND_DIR / "services"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

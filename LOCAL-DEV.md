@@ -139,7 +139,7 @@ cp backend/.env.example backend/.env
 ```bash
 cat > backend/.env <<'EOF'
 APP_ENV=local
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cloud360
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
@@ -165,6 +165,10 @@ LLM_MODEL=
 # 禁止把真金鑰寫進版控檔；log／錯誤訊息不得含 secret 值（變數名可出現）。
 EOF
 ```
+
+> **`+psycopg` 這個後綴只給應用程式用**，因為它是 SQLAlchemy 的 driver 指定語法。
+> 上面用 `psql` 建庫的指令**不能**加它——`psql` 不認得這個形式，會直接連線失敗。
+> 兩處刻意不同：`psql` 用裸的 `postgresql://`，`backend/.env` 用 `postgresql+psycopg://`。
 
 > `JWT_SECRET` 未設時會**靜默 fallback 到程式碼內的預設字串**（依賴風險 R2），不會報錯。本機無所謂，但要知道它不會提醒你。
 
@@ -293,7 +297,7 @@ UPDATE users SET last_activity_at = NULL WHERE username='demo2';
 ## 7. 跑測試（開發時最有用的迴圈）
 
 ```bash
-# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg2 被 mock 掉）
+# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg 被 mock 掉）
 cd backend && python -m unittest discover -s tests -v
 
 # 前端 lint + 型別 + build
