@@ -23,6 +23,16 @@ Issues（已經發生、需要處置）、Dependencies（依賴他方才能完�
 | R-8 | **兩份 LangGraph／OpenRouter 執行層並存後各自漂移**。大腦自建 runtime，既有 `services/langgraph_runtime.py` 供成本 agent 使用；兩份 OpenRouter 客戶端與兩套串流事件語意並存，任一份改動（模型別名、逾時、重試、事件型別）不會自動反映到另一份 | 高 | 中 | 方向為「鎖住兩者一致性的驗證」，依 `team.md ## Code Style` 單一真實來源規則所要求。手段不在本站預選；設計階段須指定落點並說明驗證什麼。**此為使用者知情後的選擇（Q13=B 的代價已於作答時揭露），不是疏漏** | [Q13][V8] |
 | R-9 | **成本 job 的兩種終態（`timeout`／`failed`）在大腦側無對應訊息而靜默**。成本端明確送出這兩種事件，若大腦只處理 `progress` 與 `completed`，使用者會停在最後一則進度訊息，無法分辨「還在跑」與「已失敗」 | 中 | 中 | 方向為「每一種終態事件都有對應的使用者可見訊息」。具體文案屬下游 | [V-F1][F15] |
 
+
+**R-10（本輪合併 `ut` 時查出）— 大腦路由目標的下游相依缺口，六道 CI 閘門結構性抓不到。**
+D-8／D-9 的三處缺口全是**函式內 import**：`backend/main.py` 的 import smoke 只驗模組層，
+398 個測試不走那些路徑，兩道契約漂移檢查只看 `openapi.json`／`ws-contract.json` 的形狀。
+四者皆綠而功能仍壞，屬 `project.md` 記載的三塊結構性盲區之一（「所有 LLM 路徑」）。
+**緩解**：把 D-8／D-9 列為能力 10 與 Assessment 路由的**外部驗收前置條件**，在排驗收
+順序時先確認它們已修，不要等到 demo 當天。本分支的程式**與這三隻零耦合**（47 個改動檔
+中 0 個、10 個關鍵字 grep 全 0 命中，且設計刻意選擇自建 runtime 而非重用
+`langgraph_runtime`），故不阻擋開發與合併。
+
 ## Assumptions
 
 | ID | 假設 | 驗證者 | 來源 |
@@ -52,6 +62,8 @@ Issues（已經發生、需要處置）、Dependencies（依賴他方才能完�
 | D-5 | requirements-analysis 接下三個指標門檻的定案 | 阻擋成功與否的可判定性 | [F7][Q3] |
 | D-6 | 設計階段接下 R-8 的一致性驗證落點指派 | 阻擋 R-8 的緩解；未接到則兩份 runtime 的漂移無任何偵測手段 | [Q13] |
 | D-7 | 既有成本能力的 `/api/cost/v1` 契約維持穩定 | 大腦以 HTTP 呼叫它，該契約變動會直接打斷編排；但兩者同 repo 同部署，由 CI 的 OpenAPI drift 檢查承載 | [F14][V-F2] |
+| D-8 | **tina 修復 `services/langgraph_runtime.py` 的 `langchain_openai` 相依** | 阻擋**能力 10 的端到端驗收**（不阻擋開發）。大腦的成本編排路由到 `/api/cost/v1`，該端點的建議流程走 `cost/estimate_intake_service.py:71` → `advice_orchestrator` → `cost_advice_agent._invoke_once` → `langgraph_runtime.openrouter_chat_model()` → `from langchain_openai import ChatOpenAI`，而 `langchain-openai` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'langchain_openai'`。該 import 位於函式內，**CI 的 import smoke 與現有測試皆掃不到**，第一次真的問成本才會炸 | 本輪合併 `ut` 時查出 |
+| D-9 | **tina 修復 `services/review_agent.py` 與 `services/wa_lens_engine.py` 的 `claude_agent_sdk` 相依** | 阻擋 **Assessment 路由目標的端到端驗收**（不阻擋開發）。進入點 `run_review_agent()`（`review_agent.py:115`）與 `answer_lens_with_agent()`（`wa_lens_engine.py:469`），呼叫端為 `review_orchestrator.py:257`／`:336`／`:461` 與 `wa_score_service.py:16`，而 `claude-agent-sdk` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'claude_agent_sdk'`。同樣是函式內 import，同樣掃不到 | 本輪合併 `ut` 時查出 |
 
 <!-- 修訂 1 存檔於 2026-09-21，對應 feasibility 的 Consolidated Summary
      Confirmation 收據。本檔的修訂範圍：新增風險 R-8（兩份 runtime 漂移）
