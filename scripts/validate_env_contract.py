@@ -243,7 +243,7 @@ def validate_local_dev_template_is_complete() -> int:
     """Every variable the backend reads must be documented for local dev."""
     read_names: set[str] = set()
     for path in sorted((ROOT / "backend").rglob("*.py")):
-        if "tests" in path.parts or ".venv" in path.parts:
+        if "tests" in path.parts or any("venv" in part for part in path.parts):
             continue
         read_names |= set(PY_ENV_READ.findall(path.read_text(encoding="utf-8")))
 
