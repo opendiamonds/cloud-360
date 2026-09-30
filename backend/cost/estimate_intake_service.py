@@ -96,11 +96,11 @@ def validate_upload_files(files: list[UploadFile], payloads: list[bytes]) -> Non
     if n < MIN_FILES:
         raise IntakeError(status.HTTP_400_BAD_REQUEST, DETAIL_TOO_FEW_FILES)
     if n > MAX_FILES:
-        raise IntakeError(status.HTTP_413_CONTENT_TOO_LARGE, DETAIL_TOO_MANY_FILES)
+        raise IntakeError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, DETAIL_TOO_MANY_FILES)
     for uf, data in zip(files, payloads):
         if len(data) > MAX_FILE_BYTES:
             raise IntakeError(
-                status.HTTP_413_CONTENT_TOO_LARGE, DETAIL_FILE_TOO_LARGE
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, DETAIL_FILE_TOO_LARGE
             )
         ext = _ext_ok(uf.filename)
         if ext is None or not _magic_ok(ext, data):

@@ -20,6 +20,28 @@
 
 這是本檔最重要的一段，請不要略過。
 
+---
+
+## 另一次掃描基準（合併自 `ut`，不取代上表）
+
+> 下表是 `doreen/feat/agent-langraph-migration` 分支為 POC intent `260928-poc` 做的
+> **快速新鮮度驗證**，與上面那次 Full rescan 是兩件不同的事，覆蓋範圍也不同。
+> 兩份都保留：把兩次掃描壓成一個時間戳，會讓下游把未重新推導的內容誤當成最新結論
+> （`project.md` 的 `reverse-engineering:260822-re-c1`）。引用本 codekb 任何一節之前，
+> 先確認那一節的新鮮度出自哪一次。
+
+| **日期** | 2026-09-28 |
+| **Commit** | `5106acd` |
+| **Commit 訊息** | `文件(aidlc): 完成 intent-capture 階段意圖捕捉問卷與文件` |
+| **Branch** | `doreen/feat/agent-langraph-migration` |
+| **Repository** | `cloud-360` |
+| **AIDLC stage** | `reverse-engineering`（inception 2.1，pipeline mode） |
+| **執行方式** | 快速新鮮度驗證 (POC 意圖 `260928-poc`) |
+
+### 本次為新鮮度驗證（非完整重掃）
+
+本 codekb 於 2026-09-28 執行快速新鮮度驗證。針對將 Agent 框架從 Claude SDK 改成 LangGraph 的 POC (`260928-poc`)，我們驗證了現有的架構與元件盤點仍能正確反映當前分支的狀態，無須重新產生所有 9 份文件。
+
 - **廣度**：人工選擇 Full rescan，故 9 份 artifact **全部重寫**，不與舊 store 合併散文。
   舊 store（基準 `9307dbc`）的守門判定為 `UNKNOWN_SCOPE`——它早於覆蓋追蹤機制，
   其中任何一句話在本輪都**不算已驗證**。
@@ -40,6 +62,9 @@
 | **僅計數 `[算]`** | `backend/tests/`（37 支，**未讀任何一支內容**）、`frontend/tests/`、`scripts/`、11 支 gh-aw `.md`（只取 `engine:` 統計） | 低 |
 | **未開啟 `[未驗]`** | `backend/prompts/`、`backend/lenses/`、`deploy.yml` 的 step 實作、`schema.sql`、`.github/` 的 `aidlc-sync-*.yml` | 無 |
 | **刻意不掃描** | `.claude/`、`aidlc/`——AI-DLC 框架殼與工作區，非應用程式碼 | 不適用 |
+
+**上述深度分佈屬 2026-09-24 那次 Full rescan。** 2026-09-28 的快速新鮮度驗證未重做
+深度切分，其自述為：掃描當下工作樹除 `aidlc/.../audit/` shard 外乾淨。**本 codekb 描述的是 commit `5106acd` 於 branch `doreen/feat/agent-langraph-migration` 的狀態。**
 
 ### 為什麼「部分讀過的檔」沒有被升格為深讀元件
 

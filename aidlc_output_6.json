@@ -1,0 +1,53 @@
+{
+  "kind": "run-stage",
+  "stage": "requirements-analysis",
+  "phase": "inception",
+  "lead_agent": "aidlc-product-agent",
+  "support_agents": [],
+  "mode": "inline",
+  "inline_context_paths": [
+    ".claude/agents/aidlc-product-agent.md",
+    ".claude/knowledge/aidlc-shared/ai-dlc-principles.md",
+    ".claude/knowledge/aidlc-shared/audit-format.md",
+    ".claude/knowledge/aidlc-shared/brownfield.md",
+    ".claude/knowledge/aidlc-shared/knowledge-readme-template.md",
+    ".claude/knowledge/aidlc-shared/memory-template.md",
+    ".claude/knowledge/aidlc-shared/rules-reading.md",
+    ".claude/knowledge/aidlc-shared/state-template.md",
+    ".claude/knowledge/aidlc-shared/verification.md",
+    ".claude/knowledge/aidlc-shared/worktree-info-schema.md",
+    ".claude/knowledge/aidlc-product-agent/functional-design-guide.md",
+    ".claude/knowledge/aidlc-product-agent/market-research-methods.md",
+    ".claude/knowledge/aidlc-product-agent/prioritization-frameworks.md",
+    ".claude/knowledge/aidlc-product-agent/product-guide.md",
+    ".claude/knowledge/aidlc-product-agent/requirements-elicitation.md",
+    ".claude/knowledge/aidlc-product-agent/requirements-guide.md",
+    ".claude/knowledge/aidlc-product-agent/user-story-patterns.md"
+  ],
+  "gate": true,
+  "memory_path": "aidlc/spaces/default/intents/260928-poc/inception/requirements-analysis/memory.md",
+  "consumes": [
+    "aidlc/spaces/default/intents/260928-poc/ideation/intent-capture/intent-statement.md",
+    "aidlc/spaces/default/codekb/cloud-360/business-overview.md",
+    "aidlc/spaces/default/codekb/cloud-360/architecture.md",
+    "aidlc/spaces/default/codekb/cloud-360/code-structure.md"
+  ],
+  "produces": [
+    "aidlc/spaces/default/intents/260928-poc/inception/requirements-analysis/requirements.md",
+    "aidlc/spaces/default/intents/260928-poc/inception/requirements-analysis/requirements-analysis-questions.md"
+  ],
+  "rules_in_context": [
+    "aidlc/spaces/default/memory/org.md",
+    "aidlc/spaces/default/memory/team.md",
+    "aidlc/spaces/default/memory/project.md",
+    "aidlc/spaces/default/memory/phases/inception.md"
+  ],
+  "sensors_applicable": [
+    "required-sections",
+    "upstream-coverage"
+  ],
+  "stage_file": ".claude/aidlc-common/stages/inception/requirements-analysis.md",
+  "next_stage": "Code Generation",
+  "reviewer": "aidlc-product-lead-agent",
+  "reviewer_max_iterations": 2
+}

@@ -23,7 +23,18 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/cloud360"
 )
 
-engine = create_engine(DATABASE_URL)
+# 裸 `postgresql://` 的相容改寫（引入於 ut 的 4194cd2）。**目標驅動由 psycopg2
+# 改為 psycopg v3**：本 repo 的 requirements.txt 裝的是 `psycopg[binary]`，
+# psycopg2 已不在相依裡，所以原本改寫成 `postgresql+psycopg2://` 會在乾淨環境
+# 以 `ModuleNotFoundError: No module named 'psycopg2'` 失敗（已於乾淨 venv 實測）。
+# 改寫的用意——讓忘記加後綴的環境也能啟動——原樣保留，只是指向實際裝的那一個。
+# 正規寫法仍是在 DATABASE_URL 直接寫 `postgresql+psycopg://`（六處設定皆已如此），
+# 這段只是安全網，不是主路徑。
+db_url = DATABASE_URL
+if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+engine = create_engine(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 LOCAL_APP_ENVS = {"local", "test", "ci"}

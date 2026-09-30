@@ -1,0 +1,60 @@
+{
+  "kind": "run-stage",
+  "stage": "build-and-test",
+  "phase": "construction",
+  "lead_agent": "aidlc-quality-agent",
+  "support_agents": [
+    "aidlc-devsecops-agent"
+  ],
+  "mode": "inline",
+  "inline_context_paths": [
+    ".claude/agents/aidlc-quality-agent.md",
+    ".claude/agents/aidlc-devsecops-agent.md",
+    ".claude/knowledge/aidlc-shared/ai-dlc-principles.md",
+    ".claude/knowledge/aidlc-shared/audit-format.md",
+    ".claude/knowledge/aidlc-shared/brownfield.md",
+    ".claude/knowledge/aidlc-shared/knowledge-readme-template.md",
+    ".claude/knowledge/aidlc-shared/memory-template.md",
+    ".claude/knowledge/aidlc-shared/rules-reading.md",
+    ".claude/knowledge/aidlc-shared/state-template.md",
+    ".claude/knowledge/aidlc-shared/verification.md",
+    ".claude/knowledge/aidlc-shared/worktree-info-schema.md",
+    ".claude/knowledge/aidlc-quality-agent/nfr-reliability-guide.md",
+    ".claude/knowledge/aidlc-quality-agent/nfr-validation-methods.md",
+    ".claude/knowledge/aidlc-quality-agent/test-strategy-patterns.md",
+    ".claude/knowledge/aidlc-quality-agent/testing-guide.md",
+    ".claude/knowledge/aidlc-devsecops-agent/devsecops-pipeline-patterns.md",
+    ".claude/knowledge/aidlc-devsecops-agent/nfr-requirements-guide.md",
+    ".claude/knowledge/aidlc-devsecops-agent/security-guide.md",
+    ".claude/knowledge/aidlc-devsecops-agent/threat-modelling-stride.md",
+    "aidlc/spaces/default/knowledge/aidlc-quality-agent/test-case-authoring.md"
+  ],
+  "gate": true,
+  "memory_path": "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/memory.md",
+  "consumes": [
+    "aidlc/spaces/default/intents/260928-poc/construction/{unit-name}/code-generation/code-generation-plan.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/{unit-name}/code-generation/code-summary.md"
+  ],
+  "produces": [
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/build-instructions.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/unit-test-instructions.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/integration-test-instructions.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/performance-test-instructions.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/security-test-instructions.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/build-and-test-summary.md",
+    "aidlc/spaces/default/intents/260928-poc/construction/build-and-test/build-test-results.md"
+  ],
+  "rules_in_context": [
+    "aidlc/spaces/default/memory/org.md",
+    "aidlc/spaces/default/memory/team.md",
+    "aidlc/spaces/default/memory/project.md",
+    "aidlc/spaces/default/memory/phases/construction.md"
+  ],
+  "sensors_applicable": [
+    "required-sections",
+    "upstream-coverage",
+    "type-check"
+  ],
+  "stage_file": ".claude/aidlc-common/stages/construction/build-and-test.md",
+  "next_stage": "Tcms Test Cases"
+}

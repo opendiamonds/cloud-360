@@ -1,0 +1,5 @@
+{
+  "kind": "parked",
+  "reason": "Workflow parked at \"intent-capture\". Resume with /aidlc --resume.",
+  "stage": "intent-capture"
+}
