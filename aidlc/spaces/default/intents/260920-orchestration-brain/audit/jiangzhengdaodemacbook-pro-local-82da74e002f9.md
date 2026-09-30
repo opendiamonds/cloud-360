@@ -39296,3 +39296,82 @@
 **Agent**: aidlc-delivery-agent
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T15:21:23Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: aace4642a0f448cd9
+**Message**: 繼續跑 Approval & Handoff
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T15:25:32Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-30T15:29:12Z
+**Event**: DECISION_RECORDED
+**Stage**: approval-handoff
+**Decision**: 修訂 2 新增兩題：H6 成員管理的範圍決定（rough-mockups 指派給 scope-definition 但該站在游標之前、已完成，為死指派）；H7 Go/No-Go 重審與 D-8／D-9 是否成為前置條件
+**Options**: H6: A 明確排除本 intent,H6: B 回跳 scope-definition 定為能力 12,H6: C 帶進 Inception 當開放範圍項,H7: A 維持 GO 不附前置條件,H7: B 升為進入 Construction 的前置,H7: C 改為 CONDITIONAL GO
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T15:39:07Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-30T15:39:26Z
+**Event**: QUESTION_ANSWERED
+**Stage**: approval-handoff
+**Details**: H6=B（回跳 scope-definition 以 Modify 模式把成員管理定為能力 12）；H7=A（維持 GO、不附進入 Inception 的前置條件，D-8／D-9 列為端到端驗收前置並指名 tina）
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T15:43:00Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-30T15:43:23Z
+**Event**: QUESTION_ANSWERED
+**Stage**: approval-handoff
+**Details**: 成本揭露後確認：執行回跳（我已選 B）。實測 affected_stages 23 站，其中僅 scope-definition 與 rough-mockups 為已完成而真失去核可，需重過 3 個閘門；另揭露 rough-mockups 須新畫成員管理畫面（非僅重新核可）。H6=B 維持。
+
+---
+
+## Stage Jump
+**Timestamp**: 2026-09-30T15:43:30Z
+**Event**: STAGE_JUMPED
+**Direction**: BACKWARD
+**Source**: approval-handoff
+**Target**: scope-definition
+**Scope**: agent-orchestration-brain
+**Details**: BACKWARD jump from approval-handoff to scope-definition (1.4). Scope: agent-orchestration-brain.
+**Changed Upstream Artifacts**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/intent-backlog.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/scope-definition-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/scope-document.md"]
+**Invalidated Downstream Artifacts**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/approval-handoff-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/decision-log.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/initiative-brief.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md"]
+**Invalidated Downstream Reviews**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md#Review"]
+**Source Baseline**: sha256:dc8db3a91078a5d7b1a89d17b85a41dad352ac55f5446b21198bf746991df05d
+
+---
+
+## Stage Start
+**Timestamp**: 2026-09-30T15:43:30Z
+**Event**: STAGE_STARTED
+**Stage**: scope-definition
+**Agent**: aidlc-product-agent
+**Source Baseline**: sha256:dc8db3a91078a5d7b1a89d17b85a41dad352ac55f5446b21198bf746991df05d
+
+---

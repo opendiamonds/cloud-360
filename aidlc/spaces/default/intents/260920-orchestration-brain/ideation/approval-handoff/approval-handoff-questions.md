@@ -187,6 +187,114 @@ PR 必須一併新增鎖住兩者一致的測試」。`raid-log.md` R-8 與 `D-6
 
 ---
 
+## 修訂 2 —— 上游修訂後新增的兩題（H6、H7）
+
+<!-- 修訂 2 的觸發：2026-09-29 的會議結論使 scope-definition 以 Modify 模式
+     新增能力 11（專案系統資訊需求頁），rough-mockups 隨之重做（21 個畫面），
+     RAID 於 2026-09-30 新增 D-8／D-9／R-10。本站於 2026-09-23 完成的三份
+     產出對「能力 11」零命中，故需修訂。
+     依 `approval-handoff:260823-rev1-c1`：既有的 H1–H5 作答只涵蓋它作答當下
+     存在的清單，修訂新增的項目必須另行取得確認，不得沿用舊確認寫成「已接受」。
+     H1–H5 與其 `[Answer]` 一律不動。 -->
+
+**修訂 2 仍不重問的事項**（延續 `approval-handoff:c1`，附可引用依據）：
+
+| 事項 | 不問的依據 |
+|---|---|
+| 能力 11 要不要做 | `[S12]`＝A 已定案為 Must；`scope-document.md` 修訂 2 逐字記載其四項責任 |
+| 能力 11 與能力 10 之間要不要列依賴 | scope-definition 修訂 2 逐字寫「本站不主張的一項：不列依賴」，理由已記入 `project.md` 的 Forbidden |
+| 能力 11 的三籤是否為同一個驗證面 | rough-mockups 的 Assumptions 已明寫「導覽上的分組、非同一驗證面」並指名 `units-generation:c6` 要求逐籤評估 |
+| D-8／D-9 由誰修 | 使用者於 2026-09-30 明確指出由 tina 承接，非 doreen、非本 intent |
+
+---
+
+## H6. 成員管理的範圍決定 —— 指派已落空，要在哪裡收
+
+**背景（本站查證，非推論）**：rough-mockups 修訂 2 發現 §16–§18 畫了 `[成員]`
+按鈕卻無對應範圍，處置是**移除按鈕**並把範圍決定**回送 `scope-definition`**
+（併入能力 11／另立能力 12／明確排除，三選一）。
+
+**但那個指派不會自己執行。** 本站實查 `.claude/tools/data/stage-graph.json`：
+`scope-definition` 的 `execution` 為 `ALWAYS`，然而 `aidlc-state.md` 顯示
+`Last Completed Stage: rough-mockups`、`Completed: 7`——它**在游標之前、已完成**。
+`ALWAYS` 只保證它在工作流程中會被執行一次，不保證會被再執行一次。也就是說，
+這是 `units-generation:260822-ug-L2` 警告的那種**死指派**：交接表上看起來完整，
+實際上沒有任何一站會接。
+
+**會議結論描述的範圍有多大**（逐字）：專案創建者為 `project_owner` 即
+`project_admin`、可指定其他加入專案的成員角色給予權限、`project_admin` 可多人、
+`project_owner` 帳號被移除時自動改選其他人。這是一整層授權模型，不是一個按鈕。
+
+**約束**：`phases/ideation.md` 的 Scope Discipline 逐字禁止「carry forward scope
+decisions that have not been explicitly approved」；`scope-definition:rev1-c4`
+禁止下游 stage 擅自擴大已核可範圍——所以本站**不能**自行把它併進能力 11。
+
+- **A**：**明確排除本 intent**，寫進 `scope-document.md` 的 Won't Have（本次），
+  並記明它是會議結論的一部分、留給後續 intent。本 intent 的範圍就此收斂。
+  代價：`[S14]=A`（專案成員角色不進 `CANONICAL_ROLES`）這句話會暫時失去對象——
+  它預設成員角色存在，而本 intent 不做它；需在 scope 文件就地註記此事。
+- **B**：**回跳 `scope-definition` 以 Modify 模式定為能力 12**，正式擴充範圍並
+  重走該站核可關卡。代價：本 intent 從 11 項變 12 項，且新增的是一整層授權模型
+  （per-project 角色、多 admin、自動繼任），會再一次觸發 `schema_rbac.sql` ＋
+  `DEPLOY.md` 的 blocking 同步；`rough-mockups` 與本站都要再修訂一輪。
+- **C**：**帶進 Inception 當明確的開放範圍項**，由 `requirements-analysis`（2.3，
+  `ALWAYS`）承接決定。代價：**這一條牴觸 `phases/ideation.md` 的 Scope Discipline**
+  ——未經核可的範圍決定不得帶過階段邊界。本站如實列出它是為了不隱藏這個選項，
+  但它需要你明知該牴觸而仍選擇它。
+
+[Answer]: B  <!-- 2026-09-30T15:39:25Z | Mode: guided | 修訂 2 新增 -->
+
+---
+
+<!-- H6 的成本揭露確認（2026-09-30T15:43:22Z）：H6=B 作答之後，本站以
+     `aidlc-jump.ts resolve --stage scope-definition` 實測回跳成本並回報使用者
+     ——`affected_stages` 共 23 站，但其中只有 `scope-definition` 與
+     `rough-mockups` 為 `[x]` 已完成而真的失去核可，`approval-handoff` 為 `[-]`
+     進行中，其餘 20 站本就是 `[ ]` PENDING、重設對它們是 no-op；需重過的核可
+     閘門為 3 個。另揭露一項原選項說明未涵蓋的新工作：rough-mockups 修訂 2
+     刻意移除了 `[成員]` 按鈕（理由逐字為「不為一個沒有範圍的東西畫
+     affordance」），成員管理成為能力 12 之後該站必須**新畫**成員清單／邀請／
+     角色指定／自動繼任等畫面，不只是重新核可。使用者在看到這份實測成本後
+     選擇「執行回跳（我已選 B）」，H6=B 維持不變。依
+     `intent-capture:c6`（不揭露成本的確認不是知情確認）記錄此輪。 -->
+
+## H7. Go / No-Go 重審 —— D-8／D-9 要不要成為進入下一階段的前置條件
+
+**背景**：修訂 1 的判定是 **GO 且不附帶任何前置條件** [H5]。修訂 2 之後有兩項
+新事實：
+
+1. **範圍變大**：新增能力 11（新頁面 ＋ 新資料模型的管理面）。
+2. **新增兩項外部相依**（RAID D-8／D-9，本站於 2026-09-30 合併 `ut` 時查出）：
+   `#678` 從 `requirements.txt` 移除 `langchain-openai` 與 `claude-agent-sdk`，
+   而程式仍在活路徑上 import 它們，乾淨 venv 實測皆為 `ModuleNotFoundError`。
+   影響**能力 10 路由的 `/api/cost/v1` 建議流程**與 **Assessment 路由目標**。
+   修復方為 tina，不在本 intent 範圍。
+
+**逐項對照可行性面向**（依 `approval-handoff:rev1-c2`，不因範圍變大就自動下修；
+依 `feasibility:3966ea4`，重審也可能上調）：
+
+| 面向 | 能力 11 是否引入 | 判定 |
+|---|---|---|
+| 新服務 | 否——沿用既有 FastAPI／React | 不下修 |
+| 新依賴 | 否——無新套件 | 不下修 |
+| 新基礎設施 | 否——`projects`／`systems` 兩表已在能力 9 的範圍內 | 不下修 |
+| 新技術層 | 否——CRUD 表單 ＋ 唯讀彙總，本 repo 有大量前例 | 不下修 |
+| 可無障礙存取的籤元件 | **是**——本 repo 零前例（`AssessmentPage` 的兩籤為純 `useState`，無 `role="tablist"`／`aria-selected`／方向鍵），rough-mockups 已如實記載此揭露落差 | 小幅新工作，非可行性風險 |
+
+- **A**：**維持 GO，不附帶進入 Inception 的前置條件**。D-8／D-9 列為**能力 10 與
+  Assessment 路由的端到端驗收前置**，寫進交接表並指名 tina；它們不阻擋任何設計
+  工作。依據：三處缺口皆與本分支零耦合（47 個改動檔中 0 個、10 個識別字 grep 全
+  0 命中、設計刻意自建 runtime 而非重用 `langgraph_runtime`）。
+- **B**：維持 GO，但把 D-8／D-9 升為**進入 Construction 的前置條件**——設計可以
+  做，但不得開始寫能力 10 的程式直到 tina 修完。代價：能力 10 的施工被一個
+  本 intent 無法控制的外部項擋住，而它其實可以先寫完再驗。
+- **C**：改為 **CONDITIONAL GO**——tina 修完才進 Inception。代價：整個 intent 停在
+  別人的修復上，而那兩處缺口不影響任何設計工作，這個代價與風險不成比例。
+
+[Answer]: A  <!-- 2026-09-30T15:39:25Z | Mode: guided | 修訂 2 新增 -->
+
+---
+
 ## Consolidated Summary Confirmation
 
 - Looks correct
