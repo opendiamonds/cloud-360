@@ -327,7 +327,7 @@ class TestNormalizeDiagramLayout(unittest.TestCase):
                 "type": "private_subnet",
                 "x": 0,
                 "y": 0,
-                "width": 360,  # 約兩欄寬 → 3 個 icon 變兩排
+                "width": 180,  # 約兩欄寬 → 3 個 icon 變兩排
                 "height": 320,
             }
         ]

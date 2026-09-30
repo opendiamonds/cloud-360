@@ -2059,10 +2059,11 @@ async def build_mxgraph_xml(
                 ports, waypoints = compute_edge_waypoints(src_node, tgt_node, nodes)
             exit_x, exit_y, entry_x, entry_y = ports
             edge_style = (
-                "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
+                "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;"
                 "html=1;dashed=0;strokeColor=#4284F3;strokeWidth=2;align=center;verticalAlign=middle;"
                 "fontFamily=Helvetica;fontSize=12;fontColor=default;labelBackgroundColor=default;"
                 "startSize=4;endArrow=blockThin;endFill=1;endSize=4;"
+                "exitPerimeter=0;entryPerimeter=0;"
                 f"exitX={_fmt_port(exit_x)};exitY={_fmt_port(exit_y)};exitDx=0;exitDy=0;"
                 f"entryX={_fmt_port(entry_x)};entryY={_fmt_port(entry_y)};entryDx=0;entryDy=0;"
             )
