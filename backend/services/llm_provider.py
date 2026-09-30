@@ -57,6 +57,7 @@ _CLI_AUTH_VARS = (
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
 )
 
 # What the CLI's model aliases (sonnet/opus/haiku) resolve to. A gateway slug
@@ -73,7 +74,7 @@ _CLI_CONFLICTING_VARS = _CLI_AUTH_VARS + _CLI_ALIAS_MODEL_VARS
 # aliases. A slug from the wrong provider is rejected at request time, which is
 # far from where the misconfiguration lives.
 _OPENROUTER_DEFAULT_MODEL = "google/gemini-3.7-flash"
-_OPENROUTER_DEFAULT_REVIEW_MODEL = "anthropic/claude-3.5-haiku"
+_OPENROUTER_DEFAULT_REVIEW_MODEL = "google/gemini-3.7-flash"
 _CLI_DEFAULT_MODEL = "sonnet"
 _CLI_DEFAULT_REVIEW_MODEL = "haiku"
 
@@ -197,10 +198,23 @@ def _sonnet_alias_candidate(provider: str) -> tuple[str, ...]:
     return (os.environ.get("ANTHROPIC_DEFAULT_SONNET_MODEL", ""),)
 
 
-def get_model_name() -> str:
-    """Model for the design/lens agents."""
+def get_design_model_name() -> str:
+    """Model specifically for A1 design/drawing agent (google/gemini-2.5-flash)."""
     provider = get_provider()
-    default = _CLI_DEFAULT_MODEL if provider == CLI else _OPENROUTER_DEFAULT_MODEL
+    default = _CLI_DEFAULT_MODEL if provider == CLI else "google/gemini-2.5-flash"
+    return _resolve(
+        (
+            os.environ.get("DESIGN_LLM_MODEL", ""),
+        ),
+        default,
+        provider=provider,
+    )
+
+
+def get_model_name() -> str:
+    """Model for general agents (e.g. WA lens engine, google/gemini-3.7-flash)."""
+    provider = get_provider()
+    default = _CLI_DEFAULT_MODEL if provider == CLI else "google/gemini-3.7-flash"
     return _resolve(
         (os.environ.get("LLM_MODEL", ""),) + _sonnet_alias_candidate(provider),
         default,
@@ -209,7 +223,7 @@ def get_model_name() -> str:
 
 
 def get_review_model_name() -> str:
-    """Model for A3 review suggestions; prefers a faster model."""
+    """Model for A3 review suggestions; uses google/gemini-3.7-flash."""
     provider = get_provider()
     default = _CLI_DEFAULT_REVIEW_MODEL if provider == CLI else _OPENROUTER_DEFAULT_REVIEW_MODEL
     return _resolve(

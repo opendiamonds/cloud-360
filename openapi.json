@@ -27,7 +27,7 @@
           },
           "files": {
             "items": {
-              "contentMediaType": "application/octet-stream",
+              "format": "binary",
               "type": "string"
             },
             "title": "Files",
@@ -856,13 +856,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
