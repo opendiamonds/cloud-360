@@ -35,10 +35,10 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 
 | `LLM_PROVIDER` | 認證來源 | 適用 |
 |---|---|---|
-| `openrouter`（程式預設、部署用） | `OPENROUTER_API_KEY` | 部署與本機 OpenRouter |
-| `cli`（本機範本可選） | 歷史 CLI 登入語意；**A3 Review／Lens 仍要求 OpenRouter 金鑰**（`openrouter_chat_model`） | 僅部分遺留環境整理 |
+| `openrouter`（程式預設，**唯一可用值**） | `OPENROUTER_API_KEY` | 部署與本機皆同 |
+| ~~`cli`~~ | **已退役（2026-10-02，RAID R-11）** | 設它會退回 `openrouter` 並記一行 ERROR。A3 遷移到 LangGraph 之後已無 `claude` CLI 子行程可認證，而該模式仍會刪除 `ANTHROPIC_AUTH_TOKEN`／`BASE_URL`，使金鑰被清空而健康檢查仍回報正常 |
 
-本機建議直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
+本機直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
 
 `cli` 模式下程式仍可能**主動刪除**兩組變數（避免殘值干擾 Anthropic 相容客戶端）：
 
@@ -220,9 +220,9 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 # 已修）：設它會退回 openrouter 並記一行 ERROR。注意舊的 backend/.env.example
 # 預設值就是 cli，若你的 .env 是在 2026-10-01 之前複製的，把那一行改成
 # openrouter（或刪掉）。
-LLM_PROVIDER=cli
+LLM_PROVIDER=openrouter
 
-# 只有 LLM_PROVIDER=openrouter 時才需要。留空＝未設定；
+# 必填。留空＝未設定；
 # 千萬不要填佔位字串，那會被當成真金鑰送出去。
 OPENROUTER_API_KEY=
 
@@ -355,16 +355,20 @@ open http://localhost:8010/docs
 **A1／A3 要在 UI 上驗**：登入 → Workspace 輸入一句架構描述 → 應該串流出圖。若回 500，照這個順序查：
 
 0. **你改的 `.env` 跟跑起來的 process 是不是同一份 checkout。** 這個 repo 常同時存在多個
-   worktree，症狀是「`backend/.env` 明明寫著 `LLM_PROVIDER=cli`，API 卻回報尚未設定
-   `OPENROUTER_API_KEY`」。查法：
+   worktree，症狀是「`backend/.env` 明明有值，API 卻回報尚未設定 `OPENROUTER_API_KEY`」。
+   查法：
    ```bash
    # 找出跑著的 uvicorn 究竟在哪個目錄
    lsof -p "$(pgrep -f 'uvicorn main:app')" | awk '$4=="cwd" {print $NF}'
    ```
-   訊息本身也能分辨版本：新版的那句後面會接「本機開發也可改設 LLM_PROVIDER=cli」，
-   沒有那句就是舊碼。
-1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值（`LLM_PROVIDER=cli` 時不需要）
-2. `command -v claude` 找不找得到
+   **2026-10-02 更正**：本節原本教人以錯誤訊息裡有沒有「本機開發也可改設
+   `LLM_PROVIDER=cli`」來分辨新舊碼——該句已隨 cli 模式退役從
+   `auth_error_message()` 移除，**那個判準現在會把新碼誤判成舊碼**。改用上面的
+   `lsof` 查法，或直接看 `llm_provider.py` 是否含 `_RETIRED_PROVIDERS`（含＝新碼）。
+1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值（**必填**；`LLM_PROVIDER=cli` 已退役，不再是免金鑰的替代路徑）
+2. 若日誌出現「`LLM_PROVIDER=...` 已退役」的 ERROR，把 `backend/.env` 那一行改成
+   `openrouter` 或刪掉（**本步取代原本的「`command -v claude` 找不找得到」**——A3 遷移到
+   LangGraph 之後全樹已無子行程呼叫，`claude` CLI 不再是任何路徑的依賴）
 3. `ANTHROPIC_API_KEY` 是不是**留空**
 4. OpenRouter 餘額（402 錯誤來自額度，或 `max_tokens` 預扣過高 → 調低 `LLM_MAX_OUTPUT_TOKENS`）
 
