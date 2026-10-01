@@ -33,6 +33,24 @@ D-8／D-9 的三處缺口全是**函式內 import**：`backend/main.py` 的 impo
 中 0 個、10 個關鍵字 grep 全 0 命中，且設計刻意選擇自建 runtime 而非重用
 `langgraph_runtime`），故不阻擋開發與合併。
 
+**R-11（併入 `ut` 時實測查出）— `LLM_PROVIDER=cli` 已失效，且是靜默失敗。**
+`services/llm_provider.py` 的 cli 模式會從環境**刪除** `ANTHROPIC_AUTH_TOKEN`／
+`ANTHROPIC_BASE_URL`——這在 claude-agent-sdk 時代是正確的（當時由 `claude` CLI 自行
+認證）。但 A3 遷移之後 `design_agent.py:118` 直接讀這兩個變數建構 `ChatAnthropic`，
+刪掉即取到**空金鑰**，而 `llm_auth_ready()` 仍回 `True`。**已實測**：設
+`LLM_PROVIDER=cli` 並給定兩個變數後呼叫 `configure_provider_env()`，`api_key` 為空
+字串、`base_url` 為 `None`、`llm_auth_ready()` 為 `True`——健康檢查回報正常而功能在
+呼叫時才失敗。全樹已無任何子行程呼叫（`create_subprocess_exec`／`Popen` 皆 0 命中），
+故 cli 模式已無可認證的對象。
+**可能性**低（預設為 openrouter，須手動改設才會踩到）；**影響**中（靜默失敗，且
+`llm_auth_ready()` 回 True 會把排查方向帶往錯的地方）。
+**這不是本 intent 的程式**：`llm_provider.py` 為 A1／A3 共用，屬 `ut` 側的維護範圍。
+緩解方向二擇一，屬該模組擁有者的決定——①移除 cli 模式與相關敘述；②讓 cli 模式不再
+刪除那兩個變數，或讓 `llm_auth_ready()` 在 cli 模式下據實回 `False`。
+**本 intent 的處置僅限**：`LOCAL-DEV.md` 已標明該模式目前是壞的並指向本條（原文第
+219 行說「cli 用你已登入的 claude CLI，不需任何金鑰」，與 `ut` 新寫的 H1 自相矛盾，
+是解合併衝突時發現的）。不阻擋本分支開發與合併。
+
 ## Assumptions
 
 | ID | 假設 | 驗證者 | 來源 |
@@ -62,8 +80,8 @@ D-8／D-9 的三處缺口全是**函式內 import**：`backend/main.py` 的 impo
 | D-5 | requirements-analysis 接下三個指標門檻的定案 | 阻擋成功與否的可判定性 | [F7][Q3] |
 | D-6 | 設計階段接下 R-8 的一致性驗證落點指派 | 阻擋 R-8 的緩解；未接到則兩份 runtime 的漂移無任何偵測手段 | [Q13] |
 | D-7 | 既有成本能力的 `/api/cost/v1` 契約維持穩定 | 大腦以 HTTP 呼叫它，該契約變動會直接打斷編排；但兩者同 repo 同部署，由 CI 的 OpenAPI drift 檢查承載 | [F14][V-F2] |
-| D-8 | **tina 修復 `services/langgraph_runtime.py` 的 `langchain_openai` 相依** | 阻擋**能力 10 的端到端驗收**（不阻擋開發）。大腦的成本編排路由到 `/api/cost/v1`，該端點的建議流程走 `cost/estimate_intake_service.py:71` → `advice_orchestrator` → `cost_advice_agent._invoke_once` → `langgraph_runtime.openrouter_chat_model()` → `from langchain_openai import ChatOpenAI`，而 `langchain-openai` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'langchain_openai'`。該 import 位於函式內，**CI 的 import smoke 與現有測試皆掃不到**，第一次真的問成本才會炸 | 本輪合併 `ut` 時查出 |
-| D-9 | **tina 修復 `services/review_agent.py` 與 `services/wa_lens_engine.py` 的 `claude_agent_sdk` 相依** | 阻擋 **Assessment 路由目標的端到端驗收**（不阻擋開發）。進入點 `run_review_agent()`（`review_agent.py:115`）與 `answer_lens_with_agent()`（`wa_lens_engine.py:469`），呼叫端為 `review_orchestrator.py:257`／`:336`／`:461` 與 `wa_score_service.py:16`，而 `claude-agent-sdk` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'claude_agent_sdk'`。同樣是函式內 import，同樣掃不到 | 本輪合併 `ut` 時查出 |
+| D-8 | **tina 修復 `services/langgraph_runtime.py` 的 `langchain_openai` 相依** | 阻擋**能力 10 的端到端驗收**（不阻擋開發）。大腦的成本編排路由到 `/api/cost/v1`，該端點的建議流程走 `cost/estimate_intake_service.py:71` → `advice_orchestrator` → `cost_advice_agent._invoke_once` → `langgraph_runtime.openrouter_chat_model()` → `from langchain_openai import ChatOpenAI`，而 `langchain-openai` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'langchain_openai'`。該 import 位於函式內，**CI 的 import smoke 與現有測試皆掃不到**，第一次真的問成本才會炸 | 本輪合併 `ut` 時查出 ｜ **已於 2026-10-01 解決**（`ut` 的 PR #683 把 `langchain-openai` 加回 `backend/requirements.txt`；併入後複驗 import 成立） |
+| D-9 | **tina 修復 `services/review_agent.py` 與 `services/wa_lens_engine.py` 的 `claude_agent_sdk` 相依** | 阻擋 **Assessment 路由目標的端到端驗收**（不阻擋開發）。進入點 `run_review_agent()`（`review_agent.py:115`）與 `answer_lens_with_agent()`（`wa_lens_engine.py:469`），呼叫端為 `review_orchestrator.py:257`／`:336`／`:461` 與 `wa_score_service.py:16`，而 `claude-agent-sdk` 已被 `#678` 自 `requirements.txt` 移除。乾淨 venv 實測：`ModuleNotFoundError: No module named 'claude_agent_sdk'`。同樣是函式內 import，同樣掃不到 | 本輪合併 `ut` 時查出 ｜ **已於 2026-10-01 解決**（`ut` 的 `b4f0cdc` 把 Review／Lens 改走 LangGraph，兩支模組不再 import `claude_agent_sdk`；全樹僅剩回歸測試 `test_a3_langgraph_migration.py` 的斷言字串，該測試即鎖住此修復的機制） |
 
 <!-- 修訂 1 存檔於 2026-09-21，對應 feasibility 的 Consolidated Summary
      Confirmation 收據。本檔的修訂範圍：新增風險 R-8（兩份 runtime 漂移）
