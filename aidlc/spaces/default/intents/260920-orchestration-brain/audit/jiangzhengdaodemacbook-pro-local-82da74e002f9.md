@@ -39987,3 +39987,205 @@
 **Error**: --help expects a value, got end of arguments.
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-10-01T14:37:00Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T14:37:39Z
+**Event**: RULE_LEARNED
+**Stage**: rough-mockups
+**Candidate-ID**: c22
+**Content-Hash**: fd327aa7b163811261d7336322f61499ccf2b78cb75d74f627616d5888d1caa3
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T14:37:39Z
+**Event**: RULE_LEARNED
+**Stage**: rough-mockups
+**Candidate-ID**: c29
+**Content-Hash**: 32c8f599c2753706a98928f0f8e17a08f449b9e0de3064c23ad01f555c854139
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T14:37:39Z
+**Event**: RULE_LEARNED
+**Stage**: rough-mockups
+**Candidate-ID**: c7
+**Content-Hash**: f4fc9ff636bf8d05a8fe19311769b06127918e3eb8454ac2f48431fc3de4e806
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:52Z
+**Event**: SENSOR_FIRED
+**Fire id**: 8bebe008
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_PASSED
+**Fire id**: 8bebe008
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md
+**Duration ms**: 43
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_FIRED
+**Fire id**: 63ed2ec9
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_PASSED
+**Fire id**: 63ed2ec9
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_FIRED
+**Fire id**: 35d12097
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_PASSED
+**Fire id**: 35d12097
+**Sensor ID**: required-sections
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_FIRED
+**Fire id**: 44925dcf
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:53Z
+**Event**: SENSOR_PASSED
+**Fire id**: 44925dcf
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:54Z
+**Event**: SENSOR_FIRED
+**Fire id**: 9f993a6f
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:54Z
+**Event**: SENSOR_PASSED
+**Fire id**: 9f993a6f
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T14:37:54Z
+**Event**: SENSOR_FIRED
+**Fire id**: 6a23776f
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T14:37:54Z
+**Event**: SENSOR_PASSED
+**Fire id**: 6a23776f
+**Sensor ID**: upstream-coverage
+**Stage slug**: rough-mockups
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md
+**Duration ms**: 42
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-10-01T14:37:54Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: rough-mockups
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-10-01T14:38:01Z
+**Event**: GATE_APPROVED
+**Stage**: rough-mockups
+**User Input**: Approve
+**Review Finding Dispositions**: {"version":1,"dispositions":[{"artifact":"aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md","id":"R-05","fingerprint":"sha256:b9e07f0870328eb94ecdddf80d6bba95ab217def758ab7e40bdf87187196ca14","status":"Accepted risk"},{"artifact":"aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md","id":"R-06","fingerprint":"sha256:5c53cbdf1f439f71bff274a83fdfb4c29d407a1b71c50f743fcd729d59fba008","status":"Accepted risk"}]}
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-10-01T14:38:01Z
+**Event**: STAGE_COMPLETED
+**Stage**: rough-mockups
+**Validation Basis**: {"graphContract":"sha256:5fba28f1cd240c14897220333a49791025975ed0959b36140f54f85ea567bf03","inputs":[{"artifact":"intent-backlog","contentHash":"sha256:0b90ab437039f85b9cabd5a1f16e4996bc34b73677f00f23d6c2357047120486","instanceCount":1,"presentCount":1,"producer":"scope-definition","required":true,"structureHash":"sha256:d89c1a8853a488a7de9bbe5d90c6dd734d253adc526e1d27e6ef379f17fbc8cf"},{"artifact":"intent-statement","contentHash":"sha256:5518de162f852723d31ab69aac60f8a0afd72b2f991fd770d6b5cd1aa90b8f24","instanceCount":1,"presentCount":1,"producer":"intent-capture","required":true,"structureHash":"sha256:5006d391ecfb2d652362d585d8849ee3c592fd40beb2eb7c75ee02a3641b1945"},{"artifact":"scope-document","contentHash":"sha256:a1c73ded4aad03bd9e6b68b3d729a2a295eb641103591f4258bd58c2dad810ff","instanceCount":1,"presentCount":1,"producer":"scope-definition","required":true,"structureHash":"sha256:c9009349d7e2faebf6924bd2c75b23537d5ad0a73104e914a9599f13db3cbdc0"}],"outputs":[{"artifact":"rough-mockups-questions","contentHash":"sha256:48f21c76ec21110b8fb77f72a2abc817e3aeaae265a57322071edb25c1ac6258","instanceCount":1,"presentCount":1,"producer":"rough-mockups","required":true,"structureHash":"sha256:8fa711c39be880bc2612c465faf8ce01edfb23c56b7824cb2d32908ad6f970c4"},{"artifact":"user-flow","contentHash":"sha256:afa2078adf60221e8f4d3c03f4499085cdc0124827d9181f8f58130c2d7f384d","instanceCount":1,"presentCount":1,"producer":"rough-mockups","required":true,"structureHash":"sha256:d6218e9aed34286ae2eaf2b1af3e8839c1850fc19687d52961aa055702deafdf"},{"artifact":"wireframes","contentHash":"sha256:b5d63444c2f3defc8ad4740d58ded9322176b7e9fc354b4f7933ba738ee02d81","instanceCount":1,"presentCount":1,"producer":"rough-mockups","required":true,"structureHash":"sha256:a150645b62364088961a855daadfdd7682b3f4f138ae619c16cbc625f83c733b"}],"projectType":"brownfield","schema":3}
+**Details**: Stage Rough Mockups approved by gate
+
+---
+
+## Stage Start
+**Timestamp**: 2026-10-01T14:38:01Z
+**Event**: STAGE_STARTED
+**Stage**: approval-handoff
+**Agent**: aidlc-delivery-agent
+
+---
