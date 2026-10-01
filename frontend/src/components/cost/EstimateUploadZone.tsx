@@ -4,7 +4,7 @@ import { authHeaders, type CloudId } from './types';
 import {
   serializeWorkloadContext,
   type WorkloadContext,
-} from './EstimateWorkloadForm';
+} from './workloadContext';
 
 type Props = {
   disabled?: boolean;

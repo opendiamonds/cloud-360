@@ -10,11 +10,11 @@ import { EstimateShareModal } from '../components/cost/EstimateShareModal';
 import { EstimateSaveModal } from '../components/cost/EstimateSaveModal';
 import { EstimateAdvicePanel } from '../components/cost/EstimateAdvicePanel';
 import { EstimateOfficialCalculators } from '../components/cost/EstimateOfficialCalculators';
+import { EstimateWorkloadForm } from '../components/cost/EstimateWorkloadForm';
 import {
   EMPTY_WORKLOAD_CONTEXT,
-  EstimateWorkloadForm,
   type WorkloadContext,
-} from '../components/cost/EstimateWorkloadForm';
+} from '../components/cost/workloadContext';
 import {
   authHeaders,
   cloudLabel,
