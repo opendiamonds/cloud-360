@@ -238,7 +238,7 @@ Does this all look correct before I generate the artifact?
 | 事項 | 定案 | 來源 |
 |---|---|---|
 | 能力 11 存在、為 Must、與能力 9 並列不取代 | 已定案 | scope-definition [S12]=A |
-| agent 取用走大腦端 MCP 封裝、底下 HTTP 帶 token | 已定案 | [S13]=A |
+| agent 取用走 MCP server（獨立進程）、對外帶 token 呼叫既有 API | 已定案 | [S13]=A → **已由 [F16]=B 取代，見 scope 的 [S18]** |
 | 專案成員角色不進 `CANONICAL_ROLES` | 已定案 | [S14]=A |
 | `system_admin` 即既有 `Platform_Admin`，下游不得用該別名 | 已定案 | [S15]=A |
 | 能力 11 與能力 10 之間不列依賴 | 已定案 | scope-document 修訂 2「本站不主張的一項」 |
@@ -430,7 +430,7 @@ J 為左欄的「系統管理」）——設計是照現有權限矩陣的形狀
 「有其他成員可被改選」。若被移除的 `project_owner` 是專案裡**唯一的成員**，就
 沒有人可被改選、也沒有人可收橫幅——而 M1=B 不在清單上標示任何東西，**該狀態在
 畫面上完全不存在**。這是真實可達的狀態（專案剛建立時成員只有 owner 一人），且
-正是 `schema_rbac.sql:328` 的 FK（`NOT NULL`、無 `ON DELETE`）今天就會失敗的
+正是 `schema_rbac.sql:330` 的 FK（`NOT NULL`、無 `ON DELETE`）今天就會失敗的
 同一條路。`wireframing-guide.md` 要求線框畫出全部狀態含邊界情境，故不能留空。
 
 - **A**：**擋下刪除，要求先指定接手人**。刪除使用者時若他是某專案的唯一成員，
@@ -443,7 +443,7 @@ J 為左欄的「系統管理」）——設計是照現有權限矩陣的形狀
 **A 的後果（本站記載，供下游承接）**：
 
 1. 它是唯一**不留下壞資料**的選項——不留孤兒、不連帶刪除。
-2. 與 `schema_rbac.sql:328` 的 FK 現況**一致**：`owner_user_id` 為 `NOT NULL`
+2. 與 `schema_rbac.sql:330` 的 FK 現況**一致**：`owner_user_id` 為 `NOT NULL`
    且無 `ON DELETE`，所以資料庫今天就是擋下這個刪除的。A 等於「保留 DB 已有的
    行為，補上一句人話與一個錯誤畫面」，**不需要改 schema**。
 3. **這改變了 scope 修訂 3 對第 (4) 項的描述範圍**：原本寫「自動改選就是讓那條
