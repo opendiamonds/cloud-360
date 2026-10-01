@@ -24,7 +24,8 @@ logger = logging.getLogger("cloud360.main")
 # because main imports it above -- fixing only one of the two changes nothing.
 load_backend_dotenv(override=True)
 
-# 依 LLM_PROVIDER 準備 Agent SDK 的環境（OpenRouter 映射，或清掉會蓋掉 CLI 登入的變數）
+# 準備 OpenRouter 環境（金鑰映射到 ANTHROPIC_AUTH_TOKEN／BASE_URL）；
+# 同時讓已退役的 LLM_PROVIDER=cli 在啟動時就記一行 ERROR（RAID R-11）
 configure_provider_env()
 
 app = FastAPI(title="Cloud-360 API")

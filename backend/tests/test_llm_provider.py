@@ -1,8 +1,22 @@
 """Tests for LLM provider selection (services.llm_provider).
 
-The behaviour under test is what made the cli path unreachable before: the
-guards demanded a non-empty credential, while a non-empty credential is exactly
-what disables the CLI's own login. Each case below pins one half of that.
+@purpose Pin the retirement of `LLM_PROVIDER=cli` and the single remaining
+         (OpenRouter) credential/model resolution path.
+@given   A clean environment with only the MANAGED variables this module reads.
+@step    Set LLM_PROVIDER and the credential/model variables; assert what
+         get_provider / configure_provider_env / llm_auth_ready resolve to.
+@pass    cli resolves to openrouter with an ERROR log and deletes nothing;
+         credentials survive; llm_auth_ready reflects whether a key is present.
+@story   RAID R-11 (260920-orchestration-brain)
+
+The behaviour under test used to be the cli-vs-openrouter split: cli mode
+DELETED every credential variable so the `claude` CLI subprocess could use its
+own login. After the A3 migration (`ut` commit `b4f0cdc`) nothing spawns that
+subprocess, while `design_agent.py` reads `ANTHROPIC_AUTH_TOKEN` directly — so
+cli mode deleted the only credential the live path had, and `llm_auth_ready()`
+still returned True. The health check said ready and the call failed with an
+empty key. These cases pin that the deletion is gone and that the retired value
+is still recognised rather than treated as a typo.
 """
 
 import os
@@ -12,7 +26,6 @@ from contextlib import contextmanager
 import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 from services.llm_provider import (
-    CLI,
     OPENROUTER,
     auth_error_message,
     configure_provider_env,
@@ -61,186 +74,148 @@ class ProviderSelection(unittest.TestCase):
         with env():
             self.assertEqual(get_provider(), OPENROUTER)
 
-    def test_reads_cli(self):
-        with env(LLM_PROVIDER="cli"):
-            self.assertEqual(get_provider(), CLI)
-
     def test_is_case_and_whitespace_insensitive(self):
-        with env(LLM_PROVIDER="  CLI  "):
-            self.assertEqual(get_provider(), CLI)
+        with env(LLM_PROVIDER="  OpenRouter  "):
+            self.assertEqual(get_provider(), OPENROUTER)
 
     def test_unknown_value_falls_back_to_openrouter(self):
-        with env(LLM_PROVIDER="anthropic-direct"):
-            with self.assertLogs("cloud360.llm_provider", level="WARNING"):
+        with env(LLM_PROVIDER="bedrock"):
+            with self.assertLogs("cloud360.llm_provider", level="WARNING") as logs:
                 self.assertEqual(get_provider(), OPENROUTER)
+            self.assertNotIn("ERROR", logs.output[0].split(":")[0])
 
 
-class CliModeClearsConflictingVars(unittest.TestCase):
-    """A non-empty value in any of these disables the CLI's own login."""
+class RetiredCliMode(unittest.TestCase):
+    """`LLM_PROVIDER=cli` is recognised, resolves to openrouter, and says why."""
 
-    def test_deletes_rather_than_blanks(self):
-        with env(
-            LLM_PROVIDER="cli",
-            ANTHROPIC_BASE_URL="https://openrouter.ai/api",
-            ANTHROPIC_AUTH_TOKEN="sk-or-leftover",
-            ANTHROPIC_API_KEY="sk-ant-leftover",
-        ):
-            configure_provider_env()
-            # Absent, not empty: an empty string would still be inherited by the
-            # subprocess, and an empty ANTHROPIC_BASE_URL is worse than none.
-            for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
-                self.assertNotIn(name, os.environ, f"{name} should be removed entirely")
+    def test_resolves_to_openrouter(self):
+        with env(LLM_PROVIDER="cli"):
+            self.assertEqual(get_provider(), OPENROUTER)
 
-    def test_clears_even_when_openrouter_key_is_present(self):
-        with env(LLM_PROVIDER="cli", OPENROUTER_API_KEY="sk-or-real"):
-            configure_provider_env()
-            self.assertNotIn("ANTHROPIC_AUTH_TOKEN", os.environ)
+    def test_logs_at_error_not_as_a_typo(self):
+        with env(LLM_PROVIDER="cli"):
+            with self.assertLogs("cloud360.llm_provider", level="ERROR") as logs:
+                get_provider()
+        joined = "\n".join(logs.output)
+        self.assertIn("已退役", joined)
+        self.assertIn("R-11", joined)
+        # The generic typo wording must NOT appear: an existing setting is not a typo.
+        self.assertNotIn("不是有效值", joined)
 
-    def test_is_idempotent(self):
-        with env(LLM_PROVIDER="cli", ANTHROPIC_API_KEY="x"):
-            configure_provider_env()
-            configure_provider_env()
-            self.assertNotIn("ANTHROPIC_API_KEY", os.environ)
+    def test_no_longer_deletes_credentials(self):
+        """The defect itself: cli mode used to pop these, leaving an empty key.
 
-    def test_deletes_the_alias_model_family(self):
-        """These name what `sonnet`/`opus`/`haiku` resolve to, not the model.
-
-        Observed 404: with ANTHROPIC_DEFAULT_SONNET_MODEL left at an OpenRouter
-        slug, `claude -p ... --model sonnet` reported "There's an issue with the
-        selected model (anthropic/claude-sonnet-4.6)". Normalising the model
-        name is not enough while the alias maps it back.
+        `design_agent.py` builds its client from ANTHROPIC_AUTH_TOKEN /
+        ANTHROPIC_BASE_URL, so deleting them is what made the call fail.
         """
         with env(
             LLM_PROVIDER="cli",
-            ANTHROPIC_DEFAULT_SONNET_MODEL="anthropic/claude-sonnet-4.6",
-            ANTHROPIC_DEFAULT_OPUS_MODEL="anthropic/claude-opus-4.1",
-            ANTHROPIC_DEFAULT_HAIKU_MODEL="anthropic/claude-3.5-haiku",
-        ):
-            configure_provider_env()
-            for name in (
-                "ANTHROPIC_DEFAULT_SONNET_MODEL",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-            ):
-                self.assertNotIn(name, os.environ, f"{name} should be removed entirely")
-
-    def test_no_gateway_slug_survives_anywhere(self):
-        """The real `backend/.env` shape that produced the 404, end to end."""
-        with env(
-            LLM_PROVIDER="cli",
+            OPENROUTER_API_KEY="sk-or-real",
+            ANTHROPIC_AUTH_TOKEN="sk-token",
             ANTHROPIC_BASE_URL="https://openrouter.ai/api",
-            ANTHROPIC_DEFAULT_SONNET_MODEL="anthropic/claude-sonnet-4.6",
-            LLM_MODEL="anthropic/claude-sonnet-4.6",
         ):
             configure_provider_env()
-            leftovers = {
-                name: value
-                for name, value in os.environ.items()
-                if name.startswith("ANTHROPIC_") and "/" in value
-            }
-            self.assertEqual(leftovers, {}, "a gateway slug reached the CLI subprocess")
-            self.assertEqual(get_model_name(), "sonnet")
+            self.assertEqual(os.environ.get("ANTHROPIC_AUTH_TOKEN"), "sk-token")
+            self.assertEqual(os.environ.get("ANTHROPIC_BASE_URL"), "https://openrouter.ai/api")
+            self.assertEqual(os.environ.get("OPENROUTER_API_KEY"), "sk-or-real")
+
+    def test_auth_ready_no_longer_lies(self):
+        """It used to return True unconditionally under cli, with no credential."""
+        with env(LLM_PROVIDER="cli"):
+            self.assertFalse(llm_auth_ready())
+        with env(LLM_PROVIDER="cli", OPENROUTER_API_KEY="sk-or-real"):
+            self.assertTrue(llm_auth_ready())
+
+    def test_alias_model_family_survives(self):
+        with env(LLM_PROVIDER="cli", ANTHROPIC_DEFAULT_SONNET_MODEL="google/gemini-3.7-flash"):
+            configure_provider_env()
+            self.assertEqual(
+                os.environ.get("ANTHROPIC_DEFAULT_SONNET_MODEL"), "google/gemini-3.7-flash"
+            )
 
 
-class OpenRouterModeMapsTheKey(unittest.TestCase):
+class OpenRouterEnv(unittest.TestCase):
     def test_maps_key_to_auth_token(self):
-        with env(LLM_PROVIDER="openrouter", OPENROUTER_API_KEY="sk-or-real"):
+        with env(OPENROUTER_API_KEY="sk-or-real"):
             configure_provider_env()
             self.assertEqual(os.environ["ANTHROPIC_AUTH_TOKEN"], "sk-or-real")
             self.assertEqual(os.environ["ANTHROPIC_BASE_URL"], "https://openrouter.ai/api")
             self.assertEqual(os.environ["ANTHROPIC_API_KEY"], "")
 
     def test_touches_nothing_without_a_key(self):
-        with env(LLM_PROVIDER="openrouter"):
+        with env():
             configure_provider_env()
-            self.assertNotIn("ANTHROPIC_AUTH_TOKEN", os.environ)
+            self.assertIsNone(os.environ.get("ANTHROPIC_BASE_URL"))
+            self.assertIsNone(os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
     def test_does_not_overwrite_an_explicit_auth_token(self):
-        with env(
-            LLM_PROVIDER="openrouter",
-            OPENROUTER_API_KEY="sk-or-real",
-            ANTHROPIC_AUTH_TOKEN="explicit",
-        ):
+        with env(OPENROUTER_API_KEY="sk-or-real", ANTHROPIC_AUTH_TOKEN="sk-explicit"):
             configure_provider_env()
-            self.assertEqual(os.environ["ANTHROPIC_AUTH_TOKEN"], "explicit")
+            self.assertEqual(os.environ["ANTHROPIC_AUTH_TOKEN"], "sk-explicit")
+
+    def test_is_idempotent(self):
+        with env(OPENROUTER_API_KEY="sk-or-real"):
+            configure_provider_env()
+            first = dict(os.environ)
+            configure_provider_env()
+            for k in MANAGED:
+                self.assertEqual(os.environ.get(k), first.get(k), k)
 
 
 class AuthReadiness(unittest.TestCase):
-    def test_cli_is_always_ready(self):
-        """The CLI owns its credentials; the backend cannot and must not judge."""
-        with env(LLM_PROVIDER="cli"):
-            self.assertTrue(llm_auth_ready())
-
-    def test_openrouter_needs_a_credential(self):
-        with env(LLM_PROVIDER="openrouter"):
+    def test_needs_a_credential(self):
+        with env():
             self.assertFalse(llm_auth_ready())
 
-    def test_openrouter_accepts_either_variable(self):
-        with env(LLM_PROVIDER="openrouter", OPENROUTER_API_KEY="k"):
+    def test_accepts_either_variable(self):
+        with env(OPENROUTER_API_KEY="sk-or-real"):
             self.assertTrue(llm_auth_ready())
-        with env(LLM_PROVIDER="openrouter", ANTHROPIC_AUTH_TOKEN="t"):
+        with env(ANTHROPIC_AUTH_TOKEN="sk-token"):
             self.assertTrue(llm_auth_ready())
 
     def test_whitespace_only_is_not_a_credential(self):
-        with env(LLM_PROVIDER="openrouter", OPENROUTER_API_KEY="   "):
+        with env(OPENROUTER_API_KEY="   "):
             self.assertFalse(llm_auth_ready())
 
-    def test_error_message_names_both_ways_out(self):
+    def test_error_message_names_the_one_way_out(self):
         message = auth_error_message()
         self.assertIn("OPENROUTER_API_KEY", message)
-        self.assertIn("LLM_PROVIDER=cli", message)
+        # It must no longer offer cli mode as an alternative.
+        self.assertNotIn("LLM_PROVIDER=cli", message)
 
 
-class ModelSelection(unittest.TestCase):
-    def test_provider_specific_defaults(self):
-        with env(LLM_PROVIDER="openrouter"):
-            self.assertEqual(get_design_model_name(), "google/gemini-2.5-flash")
+class ModelNames(unittest.TestCase):
+    def test_defaults(self):
+        with env():
             self.assertEqual(get_model_name(), "google/gemini-3.7-flash")
-        with env(LLM_PROVIDER="cli"):
-            self.assertEqual(get_design_model_name(), "sonnet")
-            self.assertEqual(get_model_name(), "sonnet")
+            self.assertEqual(get_design_model_name(), "google/gemini-2.5-flash")
+            self.assertEqual(get_review_model_name(), "google/gemini-3.7-flash")
 
     def test_explicit_model_wins(self):
-        with env(LLM_PROVIDER="cli", LLM_MODEL="opus"):
-            self.assertEqual(get_model_name(), "opus")
+        with env(LLM_MODEL="google/gemini-2.5-pro"):
+            self.assertEqual(get_model_name(), "google/gemini-2.5-pro")
 
-    def test_cli_ignores_a_gateway_slug(self):
-        """A slug left over from openrouter mode would fail at the CLI."""
-        with env(LLM_PROVIDER="cli", LLM_MODEL="google/gemini-2.5-flash"):
-            with self.assertLogs("cloud360.llm_provider", level="INFO"):
-                self.assertEqual(get_model_name(), "sonnet")
+    def test_keeps_the_gateway_slug(self):
+        """No provider strips vendor/model shapes any more."""
+        with env(LLM_MODEL="google/gemini-2.5-flash"):
+            self.assertEqual(get_model_name(), "google/gemini-2.5-flash")
 
-    def test_openrouter_keeps_the_gateway_slug(self):
-        with env(LLM_PROVIDER="openrouter", LLM_MODEL="anthropic/claude-opus-4.1"):
-            self.assertEqual(get_model_name(), "anthropic/claude-opus-4.1")
+    def test_falls_back_to_the_sonnet_alias_variable(self):
+        with env(ANTHROPIC_DEFAULT_SONNET_MODEL="google/gemini-2.5-pro"):
+            self.assertEqual(get_model_name(), "google/gemini-2.5-pro")
 
-    def test_openrouter_falls_back_to_the_sonnet_alias_variable(self):
-        with env(
-            LLM_PROVIDER="openrouter",
-            ANTHROPIC_DEFAULT_SONNET_MODEL="anthropic/claude-opus-4.1",
-        ):
-            self.assertEqual(get_model_name(), "anthropic/claude-opus-4.1")
-
-    def test_cli_never_reads_the_sonnet_alias_variable(self):
-        """Even a bare name there means "what `sonnet` resolves to", not "use this".
-
-        Asserted without calling configure_provider_env() on purpose: the model
-        choice must not depend on whether the environment has been cleaned yet.
-        """
-        with env(LLM_PROVIDER="cli", ANTHROPIC_DEFAULT_SONNET_MODEL="opus"):
-            self.assertEqual(get_model_name(), "sonnet")
-        with env(LLM_PROVIDER="cli", ANTHROPIC_DEFAULT_SONNET_MODEL="opus"):
-            self.assertEqual(get_review_model_name(), "haiku")
+    def test_design_model_has_its_own_override(self):
+        with env(LLM_MODEL="google/gemini-2.5-pro", DESIGN_LLM_MODEL="google/gemini-3.7-flash"):
+            self.assertEqual(get_design_model_name(), "google/gemini-3.7-flash")
+            self.assertEqual(get_model_name(), "google/gemini-2.5-pro")
 
     def test_review_model_prefers_its_own_override(self):
-        with env(LLM_PROVIDER="cli", LLM_MODEL="opus", REVIEW_LLM_MODEL="haiku"):
-            self.assertEqual(get_review_model_name(), "haiku")
-
-    def test_review_model_defaults_per_provider(self):
-        with env(LLM_PROVIDER="cli"):
-            self.assertEqual(get_review_model_name(), "haiku")
-        with env(LLM_PROVIDER="openrouter"):
+        with env(LLM_MODEL="google/gemini-2.5-pro", REVIEW_LLM_MODEL="google/gemini-3.7-flash"):
             self.assertEqual(get_review_model_name(), "google/gemini-3.7-flash")
+
+    def test_review_model_falls_back_to_llm_model(self):
+        with env(LLM_MODEL="google/gemini-2.5-pro"):
+            self.assertEqual(get_review_model_name(), "google/gemini-2.5-pro")
 
 
 if __name__ == "__main__":

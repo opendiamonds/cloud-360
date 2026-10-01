@@ -216,10 +216,10 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# LLM 供應商：openrouter（預設）。**`LLM_PROVIDER=cli` 目前是壞的,不要用**——
-# A3 遷移到 LangGraph 之後已無 claude CLI 子行程,而 cli 模式仍會刪掉
-# ANTHROPIC_AUTH_TOKEN／ANTHROPIC_BASE_URL,使 design_agent.py:118 取到空金鑰;
-# 且 llm_auth_ready() 仍回 True,所以是靜默失敗(已實測)。見 RAID R-11。
+# LLM 供應商：openrouter 是唯一可用值。`LLM_PROVIDER=cli` 已退役（RAID R-11
+# 已修）：設它會退回 openrouter 並記一行 ERROR。注意舊的 backend/.env.example
+# 預設值就是 cli，若你的 .env 是在 2026-10-01 之前複製的，把那一行改成
+# openrouter（或刪掉）。
 LLM_PROVIDER=cli
 
 # 只有 LLM_PROVIDER=openrouter 時才需要。留空＝未設定；

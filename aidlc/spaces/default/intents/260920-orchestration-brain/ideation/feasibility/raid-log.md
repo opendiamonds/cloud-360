@@ -33,7 +33,8 @@ D-8／D-9 的三處缺口全是**函式內 import**：`backend/main.py` 的 impo
 中 0 個、10 個關鍵字 grep 全 0 命中，且設計刻意選擇自建 runtime 而非重用
 `langgraph_runtime`），故不阻擋開發與合併。
 
-**R-11（併入 `ut` 時實測查出）— `LLM_PROVIDER=cli` 已失效，且是靜默失敗。**
+**R-11（併入 `ut` 時實測查出，已於 2026-10-01 修復）— `LLM_PROVIDER=cli` 已失效，
+且是靜默失敗。**
 `services/llm_provider.py` 的 cli 模式會從環境**刪除** `ANTHROPIC_AUTH_TOKEN`／
 `ANTHROPIC_BASE_URL`——這在 claude-agent-sdk 時代是正確的（當時由 `claude` CLI 自行
 認證）。但 A3 遷移之後 `design_agent.py:118` 直接讀這兩個變數建構 `ChatAnthropic`，
@@ -42,14 +43,38 @@ D-8／D-9 的三處缺口全是**函式內 import**：`backend/main.py` 的 impo
 字串、`base_url` 為 `None`、`llm_auth_ready()` 為 `True`——健康檢查回報正常而功能在
 呼叫時才失敗。全樹已無任何子行程呼叫（`create_subprocess_exec`／`Popen` 皆 0 命中），
 故 cli 模式已無可認證的對象。
-**可能性**低（預設為 openrouter，須手動改設才會踩到）；**影響**中（靜默失敗，且
-`llm_auth_ready()` 回 True 會把排查方向帶往錯的地方）。
-**這不是本 intent 的程式**：`llm_provider.py` 為 A1／A3 共用，屬 `ut` 側的維護範圍。
-緩解方向二擇一，屬該模組擁有者的決定——①移除 cli 模式與相關敘述；②讓 cli 模式不再
-刪除那兩個變數，或讓 `llm_auth_ready()` 在 cli 模式下據實回 `False`。
-**本 intent 的處置僅限**：`LOCAL-DEV.md` 已標明該模式目前是壞的並指向本條（原文第
-219 行說「cli 用你已登入的 claude CLI，不需任何金鑰」，與 `ut` 新寫的 H1 自相矛盾，
-是解合併衝突時發現的）。不阻擋本分支開發與合併。
+
+**可能性的評估已更正**：初次記載時評為「低（預設為 openrouter，須手動改設才會踩
+到）」，**這是錯的**。`backend/.env.example` 第 23 行的預設值**就是**
+`LLM_PROVIDER=cli`——照文件複製出的 `.env` 會直接踩到。更正後為**高**（照文件做就會
+中）；影響維持**中**（靜默失敗，且 `llm_auth_ready()` 回 True 會把排查方向帶往錯的
+地方）。這個誤判的來源是我只讀了程式沒讀範本檔，而範本檔才是使用者實際會照做的
+那一份。
+
+**處置：[H8]=D —— 本 intent 直接修。** 使用者於 approval-handoff 修訂 3 選 D（AI 推薦
+A「指派 `ut` 側」）。三種修法評估後選**移除 cli 模式**：全樹已無子行程，它不是壞了，
+是它要服務的東西不存在了；另兩種修法（讓它不再刪變數／只讓 `llm_auth_ready()` 回
+False）分別會把它變成無作用的別名、或把靜默失敗改成大聲失敗但仍不可用。
+
+**落實內容**（`llm_provider.py` 由 237 行縮為 178 行）：
+- `cli` 保留**辨識**但標為退役——設它會退回 `openrouter` 並記一行 **ERROR**（不是
+  WARNING，與「不是有效值」的 typo 訊息刻意區分；既有設定不是打錯字）。
+- 不拒絕啟動：本模組自己的契約是「一個選填變數的錯值不該讓整個 API 起不來」，且
+  openrouter 路徑已有明確可行動的「金鑰未設定」錯誤。拒絕啟動會把一行過期設定變成停機。
+- 刪除 `_configure_cli_env()`、`_CLI_*` 變數族、cli 專屬模型預設與 slug 過濾分支。
+- `llm_auth_ready()` 的 cli 分支移除——它不再對任何情況回報未經查證的 `True`。
+- `auth_error_message()` 不再把 cli 模式當成另一條出路。
+- `backend/.env.example` 預設值改為 `openrouter`，並寫明舊預設就是 cli 這件事；
+  順手合併該檔原本重複兩次且敘述不一致的 `DESIGN_LLM_MODEL` 區塊。
+- `LOCAL-DEV.md` 與 `backend/main.py` 的敘述同步。
+- `tests/test_llm_provider.py` 改寫（23 個測試全綠），新增 `RetiredCliMode` 類別直接
+  鎖住這個缺陷：`test_no_longer_deletes_credentials`、`test_auth_ready_no_longer_lies`。
+  **已做突變驗證**：把兩處行為改回原本的靜默失敗，該兩個測試即紅燈；還原後全綠。
+
+**殘留**：`cli` 這個字串仍留在 `llm_provider.py` 的 `_RETIRED_PROVIDERS` 與檔頭散文、
+`.env.example` 的退役說明中——這是刻意保留，移除它會讓既有設定退化成「打錯字」訊息。
+**協調事項**：`llm_provider.py` 屬 `ut` 側（tina）正在改動的範圍，本次修改可能在她下次
+碰同一支時產生衝突。此代價於 [H8] 選項原文已向使用者揭露。
 
 ## Assumptions
 

@@ -295,6 +295,129 @@ decisions that have not been explicitly approved」；`scope-definition:rev1-c4`
 
 ---
 
+# 修訂 3（2026-10-01）—— 能力 12 落地後的收尾
+
+<!-- 觸發：修訂 2 的 [H6]=B 使範圍決定回跳 scope-definition。該站修訂 3 以
+     [S16]=A 新增能力 12（專案成員管理，Must），rough-mockups 修訂 3 補完其
+     畫面並通過兩輪審查（皆 READY）。本站第三次執行的工作是把 initiative-brief
+     與 decision-log 補到現況——兩者仍是 2026-09-29 的版本，不只早於 H6／H7，
+     更早於能力 11 與能力 12，比現況落後兩個修訂。 -->
+
+**修訂 3 不重問的事項**（附可引用依據，依 `scope-definition:260822-c5` 須能引用具體選項字母）：
+
+| 不重問的事項 | 可引用依據 |
+|---|---|
+| 兩個技術試探的執行位置 | [H1]=A |
+| 兩項上線前置依賴的承接站 | [H2]=A |
+| R-1（架構圖遷入新階層）的設計落點 | [H3]=A |
+| R-8（兩份 runtime 漂移）的驗證落點 | [H4]=A |
+| 殘留風險的接受範圍（H5 當時的集合） | [H5]=A |
+| 成員管理的範圍決定收在哪 | [H6]=B（已執行：回跳 scope-definition，產出能力 12） |
+| D-8／D-9 是否為進入下一階段的前置 | [H7]=A（且兩者已於 2026-10-01 由 `ut` 解決，條件自然滿足） |
+| 自動改選的挑選規則 | scope-definition 修訂 3 已指派 `requirements-analysis` |
+| 兩層串聯的診斷畫面缺口 | rough-mockups 修訂 3 已指派 `requirements-analysis` |
+
+**本輪 Go / No-Go 逐項重審（分析，非提問）**：依 `approval-handoff:rev1-c2`，範圍
+擴充後不得自動下修信心，須逐項對照可行性面向。能力 12 不引入新服務、不新增對外
+暴露面、不新增依賴、不引入新技術層——它是既有 FastAPI／React／PostgreSQL 之上
+的一張新表與一組既有形狀的頁面，且 `[M3]=A` 經查證不需改 schema 約束。故 **GO
+維持不變**。反方向同樣逐項檢查（依同一條規則的反面）：D-8／D-9 由 `ut` 解決，使
+[H7]=A 所列的兩項外部驗收前置**由待辦轉為已滿足**，信心面為上調而非下調。
+
+---
+
+## H8. R-11（`LLM_PROVIDER=cli` 已失效且為靜默失敗）要怎麼處置？
+
+<!-- 本題為新增風險，不在 [H5]=A 確認當下的集合內，依
+     `approval-handoff:260823-rev1-c1` 必須另行取得確認，不得沿用舊確認。
+     發現經過：解 `LOCAL-DEV.md` 的 `ut` 合併衝突時，看到該檔第 219 行
+     （cli 模式用已登入的 claude CLI、不需金鑰）與 `ut` 新寫的 H1（不再需要
+     claude CLI）自相矛盾。實測：設 `LLM_PROVIDER=cli` 並給定兩個變數後呼叫
+     `configure_provider_env()`，`api_key` 為空字串、`base_url` 為 None、
+     `llm_auth_ready()` 仍回 True。全樹已無子行程呼叫。 -->
+
+- **A**：**接受為殘留風險，指派 `requirements-analysis`（已查證為 `ALWAYS`，不需
+  轉移目標）判定是否要求 `ut` 側修**。本 intent 不改 `llm_provider.py`——它是
+  A1／A3 共用、屬 `ut` 側維護範圍，且修法二擇一（移除 cli 模式／讓它不再刪變數）
+  屬該模組擁有者的決定。本 intent 的處置僅限 `LOCAL-DEV.md` 已標明該模式目前是壞
+  的並指向 RAID R-11。代價：cli 模式在被修好之前都不能用，而預設是 openrouter，
+  須手動改設才會踩到。
+- **B**：比照 [H7] 對 D-8／D-9 的處置，升為**進入下一階段的前置條件**。代價：R-11
+  的可能性為低（須手動改設）、且與本 intent 的任何設計工作零關係，用前置條件擋
+  整個階段與風險不成比例。
+- **C**：不列入本 intent 的 RAID，移除 R-11，改以 issue 交給 `ut` 側。代價：RAID
+  是本 intent 唯一會被下游讀到的風險清單，移出等於讓這個靜默失敗在本 intent 的
+  紀錄裡消失；而它是在本 intent 的合併動作中查出來的。
+- **D**：本 intent 直接修 `llm_provider.py`。代價：改別人正在改的模組，且修法涉及
+  「cli 模式該不該存在」這個不屬本 intent 的設計決定。
+
+[Answer]: D  <!-- 2026-10-01T14:48:45Z | Mode: guided | 修訂 3 新增 -->
+
+**D 的落實方式（三種修法逐一評估後選定）**：
+
+| 修法 | 判定 |
+|---|---|
+| ①**移除 `cli` 模式** | **選定**。全樹已無子行程呼叫（`create_subprocess_exec`／`Popen` 皆 0 命中），cli 模式已無可認證的對象——它不是壞了，是它要服務的東西不存在了。移除是唯一讓程式與事實一致的修法 |
+| ②讓 cli 模式不再刪那兩個變數 | 不選。這樣它會與 `openrouter` 模式行為完全相同，變成一個無作用的別名——把一個會靜默失敗的選項換成一個會誤導人的選項 |
+| ③只讓 `llm_auth_ready()` 在 cli 模式回 `False` | 不選。那只是把靜默失敗改成大聲失敗，使用者仍然得到一個永遠不能用的設定值 |
+
+**相容性處置**：`LLM_PROVIDER=cli` 已是公開設定值，不能靜默消失。處置為**保留該值的辨識但拒絕啟動**，並在訊息中指出 A3 已遷移至 LangGraph／OpenRouter、該模式已無子行程可認證——大聲失敗優於無聲降級（與 `construction.md` 的「Errors must be surfaced」一致）。`LOCAL-DEV.md` 第 219 行與 RAID R-11 同步更新為已解決。
+
+
+<!-- 本題我推薦 A，使用者選 D（本 intent 直接修 llm_provider.py）。依
+     `project.md` 的規則，選項會製造新的正確性問題時須請其重選——本輪判定
+     **不構成**：D 的代價是協調成本（改 tina 正在改的模組，下次她碰同一支
+     時可能衝突），不是正確性問題，且該代價已在選項原文逐字揭露。使用者對
+     自己 repo 的協調有權決定，故照辦。
+     修法選擇見下方「D 的落實方式」。 -->
+
+---
+
+## H9. rough-mockups 的兩個殘留 Minor（R-05／R-06）要在哪裡收？
+
+<!-- R-05：`user-flow.md` 的 Flow 6（建立專案）未提建立者的預設角色，使能力 12
+     第 (1) 項在流程檔無落點（wireframes 已補引用）。R-06：§23 的文字 fallback
+     仍寫「這一格的存在理由是 M3」，比該節新標題的雙重引用窄。
+     注意：rough-mockups 已核可，其審查收據已消耗。 -->
+
+- **A**：**在本站的 `initiative-brief.md` 明記這兩項對齊修正，上游檔不回改**。依
+  `refined-mockups:c3` 的既有慣例——下游修正上游已核可 artifact 的內部瑕疵時，在
+  本站 artifact 明記「這是對齊修正、非本站新定案」並說明原瑕疵，上游檔案本身仍不
+  回改（否則純比對兩份文件會誤判為迴歸）。代價：讀 `user-flow.md` 的人看不到這則
+  修正，必須讀到交接文件才知道。
+- **B**：指派 `requirements-analysis`（`ALWAYS`）在寫 FR 時吸收這兩項。代價：它們
+  是畫面層的敘述瑕疵而非需求缺口，交給需求站會把一件小事放大成一條 FR。
+- **C**：回改 `user-flow.md` 與 `wireframes.md`。代價：直接違反「上游檔案本身仍不
+  回改」，且該站已核可、收據已消耗，回改會讓已核可版本與現況分歧。
+- **D**：保留為已知殘留，兩份文件都不記。代價：R-05／R-06 在審查紀錄裡存在但在交接
+  文件裡消失，下游不會知道。
+
+[Answer]: A  <!-- 2026-10-01T14:48:45Z | Mode: guided | 修訂 3 新增 -->
+
+---
+
+## H10. 新角色命名與 RBAC story id 的落點 —— 候選承接站是 CONDITIONAL
+
+<!-- 能力 11 與能力 12 都需要新的 RBAC story id（K1／K2 已被入口頁與階層用掉），
+     且能力 12 的非管理者那一層叫什麼尚未定案（[S14]=A 只定了 project_admin 不進
+     CANONICAL_ROLES）。兩者必須一起定才不會再撞名。
+     已查證 stage-graph.json：domain-design 為 CONDITIONAL（可能被 skip），
+     requirements-analysis 與 units-generation 為 ALWAYS。
+     依 `approval-handoff` 的既有規則，指派 CONDITIONAL 站必須附轉移目標，
+     否則指派會無聲落空（本 intent 的 [H6] 就是一次死指派）。 -->
+
+- **A**：**指派 `domain-design`，並附轉移目標 `requirements-analysis`（`ALWAYS`）**；
+  若 `domain-design` 被判定 skip，由當時的 conductor 轉交。理由：角色模型與
+  story id 本質是 domain 決定；但本 intent 已經吃過一次死指派，所以必須附轉移目標。
+- **B**：直接指派 `requirements-analysis`（`ALWAYS`），不經 `domain-design`。
+  代價：角色命名與權限矩陣的設計在需求站做會偏早，可能在 domain-design 又被改一次。
+- **C**：指派 `units-generation`（`ALWAYS`）。代價：那站的工作是切分單元，不是定
+  命名與 story id；塞進去等於把一個設計決定藏在切分裡。
+
+[Answer]: A  <!-- 2026-10-01T14:48:45Z | Mode: guided | 修訂 3 新增 -->
+
+---
+
 ## Consolidated Summary Confirmation
 
 - Looks correct

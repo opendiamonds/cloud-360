@@ -40189,3 +40189,27 @@
 **Agent**: aidlc-delivery-agent
 
 ---
+
+## Decision Recorded
+**Timestamp**: 2026-10-01T14:43:19Z
+**Event**: DECISION_RECORDED
+**Stage**: approval-handoff
+**Decision**: 修訂 3：R-11 處置、R-05／R-06 落點、新角色命名與 RBAC story id 的承接站
+**Options**: H8: A 接受為殘留風險並指派 requirements-analysis | B 升為進入下一階段的前置條件 | C 移出 RAID 改開 issue | D 本 intent 直接修 llm_provider.py ;; H9: A 在 initiative-brief 明記對齊修正、上游檔不回改 | B 指派 requirements-analysis 吸收 | C 回改上游檔 | D 保留為已知殘留不記 ;; H10: A 指派 domain-design 並附轉移目標 requirements-analysis | B 直接指派 requirements-analysis | C 指派 units-generation
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T14:47:54Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-10-01T14:48:45Z
+**Event**: QUESTION_ANSWERED
+**Stage**: approval-handoff
+**Details**: H8=D（本 intent 直接修 llm_provider.py；AI 推薦 A，使用者選 D，判定不構成正確性問題故照辦）；H9=A（在 initiative-brief 明記對齊修正，上游檔不回改）；H10=A（指派 domain-design 並附轉移目標 requirements-analysis）
+
+---
