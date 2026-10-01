@@ -794,6 +794,8 @@ export interface components {
             files: string[];
             /** Note */
             note?: string | null;
+            /** Workload Context */
+            workload_context?: string | null;
         };
         /** BulkRolePermissionUpdate */
         BulkRolePermissionUpdate: {
@@ -902,6 +904,10 @@ export interface components {
             note?: string | null;
             /** Privacy */
             privacy: string;
+            /** Workload Context */
+            workload_context?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1209,6 +1215,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
