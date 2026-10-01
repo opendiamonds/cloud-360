@@ -7,6 +7,8 @@
 - 2026-09-21T02:42:25Z — F13 取代 F12：使用者「用系統admin功能去設定」的回覆被判讀為**重新框定**而非選項之一，依 `application-design:260822-ad-L3` 先查證（llm_limits.py 管的是單次 token 上限非花費、user_router 無任何設定類端點、強制花費上限需成本計量而 [Q6]=C／[Q11]=B 已排除成本計算），確認它同時是跨階段矛盾與範圍擴充，故改問真正的決策點而非直接採納。使用者選 A（改在 OpenRouter 後台設），矛盾解除、範圍不變、不需回跳上游。
 - 2026-09-21T01:40:34Z — CONDITIONAL 適用性逐項判定（依 project.md `feasibility:c1`，不憑 feature 表面大小直覺）：**整合約束＝成立**（須接既有 agent 端點、既有 LLM provider 切換層、既有 auth／RBAC，並在既有 user_diagrams 之上疊專案／系統階層）；**法規要求＝部分成立**（episodic memory 是 by user 的對話紀錄，有保存期與刪除的隱私面，雖僅限自有 staging）；**顯著技術不確定性＝成立**（LangGraph 與 Redis 在 repo 內引用為 0，三種記憶與推播皆無前例）。三款有二款明確成立，故本 stage EXECUTE。
 <!-- example: 2026-05-29T10:14:32Z — chose REST over GraphQL; the consuming team only needs CRUD, revisit if subscriptions land -->
+- 2026-10-01T15:13:14Z — **修訂 2 的觸發不是上游改了什麼，是本站從未評估過的兩項能力已經進了範圍。** approval-handoff 的階段邊界檢查以八個關鍵詞（`需求頁`、`需求欄位`、`成員管理`、`project_admin`、`project_owner`、`MCP`、`能力 11`、`能力 12`）對本站三份產出合併搜尋，**全部 0 命中**；引擎亦標 `Directly stale: feasibility`。使用者於該站核可關卡選 [H11]=B 重跑本站。本輪為 **Modify 模式**：F1–F15 的既有作答一律不動，只疊加能力 11／12 與 R-11 的評估。
+- 2026-10-01T15:13:14Z — **能力 11 與 12 的缺口性質不同，必須分開判，不能合併成一句「兩項都沒評估」。** 能力 12（成員管理）的可行性已由 approval-handoff 的 Go／No-Go 逐項表以**查證過的事實**覆蓋（不引入新服務／新暴露面／新依賴／新技術層；`[M3]`=A 與 `schema_rbac.sql:328` 的現況一致，不需改 schema 約束）——它的缺口是**形式缺口**。能力 11 的 `[S13]`=A「agent 經大腦端 MCP 封裝取用欄位，底下走 HTTP 帶使用者 token」在 repo 內**零基礎設施**，是**實質缺口**。
 
 ## Deviations
 - 2026-09-21T10:23:32Z — 稽核收據的正確順序本輪才摸清，記下來給後續 stage：(1) 先把所有產出寫到定稿；(2) `aidlc-log decision --checkpoint summary-confirmation` 登記提示；(3) 提問；(4) `aidlc-log answer` 記錄選擇（產生 Summary Authorization Id）；(5) **之後**才用 Write/Edit 工具重存每一份產出，讓 hook 蓋上該 id。本輪踩到兩個坑：產出在收據之前就寫好 → SUMMARY_ARTIFACT_UNAUTHORIZED；收據之後又去改問題檔（只加了一段 HTML 註解）→ SUMMARY_CONTENT_STALE，因為收據綁定的是問題檔在確認當下的內容。問題檔若也需要帶戳記的寫入，做法是以 Edit 還原成確認當下的內容——工具呼叫觸發 hook，而內容雜湊不變。
@@ -16,11 +18,15 @@
 - 2026-09-21T01:40:34Z — 依 project.md `feasibility:c2`，省略 stage 檔範例題「What AWS services and accounts are currently in use?」。理由：本 repo 的部署目標只有自有 staging（ADR-0007），雲端供應商 production 環境與 credentials 由 ADR-0001／0002 排除在範圍外（project.md `## Scope Overrides`），沒有雲端帳號盤點的標的。
 - 2026-09-21T01:40:34Z — 省略「組織阻礙（change freeze、競爭優先序）」一題。理由可引用：intent-capture 的 [Q8] 已定案為「單一決策者（你），無其他關係人：範圍、優先順序、驗收皆由你決定，不需要對外回報節奏」，組織層阻礙在此結構下不存在。依 project.md `scope-definition:260822-c5`，省略時必須能引用定案原文，此處可引用。
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
+- 2026-10-01T15:13:14Z — **出題前的查證查出一件上游六站都沒碰到的事，而它比 MCP 本身更要緊。** 原本只想確認 MCP 可行性，查「工具怎麼取得 per-request 脈絡」時發現 `design_agent.py` 用的是**模組層全域** `_progress_queue`（第 31、183、203、211、218 行）而非 LangGraph 的 `configurable`／`contextvars`——全樹只有 `thread_id` 走 `configurable`。這不是風格問題：工具與入口**都讀當下的模組全域**，兩個併發請求共用最後一個被建立的佇列。**已實測**：使用者 A 收到 B 產生的架構圖 XML，B 什麼都沒收到。`agent_router.py:125`（每個 HTTP 請求）與 `wa_collab_orchestrator.py:79` 是兩個可達的呼叫點。
+- 2026-10-01T15:13:14Z — **我的第一次實測與實際程式不符，當場更正重做。** 第一版模擬在入口端捕獲區域變數 `mine = da._progress_queue`，但第 203 行實際讀的是模組全域。更正後結論改變且更嚴重：不是「A 收不到」，而是**A 收到 B 的 XML**。寫下實測結論前要逐行核對模擬與被測程式是否同形，否則實測會變成另一種憑印象。
+- 2026-10-01T15:55:38Z — **自檢 3（引用逐字核對）抓到一個跨七個檔的錯誤引用，而審查員也沒抓到。** 上游六處一致引用 `schema_rbac.sql:328`，但該行實為 `id SERIAL PRIMARY KEY,`；`projects.owner_user_id` 在**第 330 行**。源頭是 scope-definition 修訂 2 的 `scope-document.md:52`，傳播到 rough-mockups（4 處）、approval-handoff（2 處）、phase-check。**rough-mockups 的審查員在 review-06 寫「已直接讀檔確認 `schema_rbac.sql:328`」並判定 accurate**——他驗了**事實**（`NOT NULL`、無 `ON DELETE`）但沒驗**定位**。教訓不是「要核對引用」（那已是規則），是**核對引用時要分開驗事實與驗定位**：內容對而行號錯的引用會通過任何只檢查內容的核對，而下一個照行號去讀的人會讀到別的東西。附帶發現使這件事更要緊而非更不要緊：`schema_rbac.sql:242` 另有一個 `owner_user_id` 且**有** `ON DELETE CASCADE`（在 `estimate_sets`），所以「無 ON DELETE」只對 `projects` 那一個成立——行號指錯就可能指到反例上。
 
 ## Tradeoffs
 - 2026-09-21T10:14:41Z — F14 定案 A（HTTP 帶使用者 token）而非 B（同進程呼叫 service 層）。取捨是多一跳本機 HTTP，換到既有 require_story_action dependency 照常執行——授權在機制上不可能被繞過，稽核主體自然是使用者本人。這一題同時關掉 intent-statement 的假設⑧與⑨，兩者都不需要新機制。
 - 2026-09-21T02:42:25Z — F6 只選兩個 spike（LangGraph 編排、記憶層資料模型），未含既有資料遷移。依 `feasibility:260822-c1` 的覆蓋檢查主動加開 F10，使用者選 A（交給設計階段處理）。取捨是：遷移風險不在本站以試探消除，改以對 application-design／functional-design 的明確指派承載——故該指派必須寫進產出，否則會無聲落空。
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
+- 2026-10-01T15:13:14Z — **`advice_orchestrator.py` 就是這個問題在本 repo 的正解，所以不需要發明新模式。** 它的 `_progress` 是 `dict[int, dict]` **以 `set_id` 為鍵** ＋ `threading.Lock`（第 23–24 行）。同一個 repo 裡一邊有正解一邊有錯解，使「要怎麼修」不是開放設計題而是「沿用鄰居的形狀」。這讓 F17 的選項可以具體到形狀而非只問要不要修。
 
 ## Open questions
 - 2026-09-21T10:14:41Z — R-8（兩份 runtime 並存後各自漂移）的緩解手段刻意不在本站預選，依 feasibility:c6 只記風險與方向。但這一項與其他 RAID 項不同：它是使用者知情選擇（Q13=B）的直接後果，不是外部不確定性——若設計階段未接下 D-6 的指派，它會無聲落空而沒有任何人會發現。
@@ -28,3 +34,5 @@
 - 2026-09-21T02:42:25Z — F11=B（無硬數字、原則盡量省）與 F13=A（上限由 OpenRouter 後台承載）銜接後，本專案不掌握該上限的實際數值。當外部上限觸發、OpenRouter 開始拒絕請求時，系統當下的行為未定。此項列入 RAID 風險，緩解方向於設計階段選定。
 - 2026-09-21T01:40:34Z — team.md `## Code Style` 記載「Backend 依賴 100% 未 pin、無 lockfile……11 個依賴無一有版本約束」，但實測 `backend/requirements.txt` 現已有 `fastapi[standard]==0.141.1` 與 `pydantic==2.13.4` 兩項精確釘選（且附有與 openapi.json 漂移檢查相關的理由註解）。該規則層敘述已過期，待下一輪 practices-discovery 更正；本 stage 以實測值為準。
 <!-- example: 2026-05-29T10:14:32Z — confirm the retention window with compliance before the next stage hardens the schema -->
+- 2026-10-01T15:13:14Z — **能力 11 的 `MCP` 在 repo 內唯一的命中是 `user_router.py:85` 的字串 `"H3": "MCP／Skill 生命週期"`——那是 RBAC 權限矩陣裡的 story 標籤，不是實作。** 權限矩陣領先實作這件事本 repo 已有先例（`project.md` 的 `reverse-engineering:c9` 逐字記過 C1 的情況），但這次是**上游把矩陣標籤讀成了既有能力**的風險：`[S13]`=A 寫「經大腦端 MCP 封裝」時，repo 內並沒有任何 MCP server／client。`langchain-mcp-adapters` 亦不在 `requirements.txt`。
+

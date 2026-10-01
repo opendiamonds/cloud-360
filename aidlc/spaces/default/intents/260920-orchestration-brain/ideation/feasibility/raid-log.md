@@ -76,6 +76,34 @@ False）分別會把它變成無作用的別名、或把靜默失敗改成大聲
 **協調事項**：`llm_provider.py` 屬 `ut` 側（tina）正在改動的範圍，本次修改可能在她下次
 碰同一支時產生衝突。此代價於 [H8] 選項原文已向使用者揭露。
 
+**R-12（修訂 2 查證查出）— 既有 agent 的工具脈絡是模組層全域，併發時跨使用者
+錯送內容。**
+`design_agent.py` 的 `_progress_queue` 是模組層全域（第 31／183／203／211／218
+行），工具與入口**都讀當下的模組全域**。**已實測**：兩個重疊請求共用最後一個被
+建立的佇列，使用者 A 收到使用者 B 產生的架構圖 XML，B 什麼都沒收到；第 218 行
+先結束者把全域設為 `None` 後，另一請求其後的 progress／xml／error 事件被
+**靜默丟棄**。兩個生產呼叫點皆可達（`agent_router.py:125` 每個 HTTP 請求、
+`wa_collab_orchestrator.py:79`）。`thread_id` 是 per-user 的（`agent_router.py:125`
+用 `f"user-{current_user.id}-design"`），但那只餵 checkpointer，不管佇列。
+**可能性**高（任何兩個使用者同時用 A1 即觸發；本專案的大腦會增加併發路徑）；
+**影響**高（跨使用者資料暴露 ＋ 靜默遺失，且兩者在單一使用者的驗收下都不會出現）。
+**緩解**：`[F17]`=A 定為能力 1／8 的實作前置，沿用 `cost/advice_orchestrator.py:23-24`
+的 per-key dict ＋ `threading.Lock` 形狀——本 repo 自己的正解，不需發明新模式。
+記為約束 **C-R3**。既有缺陷而非本 intent 引入，但本 intent 的編排與串流會放大它。
+
+**R-13（修訂 2）— MCP 的 token 傳遞路徑若設計錯誤，憑證會進入模型輸入且不可撤回。**
+`[F16]`=B 選擇真的導入 MCP server ＋ client。MCP server 是獨立進程，而 `[S13]`=A
+要求「底下走 HTTP 帶使用者 token」——若 token 以**工具參數**傳遞，它會(1)進入 LLM
+的 context、(2)被 LangGraph checkpointer 寫進訊息歷史並持久化、(3)出現在任何記錄
+`tool_calls` 的 log。三者皆無法事後撤回。
+**可能性**中（工具參數是最直觀的傳法，不明文禁止就很可能被這樣寫）；**影響**高
+（憑證洩漏且不可撤回）。
+**緩解**：已寫成硬約束 **C-T11**——token 必須由傳輸層或 session 承載，工具的 JSON
+schema 內不得出現任何憑證欄位。本站不預選傳輸形式（stdio 或 HTTP／SSE），那屬設計
+階段；但「不得進入 LLM context」這條不是設計選項。
+**附帶**：MCP server 是本 intent 的**第二個**新增進程邊界（第一個是 Redis），本身
+亦為新增依賴與新技術層——`[F16]` 的選項原文已逐字揭露此代價，使用者知情選擇。
+
 ## Assumptions
 
 | ID | 假設 | 驗證者 | 來源 |
@@ -86,6 +114,7 @@ False）分別會把它變成無作用的別名、或把靜默失敗改成大聲
 | A-4 | 「盡量省」的設計原則足以守住 OpenRouter 後台的成本上限 | **無法驗證**——本專案不掌握該上限數值 | [F11][F13] |
 | A-5 | 記憶層內建的最小權限模型（擁有者、可見範圍）足以讓介接的應用系統映射自身角色，不需要記憶層理解各系統的角色語意 | 設計階段確認 | [F9] |
 | A-6 | 三個成功指標的門檻值可在 requirements-analysis 定出，不需要先有實測基準 | requirements-analysis 確認 | [F7] |
+| **A-7** | **MCP 的 Python server／client 生態可在本 repo 的 Python 3.12 ＋ LangGraph 1.2.11 環境下運作，且其工具定義能被 `ChatAnthropic` 以 tool-calling 消費。** 本站**未實測**——`[F16]`=B 的選擇是在「repo 內零前例」的事實被揭露後做的，故這是真實的待驗假設，不是形式記載 | `domain-design` 的技術試探（比照 P-1／P-2） | 修訂 2 [F16]=B |
 
 ## Issues
 

@@ -40277,3 +40277,277 @@
 **Source Baseline**: sha256:ba3a0a876947b27d2e33a48cfdfbc606ee4bf7bc6d3595e3c01939152a2186b7
 
 ---
+
+## Decision Recorded
+**Timestamp**: 2026-10-01T15:14:28Z
+**Event**: DECISION_RECORDED
+**Stage**: feasibility
+**Decision**: 修訂 2：能力 11 的 MCP 封裝怎麼收、以及查證查出的 _progress_queue 併發危害怎麼定位
+**Options**: F16: A 收窄為 LangChain @tool（零新依賴） | B 真的導入 MCP server+client | C 先做技術試探再定 | D 維持 MCP 字面由設計階段解釋 ;; F17: A 列為能力 1／8 的實作前置並沿用 advice_orchestrator 的形狀 | B 列為獨立既有缺陷開給 ut 側 | C 升為阻擋項 | D 不列入留給 functional-design
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T15:50:37Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-10-01T15:51:16Z
+**Event**: QUESTION_ANSWERED
+**Stage**: feasibility
+**Details**: F16=B（真的導入 MCP server+client；AI 推薦 A，使用者選 B。已指名 B 的硬約束：使用者 token 不得以工具參數傳遞否則會進入 LLM context 與 checkpointer 歷史，須由傳輸層／session 承載——寫成約束 C-S3 而非要求重選）；F17=A（_progress_queue 併發危害列為能力 1／8 的實作前置，沿用 advice_orchestrator 的 per-key dict + lock 形狀）
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T16:07:30Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T16:07:45Z
+**Event**: RULE_LEARNED
+**Stage**: feasibility
+**Candidate-ID**: c15
+**Content-Hash**: cb353d32d713543a478af4c94654a13ff6e1e4ce915d6a5812085ddd7ee5806e
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T16:07:45Z
+**Event**: RULE_LEARNED
+**Stage**: feasibility
+**Candidate-ID**: c14
+**Content-Hash**: f1bd833fb781e042f3c321c030f6b364cc2de3f585f52cc8a45599c8a66f8e72
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Rule Learned
+**Timestamp**: 2026-10-01T16:07:45Z
+**Event**: RULE_LEARNED
+**Stage**: feasibility
+**Candidate-ID**: c6
+**Content-Hash**: 1200b80ffd071b6e59012bb0587abc7a0932f1b1efd5381ecaf61025d8189c5a
+**Destination**: <project-dir>/aidlc/spaces/default/memory/project.md
+**Heading**: ## Corrections
+**Source**: orchestrator
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T16:08:24Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:32Z
+**Event**: SENSOR_FIRED
+**Fire id**: 0d46f5d9
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-assessment.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:32Z
+**Event**: SENSOR_PASSED
+**Fire id**: 0d46f5d9
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-assessment.md
+**Duration ms**: 43
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:32Z
+**Event**: SENSOR_FIRED
+**Fire id**: e4c9d462
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/constraint-register.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_PASSED
+**Fire id**: e4c9d462
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/constraint-register.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: 13687b62
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/raid-log.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_PASSED
+**Fire id**: 13687b62
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/raid-log.md
+**Duration ms**: 44
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: aa8e35b0
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_PASSED
+**Fire id**: aa8e35b0
+**Sensor ID**: required-sections
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-questions.md
+**Duration ms**: 43
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_FIRED
+**Fire id**: 08bff52d
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-assessment.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:33Z
+**Event**: SENSOR_PASSED
+**Fire id**: 08bff52d
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-assessment.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 7c3566e2
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/constraint-register.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: 7c3566e2
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/constraint-register.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 5fb7500e
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/raid-log.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: 5fb7500e
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/raid-log.md
+**Duration ms**: 42
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_FIRED
+**Fire id**: 32493865
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: SENSOR_PASSED
+**Fire id**: 32493865
+**Sensor ID**: upstream-coverage
+**Stage slug**: feasibility
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-questions.md
+**Duration ms**: 43
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-10-01T16:08:34Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: feasibility
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-10-01T16:08:35Z
+**Event**: GATE_APPROVED
+**Stage**: feasibility
+**User Input**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-10-01T16:08:35Z
+**Event**: STAGE_COMPLETED
+**Stage**: feasibility
+**Validation Basis**: {"graphContract":"sha256:543912e848784f58af817ec322275022445da586f78256c281d1c37d967b15aa","inputs":[{"artifact":"intent-statement","contentHash":"sha256:5518de162f852723d31ab69aac60f8a0afd72b2f991fd770d6b5cd1aa90b8f24","instanceCount":1,"presentCount":1,"producer":"intent-capture","required":true,"structureHash":"sha256:5006d391ecfb2d652362d585d8849ee3c592fd40beb2eb7c75ee02a3641b1945"}],"outputs":[{"artifact":"constraint-register","contentHash":"sha256:8aac85a836f502da664a549b0bc8baf304620db8b671b64a2db17b26c64a4d8a","instanceCount":1,"presentCount":1,"producer":"feasibility","required":true,"structureHash":"sha256:1529999c79c9c9f7a2207db4c5af5d6e66bd6af48b1e644925a4f6fb6a42a57e"},{"artifact":"feasibility-assessment","contentHash":"sha256:f3881398098551db0a78507521259ffe4777c16e400070a89096bdaaed429572","instanceCount":1,"presentCount":1,"producer":"feasibility","required":true,"structureHash":"sha256:fc5a5cb217fde407b18372ac8f1ef7c1eae1c789eecebf3322d931d01520e1ee"},{"artifact":"feasibility-questions","contentHash":"sha256:797d52dd2463c1873440604b925dcc4abdf2c45529d2dcf408dd2df74bd7ba2e","instanceCount":1,"presentCount":1,"producer":"feasibility","required":true,"structureHash":"sha256:a22797d5dde3d3b7400d06da19b1e66d204fbc6091e477c5c7c8a1fa24e00468"},{"artifact":"raid-log","contentHash":"sha256:990c4e81c4b93d7cf47e73c596502d658a752fbbb1d0556cb4800452eea420a3","instanceCount":1,"presentCount":1,"producer":"feasibility","required":true,"structureHash":"sha256:95b456cdb76d002c419a4bdfa89da39cf5fb4fd50fd5604efdb022f9e16750e1"}],"projectType":"brownfield","schema":3}
+**Details**: Stage Feasibility & Constraints approved by gate
+
+---
+
+## Stage Start
+**Timestamp**: 2026-10-01T16:08:35Z
+**Event**: STAGE_STARTED
+**Stage**: scope-definition
+**Agent**: aidlc-product-agent
+
+---
