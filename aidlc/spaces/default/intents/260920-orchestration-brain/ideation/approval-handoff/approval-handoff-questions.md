@@ -418,6 +418,44 @@ decisions that have not been explicitly approved」；`scope-definition:rev1-c4`
 
 ---
 
+## H11. 能力 11 的 MCP 封裝完全沒有可行性評估，要怎麼處置？（階段邊界檢查加開）
+
+<!-- 本題由本站 Step 4 的階段邊界檢查重驗觸發，非上游遺留。
+     實測：以八個關鍵詞（需求頁、需求欄位、成員管理、project_admin、
+     project_owner、MCP、能力 11、能力 12）對 feasibility 的三份產出合併搜尋，
+     全部 0 命中。原因是結構性的——兩項能力都在 feasibility 跑完之後才新增
+     （能力 11 於 scope 修訂 2、能力 12 於修訂 3），而 feasibility 從未重跑；
+     引擎自己也標 `Directly stale: feasibility`。
+     兩項的風險型態不同：能力 12 的缺口是形式缺口（其可行性已由本站 Go/No-Go
+     的逐項表以查證過的事實覆蓋）；能力 11 的 [S13]=A 定案「agent 經大腦端
+     MCP 封裝取用欄位，底下走 HTTP 帶使用者 token」是 repo 內無前例的全新整合
+     機制，缺口是實質缺口。 -->
+
+- **A**（AI 推薦）：接受為殘留風險，列為交接第 19 列，指派 `domain-design`
+  （CONDITIONAL）並附轉移目標 `requirements-analysis`（`ALWAYS`），且在該站先做
+  技術試探（比照 P-1／P-2）。代價：若該機制實際不可行，會到 `domain-design` 才
+  發現，而那時能力 11 的兩頁線框與 `[R10]`／`[R12]` 已經核可。
+- **B**：**重跑 `feasibility`**（引擎已建議 `/aidlc --stage feasibility`）。讓能力
+  11／12 與新增的 R-11 都正式被評估一次。代價：多一輪完整的 stage（提問、產出、
+  審查、關卡），而其中大部分內容（能力 1–10）本輪已驗過且未變；且往回跳會使
+  下游已核可的站失去核可狀態。
+- **C**：只對 MCP 封裝做一次小範圍技術試探，現在做。代價：ideation 階段本不該做
+  實作性試探，且會拖延進入 Inception。
+- **D**：不記為缺口，視為已被能力 9 的評估隱含。代價：隱含不等於背書——這正是
+  檢查 2 對能力 3／5／6 已經記過的語句；MCP 封裝是 repo 內無前例的新整合機制，
+  與能力 9 的資料模型不是同一類風險。
+
+[Answer]: B  <!-- 2026-10-01T15:02:47Z | Mode: guided | 修訂 3、階段邊界檢查加開 -->
+
+<!-- AI 推薦 A，使用者選 B。依 `project.md` 的規則，選項會製造新正確性問題時須
+     請其重選——本輪判定**不構成**：B 是把一個實質缺口補起來的正確做法，代價純
+     為流程成本（多一輪 stage ＋ 下游重新核可），不是正確性問題。且使用者的選擇
+     與引擎自己的 stale 判定一致。
+     後果：本站**不核可**，改為往回跳至 feasibility。影響範圍於執行前以
+     `jump resolve` 查明並向使用者揭露。 -->
+
+---
+
 ## Consolidated Summary Confirmation
 
 - Looks correct

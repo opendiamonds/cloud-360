@@ -40213,3 +40213,34 @@
 **Details**: H8=D（本 intent 直接修 llm_provider.py；AI 推薦 A，使用者選 D，判定不構成正確性問題故照辦）；H9=A（在 initiative-brief 明記對齊修正，上游檔不回改）；H10=A（指派 domain-design 並附轉移目標 requirements-analysis）
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-10-01T15:02:12Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-10-01T15:02:47Z
+**Event**: QUESTION_ANSWERED
+**Stage**: approval-handoff
+**Details**: H11=B（重跑 feasibility；AI 推薦 A 接受殘留風險並指派，使用者選 B，與引擎的 Directly stale: feasibility 判定一致）
+
+---
+
+## Error Logged
+**Timestamp**: 2026-10-01T15:02:56Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-jump
+**Command**: aidlc-jump resolve --target feasibility --direction backward
+**Error**: Usage: resolve --stage <slug|#> or --phase <name|#> [--scope <scope>]
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T15:07:39Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
