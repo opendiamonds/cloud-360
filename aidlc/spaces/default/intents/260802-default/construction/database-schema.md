@@ -2,6 +2,9 @@
 
 本文件紀錄 A2（多份草稿儲存、精準權限分享）與 A4（user × diagram 聊天持久化、上次開啟圖）的資料庫 Schema。
 
+> **C1 估價上傳表**（`estimate_sets`／`estimate_line_items` 等，含 `workload_context_json`、`spec_description`）不在本檔範圍；governing spec 見  
+> `aidlc/spaces/default/intents/260916-estimate-upload-rework/construction/database-schema.md`。
+
 ### 1. 核心關聯圖 (ERD)
 
 ```mermaid
