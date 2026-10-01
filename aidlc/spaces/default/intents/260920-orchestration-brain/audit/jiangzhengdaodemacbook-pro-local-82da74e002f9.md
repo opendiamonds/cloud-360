@@ -39642,3 +39642,348 @@
 **Agent**: aidlc-design-agent
 
 ---
+
+## Decision Recorded
+**Timestamp**: 2026-09-30T23:13:31Z
+**Event**: DECISION_RECORDED
+**Stage**: rough-mockups
+**Decision**: 修訂 3：能力 12 成員管理的畫面。M1 問自動改選發生後使用者看到什麼（系統發起的授權變更）；M2 問角色指定的互動形式
+**Options**: M1: A 清單就地標記＋稽核列,M1: B 新任 admin 收到橫幅,M1: C 只在稽核紀錄呈現,M2: A 每列一個角色下拉,M2: B 勾選矩陣,M2: C 點進成員詳情頁再改
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T23:19:13Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-30T23:19:47Z
+**Event**: QUESTION_ANSWERED
+**Stage**: rough-mockups
+**Details**: M1=B（自動改選以新任 admin 收到橫幅呈現，成員清單不特別標示）；M2=C（角色指定在成員詳情頁進行，清單頁不就地改）
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-30T23:20:16Z
+**Event**: DECISION_RECORDED
+**Stage**: rough-mockups
+**Decision**: M1=B 的追問（M3）：被移除的 owner 是專案唯一成員時，沒有人可被改選也沒有人可收橫幅，該狀態在 B 之下於畫面上不存在。此為真實可達狀態且是 schema_rbac.sql:328 的 FK 今天就會失敗的同一條路
+**Options**: M3: A 擋下刪除並要求先指定接手人,M3: B 允許刪除，專案成孤兒並由 system_admin 接手,M3: C 允許刪除並連帶刪除專案
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T23:21:16Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Question Answered
+**Timestamp**: 2026-09-30T23:21:58Z
+**Event**: QUESTION_ANSWERED
+**Stage**: rough-mockups
+**Details**: M3=A（被移除的 owner 是專案唯一成員時擋下刪除、要求先指定接手人或刪除專案）。本站另就地更正 M1 選項 B 的一句不成立的理由（橫幅不依賴能力 7，C1 的超支橫幅即為伺服器持久化形狀），依 functional-design:c22 只修理由不改決定
+
+---
+
+## Session Compacted
+**Timestamp**: 2026-09-30T23:25:51Z
+**Event**: SESSION_COMPACTED
+**Current Stage**: rough-mockups
+**State Validity**: valid
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:28:20Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a267564a95e19d071
+**Message**: <analysis>\nLet me chronologically work through this conversation, which is a continuation of a prior compacted session.\n\n**Session start context**: The conversation resumed mid-task with PR #671 work 
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-30T23:30:26Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log review --help
+**Error**: --help expects a value, got end of arguments.
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-30T23:30:29Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log
+**Error**: Unknown subcommand: undefined. Valid: decision, answer, link, review
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-30T23:31:19Z
+**Event**: REVIEW_REQUESTED
+**Stage**: rough-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:6dd195815ffdf437056a16b2a1aeb6fef6617a2dd3dd824d4f93b10e800b1109
+**Request Id**: review:b88b62d56568fa43d930cb12f5501d9e
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:33:00Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a69ee8e4a34f7cb27
+**Message**: Reading scope-document.md capability 12 definition
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:33:33Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ad3979d6a53e7f6b4
+**Message**: Grepping wireframes.md for item citations
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:34:06Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a456eeb3730f88b39
+**Message**: Verifying schema_rbac.sql owner_user_id constraint
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:34:40Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a3dd5c4e7e4f9aea7
+**Message**: Verifying ASCII box widths in wireframes.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:35:13Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a342645b79b40d21d
+**Message**: Checking capability 12 coverage table row
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:35:45Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a09ec9a12c6a282c9
+**Message**: Grepping stale Must-count references in wireframes.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:36:18Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a4978979c40761159
+**Message**: Verifying M3 owner-sole-member disclosure text
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:36:51Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7ce8ba5bde6ef5c3
+**Message**: Creating reviews directory for wireframes.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-30T23:37:18Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/rough-mockups/stage/b3ba6b596b1fdf14/1.review.md
+**Context**: .aidlc-engine > reviews > rough-mockups > stage > b3ba6b596b1fdf14 > 1.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:37:23Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a41c909a914f52cbc
+**Message**: Writing rough-mockups review verdict
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:37:28Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-product-lead-agent
+**Agent ID**: a4075395c864bb984
+**Message**: **Reviewer:** aidlc-product-lead-agent\n\nVerdict: READY (advisory pass, one new Major finding for the human to weigh).\n\nReviewed revision 3 of `rough-mockups` for intent `260920-orchestration-brain`, f
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-30T23:37:30Z
+**Event**: REVIEW_COMPLETED
+**Stage**: rough-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 1
+**Verdict**: READY
+**Request Fingerprint**: sha256:6dd195815ffdf437056a16b2a1aeb6fef6617a2dd3dd824d4f93b10e800b1109
+**Artifact Fingerprint**: sha256:6dd195815ffdf437056a16b2a1aeb6fef6617a2dd3dd824d4f93b10e800b1109
+**Request Id**: review:b88b62d56568fa43d930cb12f5501d9e
+**Review Record**: .aidlc-engine/reviews/rough-mockups/stage/b3ba6b596b1fdf14/1.json
+**Review Record Digest**: sha256:0ee19a0699ed29c645ff202b3f23e4fa7396ab100716d8377cb821bbd5741350
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T23:37:31Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-30T23:39:16Z
+**Event**: REVIEW_REQUESTED
+**Stage**: rough-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 2
+**Recovery**: stale-receipt
+**Recovery Cause**: artifact
+**Artifact Fingerprint**: sha256:02ee125b61092f98955c1768ede3fa0db1c2f9ce046d95460365187a0befe2f1
+**Request Id**: review:1cf92977d4229d04087cbab253782289
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:40:50Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a5408ea33793b994b
+**Message**: Reading capability-12 coverage table
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:41:23Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a0f691fe273d3b3bf
+**Message**: Verifying capability 12's four behaviors in scope-document.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:41:56Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: aea7e08e49e63cd30
+**Message**: Checking ASCII box-width consistency across wireframes.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:42:29Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a5e03c7129cfb9174
+**Message**: Verifying capability-12 behavior mappings in wireframes.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:43:01Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a3697d7abbecc8e4e
+**Message**: Diffing user-flow.md against HEAD
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-30T23:43:30Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/reviews/rough-mockups/stage/b3ba6b596b1fdf14/2.review.md
+**Context**: .aidlc-engine > reviews > rough-mockups > stage > b3ba6b596b1fdf14 > 2.review.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:43:33Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a7b9915c19f6f584b
+**Message**: Writing iteration 2 review verdict
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-30T23:43:40Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-product-lead-agent
+**Agent ID**: a43d6f56c24da6ccc
+**Message**: **Reviewer:** aidlc-product-lead-agent\n\nVerdict: READY (advisory pass, iteration 2 of 2).\n\nReview written to: `<project-dir>/aidlc/spaces/default/intents/260920
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-30T23:43:40Z
+**Event**: REVIEW_COMPLETED
+**Stage**: rough-mockups
+**Reviewer**: aidlc-product-lead-agent
+**Iteration**: 2
+**Verdict**: READY
+**Request Fingerprint**: sha256:02ee125b61092f98955c1768ede3fa0db1c2f9ce046d95460365187a0befe2f1
+**Artifact Fingerprint**: sha256:02ee125b61092f98955c1768ede3fa0db1c2f9ce046d95460365187a0befe2f1
+**Request Id**: review:1cf92977d4229d04087cbab253782289
+**Review Record**: .aidlc-engine/reviews/rough-mockups/stage/b3ba6b596b1fdf14/2.json
+**Review Record Digest**: sha256:da1fb2220a03b2b9fe431ef0a1460d517ea20918600949677dfb16712dc445ff
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-30T23:43:40Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T14:20:58Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Human Turn
+**Timestamp**: 2026-10-01T14:21:25Z
+**Event**: HUMAN_TURN
+**Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
+
+---
+
+## Error Logged
+**Timestamp**: 2026-10-01T14:21:39Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-log
+**Command**: aidlc-log decision --help
+**Error**: --help expects a value, got end of arguments.
+
+---
