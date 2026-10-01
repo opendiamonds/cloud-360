@@ -2,7 +2,7 @@
 
 > 給要把本專案部署到**另一個環境**（本機／staging／新機器）的人。  
 > 前後端分服務部署時，請特別核對 API／CORS／資料庫三塊。  
-> **A1 產圖、A3 評核建議、A1↔A3「優化」協作**皆依賴 **OpenRouter + Claude Code CLI**（見第 0 節）。
+> **A1 產圖、A3 評核建議、A1↔A3「優化」協作**皆依賴 **OpenRouter**（見第 0 節；映像**不再**內建 Claude Code CLI）。
 
 ---
 
@@ -14,21 +14,19 @@
 
 ```text
 後端 FastAPI
-  → Python 套件 claude-agent-sdk（ClaudeSDKClient）
-    → 本機／容器內子行程：Claude Code CLI（@anthropic-ai/claude-code）
-      → HTTP：OpenRouter（ANTHROPIC_BASE_URL=https://openrouter.ai/api）
-        → 模型（例：google/gemini-3.7-flash）
+  → LangGraph／LangChain（A1 Design、A3 Review／Lens、cost advice）
+    → HTTP：OpenRouter（OPENROUTER_API_KEY）
+      → 模型（例：google/gemini-3.7-flash；A1 Design 預設 google/gemini-2.5-flash）
 ```
 
 | 元件 | 角色 | 缺了會怎樣 |
 |---|---|---|
 | `OPENROUTER_API_KEY` | 真正計費、出模型回應 | A1／A3／優化 API 回 500 或錯誤訊息 |
-| Claude Code CLI | Agent SDK 的 runtime（子行程） | 請求時失敗：找不到 `claude`／CLI |
-| `claude-agent-sdk` | Python 依賴（`requirements.txt`） | 後端無法 import／啟動後相關路由掛掉 |
+| `langgraph`／`langchain-openai` 等 | Python 依賴（`requirements.txt`） | 後端無法 import／相關路由掛掉 |
 
-**仍使用 OpenRouter。** Claude Code CLI 只是殼；credits／402 等錯誤來自 OpenRouter 額度或 `max_tokens` 預扣。
+**仍使用 OpenRouter。** credits／402 等錯誤來自 OpenRouter 額度或 `max_tokens` 預扣。`backend/Dockerfile` **不再**安裝 Node／`@anthropic-ai/claude-code`。
 
-#### 0.1 哪些功能需要 CLI＋OpenRouter
+#### 0.1 哪些功能需要 OpenRouter
 
 | 功能 | 程式入口 |
 |---|---|
@@ -37,32 +35,15 @@
 | Offline Lens agent 填答 | `backend/services/wa_lens_engine.py` |
 | A3「優化」（Design↔Review） | `backend/services/wa_collab_orchestrator.py` |
 
-離線規則打分／啟發式備援可不靠 LLM；但完整建議與協作優化**必須**有 CLI＋金鑰。
+離線規則打分／啟發式備援可不靠 LLM；但完整建議與協作優化**必須**有 OpenRouter 金鑰。
 
-#### 0.2 各部署方式如何取得 Claude Code CLI
+#### 0.2 部署與映像
 
-| 部署方式 | CLI 怎麼來 | 你要做的事 |
+| 部署方式 | LLM runtime | 你要做的事 |
 |---|---|---|
-| **Docker 映像（建議）** | `backend/Dockerfile` 已 `npm install -g @anthropic-ai/claude-code` | `docker compose … --build`；確認 build 有網路可連 nodesource／npm |
-| **本機直接跑 uvicorn** | 主機自行安裝 Node 22＋CLI | 見下方「本機安裝 CLI」 |
-| **既有容器升級本次功能** | 需**重建** backend image（舊 image 若沒裝 CLI 會掛） | `up -d --build`，不要只用舊 image restart |
-
-本機安裝 CLI（非 Docker）：
-
-```bash
-# 需 Node.js 18+（建議 22，與 Dockerfile 一致）
-node -v
-npm install -g @anthropic-ai/claude-code
-which claude   # 應能找到
-claude --version
-```
-
-容器內驗證（部署後）：
-
-```bash
-docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec backend which claude
-docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec backend claude --version
-```
+| **Docker 映像（建議）** | 純 Python 映像（無 Claude CLI） | `docker compose … --build`；確認 `OPENROUTER_API_KEY` |
+| **本機直接跑 uvicorn** | 同上（HTTP 呼叫 OpenRouter） | 設定 `OPENROUTER_API_KEY`（或本機 `LLM_PROVIDER=cli` 僅影響 Design 等仍走 Anthropic 相容環境變數之路徑） |
+| **既有容器升級** | 需**重建** backend image（舊 image 可能仍含 Node／CLI，可清掉） | `up -d --build` |
 
 #### 0.3 OpenRouter／token 相關變數（本次更新）
 
@@ -452,10 +433,9 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 #### 3.4 本次功能升級檢查清單（A1↔A3 優化）
 
-- [ ] Backend image **重建**（含 `@anthropic-ai/claude-code`）  
-- [ ] 容器內 `which claude` 成功  
+- [ ] Backend image **重建**（確認映像**無** Node／`@anthropic-ai/claude-code`）  
 - [ ] `OPENROUTER_API_KEY` 已設且有餘額  
-- [ ] `ANTHROPIC_API_KEY` 為空；`ANTHROPIC_BASE_URL` 指向 OpenRouter  
+- [ ] `ANTHROPIC_API_KEY` 為空；`ANTHROPIC_BASE_URL` 指向 OpenRouter（若仍供 A1 ChatAnthropic 使用）  
 - [ ] （建議）`LLM_MAX_OUTPUT_TOKENS=12000` 或更低，避免 402  
 - [ ] **無需**為本次功能重跑 SQL（無 schema 變更）  
 - [ ] 煙測：Assessment 對含高風險報告按「優化」→ 出現新舊比對／儲存取消；Workspace 產圖正常  
@@ -474,7 +454,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 1. 準備 PostgreSQL，設定 `DATABASE_URL`  
 2. 執行 `psql "$DATABASE_URL" -f schema_rbac.sql`  
-3. 準備 LLM：OpenRouter 金鑰 ＋ **Claude Code CLI**（Docker build 或本機安裝）  
+3. 準備 LLM：設定 **`OPENROUTER_API_KEY`**（映像不再需要 Claude Code CLI）  
 4. 設定後端 `.env`／`deploy/.env`（含 `CORS_ORIGINS`、`JWT_SECRET`、LLM／token 變數，以及 **C1 的 `AWS_*`／`GCP_BILLING_API_KEY`**；全新 staging 可選 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`）並啟動 API
 5. 設定前端 `VITE_API_BASE_URL` 後 build／部署  
 6. 用既有管理員或 bootstrap admin 登入 → **立刻輪替臨時密碼／清除 bootstrap secret** → 調整角色權限
@@ -490,7 +470,7 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 | `aidlc/spaces/default/intents/260802-default/construction/plans/schema-rbac-notes.md` | SQL 區塊說明 |
 | `aidlc/spaces/default/intents/260802-default/construction/plans/role-permission-design.md` | 角色／細項語意 |
 | `backend/.env.example`、`frontend/.env.example`、`deploy/.env.example` | 環境變數範本 |
-| `backend/Dockerfile` | 內建 Node 22 ＋ Claude Code CLI |
+| `backend/Dockerfile` | 純 Python 映像（OpenRouter／LangGraph；無 Claude CLI） |
 | `deploy/docker-compose.deploy.yml` | staging／自架 compose |
 | `.github/workflows/deploy.yml` | `ut` → 192.168.10.10 自動部署 |
 | `aidlc/spaces/default/intents/260802-default/construction/a1/code-generation/a1-a3-multi-agent-summary.md` | A1↔A3 協作實作摘要 |
@@ -501,8 +481,8 @@ docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec b
 
 ### LLM stack（required for A1 / A3 / optimize）
 
-Runtime path: **FastAPI → `claude-agent-sdk` → Claude Code CLI subprocess → OpenRouter**.  
-You still need **`OPENROUTER_API_KEY`**. The CLI is only the Agent SDK shell (`npm i -g @anthropic-ai/claude-code`). The official Docker image installs it in `backend/Dockerfile`; bare-metal uvicorn hosts must install Node + CLI themselves. Rebuild the backend image when upgrading this feature.
+Runtime path: **FastAPI → LangGraph／LangChain → OpenRouter HTTP**.  
+You still need **`OPENROUTER_API_KEY`**. The backend image no longer installs Node or `@anthropic-ai/claude-code`. Rebuild the backend image when upgrading so old CLI layers are dropped.
 
 Optional: `LLM_MAX_OUTPUT_TOKENS` (default `12000`) and `LLM_XML_CONTEXT_MAX_CHARS` to reduce OpenRouter 402 / credit pressure. Keep `ANTHROPIC_API_KEY` empty and `ANTHROPIC_BASE_URL=https://openrouter.ai/api`.
 
@@ -515,8 +495,8 @@ Optional: `LLM_MAX_OUTPUT_TOKENS` (default `12000`) and `LLM_XML_CONTEXT_MAX_CHA
 
 ### Deploy paths
 
-- **Local**: install Claude Code CLI on the host; run API + Vite with matching CORS／API URL.  
-- **Docker Compose**: `docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build` (must rebuild so the image contains the CLI).  
+- **Local**: set `OPENROUTER_API_KEY`; run API + Vite with matching CORS／API URL.  
+- **Docker Compose**: `docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build` (rebuild drops the old Claude CLI image layers).  
 - **Project staging**: push／merge to `ut` → `.github/workflows/deploy.yml` on self-hosted runner → `https://cloud360.danniel.cc`.  
 
 No new SQL is required for the A1↔A3 optimize feature; schema remains `schema_rbac.sql`.

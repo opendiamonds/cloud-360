@@ -1,0 +1,43 @@
+{
+  "stage": "functional-design",
+  "unit": "a2-langgraph-refactor",
+  "upstream_ids": [
+    "FR1.1", "FR1.2", "FR1.3",
+    "FR2.1", "FR2.2", "FR2.3", "FR2.4",
+    "FR3.1", "FR3.2", "FR3.3", "FR3.4",
+    "FR4.1", "FR4.2", "FR4.3", "FR4.4",
+    "FR5.1", "FR5.2", "FR5.3",
+    "NFR1.1", "NFR1.2", "NFR2.1", "NFR3.1", "NFR3.2"
+  ],
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.2", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.3", "status": "OK", "target": "BR2.2" },
+    { "id": "FR2.1", "status": "OK", "target": "BR1.1" },
+    { "id": "FR2.2", "status": "OK", "target": "BR1.1" },
+    { "id": "FR2.3", "status": "OK", "target": "BR1.3" },
+    { "id": "FR2.4", "status": "OK", "target": "BR1.3" },
+    { "id": "FR3.1", "status": "OK", "target": "BR2.2" },
+    { "id": "FR3.2", "status": "OK", "target": "BR2.1" },
+    { "id": "FR3.3", "status": "OK", "target": "BR2.2" },
+    { "id": "FR3.4", "status": "OK", "target": "BR2.1" },
+    { "id": "FR4.1", "status": "OK", "target": "BR1.1" },
+    { "id": "FR4.2", "status": "OK", "target": "BR4.1" },
+    { "id": "FR4.3", "status": "OK", "target": "BR4.1" },
+    { "id": "FR4.4", "status": "OK", "target": "BR4.1" },
+    { "id": "FR5.1", "status": "OK", "target": "BR5.1" },
+    { "id": "FR5.2", "status": "OK", "target": "BR5.1" },
+    { "id": "FR5.3", "status": "OK", "target": "BR5.1" },
+    { "id": "NFR1.1", "status": "OK", "target": "BR3.1" },
+    { "id": "NFR1.2", "status": "OK", "target": "BR3.3" },
+    { "id": "NFR2.1", "status": "OK", "target": "BR3.2" },
+    { "id": "NFR3.1", "status": "OK", "target": "BR1.1" },
+    { "id": "NFR3.2", "status": "OK", "target": "BR4.1" }
+  ],
+  "reverse": [
+    { "id": "BR1.2", "status": "N/A", "target": "FD-Q1 design constraint (independent graphs); no separate FR letter beyond FR2 family" },
+    { "id": "BR2.3", "status": "N/A", "target": "FD-Q2 structured lens output; implements FR1.1 lens path" },
+    { "id": "BR3.2", "status": "OK", "target": "NFR2.1" },
+    { "id": "BR3.3", "status": "OK", "target": "NFR1.2" }
+  ]
+}

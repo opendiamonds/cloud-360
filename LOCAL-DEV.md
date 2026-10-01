@@ -22,35 +22,29 @@
 
 ### 兩個「不在 requirements.txt 裡」的硬依賴
 
-**H1 — LLM 供應商**：`claude-agent-sdk` 不是 HTTP client，它會 **spawn 一個 `claude` CLI 子行程**。鏈路長這樣：
+**H1 — LLM 供應商（OpenRouter）**：A3 Review／Lens 與多數 LLM 路徑經 **LangGraph + OpenRouter HTTP**（`OPENROUTER_API_KEY`）。映像與本機 **不再**需要為 A3 安裝 `@anthropic-ai/claude-code`。
 
 ```
-FastAPI → claude-agent-sdk → claude CLI 子行程 → 供應商 → 模型
+FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 ```
 
-供應商由 `LLM_PROVIDER` 決定（`backend/services/llm_provider.py`），本機有兩條路：
+供應商環境仍由 `LLM_PROVIDER`（`backend/services/llm_provider.py`）整理：
 
 | `LLM_PROVIDER` | 認證來源 | 適用 |
 |---|---|---|
-| `cli`（本機範本的預設） | 你自己 `claude login` 的登入（macOS 存在 Keychain） | 本機。不需金鑰、不燒 OpenRouter 額度 |
-| `openrouter`（程式預設、部署用） | `OPENROUTER_API_KEY` | 部署；本機想用 OpenRouter 時也可 |
+| `openrouter`（程式預設、部署用） | `OPENROUTER_API_KEY` | 部署與本機 OpenRouter |
+| `cli`（本機範本可選） | 歷史 CLI 登入語意；**A3 Review／Lens 仍要求 OpenRouter 金鑰**（`openrouter_chat_model`） | 僅部分遺留環境整理 |
 
-`cli` 模式需要**登入過**的 CLI。SDK 自帶一份 `claude` 執行檔（`claude_agent_sdk/_bundled/claude`），所以不一定要全域安裝 `@anthropic-ai/claude-code`——但**登入不是自帶的**，你得先在終端機跑過 `claude login`（或已在用 Claude Code）。驗證：
+本機建議直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
 
-```bash
-claude -p "回一個字：好"      # 有回應 = 登入可用
-```
-
-`cli` 模式下程式會**主動刪除**兩組變數。這不是潔癖：`.env` 是以 `override=True` 載入的，磁碟上或 shell 裡的殘值都會傳進子行程，而設成空字串不夠，必須刪掉。
+`cli` 模式下程式仍可能**主動刪除**兩組變數（避免殘值干擾 Anthropic 相容客戶端）：
 
 | 被刪除的變數 | 留著會怎樣 |
 |---|---|
-| `ANTHROPIC_BASE_URL`／`ANTHROPIC_AUTH_TOKEN`／`ANTHROPIC_API_KEY` | 只要**非空**就會蓋掉 CLI 自己的登入；前兩者還會讓請求被導去別的端點 |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL`／`_OPUS_`／`_HAIKU_` | 它們定義 CLI 的**別名**指向哪個實際模型，會把正規化後的 `sonnet` 又映射回 OpenRouter slug |
+| `ANTHROPIC_BASE_URL`／`ANTHROPIC_AUTH_TOKEN`／`ANTHROPIC_API_KEY` | 只要**非空**就可能蓋掉預期路由 |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL`／`_OPUS_`／`_HAIKU_` | 別名映射可能把模型名又導回錯誤 slug |
 
-第二組特別容易漏，因為它既不認證也不路由。實際踩過的症狀：`.env` 留著 `ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-sonnet-4.6` 時，即使程式已把模型正規化成 `sonnet`，CLI 仍回 404 —— `There's an issue with the selected model (anthropic/claude-sonnet-4.6)`。
-
-`openrouter` 模式下，`OPENROUTER_API_KEY` 會在啟動時被映射為 `ANTHROPIC_AUTH_TOKEN`，且 `ANTHROPIC_API_KEY` 必須留空，否則 SDK 會繞過 OpenRouter 直連 Anthropic。
+`openrouter` 模式下，`OPENROUTER_API_KEY` 會在啟動時被映射為 `ANTHROPIC_AUTH_TOKEN`（供仍走 Anthropic 相容客戶端的路徑），且 `ANTHROPIC_API_KEY` 必須留空。
 
 > ⚠️ **金鑰欄位留空就是留空，不要填佔位字串。** 程式判斷「有沒有設定」看的是非空，所以 `OPENROUTER_API_KEY=your_openrouter_api_key_here` 會被當成真金鑰送出去，換來一個離肇因三層遠的 401。範本現在一律出空值、範例寫在註解裡，`scripts/validate_env_contract.py` 也會擋下佔位值。同一個陷阱也適用 `N8N_WEBHOOK_URL`：留著 `your_n8n_webhook_url_here` 會讓每個節點發一次必然失敗的請求，圖照樣出來、但圖示全是灰底。
 
@@ -72,10 +66,9 @@ claude -p "回一個字：好"      # 有回應 = 登入可用
 psql --version                      # 需要 PostgreSQL client
 pg_isready -h localhost -p 5432     # 需要一個跑著的 server
 
-# LLM 鏈路（A1／A3 必要）
-node -v                             # 18+，Dockerfile 用 22
-command -v claude && claude --version
-# 沒有的話：npm install -g @anthropic-ai/claude-code
+# LLM 鏈路（A1／A3 必要：OpenRouter 金鑰）
+# 映像與 A3 不再需要 Node／claude CLI
+test -n "${OPENROUTER_API_KEY:-}" && echo "OPENROUTER_API_KEY 已在環境" || echo "請在 backend/.env 設定 OPENROUTER_API_KEY"
 
 # Python
 python3 --version                   # CI 用 3.12
