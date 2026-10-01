@@ -6,7 +6,7 @@
 @step 對 GCP XXXX-XXXX-XXXX 且 mock 有描述 | 列上出現 specDescription
 @step mock 回 None | 列上沒有 specDescription
 @pass 非 SKU 不查詢；命中時只寫描述
-@story FR13
+@story C1-S1 FR13
 """
 
 from __future__ import annotations

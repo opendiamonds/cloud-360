@@ -3,7 +3,8 @@
 > Intent `261001-a2-langgraph`｜階段 inception / requirements-analysis｜深度 Minimal｜scope refactor  
 > 權威描述（`project-description` 工具逐字）：「我要進行 a2評估儀表板 將agent框架改成 langraph ,使用refactor」  
 > `FR{n}` 與 `NFR{n}` 為永久追溯鍵，下游階段必須原樣保留，不得重新編號或改以散文指涉。  
-> 答案來源：`requirements-analysis-questions.md`（Q1–Q7；Consolidated Summary = Looks correct）
+> 答案來源：`requirements-analysis-questions.md`（Q1–Q7；Consolidated Summary = Looks correct）  
+> **架構決策**：`../decisions/0019-a3-langgraph-openrouter-runtime.md`（ADR-0019；A3→LangGraph／OpenRouter、CLI 退場、A1／C1 界線）
 
 ## 意圖分析
 

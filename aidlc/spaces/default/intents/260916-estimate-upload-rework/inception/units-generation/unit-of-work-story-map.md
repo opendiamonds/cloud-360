@@ -1,8 +1,9 @@
 # 工作單元 ↔ 需求對應：C1 估價表上傳
 
-本 scope 的 `user-stories` 為 SKIP，無 `stories.md`。依 units-generation stage 檔 fallback：**以 `requirements.md` 的每一條 FR 作為上游 ID**，對應到 Unit ID 與 construction 目錄。
+原 scope 曾將 `user-stories` SKIP，units-generation 以 FR 當上游 ID。  
+**2026-10-01 契約補件**：已補交 `../user-stories/stories.md`（與 `personas.md`），至少覆蓋後補可見能力 **FR1.7 → C1-W1**、**FR12 → C1-G1**、**FR13 → C1-S1**。其餘 FR 仍以本表 FR→Unit 對應；故事與 FR **雙追溯**，不以 SKIP 為豁免。
 
-「Story implementation order within each unit」改為該單元內 FR 的建議實作關注序（非跨單元建置序）。
+「Story implementation order within each unit」仍為該單元內 FR 的建議實作關注序（非跨單元建置序）。
 
 ## 對應表
 
@@ -14,7 +15,7 @@
 | FR1.4 | U2 | `u2-estimate-intake-api` | 副檔名＋魔數 |
 | FR1.5 | U1 | `u1-estimate-parser` | 雲別判定（互動由 U2／U8） |
 | FR1.6 | U2 | `u2-estimate-intake-api` | 即用即棄 |
-| FR1.7 | U8（主）＋U2 | `u8-…`／`u2-…` | 選填工作負載表單（UI）＋持久化／multipart |
+| FR1.7 | U8（主）＋U2 | `u8-…`／`u2-…` | 選填工作負載表單（UI）＋持久化／multipart；**故事 C1-W1** |
 | FR2.1 | U1 | `u1-estimate-parser` | |
 | FR2.2 | U1 | `u1-estimate-parser` | 無法辨識列 |
 | FR2.3 | U1 | `u1-estimate-parser` | 純函式 |
@@ -68,9 +69,9 @@
 | FR11.2 | U4 | `u4-credential-pipeline` | |
 | FR11.3 | U4 | `u4-credential-pipeline` | |
 | FR11.4 | U4 | `u4-credential-pipeline` | |
-| FR12.1–12.5 | U8 | `u8-estimate-workspace-ui` | 官方估價教學彈窗 |
-| FR13.1–13.3／13.5–13.6 | U2 | `u2-estimate-intake-api` | SKU 描述補齊與落庫 |
-| FR13.4 | U5 | `u5-pricing-lookup-port` | 邊界腳本放行 sku_catalog |
+| FR12.1–12.5 | U8 | `u8-estimate-workspace-ui` | 官方估價教學彈窗；**故事 C1-G1** |
+| FR13.1–13.3／13.5–13.6 | U2 | `u2-estimate-intake-api` | SKU 描述補齊與落庫；**故事 C1-S1** |
+| FR13.4 | U5 | `u5-pricing-lookup-port` | 邊界腳本放行 sku_catalog；**故事 C1-S1** |
 
 ## 跨單元 FR
 

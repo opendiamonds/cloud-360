@@ -5,6 +5,7 @@
 @api GET /api/cost/v1/sets/{set_id}
 @api DELETE /api/cost/v1/sets/{set_id}
 @api GET /api/cost/v1/sets/{set_id}/advice
+@story C1-W1 FR1.7
 """
 
 from __future__ import annotations

@@ -1,4 +1,5 @@
 """
+@story C1-W1 FR1.7
 @purpose Workload context normalize / dump / load for estimate advice
 @api POST /api/cost/v1/sets | Form field workload_context（本檔測純函式）
 """
