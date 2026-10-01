@@ -13,7 +13,7 @@
 | 快取 | **磁碟** `.pricing_offer_cache`，TTL 24h；**不**重建 Postgres `pricing_cache` | FD Q2=A、BR5.6 |
 | SDK 開關 | **`COST_PRICING_USE_SDK`**：未設／`auto`＝可啟用；`0`／`false`／`no`＝關 | Q4=A、FR9.4 |
 | 重試 | **無額外重試迴圈**；降級鏈即容錯 | Q2=A |
-| 邊界檢查 | **CI 腳本**（code-gen 新增／改指向）：intake import 禁令＋禁 Port 外直打 host | Q5=A、BR5.7–5.8 |
+| 邊界檢查 | **CI 腳本**：intake 禁 import Port；`sku_catalog` 列入存活／允許集（只取描述） | Q5=A、BR5.7–5.8、BR5.11 |
 | 測試 | **`unittest` + mock**；邊界腳本進 CI；不強制 CI 真金鑰 | Q3=A、Q6=A、NFR8 |
 | 新基礎設施 | **無**（無佇列、無新服務、無 Playwright） | NFR8 |
 
@@ -29,7 +29,7 @@
 
 - 不重建 live `pricing_cache` 表或讀寫 `archive_*` 作目錄價快取
 - 不引入 Cost Explorer／Cost Management／Billing Export 客戶端
-- 不把目錄價結果寫入 Estimate／EstimateLineItem 持久化路徑
+- 不把目錄**價格**寫入 Estimate／EstimateLineItem 金額欄（描述見 FR13／`sku_catalog`）
 - 不為本 unit 手寫 TCMS（歸 `tcms-test-cases`）
 
 <!-- confirmed: Looks correct -->

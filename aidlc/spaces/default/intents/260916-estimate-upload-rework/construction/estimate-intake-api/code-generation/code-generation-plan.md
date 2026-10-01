@@ -106,7 +106,7 @@
 
 ## Step 1 — 資料模型（Data model）
 
-- [x] `models.py`：EstimateSet／Estimate／EstimateLineItem／EstimateShare／EstimateAuditEvent／Advice（空殼 status 等）
+- [x] `models.py`：EstimateSet／Estimate／EstimateLineItem／EstimateShare／EstimateAuditEvent／Advice（空殼 status 等）；`EstimateSet.workload_context_json`
 - [x] `database.py` 啟動補丁＋`schema_rbac.sql` 雙軌建表；`DEPLOY.md` 表對照
 - [x] Advice.`estimate_set_id` UNIQUE；刪除級聯或應用層級聯（Q4=A）
 
@@ -119,6 +119,7 @@
 ## Step 3 — Intake service（Business）
 
 - [x] `estimate_intake_service.py`：multipart 驗證（5MB／1–3／魔數）、parse／validate、持久化、丟棄原始 bytes
+- [x] 選填 `workload_context` 正規化（`workload_context.py`）並寫入 `EstimateSet`（FR1.7／BR2.14）
 - [x] ambiguous＋`cloud_overrides`；錯誤 detail 固定短語（NFR Q1）
 - [x] 機械檢查每次重算，不落庫
 

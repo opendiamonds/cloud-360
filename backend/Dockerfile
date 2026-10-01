@@ -1,20 +1,14 @@
 # Cloud-360 backend — FastAPI + uvicorn
 #
-# Node is not optional: services/design_agent.py drives ClaudeSDKClient from
-# claude-agent-sdk, which shells out to the Claude Code CLI (a Node package).
-# Without it the A1 design agent raises at request time, not at build time.
+# LLM paths (A1 Design / A3 Review / Lens / cost advice) use LangGraph +
+# OpenRouter HTTP clients — no Claude Code CLI / Node runtime in the image.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g @anthropic-ai/claude-code \
-    && apt-get purge -y gnupg \
-    && apt-get autoremove -y \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,7 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Drop root: the agent SDK spawns child processes, so keep them unprivileged.
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
 USER appuser

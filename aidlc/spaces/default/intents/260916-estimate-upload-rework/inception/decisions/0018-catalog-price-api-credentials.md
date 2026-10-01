@@ -144,3 +144,7 @@ commit `aa2daec`（2026-09-16）移除了整條 AWS 憑證傳遞管線，理由�
 - [closed] §6 的 `FORBIDDEN_CONTENT_PATTERNS` 具體調整手法已定（原 `requirements.md` OQ7）：值樣式 regex 見 §6；NFR Q1=A；實作於 credential-pipeline code-generation。
 - [open] 憑證輪替機制不存在。本 ADR 引入憑證但未規定輪替週期與流程，這是新增的運維義務，歸屬階段未指派。
 - [open] `requirements.md` OQ8：§5 與 §6 的工作量是與上傳解析主線平行的一批，其在 value-first 排序中的插入位置留給 delivery-planning。
+
+## 後補：規格描述查詢（FR13，2026-09-26）
+
+§1 解禁的目錄價端點，除供 `pricing_client.fetch_hourly` 給建議文字取價外，亦允許 `cost/sku_catalog.py` 只取 SKU 的人類可讀描述並寫入 `spec_description`。**價格仍不得回寫明細金額欄**（AH-6）。intake 寫入路徑不得 import `pricing_client`／`pricing_sdk`。帳單與用量類 API 的全面禁令（§2）不變。

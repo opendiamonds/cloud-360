@@ -1,8 +1,8 @@
 """
-review_agent.py — A3 Review Agent（Anthropic Agent SDK + OpenRouter）
+review_agent.py — A3 Review Agent（LangGraph + OpenRouter）
 
-快速路徑：不掛 MCP／工具（減少多回合），壓縮 findings 輸入，短輸出。
-串流：即時 yield AssistantMessage TextBlock → SSE suggestion_delta。
+快速路徑：獨立 compiled Review graph，壓縮 findings 輸入，短輸出。
+串流：model／graph messages stream → SSE suggestion_delta。
 """
 
 from __future__ import annotations
@@ -11,15 +11,13 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from services.llm_provider import (
     auth_error_message,
     configure_provider_env,
     get_review_model_name,
-    llm_auth_ready,
 )
-from services.llm_limits import agent_sdk_env
 
 logger = logging.getLogger("cloud360.review_agent")
 
@@ -105,6 +103,53 @@ def _compact_payload(
     }
 
 
+def _message_text(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+            else:
+                text = getattr(block, "text", None)
+                if text:
+                    parts.append(str(text))
+        return "".join(parts)
+    return str(content)
+
+
+class _ReviewState(TypedDict, total=False):
+    user_prompt: str
+    text: str
+
+
+def _compile_review_graph(model: Any, system_prompt: str):
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langgraph.graph import END, StateGraph
+
+    async def generate(state: _ReviewState) -> _ReviewState:
+        msg = await model.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=state["user_prompt"]),
+            ]
+        )
+        return {**state, "text": _message_text(getattr(msg, "content", None))}
+
+    # Must match node annotation: StateGraph(dict) + TypedDict param yields
+    # empty state under stream_mode="messages" with ChatOpenAI (KeyError user_prompt).
+    graph = StateGraph(_ReviewState)
+    graph.add_node("generate", generate)
+    graph.set_entry_point("generate")
+    graph.add_edge("generate", END)
+    return graph.compile()
+
+
 async def run_review_agent(
     diagram_summary: dict[str, Any],
     rule_result: dict[str, Any],
@@ -112,17 +157,9 @@ async def run_review_agent(
     """
     Yield suggestion text chunks for SSE. Raises RuntimeError on hard failure.
     """
-    from claude_agent_sdk import (
-        AssistantMessage,
-        ClaudeAgentOptions,
-        ClaudeSDKClient,
-        TextBlock,
-    )
+    from services.langgraph_runtime import RuntimeAuthError, openrouter_chat_model
 
     configure_provider_env()
-    if not llm_auth_ready():
-        raise RuntimeError(auth_error_message())
-
     payload = _compact_payload(diagram_summary, rule_result)
     user_prompt = (
         "依下列評核摘要，直接寫出繁中改善建議（精簡、可執行）。"
@@ -132,43 +169,37 @@ async def run_review_agent(
         "勿呼叫任何工具：\n"
         f"```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
     )
-    # Prefers a faster model; override with REVIEW_LLM_MODEL.
     model_name = get_review_model_name()
-    options = ClaudeAgentOptions(
-        system_prompt=load_review_system_prompt(),
-        model=model_name,
-        tools=[],
-        allowed_tools=[],
-        disallowed_tools=[
-            "Bash",
-            "Read",
-            "Write",
-            "Edit",
-            "Glob",
-            "Grep",
-            "WebSearch",
-            "WebFetch",
-        ],
-        permission_mode="bypassPermissions",
-        max_turns=2,
-        env=agent_sdk_env(),
+    logger.info(
+        "review_agent start model=%s findings=%s",
+        model_name,
+        len(payload["findings"]),
     )
 
-    streamed_parts: list[str] = []
-    logger.info("review_agent start model=%s findings=%s", model_name, len(payload["findings"]))
-
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(user_prompt)
-            async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock) and block.text:
-                            streamed_parts.append(block.text)
-                            yield block.text
+        try:
+            model = openrouter_chat_model(model=model_name)
+        except RuntimeAuthError as exc:
+            raise RuntimeError(auth_error_message()) from exc
+
+        system_prompt = load_review_system_prompt()
+        compiled = _compile_review_graph(model, system_prompt)
+        streamed_parts: list[str] = []
+
+        async for item in compiled.astream(
+            {"user_prompt": user_prompt},
+            stream_mode="messages",
+        ):
+            msg_chunk = item[0] if isinstance(item, tuple) else item
+            text = _message_text(getattr(msg_chunk, "content", None))
+            if text:
+                streamed_parts.append(text)
+                yield text
 
         if not "".join(streamed_parts).strip():
             raise RuntimeError("ReviewAgent 未產出 suggestions（模型未回覆文字）")
+    except RuntimeError:
+        raise
     except Exception:
         logger.exception("ReviewAgent runtime failure")
         raise

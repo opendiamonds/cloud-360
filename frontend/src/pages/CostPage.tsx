@@ -10,6 +10,11 @@ import { EstimateShareModal } from '../components/cost/EstimateShareModal';
 import { EstimateSaveModal } from '../components/cost/EstimateSaveModal';
 import { EstimateAdvicePanel } from '../components/cost/EstimateAdvicePanel';
 import { EstimateOfficialCalculators } from '../components/cost/EstimateOfficialCalculators';
+import { EstimateWorkloadForm } from '../components/cost/EstimateWorkloadForm';
+import {
+  EMPTY_WORKLOAD_CONTEXT,
+  type WorkloadContext,
+} from '../components/cost/workloadContext';
 import {
   authHeaders,
   cloudLabel,
@@ -29,6 +34,9 @@ export const CostPage: React.FC = () => {
   const [shareOpen, setShareOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [error, setError] = useState('');
+  const [workloadContext, setWorkloadContext] = useState<WorkloadContext>(
+    EMPTY_WORKLOAD_CONTEXT,
+  );
   // 無檢視權時第一次 render 即非 loading，避免 effect 內同步 setLoading(false)
   // （react-hooks/set-state-in-effect）。
   const [loading, setLoading] = useState(canView);
@@ -225,6 +233,13 @@ export const CostPage: React.FC = () => {
 
         <EstimateOfficialCalculators />
 
+        {canEdit && (
+          <EstimateWorkloadForm
+            value={workloadContext}
+            onChange={setWorkloadContext}
+          />
+        )}
+
         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
           <div>
             <h2 className="text-sm font-bold text-gray-800">上傳估價表</h2>
@@ -235,6 +250,7 @@ export const CostPage: React.FC = () => {
           <EstimateUploadZone
             canEdit={canEdit}
             compact={!!detail}
+            workloadContext={workloadContext}
             onError={setError}
             onUploaded={(d) => {
               const next = d as EstimateSetDetail;

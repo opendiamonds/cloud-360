@@ -8267,12 +8267,14 @@ function summaryQuestionFiles(
 ): SummaryQuestionFile[] {
   const rec = recordDir(projectDir);
   if (rec === null) return [];
+  const stageLevel = () =>
+    questionFilesInDir(join(rec, stage.phase, stage.slug), null);
   if (!isPerUnitStage(stage)) {
-    return questionFilesInDir(join(rec, stage.phase, stage.slug), null);
+    return stageLevel();
   }
 
   const constructionDir = join(rec, "construction");
-  if (!existsSync(constructionDir)) return [];
+  if (!existsSync(constructionDir)) return stageLevel();
   const files: SummaryQuestionFile[] = [];
   try {
     for (const unit of readdirSync(constructionDir).sort()) {
@@ -8284,8 +8286,12 @@ function summaryQuestionFiles(
       );
     }
   } catch {
-    return [];
+    return stageLevel();
   }
+  // When Units Generation is SKIP (refactor / bugfix / …), artefacts live at
+  // construction/<stage>/ — the same layout artifact resolution already uses via
+  // usesStageLevelPerUnitArtifacts. Fall back so summary evidence can see them.
+  if (files.length === 0) return stageLevel();
   return files;
 }
 

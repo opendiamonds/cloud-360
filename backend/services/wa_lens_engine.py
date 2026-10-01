@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from services.wa_rule_engine import WEIGHTS, parse_diagram_summary
 
@@ -439,21 +439,140 @@ def heuristic_answers_from_diagram(xml: str, lens: dict[str, Any] | None = None)
     return {k: v for k, v in answers.items() if k in valid}
 
 
+def _message_text(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+            else:
+                text = getattr(block, "text", None)
+                if text:
+                    parts.append(str(text))
+        return "".join(parts)
+    return str(content)
+
+
+def _extract_json_payload(text: str) -> Any:
+    raw = (text or "").strip()
+    if not raw:
+        raise ValueError("empty_model_text")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw, re.IGNORECASE)
+    if fence:
+        try:
+            return json.loads(fence.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+    obj = re.search(r"\{[\s\S]*\}", raw)
+    if obj:
+        try:
+            return json.loads(obj.group(0))
+        except json.JSONDecodeError:
+            pass
+    arr = re.search(r"\[[\s\S]*\]", raw)
+    if arr:
+        return json.loads(arr.group(0))
+    raise ValueError("unparseable_lens_json")
+
+
+def _normalize_lens_answers(
+    payload: Any,
+    questions: list[dict[str, Any]],
+) -> dict[str, list[str]]:
+    """Map model JSON → {question_id: [choice_id, ...]}; drop unknown ids."""
+    valid_q: dict[str, set[str]] = {}
+    for q in questions:
+        qid = q.get("question_id")
+        if not qid:
+            continue
+        valid_q[str(qid)] = {
+            str(c.get("id")) for c in (q.get("choices") or []) if c.get("id")
+        }
+
+    items: list[Any]
+    if isinstance(payload, dict):
+        if isinstance(payload.get("answers"), list):
+            items = payload["answers"]
+        else:
+            # {question_id: [choice_ids]} shape
+            items = [
+                {"question_id": k, "selected_choice_ids": v}
+                for k, v in payload.items()
+                if k != "answers"
+            ]
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        raise ValueError("unexpected_lens_payload_type")
+
+    out: dict[str, list[str]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        qid = item.get("question_id")
+        if not qid or str(qid) not in valid_q:
+            continue
+        allowed = valid_q[str(qid)]
+        raw_ids = item.get("selected_choice_ids") or []
+        if not isinstance(raw_ids, list):
+            continue
+        filtered = [str(cid) for cid in raw_ids if str(cid) in allowed]
+        out[str(qid)] = filtered
+    return out
+
+
+class _LensState(TypedDict, total=False):
+    user_prompt: str
+    text: str
+
+
+def _compile_lens_graph(model: Any, system_prompt: str):
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langgraph.graph import END, StateGraph
+
+    async def generate(state: _LensState) -> _LensState:
+        msg = await model.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=state["user_prompt"]),
+            ]
+        )
+        return {**state, "text": _message_text(getattr(msg, "content", None))}
+
+    # Keep schema aligned with node annotation (see review_agent KeyError note).
+    graph = StateGraph(_LensState)
+    graph.add_node("generate", generate)
+    graph.set_entry_point("generate")
+    graph.add_edge("generate", END)
+    return graph.compile()
+
+
 async def answer_lens_with_agent(
     diagram_summary: dict[str, Any],
     lens: dict[str, Any],
 ) -> dict[str, list[str]]:
     """
-    Ask ReviewAgent-style LLM to pick choices. Falls back to heuristic on failure.
+    Ask LLM (LangGraph + OpenRouter) to pick choices. Heuristic when auth not ready.
     POC: prefer heuristic first if no API key (fast + testable); try agent when key present.
     """
+    from services.langgraph_runtime import RuntimeAuthError, openrouter_chat_model
+    from services.llm_limits import get_xml_context_max_chars
     from services.llm_provider import (
         auth_error_message,
         configure_provider_env,
         get_model_name,
         llm_auth_ready,
     )
-    from services.llm_limits import agent_sdk_env, get_xml_context_max_chars
 
     configure_provider_env()
     if not llm_auth_ready():
@@ -465,16 +584,6 @@ async def answer_lens_with_agent(
         fake_xml = f"<mxGraphModel><root><mxCell id='1' value='{blob[:2000]}'/></root></mxGraphModel>"
         return heuristic_answers_from_diagram(fake_xml, lens)
 
-    # Agent path: reuse Claude SDK briefly
-    from claude_agent_sdk import (
-        AssistantMessage,
-        ClaudeAgentOptions,
-        ClaudeSDKClient,
-        TextBlock,
-        create_sdk_mcp_server,
-        tool,
-    )
-
     questions = list_questions(lens)
     catalog = [
         {
@@ -484,73 +593,39 @@ async def answer_lens_with_agent(
         }
         for q in questions
     ]
-    collected: dict[str, list[str]] = {}
-
-    @tool(
-        "emit_lens_answers",
-        "Submit selected best-practice choice ids per question for the offline lens.",
-        {
-            "type": "object",
-            "properties": {
-                "answers": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "question_id": {"type": "string"},
-                            "selected_choice_ids": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": ["question_id", "selected_choice_ids"],
-                    },
-                }
-            },
-            "required": ["answers"],
-        },
-    )
-    async def emit_lens_answers(args: dict[str, Any]) -> dict[str, Any]:
-        for item in args.get("answers") or []:
-            qid = item.get("question_id")
-            ids = item.get("selected_choice_ids") or []
-            if qid:
-                collected[qid] = list(ids)
-        return {"content": [{"type": "text", "text": "answers recorded"}]}
-
-    mcp = create_sdk_mcp_server(
-        name="cloud360-lens", version="1.0.0", tools=[emit_lens_answers]
-    )
     model_name = get_model_name()
     diagram_cap = get_xml_context_max_chars()
-    prompt = (
+    user_prompt = (
         "你是離線 Well-Architected 評核助理。根據架構圖摘要，為每題勾選適用的 best practice "
-        "choice id（可多選或空陣列）。完成後必須呼叫 emit_lens_answers。\n"
+        "choice id（可多選或空陣列）。只回覆 JSON，勿呼叫工具、勿加說明文字。\n"
+        '格式：{"answers":[{"question_id":"...","selected_choice_ids":["..."]}]}\n'
         f"題目目錄：\n```json\n{json.dumps(catalog, ensure_ascii=False)}\n```\n"
         f"圖摘要：\n```json\n{json.dumps(diagram_summary, ensure_ascii=False)[:diagram_cap]}\n```"
     )
-    options = ClaudeAgentOptions(
-        system_prompt="Offline WA custom-lens answering. Only use emit_lens_answers tool.",
-        model=model_name,
-        mcp_servers={"cloud360-lens": mcp},
-        tools=[],
-        allowed_tools=["mcp__cloud360-lens__emit_lens_answers"],
-        disallowed_tools=["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"],
-        permission_mode="bypassPermissions",
-        max_turns=4,
-        env=agent_sdk_env(),
+    system_prompt = (
+        "Offline WA custom-lens answering. "
+        "Return only JSON with answers as an array of "
+        "{question_id, selected_choice_ids}."
     )
+    logger.info("lens_agent start model=%s questions=%s", model_name, len(catalog))
+
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
-            async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            pass
-        if collected:
-            return collected
+        try:
+            model = openrouter_chat_model(model=model_name)
+        except RuntimeAuthError as exc:
+            raise RuntimeError(auth_error_message()) from exc
+
+        compiled = _compile_lens_graph(model, system_prompt)
+        state = await compiled.ainvoke({"user_prompt": user_prompt})
+        text = ""
+        if isinstance(state, dict):
+            text = str(state.get("text") or "")
+        answers = _normalize_lens_answers(_extract_json_payload(text), questions)
+        if not answers:
+            raise RuntimeError("lens agent returned no answers")
+        return answers
+    except RuntimeError:
+        raise
     except Exception:
         logger.exception("lens agent failed; caller should fallback")
         raise
-    raise RuntimeError("lens agent returned no answers")

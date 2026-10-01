@@ -16,11 +16,13 @@ rules:
     source: FR5.1, FR5.2, FR5.3
 
   - id: BR7.2
-    statement: 送 LLM 的內容為完整解析結果
+    statement: 送 LLM 的內容為完整解析結果與選填工作負載上下文
     category: constraint
     applies_to: CostAdviceAgent
     trigger: 組 prompt
-    logic: IF 呼叫模型 THEN 含品項／規格／數量／金額之解析結果（FE-3）
+    logic: >
+      IF 呼叫模型 THEN 含品項／規格／數量／金額之解析結果（FE-3），
+      以及上傳時選填的 workload_context（系統說明、資訊需求、費用限制、流量與負載指標）
     source: FR5.4
 
   - id: BR7.3

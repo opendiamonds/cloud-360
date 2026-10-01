@@ -203,6 +203,8 @@ class EstimateSet(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     diagram_id = Column(Integer, nullable=True)  # 純標籤；不 FK、不參與授權
     note = Column(Text, nullable=True)
+    # JSON: workload / budget / traffic context for advice agent (FR5.4).
+    workload_context_json = Column(Text, nullable=True)
     # False until owner explicitly saves with a name (history drawer only shows saved).
     is_saved = Column(Boolean, nullable=False, default=False, server_default="false")
 
@@ -275,6 +277,7 @@ class EstimateLineItem(Base):
     ordinal = Column(Integer, nullable=False)
     item_name = Column(Text, nullable=True)
     spec = Column(Text, nullable=True)
+    spec_description = Column(Text, nullable=True)
     quantity = Column(Numeric(18, 6), nullable=True)
     amount = Column(Numeric(18, 6), nullable=True)
     currency = Column(String(16), nullable=True)

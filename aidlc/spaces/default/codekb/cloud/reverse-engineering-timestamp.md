@@ -1,102 +1,112 @@
 # Reverse Engineering 時間戳
 
-> Freshness marker for space-level codekb｜repo `cloud`｜mode **Full rescan（9 份 artifacts 整組取代）**
+> Freshness marker for space-level codekb｜repo `cloud`｜mode **Focused merge（STALE）**
 
 ## 掃描元資料
 
 | 欄位 | 值 |
 |---|---|
-| 執行時刻（UTC） | `2026-09-16T09:47:32Z` |
-| Commit（full） | `cd2754d291eb37086646d80f1fed2abf209e9805` |
-| Commit（short） | `cd2754d` |
-| 分支脈絡 | `luojingting/feat/cost-estimation-finops` |
-| 來源 fingerprint（工具計算） | `git:37b327b8bdc49dac2a2e0974270f8944f2abd9c8` |
-| Intent | `260916-estimate-upload-rework`（C1 成本估算改版：改為上傳官方估價表） |
-| 模式 | **Full rescan**：全 repo 重新掃描，9 份 artifacts 整批取代 2026-08-19（`c3de2c8`）版本；不合併舊敘述 |
+| 執行時刻（UTC） | `2026-10-01T07:06:31Z` |
+| Commit（full） | `5fd8f14f8d1d4cdaa52ed89428574a0472fa2ae0` |
+| Commit（short） | `5fd8f14` |
+| 分支脈絡 | `luojingting/feat/c1-workspace-optimize` |
+| 來源 fingerprint（snapshot） | `git:81c5a1600194da8a5429a3103e1bc84e396ef08b` |
+| Intent | `261001-a2-langgraph`（Assessment／A3 agent 框架迁 LangGraph） |
+| 模式 | **Focused merge（STALE）**：更新 A2／Assessment／agent／LangGraph／`llm_provider` 區塊；保留成本域等先前散文；先前 `analyzed.*` demote 為 shallow |
 | Active space | `default` |
 | Codekb 目錄 | `aidlc/spaces/default/codekb/cloud/` |
-| 專案類型 | brownfield（workspace root 即單一 repo `cloud`） |
+| 專案類型 | brownfield |
 | Pipeline | reverse-engineering link 2／FINAL（architect synthesis） |
-| 上游輸入 | `<record>/inception/reverse-engineering/developer-scan.md`（2026-09-16） |
+| 上游輸入 | `<record>/inception/reverse-engineering/developer-scan.md` |
+| 前一 store_generation | `sha256:8c2194a60a24d3f2438fa78b3f6f2f625b0f2983aee2bd3199531bebef71f57d` |
+| Depth | Minimal |
 
-### 關於 fingerprint 與 HEAD 不同的說明
+### 關於 fingerprint
 
-`git:37b327b8bdc49dac2a2e0974270f8944f2abd9c8` 是工具對**來源樹內容**計算的 fingerprint，**不是 HEAD commit hash**（HEAD 為 `cd2754d`）。兩者本來就不會相等。本次在合成階段重新執行 `codekb-scope-diff --mint --paths ./`，得到的值與掃描前 snapshot 完全相同，確認掃描期間來源樹未變動。
-
-### 本 codekb 描述的是工作樹，不是版控歷史
-
-掃描當下有 **5 個應用面檔案處於未提交狀態**（`git status` 為 ` M`）：
-
-`deploy/render-env.sh`、`deploy/docker-compose.deploy.yml`、`.github/workflows/deploy.yml`、`DEPLOY.md`、`LOCAL-DEV.md`
-
-變更內容為 2026-09-16 移除 AWS 帳號憑證的部署傳遞，並把 `COST_PRICING_USE_SDK` 預設改為 `0`。**查 git 歷史的讀者不會看到這些改動**；本 codekb 的相關敘述以工作樹為準，不要因為歷史對不上而誤判為錯誤記載。
+Scope 區塊的 `fingerprint:` 為 `codekb-scope-diff --mint --paths <本輪 analyzed.paths>` 的 verbatim 輸出，對應本輪深讀路徑集合的來源指紋（與 snapshot `source_fingerprint` 同值 `81c5a160…`，因 snapshot paths 與本輪 deep 集合一致）。
 
 ## 與前一版 codekb 的關係
 
-前一版（2026-08-19、`c3de2c8`、intent `260819-cost-finops`）在本次 rerun guard 中回傳 `UNKNOWN_SCOPE`——它沒有可機讀的覆蓋宣告，因此**不帶任何已驗證覆蓋**。本次為 full rescan，9 份 artifacts 全部以本輪結果重寫，未保留任何本輪未查證的舊敘述。
+前一版（2026-09-16、intent `260916-estimate-upload-rework`）為 `kind: full`（`analyzed.paths` 含 `./`）。本輪因 store **STALE**，依 stage 規則：
 
-前一版已失效的主要敘述（供讀過舊版的人對照）：C1「cost calculator ABSENT」「pricing client ABSENT」「無 `/cost` 路由」「無成本 API」「無 cost 表」——**全部不再成立**。C1 現為完整可運行的功能域。
+- `analyzed.paths`／`analyzed.components` **僅本輪**深讀結果；
+- 前一版 `analyzed.paths`（含 `./` 與 cost／CI／deploy 等）**demote** 進 `shallow.paths`；
+- 成本域、CI、部署等散文**保留**，但不得再視為已驗證 deep。
 
-## 深度分佈
+預期 compare 為 **NARROWER**（verified deep 範圍小於先前 full store）。
 
-本次為全 repo 廣度掃描，但**深度並不均勻**。下列區域只做了檔名、行數與介面面的盤點，**沒有**逐行閱讀，引用它們的細節時請自行複驗：
+## 深度分佈（誠實紀錄）
 
-- `backend/services/` 的大檔（`diagram_builder.py`、`wa_rule_engine.py`、`wa_collab_orchestrator.py` 等）
-- `frontend/src/pages/` 的實作細節（含 `CostPage.tsx` 的非 API 段落）
-- 43 支測試檔的個別內容
-- `.claude/`（272 檔）與 `aidlc/`（776 檔）——依指派單排除深度分析
+**Deep（本輪）**：見下方 Scope `analyzed.paths`——Assessment 評核 call graph、`llm_provider`／`llm_limits`、Design LangGraph、`langgraph_runtime`、相關測試／smoke、`main.py`／`Dockerfile`／`requirements.txt`、`AssessmentPage`／`App.tsx`、OpenAPI 評核相關 paths。
 
-若後續 stage 需要 WorkspacePage／AssessmentPage 與成本頁之間的資料流細節，需另行補掃。
+**Skimmed／demoted**：`backend/cost/`、多數 `backend/services/` 其餘模組、`backend/prompts/`、非 Assessment 前端頁、除兩支 langgraph 測試外的 tests、CI／deploy／schema 文件等（含前一版 full 覆蓋宣告）。
 
 ## 本輪重點發現索引
 
 | 發現 | 所在 artifact |
 |---|---|
-| `backend/cost/` 只有一條進入邊（`main.py:13`），`services` 不反向依賴 cost | `dependencies.md`、`architecture.md` |
-| 八類套件外掛鉤，其中三類會讓 CI 紅燈 | `dependencies.md` |
-| `backend/Dockerfile` 缺 `playwright install chromium`，Calculator 路徑在部署環境不可用 | `code-quality-assessment.md` |
-| `pricing_client` 的最小存活集合為 8 個檔案（比預期大） | `dependencies.md` |
-| `claude-agent-sdk` 有 3 個非 cost 消費者，不可隨 C1 移除 | `technology-stack.md`、`dependencies.md` |
-| `App.tsx:24` 根導向以 C1 為第一順位 | `api-documentation.md`、`component-inventory.md` |
-| 5 個部署面檔案為未提交的工作樹修改 | 本檔、`code-quality-assessment.md` |
+| Design＝LangGraph；Review／Lens＝Claude Agent SDK | `architecture.md`、`business-overview.md` |
+| `langgraph_runtime` 未接 Assessment；雙 OpenRouter 適配 | `architecture.md`、`dependencies.md` |
+| `llm_provider` 模型預設與 env 契約 | `technology-stack.md`、`api-documentation.md` |
+| Dockerfile／`llm_provider` 頂註過時 | `code-quality-assessment.md` |
+| 缺 `langchain-openai`／`claude-agent-sdk` pin | `technology-stack.md`、`dependencies.md` |
+| Assessment SSE 契約與互動圖 | `architecture.md`、`api-documentation.md` |
+| 成本域散文保留但 shallow | `business-overview.md`、`dependencies.md` |
 
 ## Scope of Analysis
 
 ```yaml
 scope_version: 1
-kind: full
-intent: 260916-estimate-upload-rework
-fingerprint: 37b327b8bdc49dac2a2e0974270f8944f2abd9c8
+kind: partial
+intent: 261001-a2-langgraph
+fingerprint: 81c5a1600194da8a5429a3103e1bc84e396ef08b
 analyzed:
+  paths:
+    - backend/services/agent_router.py
+    - backend/services/design_agent.py
+    - backend/services/langgraph_runtime.py
+    - backend/services/review_agent.py
+    - backend/services/review_orchestrator.py
+    - backend/services/review_router.py
+    - backend/services/wa_score_service.py
+    - backend/services/wa_collab_orchestrator.py
+    - backend/services/wa_lens_engine.py
+    - backend/services/wa_rule_engine.py
+    - backend/services/llm_provider.py
+    - backend/services/llm_limits.py
+    - backend/main.py
+    - backend/Dockerfile
+    - backend/tests/test_langgraph_runtime.py
+    - backend/tests/test_langgraph_migration.py
+    - backend/test_agent.py
+    - backend/requirements.txt
+    - frontend/src/App.tsx
+    - frontend/src/pages/AssessmentPage.tsx
+    - scripts/smoke_langgraph_openrouter.py
+    - openapi.json
+  components:
+    - backend-app-shell
+    - architecture-generation
+    - langgraph-runtime
+    - wa-review
+    - lens-management
+    - llm-gateway
+    - openapi-contract
+    - frontend-routing
+    - assessment-page
+shallow:
   paths:
     - ./
     - backend/cost/
-    - backend/main.py
     - backend/models.py
     - backend/database.py
-    - backend/Dockerfile
-    - backend/requirements.txt
     - .github/workflows/ci.yml
     - scripts/validate_repo_contract.py
     - scripts/validate_env_contract.py
     - scripts/validate_cost_calculator_boundary.py
-    - openapi.json
     - deploy/docker-compose.deploy.yml
     - frontend/package.json
-    - frontend/src/App.tsx
     - frontend/src/cost/
-  components:
-    - backend-app-shell
-    - persistence-orm
-    - cost-domain
-    - openapi-contract
-    - frontend-routing
-    - frontend-cost-support
-    - contract-validators
-    - ci-core
-    - deployment-compose
-shallow:
-  paths:
     - backend/services/
     - backend/tests/
     - backend/prompts/
@@ -121,4 +131,8 @@ shallow:
     - TESTING.md
     - CLAUDE.md
     - AGENTS.md
+    - backend/services/lens_router.py
+    - backend/services/collab_router.py
+    - backend/services/diagram_builder.py
+    - backend/tests/test_llm_provider.py
 ```

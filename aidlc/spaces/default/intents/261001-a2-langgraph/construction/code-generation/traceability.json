@@ -1,0 +1,213 @@
+{
+  "stage": "code-generation",
+  "intent": "261001-a2-langgraph",
+  "unit": "a2-langgraph-refactor",
+  "upstream_ids": [
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR4.4",
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "NFR1.1",
+    "NFR1.2",
+    "NFR2.1",
+    "NFR3.1",
+    "NFR3.2",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR4.1",
+    "BR5.1"
+  ],
+  "coverage": [
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/services/review_agent.py;backend/services/wa_lens_engine.py"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/services/review_agent.py;backend/services/wa_lens_engine.py"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "BR2.2 (no AssessmentPage / router URL change)"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/services/langgraph_runtime.py;backend/services/review_agent.py"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/services/wa_lens_engine.py"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/services/llm_provider.py#get_review_model_name;backend/services/review_agent.py"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "backend/services/llm_provider.py (Design default untouched)"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "BR2.2 (frontend frozen)"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/services/review_agent.py (AsyncIterator[str] chunks)"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "BR2.2"
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "backend/services/review_agent.py"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "backend/services (zero ClaudeSDKClient runtime)"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/Dockerfile"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "DEPLOY.md;LOCAL-DEV.md"
+    },
+    {
+      "id": "FR4.4",
+      "status": "OK",
+      "target": "backend/Dockerfile (CLI removed after FR4.1)"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "backend/tests/test_a3_langgraph_migration.py"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "backend/tests/test_a3_langgraph_migration.py"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "backend/tests/test_review_agent.py;backend/tests/test_wa_lens_engine.py"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "BR3.1;backend/services/review_agent.py;backend/services/wa_lens_engine.py"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "BR3.3;cloud360.review_agent;cloud360.wa_lens_engine"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "BR3.2;auth_error_message() paths"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "backend/requirements.txt#langchain-openai"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "backend/Dockerfile"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/review_agent.py;backend/services/wa_lens_engine.py"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "independent Review/Lens StateGraph compiles"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "get_review_model_name / get_model_name defaults"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "run_review_agent string chunks → suggestion_delta consumers"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "(no frontend change)"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/wa_lens_engine.py#_normalize_lens_answers"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "empty-text / empty-answers RuntimeError"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "RuntimeAuthError → auth_error_message()"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "cloud360.review_agent;cloud360.wa_lens_engine"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/Dockerfile"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/tests/test_a3_langgraph_migration.py"
+    }
+  ]
+}

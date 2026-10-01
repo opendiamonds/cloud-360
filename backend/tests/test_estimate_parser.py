@@ -176,6 +176,7 @@ class TestEstimateParser(unittest.TestCase):
                 "Service Type",
                 "Service Name",
                 "Region",
+                "Description",
                 "Currency",
                 "Estimated Monthly Cost",
                 "Estimated Upfront Cost",
@@ -187,6 +188,7 @@ class TestEstimateParser(unittest.TestCase):
                 "Virtual Machines",
                 "Virtual Machines",
                 "East US",
+                "1 D2s v5 (2 vCPUs, 8 GB RAM) x 730 Hours",
                 "USD",
                 "73.00",
                 "0",
@@ -202,6 +204,51 @@ class TestEstimateParser(unittest.TestCase):
         self.assertEqual(result["lines"][0]["quantity"], 1.0)
         self.assertEqual(result["lines"][0]["amount"], 73.0)
         self.assertEqual(result["lines"][0]["itemName"], "Virtual Machines")
+        self.assertEqual(
+            result["lines"][0]["spec"],
+            "1 D2s v5 (2 vCPUs, 8 GB RAM) x 730 Hours",
+        )
+
+    def test_azure_spec_from_description_not_region(self):
+        """Official Azure XLSX: 規格 = Description; AWS Description stays itemName."""
+        raw = _minimal_xlsx(
+            [
+                "Service Category",
+                "Service Type",
+                "Service Name",
+                "Region",
+                "Description",
+                "Estimated Monthly Cost",
+                "Currency",
+            ],
+            [
+                [
+                    "Compute",
+                    "Virtual Machines",
+                    "Virtual Machines",
+                    "East US",
+                    "Premium SSD P30 1 TiB",
+                    "135.17",
+                    "USD",
+                ]
+            ],
+        )
+        result = parse(raw, "azure.xlsx")
+        self.assertEqual(result["detection"]["cloud"], "azure")
+        self.assertEqual(result["lines"][0]["itemName"], "Virtual Machines")
+        self.assertEqual(result["lines"][0]["spec"], "Premium SSD P30 1 TiB")
+        self.assertNotEqual(result["lines"][0]["spec"], "East US")
+
+        aws = parse(
+            (
+                "Description,Service,Region,Quantity,Monthly cost,Currency\n"
+                "EC2 box,Amazon EC2,us-east-1,1,10.00,USD\n"
+            ).encode("utf-8"),
+            "aws.csv",
+        )
+        self.assertEqual(aws["detection"]["cloud"], "aws")
+        self.assertEqual(aws["lines"][0]["itemName"], "EC2 box")
+        self.assertEqual(aws["lines"][0]["spec"], "us-east-1")
 
     def test_forced_cloud_parses_lines_when_detection_ambiguous(self):
         raw = _minimal_xlsx(
@@ -269,9 +316,15 @@ class TestEstimateParser(unittest.TestCase):
         self.assertEqual(result["detection"]["status"], "resolved")
         self.assertEqual(result["detection"]["cloud"], "gcp")
         names = [ln["itemName"] for ln in result["lines"]]
-        self.assertEqual(names, ["N4 Core", "Standard Storage"])
+        self.assertEqual(
+            names, ["Instances (Compute Engine)", "Cloud Storage"]
+        )
         self.assertEqual(result["lines"][0]["amount"], 45.54)
         self.assertEqual(result["lines"][0]["currency"], "USD")
+        self.assertEqual(result["lines"][0]["spec"], "N4 Core")
+        self.assertEqual(result["lines"][0].get("catalogSku"), "SKU2")
+        self.assertEqual(result["lines"][0].get("serviceId"), "SID2")
+        self.assertEqual(result["lines"][1]["spec"], "Standard Storage")
         self.assertEqual(result["totals"]["statedTotal"], 47.54)
         self.assertEqual(result["totals"]["currency"], "USD")
 
@@ -301,7 +354,9 @@ class TestEstimateParser(unittest.TestCase):
         self.assertEqual(result["lines"][0]["parseStatus"], "parsed")
         self.assertEqual(result["lines"][0]["quantity"], 730.0)
         self.assertEqual(result["lines"][0]["amount"], 24.82)
-        self.assertEqual(result["lines"][0]["itemName"], "N1 Core")
+        self.assertEqual(result["lines"][0]["itemName"], "Compute Engine")
+        self.assertEqual(result["lines"][0]["spec"], "N1 Core")
+        self.assertEqual(result["lines"][0].get("catalogSku"), "SKU1")
 
     def test_aws_xlsx_is_ambiguous_not_azure(self):
         """BR1.1: AWS-shaped headers in xlsx must not resolve as Azure."""

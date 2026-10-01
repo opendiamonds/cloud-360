@@ -71,8 +71,8 @@ entities:
       - { name: resultUnion, type: enum, required: true, allowed_values: [PriceHit, PriceMiss, PriceUnsupported] }
       - { name: survivingModules, type: list, required: true, description: "pricing_sdk／query_parser／units／gcp／azure／offer_parser／config＋YAML（FR9.4／9.5）" }
     constraints:
-      - "estimate_intake_* 與明細 ORM 寫入路徑不得 import 本 Port（Q5=A）"
-      - "僅 CostAdviceAgent／U7 與測試為預期消費者"
+      - "estimate_intake_* 與明細 ORM 寫入路徑不得 import 本 Port（Q5=A）；得延遲 import sku_catalog（BR5.11）"
+      - "僅 CostAdviceAgent／U7 與測試為 fetch_hourly 的預期消費者"
 ```
 
 ## 摘要
