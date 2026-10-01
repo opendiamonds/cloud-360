@@ -163,7 +163,27 @@ Bolt 編組與序列由 `delivery-planning`（2.9）承接；本站只交付能�
 | 是否新增對外暴露面 | 否 | `[S17]`=B 的獨立一頁是既有前端路由下的一頁，入口為專案詳情頁的動作 |
 | 是否新增依賴 | 否 | 無新套件；成員關係為既有 PostgreSQL 之上的關聯資料 |
 | 是否引入新技術層 | 否 | per-project 角色層與既有全域 `role_permissions` 兩層串聯，矩陣 308 列不動 |
-| 是否需改既有 schema 約束 | **否** | `[M3]`=A 經查證與 `schema_rbac.sql:328` 的現況一致（`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE`，資料庫今天就會擋），不需放寬任何約束 |
+| 是否需改既有 schema 約束 | **否** | `[M3]`=A 經查證與 `schema_rbac.sql:330` 的現況一致（`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE`，資料庫今天就會擋），不需放寬任何約束 |
+
+#### 修訂 5 的補充：能力 11 的獨立判定（2026-10-02）
+
+修訂 3 的上表是**能力 12 的**五面向判定，不涵蓋能力 11——當時能力 11 的通道形狀
+還是 `[S13]`=A 的「大腦端工具封裝」。該決定已由 `[F16]`=B 取代（scope `[S18]`=A），
+故能力 11 需要自己的一張表：
+
+| 可行性面向 | 能力 11 的判定 | 依據 |
+|---|---|---|
+| 是否引入新服務 | **是** | MCP server 跑**獨立進程**（原 `[S13]` 的選項 C） |
+| 是否新增進程邊界 | **是，本 intent 的第二個**（第一個是 Redis） | 同上。該 server **不得對外暴露**，僅供同主機的大腦進程連接 |
+| 是否新增依賴 | **是** | repo 內零 MCP 基礎設施——`backend/` 全樹對 `mcp` 僅一處命中，是 `services/user_router.py:85` 的字串 `"H3": "MCP／Skill 生命週期"`，即 RBAC 權限矩陣的 story 標籤而非實作；`requirements.txt` 無任何 MCP 套件 |
+| 是否引入新技術層 | **是** | 既有 agent 暴露工具的方式是 LangChain `@tool` ＋ `ToolNode`，與 MCP 無關 |
+| 是否需改既有授權入口 | **否** | 已逐字核對 `[S13]` 的選項 A 與 C——**兩者都是「帶 token 呼叫既有 API」**，故 `FR10.2`（禁止同進程繞過 `require_story_action`）在兩種形狀下同樣成立。這不是推定 |
+
+**GO 仍然維持**，但理由與能力 12 不同：能力 11 確實引入新服務／新依賴／新技術層，
+判定為可行的依據是**它們都有明確的待驗假設與硬約束把風險框住**——`A-7`（MCP 生態
+可在本 repo 的 Python 3.12 ＋ LangGraph 1.2.11 下運作，**未實測**，交 `domain-design`
+試探）與 `C-T11`（token 不得以工具參數傳遞）。**不得把能力 12 的「四個否」讀成
+能力 11 也是如此。**
 
 **故 GO 維持不變，信心未下修。**
 
@@ -217,6 +237,29 @@ skip 風險並指出誰確認——故每一列都附 execution 欄與轉移目�
 而該站雖為 `ALWAYS` 卻已完成且在游標之前，使指派無聲落空，最後必須由使用者在核可
 關卡上裁決回跳才收斂。那次的代價就是這兩列必須附轉移目標的理由。
 
+**修訂 5 的對齊修正（沿用同一條 `refined-mockups:c3` 慣例，上游檔不回改）**：
+
+本站的檢查 4 逐項掃查三站重跑後的一致性，查出兩處上游殘留。兩站（`feasibility`
+修訂 2、`scope-definition` 修訂 4）**都已核可**，故在本站明記而不回改上游：
+
+1. **`scope-definition-questions.md:374` 與 `:480` 仍以 `schema_rbac.sql:328` 作為
+   事實陳述**，其中第 480 行逐字寫「`schema_rbac.sql:328` 逐字為」——該行實為
+   `id SERIAL PRIMARY KEY,`，`projects.owner_user_id` 在**第 330 行**。正確的定位
+   是 `:330`。**這是對齊修正，非本站新定案。** 該檔的 `scope-document.md` 對應兩處
+   已於修訂 4 更正，問題檔漏接。
+   （附帶：`schema_rbac.sql:242` 另有一個 `owner_user_id` 且**有** `ON DELETE
+   CASCADE`，在 `estimate_sets` 表——所以行號指錯有機會指到反例上，這使精確定位
+   比一般情況更要緊。）
+2. **`feasibility-assessment.md:76` 引述 `[S13]`=A 時多了一個「欄位」**：原文為
+   「agent 經大腦端 MCP 封裝取用，底下走 HTTP 帶使用者 token」，引述寫成「……取用
+   **欄位**，……」。語意未變但非逐字。同一列亦未指向 `[S18]`（該決定已被取代）——
+   因為 `[S18]` 是在 feasibility 核可之後才產生的，屬時序而非疏漏。**這是對齊修正，
+   非本站新定案。**
+
+**兩處都不另立交接列**：它們是引用精確度問題，不產生下游工作。但都如實記載——
+`project.md` 的既有規則要求核對引用時**分開驗事實與驗定位**，而這兩處正是「事實對、
+定位或字面不對」的形狀，只檢查內容的核對會全部放行。
+
 **修訂 3 的對齊修正（[H9]=A）**：rough-mockups 第二輪審查留下兩個 Minor，依
 `refined-mockups:c3` 的既有慣例——下游修正上游已核可 artifact 的內部瑕疵時，在
 **本站** artifact 明記「這是對齊修正、非本站新定案」並說明原瑕疵，上游檔案本身
@@ -233,6 +276,22 @@ skip 風險並指出誰確認——故每一列都附 execution 欄與轉移目�
 兩項皆為畫面層的敘述瑕疵而非需求缺口或畫面缺口，故不另立交接列、不指派下游。
 注意交接表第 10 列引用的 `R-06` 是**前一輪**審查的發現（第 13 節框內文案的無條件
 語氣），與本輪的 R-06 是不同的東西——發現編號跨輪會重用，不可混讀。
+
+
+**修訂 5 新增的交接列**（三站重跑後才存在的義務）：
+
+| # | 交接事項 | 指派給 | execution | skip 時轉移至 | 來源 |
+|---|---|---|---|---|---|
+| 19 | **`C-T11`：MCP 工具呼叫中使用者 token 不得以工具參數傳遞。** 必須由 MCP 的傳輸層或 session 承載；工具的 JSON schema 內不得出現任何憑證欄位。違反即為安全缺陷——工具參數是 LLM 產生的，憑證因此會 (1) 進入模型輸入、(2) 被 LangGraph checkpointer 寫進訊息歷史並持久化、(3) 出現在任何記錄 `tool_calls` 的 log，三者皆**不可撤回** | `contract-design`（2.8） | CONDITIONAL | `functional-design`（3.1，per-unit CONDITIONAL）→ 若亦 skip 則 `code-generation`（3.5，**ALWAYS**） | feasibility 修訂 2 `[F16]`=B 的硬約束 |
+| 20 | **MCP server 為本 intent 的第二個新增進程邊界**（第一個是 Redis）。它不得對外暴露、僅供同主機的大腦進程連接；傳輸形式（stdio 或 HTTP／SSE）本站不預選，但若採 HTTP／SSE 則該通道必須為本機迴環或加密 | `infrastructure-design`（3.4） | CONDITIONAL | `code-generation`（3.5，**ALWAYS**） | feasibility 修訂 2 的 ADR-0006 network exposure 與 encryption 判定 |
+| 21 | **`C-R3`：能力 1 與能力 8 的實作前置——既有 `design_agent.py` 的模組層全域 `_progress_queue` 須先改為 per-key 狀態。** 形狀沿用 `cost/advice_orchestrator.py:23-24` 的 `dict` ＋ `threading.Lock`（鍵為 session 或 thread_id）。**已實測**的現狀：兩個併發請求共用最後一個被建立的佇列，使用者 A 收到使用者 B 產生的架構圖 XML，B 什麼都沒收到；另 `design_agent.py:218` 先結束者把全域設為 `None` 後，另一請求其後的事件被**靜默丟棄**。兩個生產呼叫點皆可達（`agent_router.py:125`、`wa_collab_orchestrator.py:79`） | `units-generation`（2.7，決定它落在哪個 unit） | **ALWAYS** | 不適用 | feasibility 修訂 2 `[F17]`=A |
+
+**第 19、20 列的轉移目標是兩層的**，如實記載理由：兩者的自然承接站（`contract-design`、
+`infrastructure-design`）都是 `CONDITIONAL`，而它們的第一順位轉移目標
+（`functional-design`）**也是** `CONDITIONAL` 且為 per-unit。故各列到 `code-generation`
+（`ALWAYS`）為止才有保證。這不是過度防衛——本 intent 已有兩次指派落空的實例：
+`[H6]` 的成員管理範圍決定（目標站是 `ALWAYS` 但已完成且在游標之前）與第 11 列的
+Jev（**無自然承接站**）。
 
 **轉移規則（本站訂定）**：第 1、5、6、10 列的目標站為 `CONDITIONAL`。若該站
 在其執行時被判定為不適用而 skip，其義務**自動轉移**至上表指定的站；確認者是

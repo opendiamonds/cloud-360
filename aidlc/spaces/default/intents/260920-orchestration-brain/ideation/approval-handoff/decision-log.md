@@ -152,7 +152,7 @@ LLM 解析，而 `project.md` 記載本 repo 的三塊結構性盲區之一正�
 路徑」——那是這個 repo 已經付過代價的地方。此代價在選項原文逐字揭露，不是只
 寫「比較不好維護」。
 
-**M3 選 A 的依據是查證而非偏好**：`schema_rbac.sql:328` 的 `owner_user_id` 為
+**M3 選 A 的依據是查證而非偏好**：`schema_rbac.sql:330` 的 `owner_user_id` 為
 `NOT NULL` 且無 `ON DELETE` 子句——資料庫今天就會擋下刪除唯一成員的 owner。
 A 是四個選項裡唯一不留壞資料、且**不需改 schema** 的一個；B／C／D 都得先放寬
 那個約束。
@@ -199,6 +199,29 @@ A 是四個選項裡唯一不留壞資料、且**不需改 schema** 的一個；
 | H8 | R-11（`LLM_PROVIDER=cli` 靜默失敗）**由本 intent 直接修**（修訂 3；AI 推薦指派 `ut` 側，使用者選擇自行修） | D |
 | H9 | rough-mockups 的兩個殘留 Minor 在**本站 artifact 明記為對齊修正**，上游檔不回改（修訂 3） | A |
 | H10 | 新角色命名與 RBAC story id 指派 **`domain-design`，並附轉移目標 `requirements-analysis`**（修訂 3） | A |
+| H11 | **重跑 `feasibility`**（修訂 3 的階段邊界檢查加開；能力 11／12 在 feasibility 三份產出中八個關鍵詞全部 0 命中，與引擎的 `Directly stale: feasibility` 判定一致） | B |
+| F16 | 能力 11 的 agent 通道**真的導入 MCP server ＋ client（獨立進程）**，不收窄為既有的 LangChain `@tool`（feasibility 修訂 2） | B |
+| F17 | 既有 `_progress_queue` 的併發危害列為**能力 1／8 的實作前置**，沿用 `advice_orchestrator.py` 的 per-key dict ＋ lock（feasibility 修訂 2） | A |
+| S18 | **`[F16]`=B 正式取代 `[S13]`=A**（scope 修訂 4；B 實質等於 S13 被否決的選項 C） | A |
+| H8 補述 | R-11（`LLM_PROVIDER=cli` 靜默失敗）**已修完**，含突變驗證。`llm_provider.py` 237 → 178 行 | — |
+
+**H11 的由來**：修訂 3 的階段邊界檢查以八個關鍵詞（`需求頁`、`需求欄位`、
+`成員管理`、`project_admin`、`project_owner`、`MCP`、`能力 11`、`能力 12`）對
+feasibility 的三份產出合併搜尋，**全部 0 命中**。原因是結構性的——兩項能力都在
+feasibility 跑完後才進範圍，而該站從未重跑。回跳重設了 4 站（feasibility、
+scope-definition、rough-mockups、approval-handoff），完成數 7 → 4。
+
+**S18 是一次被攔下的無聲範圍反轉，如實記載**：`[F16]`=B 的文字（「新增 MCP server
+＋ 在大腦側加 MCP client」）實質等於 `[S13]` 的選項 C（「MCP server 跑獨立進程」），
+而 `[S13]` 當時選的是 A（「大腦端的工具封裝」）。**出 `[F16]` 時 AI 未查證 `[S13]`
+已就同一問題定案，也未在選項標示 B 會推翻它**——feasibility 的「不重問」表還把
+`[S13]` 列為 MCP 需求的**來源**。scope-definition 修訂 4 在開工前逐字核對 S13 的
+四個選項才發現，停下來向使用者界定反轉範圍。既有規則（核對最下游的已核可決定）
+攔不住這個形狀，因為只讀了 S13 的**作答**、沒讀它的**選項**。
+
+**`FR10.2` 不受此反轉影響**：已逐字核對 `[S13]` 的 A 與 C，**兩者都是「帶 token
+呼叫既有 API」**，故「禁止同進程繞過 `require_story_action`」在兩種形狀下同樣成立。
+由 rough-mockups 修訂 5 的審查員獨立複驗。
 
 **H6 的由來值得記下**：rough-mockups 修訂 2 畫了 `[成員]` 按鈕後查出能力 11
 的定義裡沒有成員管理，處置是**移除按鈕而非補畫面**（畫一個沒有範圍的
