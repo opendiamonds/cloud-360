@@ -3,7 +3,8 @@
 | 元件 | 職責 | data-testid |
 |---|---|---|
 | `CostPage` | `/cost` 殼、landing、權限閘 | `cost-page` |
-| `EstimateUploadZone` | 拖放／選擇檔；compact 模式 | `estimate-upload-zone` |
+| `EstimateWorkloadForm` | 選填工作負載／預算（送 AI 建議） | `estimate-workload-form` |
+| `EstimateUploadZone` | 拖放／選擇檔；compact 模式；附帶 workload_context | `estimate-upload-zone` |
 | `CloudOverridePicker` | ambiguous 雲別選擇 | `cloud-override-picker` |
 | `EstimateCloudCard` | 摺疊雲別卡片＋明細列；規格欄優先描述 | `estimate-cloud-card` |
 | `EstimateOfficialCalculators` | 三雲教學入口按鈕 | `estimate-official-calculators` |

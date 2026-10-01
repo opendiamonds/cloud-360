@@ -181,7 +181,15 @@ def _load_payload(db: Session, set_id: int) -> dict[str, Any]:
                 ],
             }
         )
-    return {"estimate_set_id": set_id, "clouds": clouds}
+    from cost.workload_context import loads_workload_context
+
+    return {
+        "estimate_set_id": set_id,
+        "clouds": clouds,
+        "workload_context": loads_workload_context(
+            getattr(tree, "workload_context_json", None)
+        ),
+    }
 
 
 def _default_run_agent(payload: dict[str, Any]) -> dict[str, Any]:

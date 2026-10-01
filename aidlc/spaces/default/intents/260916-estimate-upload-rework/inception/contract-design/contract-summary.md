@@ -132,6 +132,19 @@ paths:
                 cloud_overrides:
                   type: string
                   description: JSON 陣列，對應 files 次序；元素為 aws|azure|gcp|null
+                note:
+                  type: string
+                  nullable: true
+                workload_context:
+                  type: string
+                  description: >
+                    選填 JSON 物件（FR1.7／FR5.4）。允許鍵含 system_description、
+                    information_requirements、monthly_budget、budget_currency、
+                    cost_constraints、monthly_egress_gb、peak_bandwidth_mbps、
+                    cross_region_traffic、monthly_active_users、concurrent_users、
+                    api_requests_per_month、storage_hot_gb、storage_backup_gb、
+                    availability_sla、primary_regions、environment、growth_pct_year、
+                    workload_pattern；未知鍵丟棄；空物件等同省略
       responses:
         "201":
           description: 已建立；含解析明細與機械檢查（重算）
@@ -329,6 +342,11 @@ components:
               type: array
               maxItems: 3
               items: { $ref: "#/components/schemas/CloudEstimateView" }
+            workload_context:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: 上傳時選填的工作負載／預算上下文；無則 null（FR1.7／FR5.4）
     ShareEntry:
       type: object
       required: [user_id, username, shared_at]

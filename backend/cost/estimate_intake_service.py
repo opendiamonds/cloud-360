@@ -273,8 +273,13 @@ def summary_view(set_row: EstimateSet, viewer_id: int) -> dict[str, Any]:
 
 
 def detail_view(set_row: EstimateSet, viewer_id: int) -> dict[str, Any]:
+    from cost.workload_context import loads_workload_context
+
     base = summary_view(set_row, viewer_id)
     base["estimates"] = [_cloud_estimate_view(est) for est in set_row.estimates]
+    base["workload_context"] = loads_workload_context(
+        getattr(set_row, "workload_context_json", None)
+    )
     return base
 
 
@@ -304,11 +309,16 @@ def create_estimate_set(
     diagram_id: int | None,
     cloud_overrides_raw: str | None,
     note: str | None = None,
+    workload_context_raw: str | None = None,
 ) -> EstimateSet:
     started = time.monotonic()
     validate_upload_files(files, payloads)
     if diagram_id is not None and diagram_id < 1:
         raise IntakeError(status.HTTP_400_BAD_REQUEST, DETAIL_BAD_DIAGRAM_ID)
+
+    from cost.workload_context import dumps_workload_context, normalize_workload_context
+
+    workload_ctx = normalize_workload_context(workload_context_raw)
 
     overrides = parse_cloud_overrides(cloud_overrides_raw, len(files))
     resolved: list[tuple[CloudId, ParseResult, str]] = []
@@ -346,6 +356,7 @@ def create_estimate_set(
         owner_user_id=owner.id,
         diagram_id=diagram_id,
         note=note,
+        workload_context_json=dumps_workload_context(workload_ctx),
         is_saved=False,
     )
     db.add(set_row)

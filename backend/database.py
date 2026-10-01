@@ -399,8 +399,13 @@ def _ensure_estimate_intake_schema():
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           diagram_id INTEGER,
           note TEXT,
+          workload_context_json TEXT,
           is_saved BOOLEAN NOT NULL DEFAULT FALSE
         )
+        """,
+        """
+        ALTER TABLE estimate_sets
+          ADD COLUMN IF NOT EXISTS workload_context_json TEXT
         """,
         """
         ALTER TABLE estimate_sets

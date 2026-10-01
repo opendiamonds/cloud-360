@@ -96,6 +96,7 @@ class EstimateSetSummaryView(BaseModel):
 
 class EstimateSetDetailView(EstimateSetSummaryView):
     estimates: list[CloudEstimateView]
+    workload_context: dict | None = None
 
 
 def _read_uploads(files: list[UploadFile]) -> tuple[list[UploadFile], list[bytes]]:
@@ -115,6 +116,7 @@ async def upload_estimate_set(
     diagram_id: Annotated[int | None, Form()] = None,
     cloud_overrides: Annotated[str | None, Form()] = None,
     note: Annotated[str | None, Form()] = None,
+    workload_context: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_story_action("C1", "edit")),
 ):
@@ -128,6 +130,7 @@ async def upload_estimate_set(
             diagram_id=diagram_id,
             cloud_overrides_raw=cloud_overrides,
             note=note,
+            workload_context_raw=workload_context,
         )
     except svc.IntakeError as exc:
         svc.raise_as_http(exc)

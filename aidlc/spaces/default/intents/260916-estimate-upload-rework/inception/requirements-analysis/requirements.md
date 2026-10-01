@@ -30,10 +30,11 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **FR1.4** 只接受 `.csv` 與 `.xlsx` 副檔名，且須驗證檔案內容的魔數與副檔名相符；不符者拒絕並說明原因。
 - **FR1.5** 系統須依檔案標頭欄位自動判定所屬雲別；判定不出來時才要求使用者指定，不得逕自拒絕。
 - **FR1.6** 原始檔案在解析完成後即丟棄，不落地保存（FE-2）。
+- **FR1.7** 上傳區上方須提供選填的工作負載／預算表單（系統說明、資訊需求、費用限制、流量與常用負載指標）；有填欄位須隨上傳一併持久化於該 `EstimateSet`，並納入 FR5.4 送交 LLM 的上下文。未填不得阻擋上傳。
 
 ### FR2 — 解析
 
-- **FR2.1** 解析器須自估價表擷取逐項資料：品項、規格、數量、金額，以及該表的總額與幣別。規格欄須優先對應檔案中的 SKU／SKU ID 等別名（而非僅服務顯示名）；GCP 另須擷取 `serviceId`（若檔案有該欄），供 FR13 目錄查詢，**不得**因此呼叫網路。
+- **FR2.1** 解析器須自估價表擷取逐項資料：品項、規格、數量、金額，以及該表的總額與幣別。AWS 規格欄須優先對應檔案中的 SKU／SKU ID 等別名；**GCP 現行估價表：品項取 `service_display_name`，規格取 `name`**（舊版 CSV 後備為 SKU description／SKU ID），並另擷取 `serviceId` 與目錄用 `sku`（若有）；**Azure 官方估價表的規格在 `Description` 欄**（不是 SKU ID）。目錄查詢（FR13）**不得**在 parse 階段呼叫網路。
 - **FR2.2** 解析採寬鬆策略：能解析的列照常呈現，無法辨識的列須保留其原始文字並標示為「無法辨識」，不得整份失敗（FE-4）。**「無法辨識」的判定為：該列的金額或數量無法解析為數值。**品項名稱或規格文字缺漏但金額與數量完好者，不計入無法辨識——它仍可參與 FR4.3 的總額對帳。
 - **FR2.3** 解析器須為純函式——模組內不得 import `httpx`、不得出現 DB session 型別、不得 raise `HTTPException`。ADR-0017 §2 將原 `cost_calculator` 的純函式約束改錨至此。**可執行檢查沿用 `scripts/validate_cost_calculator_boundary.py` 現行的判準形式**：以正規式比對模組內的 import 敘述，命中 `httpx`、`requests`、`sqlalchemy`、`fastapi` 任一即失敗（FR9.6 只改目標路徑，不改判準）。此判準涵蓋上述三項禁令——`sqlalchemy` 涵蓋 DB session，`fastapi` 涵蓋 `HTTPException`。
 - **FR2.4** 解析器須受 property-based test 覆蓋（ADR-0006 hard constraint，隨純函式層一併移轉）。
@@ -59,7 +60,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **FR5.1** 省錢建議為核心 Must（SD-1）。
 - **FR5.2** 跨雲比較與品質檢查建議為 Should；尚未產生時以「產生中」狀態呈現，不得空白或假裝不存在。若該類建議在本期未交付，UI 須顯示明確的「本期未提供」而非停留在「產生中」——「產生中」僅適用於本次請求仍在處理的情形。
 - **FR5.3** 跨雲比較至少需一朵雲的資料；僅上傳一朵雲時，跨雲比較須明示「資料不足」而非給出無依據的結論（FE-7）。
-- **FR5.4** 送交 LLM 的內容為完整解析結果（品項、規格、數量、金額）（FE-3）。
+- **FR5.4** 送交 LLM 的內容為完整解析結果（品項、規格、數量、金額），以及上傳時選填的工作負載上下文（系統說明、資訊需求、費用限制、流量與常用負載指標）（FE-3）。
 - **FR5.5** agent 得經 `pricing_client` 呼叫各雲的**目錄價**端點確認現價。所得**價格**只寫入建議文字，**不得回寫明細表**（AH-6）。FR13 允許把目錄查到的**規格文字描述**寫入明細的 `spec_description`；此例外不含 hourly／單價／小計，且必須走 `sku_catalog`，不得讓 intake 寫入路徑 import `pricing_client`／`pricing_sdk`。
 - **FR5.6** 允許的端點為三類，含需帳號憑證者：
   - AWS：Price List **Query** API（boto3，走 IAM）與既有公開 Bulk Price List 皆可。
@@ -158,7 +159,7 @@ reverse-engineering 確認既有 C1 是完整可運行的功能域（`backend/co
 - **NFR7 — 可測試性**：新功能須產出 TCMS 測試案例，通過 `scripts/tcms_validate.py --all` 且無 ERROR（`project.md` `## Mandated`，blocking）。
 - **NFR8 — 部署環境可用性**：新路徑不得依賴部署容器內不存在的執行期元件。`backend/Dockerfile` 未執行 `playwright install chromium`——這正是既有 Calculator 路徑在部署環境結構性不可用的原因，新設計不得重蹈。
 - **NFR9 — 憑證安全**：ADR-0006 的 IAM hard constraint 適用於 FR11 的憑證管線。憑證不得出現在版控、日誌或錯誤訊息中；權限範圍限於 FR5.9 的最小集合。此處的風險輪廓明顯低於帳單類 API——`pricing:GetProducts` 這類動作讀不到帳戶內任何資源，回傳的是與公開 Bulk API 相同的目錄價，憑證僅為存取方式；此判斷是 OQ6 之 ADR 的核心論據，也是 FR5.7 維持禁止帳單類 API 的理由。
-- **NFR10 — SKU 解讀時延**：FR13 的目錄查詢不得讓上傳主路徑無上限等待。單一查詢須有短逾時（實作上限約 4 秒連線／讀取），單次上傳互異 SKU 外呼上限 20；超出者該列不查、保留原始規格。
+- **NFR10 — SKU 解讀時延**：FR13 的目錄查詢不得讓上傳主路徑無上限等待。單一查詢須有短逾時（實作上限約 4 秒連線／讀取），單次上傳互異 SKU 外呼上限 100；超出者該列不查、保留原始規格。
 
 ---
 

@@ -1,11 +1,16 @@
 import { useCallback, useRef, useState } from 'react';
 import { apiUrl } from '../../config/api';
 import { authHeaders, type CloudId } from './types';
+import {
+  serializeWorkloadContext,
+  type WorkloadContext,
+} from './EstimateWorkloadForm';
 
 type Props = {
   disabled?: boolean;
   canEdit: boolean;
   compact?: boolean;
+  workloadContext?: WorkloadContext;
   onUploaded: (detail: unknown) => void;
   onError: (message: string) => void;
 };
@@ -16,6 +21,7 @@ export function EstimateUploadZone({
   disabled,
   canEdit,
   compact,
+  workloadContext,
   onUploaded,
   onError,
 }: Props) {
@@ -43,6 +49,12 @@ export function EstimateUploadZone({
           'cloud_overrides',
           JSON.stringify(overrides.map((o) => (o ? o : null)))
         );
+      }
+      const workloadJson = workloadContext
+        ? serializeWorkloadContext(workloadContext)
+        : null;
+      if (workloadJson) {
+        body.append('workload_context', workloadJson);
       }
       const res = await fetch(apiUrl('/api/cost/v1/sets'), {
         method: 'POST',

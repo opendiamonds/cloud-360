@@ -19,61 +19,61 @@ const STEPS: Record<CloudId, Step[]> = {
   aws: [
     {
       title: '開啟 AWS Pricing Calculator',
-      body: '進入官網後按 Create estimate（建立預估）。不必登入也能填公開價。',
+      body: '進入官網後按 Create estimate（建立預估）。不必登入也能填公開價。圖上紅框是按鈕位置。',
       image: '/cost-guides/aws-1-landing.png',
-      callout: '右上／主畫面的 Create estimate',
+      callout: '紅框：Create estimate',
     },
     {
       title: '加入要估價的服務',
       body: '在 Add service 搜尋 EC2、S3、RDS 等，逐項加入並填寫規格與區域。',
       image: '/cost-guides/aws-2-add-service.png',
-      callout: '服務清單與 Configure 按鈕',
+      callout: '紅框：Configure',
     },
     {
       title: '匯出 CSV',
       body: '填完後到 My Estimate。右上角 Export（匯出）選 CSV，確認後下載。再回到本頁上傳該檔。',
       image: '/cost-guides/aws-3-estimate.png',
-      callout: 'My Estimate 右上角 Export → CSV',
+      callout: '紅框：Export → CSV',
     },
   ],
   gcp: [
     {
       title: '開啟 Google Cloud Pricing Calculator',
-      body: '右側是 Cost details。按 Add to estimate 開始加入產品。',
+      body: '右側是 Cost details。按畫面中央（或右側）的 Add to estimate 開始加入產品。圖上紅框是按鈕位置。',
       image: '/cost-guides/gcp-1-landing.png',
-      callout: 'Add to estimate',
+      callout: '紅框：Add to estimate',
     },
     {
       title: '加入產品並調整規格',
-      body: '搜尋 Compute Engine、Cloud Storage 等，在右側面板調整機器類型、用量與區域。',
-      image: '/cost-guides/gcp-1-landing.png',
-      callout: '右側 Cost details 會列出已加入項目',
+      body: '搜尋 Compute Engine、Cloud Storage 等，點選產品後在面板調整機器類型、用量與區域。',
+      image: '/cost-guides/gcp-2-products.png',
+      callout: '紅框：產品卡右上角 +',
     },
     {
       title: '匯出 CSV／試算表',
-      body: '右側預估金額列上方有下載／匯出圖示（文件圖示）。按下去可匯出估價表。若介面改版，請找 Export 或 Download。再回到本頁上傳。',
-      image: '/cost-guides/gcp-1-landing.png',
-      callout: '右側預估列附近的下載／匯出圖示',
+      body: '右側 Cost details 底部有 SAVE／下載。按下去匯出估價表，再回到本頁上傳。若介面改版，請找 Export 或 Download。',
+      image: '/cost-guides/gcp-3-export.png',
+      callout: '紅框：SAVE / Download',
     },
   ],
   azure: [
     {
       title: '開啟 Azure Pricing Calculator',
-      body: '上方是 Your estimate，下方是產品目錄。用搜尋或「加入估算」把服務加進估價。',
+      body: '下方產品卡按 Add to estimate（加入估算）把服務加進估價。圖上紅框是按鈕位置。',
       image: '/cost-guides/azure-1-landing.png',
-      callout: '產品卡上的 Add ／ 加入估算',
+      callout: '紅框：Add to estimate',
     },
     {
       title: '設定各服務規格',
-      body: '加入後在估價區展開該服務，選區域、SKU、數量。頂端會顯示預估前期與每月費用。',
-      image: '/cost-guides/azure-1-landing.png',
-      callout: '頂端 Your estimate 與產品選擇器',
+      body: '加入後在估價區展開該服務，選區域、SKU、數量。頂端 Your Estimate 會顯示預估費用。',
+      image: '/cost-guides/azure-2-configure.png',
+      callout: '紅框：估價總額',
     },
     {
       title: '匯出 Excel（XLSX）',
-      body: '估價工具列有 Export（匯出）。選 Excel 下載 .xlsx，再回到本頁上傳。官方匯出通常不含數量欄，本系統會視為 1。',
-      image: '/cost-guides/azure-1-landing.png',
-      callout: 'Your estimate 工具列的 Export',
+      body: '估價工具列按 Export（匯出），選 Excel 下載 .xlsx，再回到本頁上傳。官方匯出通常不含數量欄，本系統會視為 1。',
+      image: '/cost-guides/azure-3-export.png',
+      callout: '紅框：Export → Excel',
     },
   ],
 };
@@ -127,7 +127,7 @@ export function EstimateCalculatorGuideModal({ cloud, onClose }: Props) {
             <img
               src={step.image}
               alt={`${cloudLabel(cloud)} ${step.title}`}
-              className="block w-full object-cover object-top"
+              className="block w-full object-contain object-top bg-gray-50"
             />
             <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-amber-950 shadow">
               {step.callout}

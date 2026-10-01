@@ -14,7 +14,9 @@ components:
     summary: /cost 頁面，估價表上傳與結果檢視的唯一使用者介面
     behaviour: >
       沿用 /cost 路徑，App.tsx:24 的根導向與 Sidebar.tsx:201 的導覽項目不變（FR3.3）。
-      呈現拖放上傳區並常駐顯示限制（5 MB、3 檔、.csv/.xlsx）；每檔落地後顯示雲別判定
+      呈現拖放上傳區並常駐顯示限制（5 MB、3 檔、.csv/.xlsx）；上傳區上方提供選填
+      工作負載／預算表單（系統說明、資訊需求、費用限制、流量與負載指標）（FR1.7），
+      有填欄位隨 multipart 一併送出。每檔落地後顯示雲別判定
       結果並允許就地更正。三張雲別卡片預設摺疊，標頭攜帶雲別、項數、總額與機械檢查
       摘要（含無法辨識列數——此為 FR3.2 在摺疊版面下成立的依據）。展開後為逐項明細表，
       無法辨識的列留在原始順序、淡色底、金額欄標示「無法辨識」。規格欄有
@@ -26,6 +28,7 @@ components:
       抽屜呈現，**不提供勾選框與並排比較**（FR6.3）。細部規格見 refined-mockups。
     responsibilities:
       - 上傳互動與前端層的限制提示
+      - 選填工作負載／預算表單（FR1.7）
       - 官方估價教學彈窗（FR12）
       - 明細（含規格描述）、機械檢查結果與 AI 建議的呈現與來源區分
       - SSE 訂閱與進度呈現
@@ -53,13 +56,15 @@ components:
       原始檔案在解析完成後即丟棄，不落地保存（FR1.6）——這是本元件唯一持有原始位元組
       的地方，丟棄責任在此。寫庫前得呼叫 SkuCatalog 為目錄形 SKU 補規格描述
       （FR13）；**不得**因此 import PricingLookup／pricing_client。持久化
-      EstimateSet、Estimate 與 EstimateLineItem，接著觸發 AdviceOrchestrator。
+      EstimateSet（含選填 workloadContext，FR1.7）、Estimate 與 EstimateLineItem，
+      接著觸發 AdviceOrchestrator。
       **機械檢查結果不持久化**：EstimateValidator 是純函式且輸入（逐項明細）已持久化，
       每次讀取時重算，永遠與明細一致。維持 cost_router → cost_service → 純函式層的
       三層形狀（NFR6），router 為本元件的 HTTP 邊界、不含業務邏輯。
     responsibilities:
       - 上傳限制與檔案型別把關
       - 原始檔案的即用即棄
+      - 選填工作負載上下文的正規化與持久化（FR1.7）
       - 解析與機械檢查的協調
       - 目錄形 SKU 的描述補齊（經 SkuCatalog，失敗略過）
       - 估價批次、單雲估價表與逐項明細的持久化與讀取
@@ -254,7 +259,8 @@ components:
       OpenAI 相容端點（FR10.2）。**不得移除 claude-agent-sdk 相依**——
       services/design_agent.py、review_agent.py、wa_lens_engine.py 仍在使用，
       連帶 Dockerfile 的 Node 22 與 @anthropic-ai/claude-code 也不可拿掉（FR10.3）。
-      送交 LLM 的內容為完整解析結果：品項、規格、數量、金額（FR5.4）。省錢建議為核心
+      送交 LLM 的內容為完整解析結果：品項、規格、數量、金額，以及上傳時選填的
+      工作負載上下文（系統說明、資訊需求、費用限制、流量與負載指標）（FR5.4）。省錢建議為核心
       必備（FR5.1）；跨雲比較至少需一朵雲的資料，僅上傳一朵雲時須明示「資料不足」而非
       給出無依據的結論（FR5.3）。產生建議時得經 PricingLookup 查目錄價確認現價，
       **所得價格只寫入建議文字、不得回寫明細表**（FR5.5、AH-6）。既有
@@ -473,7 +479,7 @@ graph TD
 
 | Entity | Owning Component | Identifier | Attributes | References |
 |---|---|---|---|---|
-| EstimateSet | EstimateIntakeService | id | id, ownerUserId, createdAt, diagramId, note | User（IdentityAndRbac）、UserDiagram（Collaboration，可為空） |
+| EstimateSet | EstimateIntakeService | id | id, ownerUserId, createdAt, diagramId, note, workloadContext | User（IdentityAndRbac）、UserDiagram（Collaboration，可為空） |
 | Estimate | EstimateIntakeService | id | id, estimateSetId, cloud, statedTotal, currency, parsedLineCount, unparsedLineCount | EstimateSet |
 | EstimateLineItem | EstimateIntakeService | id | id, estimateId, ordinal, itemName, spec, specDescription, quantity, amount, currency, parseStatus, rawText | Estimate |
 | EstimateShare | EstimateAccessControl | (estimateSetId, userId) | estimateSetId, userId, sharedAt | EstimateSet、User |

@@ -16,9 +16,11 @@ entities:
       - { name: createdAt, type: datetime, required: true }
       - { name: diagramId, type: integer, required: false, nullable: true, description: "純標籤；不參與授權（Q3=A）" }
       - { name: note, type: string, required: false, nullable: true }
+      - { name: workloadContext, type: object, required: false, nullable: true, description: "選填工作負載／預算 JSON（FR1.7）；欄位見 contract workload_context" }
     constraints:
       - "每次 POST /sets 成功建立一筆新 EstimateSet（FR6.2）；不原地覆寫舊批次"
       - "diagramId 若有值僅須為正整數；不驗證圖存在／可見"
+      - "workloadContext 為選填；空／無效 JSON 視為 null，不得阻擋上傳"
 
   - name: Estimate
     description: 批次內單一雲別的估價表彙總

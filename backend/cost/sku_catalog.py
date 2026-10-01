@@ -23,7 +23,7 @@ logger = logging.getLogger("cloud360.sku_catalog")
 
 _CACHE_DIR = Path(__file__).resolve().parent / ".sku_desc_cache"
 _LOOKUP_TIMEOUT = httpx.Timeout(4.0, connect=2.0)
-_MAX_UNIQUE = 20
+_MAX_UNIQUE = 100
 
 _GCP_SKU = re.compile(r"^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$", re.I)
 _AWS_SKU = re.compile(r"^[A-Z0-9]{12,20}$", re.I)
@@ -54,19 +54,26 @@ def enrich_line_specs(cloud: str, lines: list[dict[str, Any]]) -> None:
     seen: dict[tuple[str, str], str | None] = {}
     lookups = 0
     for line in lines:
-        spec = str(line.get("spec") or "").strip()
-        if not looks_like_catalog_sku(cloud, spec):
+        display_spec = str(line.get("spec") or "").strip()
+        catalog_sku = str(line.get("catalogSku") or display_spec).strip()
+        if not looks_like_catalog_sku(cloud, catalog_sku):
             continue
         service_id = str(line.get("serviceId") or "").strip()
-        key = (spec, service_id)
+        key = (catalog_sku, service_id)
         if key not in seen:
             if lookups >= _MAX_UNIQUE:
                 seen[key] = None
             else:
                 lookups += 1
-                seen[key] = _lookup(cloud, spec, service_id)
+                seen[key] = _lookup(cloud, catalog_sku, service_id)
         desc = seen[key]
         if desc:
+            item = str(line.get("itemName") or "").strip()
+            # Skip when Catalog text duplicates 品項 or 規格 (common on GCP).
+            if item and desc.casefold() == item.casefold():
+                continue
+            if display_spec and desc.casefold() == display_spec.casefold():
+                continue
             line["specDescription"] = desc
 
 

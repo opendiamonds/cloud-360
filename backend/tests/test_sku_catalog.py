@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from cost.sku_catalog import enrich_line_specs, looks_like_catalog_sku
+from cost.sku_catalog import _MAX_UNIQUE, enrich_line_specs, looks_like_catalog_sku
 
 
 class LooksLikeSkuTest(unittest.TestCase):
@@ -54,3 +54,45 @@ class EnrichLineSpecsTest(unittest.TestCase):
         with patch("cost.sku_catalog._lookup", return_value=None):
             enrich_line_specs("gcp", lines)
         self.assertNotIn("specDescription", lines[0])
+
+    def test_skips_description_matching_item_name(self):
+        lines = [
+            {
+                "spec": "2DA5-2C43-66E6",
+                "itemName": "N1 Predefined Instance Core running in Americas",
+            }
+        ]
+        with patch(
+            "cost.sku_catalog._lookup",
+            return_value="N1 Predefined Instance Core running in Americas",
+        ):
+            enrich_line_specs("gcp", lines)
+        self.assertNotIn("specDescription", lines[0])
+
+    def test_uses_catalog_sku_when_spec_is_display_name(self):
+        lines = [
+            {
+                "itemName": "Instances (Compute Engine)",
+                "spec": "N4 Core",
+                "catalogSku": "2DA5-2C43-66E6",
+                "serviceId": "6F81-5844-456A",
+            }
+        ]
+        with patch(
+            "cost.sku_catalog._lookup",
+            return_value="Extra catalog detail",
+        ) as lookup:
+            enrich_line_specs("gcp", lines)
+        lookup.assert_called_once_with("gcp", "2DA5-2C43-66E6", "6F81-5844-456A")
+        self.assertEqual(lines[0]["specDescription"], "Extra catalog detail")
+
+    def test_caps_unique_lookups(self):
+        lines = [
+            {"spec": f"{i:04X}-AAAA-0001"}
+            for i in range(_MAX_UNIQUE + 1)
+        ]
+        with patch("cost.sku_catalog._lookup", return_value="desc") as lookup:
+            enrich_line_specs("gcp", lines)
+        self.assertEqual(lookup.call_count, _MAX_UNIQUE)
+        self.assertEqual(lines[0]["specDescription"], "desc")
+        self.assertNotIn("specDescription", lines[-1])

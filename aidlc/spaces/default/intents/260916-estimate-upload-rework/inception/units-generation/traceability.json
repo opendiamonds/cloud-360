@@ -2,7 +2,7 @@
   "stage": "units-generation",
   "note": "user-stories 為 SKIP，依 stage 檔 fallback 列舉每一條 FR。OK 的 target 為 Unit ID（U1–U9）或 construction directory；跨單元 FR 以主要實作單元為 target，細節見 unit-of-work-story-map.md。FR10.4 為範圍排除宣告，標 GAP。",
   "upstream_ids": [
-    "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR1.5", "FR1.6",
+    "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR1.5", "FR1.6", "FR1.7",
     "FR2.1", "FR2.2", "FR2.3", "FR2.4",
     "FR3.1", "FR3.2", "FR3.3",
     "FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5",
@@ -23,6 +23,7 @@
     { "id": "FR1.4", "status": "OK", "target": "U2" },
     { "id": "FR1.5", "status": "OK", "target": "U1" },
     { "id": "FR1.6", "status": "OK", "target": "U2" },
+    { "id": "FR1.7", "status": "OK", "target": "U8" },
     { "id": "FR2.1", "status": "OK", "target": "U1" },
     { "id": "FR2.2", "status": "OK", "target": "U1" },
     { "id": "FR2.3", "status": "OK", "target": "U1" },

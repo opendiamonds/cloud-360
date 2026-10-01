@@ -8,6 +8,11 @@
       "target": "M1/CostPage"
     },
     {
+      "id": "FR1.7",
+      "status": "OK",
+      "target": "EstimateWorkloadForm"
+    },
+    {
       "id": "FR3.1",
       "status": "OK",
       "target": "EstimateCloudCard"

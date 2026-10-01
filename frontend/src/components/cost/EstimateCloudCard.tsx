@@ -58,29 +58,41 @@ export function EstimateCloudCard({ estimate }: Props) {
               </tr>
             </thead>
             <tbody>
-              {visibleLines.map((ln) => (
-                <tr key={ln.ordinal} className="border-t border-gray-50">
-                  <td className="py-1.5 pr-3 text-gray-500">{ln.ordinal}</td>
-                  <td className="py-1.5 pr-3">{ln.item_name || '—'}</td>
-                  <td className="py-1.5 pr-3">
-                    <div>{ln.spec_description || ln.spec || '—'}</div>
-                    {ln.spec_description && ln.spec && ln.spec_description !== ln.spec && (
-                      <div className="text-[11px] text-gray-400">SKU {ln.spec}</div>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-3">{ln.quantity ?? '—'}</td>
-                  <td className="py-1.5 pr-3">
-                    {ln.amount != null ? `${ln.amount} ${ln.currency || ''}` : '—'}
-                  </td>
-                  <td className="py-1.5">
-                    {ln.parse_status === 'unidentifiable' ? (
-                      <span className="text-amber-700">無法辨識</span>
-                    ) : (
-                      <span className="text-gray-500">已解析</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {visibleLines.map((ln) => {
+                const item = (ln.item_name || '').trim();
+                const rawDesc = (ln.spec_description || '').trim();
+                // GCP catalog description often equals the file's item name — don't repeat it.
+                const desc =
+                  rawDesc && item && rawDesc.toLowerCase() === item.toLowerCase()
+                    ? ''
+                    : rawDesc;
+                const primary = desc || ln.spec || '—';
+                const showSkuSub =
+                  Boolean(desc && ln.spec && desc !== ln.spec);
+                return (
+                  <tr key={ln.ordinal} className="border-t border-gray-50">
+                    <td className="py-1.5 pr-3 text-gray-500">{ln.ordinal}</td>
+                    <td className="py-1.5 pr-3">{ln.item_name || '—'}</td>
+                    <td className="py-1.5 pr-3">
+                      <div>{primary}</div>
+                      {showSkuSub && (
+                        <div className="text-[11px] text-gray-400">SKU {ln.spec}</div>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3">{ln.quantity ?? '—'}</td>
+                    <td className="py-1.5 pr-3">
+                      {ln.amount != null ? `${ln.amount} ${ln.currency || ''}` : '—'}
+                    </td>
+                    <td className="py-1.5">
+                      {ln.parse_status === 'unidentifiable' ? (
+                        <span className="text-amber-700">無法辨識</span>
+                      ) : (
+                        <span className="text-gray-500">已解析</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             {hasTotal && (
               <tfoot>

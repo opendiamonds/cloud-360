@@ -14,6 +14,7 @@
 | FR1.4 | U2 | `u2-estimate-intake-api` | 副檔名＋魔數 |
 | FR1.5 | U1 | `u1-estimate-parser` | 雲別判定（互動由 U2／U8） |
 | FR1.6 | U2 | `u2-estimate-intake-api` | 即用即棄 |
+| FR1.7 | U8（主）＋U2 | `u8-…`／`u2-…` | 選填工作負載表單（UI）＋持久化／multipart |
 | FR2.1 | U1 | `u1-estimate-parser` | |
 | FR2.2 | U1 | `u1-estimate-parser` | 無法辨識列 |
 | FR2.3 | U1 | `u1-estimate-parser` | 純函式 |
@@ -29,7 +30,7 @@
 | FR5.1 | U7 | `u7-cost-advice-agent` | |
 | FR5.2 | U9（主）＋U7 | `u9-…`／`u7-…` | 呈現與「產生中／本期未提供」為 U9 主責；狀態持久化在 U7 |
 | FR5.3 | U7 | `u7-cost-advice-agent` | |
-| FR5.4 | U7 | `u7-cost-advice-agent` | |
+| FR5.4 | U7（主）＋U2 | `u7-…`／`u2-…` | 解析結果＋workload_context 進 prompt；持久化在 U2 |
 | FR5.5 | U5 | `u5-pricing-lookup-port` | 執行期可被 U7 呼叫；非單元相依 |
 | FR5.6 | U5 | `u5-pricing-lookup-port` | |
 | FR5.7 | U5 | `u5-pricing-lookup-port` | |

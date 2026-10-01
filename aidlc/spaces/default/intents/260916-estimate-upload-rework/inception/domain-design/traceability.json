@@ -2,7 +2,7 @@
   "stage": "domain-design",
   "note": "user-stories 在本 scope 為 SKIP，stories.md 不存在，故依 stage 檔 Step 6 的 fallback 規則列舉 requirements.md 的每一條 FR。target 只能是 components.md 定義的元件或實體——本站的真實來源不命名服務或公開方法，那些由 contract-design 與 functional-design 釘選。GAP 者為純刪除或工具鏈維護項，不由任何構件實現，如實標記而非強行對應。",
   "upstream_ids": [
-    "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR1.5", "FR1.6",
+    "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR1.5", "FR1.6", "FR1.7",
     "FR2.1", "FR2.2", "FR2.3", "FR2.4",
     "FR3.1", "FR3.2", "FR3.3",
     "FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5",
@@ -23,6 +23,7 @@
     { "id": "FR1.4", "status": "OK", "target": "EstimateIntakeService" },
     { "id": "FR1.5", "status": "OK", "target": "EstimateParser" },
     { "id": "FR1.6", "status": "OK", "target": "EstimateIntakeService" },
+    { "id": "FR1.7", "status": "OK", "target": "EstimateWorkspacePage" },
 
     { "id": "FR2.1", "status": "OK", "target": "EstimateParser" },
     { "id": "FR2.2", "status": "OK", "target": "EstimateLineItem" },

@@ -37,6 +37,7 @@ DETAIL_FIELDS = {
     "clouds",
     "advice_status",
     "estimates",
+    "workload_context",
 }
 
 
@@ -110,6 +111,7 @@ class EstimateIntakeApiTest(unittest.TestCase):
         filename: str = "est.csv",
         cloud_overrides: str | None = None,
         diagram_id: int | None = None,
+        workload_context: str | None = None,
         parse_result: ParseResult | None = None,
     ):
         files = [("files", (filename, io.BytesIO(content), "text/csv"))]
@@ -118,6 +120,8 @@ class EstimateIntakeApiTest(unittest.TestCase):
             data["cloud_overrides"] = cloud_overrides
         if diagram_id is not None:
             data["diagram_id"] = str(diagram_id)
+        if workload_context is not None:
+            data["workload_context"] = workload_context
         pr = parse_result if parse_result is not None else _sample_parse()
 
         def _fake_parse(file_bytes, filename=None, *, forced_cloud=None):
@@ -135,6 +139,7 @@ class EstimateIntakeApiTest(unittest.TestCase):
         self.assertEqual(res.status_code, 201, res.text)
         body = res.json()
         self.assertEqual(set(body.keys()), DETAIL_FIELDS)
+        self.assertIsNone(body["workload_context"])
         self.assertEqual(len(body["estimates"]), 1)
         est = body["estimates"][0]
         self.assertIn("checks", est)
@@ -146,6 +151,36 @@ class EstimateIntakeApiTest(unittest.TestCase):
         self.assertIn("spec_description", line)
         self.assertIsNone(line["spec_description"])
         self.assertEqual(line["spec"], "m5.large")
+
+    def test_upload_persists_workload_context_for_advice(self):
+        ctx = {
+            "system_description": "B2B SaaS API",
+            "monthly_budget": 5000,
+            "budget_currency": "USD",
+            "monthly_egress_gb": 2000,
+            "availability_sla": "99.9",
+            "unknown_field": "drop-me",
+        }
+        res = self._upload(workload_context=json.dumps(ctx))
+        self.assertEqual(res.status_code, 201, res.text)
+        body = res.json()
+        wc = body["workload_context"]
+        self.assertIsInstance(wc, dict)
+        self.assertEqual(wc["system_description"], "B2B SaaS API")
+        self.assertEqual(wc["monthly_budget"], 5000.0)
+        self.assertEqual(wc["monthly_egress_gb"], 2000.0)
+        self.assertEqual(wc["availability_sla"], "99.9")
+        self.assertNotIn("unknown_field", wc)
+
+        set_id = body["id"]
+        got = self.client.get(f"{SETS_URL}/{set_id}")
+        self.assertEqual(got.status_code, 200)
+        self.assertEqual(
+            got.json()["workload_context"]["system_description"],
+            "B2B SaaS API",
+        )
+        row = self.db.query(EstimateSet).filter_by(id=set_id).one()
+        self.assertIn("B2B SaaS API", row.workload_context_json or "")
 
     def test_save_puts_set_into_history(self):
         created = self._upload()

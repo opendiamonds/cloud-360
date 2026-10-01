@@ -23,7 +23,7 @@
 |---|---|---|
 | 1 | U2 上傳成功呼叫 `enqueue_advice_job` → Orchestrator | BR7.5 |
 | 2 | 無列則建 `generating`＋`started_at`；已 generating → no-op | BR7.5 |
-| 3 | 背景執行 Agent（U6）；可選查價 | BR7.2、BR7.3 |
+| 3 | 背景執行 Agent（U6）；prompt 含解析結果＋workload_context；可選查價 | BR7.2、BR7.3 |
 | 4 | 成功 → 寫三類文字／reasons；`completed` | BR7.1 |
 | 5 | 例外／逾時 → `failed`＋reasons | BR7.6、BR7.10 |
 
@@ -97,7 +97,7 @@ erDiagram
 | ID | 一句話 |
 |---|---|
 | BR7.1 | Must／Should 與 unavailable_reasons |
-| BR7.2 | 完整解析進 LLM |
+| BR7.2 | 完整解析＋選填 workload_context 進 LLM |
 | BR7.3 | 查價可選、不捏造 |
 | BR7.4 | 價不回寫明細 |
 | BR7.5 | 去重／不自動重跑 |

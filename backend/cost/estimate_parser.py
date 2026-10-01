@@ -40,6 +40,7 @@ class LineItem(TypedDict, total=False):
     itemName: str
     spec: str
     serviceId: str
+    catalogSku: str
     specDescription: str
     quantity: float | None
     amount: float | None
@@ -111,6 +112,7 @@ def _normalize_line(
         item = row_get(row, mapping.get("itemNameAlt")).strip() or None
     spec = row_get(row, mapping.get("spec")).strip() or None
     service_id = row_get(row, mapping.get("serviceId")).strip() or None
+    catalog_sku = row_get(row, mapping.get("catalogSku")).strip() or None
 
     line: LineItem = {
         "ordinal": ordinal,
@@ -124,6 +126,8 @@ def _normalize_line(
     }
     if service_id:
         line["serviceId"] = service_id
+    if catalog_sku:
+        line["catalogSku"] = catalog_sku
     return line
 
 

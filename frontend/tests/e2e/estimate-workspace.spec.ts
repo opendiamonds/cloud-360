@@ -24,8 +24,8 @@ test.describe('估價工作區（U8）', () => {
    * @api GET /api/cost/v1/sets/{set_id} -> 200 | 讀取估價表明細
    * @ui /cost | 估價工作區：上傳區、雲別明細卡、機械檢查、隱私徽章
    * @given seed 帳號 admin / admin123，角色 Platform_Admin（具 C1 view/edit）
-   * @step 以 admin 登入並前往 /cost | 顯示 data-testid=cost-page 與上傳區
-   * @step 選擇 fixtures/aws-estimate.csv 並按「開始上傳」 | 後端接受並回傳明細
+   * @step 以 admin 登入並前往 /cost | 顯示 data-testid=cost-page、工作負載表單與上傳區
+   * @step 可選填寫系統說明後選擇 fixtures/aws-estimate.csv 並按「開始上傳」 | 後端接受並回傳明細
    * @step 檢視明細區 | 出現 estimate-cloud-card 與 estimate-checks-panel
    * @pass 雲別卡與檢查面板皆可見，且頁面仍在 /cost
    * @story C1
@@ -35,8 +35,10 @@ test.describe('估價工作區（U8）', () => {
     await expect(page).toHaveURL(/\/(workspace|cost)/);
     await page.goto('/cost');
     await expect(page.getByTestId('cost-page')).toBeVisible();
+    await expect(page.getByTestId('estimate-workload-form')).toBeVisible();
     await expect(page.getByTestId('estimate-upload-zone')).toBeVisible();
 
+    await page.getByPlaceholder(/B2B SaaS/).fill('E2E 測試系統：API＋DB');
     await page.locator('input[type="file"]').setInputFiles(FIXTURE);
     await expect(page.getByText('aws-estimate.csv')).toBeVisible();
     await page.getByTestId('estimate-upload-submit').click();

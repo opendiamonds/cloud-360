@@ -35,6 +35,17 @@
 
 ---
 
+## 2a. EstimateWorkloadForm（FR1.7）
+
+| Field | Value |
+|---|---|
+| Description | 上傳區上方選填工作負載／預算表單；有填欄位隨 multipart `workload_context` 送出 |
+| data-testid | `estimate-workload-form` |
+| Required | 否；未填不得阻擋上傳 |
+| Contents | 系統說明、資訊需求、月預算＋幣別、費用限制、出站流量、峰值頻寬、跨區流量、MAU／併發／API 數、熱／備份儲存、SLA、環境、區域、年成長、工作負載型態 |
+
+---
+
 ## 2. EstimateDropzone
 
 | Field | Value |

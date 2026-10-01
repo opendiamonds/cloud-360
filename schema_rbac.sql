@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS estimate_sets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   diagram_id INTEGER,
   note TEXT,
+  workload_context_json TEXT,
   is_saved BOOLEAN NOT NULL DEFAULT FALSE
 );
 

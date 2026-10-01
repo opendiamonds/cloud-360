@@ -290,20 +290,23 @@ def column_map(headers: Sequence[str], cloud: str) -> dict[str, int]:
             "currency": ("currency",),
         },
         "gcp": {
+            # Modern calculator: 品項 = service_display_name, 規格 = name.
+            # Legacy CSV keeps SKU description / SKU ID fallbacks.
             "itemName": (
-                "sku description",
-                "service description",
-                "name",
                 "service_display_name",
+                "service description",
+                "sku description",
                 "description",
             ),
             "spec": (
+                "name",
+                "sku description",  # legacy calculator component label
                 "sku id",
                 "sku",
                 "unit",
                 "region",
-                "service_display_name",
             ),
+            "catalogSku": ("sku id", "sku"),
             "serviceId": ("service_id", "service id"),
             "quantity": ("quantity", "usage"),
             "amount": (
@@ -320,18 +323,18 @@ def column_map(headers: Sequence[str], cloud: str) -> dict[str, int]:
                 "service name",
                 "service type",
                 "custom name",
-                "description",
                 "service category",
             ),
+            # Official Azure Pricing Calculator XLSX puts the human spec in
+            # Description (VM size, disk tier, …), not a SKU ID column.
             "spec": (
+                "description",
                 "sku",
                 "sku id",
                 "sku name",
                 "arm sku name",
                 "product name",
                 "service tier",
-                "region",
-                "service category",
             ),
             "quantity": ("quantity",),
             "amount": (

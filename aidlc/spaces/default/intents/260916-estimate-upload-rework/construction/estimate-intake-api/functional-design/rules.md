@@ -153,6 +153,19 @@ rules:
       查詢失敗、逾時、缺憑證、超過互異 SKU 上限 THEN 該列描述留空並繼續寫庫
     violation: 明細金額被目錄價覆寫；或缺描述導致整批 5xx
     source: FR13, FR5.5, AH-6, NFR10
+
+  - id: BR2.14
+    statement: 選填工作負載上下文須正規化後持久化，不得阻擋上傳
+    category: policy
+    applies_to: EstimateSet, IntakeHttpSurface
+    trigger: POST /api/cost/v1/sets 含 workload_context
+    logic: >
+      IF multipart 含 workload_context THEN 解析 JSON、僅保留允許鍵、數值鍵轉非負數、
+      文字截斷上限；未知鍵丟棄；
+      IF 缺欄、空字串、無效 JSON、或正規化後為空 THEN 存 null 並繼續上傳；
+      Detail 回應須回傳 workload_context（或 null）供 U7 組 prompt（FR5.4）
+    violation: 缺表單欄位導致 4xx；或未持久化卻聲稱已送 LLM
+    source: FR1.7, FR5.4
 ```
 
 ## 規則摘要表
@@ -172,3 +185,4 @@ rules:
 | BR2.11 | estimate_intake_*＋v1 |
 | BR2.12 | 稽核無金額／檔 |
 | BR2.13 | SKU 描述可寫、價格不可寫 |
+| BR2.14 | 選填 workload_context 正規化持久化 |
