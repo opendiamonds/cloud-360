@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS estimate_sets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   diagram_id INTEGER,
   note TEXT,
+  workload_context_json TEXT,
   is_saved BOOLEAN NOT NULL DEFAULT FALSE
 );
 
@@ -249,6 +250,7 @@ CREATE TABLE IF NOT EXISTS estimate_line_items (
   ordinal INTEGER NOT NULL,
   item_name TEXT,
   spec TEXT,
+  spec_description TEXT,
   quantity NUMERIC(18, 6),
   amount NUMERIC(18, 6),
   currency VARCHAR(16),

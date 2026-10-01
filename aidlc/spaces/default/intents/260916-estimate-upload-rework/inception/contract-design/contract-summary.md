@@ -52,6 +52,8 @@ shared-schema:
         ordinal: { type: integer, required: true, minimum: 0 }
         itemName: { type: string, required: false }
         spec: { type: string, required: false }
+        serviceId: { type: string, required: false, description: "GCP 等檔案內服務識別；供 FR13 查詢，可不落庫" }
+        specDescription: { type: string, required: false, description: "目錄規格說明；parse() 不填，intake 可於寫庫前補（FR13）" }
         quantity: { type: number, required: false, nullable: true }
         amount: { type: number, required: false, nullable: true }
         currency: { type: string, required: false, nullable: true }
@@ -130,6 +132,19 @@ paths:
                 cloud_overrides:
                   type: string
                   description: JSON 陣列，對應 files 次序；元素為 aws|azure|gcp|null
+                note:
+                  type: string
+                  nullable: true
+                workload_context:
+                  type: string
+                  description: >
+                    選填 JSON 物件（FR1.7／FR5.4）。允許鍵含 system_description、
+                    information_requirements、monthly_budget、budget_currency、
+                    cost_constraints、monthly_egress_gb、peak_bandwidth_mbps、
+                    cross_region_traffic、monthly_active_users、concurrent_users、
+                    api_requests_per_month、storage_hot_gb、storage_backup_gb、
+                    availability_sla、primary_regions、environment、growth_pct_year、
+                    workload_pattern；未知鍵丟棄；空物件等同省略
       responses:
         "201":
           description: 已建立；含解析明細與機械檢查（重算）
@@ -281,6 +296,7 @@ components:
         ordinal: { type: integer }
         item_name: { type: string, nullable: true }
         spec: { type: string, nullable: true }
+        spec_description: { type: string, nullable: true, description: "目錄價 API 查出的規格說明；查不到為 null（FR13）" }
         quantity: { type: number, nullable: true }
         amount: { type: number, nullable: true }
         currency: { type: string, nullable: true }
@@ -326,6 +342,11 @@ components:
               type: array
               maxItems: 3
               items: { $ref: "#/components/schemas/CloudEstimateView" }
+            workload_context:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: 上傳時選填的工作負載／預算上下文；無則 null（FR1.7／FR5.4）
     ShareEntry:
       type: object
       required: [user_id, username, shared_at]

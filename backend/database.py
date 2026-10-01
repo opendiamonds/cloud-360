@@ -399,8 +399,13 @@ def _ensure_estimate_intake_schema():
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           diagram_id INTEGER,
           note TEXT,
+          workload_context_json TEXT,
           is_saved BOOLEAN NOT NULL DEFAULT FALSE
         )
+        """,
+        """
+        ALTER TABLE estimate_sets
+          ADD COLUMN IF NOT EXISTS workload_context_json TEXT
         """,
         """
         ALTER TABLE estimate_sets
@@ -445,12 +450,17 @@ def _ensure_estimate_intake_schema():
           ordinal INTEGER NOT NULL,
           item_name TEXT,
           spec TEXT,
+          spec_description TEXT,
           quantity NUMERIC(18, 6),
           amount NUMERIC(18, 6),
           currency VARCHAR(16),
           parse_status VARCHAR(32) NOT NULL,
           raw_text TEXT NOT NULL
         )
+        """,
+        """
+        ALTER TABLE estimate_line_items
+          ADD COLUMN IF NOT EXISTS spec_description TEXT
         """,
         """
         CREATE INDEX IF NOT EXISTS ix_estimate_line_items_estimate

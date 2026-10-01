@@ -12,7 +12,9 @@
     "FR9.5",
     "FR9.7",
     "FR11.4",
-    "AH-6"
+    "AH-6",
+    "FR13.2",
+    "FR13.4"
   ],
   "coverage": [
     {
@@ -74,6 +76,16 @@
       "id": "AH-6",
       "status": "OK",
       "target": "BR5.8"
+    },
+    {
+      "id": "FR13.2",
+      "status": "OK",
+      "target": "BR5.11"
+    },
+    {
+      "id": "FR13.4",
+      "status": "OK",
+      "target": "BR5.11"
     }
   ],
   "reverse": [

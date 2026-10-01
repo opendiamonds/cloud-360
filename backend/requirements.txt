@@ -18,6 +18,7 @@ pyjwt
 langgraph
 langchain-core
 langchain-anthropic
+langchain-openai
 hypothesis
 openpyxl==3.1.5
 PyYAML>=6.0

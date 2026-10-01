@@ -13,6 +13,7 @@ tmp/
 temp/
 .cache/
 backend/cost/.pricing_offer_cache/
+backend/cost/.sku_desc_cache/
 
 # Environment and secrets
 .env

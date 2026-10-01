@@ -151,6 +151,7 @@ def _line_to_orm(estimate_id: int, line: dict[str, Any]) -> EstimateLineItem:
         ordinal=int(line["ordinal"]),
         item_name=line.get("itemName") or None,
         spec=line.get("spec") or None,
+        spec_description=line.get("specDescription") or None,
         quantity=Decimal(str(qty)) if qty is not None else None,
         amount=Decimal(str(amt)) if amt is not None else None,
         currency=line.get("currency"),
@@ -211,6 +212,7 @@ def _line_view(li: EstimateLineItem) -> dict[str, Any]:
         "ordinal": li.ordinal,
         "item_name": li.item_name,
         "spec": li.spec,
+        "spec_description": getattr(li, "spec_description", None),
         "quantity": float(li.quantity) if li.quantity is not None else None,
         "amount": float(li.amount) if li.amount is not None else None,
         "currency": li.currency,
@@ -271,8 +273,13 @@ def summary_view(set_row: EstimateSet, viewer_id: int) -> dict[str, Any]:
 
 
 def detail_view(set_row: EstimateSet, viewer_id: int) -> dict[str, Any]:
+    from cost.workload_context import loads_workload_context
+
     base = summary_view(set_row, viewer_id)
     base["estimates"] = [_cloud_estimate_view(est) for est in set_row.estimates]
+    base["workload_context"] = loads_workload_context(
+        getattr(set_row, "workload_context_json", None)
+    )
     return base
 
 
@@ -302,11 +309,16 @@ def create_estimate_set(
     diagram_id: int | None,
     cloud_overrides_raw: str | None,
     note: str | None = None,
+    workload_context_raw: str | None = None,
 ) -> EstimateSet:
     started = time.monotonic()
     validate_upload_files(files, payloads)
     if diagram_id is not None and diagram_id < 1:
         raise IntakeError(status.HTTP_400_BAD_REQUEST, DETAIL_BAD_DIAGRAM_ID)
+
+    from cost.workload_context import dumps_workload_context, normalize_workload_context
+
+    workload_ctx = normalize_workload_context(workload_context_raw)
 
     overrides = parse_cloud_overrides(cloud_overrides_raw, len(files))
     resolved: list[tuple[CloudId, ParseResult, str]] = []
@@ -344,6 +356,7 @@ def create_estimate_set(
         owner_user_id=owner.id,
         diagram_id=diagram_id,
         note=note,
+        workload_context_json=dumps_workload_context(workload_ctx),
         is_saved=False,
     )
     db.add(set_row)
@@ -366,6 +379,12 @@ def create_estimate_set(
         )
         db.add(est)
         db.flush()
+        try:
+            from cost.sku_catalog import enrich_line_specs
+
+            enrich_line_specs(cloud, lines)
+        except Exception:
+            logger.info("sku catalog enrich skipped cloud=%s", cloud)
         for line in lines:
             db.add(_line_to_orm(est.id, line))
         write_audit_event(
