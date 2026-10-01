@@ -40244,3 +40244,36 @@
 **Session**: 4b51ae80-6080-4913-8397-36bcb9710d11
 
 ---
+
+## Error Logged
+**Timestamp**: 2026-10-01T15:08:10Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-jump
+**Command**: aidlc-jump execute --stage feasibility --direction backward --reason H11=B：能力 11 的 MCP 封裝（[S13]=A）與能力 12 在 feasibility 三份產出中八個關鍵詞全部 0 命中；兩項皆在 feasibility 跑完後才新增而該站從未重跑（引擎標 Directly stale）。能力 11 的缺口為實質缺口——大腦端 MCP 封裝為 repo 內無前例的新整合機制。使用者於 approval-handoff 核可關卡選擇重跑本站。
+**Error**: Usage: execute --target <slug> --direction <forward|backward|redo> [--scope <scope>]
+
+---
+
+## Stage Jump
+**Timestamp**: 2026-10-01T15:08:16Z
+**Event**: STAGE_JUMPED
+**Direction**: BACKWARD
+**Source**: approval-handoff
+**Target**: feasibility
+**Scope**: agent-orchestration-brain
+**Details**: BACKWARD jump from approval-handoff to feasibility (1.3). Scope: agent-orchestration-brain.
+**Changed Upstream Artifacts**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/constraint-register.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-assessment.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/feasibility-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/feasibility/raid-log.md"]
+**Invalidated Downstream Artifacts**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/approval-handoff-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/decision-log.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/approval-handoff/initiative-brief.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/rough-mockups-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/user-flow.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/intent-backlog.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/scope-definition-questions.md","aidlc/spaces/default/intents/260920-orchestration-brain/ideation/scope-definition/scope-document.md"]
+**Invalidated Downstream Reviews**: ["aidlc/spaces/default/intents/260920-orchestration-brain/ideation/rough-mockups/wireframes.md#Review"]
+**Source Baseline**: sha256:ba3a0a876947b27d2e33a48cfdfbc606ee4bf7bc6d3595e3c01939152a2186b7
+
+---
+
+## Stage Start
+**Timestamp**: 2026-10-01T15:08:16Z
+**Event**: STAGE_STARTED
+**Stage**: feasibility
+**Agent**: aidlc-architect-agent
+**Source Baseline**: sha256:ba3a0a876947b27d2e33a48cfdfbc606ee4bf7bc6d3595e3c01939152a2186b7
+
+---
