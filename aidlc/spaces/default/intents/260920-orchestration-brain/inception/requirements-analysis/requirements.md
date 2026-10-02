@@ -276,6 +276,23 @@ Full rescan（廣度）＋ `kind: partial`（深度），33 個路徑實讀，**
 
 承 `[S16]`=A 的四項行為。畫面見 rough-mockups §22–§27。
 
+- **FR12.0**（**本輪由 user-stories 的 mob 回報補入，2026-10-02T03:10:29Z**｜**對齊修正，非本站新定案**）系統須有一張
+  **專案成員關係**的持久化結構，至少承載「哪個使用者屬於哪個專案」與**加入時間**
+  （FR12.4 的挑選規則依賴它）。
+  - **為什麼補這一條**：FR12.1–FR12.6 的四項行為**全部**讀這樣一張表，而原稿**沒有任何
+    一條要求建立它**。`user-stories` 的 mob 由開發與品質兩位**獨立**查出：
+    `grep -rl project_members` 全樹 **0 命中**；`projects`（`schema_rbac.sql:327`）只有
+    `id`／`name`／`owner_user_id`／`is_default`／`created_at`；`brain_router.py` 亦未碰
+    `projects`。故 **US12 的每一個 Given 在今天都不可構造**。
+  - **它讓 FR12.5a 從「保護」變成「廢掉既有功能」**，這是補這條的真正急迫性：沒有成員
+    關係表時，「某專案的唯一成員」等於**每一位使用者**——`hierarchy_migration.py:411`
+    為每位持圖使用者建立預設專案並設其為 owner。照 FR12.5a 字面實作，409 會對**每個
+    停用請求**命中，**使停用端點整支失效**，連帶廢掉它既有的兩道保護（見
+    `user_router.py:673` 上方「系統必須保留至少一位可編輯使用者角色的管理員」）。
+  - **觸發 `project.md` 的 blocking 規則**：新增表即觸發「`schema_rbac.sql` 與
+    `DEPLOY.md` 必須同步更新」，未完成不得標示相關 Construction／部署階段為完成。
+  - **本站不定** schema 細節（欄位型別、唯一約束、`ON DELETE` 行為、是否沿用
+    `diagram_shares` 的多對多形狀）——那是 `domain-design` 的工作，已由 OQ-14 承載。
 - **FR12.1** 專案建立者**自動**成為 `project_owner`，並因此具備 `project_admin`
   的能力，不需任何人指定。**可觀察形式**：剛建立的專案，其成員清單恰有一列、
   即建立者，角色欄顯示為專案管理者。[S16] 第 (1) 項[rough-mockups §23]
@@ -292,6 +309,13 @@ Full rescan（廣度）＋ `kind: partial`（深度），33 個路徑實讀，**
     `project_admin` 是怎麼來的。[scope ADR-0006 audit logging 面]
   - **FR12.4c** 新任管理者**下次進入產品時**，在入口頁頂部看到一則橫幅告知此事。
     該橫幅為**伺服器持久化**，不依賴能力 7 的推播。[M1]=B[requirements-analysis:c21]
+    - **2026-10-02T05:08:49Z 更正（來源：`user-stories` 的 `[D-17]`，由 `review-02` 的 `R-04` 指出本條
+      漏改）**：橫幅的落點由「**入口頁**頂部」改為「使用者的**落地頁**頂部（不限入口
+      頁）」。**理由**：`FR1.8`／Flow 4 的 `DefaultRedirect` 會把使用者送到他**自己的**
+      落地頁，而只有具 `C1 view` 的成員才會落在入口頁——照原文實作時，一個合法成員
+      被授予 `project_admin` 後可能**永遠看不到這則通知**，而通知的全部目的就是讓他
+      知道自己成了管理者。對應 AC 為 `stories.md` 的 `AC12.4.3`（已為落地頁形狀）。
+      本條只改**落點**，不改「伺服器持久化、不依賴能力 7」。
   - **FR12.4c-i**（**橫幅的清除端，本輪自檢補入**）橫幅須在使用者按下「知道了」後
     **不再出現**，且該已讀狀態同樣**伺服器持久化**——否則換一台裝置或清掉瀏覽器
     資料就會重新看到一則關於幾週前事件的通知。「查看成員」亦視為已讀。
@@ -309,11 +333,29 @@ Full rescan（廣度）＋ `kind: partial`（深度），33 個路徑實讀，**
     專案。保護在伺服器端，不得只做在前端。[RA-3]=A
   - **FR12.5b**（**測試義務**）FR12.5a 改動既有端點的回應契約，故依 `team.md` 的
     **B 規則**須補 `TestClient` 測試（斷言 status code 與回應欄位集合），並依 **A
-    規則**補 allow／deny 雙向案例。同時觸發 CI 的 **OpenAPI 漂移閘門**，須在同一個
-    PR 內重 dump `openapi.json`。
-  - **FR12.5c** 本條與資料庫現況一致：`schema_rbac.sql:330` 的 `owner_user_id` 為
-    `NOT NULL` 且無 `ON DELETE` 子句——資料庫今天就會擋下該刪除。FR12.5a **不需
-    放寬任何 schema 約束**，它補的是人話與清單。
+    規則**補 allow／deny 雙向案例。**關於 OpenAPI 漂移閘門的更正（2026-10-02T03:10:29Z）**：原文寫「同時觸發 CI 的
+    OpenAPI 漂移閘門，須在同一個 PR 內重 dump」——**這道閘門對本變更無效**。實測
+    `openapi.json` 的 55 個 operation 宣告的狀態碼只有 `{200:53, 422:45, 201:1, 204:1}`，
+    **非 2xx/422 的宣告數為 0**，而程式到處 raise 400/403/404。加一個 409 不會動到
+    spec，`dump_openapi.py --check` 保持綠燈，前端也產不出對應型別。
+    **改為 DoD**：FR12.5a 的 route decorator 必須**顯式**宣告
+    `responses={409: {"model": <列出專案的回應模型>}}`，使該契約真的進入 spec 與
+    產生的型別檔。此更正由 mob 的開發者查出（`V-08`）。
+  - **FR12.5c**（**2026-10-02T03:10:29Z 更正：原文的理由是錯的，結論保留**）FR12.5a **不需放寬任何
+    schema 約束**——這個結論成立，但原本給的理由不成立，且錯得會誤導實作者。
+    - **原文寫**：「`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE`——資料庫今天就會
+      擋下該刪除」，並以此作為 FR12.5a 的佐證。
+    - **錯在哪**：FR12.5a 掛的停用端點做的是 `target_user.is_active = request.is_active`
+      （`user_router.py:673`），一個 **UPDATE**；外鍵對 UPDATE **零效力**。那句話只對
+      硬刪除成立，與停用流程無關。**由 `user-stories` 的 mob 的開發與品質兩位獨立查出，
+      已自行複驗。**
+    - **更要緊的是方向相反**：`schema_rbac.sql` 對該欄的 COMMENT 逐字為
+      「Deletion behaviour of the referenced user is **deliberately NOT decided**
+      (OQ-H1, landing U7) — no `ON DELETE` clause」。所以「無 `ON DELETE`」是上游**刻意
+      留的未決項**，不是既有的保護。**原文把一個未決項讀成了 backstop。**
+    - **故 FR12.5a 沒有任何資料庫層的 backstop**，它是唯一的防線，須完整實作於應用層。
+      硬刪除路徑（`DELETE /{user_id}`）的行為仍由 OQ-H1／`domain-design` 決定，不在
+      本 FR 範圍。
 - **FR12.6**（**授權，兩層串聯**）專案資料的存取須同時通過兩層：全域
   `role_permissions`（能不能用這個功能）與 per-project 角色（能不能碰這個專案的
   資料），**任一層不過即拒**。既有 308 列全域矩陣**不動**；`project_admin` 不進
