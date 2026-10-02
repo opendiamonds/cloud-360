@@ -12,7 +12,7 @@
 每個元件的 `Props` 欄只列**畫面需要的資料**，不預設後端的回應形狀；型別契約的
 正式落點是 NFR5／N-1 要求的 WS 訊息型別來源（見 `mockups.md` 交接事項 H-2）。
 
-**測試識別碼**沿用既有慣例：kebab-case ＋ 功能前綴。既有 24 個的前綴為
+**測試識別碼**沿用既有慣例：kebab-case ＋ 功能前綴。既有 34 個（**2026-10-02T13:25:02Z 更正**：原寫 24，`design-system-mapping.md` §13 的自檢已實算為 34，本處同步；`review-02` 的 `R-06` 指出本輪自檢 5 的跨檔掃描漏了這個數字）的前綴為
 `estimate-*`／`advice-*`／`chat-*`／`cost-page`／`sidebar-toggle`；本 intent
 一律用 **`brain-*`** 前綴，記憶頁用 **`memory-*`**。
 
@@ -584,3 +584,184 @@ import `useSearchParams`、`:119` 已讀該參數、`:51`／`:242` 已寫它。
 - `CostAnswerCard.no-estimate-id` 與 `StreamingMessage.empty-stream` 兩個狀態的
   可達性皆未驗證（交接事項 H-6／H-7）；兩者皆保留為防禦性狀態，理由各自寫在該
   元件節內 [assumption]
+
+---
+
+# 修訂 1（2026-10-02T13:05:04Z）— 能力 11／12 的元件規格
+
+既有的元件規格（ContextBar、WorkItemStore、WorkItemDock、ClarifyCandidates、
+ObjectPicker、CreateConfirmCard、ObjectCreateAction、CostAnswerCard、
+StreamingMessage、MemoryPage）**全部有效、不回改**。格式沿用
+`.claude/knowledge/aidlc-design-agent/component-spec-template.md`。
+
+## 修訂 1 新增的三條不變量（供測試斷言）
+
+| # | 不變量 | 可被哪一層驗 |
+|---|---|---|
+| I-4 | **未填計數的兩個視圖讀同一份來源**：總覽籤的「未填需求欄位 N」與需求籤各組的 `x/y` 必須由同一次查詢的結果推導，不得各自發一次請求 | 行為面由 Playwright 驗（填一個欄位後切籤，計數為 N−1，`AC11.3.2`）；「同一份來源」本身由 code review 與共同 DoD 約束 |
+| I-5 | **一般成員視角不渲染任何變更控件**：成員頁在觀看者為一般成員時，`[+ 邀請成員]`、每列的 `[>]`、`[移出專案]` 三者皆不在 DOM 內（不是 `disabled`，是不存在） | Playwright 可直接斷言這三個 test-id 的數量為 0 |
+| I-6 | **改選橫幅的已讀狀態以事件為鍵**：同一使用者的第二次改選事件必須再次顯示橫幅 | 需要兩次事件的資料前提，驗證層為後端 `TestClient`；畫面層只驗「未讀時渲染、按下知道了後不再渲染」 |
+
+## ProjectList（專案清單）
+
+| 欄位 | 值 |
+|---|---|
+| Component | `ProjectList` |
+| Description | 使用者可見的專案清單，含建立入口與四種狀態 |
+| Category | display |
+
+### States
+
+| State | Description | Trigger |
+|---|---|---|
+| default | 有資料，每列可進入詳情 | 取得成功且清單非空 |
+| loading | 骨架區塊取代各列 | 請求中 |
+| empty | 說明 ＋「建立第一個專案」 | 取得成功且清單為空 |
+| error | 說明讀取失敗 ＋ 重試，**明寫這不是「你沒有專案」** | 請求失敗 |
+
+### Props / Inputs
+
+| Prop | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `projects` | `Project[]` | yes | — | 名稱、系統數、建立時間、其系統名清單 |
+| `state` | `'loading' \| 'ready' \| 'error'` | yes | — | 四種狀態的來源；`empty` 由 `ready` ＋ 空陣列推導，不另設一個值 |
+| `onOpen` | `(id) => void` | yes | — | 進入專案詳情 |
+| `onCreate` | `() => void` | yes | — | 開啟建立專案 |
+| `onRetry` | `() => void` | no | — | error 態才需要 |
+
+**資料抓取必須走兩層形狀**（`team.md` 的 `react-hooks/set-state-in-effect` 為
+**error 級**）：純抓取函式不碰 state，呼叫端在 `.then/.catch/.finally` 更新，
+`useEffect` 內用 `cancelled` flag。現例為 `AdminPage.tsx` 的 `fetchUserList`。
+
+### Accessibility
+
+| 需求 | 實作 |
+|---|---|
+| ARIA role | 清單為 `table`（有欄位語意）或 `list`；**不得**用 `div` 堆疊 |
+| 鍵盤 | 每列的進入動作為 `button`／`a`，Tab 依視覺順序；建立按鈕為 `main` 內第一個可聚焦元素 |
+| 狀態播報 | `loading` → `error` 的轉換需 `role="status"` 播報一次，否則螢幕閱讀器使用者只會發現骨架消失 |
+| 非顏色依賴 | 「尚無系統」為文字；錯誤態有 `(!)` 圖示 ＋ 文字，不只標紅 |
+
+## SystemCreateAction（建立系統，`[DM:D12]`＝A）
+
+| 欄位 | 值 |
+|---|---|
+| Component | `SystemCreateAction` |
+| Description | 總覽籤「系統 N」計數旁的建立入口 |
+| Category | navigation |
+
+**它為什麼是獨立元件而不是一個按鈕**：`[DM:D2]`＝D 已定案建立路徑有兩條（選單內
+就地建立 ＋ 對話式建立），而既有的 `ObjectCreateAction`（非視覺元件）是**共用寫入
+路徑**。本元件只是第三個**觸發點**，必須呼叫同一個 `ObjectCreateAction`，不得自建
+寫入路徑——否則三條路會有三種驗證與三種錯誤處理。
+
+| State | Description | Trigger |
+|---|---|---|
+| default | 可點擊 | 觀看者有建立權 |
+| hidden | 不渲染 | 觀看者無建立權（一般成員） |
+| pending | 建立中，按鈕進入 loading 並維持可聚焦 | 送出後 |
+
+**無障礙**：按鈕的可及名稱為「建立系統」完整字串，不得只有 `+`；與「系統 N」計數
+以 `aria-describedby` 關聯，使螢幕閱讀器讀出它要增加的是哪個數字。
+
+## MemberList（成員清單，`[DM:D9]`＝A）
+
+| State | Description | Trigger |
+|---|---|---|
+| admin-view | 含 `[+ 邀請成員]` 與每列 `[>]` | 觀看者為該專案的 `project_admin` |
+| member-view | **唯讀**：無邀請、無 `[>]`、無移出；頁尾一行說明 | 觀看者為該專案的一般成員 |
+| owner-only | 只有一人（§23 的空狀態 ＋ M3 預告） | 成員數為 1 |
+| loading / error | 沿用 `ProjectList` 的形狀 | — |
+
+| Prop | Type | Required | Description |
+|---|---|---|---|
+| `members` | `Member[]` | yes | 姓名、角色、最後活動 |
+| `viewerRole` | `'project_admin' \| 'member'` | yes | 決定 admin-view／member-view；**來源必須是伺服器回應，不得由前端推導** |
+| `onInvite` / `onOpenMember` | `fn` | no | 僅 admin-view 需要 |
+
+**`viewerRole` 為什麼不能前端推導**：前端若用「我的 user id 是否在管理者清單中」
+自行判斷，就把授權判定搬到了客戶端——而 `FR12.6` 的兩層串聯是**執行期**判定。
+畫面只消費伺服器給的結論。此約束對應不變量 I-5，並與 H-12 的交接事項同一件事。
+
+**「最後活動」欄的語意**：全域活動，非專案內活動（`schema_rbac.sql:64-65` 的
+COMMENT）。欄位標籤因此為「最後活動」，**不得**寫成「最後在本專案的活動」。
+
+## InviteMemberDialog（邀請對話框，含拒絕態）
+
+| State | Description | Trigger |
+|---|---|---|
+| default | 搜尋框 ＋ 角色單選 ＋ `(i)` 說明 | 開啟 |
+| searching | 搜尋框內 spinner | 輸入 ≥ 3 字後（`ux-guide.md`：auto-suggest after 3 characters） |
+| no-result | 「找不到這個人」 | 搜尋無結果 |
+| denied | **inline 錯誤於使用者欄位下方**，說明缺哪一項全域功能權限，對話框**不關閉** | 送出後伺服器以 `FR12.6a` 拒絕 |
+| submitting | 送出鍵 loading，欄位 `readonly` 但不 `disabled`（`disabled` 會讓它離開 Tab 序列） | 送出中 |
+
+**`no-result` 與 `denied` 的文案必須不同**：前者是「這個人不存在」，後者是
+「這個人存在但缺權限」——合併成一句會讓使用者去找錯的人解決問題。
+
+**無障礙**：`role="dialog"` ＋ `aria-modal="true"` ＋ Escape 關閉 ＋ 開啟時焦點進入
+搜尋框——這四項**照抄既有 5 個 modal**（`ShareModal.tsx:93-94`、`cost/EstimateSaveModal.tsx:67-69`
+等）即成立。**關閉時回到觸發它的 `[+ 邀請成員]`、以及焦點不得逸出對話框，這兩項既有
+程式都沒有**（實查：五個既有 modal 只做初始 `.focus()`），是新建
+（`interaction-design-patterns.md` 的 Modal 實作規則）。`denied` 的錯誤文字以
+`aria-describedby` 掛在使用者欄位上，並以 `role="alert"` 播報一次。
+
+## ReselectBanner（自動改選橫幅，`[DM:D10]`＝A）
+
+| State | Description | Trigger |
+|---|---|---|
+| single | 一則，寫出專案名 | 未讀事件數為 1 |
+| multi-collapsed | 「你成了 N 個專案的專案管理者」＋ `[v 展開]` | 未讀事件數 > 1 |
+| multi-expanded | 逐項列出專案名 ＋ `[前往]` | 使用者按下展開 |
+| hidden | 不渲染 | 無未讀事件 |
+
+| Prop | Type | Required | Description |
+|---|---|---|---|
+| `events` | `ReselectEvent[]` | yes | 每筆含事件 id 與專案名；**以事件為單位，不是以專案為單位**（同一專案可能改選兩次） |
+| `onAcknowledge` | `(eventIds) => void` | yes | 按「知道了」時把**當前顯示的全部事件 id** 標為已讀 |
+
+**為什麼 `events` 是事件而不是專案**（不變量 I-6）：已讀狀態若以使用者或專案為鍵，
+同一人第二次被改選就不會再看到橫幅。`FR12.4c-i` 只規定了寫入端與讀取端，**清除端
+未定**——本站以「事件 id 為鍵」作為畫面層的最小正確形狀，並已在 US11／US12 共同
+DoD 記為要求。
+
+**無障礙**：`role="status"`（**不是** `aria-live="polite"` 掛在隨頁面渲染的節點上
+——後者只播報掛載之後的變更，橫幅隨頁面一起渲染時不會被朗讀，`[D-11]`）；
+展開控件為 `button` ＋ `aria-expanded`；`[知道了]` 為 `button`，按下後焦點移至
+橫幅原本之後的第一個可聚焦元素（不得留在被移除的節點上）。
+
+## RecentConversations（最近的對話，`[DM:D8]`＝A）
+
+| State | Description | Trigger |
+|---|---|---|
+| default | 依時間分組（今天／7 天內／30 天內）＋ `[+ 新對話]` | 有歷史 |
+| collapsed | 只剩標題列與展開控件 | 使用者收合，或**窄螢幕預設** |
+| hidden | 不渲染 | 無歷史（首次使用） |
+| loading / error | 骨架三列／一行重試 | — |
+
+**窄螢幕預設收合是 `[DM:D8]`＝A 的代價的直接處置**：入口頁的垂直空間要共給脈絡列、
+本區與對話流；不預設收合會把對話推到首屏之外（§7／§10 的折疊規則）。
+
+**無障礙**：分組為 `h3` ＋ `list`（時間分組是語意結構，不是視覺分隔）；收合控件
+`aria-expanded` ＋ `aria-controls`；`[+ 新對話]` 的可及名稱為完整字串。
+
+## 修訂 1 補上的互動時序
+
+### 移出成員（`R-19` 指出 `user-flow.md` 零命中，本站補時序）
+
+1. 成員清單（admin-view）→ 點該列 `[>]` → 成員詳情（線框 §25）。
+2. 按 `[移出專案]` → **二次確認對話框**（§25 已定其為破壞性動作）。
+3. 確認 → 送出。兩種結果：
+   - **成功**：回到成員清單，該列消失（`AC12.6.2`）；以 `role="status"` 播報
+     「已將 <姓名> 移出專案」。
+   - **被擋下**（他是最後一位管理者，`AC12.3.2`）：**留在詳情頁**，於 `[移出專案]`
+     下方 inline 說明「這個專案會變成沒有人能管理」，並指向「先指定其他管理者」。
+4. **上游缺口（本站回報，不自行補上游）**：`user-flow.md` 的 Flow 8 第 4 步是
+   角色變更，全檔 `移出` **0 命中**；移出動作的唯一上游依據是線框 §25。交接 H-11。
+
+### 邀請被拒絕（`FR12.6a`）
+
+1. 成員清單 → `[+ 邀請成員]` → 對話框 default。
+2. 搜尋 ≥ 3 字 → searching → 選中一人 → 選角色 → `[送出邀請]` → submitting。
+3. 伺服器拒絕 → **denied**：對話框不關閉、角色選擇保留、inline 錯誤說明缺哪一項權限。
+4. 使用者改選他人 → 錯誤清除（**不是停留到下次送出**）→ 可再送出。

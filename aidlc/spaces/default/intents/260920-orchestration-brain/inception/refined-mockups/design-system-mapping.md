@@ -28,6 +28,13 @@
 **斷點的實際用量**（全 `src/` 掃描）：`md:` **19** 處、`lg:` **2** 處、`sm:` **1** 處、
 `xl:`／`2xl:` **0** 處。等於只有 `md:` 在真正工作——`[DM:D7]`=A 因此只用它。
 
+> **2026-10-02T13:27:03Z 更正（`review-02` 的 `R-05`，Minor）**：`md:` 的實際用量為 **22** 處，
+> 不是 19（`grep -ro 'md:' frontend/src | wc -l`）。`lg:` 2、`sm:` 1 兩者與原文相符。
+> **不影響 `[DM:D7]`＝A 的單一斷點決定**（`md:` 仍是唯二非零斷點中的壓倒性多數），
+> 但它是一條指令就能算出的數字。依 `refined-mockups:c3` 原句不改寫，在此記現值；
+> 同一數字在 `refined-mockups-questions.md` 的 V-1／D7／自檢表三處亦為 19，
+> 那是上一輪已核可的問答紀錄，同樣不回改。
+
 **本 intent 不新增任何 token**，不擴充 `@theme`，也**不刪除**死碼
 `tailwind.config.js`（刪它會動到既有 22 處斷點的語意，屬既有頁面的迴歸風險，
 而本 intent 對既有頁面零 e2e 掩護）。
@@ -200,3 +207,73 @@ unit／component 測試框架」與「把 `OPENROUTER_API_KEY` 放進 CI」）�
 - 既有骨架屏形狀未逐頁量測——`RouteGuard.tsx` 的 `LoadingScreen` 是整頁 spinner
   而非骨架屏，兩者不同；記憶頁與 `ObjectPicker` 的 `loading` 態究竟沿用哪一種
   未定（`mockups.md` 交接事項 H-5） [assumption]
+
+---
+
+# 修訂 1（2026-10-02T13:05:52Z）— 能力 11／12 的元件與 token 對映
+
+既有各節（token 真實來源、既有元件沿用決定、`BrainChat` 的新建理由、間距尺度、
+測試識別碼、無障礙既成慣例、`team-practices` 落點、圖表圖示、新增依賴）**全部有效**。
+
+## 11. 能力 11／12 的新元件與既有元件的對映
+
+| 新元件 | 沿用既有的什麼 | 為什麼不是全新 | 新增的部分 |
+|---|---|---|---|
+| `ProjectList` | `AdminPage.tsx` 的表格形狀與兩層抓取（`fetchUserList` → `.then` → state） | 它是「清單 ＋ 每列進入詳情」，與使用者清單同形 | 四種狀態的骨架屏（既有 `AdminPage` 無骨架，只有整塊文字） |
+| `ProjectDetailTabs` | `aria-expanded` 的 disclosure 形狀（`Sidebar.tsx:126/182/215`） | — | **籤列是 `role="tablist"`，本 repo 無既有前例**；方向鍵切換 ＋ Tab 進出面板為新建 |
+| `SystemCreateAction` | `ObjectCreateAction`（既有的共用寫入路徑，非視覺元件） | 它只是第三個觸發點 | 無新寫入路徑 |
+| `RequirementFieldGroup` | `LoginPage.tsx:158-193` 的 `label` ＋ `input` ＋ `focus:ring` 形狀 | 標準表單欄位 | `fieldset` ＋ `legend` 的分組（既有表單皆為平鋪，無分組前例） |
+| `MemberList` | 同 `ProjectList`；「最後活動」欄直接沿用 `LastActivityCell.tsx` | 欄位語意相同（全域活動） | `viewerRole` 驅動的兩種視角 |
+| `InviteMemberDialog` | **既有 5 個 modal 的 shell**：`ShareModal.tsx:93-94`、`cost/EstimateSaveModal.tsx:67-69`、`cost/EstimateShareModal.tsx:109-110`、`cost/EstimateCalculatorGuideModal.tsx:105-107`、`cost/EstimateHistoryDrawer.tsx:56-57`——五者皆 `role="dialog"` ＋ `aria-modal="true"` ＋ Escape 關閉 ＋ 開啟時把焦點送進面板 | modal 的外殼與 Escape 是既有形狀，照抄即可 | **焦點陷阱與焦點返還兩項既有程式都沒有**（實查：`ShareModal.tsx:47` 與 `EstimateSaveModal.tsx:25` 只做初始 `.focus()`，全樹無 trap、無返還觸發元素）——這兩項是新建 |
+| `ReselectBanner` | `EstimateAdvicePanel.tsx:278` 的 `sr-only` 播報區形狀 | 播報機制相同 | `role="status"`（既有 2 處皆為 `aria-live="polite"`，本元件**不能**用它，見下） |
+| `RecentConversations` | `Sidebar.tsx` 的群組收合形狀 | disclosure 相同 | 時間分組的 `h3` ＋ `list` 結構 |
+
+**兩個「無既有前例」是本修訂的真實成本**：`role="tablist"` 與 `role="status"`
+在本 repo 全樹**零命中**（實測：`grep -rl` 於 `frontend/src` 各回 0 個檔）。它們不是
+沿用而是新建，且都有明確的鍵盤與焦點契約（見 `accessibility-wcag.md` 的鍵盤樣式表）。
+
+> **2026-10-02T13:08:00Z 更正（本站自檢 3 查出，非審查指出）**：本段原寫「**三個**無既有前例」並把
+> `role="dialog"` 列入，逐字寫「全樹 `role="dialog"` 零命中」——**那是錯的**。實測
+> `role="dialog"` 與 `aria-modal` 各命中 **5 個檔**（見上表該列）。方向錯了：modal
+> 的外殼是**既有形狀可照抄**，真正缺的是**焦點陷阱與焦點返還**——這兩項五個既有
+> modal 都沒做（只有初始 `.focus()`）。更正後的成本敘述比原版低（少一個全新 role）
+> 但風險位置更精確：新建的不是 modal，是它的焦點契約。
+
+## 12. `aria-live="polite"` 與 `role="status"` 的分野（`[D-11]` 的具體落點）
+
+既有 2 處 `aria-live="polite"` 都掛在**已經存在於 DOM、內容之後才變更**的節點上
+（`EstimateAdvicePanel.tsx:278`）——那是該屬性的正確用法。
+
+`ReselectBanner` **不能**照抄：它是隨頁面一起渲染的，`aria-live` 只播報掛載**之後**
+的內容變更，所以初次渲染的橫幅不會被朗讀。處置是 `role="status"`（隱含 polite 且
+在初次渲染即為 live region），或維持 `aria-live` 但在掛載後才插入內容。
+**本站選前者**：後者把「什麼時候插入內容」變成一個時序細節，而時序細節在 React
+的 effect 排程下不保證。
+
+## 13. 修訂 1 的測試識別碼
+
+沿用第 5 節的 `brain-*` 前綴規則；能力 11／12 另立兩個前綴以免與入口頁混淆。
+
+> **第 5 節的「既有 24 個 `data-testid`」已過時（2026-10-02T13:08:00Z，自檢 3 查出）**：實算為
+> **34** 個（`grep -roh 'data-testid="[^"]*"' frontend/src | sort -u | wc -l`）。
+> 依 `refined-mockups:c3`，第 5 節為本站上一輪已核可的內容、**不回改**；在此記載
+> 現值。前綴慣例（kebab-case ＋ 功能前綴）未變，故該節的規則本身仍成立。
+
+| 前綴 | 用於 | 例 |
+|---|---|---|
+| `project-*` | 能力 11 的畫面 | `project-list`、`project-create`、`project-tab-overview`、`project-tab-requirements`、`system-create`、`requirement-field-{key}`、`requirement-unfilled-count` |
+| `member-*` | 能力 12 的畫面 | `member-list`、`member-invite`、`member-row-{id}`、`member-role-select`、`member-remove`、`invite-deny-reason`、`reselect-banner`、`reselect-banner-expand` |
+| `brain-*` | 入口頁（既有規則） | `brain-recent-conversations`、`brain-new-conversation` |
+
+**`member-remove`／`invite-deny-reason`／`reselect-banner` 三個是不變量的斷言點**
+（I-5／I-6 與 `AC12.6.2`／`AC12.5.1`）——改名會讓對應的 e2e 失去目標，故列在此處
+而非只寫在 `interaction-spec.md`。
+
+## 14. 修訂 1 不新增任何依賴
+
+能力 11／12 的全部新元件可由既有 React ＋ Tailwind ＋ `@theme` token 構成：
+籤列、modal、橫幅、骨架屏皆為自寫（`[US:U9]`＝A 已拒絕引入前端測試框架，本站
+同樣不引入 UI 套件）。**唯一的例外是無障礙驗證工具**——`[DM:D11]`＝A 要求把 axe
+掃描擴到新畫面，而 axe 是既有 Playwright 層的 plugin（`@axe-core/playwright`），
+不是新測試框架。該區別已在既有第 8 節與 `[DM:D6]`＝A 處理過，本修訂只擴大它的掃描
+範圍，不改變它的性質。
