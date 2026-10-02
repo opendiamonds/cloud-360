@@ -10,8 +10,16 @@ pydantic==2.13.4
 uvicorn
 httpx
 python-dotenv
+# PostgreSQL 驅動為 psycopg v3（套件名 `psycopg`，import 名也是 `psycopg`；
+# 與第二代的 `psycopg2-binary`／`import psycopg2` 是**兩個不同的套件**）。
+# 驅動由下方的 DATABASE_URL 以 `postgresql+psycopg://` **顯式指定**，不依賴
+# SQLAlchemy 的隱含預設——那個預設在 2.1 由 psycopg2 改為 psycopg(v3)
+# （本次實測：2.0.51 解析為 psycopg2、2.1.1 解析為 psycopg），而 ut 上
+# `sqlalchemy` 未釘 ＋ URL 是裸的 `postgresql://` ＋ 只裝 psycopg2-binary，
+# 三者合起來會讓全新 build 以 ModuleNotFoundError: No module named 'psycopg'
+# 啟動失敗。顯式指定之後，升版不再改變驅動選擇，故此處不需為了它而釘 sqlalchemy。
 sqlalchemy
-psycopg2-binary
+psycopg[binary]
 passlib[bcrypt]
 bcrypt
 pyjwt

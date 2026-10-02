@@ -20,7 +20,7 @@ if app_env == "local":
 
 # Database configuration
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/cloud360"
+    "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/cloud360"
 )
 
 db_url = DATABASE_URL

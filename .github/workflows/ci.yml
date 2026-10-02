@@ -259,7 +259,7 @@ jobs:
           JWT_SECRET: ci_only_not_a_real_secret
         run: python scripts/dump_openapi.py --check
 
-      # Unit suite (SQLite in-memory; psycopg2 mocked in tests/helpers.py)
+      # Unit suite (SQLite in-memory; psycopg mocked in tests/helpers.py)
       - name: Run unit tests
         env:
           JWT_SECRET: ci_only_not_a_real_secret
