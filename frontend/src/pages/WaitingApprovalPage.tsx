@@ -26,11 +26,18 @@ export const WaitingApprovalPage: React.FC = () => {
     }
   }, [isLoading, isPending, navigate]);
 
+  // 這裡曾經是 `.catch(() => setCatalog([]))`，與 LoginPage 同一個缺陷：抓取失敗
+  // 被收斂成空目錄，畫面上就是一個打開來沒有選項的下拉，使用者無從得知原因。
+  // 本頁已有 error 的顯示位置，直接沿用。
   useEffect(() => {
     fetch(apiUrl('/api/auth/roles/catalog'))
       .then((r) => r.json())
       .then((d) => setCatalog(d.roles || []))
-      .catch(() => setCatalog([]));
+      .catch((err: unknown) =>
+        setError(
+          `無法取得可申請的角色清單：${err instanceof Error ? err.message : '未知錯誤'}`
+        )
+      );
   }, []);
 
   const selectedRole = roleOverride ?? user?.pending_request?.requested_role ?? '';

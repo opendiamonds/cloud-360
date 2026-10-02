@@ -44,8 +44,11 @@ services:
   frontend:
     build:
       context: ../frontend
-      args:
-        VITE_API_BASE_URL: http://localhost:8090
+      # 刻意不傳 VITE_API_BASE_URL：bundle 走同源相對路徑 `/api/...`，由這個容器
+      # 自己的 nginx 代理到 backend:8000。原本這裡烤進 `http://localhost:8090`，
+      # 把站台綁死在 localhost 這一個主機名上——從 http://127.0.0.1:8090 開同一個
+      # 站台時，每一個 API 呼叫都是跨來源，而下方的 CORS_ORIGINS 只放行 localhost，
+      # 於是連登入都送不出去，註冊頁的角色下拉更是直接空白。
     ports:
       - "8090:80"
     depends_on:
