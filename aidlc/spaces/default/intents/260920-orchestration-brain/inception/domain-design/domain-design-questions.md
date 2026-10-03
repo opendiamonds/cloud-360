@@ -14,6 +14,7 @@
 | `[US:U<n>]` | user-stories 的作答 |
 | `[DM:D<n>]` | refined-mockups 的作答 |
 | `[DD:E<n>]` | **本站新增**——domain-design 的作答（用 `E` 避開既有 D／DM 撞號） |
+| `[E<n>]`（**無** `DD:` 前綴） | **修訂輪**的 domain-design 作答，與上一列是**兩套不同的編號空間**：原輪用到 `E9` 為止，修訂 1 自 **`E11`** 起（`E10` 保留不用，避免與原輪最後一號相鄰造成誤讀）。**下一次修訂請從 `E16` 起**——本表是唯一要查的地方，不必回去數標題 |
 | `[kb:<檔>]` | codekb 的事實，附其證據標記 |
 | `[實測]` | 本站對 repo 現況的唯讀查證 |
 
@@ -343,3 +344,186 @@ Does this all look correct before I generate the artifact?
      embeddings 端點、OQ-1 本站未定案並轉移 units-generation）、以及 Ollama 主機
      資源未實測且文件無記載一事、七項交接事項 H-1…H-7。 -->
 
+---
+
+> **編號空間的更正（2026-10-02T23:26:55Z，`review-02` 的 `R-04`）**：修訂 1 原本把五個新問題編為
+> `E6`–`E10`，而 `E6`–`E9` 在原輪**已被用於完全不同的問題**（原 `E6`＝Redis session
+> 存活期、`E7`＝語意記憶檢索、`E8`＝「需求」實體承載、`E9`＝本機 embedding 切換），
+> 當時只靠「有無 `DD:` 前綴」區分——而那個區分**未寫進慣例表**，一旦有人誤加或誤刪
+> 前綴，追溯就會指向錯誤的問題。已改為 **`E11`–`E15`**（原輪用到 `E9` 為止，故
+> `E11` 起無碰撞），`components.md`／`decisions.md` 的裸 `[E#]` 引用同步更新。
+
+# 修訂 1（2026-10-02T22:47:42Z）— 能力 11／12／13 的元件邊界
+
+## 為什麼有修訂 1
+
+本站三份產出於 2026-09-25 完成並通過審查，但那一輪早於 `scope-document.md` 修訂
+3／4（能力 11／12）與 user-stories 修訂 1（US11／US12／US13）。機械實測：
+`能力 11`／`能力 12`／`project_members`／`成員`／`需求欄位`／`MCP`／`自動改選`／
+`併發`／`FR11`–`FR13`／`US11`–`US13`／`_progress_queue`／`邀請` **16 個關鍵詞在三份
+產出合計 0 命中**；追溯表只有 **20 筆**上游 id，而 `requirements.md` 現有 **76 個**
+FR／NFR 識別字。既有六個元件與九則 ADR **全部有效、不回改**。
+
+## 上游的狀態標記（本站消費的兩份都不乾淨，如實記載）
+
+| 上游 | 狀態 | 具體影響 |
+|---|---|---|
+| `requirements.md` | **`directly stale`** | 本 session 把 `FR12.4c` 的橫幅落點由「入口頁」就地更正為「使用者的落地頁」（審查 `R-04` 要求），該更正**尚未經 requirements-analysis 的關卡重新核可**。本站的設計以更正後的版本為準，並在此標明 |
+| `stories.md` | **`Revalidate`** | 因上述 `requirements.md` 的更正而被標記；內容本身已於 2026-10-02 核可（31 則／106 條 AC） |
+
+**不假裝上游是乾淨的**：若 requirements-analysis 之後重跑並改變 `FR12.4c` 的落點，
+本站與 `ReselectionEvent` 相關的設計須一併重審。
+
+## 本站查出的一個直接衝突（**必須先解，否則下游拿到兩個互斥的模型**）
+
+**`ADR-009` 與能力 11 直接牴觸。** `ADR-009` 的 Decision 逐字為「**不建
+`Requirement` 實體**、不建需求↔系統的多對多關聯表」，改以 `DiagramChangeRecord`
+的 `requirementSummary`（**自由文字摘要**）與 `requirementLabel`（**輕量標籤**）承載。
+
+而能力 11 要求的是**結構化的固定欄位**：`[R12]`＝D 逐字否決了自由鍵值對
+（理由是「自由欄位會讓同一個概念出現多個名字，而畫面無從分辨」），`FR11.2` 要求
+按 agent 分組的固定欄位、`FR11.3` 要求未填計數、線框 §17 畫出 SLA／尖峰 TPS／
+使用客群／月預算上限／計費區域五個具名欄位。
+
+**兩者對「需求」這個詞指的不是同一件事**：`ADR-009` 的「需求」是**溯源概念**
+（哪個需求驅動了這次架構圖變更），能力 11 的「需求欄位」是**agent 需要的架構假設**
+（SLA、TPS、預算）。這是 `ddd-patterns.md` 點名的同名不同義（bounded context 的
+命名碰撞），也正是 `project.md` 記著的「會議結論點名的識別字先查證是否已被佔用」。
+**怎麼收是 E12 的問題。**
+
+## 已由上游定案、本站不重問
+
+| 已定案項 | 定案內容 | 來源 |
+|---|---|---|
+| 三層階層 | 專案 → 系統 → 架構圖 | `[RA:FR9.1]`、`AC9.1.1`、`ADR-002`／`ADR-003` |
+| 需求欄位的形狀 | **按 agent 分組的固定欄位**，非自由鍵值對 | `[R12]`＝D、`FR11.2`、線框 §17 |
+| MCP 的進程形狀 | **獨立進程**，對外帶使用者 token 呼叫既有 API | `[F16]`＝B（取代 `[S13]`＝A） |
+| MCP 的暴露範圍 | **不得對外暴露**，僅供同主機的大腦進程連接 | `requirements.md:614` |
+| token 不得當工具引數 | 工具 schema 的 properties 不含憑證名稱 | `FR11.5`、`C-T11` |
+| 兩層授權串聯 | 全域功能權限 ＋ 專案成員資格，任一層不過即拒 | `FR12.6` |
+| 自動改選的挑選規則 | **最早加入的成員**，且挑選結果須排列不變 | `[RA-1]`＝A、`FR12.4`／`FR12.4a` |
+| 併發修復的鍵 | **per-request**，不得用 `thread_id`（per-user）或不存在的「session」 | `[V-01]`、US13 的 DoD |
+| 成員頁的可見性 | 一般成員看得到、清單唯讀；控件**不在 DOM 內** | `[DM:D9]`＝A、不變量 I-5 |
+
+## E11. 專案成員管理要新建元件，還是擴充既有的 `ProjectHierarchy`？
+
+`ProjectHierarchy` 已擁有 `Project`／`System`／`DiagramChangeRecord` 三個實體，
+而能力 12 新增的是成員關係與角色。
+
+- **A. 新建 `ProjectMembership` 元件**，擁有 `ProjectMember` 實體，`depends_on`
+  `ProjectHierarchy`（讀專案是否存在）。理由：成員關係的**變更率與生命週期**與
+  階層不同（階層是建立後少動，成員是持續進出），且它承載**授權判定**這個與
+  階層無關的職責。`architecture-guide.md` 的邊界判準：單一可命名的職責、擁有自己
+  的資料、可獨立測試。代價：多一個元件邊界、多一條 `depends_on` 邊。
+- **B. 擴充 `ProjectHierarchy`**，把 `ProjectMember` 加為它的第四個實體。理由：
+  成員**附屬於**專案，沒有專案就沒有成員；併在一起可避免一個「只有一張表」的元件。
+  代價：`ddd-patterns.md` 逐字「若兩個概念因**不同理由**而改變，它們屬於不同的
+  bounded context」——成員變更的理由（人員進出、授權調整）與階層變更的理由
+  （新系統、新架構圖）無關；且 `ProjectHierarchy.behaviour` 已在上一輪因「不得有
+  任何繞過 `require_story_action` 的路徑」與它自己的 `sync` 入邊自相矛盾而被審查打回
+  （見 `project.md` 的該條教訓），再加一個職責會讓那段 behaviour 更難寫對。
+- **C. 新建 `ProjectMembership` 且**不**依賴 `ProjectHierarchy`**（只持有
+  `projectId` 而不驗證它存在）。代價：孤兒成員列無人擋，而 `AC12.1.3`（非成員看不到
+  專案）需要兩者一起判——把關聯完整性推給資料庫外鍵等於讓它在應用層不可測。
+
+`[Answer]`: A — 新建 ProjectMembership 元件，depends_on ProjectHierarchy
+<!-- 作答時間 2026-10-02T23:06:33Z（以 `date -u` 取值）。選項本文已於提問前寫入本檔，選單內容與本檔逐字一致。 -->
+
+## E12. `ADR-009` 與能力 11 的「需求」衝突怎麼收？
+
+見上方「本站查出的一個直接衝突」。三個選項的**可逆性差異很大**。
+
+- **A. 兩者並存且改名**：能力 11 的東西叫 **`SystemRequirementField`**（掛在系統之下、
+  按 agent 分組的固定欄位），`ADR-009` 的 `requirementSummary`／`requirementLabel`
+  **原樣保留**於 `DiagramChangeRecord`。新增一則 ADR 明寫兩者是不同概念、各自的
+  讀寫端，並在兩處都標註「**不要把這兩個『需求』當成同一件事**」。代價：產品裡有
+  兩個都叫「需求」的東西，使用者介面上必須用不同措辭（線框 §17 用「需求籤」，
+  `DiagramChangeRecord` 用「最近變更」——實際上**線框已經這樣區分了**）。
+- **B. 取代 `ADR-009`**：把 `DiagramChangeRecord` 的自由文字摘要改為指向
+  `SystemRequirementField`。代價：`ADR-009` 是**使用者自己在 `[DD:E2]` 重新框定後
+  定案的**（逐字「需求不用被完整紀錄，只要讓架構圖在被異動時被紀錄……紀錄內容只要
+  是摘要即可」），取代它等於推翻使用者的定案，依 `project.md` 的規則必須先界定
+  反轉範圍並由使用者裁決——而本題就是那個裁決點。且兩者的**基數不同**：一次架構圖
+  變更可能由多個需求驅動，而需求欄位是每個系統一組固定欄位，硬接會製造一個
+  多對多關聯表，正是 `ADR-009` 明文拒絕的東西。
+- **C. 把需求欄位掛在 `System` 實體上**（`ProjectHierarchy` 擁有，不新建實體）。
+  代價：`FR11.3` 的未填計數、`FR11.4`–`FR11.6` 的 MCP 讀寫、`FR12.4b` 式的「誰寫」
+  稽核都要掛在 `ProjectHierarchy` 上，使它同時擁有階層、變更紀錄與 agent 契約三種
+  職責；且欄位集合會隨新 agent 上線而變（線框 §17 明寫「新 agent 上線要同步加一組
+  定義」），那個變更率與 `System` 完全不同。
+
+`[Answer]`: A — 兩者並存且改名：能力 11 的叫 SystemRequirementField，ADR-009 的 requirementSummary／requirementLabel 原樣保留
+<!-- 作答時間 2026-10-02T23:06:33Z（以 `date -u` 取值）。選項本文已於提問前寫入本檔，選單內容與本檔逐字一致。 -->
+
+## E13. per-project 授權判定（`H-12`）要落在哪一層？
+
+`[DM:D9]`＝A 要求畫面依「我在這個專案的角色」決定控件可見性，而既有的
+`CapabilityRoute` 管的是**能力層**（story id）。不變量 `I-5` 另要求一般成員視角的
+變更控件**不在 DOM 內**，所以前端必須收到一個明確的結論而不是自己推導。
+
+- **A. `ProjectMembership` 提供判定方法**，每個需要它的元件 `depends_on` 它。
+  理由：授權判定與成員資料同屬一個 bounded context，資料與規則不分離；
+  `architecture-guide.md` 的「擁有自己的資料」判準成立。代價：每個消費端都多一條
+  `depends_on` 邊，且**必須**在設計上禁止繞過（上一輪 `ProjectHierarchy` 正是在這裡
+  自相矛盾——behaviour 寫「不得同進程直呼」而機讀目錄自己宣告了 `sync` 入邊）。
+- **B. 新建獨立的 `ProjectAuthorization` 元件**，只做判定、不擁有資料（讀
+  `ProjectMembership`）。理由：判定邏輯有自己的變更率（將來可能加入繼承、群組）。
+  代價：一個不擁有資料的元件正是 `architecture-guide.md` 列為**紅旗**的
+  「pass-through proxy」；且它與 `ProjectMembership` 會永遠一起改。
+- **C. 每個元件自己判**（各自讀成員資料並比對角色）。代價：授權規則出現 N 份副本，
+  而 `team.md` 的「單一真實來源」逐字要求「同一份事實已存在於程式中時，新增第二份
+  物化前必須先確認是否有既有常數或 API 可直接使用」；更實際的問題是 `FR12.6` 的
+  兩層串聯會在每個元件裡被重寫一次，而其中任一處寫錯就是一個授權繞過。
+
+`[Answer]`: A — ProjectMembership 提供 per-project 授權判定方法
+<!-- 作答時間 2026-10-02T23:06:33Z（以 `date -u` 取值）。選項本文已於提問前寫入本檔，選單內容與本檔逐字一致。 -->
+
+## E14. MCP 橋接是獨立元件，還是 `BrainGateway` 的一部分？
+
+`[F16]`＝B 已定案它跑**獨立進程**，對外帶使用者 token 呼叫既有 API；
+`requirements.md:614` 已定案它**不得對外暴露、僅供同主機**。本題只問**元件身分**
+（domain-design 的元件是「你寫的程式」，不是部署拓樸——拓樸屬 units-generation）。
+
+- **A. 新建 `McpBridge` 元件**：擁有工具 schema 的宣告與 token 轉遞路徑，
+  `depends_on` 既有 API（以 `external_dependencies` 記 HTTP 呼叫）。理由：它的
+  **消費者不是人而是 agent**，介面形狀（MCP 工具宣告）與 `BrainGateway` 的
+  WebSocket 完全不同；且 `C-T11` 的「token 不得當工具引數」是**它專屬**的硬約束，
+  掛在獨立元件上才有明確的斷言落點（`AC11.4.2` 的白名單斷言）。
+- **B. 併入 `BrainGateway`**：兩者都是「對外的入口」。代價：`BrainGateway` 的
+  behaviour 會同時描述 WebSocket 的使用者連線與 MCP 的 agent 連線，而兩者的認證
+  主體（使用者 JWT vs 代使用者的 token）、暴露範圍（對外 vs 僅同主機）與失敗模式
+  都不同——`architecture-guide.md` 的紅旗之一正是「兩個元件總是一起部署」的反面：
+  **一個元件承擔兩種不該一起變的理由**。
+- **C. 不建元件，記為 `external_dependencies`**。代價：MCP server 是**我們要寫的
+  程式**，不是我們使用的第三方服務；stage 檔逐字「Infrastructure, databases, caches,
+  queues, and third-party services are `external_dependencies` — never components」，
+  反過來說**我們寫的程式必須是元件**。
+
+`[Answer]`: A — 新建 McpBridge 元件
+<!-- 作答時間 2026-10-02T23:06:33Z（以 `date -u` 取值）。選項本文已於提問前寫入本檔，選單內容與本檔逐字一致。 -->
+
+## E15. `FR13` 的 per-request 進度通道要不要成為元件？
+
+`FR13.1` 要求把 `design_agent.py` 的模組層全域 `_progress_queue` 改為 per-key
+（鍵為 per-request），`FR13.2`／`FR13.3` 是它的可觀察面，US13 的 DoD 另要求一併
+清理該檔的三個模組層可變狀態、以及 `wa_collab_orchestrator.py:79` 補傳鍵。
+`H-13` 層級的提醒：既有 agent 模組（`design_agent`／`wa_collab_orchestrator`）在
+本站的機讀目錄裡是「既有」而**不是元件**。
+
+- **A. 新建 `ProgressChannel` 元件**：擁有 per-request 的進度佇列與其清除端，
+  既有 agent 模組與 `BrainGateway` 都 `depends_on` 它。理由：它是**本 intent 要寫的
+  新程式**，且「誰清」這一腿目前無人負責（US13 的 DoD 只要求鍵是 per-request、
+  **沒有要求清除**，而只寫不刪會把跨使用者錯送換成無上界記憶體成長——這是我在
+  refined-mockups 自檢 2 查出的）。獨立元件讓清除端有明確的擁有者。
+- **B. 修在既有 agent 模組內，不成為元件**：它是一個 bug fix，不是新建構塊。
+  代價：「誰清」仍然無人負責，且 `BrainGateway` 要消費這些事件卻沒有任何契約——
+  `FR13.2` 的「A 的事件集合與 B 的事件集合互斥」會變成一條沒有元件可掛的斷言。
+- **C. 併入 `WorkOrchestrator`**（它已負責交辦與狀態事件轉譯）。理由：進度事件
+  本就是它轉譯的那些事件的來源。代價：`WorkOrchestrator` 的 `behaviour` 會同時
+  描述「交辦給哪個 agent」與「agent 的進度怎麼隔離」，而後者是**既有 agent 的
+  內部狀態**；更實際的問題是 `FR13` 的修復範圍橫跨兩支既有檔案
+  （`design_agent.py`、`wa_collab_orchestrator.py`），把它併進一個新元件的
+  responsibilities 會讓「這個元件完成了嗎」同時指涉新程式與既有程式的改動。
+
+`[Answer]`: A — 新建 ProgressChannel 元件，擁有 per-request 進度佇列與其清除端
+<!-- 作答時間 2026-10-02T23:06:33Z（以 `date -u` 取值）。選項本文已於提問前寫入本檔，選單內容與本檔逐字一致。 -->

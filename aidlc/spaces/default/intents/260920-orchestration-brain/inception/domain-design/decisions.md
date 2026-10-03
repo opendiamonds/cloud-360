@@ -405,3 +405,299 @@ ADR-007 定案 staging 用 Ollama，但本機開發未必有它（使用者指�
 - **只做摘要、不做標籤**：無法回答「這個需求影響過哪些圖」，而使用者原文明確提到
   「一個需求有可能影響多個系統」——完全不留標籤就失去那個面向。
 - **本 intent 不做、只記入文件**：使用者未選此項。
+
+---
+
+# 修訂 1（2026-10-02T23:11:16Z）— ADR-010 至 ADR-016
+
+既有 `ADR-001`–`ADR-009` **全部有效**。`ADR-009` 未被取代，但其適用範圍由
+`ADR-011` 明確界定。
+
+## ADR-010：專案成員管理獨立為 `ProjectMembership` 元件
+
+### Context
+
+能力 12（`FR12.0`–`FR12.6b`）新增成員關係、角色與自動改選。既有 `ProjectHierarchy`
+已擁有 `Project`／`System`／`DiagramChangeRecord` 三個實體，把成員加為第四個實體是
+表面上最省的做法。
+
+兩個查證過的事實使它不是最省的：① `ddd-patterns.md` 逐字「若兩個概念因**不同理由**
+而改變，它們屬於不同的 bounded context」——成員變更的理由（人員進出、授權調整）與
+階層變更的理由（新系統、新架構圖）無關。② `ProjectHierarchy.behaviour` 在
+domain-design 的上一輪**已因自相矛盾被審查打回**（它寫「不得有任何繞過
+`require_story_action` 的路徑，含同進程直呼 service 層」，而同一份機讀目錄自己宣告了
+`SessionContext --sync--> ProjectHierarchy` 與 `WorkOrchestrator --sync--> ProjectHierarchy`
+兩條 `sync` 入邊——`sync` 就是同進程呼叫）。再給它一個授權職責會讓那段 behaviour
+更難寫對。
+
+### Decision
+
+新建 `ProjectMembership` 元件，擁有 `ProjectMember` 與 `ReselectionEvent` 兩個實體，
+`depends_on` `ProjectHierarchy`（驗證專案存在、讀 `ownerUserId`）。
+
+### Consequences
+
+**正面**：成員與階層各自有清楚的擁有者；授權判定（`ADR-012`）有一個明確的落點；
+`ProjectHierarchy` 的 behaviour 不需再擴寫。
+
+**負面**：多一個元件邊界與一條 `depends_on` 邊；`AC12.1.3`（非成員看不到專案）需要
+兩個元件一起判，故兩者的交易邊界必須明訂——**建立專案與寫入建立者的成員資格必須在
+同一個交易內**，否則會出現沒有管理者的專案。此約束已寫進 `ProjectMembership.behaviour`。
+
+**2026-10-02T23:28:04Z 補入（`review-02` 的 `R-03`，Major）——本 ADR 漏了一條 blocking 規則**：
+`ProjectMembership` 新增 **`project_members`** 與 **`reselection_events`** 兩張表，
+而 `project.md ## Mandated` 逐字要求新增表時**必做 1**（`schema_rbac.sql` 同步）與
+**必做 2**（`DEPLOY.md` 同步）為 **blocking，未完成不得標示相關階段完成**。
+**這不是沒注意到那條規則**——同一份檔案的 `ADR-009` 與 `N-11` 都正確點名了它
+（`ADR-009` 逐字「並觸發 `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步」），
+而本輪新增的表漏套用。兩張表的 DDL 須以 `IF NOT EXISTS` 等可重跑安全寫法寫進
+`schema_rbac.sql` 的適當區塊並補 COMMENT；`DEPLOY.md` 的「這支 SQL 會建立的表／
+欄位」表須同步，並補建議的 `psql` 驗證指令。見交接 `DG-9`。
+
+### Alternatives Rejected
+
+- **擴充 `ProjectHierarchy`**（`[E11]` 選項 B）：見 Context 的兩項理由。
+- **新建但不依賴 `ProjectHierarchy`**（選項 C）：孤兒成員列無人擋，而把關聯完整性
+  推給資料庫外鍵等於讓它在應用層不可測。
+
+## ADR-011：兩個「需求」並存且改名，`ADR-009` 的適用範圍就此界定
+
+### Context
+
+**本站查出 `ADR-009` 與能力 11 直接牴觸。** `ADR-009` 的 Decision 逐字為「不建
+`Requirement` 實體、不建需求↔系統的多對多關聯表」，改以 `DiagramChangeRecord` 的
+`requirementSummary`（自由文字摘要）與 `requirementLabel`（輕量標籤）承載。
+
+而能力 11 要求**結構化的固定欄位**：`[R12]`＝D 逐字否決自由鍵值對（理由是「自由欄位
+會讓同一個概念出現多個名字，而畫面無從分辨」），`FR11.2` 要求按 agent 分組的固定
+欄位，`FR11.3` 要求未填計數，線框 §17 畫出 SLA／尖峰 TPS／使用客群／月預算上限／
+計費區域五個具名欄位。
+
+**關鍵是兩者對「需求」指的不是同一件事**：`ADR-009` 的是**溯源概念**（哪個需求驅動
+了這次架構圖變更），能力 11 的是**agent 需要的架構假設**。這是 `ddd-patterns.md`
+點名的同名不同義（bounded context 的命名碰撞），也正是 `project.md` 記著的
+「會議結論點名的識別字先查證是否已被佔用、既有語意是什麼」。
+
+`ADR-009` 是**使用者在 `[DD:E2]` 重新框定後自己定案的**（逐字「需求不用被完整紀錄，
+只要讓架構圖在被異動時被紀錄……紀錄內容只要是摘要即可」），故依 `project.md` 的
+`approval-handoff:e2923632`，反轉它須由使用者裁決而不得由 AI 吸收。本站把它出成
+`[E12]`。
+
+### Decision
+
+**兩者並存且改名**（`[E12]`＝A）。能力 11 的東西命名為 `SystemRequirementField`，
+由新元件 `RequirementRegistry` 擁有（`ADR-009` 的那一組原樣保留在
+`DiagramChangeRecord`）。兩處都標註「不要把這兩個『需求』當成同一件事」。
+
+**`ADR-009` 未被取代**；它的適用範圍自此界定為「架構圖變更的來源需求**溯源摘要**」，
+不涵蓋 agent 需要的架構假設欄位。
+
+### Consequences
+
+**正面**：`ADR-009` 與使用者在 `[DD:E2]` 的定案**不被推翻**；`[R12]`＝D 的固定欄位
+要求得到一個名字不衝突的落點；兩者的基數差異（一次變更可由多個需求驅動 vs 每系統
+一組固定欄位）不需要被硬接成多對多關聯表。
+
+**負面**：產品裡有兩個都叫「需求」的東西。實務上**線框已經區分了**（§17 是「需求籤」、
+§16 是「最近變更」），但**文件與對話中必須持續用全名**，否則下一個人會把兩者混為
+一談。這是真實的持續成本，不是一次性的。
+
+**2026-10-02T23:28:04Z 補入（`review-02` 的 `R-03`）**：`RequirementRegistry` 新增
+**`system_requirement_fields`** 一張表，同樣觸發 `schema_rbac.sql` ＋ `DEPLOY.md` 的
+**blocking** 同步（理由同 `ADR-010` 的補入段）。`ADR-015` 定下的清空語意
+（保留列、`value` 為 `null`、`clearedAt` 有值）**必須反映在該表的 DDL 上**——
+`value` 須可為 null、`clearedAt` 為獨立欄位，否則「從未填過」與「清空」在資料層
+無法區分。見交接 `DG-9`。
+
+**中性**：`SystemRequirementField` 的**擁有元件**（`RequirementRegistry`）是本站的
+判定而非使用者的直接選擇——`[E12]` 的選項 C（由 `ProjectHierarchy` 擁有）被否決，
+故「不由 `ProjectHierarchy` 擁有」是定案的直接後果；**新元件的名字是我取的**，
+若團隊偏好別的名字，改名的成本僅限本站與下游的識別字。
+
+### Alternatives Rejected
+
+- **取代 `ADR-009`**（`[E12]` 選項 B）：推翻使用者自己的定案；且兩者基數不同，硬接
+  會製造 `ADR-009` 明文拒絕的多對多關聯表。
+- **掛在 `System` 實體上**（選項 C）：會讓 `ProjectHierarchy` 同時擁有階層、變更紀錄
+  與 agent 契約三種職責；且欄位集合隨新 agent 上線而變，變更率與 `System` 完全不同。
+
+## ADR-012：per-project 授權判定由 `ProjectMembership` 提供
+
+### Context
+
+`[DM:D9]`＝A 要求成員頁依「我在這個專案的角色」決定控件可見性，不變量 `I-5` 要求
+一般成員視角的變更控件**不在 DOM 內**（不是 `disabled`）。既有的 `CapabilityRoute`
+管的是**能力層**（story id），表達不了 per-project 判定。refined-mockups 把這個缺口
+列為交接 `H-12`。
+
+### Decision
+
+判定方法由 `ProjectMembership` 提供（`[E13]`＝A），消費端以 `depends_on` 取用。
+判定結論由**伺服器**產生並交給前端，前端不得自行推導。全域那一層仍由既有的
+`require_story_action` 承載，本元件不重新實作它（`FR12.6` 的兩層串聯）。
+
+### Consequences
+
+**正面**：授權規則只有一份；資料與規則不分離。
+
+**負面**：每個消費端多一條 `depends_on` 邊，且**設計上必須禁止繞過**——
+`ProjectHierarchy` 上一輪正是在這裡自相矛盾（behaviour 寫「不得同進程直呼」而機讀
+目錄自己宣告了 `sync` 入邊）。本 ADR 明記：`ProjectMembership` 的 `sync` 入邊是
+**預期且允許**的呼叫方式，禁止的是**跳過它直接讀 `project_members` 表**——這兩件事
+不同，而上一輪把它們寫成同一句話。
+
+### Alternatives Rejected
+
+- **獨立 `ProjectAuthorization` 元件**（`[E13]` 選項 B）：一個不擁有資料的元件正是
+  `architecture-guide.md` 列為紅旗的 pass-through proxy，且它與 `ProjectMembership`
+  會永遠一起改。
+- **每個元件自己判**（選項 C）：`FR12.6` 的兩層串聯會在每個元件裡被重寫一次，
+  其中任一處寫錯就是一個授權繞過；違反 `team.md` 的「單一真實來源」。
+
+## ADR-013：`McpBridge` 為獨立元件
+
+### Context
+
+`[F16]`＝B 已定案 MCP 跑獨立進程、對外帶使用者 token 呼叫既有 API；
+`requirements.md:614` 已定案它**不得對外暴露、僅供同主機**，且它是本 intent 的
+**第二個**新增進程邊界（第一個是 Redis）。元件身分是另一件事（元件是「我們寫的
+程式」，部署拓樸屬 units-generation）。
+
+### Decision
+
+新建 `McpBridge` 元件（`[E14]`＝A），擁有工具 schema 的宣告與 token 轉遞路徑，
+零實體。
+
+### Consequences
+
+**正面**：`C-T11`（token 不得當工具引數）有明確的斷言落點——`AC11.4.2` 的白名單
+斷言掛在這個元件上；`BrainGateway` 的 behaviour 不需同時描述兩種認證主體。
+
+**負面**：多一個元件；且它是本站唯一**沒有既有程式可參照**的元件（repo 內零 MCP
+基礎設施，`A-7`「MCP 生態可在本 repo 運作」**本輪未實測**）。
+
+### Alternatives Rejected
+
+- **併入 `BrainGateway`**（`[E14]` 選項 B）：認證主體、暴露範圍與失敗模式都不同；
+  一個元件承擔兩種不該一起變的理由。
+- **記為 `external_dependencies`**（選項 C）：stage 檔逐字只有第三方服務才是
+  `external_dependencies`，而 MCP server 是我們要寫的程式。
+
+## ADR-014：`ProgressChannel` 為獨立元件，並由它擁有清除端
+
+### Context
+
+`FR13.1` 要求把 `design_agent.py` 的模組層全域 `_progress_queue` 改為 per-key；
+`FR13.2`／`FR13.3` 是其可觀察面。**US13 的 DoD 要求鍵是 per-request，但沒有要求
+清除**——這個缺口是我在 refined-mockups 的契約端點三問查出的：只寫不刪會把跨使用者
+錯送換成**無上界的記憶體成長**，即修掉一個失敗模式換來另一個。
+
+### Decision
+
+新建 `ProgressChannel` 元件（`[E15]`＝A），擁有 per-request 的進度通道**與其清除端**：
+請求結束時必須移除該鍵。零實體（通道是行程內狀態，生命週期短於一次請求）。
+對外的錯誤一律為固定訊息，不含例外原文。
+
+**兩處上游引用的更正（2026-10-02T23:13:20Z，本站自檢 3 開檔核對）**：
+- US13 的 DoD 與 `stories.md` 寫「形狀沿用 `cost/advice_orchestrator.py:23-24`」——
+  **路徑前綴錯了**，真實路徑是 **`backend/cost/advice_orchestrator.py`**（不是
+  `backend/services/cost/`）。行號與樣式本身正確：`:23` 為
+  `_progress: dict[int, dict[str, Any]] = {}`、`:24` 為 `_progress_lock = threading.Lock()`。
+- **但本元件不照抄它的 `threading.Lock`。** 那支檔案用 Lock 是因為它有
+  `ThreadPoolExecutor`（`:21` 的 `_executor`），而 `ProgressChannel` 跑在單執行緒的
+  asyncio 事件迴圈上——在那裡 `threading.Lock` 是 cargo cult，而且會在 `await` 邊界
+  給出錯誤的安全感。這正是 `project.md` 的 `application-design:c15` 要求的：
+  **指定「沿用既有機制」之前，先寫下該既有機制的副作用是否與新需求的意圖相容**。
+
+### Consequences
+
+**正面**：「誰清」有了擁有者；`FR13.2` 的互斥斷言有元件可掛；
+`FR13.3` 的「內部例外文字外洩」這個獨立的 ADR-0006 面有明確的處置點。
+
+**負面**：既有兩支檔案（`design_agent.py`、`wa_collab_orchestrator.py:79`）都要改動，
+而它們在本站的機讀目錄裡是 `external_dependencies` 而非元件——**這個元件的完成條件
+因此橫跨新程式與既有程式的改動**，`units-generation` 切單元時要注意這一點。
+
+### Alternatives Rejected
+
+- **修在既有模組內、不成為元件**（`[E15]` 選項 B）：「誰清」仍無人負責，且
+  `FR13.2` 的互斥斷言會變成一條沒有元件可掛的斷言。
+- **併入 `WorkOrchestrator`**（選項 C）：會讓「這個元件完成了嗎」同時指涉新程式與
+  既有程式的改動，而 `WorkOrchestrator` 的既有職責是交辦與狀態事件轉譯。
+
+## ADR-015：需求欄位的清空語意——保留列、值設為 `null`、記 `clearedAt`
+
+### Context
+
+線框 §17 自標出一個缺口並判給本站：「**清除端沒有任何畫面**：一個填過的欄位要怎麼
+清空、清空與『從未填過』在畫面上是否可區分、以及 agent 寫錯時使用者如何撤銷」。
+refined-mockups 的 M12 進一步要求「從未更新」與「由大腦更新但內容為空」必須可區分，
+並把它列為交接 `H-9`。這是本站必須定案的事，不能再往下推。
+
+### Decision
+
+**保留列、`value` 設為 `null`、記 `clearedAt` 與 `updatedBy`。**
+- **從未填過** ＝ 該 `(systemId, agentGroup, fieldKey)` **無列**。
+- **清空** ＝ 該列存在、`value` 為 `null`、`clearedAt` 有值。
+- 未填計數（`FR11.3`）把「無列」與「`value` 為 `null`」**都**算為未填。
+
+### Consequences
+
+**正面**：畫面得以區分兩種狀態（M12 的要求）；清空動作留下誰清、何時清的紀錄，
+故 agent 寫錯時使用者能看出是誰寫的、也能清掉它；未填計數的定義是二元可判的。
+
+**負面**：清空後的列不會消失，故表的列數只增不減（每個系統最多為欄位定義數）。
+這個上限是有界的，但需要一個「欄位定義被移除後其值列如何處置」的後續決定——
+**本 ADR 不處理那件事**，它屬於欄位定義變更（新 agent 上線／下線）的範圍，
+指派 `units-generation`（2.7，**ALWAYS**）在切單元時明訂。
+
+**中性**：未採「刪除該列」的做法，代價是多一個 `clearedAt` 欄位；換到的是
+「清空」這個動作本身可被稽核。
+
+### Alternatives Rejected
+
+- **刪除該列**：清空與從未填過在資料層變成同一種狀態，M12 的區分要求無法滿足，
+  且「誰清」的紀錄會隨列一起消失。
+- **以哨兵值表示清空**（如空字串）：空字串與「使用者真的填了空白」無法區分，
+  而 `ux-guide.md` 的錯誤預防要求的是讓錯誤難以發生，不是讓它難以察覺。
+
+## ADR-016：對話歷史落在 `SessionContext`，保存參數的擁有者明訂
+
+### Context
+
+線框 §21 逐字寫「對話歷史的保存期限與筆數上限**本站不預選**」，並明寫它與
+`U5`／`U8` 的 90 天記憶保存期是**不同的東西**（對話歷史是 session 層，記憶是內容層）。
+refined-mockups 把它列為交接 `H-10` 並指派本站。
+
+另一件必須一起說的事：refined-mockups 的可達性自檢查出
+**`RecentConversations.hidden`（首次使用時不渲染該區）在使用者送出第一則訊息之後
+就永遠不可達**，除非對話歷史有清除端——而清除端正是保存參數要決定的東西。
+
+### Decision
+
+對話歷史的**實體落點**為既有的 `SessionContext`（它已擁有 `BrainSession`，對話歷史
+是同一個 session 層的狀態），**不新建元件**。
+
+**保存期限與筆數上限本站同樣不定數值**，但明訂三件事：① 它是 `SessionContext` 的
+職責，不是 `MemoryStore` 的（兩者分屬 session 層與內容層）；② 它必須**有**清除端，
+否則 `RecentConversations.hidden` 這個狀態只在首次使用可達一次；③ 數值由
+`nfr-requirements` 決定——而該站在本工作流程中是 `CONDITIONAL`，**若被 skip 則轉
+`units-generation`（2.7，ALWAYS）**。
+
+### Consequences
+
+**正面**：落點明確，不再是一個無人承接的交接項；清除端的存在被記為硬要求而非選項。
+
+**負面**：數值仍未定，故 `units-generation` 切單元時無法完整寫出該單元的完成條件。
+**這是誠實的未決而非遺漏**：定一個沒有依據的數字（例如「30 天」）會讓下游以為它
+有來源。
+
+### Alternatives Rejected
+
+- **新建 `ConversationHistory` 元件**：它與 `BrainSession` 的生命週期相同、資料來源
+  相同、變更理由相同——`architecture-guide.md` 逐字「若兩個元件總是一起改，它們是
+  一個元件」。
+- **併入 `MemoryStore`**：會混淆 session 層與內容層，而 `[S12]` 已定案兩者是兩件事
+  並存；且記憶的 90 天保存期會被誤用到對話歷史上。
+- **本站直接定一個數值**：沒有依據。`[F5]`／`[S12]` 都沒有對話歷史的保存要求，
+  憑空定數字正是 `project.md` 禁止的「填一個看起來合理的值」。

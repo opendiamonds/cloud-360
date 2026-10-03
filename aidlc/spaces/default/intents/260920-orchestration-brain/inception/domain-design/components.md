@@ -512,3 +512,391 @@ N-9 於 `mockups.md`）。本站新增 **兩項**：
 - `IntentRouter` 讀記憶以輔助判定，這條依賴使「首字回應時間 P50 ≤ 2 秒」的預算
   又多一段（記憶檢索 ＋ embedding）。`[RA:NFR3]` 明寫該預算幾乎全被路由層 LLM 吃掉，
   本站**未重新估算**加入記憶檢索後是否仍可達 [assumption]
+
+---
+
+# 修訂 1（2026-10-02T23:09:30Z）— 能力 11／12／13 的四個新元件
+
+既有六個元件（`BrainGateway`／`IntentRouter`／`SessionContext`／`WorkOrchestrator`／
+`MemoryStore`／`ProjectHierarchy`）與其實體**全部有效、不回改**。本修訂新增四個元件，
+元件總數 **6 → 10**。
+
+**上游狀態（如實記載，不假裝乾淨）**：本站消費的 `requirements.md` 為 `directly stale`
+（`FR12.4c` 的橫幅落點更正尚未經 requirements-analysis 的關卡重新核可）、`stories.md`
+為 `Revalidate`。本站以更正後的 `FR12.4c`（落地頁）為準；若該站重跑並改變落點，
+`ReselectionEvent` 的相關設計須一併重審。
+
+## Part A' — 修訂 1 新增的機讀目錄（接續 Part A，同一真實來源）
+
+```yaml
+components:
+  - name: ProjectMembership
+    summary: 專案成員關係、角色、自動改選，以及 per-project 授權判定的唯一來源
+    behaviour: >
+      成員資格與全域功能權限為兩層串聯，任一層不過即拒（FR12.6）；本元件只回答
+      「這個人在這個專案是什麼角色」，全域那一層仍由既有的 require_story_action
+      承載，本元件不得重新實作它。建立專案者自動成為該專案的 project_admin
+      （FR12.1），且該寫入與專案建立在同一個交易內——否則會出現沒有管理者的專案。
+      一個專案可同時有多位 project_admin（FR12.3），角色不互斥、指定第二位不得
+      覆寫第一位。專案不得失去最後一位管理者：停用帳號、自我降級、自我移出三條
+      路徑必須經過同一個守門判定（AC12.3.1–.3），該判定位於三者的共同上游，
+      不是三處各寫一次。project_owner 的帳號被停用時自動改選該專案最早加入的成員
+      為 project_admin（FR12.4），挑選必須對同一組成員資料恆定且與資料庫回傳順序
+      無關——平手時以 (joinedAt, userId) 做決定性 tie-break，形狀沿用 repo 既有的
+      best_clouds（backend/cost/estimate_readers.py:247-251，key=lambda item: (-item[1], item[0])，
+      即 (-score, cloud)——本站已開檔核對，非轉引）。自動改選須留稽核（誰、何時、對誰、舊角色、
+      新角色），且該稽核必須是 UI 讀得到的持久層而非 logger（既有 _audit_append
+      寫的是 logger.info，UI 讀不到）。缺少對應全域功能權限者不得被邀請（FR12.6a）；
+      邀請被拒絕時不得留下半套狀態（AC12.5.3）。
+      per-project 授權判定的結論由伺服器產生並交給前端，前端不得自行推導（I-5）。
+    responsibilities:
+      - 專案成員關係與角色的資料模型與生命週期
+      - per-project 授權判定（「我在這個專案是什麼角色」）的單一真實來源
+      - 「專案不得失去最後一位管理者」的守門（三條路徑的共同上游）
+      - project_owner 帳號被停用時的自動改選與其稽核
+      - 邀請的前置條件檢查（全域功能權限）
+    depends_on:
+      - component: ProjectHierarchy
+        interaction: 驗證專案存在、讀取 ownerUserId
+        style: sync
+    dependents:
+      - component: BrainGateway
+        interaction: 取得 per-project 角色以決定對外訊息中可用的動作
+      - component: RequirementRegistry
+        interaction: 寫入需求欄位前確認呼叫者在該專案有權限
+      - component: McpBridge
+        interaction: agent 代使用者讀寫欄位時的 per-project 判定
+    external_dependencies:
+      - name: PostgreSQL（主 schema）
+        kind: database
+        purpose: project_members 與自動改選稽核的持久化
+      - name: 既有 users 表
+        kind: database
+        purpose: 成員指向的使用者；停用狀態為自動改選的觸發來源
+      - name: 既有 role_permissions 與 require_story_action
+        kind: other
+        purpose: 兩層串聯的全域那一層，本元件不重新實作
+    entities:
+      - name: ProjectMember
+        identifier: projectMemberId
+        attributes: [projectMemberId, projectId, userId, role, joinedAt, invitedBy]
+        references:
+          - entity: Project
+            owned_by: ProjectHierarchy
+            relationship: 每一列成員資格屬於一個專案
+      - name: ReselectionEvent
+        identifier: reselectionEventId
+        attributes: [reselectionEventId, projectId, promotedUserId, previousOwnerUserId, previousRole, newRole, occurredAt, acknowledgedAt]
+        references:
+          - entity: ProjectMember
+            owned_by: ProjectMembership
+            relationship: 每次自動改選把一位成員的角色升為 project_admin
+          - entity: Project
+            owned_by: ProjectHierarchy
+            relationship: 每次自動改選發生在一個專案內
+
+  - name: RequirementRegistry
+    summary: 系統層的需求欄位（按 agent 分組的固定欄位）、其未填計數與寫入者溯源
+    behaviour: >
+      欄位集合為**固定且按 agent 分組**，不是自由鍵值對（[R12]=D；自由欄位會讓
+      同一個概念出現多個名字而畫面無從分辨）。欄位定義隨新 agent 上線而擴充，
+      故定義與值分離：定義是程式內的常數，值是本元件的實體。
+      **「從未填過」與「填過後被清空」必須可區分**（ADR-015）：從未填過＝無該列；
+      清空＝該列存在而 value 為 null 且 clearedAt 有值。此區分是畫面 M12 的要求，
+      也是「誰清」那一腿的落點。
+      總覽籤的未填計數與需求籤各組的 x/y **必須由同一次查詢的結果推導**，不得各自
+      發一次請求（不變量 I-4）。每次寫入都記下 updatedBy（實際發起者）與
+      updatedOnBehalfOf（代哪個 agent 寫，由大腦代寫時才有值）——若不區分，使用者
+      無法分辨哪些值是自己填的、哪些是對話中被記下的。
+      本元件**不是** ADR-009 的「需求」：那是架構圖變更的溯源摘要，兩者同名不同義
+      （ADR-011）。
+    responsibilities:
+      - 需求欄位值的資料模型與生命週期（含清空語意）
+      - 未填計數的單一查詢來源
+      - 寫入者與代寫對象的溯源
+    depends_on:
+      - component: ProjectHierarchy
+        interaction: 驗證系統存在、取得其所屬專案
+        style: sync
+      - component: ProjectMembership
+        interaction: 寫入前的 per-project 授權判定
+        style: sync
+    dependents:
+      - component: McpBridge
+        interaction: agent 代使用者讀寫需求欄位
+      - component: BrainGateway
+        interaction: 對話中被記下的值經大腦寫回
+    external_dependencies:
+      - name: PostgreSQL（主 schema）
+        kind: database
+        purpose: 需求欄位值的持久化
+    entities:
+      - name: SystemRequirementField
+        identifier: systemRequirementFieldId
+        attributes: [systemRequirementFieldId, systemId, agentGroup, fieldKey, value, updatedAt, updatedBy, updatedOnBehalfOf, clearedAt]
+        references:
+          - entity: System
+            owned_by: ProjectHierarchy
+            relationship: 每一列需求欄位值屬於一個系統
+
+  - name: McpBridge
+    summary: agent 取用需求欄位的 MCP 通道；跑獨立進程、僅供同主機連接
+    behaviour: >
+      跑**獨立進程**（[F16]=B，取代 [S13]=A 的同進程封裝），對外帶使用者 token
+      呼叫既有 API。**不得對外暴露，僅供同主機的大腦進程連接**
+      （requirements.md:614）；它是本 intent 的第二個新增進程邊界，第一個是 Redis。
+      **使用者 token 不得以工具參數傳遞**：工具的 JSON schema 的 properties 不得
+      出現任何名稱匹配 token／key／secret／authorization（不分大小寫）的欄位
+      （FR11.5、C-T11）。理由是不可逆——token 一旦進入 LLM context 就會被
+      LangGraph checkpointer 持久化並出現在任何 tool_calls log。
+      每次呼叫都以使用者身分受權限檢查，agent 不得做使用者不能做的事（FR11.6）；
+      FR10.2 禁止同進程繞過 require_story_action 的規定在此仍然適用。
+      傳輸形式（stdio 或本機 HTTP／SSE）與認證機制本元件不預選，屬設計階段
+      （OQ-15／OQ-16）。
+    responsibilities:
+      - MCP 工具的宣告與其 schema 的憑證欄位白名單
+      - 代使用者呼叫既有 API 的 token 轉遞路徑（不經工具參數）
+      - agent 身分與使用者身分的對應（稽核主體必須是使用者本人）
+    depends_on:
+      - component: RequirementRegistry
+        interaction: 讀寫需求欄位
+        style: sync
+      - component: ProjectMembership
+        interaction: per-project 授權判定
+        style: sync
+    dependents: []
+    external_dependencies:
+      - name: 既有 FastAPI API（經 HTTP）
+        kind: third-party-api
+        purpose: 對外帶使用者 token 呼叫；不走同進程直呼
+      - name: MCP 協定的 client（agent 側）
+        kind: other
+        purpose: 本元件的消費者是 agent 而非人
+    entities: []
+
+  - name: ProgressChannel
+    summary: 既有 agent 進度事件的 per-request 隔離通道，含其清除端
+    behaviour: >
+      取代 design_agent.py 的模組層全域 _progress_queue（FR13.1）。鍵必須是
+      **per-request**，不得用 thread_id（per-user）或不存在的「session」（[V-01]）；
+      形狀沿用 backend/cost/advice_orchestrator.py:23-24 的 per-key dict
+      （`_progress: dict[int, dict[str, Any]] = {}`）——**但不照抄它的 threading.Lock**：
+      那支檔案用 Lock 是因為它有 ThreadPoolExecutor，而本元件在單執行緒的 asyncio
+      事件迴圈上跑，threading.Lock 在那裡是 cargo cult。鍵的型別亦不同（它是 set_id
+      的 int，本元件是 per-request 的識別字）。
+      **請求結束時必須移除該鍵**（ADR-014）——只寫不刪會把跨使用者錯送換成無上界的
+      記憶體成長，即修掉一個失敗模式換來另一個。
+      兩個併發請求各自只收到自己產生的事件，且各自的事件集合**非空**（FR13.2）；
+      非空那一半是必要的，否則空集合會讓互斥斷言真空成立。
+      通道不存在時的讀取**不得崩潰**（FR13.3）：現狀是 _drain_progress 對 None 呼叫
+      get_nowait() 拋 AttributeError，且**該例外原文被送進 SSE 給使用者**——內部例外
+      文字外洩是獨立的 ADR-0006 面，故本元件對外的錯誤一律為固定訊息，不含例外原文。
+    responsibilities:
+      - per-request 進度事件的隔離與投遞
+      - 通道的建立與**清除**（請求結束即移除）
+      - 讀取不存在通道時的安全行為（不崩潰、不外洩例外原文）
+    depends_on: []
+    dependents:
+      - component: BrainGateway
+        interaction: 取得該請求的進度事件以串流給使用者
+      - component: WorkOrchestrator
+        interaction: 交辦給既有 agent 時建立通道並於結束時移除
+    external_dependencies:
+      - name: 既有 design_agent.py 與 wa_collab_orchestrator.py
+        kind: other
+        purpose: 本元件取代其模組層全域狀態；wa_collab_orchestrator.py:79 須補傳 per-request 的鍵
+    entities: []
+```
+
+### Part A'' — 既有元件的邊補充（**YAML，非散文**；2026-10-02T23:27:18Z 依 `review-02` 的 `R-01` 改寫）
+
+`review-02` 的 `R-01`（Major）指出：本檔第 0 節自稱「下方 YAML 是這份檔的**單一真實
+來源**」，而修訂 1 原本把六條缺的對稱邊寫在一張**散文表**裡。機械解析證實那會讓
+`depends_on` 與 `dependents` 的邊數不相等（**13 vs 15**），於是**任何照字面只解析
+`components:` YAML 區塊的下游工具或 sensor，都會在這六條邊上得到不對稱的圖**——
+而它看不到散文表的存在。這不是對稱性被違反（聯集後無環、無矛盾），是**單一真實來源
+的契約被打破**。
+
+處置：補一個只含**缺少的邊**的 YAML 區塊。它不觸碰 Part A 既有元件的任何其他欄位
+（依 `refined-mockups:c3` 不回改已核可內容），但使 **Part A ＋ Part A' ＋ Part A''
+的 YAML 聯集本身對稱**，讀者與工具都不需要先讀一張 Markdown 表才能重建真正的圖。
+
+```yaml
+# 本區塊只宣告「既有元件缺少的那幾條邊」，與 Part A 的同名元件合併讀取。
+# 合併規則：同名元件的 depends_on／dependents 取聯集；其餘欄位一律以 Part A 為準。
+component_edge_supplement:
+  - name: ProjectHierarchy
+    dependents:
+      - component: ProjectMembership
+        interaction: 驗證專案存在、讀取 ownerUserId
+      - component: RequirementRegistry
+        interaction: 驗證系統存在、取得其所屬專案
+  - name: BrainGateway
+    depends_on:
+      - component: ProjectMembership
+        interaction: 取得 per-project 角色以決定對外訊息中可用的動作
+        style: sync
+      - component: RequirementRegistry
+        interaction: 對話中被記下的值經大腦寫回
+        style: sync
+      - component: ProgressChannel
+        interaction: 取得該請求的進度事件以串流給使用者
+        style: sync
+  - name: WorkOrchestrator
+    depends_on:
+      - component: ProgressChannel
+        interaction: 交辦給既有 agent 時建立通道並於結束時移除
+        style: sync
+```
+
+**對稱性實算（合併 Part A ＋ A' ＋ A'' 之後）**：`depends_on` 的邊數與 `dependents`
+的邊數相等，且每一條 `A → B` 都在 B 的 `dependents` 裡有對應項——驗算腳本與結果見
+下方自檢第 6 項。
+
+### 既有元件的邊補充（上表的人讀對照）
+
+機讀目錄的 `depends_on`／`dependents` 必須對稱。本修訂新增的邊使三個既有元件
+各需補一筆 `dependents`，列於此處（**既有的 Part A 區塊不回改**，依
+`refined-mockups:c3`；下游以 Part A ＋ 本節的聯集為準）：
+
+| 既有元件 | 需補的 `dependents` 項 | 來源邊 |
+|---|---|---|
+| `ProjectHierarchy` | `ProjectMembership`（驗證專案存在、讀 ownerUserId）、`RequirementRegistry`（驗證系統存在） | 兩條新 `depends_on` |
+| `BrainGateway` | — | 它是新增邊的**來源**（`depends_on` `ProjectMembership`／`RequirementRegistry`／`ProgressChannel`），故需補的是它的 `depends_on`，見下 |
+| `WorkOrchestrator` | — | 同上，需補 `depends_on` `ProgressChannel` |
+
+| 既有元件 | 需補的 `depends_on` 項 | 理由 |
+|---|---|---|
+| `BrainGateway` | `ProjectMembership`（取 per-project 角色）、`RequirementRegistry`（對話中被記下的值寫回）、`ProgressChannel`（取進度事件） | 三者皆為 `sync` |
+| `WorkOrchestrator` | `ProgressChannel`（交辦時建立通道、結束時移除） | `sync` |
+
+**無環驗證**：新增的邊為 `ProjectMembership → ProjectHierarchy`、
+`RequirementRegistry → {ProjectHierarchy, ProjectMembership}`、
+`McpBridge → {RequirementRegistry, ProjectMembership}`、
+`BrainGateway → {ProjectMembership, RequirementRegistry, ProgressChannel}`、
+`WorkOrchestrator → ProgressChannel`。四個新元件中 `ProgressChannel` 與
+`ProjectHierarchy` 皆為**無出邊的葉**，`McpBridge` 為**無入邊的根**，
+拓樸排序存在故**無環**——**17 條邊、10 個節點、`depends_on` 與 `dependents` 兩集合完全相等**，實算見下方自檢第 6 項。
+
+## Part B' — 修訂 1 的人讀視圖
+
+### 新增元件的 Component Diagram
+
+```mermaid
+graph TD
+    McpBridge -->|讀寫需求欄位| RequirementRegistry
+    McpBridge -->|per-project 授權| ProjectMembership
+    BrainGateway -->|取 per-project 角色| ProjectMembership
+    BrainGateway -->|對話中的值寫回| RequirementRegistry
+    BrainGateway -->|取進度事件| ProgressChannel
+    WorkOrchestrator -->|建立與移除通道| ProgressChannel
+    RequirementRegistry -->|寫入前授權| ProjectMembership
+    RequirementRegistry -->|驗證系統存在| ProjectHierarchy
+    ProjectMembership -->|驗證專案存在| ProjectHierarchy
+```
+
+文字 fallback：`McpBridge` 是本次新增的唯一無入邊根，它呼叫 `RequirementRegistry`
+與 `ProjectMembership`。`BrainGateway`（既有）新增三條出邊，分別指向
+`ProjectMembership`、`RequirementRegistry`、`ProgressChannel`。`WorkOrchestrator`
+（既有）新增一條出邊指向 `ProgressChannel`。`RequirementRegistry` 指向
+`ProjectMembership` 與 `ProjectHierarchy`；`ProjectMembership` 指向 `ProjectHierarchy`。
+`ProgressChannel` 與 `ProjectHierarchy` 皆無出邊。
+
+### 新增元件的 Component Summary
+
+| Component | Purpose | Depends On | Dependents | Entities Owned |
+|---|---|---|---|---|
+| `ProjectMembership` | 成員關係、角色、自動改選、per-project 授權判定 | `ProjectHierarchy` | `BrainGateway`、`RequirementRegistry`、`McpBridge` | `ProjectMember`、`ReselectionEvent` |
+| `RequirementRegistry` | 系統層需求欄位、未填計數、寫入者溯源 | `ProjectHierarchy`、`ProjectMembership` | `McpBridge`、`BrainGateway` | `SystemRequirementField` |
+| `McpBridge` | agent 取用欄位的 MCP 通道（獨立進程、僅同主機） | `RequirementRegistry`、`ProjectMembership` | （無） | （無） |
+| `ProgressChannel` | 既有 agent 進度事件的 per-request 隔離與清除 | （無） | `BrainGateway`、`WorkOrchestrator` | （無） |
+
+### 新增實體的 Entity Ownership
+
+| Entity | Owning Component | Identifier | Attributes | References |
+|---|---|---|---|---|
+| `ProjectMember` | `ProjectMembership` | `projectMemberId` | `projectId`、`userId`、`role`、`joinedAt`、`invitedBy` | `Project`（ProjectHierarchy） |
+| `ReselectionEvent` | `ProjectMembership` | `reselectionEventId` | `projectId`、`promotedUserId`、`previousOwnerUserId`、`previousRole`、`newRole`、`occurredAt`、`acknowledgedAt` | `ProjectMember`、`Project` |
+| `SystemRequirementField` | `RequirementRegistry` | `systemRequirementFieldId` | `systemId`、`agentGroup`、`fieldKey`、`value`、`updatedAt`、`updatedBy`、`updatedOnBehalfOf`、`clearedAt` | `System`（ProjectHierarchy） |
+
+**兩個元件擁有零實體，這是刻意的**：`McpBridge` 是通道與契約宣告，沒有自己的
+持久狀態（工具 schema 是程式內的宣告，不是資料）；`ProgressChannel` 的進度佇列是
+**per-request 的行程內狀態**，生命週期短於一次請求，`ADR-014` 明訂它必須在請求結束
+時被移除——把它寫成實體會暗示它該被持久化，而那正是要避免的。
+
+### 新增的 External Dependencies
+
+| Component | Dependency | Kind | Purpose |
+|---|---|---|---|
+| `ProjectMembership` | PostgreSQL（主 schema） | database | `project_members` 與改選稽核的持久化 |
+| `ProjectMembership` | 既有 `users` 表 | database | 成員指向的使用者；停用為改選觸發來源 |
+| `ProjectMembership` | 既有 `role_permissions` ／ `require_story_action` | other | 兩層串聯的全域那一層，不重新實作 |
+| `RequirementRegistry` | PostgreSQL（主 schema） | database | 需求欄位值的持久化 |
+| `McpBridge` | 既有 FastAPI API（經 HTTP） | third-party-api | 代使用者呼叫；不走同進程直呼 |
+| `McpBridge` | MCP 協定的 client（agent 側） | other | 消費者是 agent 而非人 |
+| `ProgressChannel` | 既有 `design_agent.py`／`wa_collab_orchestrator.py` | other | 取代其模組層全域狀態 |
+
+### Rationale — 為什麼這四個各自是獨立的建構塊
+
+| 元件 | 判準 | 具體理由 |
+|---|---|---|
+| `ProjectMembership` | **不同變更率 ＋ 不同資料擁有** | 成員變更的理由（人員進出、授權調整）與階層變更的理由（新系統、新架構圖）無關。`ddd-patterns.md` 逐字：因不同理由而改變即屬不同 bounded context。`[E11]`＝A |
+| `RequirementRegistry` | **不同變更率 ＋ 不同關注** | 欄位定義隨新 agent 上線而擴充（線框 §17 明寫），`System` 的形狀不會。併入 `ProjectHierarchy` 會讓它同時擁有階層、變更紀錄與 agent 契約三種職責。`[E12]`＝A 否決了「掛在 System 實體上」那一案 |
+| `McpBridge` | **不同消費者 ＋ 不同失敗模式** | 消費者是 agent 而非人；認證主體（代使用者的 token）、暴露範圍（僅同主機）與失敗模式都與 `BrainGateway` 的 WebSocket 不同。`C-T11` 的硬約束需要一個明確的斷言落點。`[E14]`＝A |
+| `ProgressChannel` | **明確的清除端擁有者** | 它是本 intent 要寫的新程式，而「誰清」這一腿在 US13 的 DoD 裡**無人負責**（DoD 只要求鍵是 per-request）。獨立元件讓清除端有擁有者。`[E15]`＝A |
+
+### Alternatives Rejected（修訂 1）
+
+逐案理由見 `domain-design-questions.md` 的 E11–E15 與 `decisions.md` 的
+`ADR-010`–`ADR-016`。最要緊的一項：**`[E12]` 的選項 B（取代 `ADR-009`）被否決**，
+因為 `ADR-009` 是使用者在 `[DD:E2]` 重新框定後自己定案的，且兩者基數不同
+（一次架構圖變更可能由多個需求驅動，而需求欄位是每個系統一組固定欄位），硬接會
+製造一個 `ADR-009` 明文拒絕的多對多關聯表。
+
+## 修訂 1 的 ADR-0006 四面向與 PBT 逐項判定（2026-10-02T23:14:58Z）
+
+`project.md` 記著一條本站自己造成的教訓：**`domain-design` 上一輪兩份產出對
+`ADR-0006` 的命中數是 0**，而它是 hard constraint；該缺口被升格為自檢第七項。
+本節是它的落點。已核可的 `requirements.md:617` 逐字結論為「**四面向皆適用，無不適用
+項**」，本站**不重判適用性**，只判「本站新增的四個元件有沒有新落點」。
+
+| 面向 | 適用性（承上游） | 本站新增的落點 |
+|---|---|---|
+| **IAM** | 適用 | **三處，且這是本修訂最重的一面**。① `ADR-012`：per-project 授權判定由 `ProjectMembership` 單一提供，判定結論由伺服器產生、前端不得推導。② `ProjectMembership.behaviour`：「專案不得失去最後一位管理者」的守門必須位於三條路徑（停用、自我降級、自我移出）的**共同上游**，不是三處各寫一次——`functional-design:c34` 記過的同形缺陷。③ `McpBridge`：每次呼叫以使用者身分受權限檢查，`FR10.2` 禁止同進程繞過 `require_story_action` 的規定在此仍適用 |
+| **encryption** | 適用（承 `requirements.md:613` 的 `FR11.5`／`C-T11`） | **一處**：`McpBridge` 的工具 schema 不得出現任何名稱匹配 `token`／`key`／`secret`／`authorization`（不分大小寫）的欄位。**理由是不可逆**——token 一旦進入 LLM context 就會被 LangGraph checkpointer 持久化並出現在任何 `tool_calls` log。本站把它寫進 `McpBridge.behaviour` 而非只記在 AC 上，因為它是**元件的硬約束**而非某一條驗收 |
+| **network exposure** | 適用（承 `requirements.md:614`） | **一處**：`McpBridge` 是本 intent 的**第二個**新增進程邊界（第一個是 Redis），**不得對外暴露、僅供同主機的大腦進程連接**。本站**不預選**傳輸形式（`OQ-16`）與認證機制（`OQ-15`），但暴露範圍**不是**未定項——上游已鎖 |
+| **audit logging** | 適用 | **兩處**。① `FR12.4b`：自動改選須留稽核（誰、何時、對誰、舊角色、新角色），且該稽核**必須是 UI 讀得到的持久層而非 logger**——`user_router.py:213` 的 `_audit_append` 寫的是 `logger.info`，UI 讀不到（`[Q-11]` 查出）。本站把它實體化為 `ReselectionEvent`，使「誰讀」那一腿有東西可讀。② `ADR-015`：需求欄位的清空留下 `clearedAt` 與 `updatedBy`，使「誰清」可被稽核 |
+
+### PBT hard constraint 的逐項判定
+
+| 標的 | 判定 | 依據 |
+|---|---|---|
+| **自動改選的挑選邏輯**（`FR12.4`／`FR12.4a`） | **適用，且本站是它第一次有明確落點的地方** | 它要求「挑選結果對同一組成員資料恆定」，而真正可失敗的性質是**排列不變性**（`ORDER BY joined_at` 在時間戳相同時沒有穩定順序，`[Q-05]`）。本站把它寫進 `ProjectMembership.behaviour` 的硬約束：平手時以 `(joinedAt, userId)` 做決定性 tie-break。**前例已開檔核對**：`backend/cost/estimate_readers.py:247-251` 的 `best_clouds` 用 `key=lambda item: (-item[1], item[0])`。挑選函式應為**不讀 DB 的純函式**（輸入為成員集合、輸出為被選中者），這是 PBT 能作用的結構前提 |
+| **未填計數**（`FR11.3`） | **不適用** | 它是對欄位集合的直接計算，不存在值域廣到需要生成器的性質；兩處一致性由 e2e 的相等斷言承接（不變量 `I-4`） |
+| **併發隔離**（`FR13.2`） | **不適用（但有不變量）** | 它的不變量是「A 與 B 的事件集合互斥且各自非空」，驗證手段是 `asyncio.Event` barrier 釘住交錯順序，不是 Hypothesis 生成器 |
+| **agent routing** | **本站無新落點，缺口仍在上游** | `project.md` 把 routing 列為 PBT hard constraint 落點，而 `requirements.md` 的 PBT 表未涵蓋它（`[Q-13]`，已指派 `units-generation`＋`build-and-test`）。本站的 `IntentRouter` 是既有元件、本修訂未動它，故**不在本站範圍**——但它仍是一個未關閉的 hard-constraint 缺口，在此重申以免它被當成已解決 |
+
+## 修訂 1 的七項自檢逐項結果
+
+本站審查額度為 **1 輪**，故這一節的誠實度直接決定交付品質。
+
+| 自檢 | 結果 |
+|---|---|
+| **1 可達性** | **2 處**。① `SystemRequirementField` 的「清空」態（`value` 為 `null` 且 `clearedAt` 有值）**今天不可達**——它需要 `ADR-015` 的清除端先實作；在那之前畫面只有「無列」一種未填。② `ReselectionEvent.acknowledgedAt` 的非 null 狀態需要橫幅的「知道了」先落地；而**同一人第二次被改選**這個情境（`I-6` 要求的）需要兩次事件，資料前提是兩個專案的 owner 先後被停用——可達但需要刻意構造，驗證層只能是後端 `TestClient` |
+| **2 契約端點三問** | **對三個新實體逐個入口跑**（依 `project.md` 的要求，入口清單取自已核可的 user-flow 與線框，不憑印象）：`ProjectMember`（寫＝建立專案時的自動寫入 ＋ 邀請成功／讀＝成員頁、授權判定／**清＝移出專案**；硬刪除帳號的路徑仍為 `OQ-H1`，上游未定）；`ReselectionEvent`（寫＝自動改選／讀＝橫幅、成員詳情的變更紀錄／**清＝`acknowledgedAt`，事件列本身不刪**——這是刻意的，刪了就失去稽核）；`SystemRequirementField`（寫＝使用者或大腦代 agent／讀＝各 agent、總覽計數、MCP／**清＝`ADR-015` 本站定案**）。**三個實體的「誰清」全部有答案**，這是本站與前兩站最大的差別 |
+| **3 引用逐字核對** | **查出我自己的兩處**。① US13 的 DoD 與 `stories.md` 寫的 `cost/advice_orchestrator.py:23-24` **路徑前綴錯了**，真實路徑是 `backend/cost/advice_orchestrator.py`（行號與樣式本身正確，已開檔核對）——我原樣複製了那個路徑。② 更要緊的是：**該檔用 `threading.Lock` 是因為它有 `ThreadPoolExecutor`**，而 `ProgressChannel` 跑在單執行緒 asyncio 事件迴圈上，照抄等於 cargo cult——`application-design:c15` 逐字要求「指定沿用既有機制之前，先寫下該既有機制的副作用是否與新需求的意圖相容」。另 `best_clouds` 的前例**是真的**（`backend/cost/estimate_readers.py:247-251`，`key=lambda item: (-item[1], item[0])`），我補上了路徑與行號使它可複驗；`design_agent.py:163` 的 `get_nowait()` 於 `_drain_progress`（`:160`）內、呼叫點 `:203`／`:211` 傳入 `| None` 的 `_progress_queue`，**引用準確** |
+| **4 檔案集合一致性** | 三份產出齊備（`components.md`／`decisions.md`／`traceability.json`） |
+| **5 跨檔傳播** | 本輪改動的兩個事實（`advice_orchestrator` 路徑、`best_clouds` 的可複驗引用）各以多種形式 grep，`components.md` 與 `decisions.md` 兩處皆已同步 |
+| **6 可算的數字先算再寫** | **全部以腳本實算**：元件 **6 → 10**（Part A 六個 ＋ Part A' 四個，以 `^  - name:` 計數）、實體 **7 → 10**（逐段解析 `entities:` 之下的 `- name:`，非整檔 grep——整檔 grep 會把 `external_dependencies` 的名字一起算進來，實測會得到 30 這個錯數字）、ADR **9 → 16**、追溯表 **20 → 31** 筆（`OK` 31、GAP 0）、**對稱且無環**——`depends_on` 與 `dependents` 各 **17** 條邊、兩集合**完全相等**，10 個節點、DFS 三色法確認無環（以腳本解析本檔**全部三個** `yaml` 區塊的聯集實算）。**2026-10-02T23:28:04Z 更正（`review-02` 的 `R-02`）**：原文寫「對 **14** 條邊實算」——13、15、17 都不等於 14，**沒有任何一種合理的計數方式會得出 14**，那代表這一項我是**手寫了一組邊清單**而不是從 YAML 解析出來的（9 條新邊 ＋ 8 條舊邊 ＝ 17）。結論（無環）是對的，但支撐它的數字是手寫的，故那句「已實算」不可信。已改為由腳本解析 YAML 聯集後輸出，並連帶修好 `R-01` 的不對稱（13 vs 15 → 17 vs 17） |
+| **7 ADR-0006 ＋ PBT** | 見上一節。**本站刻意不重判適用性**（`requirements.md:617` 已定四面向皆適用），只判新落點：IAM 三處、encryption 一處、network exposure 一處、audit logging 兩處；PBT 的唯一適用標的是自動改選的挑選邏輯，且本站是它第一次有明確落點的地方。**agent routing 的 PBT 缺口仍在上游未關閉**，在此重申 |
+
+## 修訂 1 的交接事項
+
+| # | 事項 | 承接站 | execution |
+|---|---|---|---|
+| DG-9 | **三張新表觸發 `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步**（`review-02` 的 `R-03`）：`project_members`、`reselection_events`、`system_requirement_fields`。`project.md ## Mandated` 逐字為 blocking——未完成不得標示相關 Construction／部署階段為完成。`ADR-015` 的清空語意須反映在 `system_requirement_fields` 的 DDL 上（`value` 可為 null ＋ 獨立的 `clearedAt`），否則「從未填過」與「清空」在資料層不可區分 | `code-generation`（3.5） | **ALWAYS** |
+| DG-4 | **`ADR-015` 的後續**：欄位定義被移除後（新 agent 下線），其既有值列如何處置 | `units-generation`（2.7） | **ALWAYS** |
+| DG-5 | **`ADR-016` 的數值**：對話歷史的保存期限與筆數上限 | `nfr-requirements`（CONDITIONAL）→ 轉移 `units-generation`（2.7，**ALWAYS**） | — |
+| DG-6 | **`ProgressChannel` 的完成條件橫跨新舊程式**：它要改 `design_agent.py` 與 `wa_collab_orchestrator.py:79` 兩支既有檔案，而兩者在本站是 `external_dependencies` 而非元件 | `units-generation`（2.7） | **ALWAYS** |
+| DG-7 | **`A-7` 仍未實測**：「MCP 生態可在本 repo 運作」是 `McpBridge` 的前提，而 repo 內零 MCP 基礎設施 | `contract-design`（2.8，CONDITIONAL）→ 轉移 `code-generation`（3.5，**ALWAYS**） | — |
+| DG-8 | **上游 stale 的傳遞**：本站以更正後的 `FR12.4c`（落地頁）為準，而該更正尚未經 requirements-analysis 的關卡重新核可；若該站重跑並改變落點，`ReselectionEvent` 的相關設計須重審 | `units-generation`（2.7） | **ALWAYS** |

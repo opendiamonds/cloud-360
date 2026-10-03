@@ -20,7 +20,18 @@
     "US9.1",
     "US9.2",
     "US10.1",
-    "US10.2"
+    "US10.2",
+    "US11.1",
+    "US11.2",
+    "US11.3",
+    "US11.4",
+    "US12.1",
+    "US12.2",
+    "US12.3",
+    "US12.4",
+    "US12.5",
+    "US12.6",
+    "US13.1"
   ],
   "coverage": [
     {
@@ -124,6 +135,73 @@
       "id": "US10.2",
       "status": "OK",
       "target": "WorkOrchestrator、WorkItem"
+    },
+    {
+      "id": "US11.1",
+      "status": "OK",
+      "target": "RequirementRegistry、ProjectHierarchy",
+      "note": "建立系統的入口在總覽籤（[DM:D12]=A），系統實體由 ProjectHierarchy 擁有；需求欄位由 RequirementRegistry 擁有"
+    },
+    {
+      "id": "US11.2",
+      "status": "OK",
+      "target": "RequirementRegistry、SystemRequirementField",
+      "note": "按 agent 分組的固定欄位與未填標示；agentGroup 為該實體的屬性"
+    },
+    {
+      "id": "US11.3",
+      "status": "OK",
+      "target": "RequirementRegistry",
+      "note": "兩處未填計數必須由同一次查詢推導（不變量 I-4），故單一元件擁有該查詢"
+    },
+    {
+      "id": "US11.4",
+      "status": "OK",
+      "target": "McpBridge、ProjectMembership",
+      "note": "agent 經 MCP 代為存取時仍以使用者身分受權限檢查；token 不得當工具引數（C-T11）"
+    },
+    {
+      "id": "US12.1",
+      "status": "OK",
+      "target": "ProjectMembership、ProjectMember",
+      "note": "建立者自動成為 project_admin，且與專案建立同一交易（ADR-010）"
+    },
+    {
+      "id": "US12.2",
+      "status": "OK",
+      "target": "ProjectMembership、ProjectMember",
+      "note": "角色在成員詳情頁變更並留稽核；多位 admin 並存不互斥"
+    },
+    {
+      "id": "US12.3",
+      "status": "OK",
+      "target": "ProjectMembership",
+      "note": "三條路徑（停用、自我降級、自我移出）的守門位於共同上游"
+    },
+    {
+      "id": "US12.4",
+      "status": "OK",
+      "target": "ProjectMembership、ReselectionEvent",
+      "note": "自動改選與其橫幅；已讀狀態以事件為鍵（acknowledgedAt 在 ReselectionEvent 上，不是 per-user 布林值）"
+    },
+    {
+      "id": "US12.5",
+      "status": "OK",
+      "target": "ProjectMembership",
+      "note": "缺全域權限者不得被邀請；拒絕不留半套狀態"
+    },
+    {
+      "id": "US12.6",
+      "status": "OK",
+      "target": "ProjectMembership、ProjectMember",
+      "note": "成功邀請新增一列、成功移出少一列（review-02 的 Critical R-01 逼出的故事）"
+    },
+    {
+      "id": "US13.1",
+      "status": "OK",
+      "target": "ProgressChannel",
+      "note": "per-request 的進度通道與其清除端（ADR-014）"
     }
-  ]
+  ],
+  "revision": "1 — 修訂 1（2026-10-02T23:11:46Z）：補 US11.1–US13.1 共 11 則故事，上游 id 由 20 增為 31。新增四個元件（ProjectMembership／RequirementRegistry／McpBridge／ProgressChannel）與三個實體（ProjectMember／ReselectionEvent／SystemRequirementField）"
 }
