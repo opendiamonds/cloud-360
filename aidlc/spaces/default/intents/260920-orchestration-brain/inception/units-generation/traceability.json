@@ -9,10 +9,10 @@
     "US2.2",
     "US3.1",
     "US4.1",
-    "US4.2",
-    "US4.3",
     "US4.4",
     "US4.5",
+    "US4.2",
+    "US4.3",
     "US5.1",
     "US6.1",
     "US7.1",
@@ -20,7 +20,18 @@
     "US9.1",
     "US9.2",
     "US10.1",
-    "US10.2"
+    "US10.2",
+    "US11.1",
+    "US11.2",
+    "US11.3",
+    "US11.4",
+    "US12.1",
+    "US12.2",
+    "US12.3",
+    "US12.4",
+    "US12.5",
+    "US12.6",
+    "US13.1"
   ],
   "coverage": [
     {
@@ -64,16 +75,6 @@
       "target": "U5"
     },
     {
-      "id": "US4.2",
-      "status": "OK",
-      "target": "U8"
-    },
-    {
-      "id": "US4.3",
-      "status": "OK",
-      "target": "U8"
-    },
-    {
       "id": "US4.4",
       "status": "OK",
       "target": "U8"
@@ -82,6 +83,16 @@
       "id": "US4.5",
       "status": "OK",
       "target": "U5"
+    },
+    {
+      "id": "US4.2",
+      "status": "OK",
+      "target": "U8"
+    },
+    {
+      "id": "US4.3",
+      "status": "OK",
+      "target": "U8"
     },
     {
       "id": "US5.1",
@@ -122,6 +133,61 @@
       "id": "US10.2",
       "status": "OK",
       "target": "U12"
+    },
+    {
+      "id": "US11.1",
+      "status": "OK",
+      "target": "U23"
+    },
+    {
+      "id": "US11.2",
+      "status": "OK",
+      "target": "U23"
+    },
+    {
+      "id": "US11.3",
+      "status": "OK",
+      "target": "U20"
+    },
+    {
+      "id": "US11.4",
+      "status": "OK",
+      "target": "U21"
+    },
+    {
+      "id": "US12.1",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US12.2",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US12.3",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US12.4",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US12.5",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US12.6",
+      "status": "OK",
+      "target": "U19"
+    },
+    {
+      "id": "US13.1",
+      "status": "OK",
+      "target": "U22"
     }
   ]
 }

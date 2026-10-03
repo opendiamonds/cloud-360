@@ -279,3 +279,231 @@ Does this all look correct before I generate the artifact?
      與 `:14` 的「17 則故事」是兩個意義不同、數值相等純屬巧合的 17，建議就地消歧。
      使用者在閘門上選擇 Approve、不折入，故 R-08 以 open item 帶進閘門紀錄。 -->
 
+---
+
+# 修訂 4（2026-10-03）— 能力 11／12／13 的新單元
+
+**G1–G5 的五題定案全部不變、不重問**，本修訂只問既有五題**沒有涵蓋**的新範圍。
+
+## 本修訂的觸發與實測基準
+
+`rough-mockups` 修訂 2／3、`user-stories` 修訂 1、`refined-mockups` 修訂 1、
+`domain-design` 修訂 1 依序把能力 11（專案系統資訊需求頁）、能力 12（專案成員管理）、
+FR13（既有 agent 的併發安全）補進上游，而本站四份產出早於它們。以腳本掃 22 個關鍵詞：
+
+- `能力 11`／`能力 12`／`能力 13`／`US11`／`US12`／`US13`／`FR11.`／`FR12.`／`FR13.`／
+  `ProjectMembership`／`RequirementRegistry`／`McpBridge`／`ProgressChannel`／
+  `project_members`／`reselection_events`／`system_requirement_fields`／`需求籤`／
+  `MCP`／`自動改選`／`最近的對話` — **20 個在四份產出合計 0 命中**
+- `成員`（2）與`專案`（2）的 4 處命中逐一開檔確認**全部是無關用法**（「`depends_on`
+  成員皆為已宣告單元」、「該層成員」、「本專案既有實務」）
+
+另實算：`stories.md` 有 **31 則**故事，`unit-of-work-story-map.md` 只引用 **20 則**，
+`traceability.json` 的 `upstream_ids` 與 `coverage` 各 **20** 筆——缺的 11 則為
+`US11.1`–`US11.4`、`US12.1`–`US12.6`、`US13.1`。
+
+## 既有 17 個單元為什麼不得改名或插號（不出成題目）
+
+依 `requirements-analysis:260822-ra-c5`，**單一可行解不出成題目**——那會是假選擇。
+實測：`construction/` 下 `brain-infra`／`brain-ws-contract`／`hierarchy-data` 三個目錄
+各有 `code-generation` 的完整產出（含 `code-summary.md` 與 `reviewed-source-*.tsv`），
+`rbac-story-ids` 有 `functional-design`；repo 內已有 `ws-contract.json`、
+`backend/services/brain_ws_contract.py`、`backend/scripts/dump_ws_contract.py`、
+`frontend/src/types/ws-contract.d.ts`、`backend/services/hierarchy_migration.py`、
+`backend/services/brain_router.py`、`frontend/src/pages/BrainPage.tsx`。
+引擎的 per-unit 收據與 construction 目錄都以**單元名**為鍵，改名或插號會讓已完成的
+工作變成找不到歸屬的孤兒。故新單元一律**附加在尾端**，`U1`–`U17` 的名稱與編號不動。
+
+這與 `scope-definition` 那一輪「能力 12 插在序 2、重新編號 11 列」的取捨不同：
+那裡只是文件，這裡是磁碟上的目錄與已通過審查的來源收據。
+
+## `U2 brain-ws-contract` 的責任敘述已經由待辦變成已交付（不出成題目，但必須記下）
+
+`unit-of-work.md:69` 逐字寫「一道**新的** CI 一致性檢查（N-1）」、`:215` 寫「本單元要建
+的就是那道缺失的閘門」。實測該閘門**已存在**（上列六個檔案 ＋
+`inception/decisions/0019-ws-contract-gates-and-generator-supply-chain.md` 即 ADR-0019）。
+`stories.md` 的 `[Q-02]` 要求「回報下游，不在本站改已核可的 delivery-planning」。
+本修訂在 `unit-of-work.md` 就地加註，並把「新增的 WebSocket 訊息型別須納入**既有**
+那份契約」寫成 `U2` 的注意事項——不是去建一道已經存在的閘門。
+
+## G6. 能力 11／12／13 的新單元怎麼切？
+
+延用 `[UG:G1]`=A 的軸（一種驗證方式 × 一個資料擁有者）。四個選項的單元數**皆為逐一
+枚舉的結果，不是估計**。
+
+- **A（建議）：7 個新單元，總數 24。**
+  `project-meta-data`（`spec`，M｜三張新表 `project_members`／`reselection_events`／
+  `system_requirement_fields` 的 DDL ＋ `schema_rbac.sql` 與 `DEPLOY.md` 的 blocking
+  同步；驗證＝真實 PostgreSQL CI job）、`membership-service`（`service`，L｜邀請／移出／
+  角色變更／自動改選／「不得失去最後一位管理者」的**共同上游**守門，含既有停用端點的
+  409／per-project 授權判定／改選稽核持久層）、`requirement-field-service`（`service`，M｜
+  欄位讀寫、清空語意、未填計數單一查詢、寫入者溯源）、`mcp-bridge`（`service`，L｜獨立
+  進程 MCP server、token 轉遞、工具 schema 白名單斷言、僅同主機）、`progress-channel`
+  （`library`，M｜per-request 進度通道 ＋ 清除端，改 `design_agent.py` 與
+  `wa_collab_orchestrator.py:79`；`depends_on: []` 可平行根）、`project-pages-ui`
+  （`ui`，L｜專案／系統清單、建立、詳情三籤）、`member-pages-ui`（`ui`，L｜成員頁、成員
+  詳情、邀請對話框、交棒橫幅）。
+  **三張表併為一個資料單元的理由**：它們的驗證方式同類（真實 PG job），而
+  `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步是**一次驗全部**、無法分單元判定
+  ——與 `[UG:G2]`=A 當初讓 `brain-infra` 獨立的理由同形。
+  **停用端點的 409 併入 `membership-service` 的理由**：`[US:D-06]` 要求閘門位在三條
+  路徑（停用帳號、自我降級、自我移出）的**共同上游**，三條 AC（`AC12.3.1`–`.3`）在
+  同一單元內才能一次驗完；三者都是 `TestClient` 端點測試，驗證方式同類。
+  **代價**：`membership-service` 同時含「新端點」與「既有端點契約變更」兩種契約面，
+  後者另需重 dump `openapi.json`（`[US:V-08]` 的顯式 409 response model）。
+
+- **B：9 個新單元，總數 26。** 把 A 的 `project-meta-data` 拆成 `membership-data`
+  （成員與改選兩表）＋ `requirement-field-data`（需求欄位表），並把既有停用端點的 409
+  拆成獨立的 `deactivation-guard`。
+  **好處**：每個單元的失敗模式更單一——`deactivation-guard` 的失敗模式（409 命中每一個
+  停用請求、連帶廢掉該端點既有的兩道保護）與新端點完全不同類。
+  **代價**：`AC12.3.3` 跨兩個單元（守門函式在 `membership-service`、呼叫點在
+  `deactivation-guard`），且 26 個單元遠超本專案既有上界（實測 5／9／12，本 intent
+  已是 17）。
+
+- **C：6 個新單元，總數 23。** A 去掉 `mcp-bridge`，把 MCP 通道併入
+  `requirement-field-service`。
+  **代價**：`A-7`（「MCP 生態可在本 repo 運作」）**本 intent 全程未實測**，repo 內零
+  MCP 基礎設施；把一個零前例的風險埋進一個另有其他責任的單元，會讓「這個單元完成了
+  嗎」在 MCP 卡住時無法回答。`domain-design` 的 `ADR-013` 正是以「不同消費者 ＋ 不同
+  失敗模式」把它獨立出來的。
+
+- **D：5 個新單元，總數 22。** C 再把兩個 UI 併成一個 `project-admin-ui`。
+  **代價**：違反 `[UG:G1]`=A 的軸——需求頁的資料擁有者是 `RequirementRegistry`、成員頁
+  是 `ProjectMembership`，兩個資料擁有者塞進同一單元；且 `[UG:G4]`=A 當初正是以「前端
+  按資料來源切」定案的。
+
+[Answer]: A
+<!-- 作答時間 2026-10-03T01:18:11Z（以 `date -u` 取值，非估計）。
+     使用者選 A：7 個新單元、總數 24。三張新表併為 project-meta-data、停用端點的 409
+     併入 membership-service（守門位在三條路徑的共同上游）。 -->
+
+## G7. `OQ-17`：per-request 的鍵從哪裡來？
+
+本題是上游**明文指派本站、`execution: ALWAYS`、不需轉移目標**的開放問題。
+`FR13.1` 原文寫鍵為「session 或 `thread_id`」，但已實測兩者都不成立：
+`agent_router.py:125` 的 `thread_id=f"user-{current_user.id}-design"` 是 **per-user**；
+`wa_collab_orchestrator.py:79` 呼叫 `run_design_agent(messages, current_xml)` **不傳**
+`thread_id`，落回 `design_agent.py:174` 的預設 `"default-thread"`；而「session」在
+`run_design_agent` 的簽章裡**不存在**。`design_agent.py:198` 的
+`config = {"configurable": {"thread_id": thread_id}}` 證實 `thread_id` **就是**
+LangGraph checkpointer 的 thread 鍵（以上四處皆本輪開檔核對）。
+
+- **A（建議）：入口端產生 request-scoped 識別字並一路傳遞。** 在
+  `agent_router.py` 與 `wa_collab_orchestrator.py` 兩個入口各產生一個 UUID，作為新的
+  參數傳進 `run_design_agent`，與 `thread_id` **並存且語意分離**——`thread_id` 繼續承載
+  對話記憶的分區，新鍵只承載進度通道。
+  **代價**：`run_design_agent` 的簽章要加一個參數，兩個呼叫點都要改（`[DG-6]` 已預告
+  本單元的完成條件橫跨新舊程式）。
+- **B：把 `thread_id` 本身改成 per-request**（例如 `f"user-{id}-design-{uuid}"`）。
+  不必改簽章。**代價已實測為會壞掉**：`thread_id` 同時是 checkpointer 的 thread 鍵，
+  每次請求換一個新值等於**每次都是新的對話記憶**——A4 共編（`wa_collab_orchestrator`）
+  的多輪對話會失去上下文。這不是理論風險，`design_agent.py:198` 直接把它交給
+  `MemorySaver`（`:169` 的模組層單例）。
+- **C：以 `contextvars` 承載，完全不改簽章。** **代價**：`ContextVar` 不會自動跨
+  `ThreadPoolExecutor` 邊界傳遞，而既有的成本路徑（`advice_orchestrator`）正是用
+  `ThreadPoolExecutor`；若日後產圖也搬進執行緒池，這個鍵會靜默變空——失敗模式是
+  無聲的，與本 intent 要修掉的那一種同類。
+- **D：以 FastAPI 的 `Request` 物件為鍵。** **代價**：不可行。agent 的事件在
+  `StreamingResponse` 的 generator 裡產生，而 `Request` 的生命週期不保證覆蓋整段串流；
+  且 `wa_collab_orchestrator` 的呼叫路徑上沒有 `Request`。
+
+[Answer]: A
+<!-- 作答時間 2026-10-03T01:18:11Z（以 `date -u` 取值）。使用者選 A：入口端產生
+     request-scoped 識別字並一路傳遞，與 thread_id 並存且語意分離。
+     `OQ-17` 自此定案，它是上游指派本站且 ALWAYS 的唯一一項。 -->
+
+## G8. 能力 11／12 的頁面與資料，要不要新的全域 story id？
+
+`[US:V-13]` 指出 `FR12.6a`（「缺少**對應全域功能權限**的使用者不得被邀請」）**沒有指明
+是哪一個 story id**，而 `domain-design` 的 `decisions.md` 對 `OQ-11`／`OQ-14` 的命中數
+實測為 **0**——`ADR-004` 只定了 `K1`（統一入口頁）與 `K2`（專案／系統階層）。沒有這個
+定案，`FR12.6a` 無法實作。
+
+- **A（建議）：沿用 `K2`，不新增 story id。** 持 `K2` 者看得到：專案清單、系統清單、
+  專案詳情的三籤（總覽／需求／記憶摘要）、成員清單與成員詳情頁；做得到：建立專案與
+  系統、填寫需求欄位、邀請與移出成員、變更成員角色——**但後三項仍須該專案的
+  per-project 角色為 `project_admin`**（`FR12.6` 的兩層串聯，第二層由
+  `membership-service` 判定）。`FR12.6a` 的「對應全域功能權限」即 `K2`。
+  **代價**：全域層分不開「能看專案」與「能管成員」——一個只需要填需求欄位的人也會
+  看到成員清單（但他若在該專案是一般成員，點進成員詳情頁不會有可改角色的控件，
+  `AC12.2.3` 已斷言清單上本來就沒有就地編輯）。`U3 rbac-story-ids` 不需重開。
+- **B：新增 `K3`（專案成員管理）。** 成員清單、成員詳情、邀請、移出、角色變更需
+  `K3`；需求頁與專案／系統清單仍用 `K2`。
+  **代價**：`U3 rbac-story-ids` **已走完 `functional-design`**，新增 story id 等於重開
+  一個已完成的單元；`role_permissions` 矩陣由 330 列增為 341（11 個角色 × 1 個新
+  story id），並再觸發一次 `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步與
+  allow/deny 雙向 `TestClient`。
+- **C：新增 `K3`（成員管理）＋ `K4`（需求欄位）。** 全域邊界最細：可以讓一個人能填
+  需求欄位但完全看不到成員清單，或反之。
+  **代價**：同 B，且矩陣增為 352 列；`U3` 重開一次要同時處理兩個新 id。
+- **D：本站不定，指派下游。** **代價**：這是**死指派**。`U3 rbac-story-ids` 的
+  `functional-design` 已完成，往游標之前指不會有人執行；而 `FR12.6a` 在 story id 定案
+  之前無法實作，缺口會一路帶到 `code-generation` 才爆。
+
+[Answer]: C
+<!-- 作答時間 2026-10-03T01:18:11Z（以 `date -u` 取值）。使用者選 C（非我建議的 A）：
+     新增 `K3`（專案成員管理）＋ `K4`（需求欄位），全域邊界取最細的一案。
+
+     **本站不反對這個選擇**——它不製造正確性問題，而是把全域層的邊界做得比 A 更嚴：
+     A 之下「只需填需求欄位的人也會看到成員清單」，C 之下兩者可完全分開。依
+     `project.md` 的規則，只有「會壞掉什麼」才該要求重選，而 C 不會壞掉任何已核可的
+     決定（`FR12.6` 的兩層串聯在 C 之下照常成立，第二層仍由 `membership-service` 判定；
+     `FR12.6a` 的「對應全域功能權限」自此有明確所指——成員頁對應 `K3`、需求欄位對應
+     `K4`）。
+
+     **逐項代價，如實記載**：
+     (1) `U3 rbac-story-ids` 的範圍由兩個 story id 擴為四個。它**不另開新單元**——
+         story id 的資料擁有者與驗證方式（`ensure_missing_role_permissions` ＋
+         allow/deny 雙向 `TestClient`）完全相同，另開單元會讓兩個單元同時改
+         `rbac_seed_data.py`／`schema_rbac.sql`／`DEPLOY.md`，違反 `[UG:G1]`=A 的
+         「一個資料擁有者」。故**新單元數仍為 7**，是 `U3` 的責任變寬。
+     (2) `role_permissions` 矩陣由 330 列增為 **352** 列（11 個角色 × 32 個 story id；
+         原 30 個 ＋ `K3` ＋ `K4`）。此數字為算式結果，施工時須以 `rbac_seed_data.py`
+         的實際角色數複算，不得照抄本行。
+     (3) `construction/rbac-story-ids/functional-design/` 已有產出，須隨之修訂。
+         **這不是本選項新增的代價**：回跳已把全部 Construction 站重設為 `[ ]`，
+         `rbac-story-ids` 的 functional-design 本來就要重跑。
+     (4) `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步在 `U3` 與
+         `project-meta-data` 兩個單元各觸發一次（前者是 seed 語意變更、後者是三張新表），
+         兩者不可互相替代。 -->
+
+## G9. `DG-4`（`ADR-015` 的後續）：欄位定義被移除後，其既有值列如何處置？
+
+`ADR-015` 定下「保留列、`value` 設 `null`、記 `clearedAt`」的**清空**語意，並明文把
+「欄位**定義**被移除後（新 agent 下線）其既有值列如何處置」指派本站。兩者不同：
+清空是使用者的動作，定義移除是程式常數的變更。
+
+- **A（建議）：保留值列，畫面不渲染未宣告的組。** 欄位定義是程式內的常數，移除後
+  該 agent 分組不再出現在需求籤；值列留在資料庫，若該 agent 日後回來，舊值仍在。
+  未填計數只統計**當前已宣告**的欄位，故移除定義會讓計數下降而不是留下幽靈欄位。
+  **代價**：表的列數只增不減（這已是 `ADR-015` 接受的代價），且會有「資料庫裡有、
+  畫面上看不到」的列——需在 DDL 註解寫明，否則下一個人會以為是髒資料。
+- **B：移除定義時一併刪除其值列。** 表不會累積無主列。
+  **代價**：不可逆——agent 下線後再上線，使用者填過的架構假設永久遺失；且刪除動作
+  本身要留稽核，而那筆稽核會指向一列已不存在的值——**與 `DG-1`（90 天清除讓稽核
+  事件的 `memoryId` 懸空）完全同形**，等於在本 intent 內製造第二個同型未決項。
+- **C：標記為 `orphaned` 並在詳情頁以「已停用的 agent」分組顯示。** 使用者看得到舊值
+  並能自行決定要不要清掉。
+  **代價**：需要新的狀態欄與**新的畫面**，而該畫面在已核可的線框 §15–§18 中零命中
+  ——會構成本站擅自擴大已核可的 UI 範圍。
+- **D：本站不定，指派 `functional-design`。** **代價**：`functional-design` 是
+  `CONDITIONAL` 且 per-unit，可能被 skip；而 `ADR-015` 的 Consequences 段**逐字把這件
+  事指派給 `units-generation`（2.7，ALWAYS）**，轉手等於把上游指名的事推回去，且第一
+  順位轉移目標也是 CONDITIONAL。
+
+[Answer]: A
+<!-- 作答時間 2026-10-03T01:18:11Z（以 `date -u` 取值）。使用者選 A：保留值列、畫面不
+     渲染未宣告的組、未填計數只統計當前已宣告的欄位。`DG-4` 自此定案，不再是待辦。
+     施工約束：此行為須寫進 `system_requirement_fields` 的 DDL COMMENT，否則「資料庫
+     裡有、畫面上看不到」的列會被下一個人當成髒資料清掉。 -->
+
+## 修訂 4 的定案摘要（四題）
+
+| 題 | 定案 | 對單元集合的直接後果 |
+|---|---|---|
+| G6 | **A**：7 個新單元，總數 **24** | 新增 `project-meta-data`／`membership-service`／`requirement-field-service`／`mcp-bridge`／`progress-channel`／`project-pages-ui`／`member-pages-ui` |
+| G7 | **A**：入口端產生 request-scoped 識別字並傳遞 | `progress-channel` 的完成條件得以寫完整（`OQ-17` 不再是阻塞） |
+| G8 | **C**：新增 `K3`＋`K4` | **既有 `U3 rbac-story-ids` 的責任由兩個 story id 擴為四個**；新單元數不變 |
+| G9 | **A**：保留值列、畫面不渲染未宣告的組 | `DG-4` 定案，寫進 `project-meta-data` 的 DDL 約束 |
+
