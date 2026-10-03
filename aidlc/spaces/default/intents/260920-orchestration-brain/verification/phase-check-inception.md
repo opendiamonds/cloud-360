@@ -13,16 +13,30 @@ Inception 階段所有執行過的站，其 `traceability.json` **無 `GAP`、�
 
 | 站 | 列數 | 狀態分佈 | `GAP`／`ORPHAN` | upstream_ids 未涵蓋 | coverage 多出 | 空白 target |
 |---|---|---|---|---|---|---|
-| `user-stories` | 70 | 61 `OK`／8 `Deferred`／1 `N/A` | 無 | 無 | 無 | 無 |
-| `domain-design` | 20 | 20 `OK` | 無 | 無 | 無 | 無 |
-| `units-generation` | 20 | 20 `OK` | 無 | 無 | 無 | 無 |
+| `user-stories` | **100** | **88 `OK`／8 `Deferred`／4 `N/A`** | 無 | 無 | 無 | 無 |
+| `domain-design` | **31** | **31 `OK`** | 無 | 無 | 無 | 無 |
+| `units-generation` | **31** | **31 `OK`** | 無 | 無 | 無 | 無 |
+
+> **以上為 2026-10-03 的重算值（修訂 1）。** 修訂前為 70／20／20 列；三站各自的修訂
+> （`user-stories` 修訂 1 的 `US11`／`US12`／`US13`、`domain-design` 修訂 1 的四個新元件、
+> `units-generation` 修訂 4 的七個新單元）把列數推到現值。每個數字由腳本直接解析三份
+> `traceability.json` 後輸出，非目測：`GAP`／`ORPHAN` 合計 **0**、空白 target **0**、
+> `upstream_ids` 與 `coverage` 的 id 集合在三份檔中**逐一相等**。
 
 `contract-design`（2.8）**不產出 `traceability.json`**——它擁有的是正式契約，不是需求
 覆蓋，故依 stage 檔規定不納入本次階段邊界檢查。
 
 ---
 
-## 8 筆 `Deferred` 與 1 筆 `N/A` 的逐項處置
+## 8 筆 `Deferred` 與 4 筆 `N/A` 的逐項處置
+
+> **修訂 1（2026-10-03）**：`Deferred` 仍是同樣的 8 筆（`NFR1`／`NFR2`／`NFR3`／`NFR5`／
+> `NFR6`／`NFR8`／`NFR10`／`NFR11`），`N/A` 由 1 筆增為 **4 筆**。新增的三筆列於下表之後。
+> **`NFR5` 的狀態值得特別記下**：它當時記為 `Deferred`（指向 `contract-design` 的 WS 訊息
+> 型別契約與 CI 一致性檢查），而該閘門現已**實際交付**——`ws-contract.json`、
+> `brain_ws_contract.py`、`dump_ws_contract.py`、`test_ws_contract.py`、`ws-contract.d.ts`
+> 全部存在，`inception/decisions/0019-ws-contract-gates-and-generator-supply-chain.md`
+> 即 ADR-0019。它不再只是「在 `K-02` 契約上有落點」，而是已經有程式。
 
 `Deferred` 與 `N/A` 是 `verification.md` 定義的**合法狀態**，不是未解決的發現——
 但兩者都要求非空的 target 或理由，且本檢查已逐筆確認其 target 非空。逐項如下：
@@ -41,6 +55,18 @@ Inception 階段所有執行過的站，其 `traceability.json` **無 `GAP`、�
 
 **八筆 `Deferred` 中有五筆指向 `build-and-test`（ALWAYS，不會被 skip）**，一筆（`NFR5`）
 已在 `contract-design` 實質交付，一筆（`NFR8`）已被本站的 Bolt 計畫承接。
+
+### 修訂 1 新增的三筆 `N/A`
+
+| id | 為什麼是 `N/A` 而非缺口 | 這個判定由誰定案 |
+|---|---|---|
+| `FR9.4` | **2026-10-02 的更正**（`user-stories` 的 `review-02` 的 `R-16`，承 `review-01` 的 `R-08`）：原記 `OK` 並指了一個 target，複核後確認它沒有可斷言的使用者可觀察行為 | `user-stories` 修訂 1，已過該站的審查 |
+| `FR12.5c` | **否定性結論**（`FR12.5a` 不需放寬任何 schema 約束），無可觀察行為可斷言。其修訂同時記錄了原理由不成立——停用端點做的是 **UPDATE**，外鍵對 UPDATE 零效力 | `requirements-analysis` 的隔離單站補核（2026-10-03T00:44:37Z，Summary Authorization Id `51d2bb1f…`） |
+| `FR12.6b` | `FR12.6a` 的**已指名後果之明文記載**（入職順序被強制為先全域權限、後專案成員），性質是文件化而非可斷言行為。執行期語意由 `AC12.5.1`／`AC12.5.2` 承載 | `requirements-analysis` 修訂 1 |
+
+**三筆都不是漏做，是「這一條沒有可斷言的行為」這個判定本身被寫下來。** 依
+`verification.md`，`N/A` 要求非空的 target 或理由——三筆的理由皆記在 `note` 欄，
+已逐筆開檔確認非空。
 
 ---
 

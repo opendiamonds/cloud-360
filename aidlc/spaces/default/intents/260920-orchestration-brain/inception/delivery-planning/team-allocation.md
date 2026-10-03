@@ -2,6 +2,13 @@
 
 <!-- Stage: delivery-planning（Inception 2.9）· Record: 260920-orchestration-brain -->
 
+> **修訂 1（2026-10-03）新增四個 Bolt（`B10`–`B13`），且 Bolt 編號不再等於執行順序。**
+> 實際順序為 `B1 → B10 → B2 → B11 → B3 → B12 → B13 → B4 → B5 → B6 → B7 → B8 → B9`。
+> 新 Bolt 的執行者指派與新增的第四類人工介入點見本檔末尾的「修訂 1」節。
+> **術語**：一個 **Bolt** 是 Construction 的一個交付切片（一或多個工作單元，帶自己的
+> 完成判準、信心假說與擁有者）；**mob** 是共同執行它的小組。本工作流程的
+> `team-formation`（1.5）為 SKIP，故全部 Bolt 由 AI 執行、無人類 mob 分派。
+
 ## 這份檔在做什麼
 
 把 **Bolt**（一次建置通過，做完一個或多個工作單元，結束時有東西能跑、能展示）
@@ -97,3 +104,39 @@
 - 三類人工介入點中，第二與第三類**沒有機制保證它們會被執行**：它們依賴屆時判定
   skip 的執行者記得重新提交使用者。本檔明寫它們，但明寫不等於強制 [assumption]
 - 未估工時、未估每個 Bolt 的時間——沒有實證輸入，估了也是虛假精確 [assumption]
+
+
+---
+
+# 修訂 1（2026-10-03）— 四個新 Bolt 的執行者
+
+既有九個 Bolt 的指派與三類人工介入點全部有效、不回改。
+
+**執行順序提醒**：Bolt 編號是識別字，**不是順序**。實際順序為
+`B1 → B10 → B2 → B11 → B3 → B12 → B13 → B4 → B5 → B6 → B7 → B8 → B9`
+（理由見 `bolt-plan.md` 修訂 1 與 `risk-and-sequencing-rationale.md` 修訂 1）。
+
+| Bolt | 單元 | 執行者 | 備註 |
+|---|---|---|---|
+| `B10` | `U22` progress-channel | `aidlc-developer-agent`（AI） | 它改的是**既有程式**（`design_agent.py`、`wa_collab_orchestrator.py`），故 brownfield 安全措施適用：改動前先跑既有測試建立基準，改動後複跑比對 |
+| `B11` | `U18`、`U19` | `aidlc-developer-agent`（AI） | 含一處**既有端點的回應契約變更**與一次 `schema_rbac.sql` ＋ `DEPLOY.md` 的 **blocking 同步** |
+| `B12` | `U24` member-pages-ui | `aidlc-developer-agent`（AI） | 前端，須走 `AdminPage.tsx` 的兩層抓取形狀（lint error 級） |
+| `B13` | `U20`、`U23`、`U21` | `aidlc-developer-agent`（AI） | `U21` 是本 intent 唯一**沒有既有程式可參照**的單元（repo 內零 MCP 基礎設施） |
+
+`team-formation`（1.5）在本工作流程是 **SKIP**，故與既有九個 Bolt 一致：全部由
+`aidlc-developer-agent` 執行，無人類 mob 分派。
+
+## 修訂 1 新增的人工介入點（第四類）
+
+既有三類之外，本輪新增一類：
+
+| # | 介入點 | 為什麼需要人 | 有沒有機制保證 |
+|---|---|---|---|
+| 4 | **`B13` 第一段完成之後、標示整個 Bolt 完成之前** | `X-04` 是部分契約（`OQ-15`／`OQ-16` 未定、`A-7` 未實測）。「第一段完成不足以標示完成」是文字約束，**沒有任何閘門擋住有人逕自標完成** | **沒有**。本檔明寫它，但明寫不等於強制——與既有第二、三類同一個性質 |
+
+## 修訂 1 的 Assumptions & Open Questions
+
+- 四個新 Bolt 全部由 AI 執行，與既有九個一致；本輪**未引入**任何需要人類 mob 的工作
+  [assumption]
+- 第四類人工介入點與既有第二、三類同樣**沒有機制保證**會被執行。本檔如實記載，
+  不宣稱它是閘門 [assumption]

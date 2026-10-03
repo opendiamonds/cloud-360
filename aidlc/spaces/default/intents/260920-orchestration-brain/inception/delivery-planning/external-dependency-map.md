@@ -2,6 +2,11 @@
 
 <!-- Stage: delivery-planning（Inception 2.9）· Record: 260920-orchestration-brain -->
 
+> **修訂 1（2026-10-03）新增五項受制項（`E4`–`E8`），其中 `E4`–`E6` 全部集中在
+> `B13` 的 `U21 mcp-bridge`。** `B10`–`B13` 四個新 Bolt 的實際執行順序為
+> `B1 → B10 → B2 → B11 → B3 → B12 → B13 → B4 → B5 → B6 → B7 → B8 → B9`
+> （Bolt 編號是識別字，不是順序）。見本檔末尾的「修訂 1」節。
+
 ## 這份檔在做什麼
 
 列出**不在這次建置範圍內、但會擋住某個 Bolt 的東西**——外部服務、資料可用性、
@@ -131,3 +136,34 @@ public、Actions log 公開可讀**——一次意外 echo 即等同公開發布
 - 本檔**不含時程**（前置時間、交付日期）。沒有外部團隊交接，也沒有實證的工時基準 [assumption]
 - 自架 runner 可能是 E3 的答案，但**本站未查證它的網路可達性與資料庫憑證是否具備**
   ——只指出它的存在供 `infrastructure-design` 參考 [assumption]
+
+
+---
+
+# 修訂 1（2026-10-03）— 新 Bolt 的外部與未決依賴
+
+既有的 E1–E3 全部有效、不回改。本節補上 B10–B13 的受制項。
+
+| # | 受制項 | 消費它的 Bolt | 性質 | 落點與 execution |
+|---|---|---|---|---|
+| E4 | **`A-7`：MCP 生態可在本 repo 運作** —— 本 intent **全程未實測**，`backend/` 對 `mcp` 僅一處命中（`user_router.py:85` 的 RBAC story 標籤，與 MCP 協定無關） | `B13`（`U21`） | **未經驗證的技術前提**，非外部團隊交接 | `code-generation`（3.5），**ALWAYS**（承 `contract-design` 的 `J-18`／`units-generation` 的 `UG-1`） |
+| E5 | **`OQ-15`：token 如何進入 MCP 進程** —— 由誰注入、生命週期多長、如何隨使用者切換 | `B13`（`U21`） | **未定的設計決定** | `code-generation`（3.5），**ALWAYS**（承 `J-16`） |
+| E6 | **`OQ-16`：MCP 傳輸形式**（stdio 或本機 HTTP／SSE） —— 它決定 Encryption 面的實際要求（stdio 不過網路；HTTP／SSE 須本機迴環或加密） | `B13`（`U21`） | **未定的設計決定** | `infrastructure-design`（3.4，**CONDITIONAL**）→ 轉移 `code-generation`（3.5，**ALWAYS**）（承 `J-17`） |
+| E7 | **`schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步** —— 三張新表（`B11`）與 `K3`／`K4` 的 seed 語意變更（`B11` 內的 `U3` 擴充）**各觸發一次，兩者不可互相替代** | `B11` | **repo 內的 blocking 規則**，不是外部依賴 | `code-generation`（3.5），**ALWAYS**（承 `UG-2`／`J-?`：`domain-design` 的 `DG-9`） |
+| E8 | **`AdminPage.tsx` 的同批更新** —— `B11` 改既有停用端點的回應契約，而該檔是既有消費端 | `B11` | **既有程式的同批約束**（`delivery-planning:c6`） | `B11` 自身的完成判準，不轉移 |
+
+**E4–E6 全部集中在 `B13` 的 `U21`**，這是本輪新 Bolt 中唯一有外部未決前提的單元。
+`bolt-plan.md` 的 B13 把完成條件分成「現在可驗」與「待 `OQ-15`／`OQ-16` 定案後才可驗」
+兩段，並明訂前者不足以標示完成——這是 E5／E6 在 Bolt 層的承載方式。
+
+**E4 與 E5／E6 的性質不同，不可混為一談**：E4 是「這條路走不走得通」（可行性），
+E5／E6 是「走哪一條」（設計選擇）。E4 若為否，`U21` 整個單元的形狀要重想；
+E5／E6 若未定，`U21` 可以部分完成。
+
+## 修訂 1 的 Assumptions & Open Questions
+
+- E4 的落點是 `code-generation`（ALWAYS，游標之後），但那意味著**MCP 生態的可行性要到
+  寫碼時才被驗證**。更早驗證它需要一個技術試探，而本工作流程沒有為它安排站——
+  如實記載此缺口，不假裝 `code-generation` 是理想落點 [assumption]
+- 本檔**不含時程**（與既有部分一致）：沒有外部團隊交接，也沒有實證的工時基準
+  [assumption]
