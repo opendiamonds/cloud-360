@@ -341,7 +341,12 @@ Full rescan（廣度）＋ `kind: partial`（深度），33 個路徑實讀，**
     **改為 DoD**：FR12.5a 的 route decorator 必須**顯式**宣告
     `responses={409: {"model": <列出專案的回應模型>}}`，使該契約真的進入 spec 與
     產生的型別檔。此更正由 mob 的開發者查出（`V-08`）。
-  - **FR12.5c**（**2026-10-02T03:10:29Z 更正：原文的理由是錯的，結論保留**）FR12.5a **不需放寬任何
+  - **FR12.5c**（**2026-10-02T03:10:29Z 更正：原文的理由是錯的，結論保留**；**本條與
+    `FR12.0`／`FR12.4c`／`FR12.5b` 四處已於 2026-10-03T00:44:37Z 的隔離單站補核取得
+    正式核可，Summary Authorization Id `51d2bb1f93ae06d1db3453f39b2595cd5fe92048c3fd4e7c26fa12f519ca1552`
+    ——該輪 `single: true`、`gate: false`，不動主流程游標、不重設任何站；範圍嚴格等於
+    這四處，不新增需求、不改動任何既有作答。詳見 `requirements-analysis-questions.md`
+    的「隔離單站補核」一節**）FR12.5a **不需放寬任何
     schema 約束**——這個結論成立，但原本給的理由不成立，且錯得會誤導實作者。
     - **原文寫**：「`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE`——資料庫今天就會
       擋下該刪除」，並以此作為 FR12.5a 的佐證。

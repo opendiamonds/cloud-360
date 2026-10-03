@@ -293,7 +293,11 @@ R6＝A 選了「token 改走 `Sec-WebSocket-Protocol` 標頭或握手後首則�
 
 ---
 
-## Consolidated Summary Confirmation
+## 原始輪的 Consolidated Summary Confirmation（已完成）
+
+<!-- 標題加後綴：引擎的解析器只認**恰好**叫「Consolidated Summary Confirmation」的 H2，
+     且取第一個命中到下一個 H2 為止；兩個同名區塊會讓它讀到舊的已填答案。
+     本區塊的內容與當時的作答原樣保留。 -->
 
 九題的定案摘要：
 
@@ -451,3 +455,64 @@ skip 時的轉移目標。提前做等於替下游決定。第 19／20／21 列�
 
 ---
 
+---
+
+# 隔離單站補核（2026-10-03T00:43:15Z）— 四處就地更正的正式核可
+
+## 這一輪是什麼，以及它刻意不做什麼
+
+本站於 2026-10-02 通過核可之後，**下游的 user-stories 修訂 1 在它的產出裡就地改了
+四處**。那些更正的內容已一致傳到下游三站（user-stories、refined-mockups、
+domain-design 皆已核可），但**本站自己的關卡沒有重新核可它們**，於是引擎把本站標為
+`directly stale`、下游三站標為 `Revalidate`。
+
+**為什麼用隔離單站跑而不是回跳**：`aidlc-jump.ts resolve` 實測回跳會影響 **19 站**
+並重設 user-stories／refined-mockups／domain-design 的核可與審查紀錄（本 session 的
+九輪審查與三次關卡要重走），而 drift 的實際內容只有下面四處。使用者在量完成本後
+選擇隔離單站跑。**本輪 `single: true`、`gate: false`**：它不動主流程的游標、不重設
+任何站。
+
+**本輪刻意不做的事**：不重開任何既有問題（R1–R9、RA-1–RA-3 的作答全部不動）、
+不新增任何需求、不改任何已核可的 FR 內容。範圍嚴格等於下面四處**已經存在於檔案裡**
+的更正——這一輪要的是它們被審查與記錄，不是再寫一次。
+
+## 四處更正的逐項清單（以 `git diff` 實算：**47 行新增、5 行刪除**）
+
+| # | 位置 | 性質 | 內容與來源 |
+|---|---|---|---|
+| 1 | **`FR12.0`**（新增條目） | **補上一條原稿完全沒有的要求** | `FR12.1`–`FR12.6` 的四項行為**全部**讀一張專案成員關係表，而原稿**沒有任何一條要求建立它**（`grep -rl project_members` 全樹 0 命中）。**急迫性在於它讓 `FR12.5a` 從「保護」變成「廢掉既有功能」**：沒有成員表時「某專案的唯一成員」等於**每一位使用者**（`hierarchy_migration.py:411` 為每位持圖使用者建預設專案並設其為 owner），照字面實作 409 會對每個停用請求命中、**使停用端點整支失效**。由 user-stories 的 mob 的開發與品質兩位獨立查出 |
+| 2 | **`FR12.4c`** | **改行為落點** | 橫幅由「**入口頁**頂部」改為「使用者的**落地頁**頂部（不限入口頁）」。理由：`FR1.8`／Flow 4 的 `DefaultRedirect` 會把使用者送到他自己的落地頁，而只有具 `C1 view` 者才落在入口頁——照原文實作，一個合法成員被授予 `project_admin` 後可能**永遠看不到這則通知**。來源 `[D-17]`，由 `review-02` 的 `R-04` 指出本條漏改。**只改落點，不改「伺服器持久化、不依賴能力 7」** |
+| 3 | **`FR12.5b`** | **推翻一個不存在的護欄** | 原文寫「同時觸發 CI 的 OpenAPI 漂移閘門」——**那道閘門對本變更無效**。實測 `openapi.json` 的 55 個 operation 宣告的狀態碼只有 `{200:53, 422:45, 201:1, 204:1}`，**非 2xx/422 的宣告數為 0**；加一個 409 不會動到 spec。改為 DoD：route decorator 須**顯式**宣告 `responses={409: ...}`。由 mob 的開發者查出（`V-08`） |
+| 4 | **`FR12.5c`** | **結論保留、理由推翻** | 原文以「`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE`——資料庫今天就會擋下該刪除」佐證 `FR12.5a`。**錯在**：停用端點做的是 `target_user.is_active = ...`（`user_router.py:673`），一個 **UPDATE**，外鍵對 UPDATE **零效力**。**更要緊的是方向相反**——`schema_rbac.sql` 該欄的 COMMENT 逐字為「Deletion behaviour … is **deliberately NOT decided** (OQ-H1, landing U7)」，所以「無 `ON DELETE`」是刻意留的**未決項**，不是既有保護。**原文把一個未決項讀成了 backstop** |
+
+**四處的共同性質**：全部是「原稿有錯或有缺，由下游 mob 以實測查出」，**沒有一處是
+新增範圍**。第 3、4 兩處推翻的都是**我自己原本寫下的、關於既有護欄的錯誤斷言**——
+那類錯誤比沒有斷言更糟，因為它會讓實作者以為有保護。
+
+## 核可這四處會連帶接受的事
+
+1. **`FR12.0` 觸發 `project.md` 的 blocking 規則**：新增表即觸發「`schema_rbac.sql`
+   與 `DEPLOY.md` 必須同步更新」，未完成不得標示相關 Construction／部署階段為完成。
+   domain-design 已把它記為交接 `DG-9`（連同另兩張表）。
+2. **`FR12.5a` 沒有任何資料庫層的 backstop**（第 4 處的直接後果）：它是唯一的防線，
+   須完整實作於應用層。硬刪除路徑的行為仍由 `OQ-H1`／`domain-design` 決定。
+3. **本站不定 `project_members` 的 schema 細節**（欄位型別、唯一約束、`ON DELETE`
+   行為）——那是 `domain-design` 的工作，已由 `OQ-14` 承載，且該站已核可
+   （`ProjectMembership` 元件 ＋ `ProjectMember` 實體）。
+
+## Consolidated Summary Confirmation
+
+**本輪產出**：`requirements.md` 的四處就地更正（內容已存在，本輪取得正式核可）、
+本問題檔的隔離輪紀錄。**不改動任何既有作答，不新增需求。**
+
+確認範圍：上表四處更正，以及「核可會連帶接受的事」那三項。
+
+Does this all look correct before I send it for review?
+
+- Looks correct
+- Request changes
+
+[Answer]: Looks correct
+<!-- 作答時間 2026-10-03T00:44:37Z（以 `date -u` 取值，非估計）。隔離單站補核（single: true、gate: false）。
+     確認範圍：四處就地更正（FR12.0／FR12.4c／FR12.5b／FR12.5c）與連帶接受的三項。
+     不改動任何既有作答（R1–R9、RA-1–RA-3 全部不動），不新增需求。 -->
