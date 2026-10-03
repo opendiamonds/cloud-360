@@ -55,7 +55,9 @@
 `機制` 欄的值：`facade`（同進程、經授權門面）、`in-process`（同進程、無受保護操作）、
 `ws`（WebSocket）、`http`（跨模組 HTTP ＋ token）、`schema`（DDL／遷移）、
 `types`（型別來源 ＋ CI 閘門）、`env`（環境變數）、`seed`（資料種子 ＋ 常數）、
-`dom`（前端元件掛載點）、`test-target`（測試標的）。
+`dom`（前端元件掛載點）、`test-target`（測試標的）、
+**`mcp`（MCP 協定的工具宣告；修訂 1 新增第 11 個值，見 `X-04`。傳輸形式與認證機制
+為未定項 `OQ-16`／`OQ-15`）**。
 
 | # | Provider Unit | Consumer | 機制 | Owner |
 |---|---|---|---|---|
@@ -1504,3 +1506,705 @@ B1 中依賴接縫的 2 條——`AC1.1.2`、`AC1.2.2`。
   該預算幾乎全被路由層 LLM 吃掉，而 `K-10` 的分類一律執行、且 `IntentRouter` 還要
   讀記憶（`components.md` 的 Assumptions 已標明「加入記憶檢索後是否仍可達」未重估）。
   `[C9]` 的「最少上下文 ＋ 合併請求」是緩解方向，不是已驗證的達成 [assumption]
+
+---
+
+# 修訂 1（2026-10-03）— 能力 11／12／13 的七條新契約
+
+**`C1`–`C11` 的十一題定案與既有 17 條契約全部有效、不回改。** 本修訂新增 7 條
+（6 條 K ＋ 1 條 X）並擴充 4 條既有契約的消費端，契約總數 **17 → 24**。
+
+## 觸發與實測基準
+
+`units-generation` 修訂 4 把單元由 17 增為 24、邊由 25 增為 **46**（新增 21 條），
+而本站產出早於它。以腳本掃 25 個關鍵詞（三個能力名、`US11`–`US13`、`FR11.`–`FR13.`、
+四個新元件名、三張新表名、七個新單元名、`需求籤`、`自動改選`）：**全部 0 命中**。
+
+**21 條新邊的歸屬實算**：`K-15` 2 ＋ `K-16` 4 ＋ `K-17` 3 ＋ `K-18` 2 ＋ `K-19` 1 ＋
+`K-20` 1 ＋ `K-03` 擴充 3 ＋ `K-04` 擴充 1 ＋ `K-07` 擴充 3 ＋ `K-08` 擴充 1 ＝ **21**，
+與上游邊數一致。`X-04` 不涵蓋單元邊（它是對外面）。
+
+## `機制` 欄新增第 11 個值（`[CD1]`=A）
+
+既有十個值（`facade`／`in-process`／`ws`／`http`／`schema`／`types`／`env`／`seed`／
+`dom`／`test-target`）無一適用於 MCP：`[C7]` 的形式清單沒有它，而它的傳輸形式是未定項
+（`OQ-16`）。新增 **`mcp`**（MCP 協定的工具宣告；傳輸形式與認證機制未定，見 `X-04`）。
+
+## 修訂 1 的契約表（新增與擴充）
+
+| # | Provider Unit | Consumer | 機制 | Owner |
+|---|---|---|---|---|
+| K-15 | `U18` `project-meta-data` | `U19`、`U20` | `schema` | `U18` |
+| K-16 | `U19` `membership-service` | `U20`、`U21`、`U13`、`U24`、**既有停用端點的消費端 `AdminPage.tsx`** | `facade` ＋ `http` | `U19` |
+| K-17 | `U20` `requirement-field-service` | `U21`、`U13`、`U23` | `facade` ＋ `http` | `U20` |
+| K-18 | `U22` `progress-channel` | `U13`、`U12` | `in-process` | `U22` |
+| K-19 | `U23` `project-pages-ui` | `U17` | `test-target` | `U23` |
+| K-20 | `U24` `member-pages-ui` | `U17` | `test-target` | `U24` |
+| X-04 | `U21` `mcp-bridge` | **External: agent 側的 MCP client** | `mcp` | `U21` |
+
+**既有四條的消費端擴充**（原列不回改，擴充列於此）：
+
+| # | 原消費端 | 新增消費端 | 理由 |
+|---|---|---|---|
+| K-03 `U3 rbac-story-ids` | `U7`、`U14` | `U19`、`U23`、`U24` | `[UG:G8]`=C 新增 `K3`（成員管理）與 `K4`（需求欄位）兩個 story id；矩陣 330 → 352 |
+| K-04 `U4 hierarchy-data` | `U7` | `U18` | 三張新表的 FK 指向 `projects`／`systems` |
+| K-07 `U7 hierarchy-service` | `U10`、`U12`、`U16` | `U19`、`U20`、`U23` | `ProjectMembership`／`RequirementRegistry` 驗證專案／系統存在；專案頁的清單與建立 |
+| K-08 `U8 memory-service` | `U11`、`U15` | `U23` | 專案詳情頁的「記憶摘要籤」 |
+
+**修訂 1 後共 24 條**（K 類 20、X 類 4）。
+
+---
+
+## 逐條契約規格（修訂 1）
+
+### K-15 `U18 project-meta-data` → `U19`、`U20`（`schema`）
+
+```yaml shared-schema
+contract: project-meta-schema
+owner: U18
+consumers: [U19 membership-service, U20 requirement-field-service]
+tables: [project_members, reselection_events, system_requirement_fields]
+foreign_keys:
+  - "project_members.project_id → projects.id（K-04 的表）"
+  - "project_members.user_id → users.id（既有表）"
+  - "reselection_events.project_id → projects.id"
+  - "system_requirement_fields.system_id → systems.id（K-04 的表）"
+columns_that_carry_semantics:
+  - name: "project_members.joined_at"
+    why: "FR12.4 的挑選規則（最早加入）直接讀它；平手時與 user_id 組成決定性
+           tie-break 的鍵。**不得可為 null**，否則挑選在空值上無序"
+  - name: "reselection_events.acknowledged_at"
+    why: "橫幅已讀狀態。**以事件為鍵、不是 per-user 布林值**——後者會讓同一人
+           第二次被改選時看不到橫幅，而那正是 FR12.4c 要防的情境"
+  - name: "system_requirement_fields.value"
+    why: "**必須可為 null**。ADR-015：『從未填過』＝無列、『清空』＝有列而 value 為
+           null 且 clearedAt 有值。若設為 NOT NULL，兩種狀態在資料層不可區分，
+           而畫面 M12 要求區分"
+  - name: "system_requirement_fields.cleared_at"
+    why: "獨立於 value 的欄位，使清空動作可被稽核（誰清、何時清）"
+  - name: "system_requirement_fields.updated_on_behalf_of"
+    why: "由大腦代某個 agent 寫入時才有值；使用者得以分辨哪些值是自己填的"
+ddl_comment_requirement:
+  rule: "`system_requirement_fields` 的 DDL COMMENT 必須寫明 `[UG:G9]`=A 的行為：
+         欄位定義被移除後其值列**保留**、畫面不渲染該組、未填計數只統計當前已宣告
+         的欄位"
+  why: "不寫下來的話，『資料庫裡有、畫面上看不到』的列會被下一個人當成髒資料清掉"
+blocking_sync:
+  rule: "新增三張表即觸發 `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步
+         （`project.md ## Mandated`）——未完成不得標示相關 Construction／部署階段為完成"
+  note: "與 `K-03` 的 seed 語意變更各觸發一次，**兩者不可互相替代**"
+behaviour_semantics:
+  authorization_responsibility: "**無**——DDL 在部署／啟動路徑執行，不經使用者授權。
+                                 資料的存取授權由 `K-16`／`K-17` 的 facade 承擔"
+  observable_side_effects: "建三表 ＋ 其索引與外鍵。**不含任何資料寫入**
+                            （與 `K-04` 不同，本契約沒有遷移步驟：三張表皆為全新，
+                            沒有既有資料要搬）"
+  retry_and_idempotency: "全部 DDL 以 `IF NOT EXISTS` 撰寫，可重跑安全。
+                          無資料寫入故無冪等性風險"
+known_constraint_inherited_from_K04:
+  statement: "`schema_rbac.sql` 只在**空 volume** 執行；既有環境的唯一演進路徑是
+              `database.py` 的 `_ensure_*` 補丁，而它們**全部吞掉失敗**"
+  consequence: "本契約的三張表若走該路徑建立，失敗必須**大聲失敗**而非被吞掉"
+verification: "真實 PostgreSQL CI job"
+```
+
+### K-16 `U19 membership-service` → `U20`、`U21`、`U13`、`U24` ＋ 既有停用端點（`facade` ＋ `http`）
+
+**`[CD2]`=A 與 `[CD3]`=A 的落點。** 本契約是修訂 1 最重要的一條：它同時是 per-project
+授權判定的唯一來源、四個消費端的 facade、以及一處**既有端點的契約擴充**。
+
+```yaml shared-schema
+contract: membership-authorized-facade
+owner: U19
+consumers:
+  in_process: [U20 requirement-field-service, U13 brain-gateway]
+  http: [U24 member-pages-ui]
+  separate_process: [U21 mcp-bridge]
+authorization_model:
+  sole_entry: "MembershipFacade —— 受保護操作的**唯一**授權入口，**且同時是
+               per-project 授權判定的唯一提供者**（ADR-012）"
+  two_layer_rule: "FR12.6 的兩層串聯：全域那一層仍由既有 require_story_action 承載
+                   （本元件**不重新實作它**），per-project 那一層由本 facade 判定。
+                   任一層不過即拒"
+  forbidden_bypass: "禁止的是**跳過本 facade 直接讀 `project_members` 表**。
+                     `sync` 入邊本身是**預期且允許**的呼叫方式——ADR-012 明記這兩件事
+                     不同，而 `ProjectHierarchy` 上一輪正是把它們寫成同一句話而自相矛盾"
+  two_facade_layers:
+    statement: "`U20` 自己也有 facade（K-17），於是出現 facade 呼叫 facade 的兩層。
+                兩層的責任切分如下，**不得互相假設對方已檢查**"
+    U19_layer: "判定『這個 principal 在這個 project 是什麼角色』，以及成員關係本身的
+                受保護操作（邀請／移出／角色變更／自動改選）"
+    U20_layer: "判定『這個 principal 能不能寫這個 system 的需求欄位』——它呼叫 U19 取得
+                per-project 角色，但**自己負責**把角色映射到欄位操作的許可"
+    anti_double_check: "`U20` 不得重複呼叫 require_story_action 做全域層檢查
+                        （它的 router 已經做了）；`U19` 不得假設呼叫端已做 per-project 判定"
+  identity_passing: "每個 facade 方法的第一個參數為 principal（已驗證的身分 ＋ 其全域角色），
+                     由呼叫端傳入；facade 不自行從 request 取身分。
+                     **`U13 brain-gateway` 的特殊性**：它是 WebSocket，握手之後每則訊息
+                     都在同一個連線裡、**不經 FastAPI 的 dependency 鏈**，故它必須把握手時
+                     取得的 principal 自行保存並逐次傳入"
+  resource_context: "projectId 為具名參數，不得藏在 payload 內"
+  on_denied: "raise MembershipForbidden(story_id='K3', action=<action>, project_id=<id>)
+              —— **不是** HTTPException。router 層轉 403；同進程呼叫端自行處置"
+  hard_rule: "授權未通過時**不得執行受保護操作**；判定先於任何讀寫，失敗即中止"
+  residual_gap: "『facade 是唯一入口』**無機械強制**（同 K-07 的 OQ-N2）。
+                 本契約額外的殘留缺口：per-project 判定結論由伺服器產生、前端不得推導
+                 （I-5），但**沒有機制擋住前端自己猜**"
+public_interface:
+  - name: MembershipFacade.resolve_project_role
+    params: "principal, project_id: str"
+    returns: "ProjectRole（project_admin | member）| None（非成員）"
+    form: sync
+    raises: [MembershipNotFound]
+    consumed_by: [U20, U13, U21]
+    note: "**這是 per-project 判定的唯一入口。** 回 None 代表非成員——呼叫端須把它
+           當成拒絕，不是當成預設角色"
+  - name: MembershipFacade.list_members
+    params: "principal, project_id: str"
+    returns: "list[MemberView]（userId, displayName, role, joinedAt）"
+    form: sync
+    raises: [MembershipForbidden, MembershipNotFound]
+    consumed_by: [U24]
+  - name: MembershipFacade.invite_member
+    params: "principal, project_id: str, user_id: str, role: ProjectRole"
+    returns: "MemberView"
+    form: sync
+    raises: [MembershipForbidden, MembershipNotFound, MissingGlobalPermission]
+    consumed_by: [U24]
+    note: "**成功邀請是一級行為**（US12.6 的上游缺口指派 units-generation 已處置）：
+           成功時成員清單必然多一列。`MissingGlobalPermission` 對應 FR12.6a，
+           且**被拒時不得留下半套狀態**（AC12.5.3）——整個操作在單一交易內"
+  - name: MembershipFacade.remove_member
+    params: "principal, project_id: str, user_id: str"
+    returns: "None"
+    form: sync
+    raises: [MembershipForbidden, MembershipNotFound, LastAdminGuard]
+    consumed_by: [U24]
+    note: "**成功移出是一級行為**：成功時清單必然少一列，且該成員其後讀取本專案資料
+           被拒。`LastAdminGuard` 見下方 last_admin_guard 區塊"
+  - name: MembershipFacade.change_role
+    params: "principal, project_id: str, user_id: str, role: ProjectRole"
+    returns: "MemberView"
+    form: sync
+    raises: [MembershipForbidden, MembershipNotFound, LastAdminGuard]
+    consumed_by: [U24]
+    note: "一個專案可同時有**多位** project_admin（FR12.3）；指定第二位**不得覆寫**
+           第一位。AC12.2.4 斷言兩位都能執行管理動作"
+  - name: MembershipFacade.assert_can_deactivate
+    params: "principal, target_user_id: str"
+    returns: "None（通過）"
+    form: sync
+    raises: [LastAdminGuard]
+    consumed_by: ["既有停用端點 user_router.py:673"]
+    note: "**這是既有端點的契約擴充，見下方 existing_endpoint_extension**"
+  - name: MembershipFacade.select_successor
+    params: "members: list[MemberSnapshot]"
+    returns: "MemberSnapshot（被選中者）"
+    form: sync
+    raises: []
+    note: "**純函式，不讀 DB**——這是 ADR-0006 PBT hard constraint 能作用的結構前提。
+           輸入為成員集合、輸出為被選中者。平手時以 (joinedAt, userId) 做決定性
+           tie-break，形狀沿用 backend/cost/estimate_readers.py:247-251 的
+           best_clouds（key=lambda item: (-item[1], item[0])）"
+last_admin_guard:
+  rule: "專案不得失去最後一位管理者。守門判定**位於三條路徑的共同上游**，
+         不是三處各寫一次"
+  three_paths:
+    - "既有停用端點（`assert_can_deactivate`）"
+    - "自我降級（`change_role` 把自己改為 member）"
+    - "自我移出（`remove_member` 移除自己）"
+  why_common_upstream: "[US:D-06] 的 Critical；`functional-design:c34` 記過同形缺陷
+                        ——修在單一入口會把違規從一個位置挪到另一個位置而不是消除它"
+  on_violation: "raise LastAdminGuard(projects=[<專案清單>])"
+existing_endpoint_extension:
+  endpoint: "既有的停用使用者端點（`user_router.py:673`）"
+  change: "在執行 `target_user.is_active = request.is_active` **之前**呼叫
+           `assert_can_deactivate`；命中則回 **409** 並於回應中列出那些專案"
+  response_model_requirement:
+    rule: "route decorator 必須**顯式**宣告 `responses={409: {\"model\": <列出專案的回應模型>}}`"
+    why: "實測 `openapi.json` 的 55 個 operation 宣告的狀態碼只有
+          `{200:53, 422:45, 201:1, 204:1}`，**非 2xx/422 的宣告數為 0**。
+          不顯式宣告則該契約不會進入 spec、前端也產不出型別——
+          `dump_openapi.py --check` 會保持綠燈（[RA:FR12.5b]／[US:V-08]）"
+  no_database_backstop:
+    statement: "**這個檢查是唯一防線。** 停用端點做的是 UPDATE，外鍵對 UPDATE 零效力；
+                而 `schema_rbac.sql` 對 `projects.owner_user_id` 的 COMMENT 逐字為
+                『deletion behaviour ... **deliberately NOT decided**』——那是刻意留的
+                未決項，不是既有的保護"
+  existing_consumer: "AdminPage.tsx（既有）"
+  batch_constraint:
+    rule: "**不可分批**：本變更改既有端點的回應契約，而 `AdminPage.tsx` 是既有消費端，
+           兩者必須同批部署"
+    basis: "`delivery-planning:c6` 只適用於**既有**端點的回應形狀變更——這一條正是，
+            故該約束在此**成立**（與 `U2` 那次判為不適用的理由正好相反）"
+    note: "本站只陳述約束，Bolt 切分仍是 2.9 的決定"
+  preserved_existing_protections:
+    statement: "該端點（`update_user_active`，`user_router.py:636`）既有的**兩道**保護
+                **不得被本變更削弱**。兩道的位置本站已開檔逐一核對："
+    guards:
+      - "`:645-646` —— `if target_user.id == admin_user.id and not request.is_active:`
+         → `raise HTTPException(400, detail=\"無法停用自己的帳號\")`（自我停用守門）"
+      - "`:667-671` —— `if admin_edit_count <= 1:`
+         → `raise HTTPException(400, detail=\"無法停用：系統必須保留至少一位可編輯使用者角色的管理員\")`
+         （最後一位可編輯角色的全域管理員守門）"
+    line_number_correction_history:
+      first_attempt: "`:651` 與 `:668-671` —— **兩者皆錯**（審查 `R-01`，Major）"
+      what_was_wrong:
+        - "`:651` 是**算錯的**：我以 `awk NR>=630` 的切片序號回推而多算 6 行，實為 `:645`"
+        - "`:668-671` 指到的是 `raise HTTPException(...)` 的**本體**，把條件判斷那一行
+           （`:667`）排除在引用範圍外——守門是那個 `if`，不是它的 raise"
+      how_corrected: "改以 `grep -n 'target_user.id == admin_user.id\\|admin_edit_count <= 1'`
+                      直接取行號，不再從切片回推"
+      why_recorded: "本輪自檢 3 曾宣稱這兩個行號是『因核對而改寫』的結果——**而改寫後仍是錯的**。
+                     保留這段歷史是因為『重新核對也會錯』這件事本身是下游判斷可信度的依據"
+    note: "新的 409 檢查與這兩道是**不同層級**：既有兩道管的是**全域**管理員與自我停用，
+           新的管的是**per-project** 的唯一成員。三者都在 `:673` 的
+           `target_user.is_active = request.is_active` 之前執行"
+    failure_mode_to_avoid: "沒有成員關係表時『某專案的唯一成員』等於每一位使用者
+                            （`hierarchy_migration.py:411` 為每位持圖使用者建預設專案並設為
+                            owner），照字面實作會讓 409 命中**每一個**停用請求、
+                            使該端點整支失效——這正是 `FR12.0` 補那張表的真正急迫性"
+auditing:
+  rule: "角色變更與自動改選皆須留稽核（誰、何時、對誰、舊角色、新角色）"
+  hard_constraint: "**不得只沿用 `user_router.py:213` 的 `_audit_append`**——它寫
+                    `logger.info`，**UI 讀不到**，而 AC12.2.2 斷言的是使用者可見的
+                    變更紀錄。自動改選的稽核實體化為 `reselection_events`（K-15）"
+behaviour_semantics:
+  authorization_responsibility: "見本契約的 `authorization_model` 區塊
+                                 （唯一入口、兩層串聯、兩層 facade 的責任切分、
+                                 principal 傳遞、資源上下文、拒絕回報、授權未過不得執行、
+                                 殘留缺口）"
+  observable_side_effects:
+    - "invite_member／remove_member／change_role 寫入 `project_members` 並留稽核"
+    - "自動改選寫入 `project_members`（角色升級）＋ 一列 `reselection_events`"
+    - "`assert_can_deactivate` **唯讀**，無副作用"
+  retry_and_idempotency:
+    - "invite_member **非冪等**——重複呼叫同一 (project, user) 必須被拒（已是成員），
+       而不是建立第二列。呼叫端不得自動重試"
+    - "remove_member 冪等（已不是成員時視為成功還是 NotFound，由實作定但須一致）"
+    - "resolve_project_role／assert_can_deactivate 唯讀且冪等，可安全重試"
+    - "自動改選**必須冪等**：owner 已被停用且已有新管理者時重跑不得再選一次，
+       否則部分失敗後的重跑會產生第二次改選事件"
+verification: "TestClient HTTP ＋ allow/deny 雙向 ＋ 純函式 PBT（select_successor 的
+               排列不變性）＋ 既有停用端點的回應契約測試（含 409 的欄位集合）"
+```
+
+### K-17 `U20 requirement-field-service` → `U21`、`U13`、`U23`（`facade` ＋ `http`）
+
+```yaml shared-schema
+contract: requirement-field-authorized-facade
+owner: U20
+consumers:
+  in_process: [U13 brain-gateway]
+  http: [U23 project-pages-ui]
+  separate_process: [U21 mcp-bridge]
+authorization_model:
+  sole_entry: "RequirementFieldFacade"
+  delegation: "per-project 判定**委由 `K-16` 的 `resolve_project_role`**，本 facade
+               不自行實作它（ADR-012：判定只有一份）"
+  own_responsibility: "把 per-project 角色映射到欄位操作的許可，並檢查 K4 的全域層
+                       （由其 router 的 require_story_action 承擔）"
+  anti_double_check: "**不得**重複呼叫 require_story_action 做全域層檢查；
+                      **不得**假設呼叫端已做 per-project 判定"
+  identity_passing: "principal 為第一個參數；systemId 為具名參數"
+  on_denied: "raise RequirementFieldForbidden(story_id='K4', action=<action>, system_id=<id>)"
+  hard_rule: "授權未通過時不得讀寫任何欄位值"
+public_interface:
+  - name: RequirementFieldFacade.read_fields
+    params: "principal, system_id: str"
+    returns: "FieldSetView（按 agentGroup 分組；每組含 fieldKey、value|null、
+              filledState: never_filled|filled|cleared、updatedBy、updatedOnBehalfOf）
+              ＋ unfilled_count: int"
+    form: sync
+    raises: [RequirementFieldForbidden, RequirementFieldNotFound]
+    consumed_by: [U23, U13, U21]
+    note: "**`unfilled_count` 與分組明細由同一次查詢的結果推導、在同一個回應內回傳。**
+           這是不變量 I-4 的落點：總覽籤與需求籤**不得各發一次請求**。
+           e2e 只驗得出『兩個數字相等』，驗不出『同一份來源』，故此約束必須在契約層
+           （回應同時帶計數與明細）而非前端（[US:V-12]／[US:Q-14]）"
+  - name: RequirementFieldFacade.write_field
+    params: "principal, system_id: str, agent_group: str, field_key: str, value: str,
+             on_behalf_of: str|None"
+    returns: "FieldView"
+    form: sync
+    raises: [RequirementFieldForbidden, RequirementFieldNotFound, UnknownFieldKey]
+    consumed_by: [U23, U13, U21]
+    note: "`on_behalf_of` 僅在由大腦代某個 agent 寫入時有值。
+           `UnknownFieldKey` 對應 AC11.2.2：欄位錯綁到別組即紅燈"
+  - name: RequirementFieldFacade.clear_field
+    params: "principal, system_id: str, agent_group: str, field_key: str"
+    returns: "FieldView（value 為 null、clearedAt 有值）"
+    form: sync
+    raises: [RequirementFieldForbidden, RequirementFieldNotFound, UnknownFieldKey]
+    note: "**ADR-015 的清空語意**：保留列、value 設 null、記 clearedAt 與 updatedBy。
+           **`U23` 本輪不提供觸發它的控件**——已核可線框 §15–§18 沒有清空控件
+           （[US:D-15] 的畫面缺口），故本方法目前的呼叫端只有 `U13`／`U21`"
+field_definition_source:
+  rule: "欄位定義（agentGroup → fieldKey 集合）是**程式內的常數**，不是資料"
+  removal_semantics: "[UG:G9]=A：定義被移除後其值列**保留**、畫面不渲染該組、
+                      `unfilled_count` 只統計**當前已宣告**的欄位"
+  consequence: "移除定義會讓計數下降而非留下幽靈欄位；表的列數只增不減（ADR-015 已接受）"
+behaviour_semantics:
+  authorization_responsibility: "見 `authorization_model`。**關鍵是委派邊界**：
+                                 per-project 判定在 `K-16`，欄位層許可在本契約"
+  observable_side_effects:
+    - "write_field／clear_field 寫入 `system_requirement_fields`（含 updatedBy 與
+       updatedOnBehalfOf 的溯源）"
+    - "read_fields 唯讀"
+  retry_and_idempotency:
+    - "write_field **冪等**（同一 (system, group, key) 的重複寫入覆寫同一列），
+       可安全重試"
+    - "clear_field 冪等（已清空的列重複清空不改變狀態，但 clearedAt 是否更新須一致）"
+    - "read_fields 唯讀且冪等"
+verification: "TestClient HTTP（含『同一次查詢推導兩處計數』的欄位集合斷言）＋
+               allow/deny 雙向"
+```
+
+### K-18 `U22 progress-channel` → `U13`、`U12`（`in-process`）
+
+**`[CD4]`=A 的落點**：契約同時描述新介面與**被取代的既有符號**，使 `DG-6`
+（完成條件橫跨新舊程式）在契約層可見。
+
+```yaml shared-schema
+contract: progress-channel
+owner: U22
+consumers: [U13 brain-gateway, U12 work-orchestrator]
+public_interface:
+  - name: ProgressChannel.open
+    params: "request_key: str"
+    returns: "None"
+    form: sync
+    raises: [DuplicateChannelKey]
+    consumed_by: [U12]
+    note: "`request_key` 為 **per-request** 的識別字，由入口端產生（[UG:G7]=A）"
+  - name: ProgressChannel.publish
+    params: "request_key: str, event: ProgressEvent"
+    returns: "None"
+    form: async
+    raises: []
+    note: "通道不存在時**不得崩潰**，亦不得靜默成功——記 log 並丟棄該事件"
+  - name: ProgressChannel.drain
+    params: "request_key: str"
+    returns: "AsyncIterator[ProgressEvent]"
+    form: async
+    raises: []
+    consumed_by: [U13]
+    note: "通道不存在時回**空迭代器**，不拋例外。
+           對外的錯誤一律為**固定訊息、不含例外原文**——現狀是 `_drain_progress`
+           對 None 呼叫 `get_nowait()` 拋 `AttributeError`，**且該例外原文被送進 SSE
+           給使用者**（AC13.1.3，獨立的 ADR-0006 面）"
+  - name: ProgressChannel.close
+    params: "request_key: str"
+    returns: "None"
+    form: sync
+    raises: []
+    consumed_by: [U12]
+    note: "**請求結束時必須呼叫**（ADR-014）。只寫不刪會把跨使用者錯送換成
+           無上界的記憶體成長——修掉一個失敗模式換來另一個"
+key_contract:
+  rule: "鍵必須是 **per-request**，由入口端產生並一路傳遞"
+  forbidden_keys:
+    - "`thread_id`：`agent_router.py:125` 為 `f\"user-{current_user.id}-design\"`，
+       是 **per-user**；且 `design_agent.py:198` 的
+       `config = {\"configurable\": {\"thread_id\": thread_id}}` 證實它**就是**
+       LangGraph checkpointer 的 thread 鍵——改成 per-request 等於關掉對話記憶"
+    - "「session」：`run_design_agent` 的簽章裡**不存在**這個參數（[US:V-01]）"
+  passing: "`run_design_agent` 新增一個參數承載它，與 `thread_id` **並存且語意分離**
+            ——`thread_id` 繼續承載對話記憶的分區，新鍵只承載進度通道"
+shape_precedent:
+  follow: "per-key dict，形狀沿用 `backend/cost/advice_orchestrator.py:23-24`
+           （`_progress: dict[int, dict[str, Any]] = {}`）"
+  do_not_follow: "**不照抄它的 `threading.Lock`**（`:24`）。那支檔案用 Lock 是因為它有
+                  `ThreadPoolExecutor`（`:21` 的 `_executor`），而本單元跑在**單執行緒的
+                  asyncio 事件迴圈**上——在那裡 `threading.Lock` 是 cargo cult，
+                  且會在 `await` 邊界給出錯誤的安全感"
+  upstream_citation_correction: "`stories.md` 的 US13 DoD 寫的路徑前綴
+                                 `cost/advice_orchestrator.py` **是錯的**，真實路徑為
+                                 `backend/cost/advice_orchestrator.py`（行號與內容正確）"
+replaced_existing_symbols:
+  why_listed_here: "[CD4]=A。這兩支既有檔在 domain-design 是 `external_dependencies`
+                    而非元件；若本站也不列，就**沒有任何一份契約文件說得出哪些既有符號
+                    會消失**——而那是 `U22` 完成與否的一半（DG-6）"
+  symbols:
+    - path: "backend/services/design_agent.py:31"
+      symbol: "_progress_queue: asyncio.Queue[dict[str, str]] | None = None"
+      disposition: "**刪除**，由本契約取代"
+    - path: "backend/services/design_agent.py:32"
+      symbol: "_last_xml: str | None = None"
+      disposition: "**刪除**——先前查證它從未被讀取（死狀態），故不構成第二個外洩路徑，
+                     但 US13 DoD 要求一併清理，避免下一個人沿用同一形狀"
+    - path: "backend/services/design_agent.py:169"
+      symbol: "memory = MemorySaver()"
+      disposition: "**保留**——它是 LangGraph checkpointer 的模組層單例，不是外洩路徑。
+                     列在此處是因為它使對話記憶綁在單一行程內，改 `thread_id` 語意時
+                     必須把它一起看。**本契約不改它**"
+    - path: "backend/services/design_agent.py:160"
+      symbol: "_drain_progress（內部函式；:163 的 get_nowait() 是崩潰點）"
+      disposition: "**改寫**為呼叫 `ProgressChannel.drain`"
+    - path: "backend/services/design_agent.py:218"
+      symbol: "把全域 _progress_queue 設為 None"
+      disposition: "**刪除**——現狀使另一請求其後的 progress／xml／error 事件被靜默
+                     丟棄（FR13.3）；改為 `ProgressChannel.close(request_key)`"
+    - path: "backend/services/wa_collab_orchestrator.py:79"
+      symbol: "run_design_agent(messages, current_xml) —— 不傳 thread_id"
+      disposition: "**補傳** per-request 的鍵。順帶：它不傳 `thread_id` 使所有 A4 共編
+                     使用者共用 `\"default-thread\"`（FR13.4，已由上游兩位 agent 獨立複驗
+                     為真），該缺陷是 US13 的第二個修復對象，**與進度通道是兩回事**"
+  completion_criterion: "本契約完成的判準含『上列五個 disposition 為刪除或改寫的符號
+                         在 repo 中不再以舊形式存在』——這是一個可 grep 的條件"
+behaviour_semantics:
+  authorization_responsibility: "**無受保護操作**——進度事件的可見性由 `request_key` 的
+                                 不可猜性保證，不由授權判定。
+                                 **但這正是它要修的缺陷所在**：現狀的模組層全域使
+                                 一個使用者收到另一個使用者產生的架構圖 XML，那是
+                                 跨帳號內容外洩（ADR-0006 IAM 面），而修法是**隔離**
+                                 而非加授權"
+  observable_side_effects: "行程內狀態的建立與移除；無持久化、無跨行程可見性"
+  retry_and_idempotency:
+    - "open 對同一鍵重複呼叫須拋 `DuplicateChannelKey`，不得靜默覆寫
+       （覆寫會讓前一個請求的事件憑空消失）"
+    - "close 冪等（已關閉的鍵重複關閉視為成功）"
+    - "drain 可被重複呼叫但**不保證重放**——事件一經取出即消耗"
+verification: "以 `asyncio.Event` barrier 釘住交錯順序的併發測試，斷言兩個重疊請求的
+               事件集合**互斥且各自非空**。**不得以 `sleep` 製造交錯**——
+               `frontend/playwright.config.ts:17` 與 `ui-regression` 都容忍 flaky，
+               一個 flaky 的併發測試等於沒有測試（[US:Q-07]）。
+               前例：`backend/tests/test_langgraph_migration.py`
+               （`IsolatedAsyncioTestCase` ＋ patch），**不需新 seam**"
+```
+
+### K-19 `U23 project-pages-ui` → `U17`（`test-target`）
+
+```yaml shared-schema
+contract: project-pages-test-target
+owner: U23
+consumers: [U17 a11y-gate]
+test_target_surface:
+  routes: ["專案／系統清單頁", "建立頁", "專案詳情頁（總覽／需求／記憶摘要三籤）"]
+  note: "精確 path 由 `functional-design`／`code-generation` 定；本契約定的是
+         『這些畫面必須存在且可被 axe 掃描』"
+  data_testid_prefix: "brain-* （沿用 `U14` 的既有慣例）"
+axe_scan_obligation:
+  rule: "`U17 a11y-gate` 的掃描範圍由兩頁擴為**四頁**（入口頁、/memory、本契約的專案頁、
+         `K-20` 的成員頁）"
+  basis: "[US:D-10]（Critical，轉移至 units-generation 後已處置）：無障礙清單的範圍表
+          無任何一列涵蓋線框 §15–§18 與 §22–§26"
+  still_out_of_scope: "§27 所在的 `/admin/*` **仍被明文列為不管**，該判定本輪不翻案
+                       ——交接事項 `UG-5`"
+required_accessible_behaviour:
+  - "未填欄位須以**文字**標示『未填』，不得只靠顏色（AC11.2.1）"
+  - "載入態與錯誤態須有 live region；**不得**沿用 `AdminPage.tsx:104` 的 4 秒 toast
+     形狀（無 `role`／`aria-live`），亦不得沿用 `:299-302` 的整塊純文字（[US:D-08]）"
+  - "首次使用時清單頁為**空狀態**（說明 ＋ 建立按鈕），不得是一張空表（AC11.1.2）"
+  - "儲存失敗時**輸入值不消失**（AC11.2.3）"
+behaviour_semantics:
+  authorization_responsibility: "**無**——本契約是測試標的的存在性約定。
+                                 頁面自身的可見性把關由 `K-03` 的 `K4` story id 承擔"
+  observable_side_effects: "無（測試標的契約）"
+  retry_and_idempotency: "axe 掃描唯讀且冪等"
+verification: "Playwright e2e ＋ axe 掃描（違規即 CI 紅燈）"
+```
+
+### K-20 `U24 member-pages-ui` → `U17`（`test-target`）
+
+```yaml shared-schema
+contract: member-pages-test-target
+owner: U24
+consumers: [U17 a11y-gate]
+test_target_surface:
+  routes: ["成員頁（清單）", "成員詳情頁（角色下拉、移出專案、變更紀錄）", "邀請對話框"]
+  cross_page_component:
+    name: "交棒橫幅（ReselectBanner）"
+    mount_point: "使用者**自己的落地頁**（不限入口頁）"
+    why: "`FR1.8`／Flow 4 的 `DefaultRedirect` 把使用者送到他自己的落地頁，
+           而只有具 `C1 view` 的成員才會落在入口頁——照『入口頁』實作會讓一個只有
+           `C1 view` 的合法成員**永遠看不到**這則通知，而通知的全部目的就是讓他知道
+           自己成了管理者（[US:D-17] 的 Critical）"
+  data_testid_prefix: "brain-*"
+required_accessible_behaviour:
+  - "橫幅須**在落地時即存在於 DOM**，或改用等價的 `role=\"status\"` 機制——
+     `aria-live=\"polite\"` 在其自述前提下不會被朗讀（[US:D-11]）"
+  - "成員清單上**沒有**可直接改角色的控件（AC12.2.3）；角色只在成員詳情頁變更"
+  - "移出專案為破壞性動作，須二次確認對話框（線框 §25）"
+  - "邀請對話框須有**拒絕態**——§24 的既有 `(i)` 文案在 `FR12.6a` 之後變成假的
+     （現在是『缺權限者根本不能被邀請』）。依 `refined-mockups:c3` 不回改已核可線框，
+     在此明記為對齊修正"
+  - "載入態與錯誤態的 live region 要求同 `K-19`"
+banner_dismissal:
+  rule: "『知道了』與『查看成員』兩個動作各有定義的效果：按下任一後該橫幅不再出現，
+         且該已讀狀態**伺服器持久化**（換裝置重新登入亦不再出現，AC12.4.4）"
+  key: "以該次改選**事件**的識別字為鍵（`reselection_events.acknowledged_at`），
+        **不是 per-user 布林值**——後者會讓同一人第二次被改選時看不到橫幅"
+behaviour_semantics:
+  authorization_responsibility: "**無**——可見性把關由 `K-03` 的 `K3` story id ＋
+                                 `K-16` 的 per-project 判定承擔。
+                                 **前端不得自行推導 per-project 判定結論**（I-5）"
+  observable_side_effects: "無（測試標的契約）；頁面的寫入動作一律經 `K-16` 的 facade"
+  retry_and_idempotency: "axe 掃描唯讀且冪等"
+verification: "Playwright e2e ＋ axe 掃描。
+               **`I-6` 的『同一人第二次被改選』情境需要兩個專案的 owner 先後被停用**
+               ——可達但需刻意構造，驗證層只能是後端 `TestClient` 而非 Playwright"
+```
+
+### X-04 `U21 mcp-bridge` → **External: agent 側的 MCP client**（`mcp`）
+
+**`[CD1]`=A 的落點。** 本契約**刻意是部分的**：工具 schema 與憑證欄位白名單現在就定，
+傳輸形式與認證機制明記為未定。不假裝完整。
+
+```yaml shared-schema
+contract: mcp-tool-surface
+owner: U21
+consumers: ["External: agent 側的 MCP client（消費者是 agent 而非人）"]
+mechanism: mcp
+process_boundary:
+  statement: "跑**獨立進程**（[F16]=B，取代 [S13]=A 的同進程封裝）。
+              本 intent 的**第二個**新增進程邊界，第一個是 Redis"
+  exposure: "**不得對外暴露，僅供同主機的大腦進程連接**（requirements.md:619）。
+             暴露範圍**不是**未定項——上游已鎖"
+credential_whitelist:
+  rule: "每一個工具的 `inputSchema.properties` 採**白名單**：宣告允許的欄位集合，
+         其餘皆不得出現"
+  blacklist_floor: "白名單之外另設底線斷言——不得出現任何名稱匹配
+                    `token`／`key`／`secret`／`authorization`（**不分大小寫**）的欄位"
+  why_whitelist_not_blacklist: "[US:V-11]：黑名單必要但不充分"
+  scope_exclusion: "斷言**必須排除**根目錄的 `.mcp.json`——那是 AI-DLC 框架自己的
+                    client 設定（`context7`／`aws-*`／`mermaid`），不是本單元的產出；
+                    不排除會讓測試去檢查框架的設定檔"
+  why_irreversible: "token 一旦進入 LLM context 就會被 LangGraph checkpointer **持久化**
+                     並出現在任何 `tool_calls` log。這是 ADR-0006 encryption 面
+                     **唯一**的新落點，且它**不依賴傳輸形式**——故現在就寫成斷言"
+tools:
+  - name: read_requirement_fields
+    inputSchema_properties_allowed: [system_id]
+    returns: "FieldSetView（同 K-17 的 read_fields 回傳形狀）"
+    note: "經 `K-17` 的 facade，不直接讀表"
+  - name: write_requirement_field
+    inputSchema_properties_allowed: [system_id, agent_group, field_key, value]
+    returns: "FieldView"
+    note: "`on_behalf_of` **不是**工具參數——它由本 bridge 依 agent 身分填入，
+           否則 agent 可以冒充別的 agent"
+token_forwarding:
+  rule: "使用者 token **不經工具參數**傳遞"
+  path: "本 bridge 代使用者以 HTTP 呼叫既有 API 並帶該 token，使
+         `require_story_action` 照常執行（FR11.6；`FR10.2` 禁止同進程繞過的規定
+         在改為獨立進程後**仍然適用**）"
+  audit_subject: "稽核主體必須是**使用者本人**而非大腦服務帳號"
+  how_token_reaches_this_process: "**未定（`OQ-15`）**——token 由誰注入該進程、
+                                   生命週期多長、如何隨使用者切換，皆未定案。
+                                   落點：`contract-design`（本站，CONDITIONAL）→
+                                   已轉移 `code-generation`（3.5，ALWAYS），見 `UG-6`"
+deliberately_incomplete:
+  transport: "**未定（`OQ-16`）**：stdio 或本機 HTTP／SSE。落點
+              `infrastructure-design`（3.4，CONDITIONAL）→ `code-generation`（ALWAYS）"
+  consequence_of_the_gap:
+    - "**傳輸層的錯誤語意寫不出來**——連線中斷、逾時、半開連線的行為本契約未定義"
+    - "**Encryption 面的實際要求隨它而定**：stdio 不過網路；HTTP／SSE 須為本機迴環
+       或加密。本契約只鎖『不得對外暴露』這一層"
+  not_a_substitute: "以上兩項**不得**被下游讀成『本契約已涵蓋』。
+                     本站選擇寫一條部分契約而非留白，理由是 `C-T11` 可以現在就斷言；
+                     但部分就是部分"
+untested_premise:
+  id: A-7
+  statement: "『MCP 生態可在本 repo 運作』**本 intent 全程未實測**——repo 內零 MCP
+              基礎設施（`backend/` 對 `mcp` 僅一處命中，是 `user_router.py:85` 的
+              RBAC story 標籤）"
+  landing: "`contract-design`（本站）→ 已轉移 `code-generation`（3.5，ALWAYS），見 `UG-1`"
+  honest_note: "本契約的工具形狀是依 MCP 協定的一般形式寫的，**沒有在本 repo 跑過**"
+behaviour_semantics:
+  authorization_responsibility: "**每次呼叫都以使用者身分受權限檢查**，agent 不得做
+                                 使用者不能做的事（FR11.6）。per-project 判定委由
+                                 `K-16` 的 `resolve_project_role`；全域層由被呼叫的
+                                 既有 API 的 `require_story_action` 承擔"
+  observable_side_effects: "`write_requirement_field` 經 `K-17` 寫入一列，
+                            並記 `updatedOnBehalfOf`"
+  retry_and_idempotency: "`read_*` 唯讀冪等；`write_requirement_field` 冪等
+                          （同一 (system, group, key) 覆寫同一列）"
+verification: "工具 schema 的**結構斷言**（白名單 ＋ 憑證名稱底線，排除 `.mcp.json`）
+               ＋ 代使用者呼叫的 allow/deny 雙向"
+```
+
+---
+
+## 修訂 1 的 ADR-0006 四面向逐項判定
+
+承已核可的 `requirements.md:622`「四面向皆適用，無不適用項」，本節**不重判適用性**，
+只判「修訂 1 的七條新契約有沒有新落點」。
+
+| 面向 | 判定 | 修訂 1 的新落點 |
+|---|---|---|
+| **IAM** | **適用（四處，本修訂最重的一面）** | ① `K-16` 是 per-project 授權判定的唯一來源，且「專案不得失去最後一位管理者」的守門位在**三條路徑的共同上游**。② `K-16`／`K-17` 的**兩層 facade 責任切分**明訂不得互相假設對方已檢查——這是本修訂新引入的結構風險，故寫進契約而非注意事項。③ `K-03` 擴充的 `K3`／`K4` 是 `role_permissions` seed 語意變更，須走 `ensure_missing_role_permissions` 並補 allow/deny 雙向。④ `X-04` 每次呼叫以使用者身分受檢，稽核主體為使用者本人 |
+| **Encryption** | **適用（一處）** | `X-04` 的工具 schema 白名單 ＋ 憑證名稱底線斷言，排除 `.mcp.json`。**理由是不可逆**：token 進入 LLM context 即被 checkpointer 持久化。傳輸層的加密要求隨 `OQ-16` 而定，本契約**未涵蓋**（已明記為 `deliberately_incomplete`） |
+| **Network exposure** | **適用（一處）** | `X-04` 的 `process_boundary`：第二個新增進程邊界，**不得對外暴露、僅供同主機**。暴露範圍已鎖，未定的只有傳輸形式 |
+| **Audit logging** | **適用（三處）** | ① `K-16` 的角色變更與自動改選稽核，**不得只沿用 `_audit_append`**（它寫 `logger.info`，UI 讀不到），改選實體化為 `reselection_events`。② `K-17` 的 `clear_field` 留 `clearedAt` ＋ `updatedBy`，使「誰清」可稽核。③ `K-15` 的 `updated_on_behalf_of` 使「誰代誰寫」可稽核 |
+
+**四面向皆有新落點，無不適用項。**
+
+### Property-based testing hard constraint 的逐項判定（修訂 1）
+
+| 標的 | 判定 | 依據 |
+|---|---|---|
+| `K-16` 的 `select_successor` | **適用，且本契約是它第一次有介面層落點的地方** | 契約明訂它是**不讀 DB 的純函式**（輸入成員集合、輸出被選中者），這是 PBT 能作用的結構前提。可失敗的性質是**排列不變性**，不是「同一組輸入選出同一人」（後者對純函式恆真，`user-stories:c4` 警告的形狀） |
+| `K-17` 的 `unfilled_count` | **不適用** | 對欄位集合的直接計算；兩處一致性由回應同時帶計數與明細的欄位集合斷言承接 |
+| `K-18` 的併發隔離 | **不適用（但有不變量）** | `asyncio.Event` barrier 釘住交錯順序，不是輸入空間探索 |
+| `X-04` 的 schema 白名單 | **不適用，但可機械斷言** | 對 schema 的結構斷言 |
+| agent routing（既有 `K-10`） | **本修訂無新落點，缺口的另一半仍開著** | `[US:Q-13]` 指派的 `build-and-test` 那一半尚未關閉（`units-generation` 的 `UG-4`） |
+
+## 修訂 1 的七項送審前自檢逐項結果
+
+| 自檢 | 結果 |
+|---|---|
+| **1 可達性** | **2 處**。① `K-17` 的 `clear_field` **今天沒有使用者可觸發的入口**——已核可線框 §15–§18 無清空控件（`[US:D-15]`），故 `system_requirement_fields` 的「清空」態（`value` 為 null ＋ `clearedAt` 有值）在使用者路徑上**不可達**；呼叫端只有 `U13`／`U21`。已列為 `J-20`。② `K-20` 的「同一人第二次被改選」（`I-6`）需要兩個專案的 owner 先後被停用，可達但需刻意構造，驗證層只能是後端 `TestClient` |
+| **2 契約端點三問** | **對七條新契約的每個宣告方法與每個共享欄位逐一跑**。`K-16` 的 10 個方法全部有具名 `consumed_by`（`resolve_project_role` 有三個消費端、`assert_can_deactivate` 的消費端是**既有端點**、`select_successor` 為內部純函式且已註明）。`K-17` 的 3 個方法有具名消費端，其中 `clear_field` 的消費端**少於兩個**——逐一判定後確認是真缺口（畫面沒有入口）而非內部方法，已列 `J-20`。`K-18` 的 4 個方法：`open`／`close` 消費端 `U12`、`publish` 無具名消費端（由 agent 內部呼叫）、`drain` 消費端 `U13`——**清除端有擁有者**（`close`，ADR-014）。`K-15` 的五個帶語意欄位各寫明「誰寫、誰讀、為什麼不能是 null」 |
+| **3 引用逐字核對（第二版，審查 `R-01`／`R-02` 之後重做）** | **第一版不可靠，這是如實記載。** 第一版只核對「本輪新寫的五處」，而審查查出**四處錯誤**：兩處是我在第一版**特意重新核對並改寫過**的（既有兩道守門的 `:651`／`:668-671`，實為 `:645`／`:667`——前者是切片序號回推多算 6 行，後者指到 `raise` 本體而非條件判斷），另兩處（`requirements.md:617`／`:614`，實為 `:622`／`:619`，各差 5 行）**根本不在那五處清單內**。第二版改為**以腳本列舉修訂 1 區段裡每一個 `<file>:<n>` 形式的引用並逐一開檔印出該行內容**，共 **20 處**；結果：18 處正確、2 處（上述 `requirements.md`）錯誤已改，另自查出第 5 處同型錯誤 **`playwright.config.ts:17` 的路徑前綴少了 `frontend/`**（內容正確、路徑錯，與 `advice_orchestrator` 那次同形，審查未提）。**兩道守門的行號改以 `grep -n` 直接取值，不再從切片回推。** 第一版的核對結果如下，全部仍然正確：`design_agent.py:218` → `_progress_queue = None`（在 `finally` 內）✓；`hierarchy_migration.py:411` → `owner_user_id=user_id`（在 `_PROJECTS.insert().values(...)` 內，`:408-413`）✓；`user_router.py:213` → `def _audit_append(...)`，其 docstring 確認寫的是應用程式日誌 ✓；`user_router.py:673` → `target_user.is_active = request.is_active` ✓；`.mcp.json` 的 server 清單實為 `context7`／`aws-mcp`／`aws-pricing`／`aws-iac`／`aws-serverless`／`mermaid`，與契約寫的「`context7`／`aws-*`／`mermaid`」相符 ✓。**一處因核對而改寫**：原文寫「既有兩道保護（見 `:673` 上方……）」，實測兩道分別在 **`:651`**（自我停用）與 **`:668-671`**（最後一位可編輯角色的全域管理員），`:673` 是 UPDATE 那一行而非守門——已改為逐道列出行號，並明寫新的 409 與它們是**不同層級**（全域 vs per-project） |
+| **4 檔案集合一致性** | 本站 `produces` 只有 `contract-summary.md` 一份，已更新；問題檔同步 |
+| **5 跨檔傳播** | **以腳本從 `unit-of-work-dependency.md` 的 yaml 邊塊解析 21 條新邊，逐邊映射到 provider 單元後比對本檔**：10 個 provider 全部有涵蓋——6 個由新契約（`K-15`–`K-20`）、4 個由擴充列（`K-03`／`K-04`／`K-07`／`K-08`）。**無缺邊、無發明邊。** 另：`機制` 欄由 10 個值增為 11 個（新增 `mcp`），已在本檔前段明寫 |
+| **6 可算的數字先算再寫** | **全部由腳本從本檔解析後輸出**：契約標題 `K-01`–`K-20`（**20** 條）＋ `X-01`–`X-04`（**4** 條）＝ **24**；fenced spec 區塊 **26**（21 個 `yaml shared-schema` ＋ 4 個 `yaml OpenAPI` ＋ 1 個 `yaml AsyncAPI`），**26/26 皆為合法 YAML**；`[C7]` 的三個 behaviour 鍵（`authorization_responsibility`／`observable_side_effects`／`retry_and_idempotency`）在 21 個 `shared-schema` 區塊中**無一缺漏**；新邊 21 條與上游一致。腳本是**收尾動作**，在最後一次內容改動（自檢 3 的行號更正）之後才跑 |
+| **7 ADR-0006 ＋ PBT 逐項對照** | 見上方兩節。**不重判適用性**（`requirements.md:622` 已定四面向皆適用），只判新落點：IAM 四處、Encryption 一處、Network exposure 一處、Audit logging 三處；PBT 的唯一新適用標的是 `K-16` 的 `select_successor`，且本契約是它第一次有**介面層**落點的地方（明訂為不讀 DB 的純函式）。填表時逐格比對上游同名表格的判定欄，**無一格與上游相反** |
+
+## 審查 iteration 1 的四項發現，逐項處置（2026-10-03）
+
+iteration 1 判 **NOT-READY**（3 Major ＋ 1 Minor）。**四項全部是引用與命名的事實錯誤，
+沒有一項是架構或授權模型的分歧**——審查逐項驗過的部分（21 條新邊的對映無缺無多、
+26 個 fenced YAML 全部合法、21 個 `shared-schema` 區塊的三個 `[C7]` behaviour 鍵無一缺漏、
+24 條契約計數、46 條邊無環、兩層 facade 的概念、`X-04` 的部分契約取捨誠實、未侵入 2.9 的
+排序決定）皆維持不變。產出當時已被終局審查凍結，故經使用者送 **Request Changes**
+（理由逐字記於 `GATE_REJECTED`）解鎖後修訂。
+
+| # | 嚴重度 | 處置 | 我自己的複驗 |
+|---|---|---|---|
+| R-01 | Major | 兩道既有守門的行號由 `:651`／`:668-671` 改為 **`:645-646`**／**`:667-671`**，並在 `line_number_correction_history` 保留第一版錯在哪裡 | `grep -n 'target_user.id == admin_user.id\|admin_edit_count <= 1'` 實得 **645** 與 **667**，審查正確 |
+| R-02 | Major | `requirements.md:617` → **`:622`**（2 處）、`:614` → **`:619`**（1 處） | 實測 `:614` 是**空行**、`:617` 是四面向表的 IAM 列；`四面向皆適用，無不適用項。` 逐字在 `:622`、`不得對外暴露，僅供同主機` 在 `:619`。審查正確 |
+| R-03 | Major | `U17_layer` → **`U20_layer`**，與 `U19_layer` 對稱 | `U17` 在全檔其他每一處都是 `a11y-gate`，審查正確。已 grep 全檔確認無其他同型單元編號誤植 |
+| R-04 | Minor | 契約表上方的「`機制` 欄的值」清單補上 **`mcp`**，並註明它是修訂 1 新增的第 11 個值、傳輸與認證為 `OQ-16`／`OQ-15` | 實測該清單原本只列 10 個值，而自檢 5 宣稱「已在本檔前段明寫」——那句是不實的，審查正確 |
+| （自查，審查未提） | — | `playwright.config.ts:17` → **`frontend/playwright.config.ts:17`** | 內容正確（`retries: process.env.CI ? 1 : 0`）、路徑前綴錯，與 `advice_orchestrator` 那次同形 |
+
+**修訂後的機械複驗**：以腳本重新列舉修訂 1 區段的 **22 處** `<file>:<n>` 引用並逐一開檔
+印出該行內容，全部相符（`:617` 的殘留命中位於自檢 3 的敘述句內，是在描述那個錯誤本身，
+非活引用）。
+
+## 修訂 1 的交接事項
+
+| # | 事項 | 承接站 | execution |
+|---|---|---|---|
+| J-16 | **`OQ-15`（token 如何進入 MCP 進程）未定**，使 `X-04` 的 `token_forwarding` 只有規則沒有機制 | `code-generation`（3.5） | **ALWAYS** |
+| J-17 | **`OQ-16`（MCP 傳輸形式）未定**，使 `X-04` 的傳輸層錯誤語意與 Encryption 面的實際要求寫不出來 | `infrastructure-design`（3.4，CONDITIONAL）→ 轉移 `code-generation`（3.5，**ALWAYS**） | — |
+| J-18 | **`A-7`（MCP 生態可在本 repo 運作）仍未實測**，而 `X-04` 的工具形狀沒有在本 repo 跑過 | `code-generation`（3.5） | **ALWAYS** |
+| J-19 | **`K-16`／`K-17` 的兩層 facade 責任切分無機械強制**（同 `OQ-N2` 的形狀）：契約寫明了不得互相假設對方已檢查，但只有 code review 擋得住 | `functional-design`（3.1，CONDITIONAL，per-unit）→ 轉移 `code-generation`（3.5，**ALWAYS**） | — |
+| J-20 | **`K-17` 的 `clear_field` 目前沒有使用者可觸發的入口**：已核可線框 §15–§18 無清空控件（`[US:D-15]`），故呼叫端只有 `U13`／`U21`。畫面缺口不在本站補 | `refined-mockups`（2.5，CONDITIONAL）→ 轉移 `code-generation`（3.5，**ALWAYS**） | — |
+
+## 修訂 1 的 Assumptions & Open Questions
+
+- `X-04` 是本站唯一一條**自述為部分**的契約。這是刻意的取捨（`[CD1]`=A）：
+  `C-T11` 可以現在就斷言，而傳輸層不能。下游**不得**把它讀成已涵蓋傳輸層 [assumption]
+- `K-16` 的 `assert_can_deactivate` 與 `AdminPage.tsx` 的**同批部署約束**是本站
+  第一次對**既有**端點宣告 `delivery-planning:c6`。Bolt 切分仍是 2.9 的決定；
+  本站只陳述約束 [assumption]
+- `K-19`／`K-20` 的精確 route path 未定——本契約定的是「這些畫面必須存在且可被 axe
+  掃描」。path 落在 `functional-design`／`code-generation` [assumption]
+- `K-18` 的 `completion_criterion`（五個被取代符號在 repo 中不再以舊形式存在）是一個
+  **可 grep 的條件**，但本站**沒有**為它建立機械閘門——它是契約文字而非 CI 檢查
+  [assumption]
+- `K-15` 的三張表與 `K-03` 的 seed 變更**各觸發一次** `schema_rbac.sql` ＋ `DEPLOY.md`
+  的 blocking 同步，兩者不可互相替代 [assumption]
+- 修訂 1 後契約總數 **24**（K 類 20、X 類 4）、fenced spec 區塊由 19 增為 **26**
+  （新增 7 條各一個）。以上為逐條計數，非估計 [assumption]
