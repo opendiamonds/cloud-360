@@ -9,8 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
-    "gen:types": "npx --yes openapi-typescript@7.13.0 ../openapi.json -o src/types/api.d.ts",
-    "check:types": "node scripts/check-api-types.mjs"
+    "gen:types": "openapi-typescript ../openapi.json -o src/types/api.d.ts",
+    "check:types": "node scripts/check-api-types.mjs",
+    "gen:ws-types": "openapi-typescript ../ws-contract.json -o src/types/ws-contract.d.ts",
+    "check:ws-types": "node scripts/check-ws-types.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
@@ -32,10 +34,16 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "openapi-typescript": "7.13.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }

@@ -1,0 +1,352 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "membership-service",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "NFR12.5",
+    "NFR12.6",
+    "NFR12.7",
+    "NFR12.8",
+    "NFR12.9",
+    "NFR12.10",
+    "NFR12.11",
+    "NFR12.12",
+    "NFR12.13",
+    "NFR12.14",
+    "NFR12.15",
+    "NFR12.16",
+    "NFR12.17",
+    "NFR12.18",
+    "NFR12.19",
+    "NFR12.20",
+    "NFR12.21",
+    "NFR12.22",
+    "NFR12.23",
+    "NFR12.24",
+    "NFR12.25",
+    "NFR12.26",
+    "NFR12.27",
+    "NFR12.28",
+    "NFR12.29"
+  ],
+  "coverage": [
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "成員變更前鎖住父 `projects` 列。`[N1]`=A 的主體。四條路徑（邀請／移出／角色變更／自動改選）缺任一條即不合格。"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "鎖的對象是**父 `projects` 列**而非子列——鎖子列擋不住這個競態，因為兩個交易改的本來就是不同子列。"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "`assertCanDeactivate` **不取鎖**：它是跨專案唯讀掃描，取鎖會讓一次停用鎖住該使用者的全部專案。殘留窗口記為 `OPEN-N19-2`。"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "併發測試以 barrier 釘住交錯，**不得以 `sleep` 製造**。來源：`unit-of-work.md` 對 `U22` 逐字記過「一個 flaky 的併發測試等於沒有測試」，且 `playwright.config.ts:17` 與 `ui-regression` 都容忍 flaky。"
+    },
+    {
+      "id": "NFR12.5",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "不改 `SessionLocal` 的隔離等級，故不引入第二種 session 形狀。這是 `[N1]`=A 勝過 `SERIALIZABLE` 的主要理由之一。"
+    },
+    {
+      "id": "NFR12.6",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "拒絕事件寫 WARN 級結構化 log（`story_id`／`action`／`projectId`／`principal`）。`[N2]`=A。宣告在 observability，安全理由見 `security-requirements.md` §二。"
+    },
+    {
+      "id": "NFR12.7",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "拒絕**不寫入** `reselection_events`、不新增表。理由：拒絕是高頻事件，寫進稽核表會讓 `AC12.2.2` 的使用者可見變更紀錄被無關列淹沒，並製造第三種欄位語意（`BR5.4` 已有兩種）。"
+    },
+    {
+      "id": "NFR12.8",
+      "status": "OK",
+      "target": "performance-requirements.md",
+      "note": "`resolveProjectRole` 為**一次**索引查詢、無 N+1。覆蓋者是 `U18` 已交付的 `uq_project_members_project_user`（以 `project_id` 為前導欄）。"
+    },
+    {
+      "id": "NFR12.9",
+      "status": "OK",
+      "target": "performance-requirements.md",
+      "note": "**不加快取**。理由不是效能而是正確性：快取授權結論會引入「權限已撤銷但快取未失效」的窗口，而撤銷正是本單元的核心功能。若日後成為瓶頸，正解是 per-request memo 而非跨請求快取。"
+    },
+    {
+      "id": "NFR12.10",
+      "status": "OK",
+      "target": "performance-requirements.md",
+      "note": "`assertCanDeactivate` 用**一次**聚合查詢（`GROUP BY project_id HAVING count(*) = 1`），不逐專案迴圈——一位使用者的專案數無上界。`[N3]`=C。"
+    },
+    {
+      "id": "NFR12.11",
+      "status": "OK",
+      "target": "performance-requirements.md",
+      "note": "另兩條路徑呼叫**同一個**單專案判定函式。與 `NFR12.10` 併讀：不變量只有一個，聚合查詢的 `HAVING` 即單專案判定的集合版。"
+    },
+    {
+      "id": "NFR12.12",
+      "status": "OK",
+      "target": "performance-requirements.md",
+      "note": "一條測試鎖住聚合查詢與逐專案判定的結果**相同**。**直接回應審查 `R-03`**——等價性由測試而非散文承載。需要資料庫，故**不是** PBT 的作用對象。"
+    },
+    {
+      "id": "NFR12.13",
+      "status": "OK",
+      "target": "scalability-requirements.md",
+      "note": "鎖的範圍限單一專案，不同專案的成員變更必須能並行。這是 `[N1]`=A 相對 `SERIALIZABLE` 的擴展優勢：序列化粒度是專案而非整個子系統。"
+    },
+    {
+      "id": "NFR12.14",
+      "status": "OK",
+      "target": "scalability-requirements.md",
+      "note": "**不為 `reselection_events` 加保存期限或清除作業**。`[FD3]`=A 讓它的成長率上升（含人工變更），但 `AC12.2.2` 需要歷史，而 `U18` 已在表 COMMENT 逐字寫「do NOT add a 90-day purge by analogy with U5」。殘留風險記為 `OPEN-N19-3`（正解是歸檔而非刪除）。"
+    },
+    {
+      "id": "NFR12.15",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "`inviteMember` 的授權檢查、全域權限前置檢查與寫入在單一交易內。來源 `K-16` 的 `invite_member.note` 逐字 ＋ `AC12.5.3`。"
+    },
+    {
+      "id": "NFR12.16",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "`changeRole` 的角色更新與稽核寫入在單一交易內。**失敗模式是靜默的**：角色改了而稽核沒寫，`AC12.2.2` 的變更紀錄漏一筆而沒有任何東西報錯。"
+    },
+    {
+      "id": "NFR12.17",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "自動改選的角色升級與稽核寫入在單一交易內。同 `NFR12.16` 的靜默失敗模式。"
+    },
+    {
+      "id": "NFR12.18",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "建立專案與其建立者成員列在同一交易內（`BR3.1`）。**限定**：只保證本單元上線後**新建**的專案；既有專案見 `NFR12.24`。"
+    },
+    {
+      "id": "NFR12.19",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "三個唯讀方法（`resolveProjectRole`／`listMembers`／`assertCanDeactivate`）冪等且可安全重試。"
+    },
+    {
+      "id": "NFR12.20",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "`inviteMember` **非冪等**：對已是成員者被拒且不建立第二列（`BR3.3`）。"
+    },
+    {
+      "id": "NFR12.21",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "`removeMember` 冪等：對已非成員者**回成功**（`[FD2]`=A／`BR3.4`）。"
+    },
+    {
+      "id": "NFR12.22",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "`changeRole` 非冪等——重複呼叫會產生第二筆稽核列，而**這是正確行為**：它記錄的是「有人執行了一次變更動作」，不是「狀態改變了」。"
+    },
+    {
+      "id": "NFR12.23",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "自動改選**必須冪等**（`BR4.3`）。本節唯一有具體失敗故事的一條：部分失敗後重跑會產生第二次改選事件，使橫幅重複出現且稽核多一筆不曾發生的變更。"
+    },
+    {
+      "id": "NFR12.24",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "**本站新增，非承接**：必須有一次性回填，為每個既有專案的 `owner_user_id` 寫一列 `project_admin`。來源是審查 `R-02`（Critical）——`functional-spec.md` §九 的風險 5／7 只涵蓋新建路徑，**完全沒提既有專案回填**。承載形式本站不預選（`U18` 的 `[P1]`=A 有先例），記為 `OPEN-N19-4`。"
+    },
+    {
+      "id": "NFR12.25",
+      "status": "OK",
+      "target": "reliability-requirements.md",
+      "note": "回填**必須先於**任何消費端上線。否則 `resolveProjectRole` 對既有專案回 `None`，而 `BR1.6` 要求當成拒絕——既有專案的擁有者會被拒絕存取自己的專案。"
+    },
+    {
+      "id": "NFR12.26",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "log 不得包含 token、密碼或任何憑證。來源 `team.md ## Forbidden`。`principal` 寫入的是身分識別而非憑證。"
+    },
+    {
+      "id": "NFR12.27",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "鎖等待若發生記 WARN log。**它需要自己一條的理由**：`[N1]`=A 是 repo 的第一個列鎖，而鎖等待的失敗模式是**延遲而非錯誤**——請求會成功，只是慢，故不會有測試抓到它（形狀同 `U5` 的 `occurredAt` 索引）。"
+    },
+    {
+      "id": "NFR12.28",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "每次自動改選**執行**時記 INFO log（`projectId`／被選中者／被停用的 owner）。"
+    },
+    {
+      "id": "NFR12.29",
+      "status": "OK",
+      "target": "observability-requirements.md",
+      "note": "自動改選因冪等檢查而**跳過**時也記 INFO log。理由：`BR4.3` 的冪等檢查是一條**什麼都不做**的靜默分支，沒有 log 時「改選沒跑」與「改選跑了但選錯人」在維運上無法區分。刻意用 log 而非稽核列——跳過不是一次角色變更。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U1／U10（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "U1（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14／U15（非本單元）",
+      "note": "本站逐一讀過 `requirements.md` 的 `NFR1`–`NFR11`（`:400`／`:430`／`:482`／`:500`／`:510`／`:520`／`:531`／`:537`／`:547`／`:553`／`:563`），**沒有一條是關於 per-project 授權、成員關係或其併發正確性**。該面向的承載者見 target；本單元無 pattern。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "N19-NEWPARENT",
+      "status": "OK",
+      "target": "全部七份產出的檔頭",
+      "note": "**本站引入新的 parent id `NFR12`，而這是一項需要揭露的決定。** `NFR12` 在 `requirements.md` 的命中數為 **0**（實測），而 `NFR1`–`NFR11` 逐一讀過後無一涵蓋本單元。刻意**不**把這 29 條硬掛到某個不相干的 parent 之下——那會讓追溯表看起來有上游依據而實際沒有。回補指派見 `OPEN-N19-1`。"
+    },
+    {
+      "id": "N19-COUNT",
+      "status": "OK",
+      "target": "scratchpad 的列舉腳本",
+      "note": "**29 條 `NFR12.x` 是機械列舉的**：以 regex 掃四份產出的粗體宣告，得 29 條、編號無跳號、每個 id 恰有一個宣告處。初稿曾在 `security-requirements.md` 與 `observability-requirements.md` **各宣告一次** `NFR12.6`／`NFR12.7`，該腳本抓到後改為「observability 宣告、security 只記安全理由」。"
+    },
+    {
+      "id": "N19-NOTARGET",
+      "status": "N/A",
+      "target": "四項刻意不設的觀測目標",
+      "note": "分散式追蹤、metrics／儀表板、告警門檻、SLI／SLO 四項**全部不設**，而理由**不是「不重要」而是「沒有承載機制」**——repo 無 OpenTelemetry、無 metrics 管線，`project.md ## Deployment` 已把 observability 列為尚未落地的維運學科。把它們寫成需求會產生四條沒有任何東西能驗證的宣告，而 `team.md` 已為「80% 覆蓋率」記過同形問題（「既無法量測也無法強制，是宣告而非閘門」）。"
+    },
+    {
+      "id": "N19-NOSLA",
+      "status": "N/A",
+      "target": "可用性 SLA／SLO、絕對延遲數字、吞吐量目標",
+      "note": "零新進程、零新監聽埠（`embedded`），本單元隨既有 backend 一起可用；且 repo **無延遲量測機制**。`NFR3`（首字回應時間 P50 ≤ 2 秒）量的是大腦的串流，不是本單元。設一個無法量測的數字是宣告而非需求。"
+    },
+    {
+      "id": "N19-SQLITEPROBE",
+      "status": "OK",
+      "target": "tech-stack-decisions.md §二的實測表",
+      "note": "**本站把一個「做不到」的斷言改成實測，而實測結果比原本的說法嚴重。** 初稿寫「SQLite 不支援 `FOR UPDATE`，故併發測試不能走既有路徑」——`project.md` 要求任何「做不到」的斷言都要附查證指令，照做之後發現：原生 SQLite 確實回語法錯誤，**但 SQLAlchemy 的 SQLite dialect 會靜默丟掉 `with_for_update()` 而不報錯**。於是真正的風險不是「測試失敗」而是「測試通過而鎖不存在」，`OPEN-N19-5` 的嚴重度因此升級。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-N19-1",
+      "severity": "named-gap",
+      "text": "**`NFR12` 是本站新增的 parent，上游 `requirements.md` 沒有它。** 該檔的 `NFR1`–`NFR11` 逐一讀過後無一涵蓋 per-project 授權、成員關係或其併發正確性；`NFR12` 在該檔的命中數為 0。指派回補：`requirements.md` 應新增 `NFR12` 的 parent 條目（標題可為「per-project 授權的正確性與可觀測性」）。落點 `code-generation`（`ALWAYS`，已查 `aidlc-state.md` 確認在游標之後）；本站**不回改**已核可的 `requirements.md`。"
+    },
+    {
+      "id": "OPEN-N19-2",
+      "severity": "named-gap",
+      "text": "**`assertCanDeactivate` 回「通過」之後、既有端點寫入 `is_active` 之前仍有一個窗口。** `NFR12.3` 明文讓它不取鎖（取鎖會把一個管理者動作變成廣域鎖），代價是這個 TOCTOU 窗口。後果是**停用一個本應被擋下的帳號**。關閉它要把停用端點整支納入同一個鎖範圍，而那會跨越 `U19` 與既有 `user_router` 的邊界——屬 `code-generation` 的實作決定而非本站可定。"
+    },
+    {
+      "id": "OPEN-N19-3",
+      "severity": "named-gap",
+      "text": "**`reselection_events` 單調成長且無清除端**，而 `[FD3]`=A 讓它的成長率上升（本輪起含**人工**角色變更，不只罕見的自動改選）。`NFR12.14` 明文**不**加保存期限，因為 `AC12.2.2` 需要歷史且 `U18` 已在表 COMMENT 禁止照 `U5` 補 90 天清除。若日後成為問題，正解是**歸檔**而非刪除。承接站：`operation` 階段。"
+    },
+    {
+      "id": "OPEN-N19-4",
+      "severity": "blocking-downstream",
+      "text": "**既有專案的 `project_admin` 回填尚無承載形式。** `NFR12.24`／`NFR12.25` 定下「必須有」與「必須先於消費端上線」，但**用什麼跑**本站不預選。`U18` 的 `[P1]`=A 已為同類問題定下先例（獨立腳本、大聲失敗、不動啟動路徑、`DEPLOY.md` 記步驟），而本項是否沿用該先例屬 `code-generation` 的決定。**不回填的後果**：`U20`／`U13`／`U24` 任何一個消費端上線時，既有專案的擁有者會被判定為非成員而被拒絕存取自己的專案。"
+    },
+    {
+      "id": "OPEN-N19-5",
+      "severity": "blocking-downstream",
+      "text": "**併發測試的 CI 載體本站不預選，但它放錯地方會產生假的覆蓋證據。** 本站**實測**兩件事：① 原生 SQLite 執行 `SELECT ... FOR UPDATE` 回**語法錯誤**（逐字 `near \"FOR\": syntax error`）；② **SQLAlchemy 對 SQLite dialect 會靜默丟掉 `with_for_update()`** ——編譯結果為 `SELECT projects.id FROM projects WHERE projects.id = ?`，沒有 `FOR UPDATE` 且**不報錯**。**所以危險不是測試會失敗，而是測試會通過而鎖根本不存在**：`backend/tests/helpers.py` 在任何 DB import 前換掉驅動，於是在既有路徑上寫的併發測試會綠燈——鎖被拿掉，而 in-memory SQLite 的整庫鎖讓兩個「交易」本來就不會真的並行。這是本 repo 反覆踩到的「違反後全綠」形狀，故嚴重度由 named-gap 升為 blocking-downstream。`U5` 已建立真實 PostgreSQL 的 CI 載體（`ci.yml` 的 `memory-schema` job），`U18` 已在同一 job 加過第二個步驟；本單元是擴充該 job 或新增一個，由 `code-generation` 決定。"
+    },
+    {
+      "id": "OPEN-P4",
+      "severity": "resolved",
+      "text": "**由本站 `[N2]`=A 關閉。** per-project 授權拒絕以 WARN 級結構化 log 記錄（`NFR12.6`／`NFR12.7`／`NFR12.26`），不新增表、不進 UI。與 `BR5.2` 不衝突的理由寫明：`BR5.2` 約束的是**稽核列**（`AC12.2.2` 要使用者可見），而拒絕不是稽核列。殘留限制如實記載：拒絕紀錄 UI 讀不到，而目前沒有任何 AC 要求它可見。"
+    }
+  ]
+}

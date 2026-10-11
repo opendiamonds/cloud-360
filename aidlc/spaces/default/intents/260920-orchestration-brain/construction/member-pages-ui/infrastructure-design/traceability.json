@@ -1,0 +1,183 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "member-pages-ui",
+  "upstream_ids": [
+    "NFR4.80",
+    "NFR8.80",
+    "NFR11.80",
+    "NFR11.81",
+    "UIP-1",
+    "UIP-2",
+    "UIP-3",
+    "UIP-4",
+    "UIP-5",
+    "SEC-U24-1",
+    "SEC-U24-2",
+    "SEC-U24-3",
+    "SEC-U24-4",
+    "SEC-U24-5",
+    "SEC-U24-6",
+    "TS-U24-1",
+    "TS-U24-2",
+    "TS-U24-3",
+    "TS-U24-4",
+    "TS-U24-5",
+    "TS-U24-6",
+    "TS-U24-7",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR4.80",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一 的「瀏覽器儲存：明文禁止」列。零新儲存面即零新基礎設施需求。"
+    },
+    {
+      "id": "NFR8.80",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一 的「環境變數：零新增」列——`render-env.sh` ＋ `deploy/.env.example` 的同步義務為空集合；`docker-compose.test.yml` 亦無需改動（其 `backend.environment` 全部自帶預設）。"
+    },
+    {
+      "id": "NFR11.80",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "頁面切換次數屬前端行為，無基礎設施落點。其量測由 `ui-regression` 的 e2e 承載（§二）。"
+    },
+    {
+      "id": "NFR11.81",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "同上。"
+    },
+    {
+      "id": "UIP-1",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§五：100 列上限的 e2e 斷言落在 `ui-regression`（構造 101 位 → 斷言清單不存在且提示存在）。基礎設施面零需求。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§五：請求數斷言落在 `ui-regression`（攔截端點計數）。**注意**缺 `K3 view` 者為 0 次的機制是發出前的 `can()` 判定，不是 `BR21.3`。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§五：三操作後不整份重抓的 e2e 斷言。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§五：首次可互動前請求數為 1 的 e2e 斷言。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "Deferred",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "變更紀錄的上限斷言**無法寫**——取得變更紀錄的端點不存在（`OPEN-MP24-7`）。沿用上一站的 `Deferred` 而非改判 `GAP`：設計方案存在、只是不可量測。"
+    },
+    {
+      "id": "SEC-U24-1",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/monitoring-design.md",
+      "note": "§六：「任一訊號含使用者文字」的 e2e 斷言（`page.on('console')` 收集後比對受測帳號的 `display_name` 與 email）。"
+    },
+    {
+      "id": "SEC-U24-2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "伺服器端持久化屬 `U19`；本單元的基礎設施面只需確認**零瀏覽器儲存**（見 `NFR4.80` 列）。"
+    },
+    {
+      "id": "SEC-U24-3",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§四 的逐道判定表 ＋ §五 的兩條控件可見性斷言。**本表的實質內容是：六道閘門只有第 6 道（`ui-regression`）對本單元的失敗路徑有效**。"
+    },
+    {
+      "id": "SEC-U24-4",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/monitoring-design.md",
+      "note": "§六：422 物件陣列型 `detail` 的 console 訊號斷言。"
+    },
+    {
+      "id": "SEC-U24-5",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§五：四控件在一般成員身分下全部不存在，**以及**在「per-project admin 但缺 `K3.edit`」下全部不存在（後者是審查 `R-01` 查出的可達壞狀態，缺此斷言則死循環不會被任何閘門抓到）。"
+    },
+    {
+      "id": "SEC-U24-6",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/monitoring-design.md",
+      "note": "§一 第 1 項 ＋ §六 前三列：三條失敗路徑各有 console 訊號的 e2e 斷言。**並如實記載第 1 項不是監控**——生產環境沒有人在看 console。"
+    },
+    {
+      "id": "TS-U24-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "零新前端依賴，故 `npm ci` 的 lockfile 不變、`docker-build` 不受影響。無基礎設施決定作用於它。"
+    },
+    {
+      "id": "TS-U24-2",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§二：`ui-regression` 是本單元唯一能碰到畫面的自動化層，且是真閘門（`.stats.unexpected` 非 0 即 `exit 1`）。§一 證實新 spec 不需管線改動。"
+    },
+    {
+      "id": "TS-U24-3",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "`apiUrl()` 沿用既有；無基礎設施面。"
+    },
+    {
+      "id": "TS-U24-4",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "兩層抓取形狀由 `eslint` 的 `react-hooks/set-state-in-effect`（error 級）守住——那是既有閘門，本單元不改它。"
+    },
+    {
+      "id": "TS-U24-5",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "就地更新的驗證為 `UIP-3` 的 e2e 斷言（見該列）。"
+    },
+    {
+      "id": "TS-U24-6",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§二：`<LiveRegion />` 由本單元自建，而**唯一要碰的共用檔是 `Layout.tsx`**；§二 寫明不走 `slotRegistry` portal 的三個理由（最硬的一條是 portal 失敗為靜默 no-op，無法保證 `BR21.1` 的無條件渲染）。"
+    },
+    {
+      "id": "TS-U24-7",
+      "status": "OK",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一 的環境變數列 ＋ §六 的「新增的部署前置：無」。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "**不是本單元的需求**，是上一站的逐字引文（`schema_rbac.sql:663`）被 sensor 以字樣抓到，屬 `U9 memory-purge` 的記憶層保存期限。沿用上一站的 `N/A` 宣告。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "OPEN-ID24-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "**本站查出的專案規則層缺陷**：`project.md` 與 `CLAUDE.md` 的 `LOCAL-DEV.md` 同步規則、以及 `local-dev-drift` workflow 的觸發 `paths:`（第 9 行）都以 `deploy/nginx.conf` 為條件，而 `git log --all -- deploy/nginx.conf` **零筆**——該路徑從未存在，真實檔案是 `frontend/nginx.conf`（commit `755c67a`）。後果：那道提醒**永遠不會觸發**，而 `LOCAL-DEV.md:569` 自己寫明該檔的 `proxy_buffering off` 與 600 秒 timeout 是 A1／A3 串流的**功能前提**。`project.md` 的 tie-break（以正式來源為準、該修的是 workflow）在此解不開——兩邊錯得一樣。**無自然承接站**（不屬任何單元，是規則層缺陷），於核可關卡提交使用者。本站不自行修：三處皆在本單元範圍之外。"
+    },
+    {
+      "id": "gate-6-of-6",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "**本站寫下的一個事實，不是需求**：`cicd-pipeline.md` §四 逐道判定六個既有 CI 閘門對本單元最可能的失敗路徑（前端讀錯或漏讀 `role`）的有效性，結論是**只有第 6 道 `ui-regression` 有效**——`repo-contract` 的 secret 掃描看不到 `frontend/`、lint 不管讀錯欄位、`tsc -b` 對手寫 interface 無效（`team.md` 已記載）、OpenAPI drift 對本單元不觸發、backend `unittest` 無標的。列在 `reverse` 是為了讓「本單元的品質完全押在一道閘門上」成為可追溯的事實：若 `ui-regression` 被停用或變成非阻擋，本單元沒有任何替代防護。"
+    }
+  ]
+}

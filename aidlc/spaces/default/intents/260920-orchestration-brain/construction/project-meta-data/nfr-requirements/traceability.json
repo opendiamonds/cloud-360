@@ -1,0 +1,165 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "project-meta-data",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR8.2",
+    "NFR8.3",
+    "NFR8.4",
+    "NFR8.5"
+  ],
+  "coverage": [
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "新增元件的部署設定完整性。**本站一次性定案 OPEN-P1／OPEN-M5**（使用者裁決 [P1]=A）：沿用 U4 先例，一支獨立腳本建 U5＋U18 的全部新物件、大聲失敗、不動啟動路徑、DEPLOY.md 記步驟。四項二元判準見 NFR8.2–NFR8.5。本單元零新環境變數。"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "一支獨立腳本建立 memory schema ＋ 五張表及其索引／約束／COMMENT／grant。涵蓋 U5 與 U18 兩個單元——**刻意一次處理而非逐單元各一支**。"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "大聲失敗：任一 DDL 失敗即非零碼結束。**不得沿用 _ensure_* 的 warning-and-continue**——functional-design §三 已實讀該形狀（含 init_db() 自身也不 re-raise）。直接處置 BR3.1。"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "不動啟動路徑（database.py diff 為空）。理由：選項 B 在 restart: unless-stopped 之下會讓建表失敗變成**重啟迴圈**，而那比少幾張表更難診斷；DEPLOY.md 已為 vector 擴充記過同形風險。"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "DEPLOY.md 記載執行步驟與 psql 驗證指令。與 BR3.3 的 blocking 同步一併在 code-generation 完成。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U1／U10（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14／U15（非本單元）",
+      "note": "本單元是 DDL-only 的 spec 單元，零端點、零進程、零畫面、零 LLM、零向量。該面向的承載者見 target；本站無 pattern。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR-DEPLOY-U18",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "OPEN-P1 的一次性定案。選 A 的三項理由皆為查證而非偏好：① 與已交付的 U4 完全同形（部署者已要跑一支腳本，再跑一支是同類動作）；② 不動啟動路徑故零重啟迴圈風險；③ **無資料遷移**，故 U4 記過的靜止窗口（U4-V6／S-9，現行 deploy.yml 單一 up -d --build 之下尚無承載者）對本批不適用——契約 K-15 的 observable_side_effects 逐字「不含任何資料寫入」。誠實代價：仍是手動步驟，但失敗明顯（relation does not exist），非靜默降級。"
+    },
+    {
+      "id": "NFR-NOORM-U18",
+      "status": "N/A",
+      "target": "tech-stack-decisions.md",
+      "note": "不建 ORM model。**理由與 U5 不完全相同**：U5 是因為 SQLite 無 schema 概念；本單元三張表在 public，SQLite 建得起來，但仍不建——① 本單元是 spec 不讀寫，讀寫屬 U19／U20；② 避免重演 U7 的建表權威問題（放進 Base.metadata 會讓 create_all() 搶先建表，而 DDL 的 IF NOT EXISTS 隨即 no-op，使本單元的 CHECK 在測試環境消失——U7 正是這樣讓 U4 的四條 CHECK 消失的）。已寫明若 U19／U20 日後建 model，必須逐條對齊本單元 DDL 的全部約束。"
+    },
+    {
+      "id": "NFR-VERIFY-U18",
+      "status": "OK",
+      "target": "tech-stack-decisions.md",
+      "note": "沿用 U5 在 ci.yml 建立的 memory-schema job 形狀（pgvector image service container、套用 schema 兩次、純 SQL 斷言）。擴充既有 job 或新增一個由 code-generation 決定；本站要求斷言必須涵蓋三態模型（BR1.3／BR1.4）與四條外鍵（BR2.3）。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-P1",
+      "severity": "resolved",
+      "text": "**已於本站一次性定案**（使用者裁決 `[P1]`=A），涵蓋 `U5` 與 `U18` 共八張表累積的同一個缺口。落地為 `NFR8.2`–`NFR8.5`，執行落點 `code-generation`。"
+    },
+    {
+      "id": "OPEN-M5",
+      "severity": "resolved",
+      "text": "**已由本站的 `[P1]`=A 一併定案**——`U5` 的兩張表加 `memory` schema 納入同一支腳本。`U5` 當時記載「本站不預選手段」，而本站就是那個決定的落點。"
+    },
+    {
+      "id": "OPEN-P5",
+      "severity": "named-gap",
+      "text": "**`deploy.yml` 不呼叫任何遷移腳本，故「部署後有沒有人去跑」沒有機械保證。** 這一點對已交付的 `U4` 已經成立（`run_hierarchy_migration.py` 同樣不被呼叫），本定案**沒有讓它變好也沒有變壞**，但累積的待跑腳本數從一支變兩支。若日後要補機械保證，形式應為部署後的健康檢查（偵測缺表即告警），而非把腳本塞進 `deploy.yml`——後者會把「資料庫結構變更」放進自動部署路徑，屬 `project.md` 的 high-risk action 範圍。"
+    },
+    {
+      "id": "OPEN-P2",
+      "severity": "named-gap",
+      "text": "**承接：`project_members.role` 與既有全域角色同名不同義，資料層無法強制區分。** 本單元只能在 COMMENT 標明；真正的區分依賴 `U19`／`U20` 不把兩者混用。承接站 `U19` 的 code-generation。"
+    },
+    {
+      "id": "OPEN-P3",
+      "severity": "resolved",
+      "text": "**已由 `NFR8.3` 處置。** `BR3.1`（既有環境建立須大聲失敗）原本無承載形式；本站定案的獨立腳本以非零碼結束即滿足它，且因不動啟動路徑而避開了 warning-and-continue 的既有形狀。"
+    },
+    {
+      "id": "OPEN-P4",
+      "severity": "named-gap",
+      "text": "**承接：拒絕事件不留痕跡**（`U19` 的 `H-8`）。`reselection_events` 記的是**改選**事件而非**拒絕**事件；一位管理者反覆嘗試邀請缺權限的人，本單元三張表都不留痕跡。在此記明以免 `reselection_events` 被誤讀成通用的成員稽核表。"
+    }
+  ]
+}

@@ -13,6 +13,9 @@ import { WaitingApprovalPage } from './pages/WaitingApprovalPage';
 import { AuthorizationRequestsPage } from './pages/AuthorizationRequestsPage';
 import { AssessmentPage } from './pages/AssessmentPage';
 import { CostPage } from './pages/CostPage';
+import { BrainPage } from './pages/BrainPage';
+import { MembersListPage } from './pages/MembersListPage';
+import { MemberDetailPage } from './pages/MemberDetailPage';
 
 /** 依權限導向第一個可用頁；pending → 等待授權；皆無則 403 */
 const DefaultRedirect: React.FC = () => {
@@ -76,6 +79,51 @@ function App() {
                 <CapabilityRoute storyId="C1" action="view">
                   <Layout>
                     <CostPage />
+                  </Layout>
+                </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* DEMO SCOPE：大腦入口的正式落點是 U14，屆時應連同權限掛載一併取代本區塊 */}
+          <Route
+            path="/brain"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <BrainPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            U24：成員頁。以既有 CapabilityRoute 做**能力層**把關（K3／view）。
+            per-project 那一層**不能**用它表達（K-16 的 two_layer_rule）——
+            管理者控件的出現依據伺服器回傳的 role 結論，見 MembersListPage 的
+            canManage 兩段式判定。詳情路由放在清單之後：react-router v7 以
+            具體度排序，兩者不互相遮蔽。
+          */}
+          <Route
+            path="/projects/:projectId/members"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="K3" action="view">
+                  <Layout>
+                    <MembersListPage />
+                  </Layout>
+                </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/projects/:projectId/members/:userId"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="K3" action="view">
+                  <Layout>
+                    <MemberDetailPage />
                   </Layout>
                 </CapabilityRoute>
               </ProtectedRoute>

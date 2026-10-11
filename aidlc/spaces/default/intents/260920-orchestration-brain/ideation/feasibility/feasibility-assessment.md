@@ -10,8 +10,12 @@
 本 stage 消費 `<record>/ideation/intent-capture/intent-statement.md`：其
 Problem Statement、Target Customer、Success Metrics、Initiative Trigger 與
 Initial Scope Signal 五段皆為本評估的前提，其中作業對象採「專案 → 系統 →
-架構圖」三層 [Q5]、成本能力只做交接介面 [Q6][Q11]、共享工作階段涵蓋統一
-入口與兩個功能頁 [Q7]，本評估不改動這些已核可的決定。
+架構圖」三層 [Q5]、**編排既有的真實成本能力** [Q12]、共享工作階段涵蓋統一
+入口與兩個功能頁 [Q7]、成本答案就地在入口頁呈現 [Q14]，本評估不改動這些
+已核可的決定。
+
+（修訂 1：本段原寫「成本能力只做交接介面 [Q6][Q11]」，其前提「成本能力
+不存在」已被上游推翻，Q6／Q11 已由 Q12 取代，改以 [Q12][Q14] 為準。）
 
 ## Go / No-Go 判定
 
@@ -24,10 +28,28 @@ Initial Scope Signal 五段皆為本評估的前提，其中作業對象採「�
 WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture 查證]。
 本 intent 在這兩件事上是「選用哪一種」而非「能不能做」。
 
-**第二層：新引入的元件各自成熟，但本 repo 皆無前例。** LangGraph 與 Redis
-在 repo 內引用為 0 [S6]。兩者都是成熟技術，風險不在技術本身，而在「它們
-與本 repo 既有形狀的接合面」——這正是本站決定以兩個技術試探處理的部分
-[F6]。
+**第二層：新引入的元件各自成熟；其中 LangGraph 在本 repo 已有可運行前例，
+Redis 仍無。** 修訂 1 重新查證後，這一層的事實與原評估不同，且方向是**信心
+上調**而非下調：
+
+- **LangGraph 已非新引入**。`backend/requirements.txt` 已釘選
+  `langgraph==1.2.11` 與 `langchain-openai==1.6.2`，`services/langgraph_runtime.py`
+  已提供 OpenRouter 版的 invoke/stream/astream，`cost/cost_advice_agent.py`
+  已以它建 `StateGraph` 並在部署環境運行 [V8]。原評估所依據的「引用為 0」
+  [S6] 對 LangGraph 已不成立。
+- **Redis 仍為 0** [V9]。`backend/`／`deploy/` 的 `redis` 命中皆為
+  Well-Architected 規則引擎中的雲端服務名稱字串與定價表資料，非實際依賴。
+  這一半的原評估維持成立。
+
+逐項對照可行性面向後，修訂 1 的三項新決定（[Q12] 編排既有成本能力、
+[Q13] 自建編排層、[Q14] 就地呈現）**未引入任何新服務、新依賴、新基礎設施
+或新技術層**：成本能力已存在且以 HTTP 呼叫 [F14]，LangGraph 已是釘選依賴，
+狀態事件轉譯不需要新機制 [F15]。故 GO 維持，且本層的信心較原評估**提高**。
+
+<!-- 修訂 1 存檔於 2026-09-21，對應 feasibility 的 Consolidated Summary
+     Confirmation 收據。本檔的修訂範圍：前提段的成本能力引用、能力表的
+     成本／串流／自建 runtime 三列、Go/No-Go 第二層、驗證計畫的 LangGraph
+     試探收窄。 -->
 
 **第三層：最大的不確定性不是新技術，而是既有資料。** 上游 [Q5] 已把
 「建立專案 → 系統 → 架構圖 階層」定為第一級範圍項，而既有架構圖直接掛在
@@ -48,7 +70,12 @@ WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture �
 | 記憶層的授權 | 可行 | 記憶層內建最小權限模型（擁有者與可見範圍欄位），介接的應用系統以自身角色對應映射到這組欄位 [F9]。DB 層邊界則由「grant 只鎖到記憶 schema」承載 [F3] |
 | 串流回覆與主動推播 | 可行 | 改用 WebSocket [F4]，既有共編 WebSocket 為可參照的前例 [S4]。代價：既有 3 個 SSE 端點維持不動，系統內將有兩種串流機制並存 |
 | 專案 → 系統 → 架構圖 階層 | 可行，風險集中在遷移 | 新資料模型本身無技術障礙；困難在既有資料的歸屬與既有頁面的相容（見上方第三層與 RAID R-1） |
-| 成本／FinOps 交接介面 | 可行 | 只做介面與明確的「尚未提供」回覆 [Q6][Q11]，不需成本計量 |
+| 編排既有的成本／FinOps 能力 | 可行 | 該能力已存在（`backend/cost/`，`/api/cost/v1` 下 10 條端點）[Q12]。大腦以 HTTP 帶使用者 token 呼叫，既有的 `require_story_action("C1",…)` dependency 照常執行，授權不可被繞過、稽核主體為使用者本人 [F14][V-F2]。本 intent 不新建成本計量 |
+| 成本回覆的串流交接 | 可行，且比預期簡單 | 成本端的「串流」實為 job 狀態輪詢（每秒查 DB，送 `progress`／`completed`／`timeout`／`failed`／`heartbeat`），非 token 級串流 [V-F1]。大腦把狀態事件轉譯進自己的訊息流即可，不需要逐 token 轉送 [F15]。代價：進度文字與 `timeout`／`failed` 兩種終態的訊息設計屬下游 |
+| 大腦自建獨立的編排執行層 | 可行，但引入一致性負債 | 既有 `services/langgraph_runtime.py` 已提供 OpenRouter 版 invoke/stream/astream 並為成本 agent 所用 [V8]；使用者知情選擇自建而非沿用 [Q13]。後果是系統內並存兩份 OpenRouter 客戶端與兩套串流事件語意，正是 `team.md` `## Code Style` 單一真實來源規則管制的形狀。緩解方向為「鎖住兩者一致性的驗證」，具體手段不在本站預選（見 RAID） |
+| **專案系統資訊需求頁（能力 11）** | **可行，但引入一個新技術層與一個新進程邊界** | 修訂 2 新增。`[S13]`=A 定案「agent 經**大腦端 MCP 封裝**取用欄位，底下走 HTTP 帶使用者 token」。查證結果（**repo 內零 MCP 基礎設施**）：`backend/` 全樹對 `mcp` 僅一處命中——`services/user_router.py:85` 的字串 `"H3": "MCP／Skill 生命週期"`，那是 **RBAC 權限矩陣的 story 標籤**而非實作 [V1]；`requirements.txt` 無任何 MCP 套件 [V1]；既有 agent 暴露工具的方式是 LangChain `@tool` ＋ `ToolNode`，與 MCP 無關 [V2]。使用者於 `[F16]`=B 知情選擇**真的導入** MCP server ＋ client，而非收窄為既有的 `@tool`。**故本能力確實引入新技術層**——這與 approval-handoff 對**能力 12** 的「不引入新技術層」判定不矛盾（不同能力），但不得被讀成能力 11 也是如此。**硬約束見 C-T11**：使用者 token 不得以工具參數傳遞 |
+| **專案成員管理（能力 12）** | 可行 | 修訂 2 新增。不引入新服務、不新增對外暴露面、不新增依賴、不引入新技術層：per-project 角色層與既有全域 `role_permissions`（308 列不動）兩層串聯，落在既有 FastAPI／React／PostgreSQL 之上；`[S17]`=B 的獨立一頁是既有前端路由下的一頁。`[M3]`=A（唯一成員時擋下停用）經查證與 `schema_rbac.sql:330` 的現況一致——`owner_user_id` 為 `NOT NULL` 且無 `ON DELETE` 子句，資料庫今天就會擋下該刪除——故**不需放寬任何 schema 約束** [V7]。**行號對齊修正（非本站新定案）**：上游六處產出一致引用 `schema_rbac.sql:328`，但該行實為 `id SERIAL PRIMARY KEY,`；`projects.owner_user_id` 在**第 330 行**。被引用的**事實正確、定位錯誤**，源頭為 scope-definition 修訂 2（`scope-document.md:52`）並傳播至 rough-mockups、approval-handoff、phase-check。本站產出已改用 330，上游檔不回改（依 `refined-mockups:c3`）——且該兩站已因回跳失去核可、將重新執行，屆時一併更正。附帶：`schema_rbac.sql:242` 另有一個 `owner_user_id` 且**有** `ON DELETE CASCADE`（在 `estimate_sets`），故「無 ON DELETE」只對 `projects` 成立，行號精確因此更重要 |
+| **既有 agent 的併發安全（能力 1 與 8 的地基）** | **不可行於現狀，須先修** | 修訂 2 新增，由本輪查證查出。`design_agent.py` 的工具取 per-request 脈絡用模組層全域 `_progress_queue`（第 31／183／203／211／218 行），而非 LangGraph 的 `configurable`——全樹只有 `thread_id` 走 `configurable`（第 198 行），`contextvars`／`InjectedState`／`RunnableConfig` 零使用 [V3]。工具與入口**都讀當下的模組全域**，故兩個併發請求共用最後一個被建立的佇列。**已實測**：使用者 A 收到使用者 B 產生的架構圖 XML，B 什麼都沒收到；另第 218 行先結束者把全域設為 `None` 後，另一請求的事件被**靜默丟棄** [V4]。兩個生產呼叫點皆可達 [V5]。本 repo 已有正解可沿用：`cost/advice_orchestrator.py:23-24` 的 per-key dict ＋ `threading.Lock` [V6]。`[F17]`=A 定案列為能力 1／8 的**實作前置** |
 
 ## 驗證計畫（技術試探）
 
@@ -56,7 +83,7 @@ WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture �
 
 | 試探 | 要回答的問題 | 不做的話會怎樣 |
 |---|---|---|
-| LangGraph 編排模型 | LangGraph 能否乾淨地包住既有那些以 SSE 回應的 agent 端點 | 這是整個架構的地基；假設錯誤時，後續全部設計都建立在錯的前提上 |
+| LangGraph 編排模型（**修訂 1 已收窄**） | 原問題為「LangGraph 能否乾淨地包住既有那些以 SSE 回應的 agent 端點」。該問題**已由 repo 內的可運行前例回答**：`cost/cost_advice_agent.py` 正是「LangGraph 圖 ＋ 以 SSE 對外」的形狀且已在部署環境運行 [V8][V-F1]。收窄後要回答的是本 intent 獨有的部分：**多意圖識別的分支結構、session 資訊如何注入圖、以及大腦自建的 runtime [Q13] 與既有那份要如何維持一致** | 收窄前的版本會重複驗證一件 repo 已經證明的事；收窄後未做的話，R-8 的一致性負債沒有任何早期訊號 |
 | 記憶層資料模型 | 三種記憶各自的形狀與查詢方式，以及換映像取得向量檢索的代價 [S9] | 資料模型錯誤會同時波及 schema、查詢與部署拓樸三處 |
 
 試探不進正式程式碼、不求品質，只為回答上述問題；答案取得後即丟棄。
@@ -88,6 +115,20 @@ WebSocket [S4]；LLM 供應商切換亦已可用 [S5 之外的 intent-capture �
 | Audit logging | **適用** | 管理者／平台維運者的需求即由長期記憶或既有稽核紀錄承載 [Q10]，故記憶層的寫入與刪除事件本身構成稽核來源；F5 的「使用者可自行刪除」亦須留下刪除紀錄，否則稽核與刪除權互相抵消 |
 
 四面向皆判定為適用，無不適用項。
+
+### 修訂 2 的補充判定（能力 11、能力 12、併發危害）
+
+| 面向 | 判定 | 影響與處置 |
+|---|---|---|
+| **IAM** | **適用（三處）** | ①能力 12 新增 per-project 角色層，與全域矩陣兩層串聯、任一層不過即拒。②能力 11 的 MCP 工具呼叫必須帶使用者 token 使 `require_story_action` 照常執行——授權不可因經過 MCP 進程邊界而被繞過。③**併發危害本身即授權面缺陷**：`_progress_queue` 使 A 取得 B 產生的架構圖內容，這是跨使用者的資料暴露，不是單純的競態 |
+| **encryption** | **適用（新增一處）** | 能力 11 的 MCP 傳輸層會承載使用者 token（見 C-T11）。若採 stdio 傳輸，token 不過網路；若採 HTTP／SSE 傳輸，該通道必須為本機迴環或加密。傳輸選擇屬設計階段，但**「token 不得進入 LLM context」**是本站定下的硬約束 |
+| **network exposure** | **適用（新增一處）** | MCP server 是獨立進程，**這是本 intent 第二個新增的進程邊界**（第一個是 Redis）。它不得對外暴露——僅供同主機的大腦進程連接。能力 12 不新增暴露面 |
+| **audit logging** | **適用** | ①能力 12 的角色指定與自動改選都是授權變更，須留稽核（誰、何時、對誰、舊角色、新角色），**自動改選尤其**——系統發起、無人按鈕，不留紀錄則事後無從得知某人的 `project_admin` 怎麼來的。②MCP 工具呼叫的稽核主體必須是**使用者本人**而非大腦服務帳號 |
+
+**PBT（ADR-0006 第二條 hard constraint）**：能力 11／12 皆不屬 ADR-0006 點名的三個
+落點，故非 blocking。但**自動改選的挑選邏輯是純演算法決定**（在剩下成員中選誰），
+失敗模式為「選出不該被選的人」或「一個都沒選出」，屬 PBT 典型適用形狀，記為
+**PBT 候選**交 `requirements-analysis` 與設計階段判定。
 
 ## Assumptions & Open Questions
 

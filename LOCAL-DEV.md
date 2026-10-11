@@ -19,6 +19,11 @@
 | **A3「優化」（Design↔Review 協作）** | 同上 | 失敗 |
 | **Offline Lens agent 填答** | 同上 | 降級為規則啟發式（會寫 WARNING log） |
 | 動態 SVG 圖示 | n8n webhook（**選填**，見下方「圖示目錄」） | 用灰底 fallback 圖示，不中斷 |
+| **建庫本身（全部功能的前提）** | PostgreSQL ＋ **pgvector 擴充**（見第 2 節 H4） | `schema_rbac.sql` 整個交易中止，**一張表都建不出來** |
+| 大腦編排的 session 還原（跨頁脈絡） | **Redis**（見第 1 節的 `redis-cli ping`） | session 相關功能不可用 |
+| **後端啟動本身（U10 起）** | `backend/.env` 的 **`BRAIN_SESSION_HISTORY_MAX`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。這不是降級，是大聲失敗——把缺值讀成「無上限」會讓單一 Redis key 無上界成長，而那是無聲的（`BR3.5`） |
+| **後端啟動本身（U11 起）** | `backend/.env` 的 **`BRAIN_ROUTER_CONFIDENCE_THRESHOLD`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。同樣是大聲失敗——門檻缺值時「信心不足就先問、不要亂做」這條路徑的判定基準不存在，而把缺值讀成某個預設門檻，等於讓它由一個沒有人選過的數字決定（`BR3.4`）。另四個 `BRAIN_ROUTER_*` 缺值只會記 WARN／INFO 並取預設 |
+| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務 |
 
 ### 兩個「不在 requirements.txt 裡」的硬依賴
 
@@ -32,10 +37,10 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 
 | `LLM_PROVIDER` | 認證來源 | 適用 |
 |---|---|---|
-| `openrouter`（程式預設、部署用） | `OPENROUTER_API_KEY` | 部署與本機 OpenRouter |
-| `cli`（本機範本可選） | 歷史 CLI 登入語意；**A3 Review／Lens 仍要求 OpenRouter 金鑰**（`openrouter_chat_model`） | 僅部分遺留環境整理 |
+| `openrouter`（程式預設，**唯一可用值**） | `OPENROUTER_API_KEY` | 部署與本機皆同 |
+| ~~`cli`~~ | **已退役（2026-10-02，RAID R-11）** | 設它會退回 `openrouter` 並記一行 ERROR。A3 遷移到 LangGraph 之後已無 `claude` CLI 子行程可認證，而該模式仍會刪除 `ANTHROPIC_AUTH_TOKEN`／`BASE_URL`，使金鑰被清空而健康檢查仍回報正常 |
 
-本機建議直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
+本機直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
 
 `cli` 模式下程式仍可能**主動刪除**兩組變數（避免殘值干擾 Anthropic 相容客戶端）：
 
@@ -66,9 +71,33 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 psql --version                      # 需要 PostgreSQL client
 pg_isready -h localhost -p 5432     # 需要一個跑著的 server
 
+# ⚠ pgvector：本機建庫的硬依賴（見第 2 節 H4）。必須有一列，否則 schema_rbac.sql
+#   會整個交易中止、一張表都建不出來。
+psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+  -c "SELECT name, default_version FROM pg_available_extensions WHERE name='vector';"
+
+# Redis：session store（第 5 服務）。沒有它，大腦編排的 session 相關功能不可用。
+redis-cli ping                      # 應回 PONG；沒有的話 brew install redis / apt install redis
+
+# U10 session-store：每段歷程上限。required、**無預設**——沒設它，後端在
+# startup 就拒絕啟動（不是降級）。值 200，理由見第 3 節的 .env 註解。
+grep -q '^BRAIN_SESSION_HISTORY_MAX=' backend/.env \
+  && echo 'BRAIN_SESSION_HISTORY_MAX 已設定' \
+  || echo '請在 backend/.env 設 BRAIN_SESSION_HISTORY_MAX=200（缺它後端不啟動）'
+
+# U11 intent-router：意圖路由的信心門檻。required、**無預設**——沒設它，後端
+# 在 startup 就拒絕啟動（不是降級）。值 0.7，理由見第 3 節的 .env 註解。
+grep -q '^BRAIN_ROUTER_CONFIDENCE_THRESHOLD=' backend/.env \
+  && echo 'BRAIN_ROUTER_CONFIDENCE_THRESHOLD 已設定' \
+  || echo '請在 backend/.env 設 BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7（缺它後端不啟動）'
+
 # LLM 鏈路（A1／A3 必要：OpenRouter 金鑰）
 # 映像與 A3 不再需要 Node／claude CLI
 test -n "${OPENROUTER_API_KEY:-}" && echo "OPENROUTER_API_KEY 已在環境" || echo "請在 backend/.env 設定 OPENROUTER_API_KEY"
+
+# 選用：本機 embedding。**本機的向量檢索走 fastembed，不是 ollama**——
+# ollama 在本機連不上：服務名過得了 NFR7.1 的驗證，但解析不到（見第 3 節）。
+# python3 -c "import fastembed" 2>/dev/null && echo "fastembed 已安裝" || echo "需 pip install 'fastembed>=0.7,<0.8'"
 
 # Python
 python3 --version                   # CI 用 3.12
@@ -77,7 +106,7 @@ python3 --version                   # CI 用 3.12
 ### 先確認 port 沒被佔用
 
 ```bash
-for p in 5432 8000 5173; do
+for p in 5432 6379 8000 5173; do
   lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1 \
     && echo ":$p 被佔用 → $(lsof -nP -iTCP:$p -sTCP:LISTEN | awk 'NR==2{print $1}')" \
     || echo ":$p 可用"
@@ -90,12 +119,71 @@ done
 
 ## 2. 資料庫
 
+### ⚠️ H4：本機 PostgreSQL 必須先裝 pgvector（不裝就一張表都建不出來）
+
+**這一步是必做前置，不是附註。** `schema_rbac.sql` 在 `BEGIN;` 之後的第一條敘述是
+`CREATE EXTENSION IF NOT EXISTS vector;`（U5 記憶表的 `vector(1024)` 欄位需要它）。
+
+而本機走的是**主機安裝的 PostgreSQL**，不是 compose 的 db 容器——所以那個容器映像帶不帶
+pgvector 跟你無關，重要的是**你主機上那顆 PostgreSQL**有沒有裝。
+
+**不裝的後果比想像的大**：`IF NOT EXISTS` 只抑制「擴充已存在」；伺服器**沒有安裝**
+pgvector 時是 `could not open extension control file` 這個**硬 ERROR**。`schema_rbac.sql`
+是**單一交易**（`BEGIN` … `COMMIT`），交易一旦中止，之後每一條敘述都以
+`current transaction is aborted` 失敗、`COMMIT` 退化為 ROLLBACK ——結果是**一張表都沒建**
+（全部資料表、308 列 RBAC 預設矩陣全沒有），**不論你碰不碰記憶功能**。
+
+```bash
+# 前置檢查：必須有一列
+psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+  -c "SELECT name, default_version FROM pg_available_extensions WHERE name='vector';"
+```
+
+沒有那一列時，二擇一：
+
+| 做法 | 指令 |
+|---|---|
+| **裝到主機的 PostgreSQL 上**（建議，維持既有的 bare-metal 流程） | macOS：`brew install pgvector`；Debian／Ubuntu：`apt install postgresql-17-pgvector`（版號跟著你的 server 走）；或由原始碼 `make && make install` |
+| **改用 repo 根的 compose 提供 db** | `docker compose up -d db`（該檔的 db 映像已是 `pgvector/pgvector:pg18`，publish `5432`，連線字串不變） |
+
+### ⚠️ H5：既有的 `postgres_data` volume 與 PG 18 不相容
+
+repo 根 `docker-compose.yml` 的 db 映像由 `postgres:15-alpine` 改為
+`pgvector/pgvector:pg18`——**跨三個大版本**。PGDATA 的格式不跨大版本相容，而該檔掛的是
+具名 volume `postgres_data` 且 `restart: always`：**既有 volume 會讓容器進入重啟迴圈**
+（日誌寫 `database files are incompatible with server`）。**沒有任何 CI 閘門涵蓋這條路徑。**
+
+若你之前用過那個 compose 起 db，二擇一：
+
+```bash
+# (a) 本機資料可丟：移除 volume 重建（最快）
+docker compose down
+docker volume rm cloud-360_postgres_data 2>/dev/null || docker volume ls | grep postgres_data
+docker compose up -d db
+psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
+
+# (b) 要保留資料：先以舊映像 dump，再以新映像 restore
+#     （把 image 暫時改回 postgres:15-alpine → pg_dump → 改回 pg18 → 移除 volume → restore）
+```
+
+> volume 的實際名稱帶 compose 專案名前綴，而根 compose 沒有 `name:`，所以前綴是**目錄名**
+> ——在 `cloud-360/` 下是 `cloud-360_postgres_data`，在名為 `chiton` 的 worktree 下會是
+> `chiton_postgres_data`。用 `docker volume ls | grep postgres_data` 確認實際名稱再刪。
+
+### 建庫
+
 ```bash
 createdb -U postgres -h localhost cloud360
 psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 ```
 
-`schema_rbac.sql` 會建立全部資料表、308 列 RBAC 預設矩陣，以及預設帳號 **`admin` / `admin123`**。
+`schema_rbac.sql` 會建立 `vector` 擴充、全部資料表，以及 308 列 RBAC 預設矩陣。
+
+> **它不建立固定密碼管理員。** （這一行先前寫「以及預設帳號 `admin` / `admin123`」，與
+> `schema_rbac.sql:11` 逐字的「不建立固定密碼管理員；bootstrap admin 由後端依環境變數
+> 建立」直接矛盾，且該檔全檔唯一的 `INSERT INTO` 是 `role_permissions`。已更正。）
+> 本機的 `admin / admin123` 是**後端啟動時**建的：`APP_ENV=local`／`test`／`ci` 之下
+> `init_db()` 會建 bootstrap admin，`local` 另外建 11 位 persona demo 帳號。
 
 ### ⚠️ 兩條 schema 演進路徑（踩過就會懂）
 
@@ -105,6 +193,83 @@ psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 | `backend/database.py` 的 `_ensure_*_schema()` | **每次後端啟動** | 這才是既有環境真正的遷移機制 |
 
 **實務結論**：改了 `schema_rbac.sql` 卻只重啟容器 → 不生效。反過來，多數欄位新增只要**重啟後端**就會被 `_ensure_*_schema()` 的 `ALTER TABLE ... IF NOT EXISTS` 補上（例如 `estimate_line_items.spec_description`）。
+
+**一個例外，改 `database.py` 時要知道**：`init_db()` 裡的 `_ensure_*` 現在有**七支**，
+其中六支在 `Base.metadata.create_all()` **之後**（它們補 `create_all` 不會做的 `ALTER`），
+而 **`_ensure_vector_extension()` 在它之前**——`vector` 型別必須先存在，否則宣告 `vector`
+欄位的表在 `create_all()` 裡就會以 `type "vector" does not exist` 失敗，而那是**啟動失敗**
+（`init_db()` 由 startup 事件同步呼叫）。新增補丁時照既有形狀擺在後面是對的；**唯獨擴充類
+必須在前面**。這條順序由 `backend/tests/test_vector_extension_bootstrap.py` 守著。
+
+### ⚠️ H6：`schema_rbac.sql` 不會給你 `U5`／`U18` 的表，而 `U19` 的程式會真的去讀它們
+
+**這一節是 `U19 membership-service` 加的，而它是第一個在執行期真的讀寫
+`project_members`／`reselection_events` 的程式**（`U18` 是純 DDL，所以它不會在
+本機壞掉）。
+
+`schema_rbac.sql` 的 `I)`／`J)` 兩個區塊只在**空 volume**（或你手動跑整個檔案）
+時生效。既有的本機資料庫拿不到它們，而既有環境的唯一路徑是**兩支獨立腳本**，
+**順序嚴格**：
+
+```bash
+cd backend
+# 1) U4：projects／systems（J) 的外鍵指向它們）
+python scripts/run_hierarchy_migration.py && echo "exit=$?"
+# 2) U5 ＋ U18：memory schema ＋ 三張 project-meta 表
+python scripts/run_meta_schema_migration.py && echo "exit=$?"
+# 3) U19：既有專案的成員回填（**沒跑的話你會被鎖在自己的專案外面**）
+python scripts/backfill_project_members.py --dry-run && echo "exit=$?"
+python scripts/backfill_project_members.py && echo "exit=$?"
+```
+
+第 3 步的後果值得寫清楚：`project_members` 是全新表，既有專案全部**零成員**，
+而 `resolve_project_role` 對零成員專案回 `None`、`BR1.6` 要求當成拒絕
+——所以**連你自己建的專案都會被判為非成員**。症狀是 `/api/membership/*` 一律
+403 而不是任何錯誤訊息。細節與驗證指令見 `DEPLOY.md` 第 2.2.10 節。
+
+#### ⚠️ 一個本機專屬的陷阱：**後端先啟動過，你就會拿到沒有 COMMENT 的表**
+
+`U19` 把 `ProjectMember` 與 `ReselectionEvent` 納入 `Base`，所以
+`backend/database.py` 的 `Base.metadata.create_all()`（啟動時跑）成為
+**第二條建表路徑**。它的 `checkfirst=True` 只建**缺少的**表，既有表一律不動。
+
+於是在一個**沒跑過 `run_meta_schema_migration.py`** 的本機資料庫上：
+
+| 順序 | 結果 |
+|---|---|
+| 先跑腳本、後啟動後端 | 正確：腳本建表（含 COMMENT），`create_all` no-op |
+| **先啟動後端、後跑腳本** | 該資料庫**永久缺 COMMENT**——`CREATE TABLE IF NOT EXISTS` 整段 no-op，之後再跑 `schema_rbac.sql` 也補不回來 |
+
+嚴重度**低且限本機**（COMMENT 是給人讀的防呆機制，不影響行為），但它說明一件事：
+**兩條建表路徑不等價，而只有一條被驗**（`verify_meta_schema.sql` 的 14 條斷言裡
+只有 `P12` 碰 COMMENT，且它驗的是 `system_requirement_fields`）。
+要修就是整個重來（下面那一段），或手動補 COMMENT。
+
+### 真實 PostgreSQL 的測試（`backend/tests_pg/`）
+
+`U19` 引入**第二個測試根**。`backend/tests/` 的 51＋ 個測試檔全部走 in-memory
+SQLite，而 `backend/tests_pg/` 需要一個**真實的** PostgreSQL：
+
+```bash
+cd backend
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360 \
+  python -m unittest discover -s tests_pg -v
+```
+
+前置條件：目標資料庫已套用 `schema_rbac.sql`（含 `U19` 回補的
+`reselection_events.cause`）。**`DATABASE_URL` 必須顯式帶 `+psycopg` 後綴**，
+而**讀不到它時這些測試會大聲失敗、不會退回 SQLite**——退回 SQLite 會讓整個
+測試綠燈而鎖從未存在。
+
+**為什麼不能把真實 PG 測試放回 `backend/tests/`**：`with_for_update()` 在
+SQLAlchemy 的 SQLite dialect 下**被靜默丟棄**（編譯出的 SQL 無鎖子句、無錯誤、
+無警告），所以併發測試在那裡會**綠燈而鎖根本不存在**。隔離是結構性的：
+`discover -s tests` 看不到 `tests_pg`，沒有東西可以忘記設。
+
+> 這些測試會在目標資料庫裡建立並清除自己的 `users`／`projects`／
+> `project_members`／`reselection_events` 列（使用者名帶 `u19pg-` 前綴）。
+> 它們不碰既有資料，但**它們不是唯讀的**——若你的 `cloud360` 裡有你在意的
+> 本機資料，建一個丟棄用的資料庫跑它們。
 
 要整個重來：
 
@@ -132,19 +297,73 @@ cp backend/.env.example backend/.env
 ```bash
 cat > backend/.env <<'EOF'
 APP_ENV=local
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cloud360
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# LLM 供應商：cli 用你已登入的 claude CLI，不需任何金鑰（見第 0 節 H1）
-LLM_PROVIDER=cli
+# LLM 供應商：openrouter 是唯一可用值。`LLM_PROVIDER=cli` 已退役（RAID R-11
+# 已修）：設它會退回 openrouter 並記一行 ERROR。注意舊的 backend/.env.example
+# 預設值就是 cli，若你的 .env 是在 2026-10-01 之前複製的，把那一行改成
+# openrouter（或刪掉）。
+LLM_PROVIDER=openrouter
 
-# 只有 LLM_PROVIDER=openrouter 時才需要。留空＝未設定；
+# 必填。留空＝未設定；
 # 千萬不要填佔位字串，那會被當成真金鑰送出去。
 OPENROUTER_API_KEY=
 
 # 留空即依供應商取預設（cli → sonnet）
 LLM_MODEL=
+
+# --- brain-infra（U1）：Redis ＋ embedding ---
+# 本機用 localhost；部署 stack 用 compose 服務名（redis／ollama），由 deploy/.env
+# 決定，兩者不共用設定。
+REDIS_URL=redis://localhost:6379/0
+# 不得為 `default`（最小權限）。本機若跑的是沒設 ACL 的 Redis，自己建一個：
+#   redis-cli ACL SETUSER cloud360 on '>本機密碼' '~*' '+@all' '-@admin' '-@dangerous'
+REDIS_USER=cloud360
+REDIS_PASSWORD=
+# U10 session-store：每段對話歷程的筆數上限。required、**無預設**——缺值時
+# 後端在 startup 大聲失敗，**不會**以「無上限」啟動（BR3.5）。
+# 上限**每段獨立計算**（至多三段：shared／workspace／assessment），故總量上界
+# 是 3 倍而非 200 則總和。值 200：3 × 200 × 約 500 B ≈ 300 KB／session。
+BRAIN_SESSION_HISTORY_MAX=200
+# U11 intent-router：意圖路由層的五個設定。**只有門檻 required、無預設**——
+# 缺它後端在 startup 大聲失敗；其餘四個缺值取預設並記 WARN／INFO。
+# 門檻值域為 0 < t <= 1：設 0 會讓「最高分 >= 門檻」恆真、反問路徑永不觸發，
+# 而那是一條 Must（「判不出來先問我，不要亂做」）靜默失效。
+# 本機**不需要** OPENROUTER_API_KEY 也能跑本單元的測試（全部用替身）；
+# 要真的讓路由層打模型才需要金鑰（見本節的 OPENROUTER_API_KEY）。
+# 換 BRAIN_ROUTER_MODEL 不需改程式，但準確率數字不可跨模型沿用。
+BRAIN_ROUTER_MODEL=typesafe/jev-1.13
+BRAIN_ROUTER_TIMEOUT_SEC=5
+BRAIN_ROUTER_MAX_CALLS_PER_TURN=1
+BRAIN_ROUTER_MAX_RETRIES=0
+BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7
+# 允許值：ollama｜fastembed｜fulltext｜stub。required、**無預設**——值不在清單內
+# 或缺值時會啟動失敗並列出可選值（不會靜默降級）。
+#   ollama    **部署 stack 專用**——本機設得出合法值但連不上，見下方 OLLAMA_BASE_URL
+#   fastembed 不另起服務，但**首次使用會下載**模型（ONNX，行程內執行）。
+#             **本機要真的驗向量檢索，用這個。**
+#   fulltext  不做向量檢索，退回全文搜尋（零下載、零額外服務）
+#   stub      完全不算 embedding；CI 的 ui-regression stack 用的就是它
+EMBEDDING_PROVIDER=fulltext
+# 只有 EMBEDDING_PROVIDER=ollama 時才用到。**本機的兩種失敗方式不同，別搞混：**
+# （a）保留下面的服務名 → 啟動**會過**（NFR7.1 驗的是主機名形式，不是可解析性；
+#      BR1.5 禁止啟動探測），失敗發生在第一次 embed()，是
+#      EmbeddingProviderUnavailable 夾 ConnectError（名稱無法解析）。
+# （b）改成 localhost／127.0.0.1／IP／對外網域 → **啟動就失敗**，訊息會說
+#      主機名必須是 compose 內部服務名。
+# NFR7.1 之所以這麼嚴：該服務的 HTTP API 零認證、不 publish host port，
+# 網段隔離是它唯一的存取控制。
+# 本機要向量檢索請改用 fastembed。維度須為 1024（對齊 vector(1024)）
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_EMBED_MODEL=bge-m3
+# 只有 EMBEDDING_PROVIDER=fastembed 時才用到。維度亦須 1024
+FASTEMBED_MODEL=multilingual-e5-large
+# 選填，預設 10。embedding 外部呼叫的逾時上界（秒）。非正數或非數字會記 WARN
+# 後取預設，不終止啟動。它保護的是「提供者掛掉時不要無限期掛住記憶路徑」，
+# 不是首字回應的延遲預算。
+EMBEDDING_TIMEOUT_SEC=10
 
 # --- 選填 ---
 # N8N_WEBHOOK_URL=https://.../webhook/get-icon
@@ -158,6 +377,10 @@ LLM_MODEL=
 # 禁止把真金鑰寫進版控檔；log／錯誤訊息不得含 secret 值（變數名可出現）。
 EOF
 ```
+
+> **`+psycopg` 這個後綴只給應用程式用**，因為它是 SQLAlchemy 的 driver 指定語法。
+> 上面用 `psql` 建庫的指令**不能**加它——`psql` 不認得這個形式，會直接連線失敗。
+> 兩處刻意不同：`psql` 用裸的 `postgresql://`，`backend/.env` 用 `postgresql+psycopg://`。
 
 > `JWT_SECRET` 未設時會**靜默 fallback 到程式碼內的預設字串**（依賴風險 R2），不會報錯。本機無所謂，但要知道它不會提醒你。
 
@@ -177,6 +400,15 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> **從既有環境升上來的人必看**：PostgreSQL 驅動已由 `psycopg2-binary` 換成
+> `psycopg[binary]`（v3）。兩者是**不同套件**，舊環境不會自動換掉，必須重跑一次
+> 上面的 `pip install -r requirements.txt`。沒裝 psycopg v3 時，`import main`
+> 會以 `ModuleNotFoundError: No module named 'psycopg'` 失敗。
+>
+> 單元測試大多不受影響（`tests/helpers.py` 在偵測到沒裝時會 stub 掉），但
+> `tests/test_dotenv_path.py` 的兩個案例是**開子行程**跑 `import main`，
+> stub 進不到子行程裡，所以那兩個案例真的需要驅動裝好才會綠。
 
 ### 啟動
 
@@ -238,16 +470,20 @@ open http://localhost:8010/docs
 **A1／A3 要在 UI 上驗**：登入 → Workspace 輸入一句架構描述 → 應該串流出圖。若回 500，照這個順序查：
 
 0. **你改的 `.env` 跟跑起來的 process 是不是同一份 checkout。** 這個 repo 常同時存在多個
-   worktree，症狀是「`backend/.env` 明明寫著 `LLM_PROVIDER=cli`，API 卻回報尚未設定
-   `OPENROUTER_API_KEY`」。查法：
+   worktree，症狀是「`backend/.env` 明明有值，API 卻回報尚未設定 `OPENROUTER_API_KEY`」。
+   查法：
    ```bash
    # 找出跑著的 uvicorn 究竟在哪個目錄
    lsof -p "$(pgrep -f 'uvicorn main:app')" | awk '$4=="cwd" {print $NF}'
    ```
-   訊息本身也能分辨版本：新版的那句後面會接「本機開發也可改設 LLM_PROVIDER=cli」，
-   沒有那句就是舊碼。
-1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值（`LLM_PROVIDER=cli` 時不需要）
-2. `command -v claude` 找不找得到
+   **2026-10-02 更正**：本節原本教人以錯誤訊息裡有沒有「本機開發也可改設
+   `LLM_PROVIDER=cli`」來分辨新舊碼——該句已隨 cli 模式退役從
+   `auth_error_message()` 移除，**那個判準現在會把新碼誤判成舊碼**。改用上面的
+   `lsof` 查法，或直接看 `llm_provider.py` 是否含 `_RETIRED_PROVIDERS`（含＝新碼）。
+1. `backend/.env` 的 `OPENROUTER_API_KEY` 有沒有值（**必填**；`LLM_PROVIDER=cli` 已退役，不再是免金鑰的替代路徑）
+2. 若日誌出現「`LLM_PROVIDER=...` 已退役」的 ERROR，把 `backend/.env` 那一行改成
+   `openrouter` 或刪掉（**本步取代原本的「`command -v claude` 找不找得到」**——A3 遷移到
+   LangGraph 之後全樹已無子行程呼叫，`claude` CLI 不再是任何路徑的依賴）
 3. `ANTHROPIC_API_KEY` 是不是**留空**
 4. OpenRouter 餘額（402 錯誤來自額度，或 `max_tokens` 預扣過高 → 調低 `LLM_MAX_OUTPUT_TOKENS`）
 
@@ -286,7 +522,8 @@ UPDATE users SET last_activity_at = NULL WHERE username='demo2';
 ## 7. 跑測試（開發時最有用的迴圈）
 
 ```bash
-# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg2 被 mock 掉）
+# 後端單元測試 —— 不需要資料庫（in-memory SQLite，psycopg 被 mock 掉）
+# 但驅動本身要裝（見上節）：有兩個案例開子行程，mock 進不去
 cd backend && python -m unittest discover -s tests -v
 
 # 前端 lint + 型別 + build
@@ -347,6 +584,18 @@ docker compose -f deploy/docker-compose.test.yml down -v
 | A1 回 402 | OpenRouter 額度或 `max_tokens` 預扣 | 儲值，或調低 `LLM_MAX_OUTPUT_TOKENS` |
 | 端點測試 `no such table` | 測試用 in-memory SQLite 需 `StaticPool` | 用 `tests/helpers.py` 的 `make_session()` |
 | 手機寬度版面爆掉 | 側邊欄 `w-64` 無斷點折疊（既有問題，全 app） | 已知；由 `260806-a1-a3-ux` intent 處理中 |
+| `psql -f schema_rbac.sql` 一張表都沒建，訊息一堆 `current transaction is aborted` | 主機的 PostgreSQL **沒有 pgvector**，第一條 `CREATE EXTENSION` 是硬 ERROR，單一交易整個回滾（H4） | 裝 pgvector 或改用 root compose 的 db，見第 2 節 H4 |
+| root compose 的 db 容器反覆重啟，日誌寫 `database files are incompatible with server` | 既有 `postgres_data` volume 是 PG 15 的，映像已改 PG 18（H5） | 移除該 volume 重建，或先 dump 再 restore，見第 2 節 H5 |
+| 後端啟動就掛，訊息提到 `EMBEDDING_PROVIDER` | 它是 required、**無預設**，缺值或值不在 `ollama/fastembed/fulltext/stub` 內就大聲失敗 | 在 `backend/.env` 設一個；本機用 `fulltext` 最省事 |
+| 設了 `EMBEDDING_PROVIDER=ollama`，後端**正常啟動**，但一用到記憶檢索就拋 `EmbeddingProviderUnavailable`，訊息夾著 `ConnectError`（名稱無法解析） | 範本的 `http://ollama:11434` **過得了** `NFR7.1` 的驗證（它驗主機名的形式，不驗可解析性；`BR1.5` 禁止啟動探測），但 `ollama` 這個名字只在部署 stack 的 compose 網路裡解析得到 | **本機改用 `fastembed`**（`pip install 'fastembed>=0.7,<0.8'`）。`ollama` 只在部署 stack 內成立 |
+| 設了 `EMBEDDING_PROVIDER=ollama` 且把主機改成 `localhost`／IP／網域後，後端**拒絕啟動**，訊息提到主機名必須是 compose 內部服務名 | 這是 `NFR7.1` 的刻意行為，不是 bug。該服務零認證、靠網段隔離保護，指到 compose 網路外就是繞過它——記憶文字會以明文送到那個位址 | 同上：本機改用 `fastembed`。不要為了「讓它啟動」而放寬主機名檢查 |
+| 後端啟動就掛，訊息提到 model id 不在合法的 `embeddingModel` 集合內 | 改了 `OLLAMA_EMBED_MODEL`／`FASTEMBED_MODEL`，但沒同步 `MEMORY_RECORD_EMBEDDING_MODELS`。擋在啟動是刻意的——否則新舊向量會共用同一個標籤，檢索時被當成可比較而回垃圾且不報錯（ADR-008） | 改回宣告集合內的值，或連同既有列的遷移方式一起改 |
+| session／跨頁脈絡相關功能連不上 | 本機沒跑 Redis，或 `REDIS_USER` 用了 `default`／ACL 使用者沒建 | `redis-cli ping` 應回 PONG；ACL 建法見第 3 節的 `.env` 註解 |
+| 後端啟動就掛，訊息提到 `BRAIN_SESSION_HISTORY_MAX` | 它是 required、**無預設**（`BR3.5`／`NFR8.40`）。缺值不會被讀成「無上限」——那會讓單一 Redis key 無上界成長且無聲 | 在 `backend/.env` 設 `BRAIN_SESSION_HISTORY_MAX=200` |
+| 後端啟動就掛，訊息提到 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD` | 它是 required、**無預設**（`BR3.4`／`NFR8.60`）。缺值不會被讀成某個預設門檻——那等於讓「信心不足要不要先問」由一個沒有人選過的數字決定 | 在 `backend/.env` 設 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7` |
+| 後端啟動就掛，訊息提到門檻必須落在 `0 < t <= 1` | 設了 `0`（或大於 1）。擋在啟動是刻意的：門檻 0 會讓反問路徑**永不觸發**，而文件上看起來已解決 | 設一個 0 與 1 之間的值；初版是 `0.7` |
+| 啟動 log 出現 `BRAIN_ROUTER_TIMEOUT_SEC 未設定，取預設` 之類的 WARN | 這四個變數**有**預設，缺值只是沒照設定跑，所以是 WARN 不是失敗 | 想消掉 WARN 就在 `backend/.env` 補上；不補也能跑 |
+| 對話超過 200 則之後，最舊的訊息不見了 | 這是刻意行為（`BR3.4`）：超限時自該段**最舊**端丟棄。上限**每段獨立**，所以 `/workspace` 的活躍對話不會擠掉 `/assessment` 的歷程 | 不是 bug。要改上限就改 `BRAIN_SESSION_HISTORY_MAX`，並記得部署端要同步 `deploy/render-env.sh` 與 `deploy/.env.example` |
 
 ---
 

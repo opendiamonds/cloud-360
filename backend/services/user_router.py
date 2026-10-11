@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 import logging
@@ -23,6 +25,12 @@ from services.auth import (
     get_current_user,
 )
 from services.activity import as_aware_utc, is_overdue, record_activity
+# U19 membership-service（契約 `K-16` 的 `existing_endpoint_extension`）：
+# 停用端點的 per-project 前置檢查與自動改選。經 **facade** 而非 service 層
+# ——`BR1.1` 要求 `MembershipFacade` 是唯一入口。
+from services.membership_errors import LastAdminGuard
+from services.membership_facade import MembershipFacade, guard_report, mint_principal
+from services.membership_types import LastAdminGuardReport
 from services.rbac import (
     CANONICAL_ROLES,
     STORY_IDS,
@@ -85,6 +93,15 @@ STORY_FEATURE_LABELS = {
     "H3": "MCP／Skill 生命週期",
     "J3a": "使用者設定",
     "J3b": "細項設定",
+    # K 字首：U3 rbac-story-ids 新增的四個能力（BR4.3′）。
+    # 這四個標籤會出現在**公開的** /roles/catalog（無 Depends(get_current_user)）
+    # ——照 J3a／J3b 的既有先例發布，刻意**不**加入 CATALOG_EXCLUDED_STORIES
+    # （BR4.5）。該端點本就逐角色列出其持有能力的中文標籤，這是它的既有設計
+    # 目的；它不揭露的是「誰是什麼角色」。K1–K4 不改變揭露的類別。
+    "K1": "統一入口頁",
+    "K2": "專案／系統階層",
+    "K3": "專案成員管理",
+    "K4": "需求欄位",
 }
 # 登入能力不列入註冊功能摘要
 CATALOG_EXCLUDED_STORIES = frozenset({"J1"})
@@ -632,7 +649,27 @@ def reject_authorization_request(
     return {"ok": True, "deleted_username": username}
 
 
-@router.put("/{user_id}/active", response_model=UserSchema)
+@router.put(
+    "/{user_id}/active",
+    response_model=UserSchema,
+    # U19/BR6.2：**顯式宣告 409 的 response model。** FastAPI 不從
+    # `raise HTTPException` 推導狀態碼，故不宣告則此契約不會進入 openapi.json、
+    # 前端也產不出型別，**而 `dump_openapi.py --check` 與 `npm run check:types`
+    # 兩道漂移閘門都保持綠燈**——這是本變更唯一「違反後沒有任何東西變紅」的
+    # 規則。回應本體**就是** LastAdminGuardReport（不是 {"detail": ...} 的包裝），
+    # 因為 AC12.3.3 的 Then 要求列出那些專案；宣告一個 model 卻回一個包裝過的
+    # 形狀，等於讓 spec 說一件回應沒有做的事。
+    responses={
+        409: {
+            "model": LastAdminGuardReport,
+            "description": (
+                "U19/BR6.1：停用被拒——該使用者是列出的每一個專案的"
+                "**最後一位專案管理者**。回應本體即 `LastAdminGuardReport`，"
+                "含每個專案的 `project_id` 與 `name`"
+            ),
+        }
+    },
+)
 def update_user_active(
     user_id: int,
     request: UpdateActiveRequest,
@@ -670,10 +707,52 @@ def update_user_active(
                     detail="無法停用：系統必須保留至少一位可編輯使用者角色的管理員",
                 )
 
+    # U19/BR6.1：**第三道**前置檢查——per-project 的「最後一位管理者」守門。
+    #
+    # 三道都必須在下面那行 `target_user.is_active = request.is_active` **之前**
+    # 執行；寫入之後才檢查等於沒有檢查。上面兩道（自我停用、最後一位可編輯
+    # 角色的全域管理員）**照原樣保留**（BR6.3）——它們與這一道是**不同層級**：
+    # 前兩者管的是全域管理員與自我，這一道管的是 per-project。
+    #
+    # **這個檢查是唯一防線**（契約 K-16 的 no_database_backstop）：本端點做的是
+    # UPDATE，而外鍵對 UPDATE **零效力**；`projects.owner_user_id` 的 COMMENT
+    # 逐字是「deletion behaviour ... deliberately NOT decided」，那是刻意留的
+    # 未決項，不是既有的保護。
+    #
+    # 守門**唯讀、無副作用、不取鎖**（BR2.3／NFR12.3）：它是跨專案的唯讀掃描，
+    # 取鎖會讓一次停用鎖住該使用者的全部專案。誠實的代價（OPEN-N19-2）：
+    # 它回「通過」之後、下面寫入之前仍有一個窗口讓另一個交易改變該使用者的
+    # 管理者身分；關閉它要把本端點整支納入同一個鎖範圍，而那會跨越 U19 與
+    # 本模組的邊界。
+    deactivating = bool(target_user.is_active and not request.is_active)
+    if deactivating:
+        try:
+            MembershipFacade(db).assert_can_deactivate(
+                mint_principal(admin_user), target_user_id=target_user.id
+            )
+        except LastAdminGuard as exc:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content=jsonable_encoder(guard_report(exc)),
+            )
+
     target_user.is_active = request.is_active
     db.commit()
     db.refresh(target_user)
-    return _to_user_schema(target_user, datetime.now(timezone.utc))
+    payload = _to_user_schema(target_user, datetime.now(timezone.utc))
+
+    # U19/BR4.4：自動改選的觸發條件是 `project_owner` 的**帳號被停用**，
+    # 且它在停用**成功之後**才跑。次序反了會對一個其實沒被停用的帳號產生改選
+    # 事件。守門先判（可能擋下整個停用，上面那一段），改選在這裡。
+    #
+    # **逐專案獨立交易**（scalability-design §二）：各自取鎖、各自 commit、
+    # 各自釋放，故本呼叫不影響上面那次 commit，而部分失敗後重跑可收斂
+    # （BR4.3 的冪等性）。
+    if deactivating:
+        MembershipFacade(db).run_auto_reselection(
+            deactivated_user_id=target_user.id
+        )
+    return payload
 
 
 @router.delete("/{user_id}")

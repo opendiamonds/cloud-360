@@ -1,0 +1,21 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-ws-contract",
+  "version": 1,
+  "writes": [
+    { "path": "backend/services/brain_ws_contract.py" },
+    { "path": "backend/scripts/dump_ws_contract.py" },
+    { "path": "backend/tests/test_ws_contract.py" },
+    { "path": "backend/tests/test_dump_ws_contract.py" },
+    { "path": "ws-contract.json" },
+    { "path": "frontend/src/types/ws-contract.d.ts" },
+    { "path": "frontend/scripts/check-ws-types.mjs" },
+    { "path": "frontend/scripts/check-api-types.mjs" },
+    { "path": "frontend/package.json" },
+    { "path": "frontend/package-lock.json" },
+    { "path": "frontend/eslint.config.js" },
+    { "path": "frontend/src/pages/BrainPage.tsx" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "scripts/validate_repo_contract.py" }
+  ]
+}

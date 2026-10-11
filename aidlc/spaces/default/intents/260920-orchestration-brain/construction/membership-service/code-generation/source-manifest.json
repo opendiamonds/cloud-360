@@ -1,0 +1,33 @@
+{
+  "stage": "code-generation",
+  "unit": "membership-service",
+  "version": 1,
+  "writes": [
+    { "path": "backend/services/membership_types.py" },
+    { "path": "backend/services/membership_errors.py" },
+    { "path": "backend/services/membership_selection.py" },
+    { "path": "backend/services/membership_service.py" },
+    { "path": "backend/services/membership_facade.py" },
+    { "path": "backend/services/membership_router.py" },
+    { "path": "backend/scripts/backfill_project_members.py" },
+    { "path": "backend/tests/test_membership_data.py" },
+    { "path": "backend/tests/test_membership_facade.py" },
+    { "path": "backend/tests/test_membership_endpoints.py" },
+    { "path": "backend/tests_pg/__init__.py" },
+    { "path": "backend/tests_pg/test_membership_concurrency.py" },
+    { "path": "backend/models.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/services/user_router.py" },
+    { "path": "backend/services/hierarchy_service.py" },
+    { "path": "backend/services/hierarchy_facade.py" },
+    { "path": "backend/services/hierarchy_router.py" },
+    { "path": "backend/scripts/verify_meta_schema.sql" },
+    { "path": "backend/scripts/run_meta_schema_migration.py" },
+    { "path": "schema_rbac.sql" },
+    { "path": "openapi.json" },
+    { "path": "frontend/src/types/api.d.ts" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "DEPLOY.md" },
+    { "path": "LOCAL-DEV.md" }
+  ]
+}

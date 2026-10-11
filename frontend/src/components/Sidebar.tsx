@@ -206,6 +206,15 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
+        {/* DEMO SCOPE：大腦入口的正式落點是 U14（含權限掛載與分層），屆時整段取代 */}
+        <div className="mt-4 mb-2">
+          <nav className="space-y-1 px-2">
+            <NavLink to="/brain" className={linkClass}>
+              大腦（示範）
+            </NavLink>
+          </nav>
+        </div>
+
         {showAdminSection && (
           <div className={showCoreSection || showCost ? 'mt-4' : ''}>
             <button

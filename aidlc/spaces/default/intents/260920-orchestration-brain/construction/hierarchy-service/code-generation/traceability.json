@@ -1,0 +1,377 @@
+{
+  "stage": "code-generation",
+  "unit": "hierarchy-service",
+  "upstream_ids": [
+    "US9.2",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3",
+    "US11.1",
+    "AC11.1.1",
+    "AC11.1.2",
+    "AC11.1.3",
+    "NFR4.1",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR7.1",
+    "NFR8.1",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR5.5",
+    "BR5.6",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR6.4",
+    "BR6.5",
+    "BR6.6"
+  ],
+  "coverage": [
+    {
+      "id": "US9.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "建立專案與系統的能力已落地，兩條建立路徑共用單一寫入端（BR2.1）。測試 T1（2xx）、T12–T15（名稱與前置）。"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "OK",
+      "target": "backend/tests/test_hierarchy_service.py",
+      "note": "「它出現在我可選的作業對象中」：建立後經 list_projects 可見，且只對擁有者可見（BR6.1）。"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "OK",
+      "target": "backend/tests/test_hierarchy_service.py",
+      "note": "建立系統後歸屬於該專案且可被選為作業對象；他人專案下不得建立（BR6.5，T8 ＋ 突變 M3）。"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "OK",
+      "target": "backend/tests/test_hierarchy_service.py",
+      "note": "「拒絕經由既有路徑產生」：K2 判定在 facade，拒絕為 HierarchyForbidden 並由 router 轉 403（突變 M7 驗證不得改為 HTTPException）。"
+    },
+    {
+      "id": "US11.1",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "三條 AC 皆為畫面行為，不屬本單元。本單元提供其背後的寫入端與計數來源。"
+    },
+    {
+      "id": "AC11.1.1",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "同上。"
+    },
+    {
+      "id": "AC11.1.2",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "同上。"
+    },
+    {
+      "id": "AC11.1.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "「0 變為 1」的資料來源為建立系統端點；畫面屬 U23。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/tests/test_hierarchy_service.py",
+      "note": "三個模組皆無模組級可變狀態；允許清單只有 FastAPI 的宣告用 CONFLICT_RESPONSE 與不可變的 ALLOWED_CHANGE_SOURCES。突變 M10（加模組級 dict）確認 RED。"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "openapi.json",
+      "note": "實測 paths 由 42 增為 47，五個 hierarchy path 全部存在；dump_openapi.py --check 回「規格檔與後端程式碼一致」。"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "**現況已達成**（POST /projects、POST /projects/{id}/systems、DELETE /projects/{id}、DELETE /systems/{id} 四者皆宣告 409），**但無任何自動化會發現它被移除**。已實測：移除四處宣告後 28 個測試全綠、openapi.json 的 409 歸零、--check 仍通過。精確失效條件是「移除宣告並重 dump」。見 OPEN-ID7-2。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "回應刻意暴露 source，使讀者能判斷涵蓋範圍由它宣告而非由資料表名稱宣告；T24 斷言欄位集合含 source。router docstring 另寫明三項減損。"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "**原判準無效已更正**：git status 顯示的是整個 session 累積的改動（schema_rbac.sql 等早由 U1／U3／U4／U6 改過）。改以 grep hierarchy_facade／hierarchy_router／hierarchy_service／HierarchyFacade 複驗，12 檔全部 0 命中。validate_env_contract.py 亦通過。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "K2 判定在 _authorize，不在 router；拒絕為 HierarchyForbidden。突變 M7 確認 RED。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "principal 為每個方法的第一位置參數，資源識別為具名參數。T4 以 inspect.signature 逐一斷言 12 個方法。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "誠實宣告：本層無第二道角色檢查。不寫測試——violation_behaviour 為「不適用」，斷言會恆真。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "Principal 以模組私有 _MINT 鑄造。T4 ＋ 突變 M8 確認 RED。誠實限制已記於 docstring。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "定義於 docstring；**本單元無法驗證**（約束 U10／U12／U19／U20）。見 OPEN-H2。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "create_project／create_system 為建立路徑的單一寫入端。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "create_system 前驗證目標專案存在（與 BR6.5 合併為同一種結果）。T15。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "新建者 is_default 一律 False。T14。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "冪等語意寫入各方法 docstring：create_* 非冪等、resolve_work_target 可重試、record_diagram_change 非冪等。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "_validated_name 去空白後長度須大於 0，raise HierarchyValidationError。T12。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "同範圍同名 raise HierarchyConflictError → 409。T13。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "誠實宣告：TOCTOU 空窗，唯一性為最佳努力而非不變量。已就地註解「名稱永遠不是鍵」。不寫測試。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "預設組可改名——**但本輪 HTTP 表面無改名端點**（BR4.5／OPEN-H5），故目前只有同進程可用。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "預設組不可刪除。T16。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "仍有架構圖歸屬的系統不可刪除，訊息含張數。T18。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "仍有系統的專案不可刪除，訊息含剩餘數。T17 ＋ 突變 M9 確認 RED。"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "誠實宣告：本輪無 patch／put，改名在 HTTP 表面不可達。已於 router 檔頭記載。不寫測試。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "GET /diagram-changes 為 DG-3 的落地。T23。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "record_diagram_change 為唯一寫入端（契約 K-07）。"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "ALLOWED_CHANGE_SOURCES 封閉列舉 ＋ models.py 的 CHECK 約束。T20。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "摘要非空白 ＋ models.py 的 CHECK 約束。T21。"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "backend/models.py",
+      "note": "誠實宣告：級聯刪除與 90 天保存期。已寫進 DiagramChangeRecord 的 docstring。不寫測試（不適用）。"
+    },
+    {
+      "id": "BR5.6",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "actor_user_id 為**必填具名參數**，刻意無預設值——使「預設為 session 擁有者」在型別層不可能。T22 ＋ 突變 M6 確認 RED。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "列舉型讀取的擁有者範圍；回「查不到」而非「無權限」。T5／T6／T7 ＋ 突變 M1／M2 確認 RED。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "誠實宣告：本輪為刻意收窄，最終模型屬 K-16。已寫進 router 的 list_projects docstring。不寫測試。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "以 user_diagrams.user_id 判定可見性，**不上溯 system→project**。T11。"
+    },
+    {
+      "id": "BR6.4",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "判定支援型三方法不套列範圍，以三道約束取代。T10（必須回答他人 id ＋ 只回最小欄位）＋ T10b（router 不得呼叫）＋ 突變 M5 確認 RED。"
+    },
+    {
+      "id": "BR6.5",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "寫入面擁有者檢查，置於 BR4.2／4.3／4.4 之前。T8／T9 ＋ 突變 M3／M4 確認 RED。W1 為唯一不需本條的寫入路徑，已就地註明。"
+    },
+    {
+      "id": "BR6.6",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "HierarchyConflictError → 409 ＋ **顯式** responses 宣告。T13／T17。守門缺口見 OPEN-ID7-2。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-MODELS",
+      "status": "N/A",
+      "target": "backend/models.py",
+      "note": "**約束逐條對齊 DDL，不只欄位**：四條 CHECK（projects/systems 的 name 非空白、diagram_change_records 的 source 封閉列舉與 summary 非空白）＋ 兩個部分唯一索引（is_default per owner／per project）＋ systems.project_id 與 user_diagrams.system_id 的 ON DELETE RESTRICT。理由是實測：把三表納入 Base 之後建表權威從 raw DDL 換成 ORM（create_all 先跑，而 U4 的 CREATE TABLE IF NOT EXISTS 隨即 no-op），少寫一條 CHECK 等於在測試環境悄悄移除它——U4 三個測試因此紅燈後才補齊。"
+    },
+    {
+      "id": "CG-FACADE",
+      "status": "N/A",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "12 個方法。Principal 以模組私有 _MINT 實作 BR1.4（突變 M8 確認 RED），誠實記載 Python 無真正封裝故擋誤用而非擋刻意存取。四個例外型別皆不繼承 HTTPException（突變 M7 確認 RED）。import hierarchy_service 置於檔尾以解循環依賴，兩個匯入方向皆實測通過。"
+    },
+    {
+      "id": "CG-SERVICE",
+      "status": "N/A",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "本層無第二道角色檢查（BR1.3 的誠實宣告）。三個 assert_*_owned_by 一律 raise HierarchyNotFound，刻意與真正的不存在回同一種結果（突變 M2 確認 RED）。判定支援型三個函式只回 bool／int／int（突變 M5 確認 RED）。"
+    },
+    {
+      "id": "CG-ROUTER",
+      "status": "N/A",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "5 個 path／7 個 operation。**不 import hierarchy_service、不 import 判定支援型方法**——BR6.4 約束 (1)，由 T10b 以原始碼比對守住。授權不掛 dependency（require_story_action 會 raise HTTPException，與 BR1.1 衝突）。回應欄位改用 snake_case 以沿用既有 UserSchema 慣例。"
+    },
+    {
+      "id": "CG-TESTS",
+      "status": "N/A",
+      "target": "backend/tests/test_hierarchy_service.py",
+      "note": "28 個測試全部通過；全套 497 passed（基線 469），零迴歸。11 項突變全部 RED、零存活，每項先確認檔案內容真的改變再跑。T2 依實測拆為 T2a／T2b：全部 11 個 canonical role 的 K2 view 皆為 True，照原指示寫會是恆真測試。"
+    },
+    {
+      "id": "CG-U4-FIXTURE",
+      "status": "N/A",
+      "target": "backend/tests/test_hierarchy_migration.py",
+      "note": "**計畫外改動，需關卡裁決**。test_pre_existing_system_id_without_a_foreign_key_is_rejected 以 ALTER ADD COLUMN 建構「欄位存在、外鍵缺席」，而 system_id 被 ORM 映射後該欄已存在且帶外鍵；DROP COLUMN 亦被 SQLite 拒絕（unknown column in foreign key definition）。處置為在該測試內整表重建 user_diagrams，**斷言與 @purpose／@pass 完全未動**。替代方案見 OPEN-CG7-1。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-CG7-1",
+      "severity": "needs-decision",
+      "text": "**修改 `U4` 已交付測試的 fixture 不在已核可計畫的檔案清單內，需關卡裁決。** 肇因是計畫決定 2 聲稱「為 UserDiagram 補 system_id 映射是純加法、行為完全不變」——**那句話是錯的**：映射該欄使 create_all 建出帶外鍵的欄位，讓 U4 那個以 ALTER 建構前提的測試無法成立。本輪處置為整表重建該 fixture（斷言未動）。**替代方案**：不映射 system_id，改以 raw SQL 讀取三處（resolve_work_target、list_diagram_changes 的系統篩選、delete_system 的圖數統計），代價是失去 ORM 型別、且本單元測試也須自行呼叫 _ensure_hierarchy_schema。兩案取捨請於關卡裁決。"
+    },
+    {
+      "id": "OPEN-CG7-2",
+      "severity": "process",
+      "text": "**我自己寫的 `NFR8.1` 完成判準（git status 不含 13 個檔案）是無效檢查**，因為 git status 顯示整個 session 累積的改動，而那些檔案早由 U1／U3／U4／U6 改過。已改以 grep 本單元識別字複驗（12 檔全 0 命中）。教訓：完成判準若依賴 git 狀態，必須先確認該狀態的範圍是「本單元」還是「整個工作樹」。"
+    },
+    {
+      "id": "OPEN-ID7-2",
+      "severity": "named-gap",
+      "text": "**承接自 infrastructure-design：`NFR5.2` 的 409 宣告無任何自動化守門，本輪已實測證實。** 移除四處 responses=CONFLICT_RESPONSE 後：28 個測試全綠、重 dump 後 openapi.json 的 409 歸零、dump_openapi.py --check 仍通過。精確失效條件是「移除宣告**並**重 dump」；只移除不重 dump 會被 drift 閘門抓到。處置只能是人工核對，已列入完成判準。"
+    },
+    {
+      "id": "OPEN-H11",
+      "severity": "named-gap",
+      "text": "**承接：新建的架構圖從未被指派系統歸屬。** 本單元未修（建圖不是本單元的路徑）。`T23` 已把現況寫成斷言——以系統為條件查詢變更紀錄時，system_id 為空的圖回空集合——**斷言現實而非願望**，使日後該缺口被修復時這個測試會變紅並提醒更新。"
+    },
+    {
+      "id": "OPEN-H10",
+      "severity": "named-gap",
+      "text": "**承接：`BR6.4` 三道約束中有兩項本單元無法自驗。** 約束 (1)「只能同進程呼叫」已由 `T10b` 以原始碼比對守住（router 不得出現三個方法名）。約束 (3)「呼叫端必須自己完成授權判定」仍無法驗證，落點在 `U19`／`U20` 的 code-generation。"
+    },
+    {
+      "id": "OPEN-H2",
+      "severity": "named-gap",
+      "text": "**承接：`BR1.5` 的四個同進程呼叫端 import 掃查未實作。** 約束 U10／U12／U19／U20 不得繞過 facade 直呼底層 service；本單元只能定義它。繞過一旦發生是靜默的。"
+    },
+    {
+      "id": "OPEN-CG7-3",
+      "severity": "process",
+      "text": "**`tcms-test-cases` stage 未跑，而 `project.md` 的 `## Mandated` 把它列為 blocking**（未完成不得進入部署階段）。本單元的 28 個自動化測試屬「已自動化」桶，但覆蓋盤點、手動測案、突變紀錄的 TCMS 同步屬該 stage 的四項必做產出，不在本站。"
+    }
+  ]
+}

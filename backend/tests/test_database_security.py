@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-import tests.helpers  # noqa: F401 — path / psycopg2 setup
+import tests.helpers  # noqa: F401 — path / psycopg stub
 from database import (
     _allow_insecure_default_personas,
     _allow_insecure_default_users,

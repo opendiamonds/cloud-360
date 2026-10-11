@@ -1,0 +1,116 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "brain-ws-contract",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率屬 U11 intent-router，量測機制落 build-and-test。U2 是型別來源，不在該路徑上"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率屬 U10 session-store 的行為（狀態訊息扇出）＋ build-and-test 的比率量測。U2 只定義那些狀態訊息的型別，不產生也不保留任何狀態"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "首字回應時間的預算幾乎全被路由層的 LLM 呼叫吃掉（requirements.md NFR3 逐字）。U2 不新增任何請求處理，其全部交付在建置期"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "狀態外部化與重啟還原屬 U10 session-store。U2 無執行期狀態"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "NFR5.1, NFR5.2, NFR5.3, NFR5.4, NFR5.5, NFR5.6, NFR5.7"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "記憶層的 schema 隔離與其 CI 驗證屬 U5 memory-data。U2 不碰資料庫"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "episodic memory 的 90 天保存與刪除稽核屬 U5／U8。U2 只定義對話內容在傳輸中的形狀（UserMessagePayload.text、TokenPayload.text），不定義它落地後怎麼存；靜態加密手段是 OQ-3，指派 nfr-design。本單元對該 NFR 無任何交付，故標 N/A 而非 Deferred"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "該條的對象是新增 compose 服務與其環境變數（Redis 為第 5 個容器），承載單元是 brain-infra。U2 不新增任何服務或環境變數；它新增的是一個 devDependency 與兩個 CI 步驟，兩者的完整性保護由 NFR5.2（依賴鎖定）與 NFR5.3（閘門存在性）承載"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "成本原則的對象是編排層的模型選擇。U2 不呼叫任何模型"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型的可替換性（typesafe/jev-1.13）屬 U11 intent-router，OQ-4 於 U11 的 nfr-requirements 迭代定案，尚未定案。承接站是本 stage 但不是本單元——這是它第二次在別的單元跑過本站（前一次為 brain-infra），兩次都不是它的承接點。明記以免它因為「本 stage 又跑過一次」而被當成已定案"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數屬 UI 單元 ＋ build-and-test 的量測。U2 無使用者介面"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR5.2",
+      "status": "N/A",
+      "target": "閘門所執行的程式碼必須被鎖定（openapi-typescript 進 devDependencies 精確釘選、四道閘門皆用本地解析版本、移除兩處 npx --yes）。NFR5 的字面只要求「有一個 CI 檢查斷言兩端一致」，未涵蓋「那個檢查執行的是誰的程式碼」。由本站實測查出（package-lock.json 對該套件命中數為 0），屬 S-1，需回補進 scope"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "N/A",
+      "target": "閘門的存在本身必須被斷言（REQUIRED_TEXT 新增 ci.yml 一鍵，涵蓋四道型別閘門的指令字串）。NFR5 未涵蓋「閘門被刪掉」這個失敗模式，而實測確認 ci.yml 雖在 REQUIRED_FILES 內、REQUIRED_TEXT 卻無此鍵，故既有兩道閘門目前也沒有任何偵測。涵蓋既有兩道即為新增工作量，屬 S-3，需回補進 scope"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "N/A",
+      "target": "契約必須涵蓋 Sec-WebSocket-Protocol 的 subprotocol 名稱與格式。無對應上游 NFR id——它的來源是 requirements.md 的 ADR-0006 四面向表 Network exposure 列（FR8.5「token 不得進 query string」的同一面），而 functional-spec.md §八 第四列逐字記載「沒有任何契約定義它的值」。承載形式為 WsSubprotocol 模型（scheme/separator 皆字面型別），本站已實測 openapi-typescript 對 const 的產出為字面型別。屬 K-02 的第三次擴充（S-2），需上游追認並回補進 scope"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "N/A",
+      "target": "閘門的斷言集合必須涵蓋 BR1.4（兩集合等勢）、BR1.5（終止事件 turnId 一致）、BR4.4（型別檔保留 sideEffect 哨兵註解）三條可機械驗證的不變量。NFR5 的字面只要求「斷言兩端一致」，這三條是 functional-design 新增的契約不變量，無獨立的上游 NFR id。不實作即等於放棄 rules.md 對 BR1.4 逐字寫的「這是可機械驗證的」"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "N/A",
+      "target": "規格檔不得落到未認證訪客可讀的路徑（repo 根，不得進 frontend/public/ 或被 import 進前端程式碼）。無對應上游 NFR id——理由沿用 backend/scripts/dump_openapi.py docstring 的既有先例（Vite 會把 public/ 原樣複製進 dist/）。對 WS 契約而言洩漏的是完整訊息地圖（九種伺服器訊息、六種客戶端訊息與全部 payload 欄位）"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "N/A",
+      "target": "授權繞過必須在型別層不可構造（BR2.12 客戶端訊息不得攜帶身分、BR2.13 不得攜帶 turnId），以 dump 期的欄位名禁用清單斷言。無對應上游 NFR id——它承接的是 requirements.md 的 ADR-0006 IAM 面向與 K-12 x-authorization-responsibility.per_connection_principal。要機械斷言而非靠 review 的理由：BR2.13 的由來正是一次 review 沒抓到的缺口（初版把 turnId 定為客戶端封包的選填欄位，同時宣告「客戶端沒有它」，兩句話並存一整輪才被審查 R-20 抓到）"
+    },
+    {
+      "id": "GAP-1",
+      "status": "GAP",
+      "target": "前端未使用產生的 subprotocol 常數時，NFR5.4 的整條保護失效——閘門只在前端真的由型別取值時成立，寫死字串時型別層碰不到它，而畫面上看不出差別。落點 U14；修法為以 const SCHEME: Sub['scheme'] = 'bearer' 形狀宣告並組字串、禁止字面量。本站不逕自擴張範圍，依 project.md 的處置形狀標出缺口並指派落點"
+    },
+    {
+      "id": "GAP-2",
+      "status": "GAP",
+      "target": "BR2.9（error.message 不得包含內部實作細節）在本單元無任何機制——型別擋不住字串內容，message: str 無論如何都通過，而 error 走對外網路面、是資訊洩漏的常見路徑。落點 U13；修法屬伺服器端的錯誤構造（統一的 error 工廠 ＋ 不得把例外訊息原樣帶出）"
+    }
+  ]
+}

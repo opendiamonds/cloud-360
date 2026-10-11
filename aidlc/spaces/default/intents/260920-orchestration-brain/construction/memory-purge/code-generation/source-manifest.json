@@ -1,0 +1,46 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-purge",
+  "version": 1,
+  "writes": [
+    {
+      "path": "schema_rbac.sql"
+    },
+    {
+      "path": "backend/scripts/seed_retention_system_actor.py"
+    },
+    {
+      "path": "backend/scripts/purge_expired_memory.sql"
+    },
+    {
+      "path": "backend/scripts/purge_dry_run.sql"
+    },
+    {
+      "path": "backend/scripts/verify_purge_sql.sql"
+    },
+    {
+      "path": "backend/scripts/verify_memory_schema.sql"
+    },
+    {
+      "path": "backend/scripts/run_meta_schema_migration.py"
+    },
+    {
+      "path": "backend/tests/test_retention_purge_contract.py"
+    },
+    {
+      "path": "backend/tests_pg/test_purge_atomicity.py"
+    },
+    {
+      "path": ".github/workflows/memory-retention-purge.yml"
+    },
+    {
+      "path": ".github/workflows/memory-retention-watchdog.yml"
+    },
+    {
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "path": "DEPLOY.md"
+    }
+  ]
+}

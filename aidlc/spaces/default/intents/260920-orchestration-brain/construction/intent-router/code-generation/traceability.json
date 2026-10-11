@@ -1,0 +1,911 @@
+{
+  "stage": "code-generation",
+  "unit": "intent-router",
+  "upstream_ids": [
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR3.6",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR5.5",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR7.1",
+    "BR7.2",
+    "BR7.3",
+    "BR7.4",
+    "BR8.1",
+    "BR8.2",
+    "BR8.3",
+    "D-1",
+    "D-3",
+    "D-7",
+    "EC1",
+    "EC2",
+    "EC3",
+    "EC4",
+    "EC5",
+    "EC6",
+    "EC7",
+    "EC8",
+    "NFR1.60",
+    "NFR10.60",
+    "NFR10.61",
+    "NFR3.60",
+    "NFR3.61",
+    "NFR3.62",
+    "NFR3.63",
+    "NFR3.64",
+    "NFR3.65",
+    "NFR3.66",
+    "NFR3.67",
+    "NFR3.68",
+    "NFR3.69",
+    "NFR3.70",
+    "NFR3.71",
+    "NFR3.72",
+    "NFR3.73",
+    "NFR3.74",
+    "NFR4.70",
+    "NFR6.60",
+    "NFR7.62",
+    "NFR8.60",
+    "NFR8.61",
+    "NFR9.60",
+    "NFR9.61",
+    "NFR9.62",
+    "OPEN-IR11-1",
+    "OPEN-IR11-2",
+    "OPEN-IR11-3",
+    "OPEN-IR11-4",
+    "OPEN-IR11-5",
+    "OQ-10",
+    "OQ-4",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "SEC-5",
+    "TS-1",
+    "TS-2",
+    "TS-3a",
+    "TS-3b",
+    "TS-3c",
+    "TS-4",
+    "TS-5",
+    "TS-6",
+    "US1.1",
+    "US1.2",
+    "US5.1",
+    "US6.1",
+    "V-1",
+    "V-2",
+    "V-3",
+    "V-4",
+    "V-5",
+    "[D1]",
+    "[I1]",
+    "[I2]",
+    "[IR1]",
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.2.1",
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC1.2.4",
+    "AC5.1.1",
+    "AC5.1.2",
+    "AC5.1.3",
+    "AC6.1.1",
+    "AC6.1.2",
+    "AC6.1.3",
+    "NFR4.60",
+    "NFR4.65",
+    "NFR7.60"
+  ],
+  "coverage": [
+    {
+      "id": "US1.1",
+      "status": "Deferred",
+      "target": "backend/tests/test_intent_routing_port.py",
+      "note": "【狀態由 Partial 改為 Deferred】追溯 sensor 的合法狀態只有 OK／GAP／ORPHAN／Deferred／N/A，沒有 Partial。未覆蓋的那一部分在下方說明裡逐字保留，且它確實有已指派的落點，故 Deferred 是誠實的映射，不是把缺口洗白。 一句話交辦的後端判定鏈完整落地（guard → L0 → L2 → L3 → L4 → L5），由 ExactlyOneModelCallPerTurnTest 端到端跑過一次並斷言兩個意圖。**Partial 而非 OK 的原因是上游已記的 OPEN-IR11-4**：AC1.1.5 的 Then 有兩個子句，「工作項針對它建立」由本單元的 referent ＋ U12 承載，而「脈絡列更新為該系統」**沒有任何已指派的寫入端**，且 Intent.referent 是不透明字串、對不上 set_work_target 要的三層識別。本單元照 BR5.3 認出句中對象並優先於 session 當前值（test_intent_routing_context.py 的 ReferentPrecedenceTest），寫回那一端不在本單元。"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "「判不出來先問我，不要亂做」由 P1／P2／P7 三條 property ＋ decide() 的雙分支構造成立：below_threshold 為真時 intents 必空且 candidates 必非空（EC4），為假時反之（EC5）。ThresholdBoundaryTest 另補門檻邊界與並列判定兩個單點。"
+    },
+    {
+      "id": "US5.1",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "多意圖由 P6 的**基數等式**承載：len(intents) == len(slots) 且第 i 個取第 i 槽位 rank==1。parser 的 HappyPathTest 以 FR5.1 的官方例子（改圖＋估成本）斷言還原成 2 × 2 而非一張 4 筆的扁平清單。StrategyReachesEveryBranchTest 確認多槽位分支真的被生成過——否則 P6 只會在單槽位被驗證。"
+    },
+    {
+      "id": "US6.1",
+      "status": "Deferred",
+      "target": "backend/tests/test_intent_routing_structure.py",
+      "note": "【狀態由 Partial 改為 Deferred】追溯 sensor 的合法狀態只有 OK／GAP／ORPHAN／Deferred／N/A，沒有 Partial。未覆蓋的那一部分在下方說明裡逐字保留，且它確實有已指派的落點，故 Deferred 是誠實的映射，不是把缺口洗白。 指涉詞解析的**輸入面**完整：L0 讀該段作業對象與歷程、MemoryFacade.search 的 kinds 以模組層常數排除 episodic（ReferentMemoryKindsExcludeEpisodicTest 斷言實際傳值），L2 明文寫出 BR5.3 的優先序，parser 以 referent_state 讓 EC3 的兩種 null 可區分。**Partial 沿用上游 traceability 對 US6.1 的 Deferred 判定**：第 N−1 輪的產出要能被第 N 輪指涉，前提是上一輪真的產生過一張圖並被寫進該段歷程，而寫入端屬 U12／U13。本單元無法單獨驗證該不變量。"
+    },
+    {
+      "id": "EC1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "V-1：candidates 存在但為空 → EmptyCandidates。predicate **刻意不**為空清單加防禦性分支（那會把分類失敗靜默變成判不出來，正是 BR2.4 禁止的事）。V1EmptyCandidatesTest 的第二條另把「缺鍵」與「空清單」分到兩個型別。"
+    },
+    {
+      "id": "EC2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "scores_available 寫成 **property** 而不是欄位，故「全有或全無」由構造成立——兩份資料（清單與旗標）遲早分歧，而分歧的徵兆是「某次判定走了錯的分支」這種不會有人注意的東西。parser 的 V-5 在建立物件前就把部分分數整批清掉，使各槽位的旗標一致。"
+    },
+    {
+      "id": "EC3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "**OPEN-IR11-1 的處置**：以顯式的 referent_state 封閉列舉（absent／unresolved／resolved）區分兩種 null，而不是 sentinel 字串（sentinel 會被當成真的 referent 值往下游傳）。parser 另檢查狀態與值互相一致（宣告已解析卻沒給值、或宣告沒有卻帶了值，兩者皆 MalformedRouting）。SlotLabelsTest 的 test_an_unresolved_referent_must_not_carry_a_value 是其閘門。 **本輪補上（審查 `R-01`／`R-05`）**：① `unresolved` 現在有讀取端（`can_single_out` 的第一道條件），不再只是一個可被表達而無人消費的狀態；② `referent_state` **缺鍵即 `MalformedRouting`**（與 `tied_with_next` 同形）——靜默取 `absent` 會把「模型漏填」與「這句話沒有指涉詞」合併，而合併的方向恰好是較不安全的那一邊。閘門為 `test_a_missing_referent_state_is_malformed` ＋ 反向的 `test_an_explicit_absent_is_still_accepted`。"
+    },
+    {
+      "id": "EC4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "decide() 的 below_threshold 分支：intents=() 且 candidates=clarify_candidates_for(...)。property P1。"
+    },
+    {
+      "id": "EC5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "decide() 的另一分支：candidates=**None**（不是空 tuple，K-10 的欄位允許 None）。property P2。EC5 單獨存在的理由寫在 decide() 的 docstring：FR1.3 的字面擋不住一個同時給出工作項與候選的實作。"
+    },
+    {
+      "id": "EC6",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "ClassificationResult（槽位層）與 CandidateRanking（候選層）是兩個型別。parser 的 HappyPathTest 斷言 2 槽位 × 2 候選的分組，而非「總共 4 個候選」。"
+    },
+    {
+      "id": "EC7",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "intents_for() 的等式。property P6 以 len() 與逐欄比對斷言。"
+    },
+    {
+      "id": "EC8",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "clarify_candidates_for() 攤平失敗槽位，`_clarify_label` **以程式**把 slot_labels[i] 前綴到 label（不依賴模型自己寫——那是無法驗證的要求）。前綴只在多槽位時加，依 BR4.5 的 trigger 逐字「整句聚合為假**且槽位數大於 1**」。property P7 斷言每個失敗槽位都有代表。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "guard_hits() 在 classify() 的第一步，fetch/port 之前。順序本身就是需求——先呼叫模型再檢查，等於已經把惡意輸入送進去了。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "命中時 raise PlatformSelfModificationRefused 並**在那之前就 return**，沒有任何路徑到得了 arun_routing。觀測事件的 error_kind 為 PROMPT_GUARD_HIT 且不帶任何輸入衍生欄位（SEC-4）。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_errors.py",
+      "note": "PlatformSelfModificationRefused **刻意不繼承** IntentRoutingError，且 docstring 明寫呼叫端義務（以 done 而非 error 結束）。把它歸進失敗基底，會讓 `except IntentRoutingError: send_error(...)` 把「系統正確地拒絕了」呈現成「系統故障」。**本站的判讀**：K-10 把 returns 固定為 IntentDecision，而固定拒絕訊息不是一個 IntentDecision（兩邊皆空違反 EC5），故以具名訊號承載——見 code-summary.md 的「設計層未指定、本站決定」。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "classify() 無快路徑：guard 之後唯一的出口是完整的分類鏈。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "回傳 CandidateRanking，且組內依 rank 遞增排序（members.sort）。HappyPathTest 的 test_rank_order_is_restored_even_when_the_payload_is_shuffled 是其閘門——沿用陣列順序的實作會讓述詞拿第二名去比門檻，而那不會拋任何例外。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "CandidateIntent.rank 必填、score 選填（Optional[float]，預設 None）。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "空清單 → EmptyCandidates，與 MalformedRouting 分開。**超界走 MalformedRouting 而不是這裡**（performance-design 修訂 1／審查 R-04 的更正）。"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "scores_available property 的 all(...)；parser 的 V-5 另把部分分數整批清掉。V5PartialScoresDegradeTest。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "below_threshold 只由 `not can_dispatch(...)` 填入（decide()）。程式中沒有任何其他地方寫這個欄位——述詞之外另有判定路徑就會有兩個真實來源。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "can_single_out 的 scores_available 分支：`top.score >= threshold`。**>= 而非 >**：FR1.7 逐字「信心值 < 0.7 即進入反問路徑」，亦即恰等於門檻時交辦。ThresholdBoundaryTest 以 0.7／0.69 兩個單點釘住它。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "無分數分支：`len(candidates) == 1 or not top.tied_with_next`。**tied_with_next 是本站為這條規則新增的 schema 欄位**——BR3.3 逐字要求「分類器宣告的嚴格優先」，而 [D1]=A 的選項文字沒有這個欄位。不能用 rank 代替：rank 依 V-4 永遠是 1、2、3…，用它判定等於永遠「嚴格」，FR1.3 於是靜默永不觸發（FR1.6 逐字警告的後果）。見 code-summary.md。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "resolve_confidence_threshold()：缺值即 raise RuntimeError（不取預設），值域 0 < t <= 1。**下界開區間是本站新增的驗證**：門檻 0 會讓反問路徑永不觸發。configure_intent_routing_env() 掛在 main.py 的 startup hook，形狀與 configure_session_env() 刻意相同。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "decide() 的雙分支；基數移交 BR4.4、候選來源移交 BR4.5（修訂 1）。"
+    },
+    {
+      "id": "BR3.6",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "整個模組零 I/O、零時間相依、零隨機值（ClarifyCandidate.id 由槽位序 ＋ rank **決定性**推導而不是 uuid4）。NoModuleLevelMutableStateTest ＋ 禁 import 斷言是其結構閘門。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "依 slot 分組即得 slots；V-3 要求自 0 連續，故槽位數 == 不同 slot 值的個數。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "can_dispatch() 的 all(...)。兩層分開（述詞吃一個槽位、聚合吃整句）正是 R-01 的處置。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "intents_for() 只複製 capability 與 referent，**沒有任何順序或依賴欄位**可寫——Intent 的欄位集合由 K-10 固定為兩個。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "intents_for() 的等式。property P6。"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "clarify_candidates_for() ＋ _clarify_label()。property P7。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "fetch_routing_context() 讀 session.segment(SEGMENT_SHARED) 的作業對象與歷程。**段識別取自 session_types 的封閉集合，不另抄字串**；選 SEGMENT_SHARED 的理由是 classify 的簽章沒有段參數、而 U10 的段規則逐字「入口頁恆讀共享段」（本站判讀，寫在模組 docstring）。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "**本輪起有一個直接的程式層落點**（審查 `R-01`）：`can_single_out` 的第一道條件——該槽位任一候選的 `referent_state` 為 `unresolved` 即回 `False`。`BR5.2` 的 `logic` 逐字「IF 指涉詞不可唯一解析 THEN `can_single_out` 為假」於是逐字成立。**看全部候選而不只看 rank 1** 是刻意的：不可唯一解析是這句話（這個槽位）的性質，不是某一個讀法的性質；欄位掛在候選上只因為 `[D1]`=A 的扁平 schema 把一切都掛在候選上。兩種錯的代價不對稱——多問一次是一次互動，少問一次是 `FR1.3` 要防的「擅自做出我沒要的東西」。**殘留**：我方仍無法強制模型在它該填 `unresolved` 的時候真的填它（見 `code-summary.md §五 #3`）。"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_context.py",
+      "note": "prompt 內一行明文優先序指示 ＋ 使用者原句。ReferentPrecedenceTest 斷言三樣東西同時在（句中對象、session 當前值、「優先於」）——少了明文指示，模型沒有理由不沿用脈絡列上的值。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "同 `EC3`（含本輪補上的讀取端與 required 檢查）。"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "_REFERENT_MEMORY_KINDS 為**模組層常數**（不是預設參數值——預設值可被覆寫，常數不行）。**reachability 如實記載**：上游曾判它為死碼，而 security-requirements §三 已以實讀推翻——memory_router.py 的 POST /api/memory/records 不限制 kind，使用者今天就能建一筆 episodic，故這是**現行防護**。residual_gap（語意記憶仍可能載有產出物名稱、模型內部無法切開「理解術語」與「決定指涉」）**維持無機械強制**，比照 OQ-N2。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_context.py",
+      "note": "build_routing_prompt 在**自己這一層**截斷（message_limit／message_chars），L0 另先截一次——兩層都有不是重複而是縱深。MinimalContextTest 的第二條以「尾段相同 ⇒ prompt 逐位元相同」斷言，比「長度差不多」強：它同時證明被截掉的內容沒有以摘要／計數／拼接任何形式滲進去。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "一個 tool schema 同時帶回意圖分類、槽位拆解與指涉詞解析（slot／capability／referent_state 在同一個物件裡）。ExactlyOneModelCallPerTurnTest 斷言一輪恰一次。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "三個數值各有一個**真的**機制：呼叫次數＝`CallBudget`（每輪一個實例，`consume()` 超限即 `LlmBudgetExceeded`）；逾時＝`timeout_seconds` 傳進 `ChatOpenAI`；重試＝`max_retries` 傳進 `ChatOpenAI`。**審查 `R-02`（Major）指出重試原本是一個不起作用的設定**：值被讀進 `RoutingConfig`、被記進啟動 INFO，然後沒有任何使用端——`openrouter_chat_model` 把 `max_retries=0` **寫死**在具名引數上，所以設 `BRAIN_ROUTER_MAX_RETRIES=3` 不會改變任何行為，而本列原本的 note 逐字寫「三個數值……全部由 `RoutingConfig` 驅動，不寫死」——那句話對重試為假，且與同一份檔的 `NFR3.63` 列互相矛盾。**本輪處置（選項 ①）**：`openrouter_chat_model` 的 `max_retries` 改為參數、**預設 0**（形狀比照同輪的 `temperature`，既有呼叫者 A1／A3／C1 行為一位元不變），`router_chat_model` 傳 `config.max_retries`。閘門為 `test_the_configured_retry_budget_reaches_the_client`（斷言**實際傳給 `ChatOpenAI` 的值**等於設定值，不是「設定讀得到」）＋ `test_the_default_retry_budget_is_zero_for_this_unit_and_for_others`。**突變驗證**：移除該傳值後前者紅，還原後 18 綠。**單節點圖「剛好只會呼叫一次」不是機制，是巧合**——巧合會在有人加第二個節點的那天安靜地消失。 **附帶的新張力見 `NFR3.62` 列與 `code-summary.md §五 #11`**：重試變成可設定之後，它與「每輪最多 1 次呼叫」落在不同的層，上游沒有寫過「重試算不算一次呼叫」。"
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "讀記憶只經注入的 MemoryFacade；NoAuthorizationOfItsOwnTest 斷言八個模組對 require_story_action／user_can／ensure_role_permissions_seeded 零命中。"
+    },
+    {
+      "id": "BR7.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "principal 是 classify 的第一個參數；NoIdentityOfItsOwnTest 斷言零 get_current_user／Request／WebSocket／ContextVar，且不 import fastapi／starlette／websockets／httpx。"
+    },
+    {
+      "id": "BR7.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "classify() 只回 IntentDecision；八個模組無任何建立工作項或呼叫能力的路徑（無 import 任何能力模組）。"
+    },
+    {
+      "id": "BR7.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "**最強形式：連 session_store 都不 import**。SessionContextIsReadOnlyTest 兩條（四個寫入方法零命中 ＋ 不 import session_store）。拿不到比記得不要呼叫可靠。session 以參數到達（K-10 的簽章），故本單元對 U10 **零 Redis 往返**——理由寫在模組 docstring。"
+    },
+    {
+      "id": "BR8.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "max_retries=0 由 langgraph_runtime 固定；CallBudget 另在我方擋第二次。無任何快取（performance-design §五 已定案不快取分類結果）。"
+    },
+    {
+      "id": "BR8.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "classify_transport_failure() 分型後**向上傳遞**，沒有任何回傳猜測 Intent 的路徑。TransportFailuresAreTypedTest 五條。"
+    },
+    {
+      "id": "BR8.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "property P5。空清單會 raise IndexError，而那是**不合法**輸入（EC1），已由 V-1 擋在本層之前——NFR3.71 的「永不失敗」逐字只涵蓋合法 ranking，寫在 can_single_out 的 docstring。"
+    },
+    {
+      "id": "V-1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "candidates 存在但為空 → EmptyCandidates；缺鍵 → MalformedRouting。兩條測試。"
+    },
+    {
+      "id": "V-2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "capability 不在 ROUTABLE_CAPABILITIES → MalformedRouting。schema 另帶 enum（提示），我方才是閘門。 **本輪另把 `referent_state` 改為缺鍵即 `MalformedRouting`**（審查 `R-05`）：同一份檔原本對兩個 required 欄位採不一致的嚴格度，而兩者的失敗形狀相同。"
+    },
+    {
+      "id": "V-3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "slot 自 0 連續（集合等於 range(n)）、槽位數 <= MAX_SLOTS，**超界即失敗不截斷**；另明文排除 bool（True 是 int 的實例，不排除則 `slot: true` 會被當成 slot 1）。三條測試。"
+    },
+    {
+      "id": "V-4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "每組非空、rank 排序後等於 1..n（連續且唯一）、組內候選數 <= MAX_CANDIDATES_PER_SLOT。三條測試（含 tied_with_next 缺值）。"
+    },
+    {
+      "id": "V-5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "跨**整張清單**的全有或全無；部分帶分數時以 dataclasses.replace 把全部 score 設 None。**不拋例外**——V5PartialScoresDegradeTest 同時斷言「沒拋」與「分數真的被整批清掉」兩件事。"
+    },
+    {
+      "id": "P1",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p1_not_dispatchable_means_no_intents_and_some_candidates。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P2",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p2_dispatchable_means_intents_and_no_candidates。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P3",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p3_single_candidate_without_scores_can_be_singled_out（**限定無分數分支**，理由見該檔檔頭：有分數時單一低分候選為假，而那是正確行為）。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P4",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p4_raising_the_top_score_never_flips_true_to_false。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P5",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p5_the_predicate_returns_a_bool_and_never_raises。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P6",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p6_every_slot_singled_out_yields_one_intent_per_slot。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "P7",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "`@given` property：test_p7_any_failed_slot_is_represented_in_the_candidates。ADR-0006 對 agent routing 的 PBT hard constraint 落點。"
+    },
+    {
+      "id": "NFR1.60",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing.py",
+      "note": "【狀態由 Partial 改為 Deferred】追溯 sensor 的合法狀態只有 OK／GAP／ORPHAN／Deferred／N/A，沒有 Partial。未覆蓋的那一部分在下方說明裡逐字保留，且它確實有已指派的落點，故 Deferred 是誠實的映射，不是把缺口洗白。 反問率的**分子與分母都可量測**：RoutingObservation.can_single_out ＋ 每輪一筆事件。**Partial**：NFR1.60 逐字要求「與 NFR1 的準確率**同時呈現**」，而準確率的標註集與其量測 job 屬 build-and-test（[I1]=A 的 workflow_dispatch job），本單元不交付它；本 intent 亦**無任何告警通道或 dashboard**（U10 的 OPEN-N10-4）。本站只確保訊號存在且欄位齊備——不把「有指標」寫成「有監控」。"
+    },
+    {
+      "id": "NFR3.60",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing.py",
+      "note": "P50 ≤ 800 ms 需要真實 Jev 回應才能量，而 OPENROUTER_API_KEY 尚未配置（TS-6 的 blocking 前置條件，只有使用者能滿足）。本站交付的是**可量測性**：classify() 以 time.perf_counter 在進出點各打一個標記，elapsed_ms 進 RoutingObservation——有了它，膠水時間即使沒有預算也可被減出來（performance-design §四）。承接 build-and-test。"
+    },
+    {
+      "id": "NFR3.61",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "timeout_seconds 由 RoutingConfig（預設 5）傳進 openrouter_chat_model；逾時 → LlmUnavailable（test_a_timeout_is_llm_unavailable）。"
+    },
+    {
+      "id": "NFR3.62",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "單節點 StateGraph ＋ CallBudget(max_calls_per_turn)。ExactlyOneModelCallPerTurnTest 斷言一輪 classify 內 ainvoke 恰一次，第二輪重用同一個 compiled graph（P-4）。 **本輪新發現（`R-02` 的副作用）**：`max_retries` 接上之後，「每輪最多 1 次呼叫」與「重試可設定」成為兩個互不知情的旋鈕——`CallBudget` 數的是我方發出的圖呼叫，`max_retries` 是 `ChatOpenAI` 內部的重試，故 `BRAIN_ROUTER_MAX_RETRIES=3` 會讓一輪實際發出最多 4 次 HTTP 請求而 `CallBudget` 仍只看到 1 次。出貨行為未變（預設 0），這是由設定可達的張力；見 `code-summary.md §五 #11`，承接 `nfr-requirements`／`build-and-test`（`N-18`）。"
+    },
+    {
+      "id": "NFR3.63",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "重試 **0 次**，而「0」現在是**設定的預設值**而不是寫死的字面值（`BRAIN_ROUTER_MAX_RETRIES` 預設 0 → `RoutingConfig.max_retries` → `openrouter_chat_model(max_retries=...)` → `ChatOpenAI`）。這與 `BR6.3` 的「可設定」不再互相矛盾（審查 `R-02`）。`test_a_server_error_is_llm_unavailable_and_is_not_retried` 斷言型別與**只被呼叫一次**；`test_the_default_retry_budget_is_zero_for_this_unit_and_for_others` 斷言預設值確實是 0，且 `openrouter_chat_model()` 不帶引數時也是 0。"
+    },
+    {
+      "id": "NFR3.64",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "五個值全部由環境變數驅動，無寫死。RoutingConfig 是 frozen dataclass。"
+    },
+    {
+      "id": "NFR3.65",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "純函式、O(len(slots) × len(candidates))，兩者都有結構性上界（4 與 8）。不另設門檻。"
+    },
+    {
+      "id": "NFR3.66",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing.py",
+      "note": "併發下的 P50 與 NFR3.60 同站量測。本單元**無狀態**（NFR4.70）故併發上不互相影響：唯一的跨輪共享物是 compiled graph（不可變的 handle），CallBudget 每輪一個實例。"
+    },
+    {
+      "id": "NFR3.67",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "NoModuleLevelMutableStateTest 以 AST 掃描八個模組的模組層 dict／list／set 字面值，**唯一例外是 __all__**（匯出宣告，不是狀態）。為此 _CAPABILITY_HINTS 由 dict 改為 tuple of pairs、tool schema 由模組層常數改為 routing_tool_spec() 函式。P-4（連線重用）的落法改放在 **IntentRouter 實例**上，故 performance-design 預期的「client factory 白名單」不需要存在。 **審查 `R-03`（Major）指出這是對 `performance-design.md:35` 逐字文字的偏離**（該檔要求模組層 factory，且 `:37-41` 已替模組層形狀做過 `NFR3.67` 的界線裁定），而換來的保證落在「一個行程一個 `IntentRouter`」這個**原本只寫在 docstring 裡**的義務上。本輪不回改成模組層（零例外的斷言確實更緊），改為：① 把該義務寫成 `code-summary.md §五` 指名 `U13 brain-gateway` 的 `code-generation` 的 open item；② 把原本分辨不出來的那條測試（只斷言 `model.calls == 2`，而 `model_factory` 每次回同一個替身）改為計數 factory 與 builder 的呼叫次數（兩輪各須為 1）。**突變驗證**：改成每輪重建後該測試紅，還原後 18 綠。"
+    },
+    {
+      "id": "NFR3.68",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "四種觸發（連線失敗、5xx、429、逾時）各一條測試，皆斷言拋出對應例外。"
+    },
+    {
+      "id": "NFR3.69",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "EmptyCandidates；V1EmptyCandidatesTest。"
+    },
+    {
+      "id": "NFR3.70",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "四類畸形（非物件／capability 不在列舉／slot 不連續或超界／rank 不連續或重複）＋ tool call 缺失＋引數非合法 JSON，逐一斷言。"
+    },
+    {
+      "id": "NFR3.71",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "property P5。"
+    },
+    {
+      "id": "NFR3.72",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "RoutingObservation.elapsed_ms，伺服器端計時。分位數的計算屬消費端（目前是人工查結構化日誌，OPEN-N10-4 未關閉）。"
+    },
+    {
+      "id": "NFR3.73",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "RoutingObservation.slot_count。它是 FR5.1 多意圖能力是否真的被觸發的唯一線上證據——若線上永遠是 1，BR4.x 整組是死碼而沒有人會發現。它同時是 D-7（槽位上界 4）的覆核工具。"
+    },
+    {
+      "id": "NFR3.74",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "RoutingObservation.error_kind = type(exc).__name__（**具體類別名，不是基底**）。IntentRoutingError 基底的風險寫在 errors 模組 docstring。test_our_own_bug_is_not_relabelled_as_a_provider_outage 是反向閘門：未識別的例外原樣傳遞，不被計進「供應商掛了」那條曲線。 **審查 `R-10` 指出觀測呼叫會遮蓋原始例外**：失敗路徑的 `self._observer(...)` 位在 `except BaseException` 區塊內、`raise` 之前，observer 自己拋出就會把原始的 `MalformedRouting`／`LlmUnavailable` 換掉——一次 schema 壞掉會被記成 observer 的例外型別，本列的分型在那一輪整個失真。本輪三處 observer 呼叫全部改走 `IntentRouter._observe()`，它捕 `Exception`（**不是** `BaseException`，`KeyboardInterrupt`／`SystemExit` 不該被一個 log 動作吞掉）並記一行 WARN。閘門為 `ObserverFailureDoesNotMaskTheResultTest` 三條（失敗路徑、成功路徑、`prompt_guard` 命中路徑）。**突變驗證**：移除 try/except 後三條全紅，還原後 18 綠。"
+    },
+    {
+      "id": "NFR4.70",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "無狀態：唯一的實例層快取是 compiled graph（不可變 handle）。NoModuleLevelMutableStateTest 是其結構閘門。"
+    },
+    {
+      "id": "NFR6.60",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "MemoryAccessGoesThroughTheFacadeTest：八個模組對 services.memory_service／services.memory_types／database／models／sqlalchemy(.orm) 零 import。facade 以參數注入（鴨子型別），故 import 集合裡沒有 DB 型別。"
+    },
+    {
+      "id": "NFR7.62",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "_REFERENT_MEMORY_KINDS 模組層常數 ＋ **斷言實際傳值**（以替身捕捉 search 的 kwargs）。兩條測試：常數本身、以及呼叫點真的用它。"
+    },
+    {
+      "id": "NFR8.60",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "門檻缺值 → RuntimeError（startup 失敗）；其餘四個缺值 → 取預設並記 WARN／INFO。configure_intent_routing_env() 已掛進 main.py 的 startup hook。"
+    },
+    {
+      "id": "NFR8.61",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "三處同步（render-env.sh 寫字面值、deploy/.env.example 列出、docker-compose.deploy.yml 以無 fallback 形式消費）＋ backend/.env.example。`python3 scripts/validate_env_contract.py` 實跑通過。**另加第四處 docker-compose.test.yml**（以 `:-` 預設），理由見 code-summary.md 的偏離項。"
+    },
+    {
+      "id": "NFR9.60",
+      "status": "OK",
+      "target": "backend/services/intent_routing_context.py",
+      "note": "build_routing_prompt 的簽章**不收 BrainSession**；TypeBoundaryTest 斷言參數名無 session 且模組不 import session_types／BrainSession。「不給它，它就送不出去」。"
+    },
+    {
+      "id": "NFR9.61",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_context.py",
+      "note": "test_the_prompt_length_does_not_grow_with_the_history：尾段相同時 prompt 逐位元相同；另斷言長度上界（8000 字元，遠低於 Jev 的 context 32000）。"
+    },
+    {
+      "id": "NFR9.62",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "429 → LlmUnavailable，**不重試、不排隊**；test_a_rate_limit_is_llm_unavailable_not_a_queue 另斷言只被呼叫一次。"
+    },
+    {
+      "id": "NFR10.60",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_structure.py",
+      "note": "BRAIN_ROUTER_MODEL 為**獨立**環境變數（intent_routing_config.MODEL_ENV）；router_chat_model 以 config.model 傳入，TemperatureIsOmittedTest 斷言送出的 model 等於設定值。換模型不需改程式。**TS-2 的驗證方式逐字是「grep 斷言本單元不讀 LLM_MODEL」，而裸 grep 在本單元會命中 1 處——`intent_routing_config.py:48` 的註解正好寫著「不得沿用 LLM_MODEL」。實際的機械閘門是 RouterModelIsItsOwnVariableTest：以 AST 斷言 LLM_MODEL **不作為程式字串**出現（八個模組實測皆 False），並反向斷言 BRAIN_ROUTER_MODEL 真的被當成字串讀（否則「完全不讀設定、寫死模型名」也會通過第一條）。**"
+    },
+    {
+      "id": "NFR10.61",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "「換模型必須重跑 NFR1 的 ≥50 筆標註集」是**流程義務**，落 build-and-test 的核可關卡。本站在 backend/.env.example 與 LOCAL-DEV.md 的註解寫明「準確率數字不可跨模型沿用」，但它不是一個程式可以強制的事。"
+    },
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "NoIdentityOfItsOwnTest 兩條（禁識別字 ＋ 禁 import）。以 AST 的程式行識別字而非字串比對——八個模組的 docstring 都在解釋「為什麼不自取身分」，字串比對會永遠紅燈，而刪掉 docstring 來讓它變綠會損失本單元最需要被讀到的理由（形狀沿用 test_session_contract.py）。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "NoExposedEndpointTest 兩條：八個模組對 APIRouter／include_router／add_api_route 零命中，**且** main.py 沒有把它掛上去（兩句話是兩個入口）。另 httpx 在禁 import 集合內。這同時是 openapi.json diff 為空的來源——`dump_openapi.py --check` 實跑回「規格檔與後端程式碼一致」。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "RoutingObservation 的欄位集合即白名單，LogWhitelistIsATypeTest 以 dataclasses.fields **逐欄比對完整集合**（不只是檢查禁止欄位不在）。第三條另斷言 log_routing_observation **不把物件整個交給 logger**——dataclass 的 __repr__ 會印出全部欄位，而「丟物件」這個形狀會讓下一個人加欄位時自動把它記出去。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "guard 命中時產生一筆 RoutingObservation，error_kind=PROMPT_GUARD_HIT，其餘輸入衍生欄位全為空值。它是安全事件、必須可被計數，但計數不需要知道他說了什麼。"
+    },
+    {
+      "id": "SEC-5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "同 SEC-3。禁止側含 referent——**它最容易被漏**：看起來像識別碼，實際上是解析使用者句子得到的系統名或圖名。label 同理，它是模型對使用者輸入的**複述**。"
+    },
+    {
+      "id": "TS-1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "DEFAULT_MODEL = typesafe/jev-1.13。"
+    },
+    {
+      "id": "TS-2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "同 NFR10.60／NFR10.61。"
+    },
+    {
+      "id": "TS-3a",
+      "status": "OK",
+      "target": "backend/services/langgraph_runtime.py",
+      "note": "openrouter_chat_model 的 temperature 改為 `float | None = 0.0`，`None` 時**不放進 kwargs**。router_chat_model 明文傳 None。TemperatureIsOmittedTest 斷言送給 ChatOpenAI 的 kwargs **完全不含** temperature（不是「等於 None」——傳一個 None 下去與不傳是兩件事）。**D-3 的驗收條件已實測**：預設仍 0.0（test_existing_callers_still_get_temperature_zero），且 A1／A3／C1 的既有測試（test_langgraph_runtime／test_a3_langgraph_migration／test_langgraph_migration／test_cost_advice_agent／test_review_agent／test_design_agent，共 34 個）全綠。"
+    },
+    {
+      "id": "TS-3b",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "tool/function calling 形狀：routing_tool_spec() 的 OpenAI function schema ＋ bind_tools(tool_choice=ROUTING_TOOL_NAME)。repo 內第一個這種形狀（with_structured_output／response_format／JsonOutputParser 仍為 0 命中）。四種畸形回應（無 tool call／引數非 JSON／引數非物件／圖跑完無引數）皆以替身覆蓋。"
+    },
+    {
+      "id": "TS-3c",
+      "status": "N/A",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "「Jev 不產生文字、故不能兼任產生回覆的角色」是對 OQ-N1 的約束，不是本單元的交付。本單元只用它做分類。"
+    },
+    {
+      "id": "TS-4",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "五個變數，四處同步。見 NFR8.61。"
+    },
+    {
+      "id": "TS-5",
+      "status": "OK",
+      "target": "backend/requirements.txt",
+      "note": "**零新依賴。** `backend/requirements.txt` 的 git diff 非空，但該 diff 完整屬於 `U10 session-store`（新增 `redis` 及其選型說明）——**本單元一行都沒有改它**。用到的是既有的 langchain-openai（經 langgraph_runtime 延遲 import）、langgraph、hypothesis、unittest.mock。`TS-3b` 的 tool calling 是新的**用法**，不是新套件。"
+    },
+    {
+      "id": "TS-6",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "OPENROUTER_API_KEY 仍未配置（`[ -f backend/.env ]` 為否）。**本單元的 62 個測試全部不需要它**（與既有 LLM 測試做法一致），故它不阻擋本站；它阻擋的是 build-and-test 的 NFR1／NFR10／OQ-10。RuntimeAuthError **刻意不被轉型**為 LlmUnavailable——否則一次 misconfiguration 會在 NFR3.74 的曲線上長得像一次供應商故障。"
+    },
+    {
+      "id": "D-1",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "U8 降級（memory_degraded=True）、U10 向上傳遞。DependencyFailuresGetDifferentTreatmentTest 兩條。降級**可被觀測**（memory_degraded 在 RoutingObservation 內，且 LogWhitelistIsATypeTest 單獨為它寫了一條）——D-1 的正當性完全建立在這個條件上。殘留風險（記憶降級可能改變分類結果而非只是少一點輔助）維持如實記載，不發明功能性保險。"
+    },
+    {
+      "id": "D-3",
+      "status": "OK",
+      "target": "backend/services/langgraph_runtime.py",
+      "note": "同 TS-3a。"
+    },
+    {
+      "id": "D-7",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "MAX_SLOTS = 4 **為暫定值**，常數的註解逐字寫明它是暫定、以及上界本身不是暫定的。覆核工具是 NFR3.73 的槽位數分佈（build-and-test）。本站的測試驗的是「超界的處置」（失敗、不截斷），不是「4 這個數字對不對」。"
+    },
+    {
+      "id": "[IR1]",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "can_single_out 是唯一判定點；confidence < 0.7 降為它在「候選帶分數」時的求值分支。K-10 的 IntentDecision 欄位集合未動一字。"
+    },
+    {
+      "id": "[D1]",
+      "status": "OK",
+      "target": "backend/services/intent_routing_port.py",
+      "note": "扁平 candidates 陣列 ＋ slot 整數索引 ＋ 平行的 slot_labels；兩層的還原與驗證在 intent_routing_parser。"
+    },
+    {
+      "id": "[I1]",
+      "status": "N/A",
+      "target": "backend/main.py",
+      "note": "workflow_dispatch 的量測 job 屬 build-and-test 的交付，不是本單元的程式碼（計畫 §四 已明列）。本單元**未新增任何 CI job**。"
+    },
+    {
+      "id": "[I2]",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7 寫字面值，**未加進任何 secret 守衛**（deploy.yml 未被本單元改動）。"
+    },
+    {
+      "id": "OPEN-IR11-1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "**本站結案**：referent_state 封閉列舉（見 EC3）。"
+    },
+    {
+      "id": "OPEN-IR11-2",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_types.py",
+      "note": "OQ-4 已定案（Jev）；**OQ-10 仍開著**，承接 build-and-test。本站的處置是 derive_contract_confidence()——它就是 entities.md 要求的那個「顯式的失敗點」：把「無可比較的信心訊號」集中在一個具名、可觀測、單一落點的推導裡，而**不是**把型別悄悄放寬成 Optional[float]。推導方式讓 K-10 自己宣告的`below_threshold == confidence < threshold` 在兩個分支都逐字成立（有分數取各槽位最高分的最小值——AND 聚合 ⟺ min >= t；無分數時回門檻本身或 0.0）。**這個值不是信心度**，同一輪的 scores_available 為假即為標記。"
+    },
+    {
+      "id": "OPEN-IR11-3",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "【狀態由 Partial 改為 Deferred】追溯 sensor 的合法狀態只有 OK／GAP／ORPHAN／Deferred／N/A，沒有 Partial。未覆蓋的那一部分在下方說明裡逐字保留，且它確實有已指派的落點，故 Deferred 是誠實的映射，不是把缺口洗白。 機制已存在且可設定（BR6.3／CallBudget／三個環境變數）；**數值**仍是上游指派回補項 N-18 的事，本站採 tech-stack-decisions 的 TS-4 預設（1 次／0 重試／5 秒）。"
+    },
+    {
+      "id": "OPEN-IR11-4",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing.py",
+      "note": "AC1.1.5 的「脈絡列更新為該系統」**仍無寫入端**，且 Intent.referent（不透明字串）對不上 set_work_target 的三層識別。**本站未指派、未新增 DAG 邊**（DAG 裡沒有 U11 → U7）。附帶的實作後果：work_target_hint 是三層識別的**文字呈現**（「專案 #3／架構圖 #12」）而不是人話名稱——人話名稱需要 K-07 的 HierarchyFacade，而本單元沒有那條邊。承接 U12 的 functional-design（CONDITIONAL，轉移目標為 U12 的 code-generation）。"
+    },
+    {
+      "id": "OPEN-IR11-5",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "可執行的那一半已落地（kinds 排除 episodic ＋ 斷言實際傳值）；殘留缺口維持如實記載。**可達性判定已由上游翻轉**：security-requirements §三 實讀 memory_router.py 後確認它是**現行防護**而非前置護欄，故「第一輪就要有這個斷言，不得遞延」已滿足。"
+    },
+    {
+      "id": "OQ-4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_config.py",
+      "note": "已由使用者定案 typesafe/jev-1.13，落為 DEFAULT_MODEL。"
+    },
+    {
+      "id": "OQ-10",
+      "status": "Deferred",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "路由層能否產出可比較的信心值——**本單元刻意設計成不依賴其結論**：七條 property 有六條不涉及分數，scores_available 由資料本身決定分支。承接 build-and-test（前提是 TS-6 的金鑰）。"
+    },
+    {
+      "id": "AC1.1.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_parser.py",
+      "note": "Then 的「標示它被交給架構設計能力」子句：`capability` 是封閉列舉（`BR2.2`），parser 的 `V-2` 對列舉外的值 raise `MalformedRouting`，使「架構設計能力」是可斷言的值而非自由字串。**工作項的建立、處理中狀態與畫面呈現屬 `U12`／`U14`**，本單元只覆蓋「交給哪一個能力」。 測試落點：`backend/tests/test_intent_routing_parser.py`（sensor 的 target 只接受單一路徑，故第二個路徑記在本欄）。"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "N/A",
+      "target": "U12 work-orchestrator（WorkItem 的五個狀態值）",
+      "note": "Then 列舉五個狀態值。`FR1.2` 逐字「實際狀態機待下游定案」，本單元依 `BR7.3` 不決定狀態，零落點。與 `functional-design/traceability.json` 的判定一致。"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "Then「系統不呼叫 LLM，並回覆固定的拒絕訊息」。`prompt_guard` 在分類之前（`BR1.1`），使「不呼叫 LLM」是結構後果而非紀律；`PlatformSelfModificationRefused` 的 `message` 預填 `prompt_guard.REFUSAL_MESSAGE`（不另抄一份字串，`BR1.2`），docstring 明寫呼叫端須以 `done` 而非 `error` 結束（`BR1.3`）。 測試落點：`backend/tests/test_intent_routing_structure.py`（sensor 的 target 只接受單一路徑，故第二個路徑記在本欄）。"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "N/A",
+      "target": "U14 entry-page-ui（跨頁看到結果）＋ U10 session-store（段落歷程）",
+      "note": "Then「切到架構圖生成頁，看到該次交辦的結果」。跨頁延續由 `U10` 的共享段落承載、呈現由 `U14`。本單元是單輪無狀態的（`BR8.1`），零落點。"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "GAP",
+      "target": "functional-spec.md §六 OPEN-IR11-4 → U12 work-orchestrator 的 code-generation（3.5，ALWAYS）",
+      "note": "**本檔唯一刻意的 GAP，沿用 `functional-design` 的同一判定。** Then 有兩個子句，只有「工作項針對它建立」有機制（本單元供 `referent`）；「脈絡列更新為該系統」**沒有任何已指派的寫入端**，且 `Intent.referent` 是不透明字串、對不上 `set_work_target` 要的三層識別。本單元依 `BR5.3` 認出句中對象並優先於 session 當前值（`ReferentPrecedenceTest`），寫回那一端不在本單元。"
+    },
+    {
+      "id": "AC1.2.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "Then「不建立任何工作項、不產生任何結果，改列出候選判讀並反問」。`can_single_out` 的兩個分支（`BR3.2` 有分數、`BR3.3` 無分數）與 `P1`／`P2` 的 property 鎖住「為假 ⇒ `intents` 空且 `candidates` 非空」；不建立工作項由 `BR7.3`（本單元零工作項程式碼）承載。 測試落點：`backend/tests/test_intent_routing_predicate.py`（sensor 的 target 只接受單一路徑，故第二個路徑記在本欄）。"
+    },
+    {
+      "id": "AC1.2.2",
+      "status": "N/A",
+      "target": "U13 brain-gateway（依候選交辦）＋ U14 entry-page-ui（select_clarify_candidate）",
+      "note": "Then「系統依該候選交辦」。本單元不參與——`BR2.1` 的「每一次輸入」指自然語言輸入，不含候選選取。"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_structure.py",
+      "note": "Then 的「脈絡列與作業對象**不變**」子句：`NoSessionWriteTest` 斷言本單元不含 `set_work_target`／`append_message`／`set_sharing_mode`／`touch`（`BR7.4`），且實作連 `session_store` 都不 import——比設計要求更強。「回到輸入狀態」屬 `U14`。"
+    },
+    {
+      "id": "AC1.2.4",
+      "status": "Deferred",
+      "target": "OQ-10 → build-and-test（[N3]=A 定案的承接站）",
+      "note": "Then「帶有一個定義域 0–1 的信心值可與門檻比較」。**這條 AC 的成立與否就是 `OQ-10` 本身。** 本站的 `derive_contract_confidence()` 讓 `K-10` 宣告的 `below_threshold: confidence < threshold` 在有分數與無分數兩個分支都逐字成立，但**無分數時的回傳值不是信心度**（同輪 `RoutingObservation.scores_available` 為假即為標記）。`OQ-10` 定案後本函式與 `K-10` 的欄位語意須一併重檢。 **審查 `R-04`（Major）確認算式與 `K-10` 兩分支逐字一致（已代入驗算），不成立的是「消費端分辨得出合成值」**：`RoutingObservation` 是**日誌白名單型別**，不是 `IntentDecision` 的欄位，`U13` 與 `build-and-test` 的 `NFR1` 量測作業都讀不到 `scores_available`。本單元**不自行擴充 `K-10`**（無授權），改為把它呈到關卡：見 `code-summary.md §五` 的該列，指名 `nfr-requirements`／`build-and-test` 在定案 `OQ-10` 時一併處理「`scores_available` 是否要上線上形狀」。可減輕的事實（審查已查證）：`interaction-spec.md:228` 逐字「`clarify` 訊息刻意不帶信心數值上畫面」，故合成值不直達使用者。"
+    },
+    {
+      "id": "AC5.1.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_predicate.py",
+      "note": "Then「畫面出現兩個工作項」：`P6` 以 property 鎖住「每槽位皆可單選 ⇒ `len(intents) == len(slots)`，第 i 個取第 i 槽位 `rank == 1`」（`EC7`／`BR4.4` 的基數等式），且生成策略**顯式涵蓋 `len(slots)` ≥ 2**。「各自帶獨立狀態」屬 `U12`。 測試落點：`backend/tests/test_intent_routing_predicate.py`（sensor 的 target 只接受單一路徑，故第二個路徑記在本欄）。"
+    },
+    {
+      "id": "AC5.1.2",
+      "status": "N/A",
+      "target": "U12 work-orchestrator（等待中狀態與「在等什麼」的說明）",
+      "note": "`BR4.3` **明禁**本單元附帶順序或依賴標記——兩處各判一次必定分歧。零落點是刻意的。"
+    },
+    {
+      "id": "AC5.1.3",
+      "status": "N/A",
+      "target": "U12 work-orchestrator（correct／已停掉，見 K-11 的 WorkOrchestrator.correct）",
+      "note": "逐項更正屬 `U12` 的狀態機。"
+    },
+    {
+      "id": "AC6.1.1",
+      "status": "Deferred",
+      "target": "U10 的 OPEN-S10-1 → U12 work-orchestrator 的 code-generation（3.5，ALWAYS）",
+      "note": "Then「系統作用在該張圖上」。本單元依 `BR5.1` 讀該段作業對象與歷程來解析「那張圖」，但**歷程裡沒有可被指涉的參照**：`SessionMessage` 只有 `role` 與 `text`，無產出物參照欄位。沿用 `functional-design` 的同一判定與同一落點。"
+    },
+    {
+      "id": "AC6.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_predicate.py",
+      "note": "Then「系統走 `US1.2` 的反問路徑，不擅自挑一個」。**審查 `R-01`（Critical）指出本列原本的 note 以「觸發條件可構造」當理由，而可構造的只有 Given——`referent_state` 當時有寫入端、有 schema、有 prompt 指示，卻沒有任何讀取端。** 本輪補上讀取端：`can_single_out` 的**第一道條件**為 `has_unresolved_referent(ranking)` 為真即回 `False`，不論分數多高（`intent_routing_predicate.py`）。測試落點：`UnresolvedReferentForcesAClarifyTest` 四條（審查構造的那一條逐欄路徑、分數 0.99 仍反問、**`absent` 不得連帶擋下**、`unresolved` 落在 rank 2 時同樣反問）＋ `P1`／`P7` 的失敗原因現含 `unresolved` ＋ `StrategyReachesEveryBranchTest` 證明該失敗原因在兩種分數模式下都生成得出來。**突變驗證**：移除該守衛後 6 個測試紅（含 `P1`／`P7`），還原後 15 綠。由構造成立的附帶後果：可交辦槽位其 rank 1 的 `referent` 必然不是「解析失敗」。"
+    },
+    {
+      "id": "AC6.1.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing.py",
+      "note": "負向驗收，**兩個違反入口都已關**：①讀錯段由 `U10` 的段隔離結構性擋下，本單元只讀傳進來的 `BrainSession`（`BR5.1`）；②經 `K-08` 讀記憶——`_REFERENT_MEMORY_KINDS: Final = (\"semantic\", \"procedure\")` 是**模組層常數**（不是可被覆寫的預設參數值），`ReferentMemoryKindsExcludeEpisodicTest` 斷言 `MemoryFacade.search` 的實際傳值等於該常數且不含 `episodic`（`NFR7.62`）。 測試落點：`backend/tests/test_intent_routing_structure.py`（sensor 的 target 只接受單一路徑，故第二個路徑記在本欄）。"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "N/A",
+      "target": "session-store（U10）",
+      "note": "本單元**未定義**此 ID，它屬 `session-store`（`NFR4.60`／`.65`）或已被改號的舊編號（`NFR7.60` → `SEC-3`）。**它仍出現在上游檔案裡是刻意的修訂紀錄，不是殘留**（`performance-requirements.md:7`／`:9`、`security-requirements.md:158`／`:160` 以它說明碰撞與改號的經過）。列此 N/A 是為了讓 sensor 的掃描結果與事實一致——sensor 看得到檔案裡的 ID，分不出「本單元定義的」與「修訂紀錄提到的」。與 `nfr-design/traceability.json` 的同 ID 判定一致。"
+    },
+    {
+      "id": "NFR4.65",
+      "status": "N/A",
+      "target": "session-store（U10）",
+      "note": "本單元**未定義**此 ID，它屬 `session-store`（`NFR4.60`／`.65`）或已被改號的舊編號（`NFR7.60` → `SEC-3`）。**它仍出現在上游檔案裡是刻意的修訂紀錄，不是殘留**（`performance-requirements.md:7`／`:9`、`security-requirements.md:158`／`:160` 以它說明碰撞與改號的經過）。列此 N/A 是為了讓 sensor 的掃描結果與事實一致——sensor 看得到檔案裡的 ID，分不出「本單元定義的」與「修訂紀錄提到的」。與 `nfr-design/traceability.json` 的同 ID 判定一致。"
+    },
+    {
+      "id": "NFR7.60",
+      "status": "N/A",
+      "target": "已改號為 SEC-3（本單元 security-requirements.md §二之零）",
+      "note": "本單元**未定義**此 ID，它屬 `session-store`（`NFR4.60`／`.65`）或已被改號的舊編號（`NFR7.60` → `SEC-3`）。**它仍出現在上游檔案裡是刻意的修訂紀錄，不是殘留**（`performance-requirements.md:7`／`:9`、`security-requirements.md:158`／`:160` 以它說明碰撞與改號的經過）。列此 N/A 是為了讓 sensor 的掃描結果與事實一致——sensor 看得到檔案裡的 ID，分不出「本單元定義的」與「修訂紀錄提到的」。與 `nfr-design/traceability.json` 的同 ID 判定一致。"
+    }
+  ]
+}

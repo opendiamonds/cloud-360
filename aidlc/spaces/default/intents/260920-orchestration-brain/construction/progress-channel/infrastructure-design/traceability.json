@@ -1,0 +1,106 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "progress-channel",
+  "upstream_ids": ["U22-V3", "U22-V5", "S-7", "S-5", "SEC-4", "U22-D3"],
+  "coverage": [
+    {
+      "id": "U22-V3",
+      "status": "OK",
+      "target": "cicd-pipeline.md §二 閘門 1（1a–1e）＋ §三 突變 1 與突變 4",
+      "note": "五個退場符號 ＋ 三個呼叫點。1e 是實質內容也是最容易寫成恆真的一條，故寫法必須是『先數出呼叫點總數，再斷言每一個都帶新參數』而非『grep 新參數有沒有出現』——後者在只改一處時也會過。突變 4（只把 wa_collab_orchestrator.py:79 改回不傳新鍵、另兩處保持正確）就是用來驗這件事的：若 1e 寫成 grep，突變 4 會過。承接 functional-design 審查 R-01（Critical）與 nfr-requirements 的 S-2，本站把它由散文義務變成有突變驗證的機械閘門，風險由高降為中。"
+    },
+    {
+      "id": "U22-V5",
+      "status": "OK",
+      "target": "cicd-pipeline.md §二 閘門 2 ＋ §三 突變 2",
+      "note": "progress_channel.py 內無 uuid／secrets／random 的 import、無任何回傳新鍵的函式。射程限制已如實記載：它只能證明本模組不鑄造，證不了入口端鑄造得正確——後者由本站新增的 U22-V7 收起來。"
+    },
+    {
+      "id": "S-7",
+      "status": "OK",
+      "target": "cicd-pipeline.md §二 閘門 3 ＋ §三 突變 3；射程限制具名為 S-10",
+      "note": "形狀級檢查（對 {e}／{exc}／str(e)／repr(e) 零命中）取代 SEC-2 原本只 grep 一個句型的寫法——那個 grep 抓不到 :103。本站實測現狀：全檔恰兩個 except ... as e、兩者都命名為 e，.format(／% e／e.args／traceback 全部零命中，所以這組 pattern 對當下是完整的。不保證的是日後新增的第三個 except（nfr-design 審查 R-04 指出的射程限制），已具名 S-10。"
+    },
+    {
+      "id": "S-5",
+      "status": "OK",
+      "target": "U22-V7（本站新增，落點 code-generation，ALWAYS）",
+      "note": "**狀態由 nfr-design 的 GAP 改為 OK，這是本站的實質貢獻。** S-5 原本沒有有保證的落點：SEC-1 的鑄造端驗證指向 U13／U12 的 nfr-requirements（皆 CONDITIONAL），而宣告的 fallback（code-generation）是 per-unit 所以到不了那兩個單元。本站把它收進**本單元自己的**閘門——U22-V7 要求閘門 2 一併斷言 agent_router.py 與 wa_collab_orchestrator.py 以 uuid4／secrets 鑄造，而那兩支檔閘門 1 的 1e 本來就要讀，可併在同一支測試檔。因此不再依賴那兩個單元是否被 skip。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "cicd-pipeline.md §一 的零設定變更表",
+      "note": "不新增環境變數、secret、socket、port 或進程。本站的設計使 ci.yml、deploy.yml、render-env.sh、三個 .env.example 與 compose 全部不動——三道閘門寄生在 backend job 既有的步 7（python -m unittest discover -s tests -v）上，而該步會自動撿到 backend/tests/ 下的任何新檔。compose 維持 6 個服務。"
+    },
+    {
+      "id": "U22-D3",
+      "status": "OK",
+      "target": "cicd-pipeline.md §一；docker-build job 不受影響",
+      "note": "零新依賴（collections.deque ＋ dict 皆標準庫），故 requirements.txt 不變、Dockerfile 不變、docker-build job 不受影響。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "U22-V7",
+      "status": "OK",
+      "target": "code-generation（3.5，ALWAYS，已查 stage-graph.json）",
+      "note": "**本站新增的驗證項。** 閘門 2 的擴充：一併斷言 agent_router.py 與 wa_collab_orchestrator.py 以 uuid4／secrets 鑄造新鍵。它不是新能力，是把 S-5 這個已存在的缺口收進一個有保證落點的閘門。與閘門 1 的 1e 讀同樣兩支檔，可併在同一支測試檔，成本接近零。"
+    },
+    {
+      "id": "S-9",
+      "status": "OK",
+      "target": "閘門上揭露",
+      "note": "更正：nfr-design 的三處產出（security-design.md、logical-components.md、traceability.json）逐字宣告本 stage 對 library kind-vacuous，實為非 vacuous——produces_kinds 四條中 cicd-pipeline 與 traceability 兩條含 library，而 cicd-pipeline 更是本 stage 的 review_artifact。引擎回的 produces 實測為 2 項。本站的存在即為證據，但凍結的產出仍帶著假宣告。方向是『多了一站』而非少了一站，故風險低；但若有人只讀 nfr-design 會以為本站不存在。"
+    },
+    {
+      "id": "S-10",
+      "status": "OK",
+      "target": "code-generation 的程式註解 ＋ 閘門上揭露",
+      "note": "閘門 3 的射程限制：形狀級 pattern 對當下完整、對未來不完整——.format(e)、% e、{e.args}、或把變數改名都會逃掉。要真正完整需 AST 層檢查，成本遠高於本單元規模。這是一個已知會隨時間腐化的閘門，而腐化是安靜的，故具名而非只寫在散文裡。"
+    },
+    {
+      "id": "R-02-nfr-design",
+      "status": "GAP",
+      "target": "閘門裁決，之後落 code-generation（ALWAYS）",
+      "note": "**本站無法收這一項，且狀態為 GAP 是刻意的。** nfr-design 審查的 R-02（Critical）：DuplicateChannelKey 在哪裡被接住，從 functional-design 到 nfr-design 一路都是假設而非設計。實測 agent_router.py:124-128 的 event_generator() 沒有 try/except 且包在 StreamingResponse 內，而 functional-spec.md:34 把 open 指派給入口端，所以該例外不經 design_agent.py:214——使用者得到的是無聲中止的 SSE 串流，連 error 事件都沒有。本站是 CI 閘門的站，擋不住一個沒有設計的出口：沒有任何 grep 能斷言『這個例外有被接住且轉成 error 事件』。它需要一個設計決定（誰接、轉成什麼），而本單元的三個設計站（functional-design、nfr-requirements、nfr-design）都已凍結。風險高。"
+    },
+    {
+      "id": "CONDITIONAL-judgement",
+      "status": "OK",
+      "target": "cicd-pipeline.md §〇 的逐款判定表",
+      "note": "project.md 要求 CONDITIONAL stage 的適用性判定必須逐項對照 condition 條款並記入 diary，不得憑 feature 表面大小直覺 skip。判定為執行，而理由不是前三款成立（三款皆不成立：無服務、無部署架構變更、無雲端資源），而是 kind 過濾本身界定了工作範圍——infra 兩份被濾掉、CI 一份留下，引擎回的 produces 實測 2 項與此一致。"
+    },
+    {
+      "id": "S-1",
+      "status": "Deferred",
+      "target": "code-generation（ALWAYS）",
+      "note": "承上游：buffer 上界數值未定，定值前須實跑一次典型產圖並把測量值與倍數寫進程式註解。本站的三道閘門不涵蓋它——容量是執行期行為，不是原始碼文字的性質。"
+    },
+    {
+      "id": "S-4",
+      "status": "OK",
+      "target": "nfr-design §三 的私有同步 _admit（語言層保證）",
+      "note": "承上游：U22-V4 的 await 禁令已由 [Q1]=A（nfr-design）的私有同步 def 變成語法層保證，風險由中降為低。本站不另設閘門——await 在 def 內是 SyntaxError，連 import 都會失敗，而 ci.yml backend job 的步 4（Import FastAPI app）會先撞到它。"
+    },
+    {
+      "id": "S-2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §二 閘門 1 的 1e ＋ §三 突變 4",
+      "note": "承上游並由本站實質收起來：三個呼叫點（agent_router.py:125、wa_collab_orchestrator.py:79、backend/test_agent.py:41）全部傳入新鍵。它原本是 nfr-requirements 的散文義務，本站把它變成閘門 1 的 1e 這條機械斷言，並以突變 4 驗證那條斷言不是恆真。風險由高降為中——降不到低，因為 1e 的寫法本身仍可寫錯（寫成 grep 而非逐點斷言），而那正是突變 4 要擋的。本列為送審前自檢 5 補入：S-2 原本只出現在 cicd-pipeline.md §四 與 U22-V3 的 note 裡而不在本檔的 reverse。"
+    },
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "本站**僅引用為脈絡**；其涵蓋在 nfr-requirements（需求）與 nfr-design（設計）。本站的貢獻是 U22-V5 ＋ U22-V7 這兩道閘門",
+      "note": "本列為送審前自檢 5 補入。SEC-1 不是本站擁有或結案的需求——它是 nfr-requirements 的需求、nfr-design 的設計。本站只做它的**驗證**那一面：閘門 2（本模組不鑄造）與新增的 U22-V7（入口端鑄造正確）。明列以免 prose↔trace 的 id 對等檢查把「引用」誤讀成「未涵蓋」，也以免反向被誤讀成「本站宣稱涵蓋了 SEC-1 全部」。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "本站**僅引用為脈絡**；其涵蓋在 nfr-requirements（需求，範圍有誤）與 nfr-design §二（設計，已更正為兩處）。本站的貢獻是閘門 3 這道形狀級檢查",
+      "note": "本列為送審前自檢 5 補入，理由同 SEC-1。本站引用它是為了說明閘門 3 為何改用形狀級而非字面級檢查——SEC-2 原本只 grep f\"發生未預期錯誤：{e}\" 一個句型，抓不到 :103。射程限制具名為 S-10。"
+    }
+  ],
+  "reverse_count": 10
+}

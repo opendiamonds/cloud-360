@@ -1,0 +1,77 @@
+{
+  "stage": "nfr-design",
+  "unit": "brain-ws-contract",
+  "upstream_ids": [
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR5.7"
+  ],
+  "coverage": [
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "§六 四道閘門的 fail-closed 失敗語意（缺檔、import 失敗、產生器失敗、斷言拋例外四種情形皆 exit 非 0）；§七 dump 只 import 契約模組不 import main，使閘門訊號只代表契約本身"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "§七 package-lock.json 的 integrity 欄為實際的完整性保證（非僅版本號）；升版義務寫入 ADR-0019。§一 STRIDE 的 Spoofing 列為其威脅模型落點"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "§六「REQUIRED_TEXT 詞條的生命週期」：詞條與 ci.yml 步驟一對一，改動任一閘門即紅燈，處置只有改詞條或刪詞條兩種，明文禁止第三種（整條註解掉）"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "§三 消費端強制：frontend/eslint.config.js 新增 error 級規則禁止 new WebSocket 第二引數出現字串或模板字面量；含本站實測得出的排序約束（BrainPage.tsx:83 現持有字面量，規則啟用前必須先處理）與明記的殘餘（存進變數再傳入不會被擋）"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "§四 BR1.5 以 Pydantic model_validator 實作並放在契約模組內，附三個測試案例與突變驗證方式；同節更正上游 functional-spec.md:11「沒有執行期程式碼」一句的過窄範圍"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "§七 兩條可機械檢查的形式（ws-contract.json 不得存在於 frontend/public/；grep -r 'ws-contract.json' frontend/src/ 須為空）；落點由 code-generation 決定，本站刻意不指定"
+    },
+    {
+      "id": "NFR5.7",
+      "status": "OK",
+      "target": "§五 斷言由禁用名單改為由契約推導的白名單：七個客戶端物件（WsClientEnvelope ＋ 六個 client payload）的欄位名集合須逐一等於釘在 dump 腳本內的預期集合。含代價記載（診斷性較差）與 §五末的 BR2.13 執行期／建置期分工"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "S-4",
+      "status": "N/A",
+      "target": "修改既有 frontend/eslint.config.js ＋ 同一個 PR 內處理 BrainPage.tsx:83 的字面量。本階段新增、scope 未涵蓋，需回補。無對應上游 NFR id——它是 NFR5.4 的消費端強制手段，而該需求本身未指定手段"
+    },
+    {
+      "id": "S-5",
+      "status": "N/A",
+      "target": "U2 的交付物開始含執行期程式碼（BR1.5 的 Pydantic validator）及其測試與突變驗證。使 functional-spec.md:11 與 unit-of-work.md:69 的字面範圍過窄，已於 §四 標明現行規格以本站為準。本階段新增、需回補"
+    },
+    {
+      "id": "S-6",
+      "status": "N/A",
+      "target": "新增 ADR-0019（WS 契約閘門與型別產生器的供應鏈）。依 project.md「架構級決策開 ADR」；[Q2]=A 改的是全 repo 的型別產生方式，超出本單元。編號已實查未被占用（全樹最大為 ADR-0018）"
+    },
+    {
+      "id": "R-02-disposition",
+      "status": "N/A",
+      "target": "上一站審查 R-02 的處置（§八）：把 tech-stack-decisions.md §四 的論證分兩層——(a)「不得寫在 U13 內」為被迫、(b)「該放 backend/services/」為慣例選擇——並標明上游把 (b) 也掛在「單一可行解」之下屬範圍過寬。不回改上游。無對應 NFR id"
+    },
+    {
+      "id": "STRIDE-R-and-D",
+      "status": "N/A",
+      "target": "§一 STRIDE 表中 Repudiation 與 Denial of Service 兩列判為不適用並附理由（本單元不產生執行期稽核記錄、無執行期資源可被耗盡）。依 project.md「判定為不適用的項目一律附理由，不留空白」"
+    }
+  ]
+}

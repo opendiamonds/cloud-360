@@ -1,0 +1,460 @@
+{
+  "stage": "code-generation",
+  "unit": "member-pages-ui",
+  "upstream_ids": [
+    "AC12.1.1",
+    "AC12.2.1",
+    "AC12.2.2",
+    "AC12.2.3",
+    "AC12.4.3",
+    "AC12.4.4",
+    "AC12.5.1",
+    "AC12.5.3",
+    "AC12.6.1",
+    "AC12.6.2",
+    "BR21.1",
+    "BR21.2",
+    "BR21.3",
+    "BR22.1",
+    "BR22.2",
+    "BR22.3",
+    "BR23.1",
+    "BR23.2",
+    "BR24.1",
+    "BR24.2",
+    "BR24.3",
+    "BR25.1",
+    "BR25.2",
+    "BR26.1",
+    "BR26.2",
+    "BR26.3",
+    "BR27.1",
+    "BR27.2",
+    "BR28.1",
+    "HO-U24-1",
+    "NFR4.80",
+    "NFR8.80",
+    "NFR11.80",
+    "NFR11.81",
+    "SEC-U24-1",
+    "SEC-U24-2",
+    "SEC-U24-3",
+    "SEC-U24-4",
+    "SEC-U24-5",
+    "SEC-U24-6",
+    "TS-U24-1",
+    "TS-U24-2",
+    "TS-U24-3",
+    "TS-U24-4",
+    "TS-U24-5",
+    "TS-U24-6",
+    "TS-U24-7",
+    "UIP-1",
+    "UIP-2",
+    "UIP-3",
+    "UIP-4",
+    "UIP-5",
+    "AC12.1.2",
+    "AC12.1.3",
+    "AC12.2.4",
+    "AC12.4.1",
+    "AC12.4.2",
+    "AC12.5.2",
+    "AC12.6.3",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "UIP-1",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "閘門在「資料→視圖」轉換點，不在列的 map 內部，故「不渲染半套清單」是結構保證。100 取自 user_router.py:146-147 的 MAX_PAGE_SIZE，不另立數字。突變驗證：> 改為 >= 使 100 位那一半紅燈（m1）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (MAX_RENDERED_MEMBERS 渲染閘) + tests/e2e/member-pages.spec.ts『renders the member list up to 100 rows and replaces it with a notice beyond that』"
+    },
+    {
+      "id": "UIP-2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "缺 K3 view 者 0 次的機制是**發出前的 can() 判定**，不是 BR21.3 的重試語意（後者實際計數為 1，會讓此案例紅燈）。零快取層。突變驗證：移除前置條件後無權限分支變 1 而紅燈（m2）。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (mayQuery 前置條件 ＋ bannerForbiddenInThisSession 閂) + tests/e2e/member-pages.spec.ts『queries pending reselections once per landing and not at all without K3 view』"
+    },
+    {
+      "id": "UIP-3",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "邀請與改角色為嚴格 0 差額（兩者皆停在原畫面）。**移出的字面目標「額外請求數 0」在本設計下不可達**：W5 第 4 步要求導回清單頁，而清單頁掛載時本來就會抓一次（那正是 UIP-4 的那一次）。故案例斷言差額恰為 1，並以此區分「處理器自己重抓」（會是 2）與「新畫面的掛載抓取」（1）。突變驗證：在 handleRemove 內加一次 fetchMembers 後變 2 而紅燈（m3）。見 code-summary.md 發現 F-2。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (handleInvited) + frontend/src/pages/MemberDetailPage.tsx (handleSaveRole／handleRemove) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "UIP-4",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "對 members 端點的請求數為 1，canManage 不另發請求（can() 讀已載入的 user.permissions）。**字面的「對 /api/membership/** 的請求數為 1」與 UIP-2 不可能同時成立**——橫幅宿主在 Layout 裡且共用該前綴，故總數必為 2。案例如實斷言 members=1、總數=2。突變驗證：在 effect 內多加一次 fetchMembers 後變 2 而紅燈（m4）。見 code-summary.md 發現 F-3。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (canManage 由同一份 list_members 回應推得) + tests/e2e/member-pages.spec.ts『issues exactly one member-list request before the page is interactive』"
+    },
+    {
+      "id": "UIP-5",
+      "status": "Deferred",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "參數已由 nfr-requirements 定案（最多 100 列、最新在前），但**取得變更紀錄的端點不存在**（OPEN-MP24-7）——六個路由與 17 個 facade 方法逐一核對皆不符，而 models.py 的 ix_reselection_events_project_id 註解逐字寫「成員詳情頁的變更紀錄讀取端」，索引為該讀取而建、讀取端卻不存在。本單元渲染明確佔位，不捏造資料、不留空白區塊。渲染閘無資料可施加，故不宣稱已實作。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (member-change-log-unavailable 佔位)"
+    },
+    {
+      "id": "SEC-U24-1",
+      "status": "OK",
+      "target": "frontend/src/membership/failureSignal.ts",
+      "note": "型別層保證：kind 帶插值（如 `invite-failed:${name}`）或 endpoint 填入實際 id 皆無法編譯。e2e 另斷言全部 console 輸出不含四個獨特測試字串（兩個顯示名稱、受邀者名稱、email）。 實作落點（完整）：frontend/src/membership/failureSignal.ts (SignalKind／SignalEndpoint 字面值聯集) + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "SEC-U24-2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "以**事件**為鍵（每筆一次 POST），非 per-user 布林值。零瀏覽器儲存已機械查證：localStorage／sessionStorage／indexedDB 在本單元七支應用檔的命中數為 0。「換瀏覽器重新登入後不再出現」由伺服器端狀態保證，屬 U19 行為，本單元不另斷言。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (handleAcknowledge 逐事件呼叫) + frontend/src/membership/membershipApi.ts (acknowledgeReselection)"
+    },
+    {
+      "id": "SEC-U24-3",
+      "status": "OK",
+      "target": "frontend/src/components/membership/InviteMemberDialog.tsx",
+      "note": "送出鈕絕不因權限停用——前端不驗受邀者的全域功能權限，一律交由伺服器回 422。無專屬 e2e 斷言：案例 3 成功送出隱含按鈕為 enabled，但「不因權限停用」的否定面未單獨構造（缺全域權限的受邀者在前端無可觀察差異，這正是本要求的內容）。 實作落點（完整）：frontend/src/components/membership/InviteMemberDialog.tsx (submitDisabled 只看必填與送出中)"
+    },
+    {
+      "id": "SEC-U24-4",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "e2e 以列舉外角色的物件陣列 detail 構造，斷言畫面不出現 [object Object] 亦不出現 enumeration member 字樣。零 dangerouslySetInnerHTML（機械查證命中數 0）。 實作落點（完整）：frontend/src/membership/membershipApi.ts (detailMessage 只接受字串 ＋ inviteMember 的 422 型別分流) + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "SEC-U24-5",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "兩個案例各自驗兩段式的一邊，且**兩個突變各打中一邊**：移除全域 K3.edit 段使前者紅燈（m5）、移除 per-project 段使後者紅燈（m6）。後者刻意把全域 edit 給足，使控件消失的唯一原因只能是 per-project 那一段——這是 BR22.3 的 observable、也是「前端沒有改用全域角色推導」的可失敗面。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx + frontend/src/pages/MemberDetailPage.tsx (canManage 兩段式) + tests/e2e/member-pages.spec.ts『hides all four manager controls for a project admin lacking global K3 edit』『shows a read-only list to a plain project member even with global K3 edit』"
+    },
+    {
+      "id": "SEC-U24-6",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "兜底規則而非三條列舉：清單 500、橫幅 403、橫幅 500、邀請 422 物件陣列四條各有相符訊號（四者皆經 e2e 斷言）；網路層例外亦各自落訊號。突變驗證：關掉橫幅失敗訊號後紅燈（m7）。 實作落點（完整）：frontend/src/membership/membershipApi.ts (六個函式的每一條失敗路徑皆呼叫 emitFailureSignal) + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "BR21.1",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "兩個斷言缺一不可（選擇器命中 ＋ role 屬性等於 status）。以**抓取失敗**的情境構造「無條件」，是該詞最強的可觀察形式。突變驗證：移除 role=\"status\" 後紅燈（m8）。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (宿主無條件渲染 ＋ role=\"status\") + tests/e2e/member-pages.spec.ts『always renders the reselection banner host with role status』"
+    },
+    {
+      "id": "BR21.2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "e2e 斷言宿主 textContent 為空且無動作鈕。橫幅是通知不是內容，骨架會變成一則假通知。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (summaryText 零筆回空字串，無骨架) + tests/e2e/member-pages.spec.ts『always renders the reselection banner host with role status』"
+    },
+    {
+      "id": "BR21.3",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "兩個分支皆不對使用者顯示錯誤（案例 8 斷言失敗時畫面無錯誤文字）。**403 的永久失敗閂無 e2e 斷言**：其觀察面是「同一份文件內 403 之後的 client-side 換頁不再發請求」，而 8 個凍結案例中沒有這個構造。閂用模組層變數而非瀏覽器儲存（NFR4.80 禁止），故整頁重新載入時重置——如實記載。見 code-summary.md 發現 F-4。 實作落點（完整）：frontend/src/membership/membershipApi.ts (403 以 err.name=BannerForbidden 區分) + frontend/src/components/membership/ReselectionBanner.tsx (bannerForbiddenInThisSession 模組層閂；catch 不設任何錯誤 state)"
+    },
+    {
+      "id": "BR22.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "per-project 控件依伺服器回傳的 role 結論，前端不推導。observable 綁在「是成員但非管理者」（他拿到 200）而非 403，故對 [D9]=A 真的會觸發。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (ownRole 取自伺服器回應) + tests/e2e/member-pages.spec.ts『shows a read-only list to a plain project member even with global K3 edit』"
+    },
+    {
+      "id": "BR22.2",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "e2e 斷言清單表格內 select 命中數為 0。角色只在詳情頁變更（[M2]=C）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (清單列只渲染角色文字) + tests/e2e/member-pages.spec.ts『shows a read-only list to a plain project member even with global K3 edit』"
+    },
+    {
+      "id": "BR22.3",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "「找不到自身即 false」已實作（find 回 undefined → isProjectManager 為 false）。讀的是伺服器給的 role 結論，非全域角色推導，故不違反 I-5。突變驗證：改以全域 can('K3','edit') 單獨決定後紅燈（m6）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx + frontend/src/pages/MemberDetailPage.tsx (以自身 user_id 在 list_members 結果中查出自己的 role) + tests/e2e/member-pages.spec.ts『shows a read-only list to a plain project member even with global K3 edit』 `canManage` 兩段式。**審查 `R-04` 更正**：第一段移除 `project_owner` 死分支——`ck_project_members_role`（`schema_rbac.sql:598`）限定 `('project_admin','member')`，而 `membership_types.py` 的 `ProjectRole` docstring 逐字說 owner 是專案屬性非成員角色。"
+    },
+    {
+      "id": "BR23.1",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "e2e 已斷言物件陣列分支：對話框仍可見、清單不新增任何列、畫面無 JSON 片段。**字串 detail 的拒絕態（AC12.5.1）未經 e2e 斷言**——8 個凍結案例無此構造，實作路徑為 InviteRejectedError → invite-dialog-rejection-reason。見 code-summary.md 發現 F-5。 實作落點（完整）：frontend/src/membership/membershipApi.ts (inviteMember 的 422 型別分流) + frontend/src/components/membership/InviteMemberDialog.tsx (rejectionReason 停在 open) + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "BR23.2",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "e2e 斷言新列可見且 members 端點請求數不增加。以新陣列回傳，不就地修改（react-hooks/immutability 為 error 級）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (handleInvited 以展開運算子新增一列) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "BR24.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "e2e 斷言下拉值變為新角色且 members 端點請求數不增加（嚴格 0 差額，因停在詳情頁）。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (handleSaveRole 的 map 替換) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "BR24.2",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "**無 e2e 斷言**：409 守門不在 cicd-pipeline.md §五 的 8 個斷言標的內，而守門本身的三條 AC（AC12.3.1–.3）屬 US12.3、不在本單元承載的五則故事內。rules.md 自己逐字記載「這份資訊若沒被渲染或渲染錯了，不會有任何東西變紅」——該陳述在本輪仍然成立。已實作下拉還原與「列出每一個專案」兩項。見 code-summary.md 發現 F-6。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (LastAdminGuardError 分支：setSelectedRole(previousRole) ＋ guard-report-projects 逐項渲染)"
+    },
+    {
+      "id": "BR24.3",
+      "status": "Deferred",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "「每列含誰／何時／原值／新值四項」在資料取不到時**不可達**（OPEN-MP24-7，與 UIP-5 同一前置缺口）。本單元不捏造資料、不留空白區塊，渲染明確的「尚無法取得變更紀錄」佔位。AC12.2.2 同步標為 Deferred，不洗成 OK。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (member-change-log-unavailable 佔位 ＋ 指向 OPEN-MP24-7 的程式註解)"
+    },
+    {
+      "id": "BR25.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "二次確認的**存在**經 e2e 間接驗證（案例 3 必須先點 member-detail-remove 才找得到 remove-confirm-accept；少了確認框該步驟即失敗）。「焦點預設在取消」已實作但未斷言。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (confirmOpen 二次確認 ＋ cancelButtonRef 預設焦點) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "BR25.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/member-pages.spec.ts",
+      "note": "**機制與規則字面不同，使用者可見結果相同**。規則寫「以 filter 就地移除該列」，但 W5 第 4 步同時要求導回清單頁，而清單頁擁有自己的掛載抓取（UIP-4 所要求的那一次），故回到該頁必然重抓、就地 filter 不可達。裁決依據是**已交付的結構**：MembersListPage 的 useEffect 無條件抓取。少一列由伺服器的下一次回應呈現。本輪 e2e 的 stub 為靜態，故不斷言列數變化（那會是在斷言 stub 而非實作）。見 code-summary.md 發現 F-2。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (handleRemove 成功後導回清單頁) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』 現在**有 observable 斷言**（審查 `R-06`）：案例 3 的夾具改為可變（DELETE 後 `list_members` 真的少一列），並斷言 `member-list-row-<OTHER_ID>` 為 0 命中。修訂前只斷言 URL、表格可見與請求差額，「清單少一列」是預測而非事實。"
+    },
+    {
+      "id": "BR26.1",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "以事件為鍵、寫在伺服器、零瀏覽器儲存（機械查證 0 命中）。跨裝置語意由伺服器端狀態保證。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (handleAcknowledge 對每筆事件各呼叫一次) + frontend/src/membership/membershipApi.ts"
+    },
+    {
+      "id": "BR26.2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "彙總態的「查看成員」改為切換展開，由展開清單內**被點選的那一項**以自己的 project_id 導航，不導向任意一個或第一個。**無 e2e 斷言**：案例 8 展開清單但未點選其中一項（8 個凍結案例無此構造）。見 code-summary.md 發現 F-7。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (ReselectionBannerActions 的 onViewMembers(ev.project_id) 逐項綁定)"
+    },
+    {
+      "id": "BR26.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/member-pages.spec.ts",
+      "note": "404 等價於成功，已成功者從本機 events 移除（filter 只留失敗 id）。**無 e2e 斷言**：其觀察面需要三筆事件、令第二筆回 500、再按一次（8 個凍結案例無此構造）。這是審查 R-02 修掉「橫幅永遠清不掉」的那條規則，未被斷言值得點名。見 code-summary.md 發現 F-7。 實作落點（完整）：frontend/src/membership/membershipApi.ts (acknowledgeReselection：204 或 404 皆回 true) + frontend/src/components/membership/ReselectionBanner.tsx (逐筆處置，只留未成功者) 現在**有 e2e 斷言**（審查 `R-03`）：案例 9『treats a 404 acknowledge as success and keeps genuinely failed ones pending』兩個方向各一段——404 ＋ 204 混合時兩筆都消失；500 ＋ 204 混合時失敗的那筆保留。突變驗證：移除 `membershipApi.ts` 的 `res.status === 404` 等價 → 紅，還原 → 綠。"
+    },
+    {
+      "id": "BR27.1",
+      "status": "OK",
+      "target": "frontend/src/components/LiveRegion.tsx",
+      "note": "e2e 斷言 live-region 的 role 屬性等於 status 且內容非空。載入訊息以 useState 初始值帶入（不在 effect body 內 setState——react-hooks/set-state-in-effect 為 error 級），播報義務因此仍然成立。零 4 秒 toast。突變驗證：移除 LiveRegion 的 role=\"status\" 後紅燈（m9）。 實作落點（完整）：frontend/src/components/LiveRegion.tsx + 兩個頁面與對話框的 <LiveRegion message={liveMsg} /> 掛載點 + tests/e2e/member-pages.spec.ts『issues exactly one member-list request before the page is interactive』"
+    },
+    {
+      "id": "BR27.2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/InviteMemberDialog.tsx",
+      "note": "停用條件只有必填未填與送出中，**沒有任何權限項**。與 SEC-U24-3 同一落點；未單獨斷言的理由同該列。 實作落點（完整）：frontend/src/components/membership/InviteMemberDialog.tsx (submitDisabled = !userIdValid || submitting)"
+    },
+    {
+      "id": "BR28.1",
+      "status": "OK",
+      "target": "frontend/src/membership/failureSignal.ts",
+      "note": "函式簽章只收 FailureSignal，故呼叫端在語法上無處附加使用者文字。e2e 斷言全部 console 輸出不含四個獨特測試字串。 實作落點（完整）：frontend/src/membership/failureSignal.ts (emitFailureSignal 只輸出兩個封閉欄位，不接受額外參數) + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "AC12.1.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "清單顯示顯示名稱、per-project 角色、加入時間；入口可達性見 code-summary.md 發現 F-1（側欄入口不可建構，目前僅能以 URL 或 U23 的專案頁首進入）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx + tests/e2e/member-pages.spec.ts『renders the member list up to 100 rows and replaces it with a notice beyond that』"
+    },
+    {
+      "id": "AC12.2.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "改角色成功後就地更新，無整頁載入態。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (handleSaveRole) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "AC12.2.2",
+      "status": "Deferred",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "**不洗成 OK**：變更紀錄「誰在何時把角色由什麼改為什麼」沒有任何可取得資料的端點（OPEN-MP24-7）。資料存在於 reselection_events，但六個路由與 17 個 facade 方法皆不提供讀取。修法屬 U19 的契約擴充，而 U19 已完成且在游標之前——本 intent 內無自然承接站。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (member-change-log-unavailable 佔位 ＋ 指向 OPEN-MP24-7 的程式註解)"
+    },
+    {
+      "id": "AC12.2.3",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "e2e 斷言清單表格內 select 命中數為 0。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (清單列不含任何角色編輯入口) + tests/e2e/member-pages.spec.ts『shows a read-only list to a plain project member even with global K3 edit』"
+    },
+    {
+      "id": "AC12.4.3",
+      "status": "OK",
+      "target": "frontend/src/components/Layout.tsx",
+      "note": "橫幅掛在 Layout，一處實作涵蓋全部落地頁，故對任何角色組合成立，不需維護「可能的落地頁」清單。直接渲染於 React 樹內，不走 slotRegistry 的靜默 no-op portal。 實作落點（完整）：frontend/src/components/Layout.tsx (掛載點) + frontend/src/components/membership/ReselectionBanner.tsx + tests/e2e/member-pages.spec.ts『always renders the reselection banner host with role status』"
+    },
+    {
+      "id": "AC12.4.4",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "已讀狀態以事件為鍵寫在伺服器，零瀏覽器儲存，故跨裝置一致。逐筆處置使部分失敗不會讓橫幅永遠清不掉（BR26.3）。e2c 覆蓋情形見 BR26.3 一列。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (handleAcknowledge) + frontend/src/membership/membershipApi.ts (acknowledgeReselection)"
+    },
+    {
+      "id": "AC12.5.1",
+      "status": "OK",
+      "target": "frontend/src/components/membership/InviteMemberDialog.tsx",
+      "note": "拒絕態停在 open、清單不新增任何列。字串 detail 分支未經 e2e 斷言（見 BR23.1 一列與發現 F-5）。 實作落點（完整）：frontend/src/components/membership/InviteMemberDialog.tsx (rejectionReason 顯示伺服器回傳的字串，畫面不自行組字)"
+    },
+    {
+      "id": "AC12.5.3",
+      "status": "OK",
+      "target": "frontend/src/components/membership/InviteMemberDialog.tsx",
+      "note": "e2e 斷言 422 後清單不新增任何列、對話框不關閉——拒絕不留半套狀態。 實作落點（完整）：frontend/src/components/membership/InviteMemberDialog.tsx + tests/e2e/member-pages.spec.ts『emits a console signal for every user-silent failure path without leaking user text』"
+    },
+    {
+      "id": "AC12.6.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "e2e 斷言 201 後清單必然多一列（新列可見）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (handleInvited) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "AC12.6.2",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "移出成功後導回清單頁；少一列由伺服器的下一次回應呈現（機制說明見 BR25.2 一列）。本輪 stub 為靜態，故不斷言列數變化。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (handleRemove) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "NFR11.80",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "改角色後頁面切換次數 0——e2e 在改角色前後皆停留於詳情頁且未斷言任何導航。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (handleSaveRole 就地更新，不導航) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+    },
+    {
+      "id": "NFR11.81",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "到達目標專案的切換次數 1，不走「先回清單再選」。未經 e2e 斷言，同 BR26.2 一列。 實作落點（完整）：frontend/src/components/membership/ReselectionBanner.tsx (onViewMembers 以被點選事件的 project_id 組路由)"
+    },
+    {
+      "id": "NFR4.80",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "機械查證：localStorage／sessionStorage／indexedDB 在本單元七支應用檔的命中數為 **0**。（e2e spec 內的 sessionStorage 是測試用來 seed token 的，屬測試程式而非本單元的應用程式碼。） 實作落點（完整）：frontend/src/membership/ + frontend/src/components/LiveRegion.tsx + frontend/src/components/membership/ + frontend/src/pages/MembersListPage.tsx + frontend/src/pages/MemberDetailPage.tsx （target 由目錄改為單一檔案以滿足 sensor 的路徑驗證；零瀏覽器儲存的查證範圍是本單元全部新檔，逐一 grep `localStorage`／`sessionStorage`／`indexedDB` 皆 0 命中。）"
+    },
+    {
+      "id": "NFR8.80",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/source-manifest.json",
+      "note": "零新環境變數，故同步義務為空集合——結構性滿足而非豁免。git status 已查證 deploy/ 與任何 .env.example 皆無改動。 實作落點（完整）：source-manifest.json 的 unchanged_by_design（deploy/**、render-env.sh、deploy/.env.example、backend/.env.example 皆未改動）"
+    },
+    {
+      "id": "TS-U24-1",
+      "status": "OK",
+      "target": "frontend/package.json",
+      "note": "零新前端依賴。表格、對話框、下拉、橫幅全部以既有 React ＋ Tailwind 完成。 實作落點（完整）：frontend/package.json 與 frontend/package-lock.json 皆未改動（git status 查證）"
+    },
+    {
+      "id": "TS-U24-2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/member-pages.spec.ts",
+      "note": "唯一驗證層為 Playwright e2e；未引入任何 unit／component 測試框架。19 條 BR 全部設計成外部可觀察，正是為了讓這個唯一可用的驗證層碰得到它們；代價是純函式層級的推導只能透過 DOM 結果間接驗證。"
+    },
+    {
+      "id": "TS-U24-3",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "零自造 URL 組裝；沿用 frontend/src/config/api.ts:25 的既有 helper。 實作落點（完整）：frontend/src/membership/membershipApi.ts (六個函式一律 apiUrl(...))"
+    },
+    {
+      "id": "TS-U24-4",
+      "status": "OK",
+      "target": "frontend/src/membership/membershipApi.ts",
+      "note": "npm run lint 的 react-hooks/set-state-in-effect 為 **0 errors**。本輪實測該規則確實會擋下 effect body 內的 setState（我第一版在兩個頁面各犯一次，已改為以 useState 初始值帶入載入訊息）。 實作落點（完整）：frontend/src/membership/membershipApi.ts (純抓取，零 setState) + 四個消費點的 .then/.catch/.finally ＋ useEffect 的 cancelled flag"
+    },
+    {
+      "id": "TS-U24-5",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "沿用既有 map／filter 形狀；先例 AdminPage.tsx:153／:179／:200。該先例的 setTotal 遞減與背景重抓**不適用**（list_members 無分頁參數，無 offset 位移可補）。狀態更新一律回傳新物件（react-hooks/immutability 為 error 級，lint 0 errors）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (展開運算子新增) + frontend/src/pages/MemberDetailPage.tsx (map 替換) + frontend/src/components/membership/ReselectionBanner.tsx (filter 移除已確認事件)"
+    },
+    {
+      "id": "TS-U24-6",
+      "status": "OK",
+      "target": "frontend/src/components/LiveRegion.tsx",
+      "note": "live region 元件由本單元自建（[N4]=A）。上游 functional-design 四處字面仍寫「由 U23 提供」，依 refined-mockups:c3 不回改已核可上游；落差已由 nfr-design/logical-components.md §一之一 承載，本檔頭亦記載。"
+    },
+    {
+      "id": "TS-U24-7",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/source-manifest.json",
+      "note": "零新環境變數：上限 100 是程式常數、不快取是行為、console 層級沿用既有。 實作落點（完整）：source-manifest.json 的 unchanged_by_design"
+    },
+    {
+      "id": "HO-U24-1",
+      "status": "OK",
+      "target": "frontend/src/components/LiveRegion.tsx",
+      "note": "做成可共用形狀而非只給成員頁用的內嵌片段：U23 之後只需 import，不需接線。已由本單元的三個不同消費點（清單頁、詳情頁、邀請對話框）實地證明可重用。role=\"status\" 寫死、不開放 prop（[ND1]=C 被排除：assertive 會打斷朗讀）。 實作落點（完整）：frontend/src/components/LiveRegion.tsx (匯出 LiveRegionProps ＋ LiveRegion，無狀態、props 驅動)"
+    },
+    {
+      "id": "AC12.1.2",
+      "status": "Deferred",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "「剛建立專案後邀請動作即可用」——前端這一側已就位：`canManage` 為真時渲染邀請入口。但**本單元無法構造它的 Given**（「我剛建立一個專案」需要建立專案的路徑，而專案頁屬 `U23`，`grep` 全前端 `'/projects'`／`ProjectsPage` 回 0）。故標 `Deferred` 而非 `OK`：實作在、斷言不可構造。隨 `U23` 落地後可驗。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「未被邀請者看不到該專案」——標的是**專案清單頁**的可見性，屬 `U23`。本單元只有成員頁，不渲染專案清單。`OPEN-MP24-5` 已記載此 AC 歸屬 `U23` 而 story map 從未列它。"
+    },
+    {
+      "id": "AC12.2.4",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「兩位管理者都能執行管理動作」——角色不互斥是**伺服器端授權**的性質（`U19` 的 `change_role` 與 per-project 角色解析），前端不對「只能有一位管理者」做任何判定，故本單元沒有可失敗的落點。"
+    },
+    {
+      "id": "AC12.4.1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「自動改選選最早加入者」——`U19` 的 `select_successor`（`membership_service.py:722`）。前端只渲染改選**結果**的橫幅，不參與選人。"
+    },
+    {
+      "id": "AC12.4.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「加入時間相同時每次選出同一位」——決定性 tie-break 屬 `U19`（前例形狀見 `backend/cost/estimate_readers.py:247-251` 的 `key=(-score, name)`）。前端無排序責任。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「具全域權限但非本專案成員者讀取被拒」——兩層串聯的 **deny** 側，由伺服器的 `require_story_action` ＋ per-project 角色解析承擔。前端不是授權決策點（`security-design.md` §一），故不可能在此驗證。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "「被邀請者登入後看得到該專案」——兩層串聯的 **allow** 側，標的同樣是專案清單頁（`U23`）。`OPEN-MP24-5` 已記載。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/member-pages-ui/code-generation/code-summary.md",
+      "note": "**不是本單元的需求**，是上游 `performance-requirements.md` §五 引用 `schema_rbac.sql:663` 原文時帶入的識別字（記憶層的保存期限，屬 `U9 memory-purge`）。sensor 以字樣比對、不分辨引文與主張，故須在此宣告。沿用前兩站的同一處置。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR24.2",
+      "status": "OK",
+      "target": "frontend/src/pages/MemberDetailPage.tsx (guard-report ／ guard-report-projects)",
+      "note": "已實作但無任何 e2e 斷言——409 守門不在本站的 8 個斷言標的內，且它的三條 AC 屬 US12.3（不在本單元承載的五則）。列在此處以免它在覆蓋表上看起來與有斷言的列無異。"
+    },
+    {
+      "id": "BR26.3",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx (handleAcknowledge 的逐筆 filter) + frontend/src/membership/membershipApi.ts (404 回 true)",
+      "note": "已實作但無 e2e 斷言。這是審查 R-02 修掉「橫幅永遠清不掉」的那條規則，其構造（三筆事件、第二筆 500、再按一次）不在 8 個凍結案例內。"
+    },
+    {
+      "id": "BR26.2",
+      "status": "OK",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx (逐項 onViewMembers(ev.project_id))",
+      "note": "已實作但無 e2e 斷言：案例 8 展開了清單卻未點選其中一項。"
+    },
+    {
+      "id": "R-01-actionError",
+      "status": "N/A",
+      "target": "frontend/src/pages/MemberDetailPage.tsx",
+      "note": "**審查 `R-01`（Major）的修法，非上游需求**：抓取錯誤與寫入錯誤分離為 `error`／`actionError` 兩個 state。原本共用一個 state 而主內容閘在 `!error` 上，於是一次暫時性的儲存失敗會卸載整個成員區塊（含角色下拉與移出鈕），而唯一能清掉它的 handler 就掛在那些剛被卸載的控件上——只能靠離開頁面脫離。清單頁同形（邀請 403 會清掉整張表而邀請鈕仍在）。由案例 10 斷言，突變驗證紅／綠皆確認。"
+    },
+    {
+      "id": "R-02-token-keyed-latch",
+      "status": "N/A",
+      "target": "frontend/src/components/membership/ReselectionBanner.tsx",
+      "note": "**審查 `R-02`（Major）的修法**：403 閂由裸布林改為以 token 為鍵。前提已獨立複驗——`logout()` 只做 `setToken(null)`＋`setUser(null)`（`AuthContext.tsx:56-61`），不觸發整頁導航，故模組不重載，裸布林會留給同分頁內下一位登入者，使 `AC12.4.3` 對他無聲消失。**無 e2e 斷言**（構造需驅動登入流程），已於 `code-summary.md` §九 逐項宣告。"
+    }
+  ]
+}

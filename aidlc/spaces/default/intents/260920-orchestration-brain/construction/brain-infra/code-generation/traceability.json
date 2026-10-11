@@ -1,0 +1,387 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-infra",
+  "upstream_ids": [
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "ADR-0006",
+    "D-1",
+    "D-2",
+    "D-3",
+    "D-4",
+    "G5",
+    "G6",
+    "G7",
+    "I1",
+    "I2",
+    "I2b",
+    "I3",
+    "I4",
+    "I5",
+    "K-01",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.2a",
+    "NFR6.3",
+    "NFR7.1",
+    "NFR8.1",
+    "NFR8.1a",
+    "NFR8.1b",
+    "NFR8.2",
+    "NFR8.3",
+    "NFR8.4",
+    "NFR8.5",
+    "NFR8.6",
+    "NFR8.7",
+    "NFR8.8",
+    "NFR8.9",
+    "NFR9.1",
+    "PROBE-CONTRACT",
+    "S-10",
+    "S-11",
+    "S-6",
+    "S-8",
+    "S-9",
+    "US2.1"
+  ],
+  "coverage": [
+    {
+      "id": "US2.1",
+      "status": "Deferred",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "本單元只交付 US2.1 所需的**儲存層**（deploy compose 的 redis 服務）。AC2.1.1／AC2.1.2／AC2.1.3（跨頁脈絡列的顯示與排除）落在 U10 與 U14，本單元不觸及。unit-of-work-story-map.md:95 記載本單元只承載這一則故事，且與 U10／U14 共享"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "Deferred",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "deploy/docker-compose.deploy.yml 的 redis 服務：command 的 `--appendonly yes` ＋ 具名 volume `redis_aof` 掛在 /data ＋ `--maxmemory 256mb --maxmemory-policy allkeys-lru`。**明確的界線**：AC2.1.4 的 Then 是「脈絡與作業對象完整還原」，而本單元只交付持久化能力；還原是否完整取決於 U10 寫了什麼、U14 讀了什麼。本單元的測試**不宣稱**驗證了 AC2.1.4"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "(a) deploy/render-env.sh:必填值檢查與 `$` 擋阻名單皆加入 REDIS_PASSWORD（測試 backend/tests/test_render_env_redis.py 案例 1／1b／2）。(b)(c) 兩份 compose 的 redis `command:` 各自建立 ACL 使用者（`--user ${REDIS_USER} on >... ~* +@all -@admin -@dangerous`），`default` 縮到 `+@connection`；REDIS_USER 由 render-env.sh 寫為字面值 `cloud360`（測試案例 4d 斷言其不為 `default`）。CONFIG／FLUSHALL／KEYS 皆在 @dangerous，故 NFR4.1(b) 的拒絕判準成立"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "deploy/docker-compose.deploy.yml：redis `command:` 的 `--appendonly yes`（映像預設為 no）＋ 具名 volume `redis_aof:/data`。auto-aof-rewrite-* 未指定，Redis 預設即為開啟，故「不得關閉」在什麼都不寫時自動滿足。test stack 依 NFR4.2 的適用範圍條款豁免（該檔已就地寫明理由）"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "deploy/docker-compose.deploy.yml：`redis_aof` 與 `ollama_models` 兩個具名 volume；`ollama_models:/root/.ollama` 的實際填入由 .github/workflows/deploy.yml 的「Pull the embedding model into the Ollama volume」步驟承擔（官方 entrypoint 不拉模型）"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "落點 1（deploy compose）、2（test compose）、4（repo 根 compose）皆改為 `pgvector/pgvector:pg18`，三處值相同（Docker Hub tag 已實地查證存在）。落點 5（volume 改名）：`cloud360_db` → `db_pg18`，掛載行與頂層宣告兩處同步。**落點 3 不屬本單元**——真實 PostgreSQL CI job 是 U5 memory-data 的交付，且上游兩處把它釘成 postgres:16-alpine 的衝突仍未解"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "backend/database.py",
+      "note": "兩處承載皆落地：(1) schema_rbac.sql 在 `BEGIN;` 之後的第一條敘述為 `CREATE EXTENSION IF NOT EXISTS vector;`；(2) backend/database.py::_ensure_vector_extension()，呼叫點在 `Base.metadata.create_all()` 之前。測試 backend/tests/test_vector_extension_bootstrap.py 案例 2（呼叫順序）與案例 5（SQL 宣告位置）"
+    },
+    {
+      "id": "NFR6.2a",
+      "status": "OK",
+      "target": "LOCAL-DEV.md",
+      "note": "三條可測判準皆成立：(1) schema_rbac.sql 的 CREATE EXTENSION 行號小於任何 `vector(N)` 欄位宣告（測試案例 5；目前無 vector 欄位，該比較為空集合上的真，U5 落地即生效）；(2) database.py 內 _ensure_vector_extension 的呼叫行號小於 create_all（測試案例 2，突變驗證已確認會紅）；(3) 三處 image 值相同。LOCAL-DEV.md 第 2 節 H4 給出可執行的前置檢查（pg_available_extensions），H5 處置 postgres_data volume 的跨大版本不相容"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "DEPLOY.md 第 5.4 節：dump/restore 唯一路徑、七步程序、步驟 4 的兩條硬條件（不掛 initdb 目錄、backend 必須停止）與兩種做法的代價對照、volume 命名完整值表（宣告名 vs 實際 `cloud360_` 前綴）、三條排序不變量（含 rollback job 只還原程式碼不還原 PGDATA 的三個處置選項與復原紀錄欄位）、collation 處置（REINDEX，因基底映像 musl→glibc）。第 5.8 節處理回退窗口結束時的刪除與記錄"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "deploy/render-env.sh 的 heredoc 寫出七個變數。deploy.yml 兩處同步**只涉及 REDIS_PASSWORD**（deploy job 的「Write deploy/.env from secrets」與 rollback job 的「Restore the last-good deployment」兩個 `env:`），並依 NFR8.1 的表另加入 deploy job 的「Require the secrets that must not default」步驟。rollback 路徑無等價守門，故 render-env.sh 的必填檢查是該路徑唯一的缺值保護——已在該檔與 deploy.yml 就地註明"
+    },
+    {
+      "id": "NFR8.1a",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "deploy/docker-compose.deploy.yml 的 backend.environment: 七個變數各一處 `${...}` 引用，**皆不含 `:-`**；就地註明帶上 fallback 等於移除閘門而非只是加預設值。`python3 scripts/validate_env_contract.py` 通過即證明 required 集合與 render-env.sh／deploy/.env.example 三者一致"
+    },
+    {
+      "id": "NFR8.1b",
+      "status": "OK",
+      "target": "deploy/docker-compose.test.yml",
+      "note": "deploy/docker-compose.test.yml 的 backend.environment: 加入 REDIS_URL／REDIS_USER／REDIS_PASSWORD ＋ EMBEDDING_PROVIDER: stub，皆依該 stack 既有慣例自帶測試用預設值（與 JWT_SECRET 同形）。該檔不在 validate_env_contract.py 的作用域內（DEPLOY_COMPOSE 是其唯一 compose 路徑），此缺口已就地記載"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "deploy/.env.example",
+      "note": "deploy/.env.example 以未註解的 `KEY=` 形式列出七者（validate_deploy_template_is_complete 用 template_keys 而非 documented_keys，註解形式不算供應）。REDIS_PASSWORD 留空，理由與 POSTGRES_PASSWORD 相同；其餘六者給字面值"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "OK",
+      "target": "backend/.env.example",
+      "note": "backend/.env.example 列出七個變數（本機值：REDIS_URL 指 localhost、EMBEDDING_PROVIDER=fulltext）。時序上 backend 目前尚未讀它們（U6／U10 未落地），本單元先補範本以免那兩個單元的第一個 PR 必然紅燈。validate_local_dev_template_is_complete 通過"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "LOCAL-DEV.md",
+      "note": "LOCAL-DEV.md 同步：§0 硬依賴表加三列（pgvector／Redis／embedding provider）；§1 前置檢查加 pgvector 可用性查詢、`redis-cli ping`、port 清單加 6379；§2 新增 H4（pgvector 硬依賴與兩種補法）與 H5（postgres_data volume 跨大版本不相容的兩種處置，含 volume 實際名稱前綴隨目錄名而變的陷阱）；§2 的 schema 演進表補上「_ensure_vector_extension 是唯一在 create_all 之前的例外」；§3 的 .env 區塊加七個變數；§9 常見卡關加四列。另**更正既有錯誤敘述**：原文稱 schema_rbac.sql 建立預設帳號 admin/admin123，與該檔 :11 逐字矛盾，已改為「不建立固定密碼管理員」並說明 local 的 admin 實為後端啟動時所建"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "DEPLOY.md 新增第 5 節（5.1–5.11），十一項必寫內容逐項落地：(1) 全碟加密與四個掛載點的祖先鏈判定＋ZFS 替代判準 §5.1；(2) 解鎖方式與斷電自動回復的張力＋須填欄位 §5.2；(3) dump 三條要求 §5.3；(4) 手動路徑探測 §5.7；(5) 回退窗口結束刪除與記錄 §5.8；(6) 逐掛載點磁碟門檻＋DBSIZE／DUMPSIZE 量測指令 §5.5；(7) 記憶體暫定值＋複量期限欄位 §5.6；(8) max-size／max-file 值與 2GB 總量上界 §5.6；(9) rollback 耗時（N／T 所選值、約束式、**未實測欄位**）§5.9；(10) 升版期暫時提高 db 上限並記錄「已恢復」§5.6.1；(11) maxmemory 值與關係式檢查結果（256m×1.5+256m=640m ≤ 768m）§5.6。另 NFR8.5 表的八項（排序不變量、七步程序、步驟 4 兩條硬條件、volume 命名完整值、回退窗口保留期限、NFR6.2 兩處承載、日誌選值、rollback 復原收尾）皆已涵蓋"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "deploy/render-env.sh:59 的 `$` 擋阻名單由六個名字擴為七個（加入 REDIS_PASSWORD）。測試 test_render_env_redis.py 案例 2 以 `ab$cd` 斷言非零退出；突變驗證（把 REDIS_PASSWORD 從名單移除）已確認該測試會紅"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "兩份 compose 的 redis 服務區塊皆無 `ports:`；REDIS_URL 的主機名為 compose 服務名 `redis`（測試案例 4c 斷言不含 localhost／127.0.0.1）"
+    },
+    {
+      "id": "NFR8.8",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "deploy/docker-compose.deploy.yml 的 ollama 服務無 `ports:`，且只掛 `internal`；OLLAMA_BASE_URL 為 `http://ollama:11434`（測試案例 4c）。分段的實際效果與其**不隔離 host-local 行程**的界限已在 compose 的 networks: 註解與 DEPLOY.md §5.11 寫明，不讀成比實際更強"
+    },
+    {
+      "id": "NFR8.9",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "`logging:` 的 json-file ＋ max-size 50m／max-file 5 加在**兩份 compose 的全部服務**（以 YAML anchor 共用，避免逐服務漂移）。deploy 側總量 50m×5×6=1.5GB ≤ 2GB 上界。選值與上界記入 DEPLOY.md §5.6，含「這是容量上限不是保留期」與「由無界改有界移除了一條會摧毀全部證據的路徑」兩項方向說明"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "EMBEDDING_PROVIDER=ollama（deploy）與 fulltext／fastembed（本機）皆為本機執行，對 OpenRouter 花費貢獻為零；本單元未為 embedding 新增任何外部 API 呼叫。`ollama pull` 只對 Ollama 官方 registry，不是計費的 LLM API"
+    },
+    {
+      "id": "D-1",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "DEPLOY.md §5.1：全碟加密列為部署前置條件，四個掛載點逐一列出，判定方式給可執行指令（findmnt 取裝置 → lsblk -s 查祖先鏈，明寫**不得**斷言「上一層就是 crypto_LUKS」因 LVM-on-LUKS 會判錯），ZFS 原生加密給替代判準並明寫前兩點對它不適用。保護／不保護的邊界就地寫明"
+    },
+    {
+      "id": "D-2",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "本單元不引入 TLS，新增的兩條連線（backend→redis、backend→ollama）沿用既有明文基線。信任邊界內的兩類主體（同網段容器、host-local 行程含自架 runner）寫進 deploy compose 的 networks: 註解與 DEPLOY.md §5.11"
+    },
+    {
+      "id": "D-3",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "兩份 compose 皆宣告 edge／internal 兩個 user-defined bridge，**不帶 `internal: true`**（compose 註解寫明它會斷開 ollama 的出向，且分段不需要它）。歸屬：deploy 側 cloudflared=edge、frontend=edge、backend=edge+internal、db／redis／ollama=internal；test 側 frontend=edge、backend=edge+internal、db／redis=internal。**cloudflared 不在 internal**，並就地註明不得加。服務集合差集實算為 {cloudflared, ollama} 兩個"
+    },
+    {
+      "id": "D-4",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "DEPLOY.md §5.3：三條要求逐條給做法與通過條件，附可執行指令（`( umask 077; pg_dump … )` 建立即 600、放 $HOME/cloud360-upgrade/ 且 700、`git status --porcelain | grep -c '\\.sql'` 須為 0）。並寫明本 repo 兩道掃描對 dump 檔結構上無效的理由，以及不加密 dump 本身的取捨"
+    },
+    {
+      "id": "PROBE-CONTRACT",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "P-1 打 /api/auth/login（命中 location /api/）；P-2 該端點在憑證比對前查 DB（已複驗 backend/services/user_router.py 的 db.query 在 verify_password 之前）；P-3 通過條件為 401、使用者名稱為固定不存在值 `__cloud360_deploy_probe_no_such_user__`，不建帳號不留稽核列不需 secret；P-4 每次請求 --connect-timeout 5 --max-time 10；P-5 取值一律在 `if` 條件位置，已以獨立 harness 實測（curl 固定 exit 7 時迴圈跑完全部迭代、結束碼由判定邏輯決定，非 7）；P-6 deploy 用結束碼、rollback 用 $GITHUB_OUTPUT 且無 exit（實測四種情形皆寫出 restored=）；P-7 未引入第四種狀態值，故 notify 的 case 不需改動"
+    },
+    {
+      "id": "S-6",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": ".github/workflows/deploy.yml 兩處：deploy job 新增獨立步驟「Probe the data plane through /api」（在「Wait for the frontend to answer locally」之後、非併入該迴圈——該迴圈第一次成功即 exit 0，加在裡面是死碼）；rollback job 的既有健康檢查迴圈併入探測，`/` 2xx 與 /api 401 兩者皆通才 RESTORED=healthy"
+    },
+    {
+      "id": "S-8",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "十個服務項（deploy 六 ＋ test 四）全部設 `deploy.resources.limits.memory`。值為公開基準推導的**暫定值**，compose 註解與 DEPLOY.md §5.6 皆標記為未量測並要求填複量期限與擁有者。兩份 compose 的值刻意不同（CI 走 ubuntu-latest 公開規格，不適用主機量測），就地註明這是例外不是漂移"
+    },
+    {
+      "id": "S-9",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "見 NFR8.9。加在兩份 compose 的全部服務上（超出上游字面的兩個新容器），理由（backend 是最多日誌的服務，而磁碟寫滿對全碟加密主機是實際風險）已在 DEPLOY.md §5.6 記載"
+    },
+    {
+      "id": "S-10",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "DEPLOY.md §5.5：逐掛載點門檻表 ＋ DBSIZE（sudo du -sb PGDATA，非 pg_database_size，需 root，量的是舊 volume 名）與 DUMPSIZE（plain 未壓縮、不假設較小）的定義與量測指令 ＋「還原期 WAL 取 max(DBSIZE×0.5, max_wal_size)」的取大者理由 ＋「空間不足時不得開始升版」"
+    },
+    {
+      "id": "S-11",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "appendonly／maxmemory／maxmemory-policy 三項由 deploy compose 的 `command:` 獨佔，並在該服務註解與 DEPLOY.md §5.6 寫明**不得移入掛載的 redis.conf**（redis-server 的 CLI 旗標會靜默覆寫檔內同名指令）。此收窄仍待 U10 的 functional-design 明示接受或反對——本單元不代它決定"
+    },
+    {
+      "id": "K-01",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "七個變數的名稱、型別與驗證規則落地一致：REDIS_URL 以 redis:// 開頭且主機名為服務名；REDIS_PASSWORD 無 fallback、不得含 $；REDIS_USER 不得為 default；EMBEDDING_PROVIDER 無預設且值域為 ollama/fastembed/fulltext/stub；OLLAMA_EMBED_MODEL=bge-m3（dense 1024）；FASTEMBED_MODEL=multilingual-e5-large。sync_obligations 三處（render-env.sh／deploy/.env.example／LOCAL-DEV.md）全部完成"
+    },
+    {
+      "id": "I1",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "maxmemory 的承載為 compose `command:`（不是環境變數、不是掛載檔），值 256mb；「由部署者定」的實際語意是「改 PR」已在 DEPLOY.md §5.6 明說"
+    },
+    {
+      "id": "I2",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "六個 deploy 服務 ＋ 四個 CI test 服務全部設上限，見 S-8"
+    },
+    {
+      "id": "I2b",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "採鬆綁後版本：依公開基準設暫定值、compose 註解與 DEPLOY.md 標記未量測、DEPLOY.md §5.6 留下複量負責人／期限／結果三個必填欄位（未填則「限期複量」會退化成「永遠暫定」——該風險就地寫明）"
+    },
+    {
+      "id": "I3",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "兩個新 healthcheck（redis 的 `redis-cli ping | grep -q PONG`、ollama 的 `ollama list`＝/api/tags，因映像無 curl）。三個 healthcheck 的已知盲點列入 DEPLOY.md §5.11 表格並在 compose 就地註明：ping 不證明 ACL 使用者可用、AOF 載入期間 ping 即可回應（其他指令回 LOADING）、/api/tags 不證明模型存在、pg_isready 在容器內執行。本單元不新增 metrics／告警"
+    },
+    {
+      "id": "I4",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "見 NFR8.9／S-9"
+    },
+    {
+      "id": "I5",
+      "status": "OK",
+      "target": "deploy/docker-compose.test.yml",
+      "note": "CI test stack 不加 ollama、EMBEDDING_PROVIDER: stub。該檔頭部逐項寫出與 deploy stack 的全部差異及其理由，並明寫代價：**CI 完全不驗證任何 embedding 路徑**，四個 EmbeddingPort 實作只由 U6 的單元測試覆蓋，沒有第二道防線"
+    },
+    {
+      "id": "G5",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "全碟加密（見 D-1）"
+    },
+    {
+      "id": "G6",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "探測三個落點全部到位：deploy.yml 的獨立步驟、deploy.yml rollback job 的迴圈、DEPLOY.md §5.7 的手動升版路徑。DEPLOY.md 一處不夠的理由（deploy.yml 觸發於 merge，而引入分段的那一次部署就是自動的）已就地寫明"
+    },
+    {
+      "id": "G7",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "rollback 側採 (a)：併入既有迴圈的成功條件、不使用 exit、$GITHUB_OUTPUT 仍是唯一寫入點、notify 的 case 不改動。四種情形（連線失敗／500／401／逾時）已以獨立 harness 實測，皆正確寫出 restored="
+    },
+    {
+      "id": "ADR-0006",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "四面向逐項：**IAM** — 本單元新增一個身分（Redis ACL 使用者 REDIS_USER，非 default，權限為 +@all -@admin -@dangerous，故 CONFIG／FLUSHALL／KEYS 被拒），既有缺口（PostgreSQL 單一 superuser、Ollama 零認證）原樣承接並在 DEPLOY.md §5.11 如實記載。**Encryption** — at rest 由 D-1 主機層全碟加密承載，DEPLOY.md §5.1 給四個掛載點的可執行判定；in transit 維持 D-2 的容器間明文，本單元不新增對外網路面。**Network exposure** — 新增兩個服務皆無 ports:、皆只在 internal；唯一有 host port 的服務仍是 frontend；探測打的是既有 host port。**Audit logging** — 實質新增：logging 的 max-size／max-file 使日誌由無界變有界（方向與度量單位的正確敘述見 DEPLOY.md §5.6）。**PBT**：ADR-0006 點名的三個模組（IaC generator／cost calculator／agent routing）本單元皆不含，判定 **N/A**（非豁免、非違反）；落點在 U11 的 IntentRouter 門檻純函式與 U6 的 EmbeddingPort"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "N/A",
+      "target": "-",
+      "note": "本單元不觸及。跨頁脈絡列的顯示落在 U10 session-store 與 U14 entry-page-ui；unit-of-work-story-map.md:95 記載本單元只承載 US2.1 的儲存層那一面。"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "N/A",
+      "target": "-",
+      "note": "同 AC2.1.1——頁面間脈絡列的一致顯示不在本單元的交付面。"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "N/A",
+      "target": "-",
+      "note": "同 AC2.1.1——/cost 與 /admin/* 的排除規則屬前端可視性，不在本單元。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "DEPLOY.md",
+      "note": "加密承載面。手段已由 nfr-design D-1 定案為主機層全碟加密（不是 compose 設定），本單元不改變它，只在 DEPLOY.md §5.1 給四個掛載點的可執行判定並讓 §5.5 的磁碟門檻沿用同一組掛載點。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-1",
+      "severity": "blocking-before-deploy",
+      "text": "GitHub secret `REDIS_PASSWORD` 尚不存在。實查 `gh api repos/opendiamonds/cloud-360/actions/secrets` 與同路徑 `/variables`（各一次，2026-09-27）：它**不在 secrets、也不在 variables**（org-level 端點回 422＝無組織層 secrets，`/environments` 為空）。所以不是「誤存為 variable」的情形，**不需要重新產生金鑰**；但必須在第一次部署之前建立它，否則 deploy job 會在「Require the secrets that must not default」步驟失敗。建立方式：`openssl rand -hex 32`，值不得含 `$`，存為 repository secret（不是 variable）"
+    },
+    {
+      "id": "OPEN-2",
+      "severity": "unverified",
+      "text": "Redis ACL 的 `command:` 形式**未經執行期驗證**。本機有 docker CLI 但 daemon 未執行，無法起容器實測 `redis-server --user default on nopass ~* +@connection --user <u> on >... ~* +@all -@admin -@dangerous` 是否被接受、以及 `redis-cli ping` 在受限的 default 下是否仍回 PONG。這一層**沒有任何 CI 閘門**（validate_env_contract.py 不解析 compose 的 command），失敗形式是容器起不來（deploy 紅燈，會被抓到）或 ACL 語意與預期不同（無聲）。建議首次部署前以 `docker run --rm redis:8-alpine <同一組旗標>` 實跑一次 **本輪更正並部分關閉（審查 R-02，Major）**：原文主張「失敗會大聲」，這對其中一種失敗模式**不成立**——若 `redis-server` 對重複的 `--user` 去重，`default` 會保留內建全權、app 使用者照常建立、容器正常啟動、healthcheck 綠燈，是一次**無聲的權限過寬**；再加上 `ACL LIST` 對兩個身分皆不可達（審查 R-01），該狀態在執行期永不可偵測。處置：`deploy.yml` 新增步驟「Verify the Redis ACL actually took effect」，以 `default` 執行 `SET` 斷言回 `NOPERM`、以 app 使用者執行 `ACL WHOAMI` 斷言等於 `REDIS_USER`、並以 `docker inspect` 斷言三個旗標都進到容器 argv。剩餘未關閉的部分：`redis-server` 是否**接受**那三個旗標仍無法在執行期讀回（`CONFIG GET` 為 @admin @dangerous），但既然同一串 argv 的 ACL 部分證實生效，「旗標傳進去卻被拒絕」不是一個活的假設。"
+    },
+    {
+      "id": "OPEN-3",
+      "severity": "unmeasured",
+      "text": "`rollback` job 的耗時約束式右側**未實測**，`up -d --build` 是其中的無界項。所選 N=18／T=10（最壞 450s）留了 750s 餘裕，但那是推算不是量測。逾時的後果是 rollback 本身被砍掉：站台留在壞版本、revert PR 沒開。DEPLOY.md §5.9 已留下四個實測欄位 **本輪擴大範圍（審查 R-03）**：原本只涵蓋 `rollback`，現同時涵蓋 `deploy` job——該側的有界消費合計 1260s，故 `up -d --build` 與 `ollama pull` 兩個無界項合計必須 ≤ 540s，算式與必填欄位寫在 `DEPLOY.md` §5.9.1。附帶：`deploy` job 的兩個等待迴圈（frontend、tunnel）原本的 `curl` 沒有 `--max-time`，本輪補上後它們才真正有界；這是既有狀態，但不補就無法為這一側寫出任何有效的約束式。"
+    },
+    {
+      "id": "OPEN-4",
+      "severity": "blocking-after-first-deploy",
+      "text": "十個記憶體上限與 `maxmemory 256mb` 皆為公開基準推導的暫定值，未在 192.168.10.10 上量測。DEPLOY.md §5.6 已留複量負責人／期限／結果欄位，但**期限本身還沒有人指定**——沒有日期的「限期複量」會退化成「永遠暫定」 **本輪由使用者裁決並記入 `DEPLOY.md` §5.6（審查 R-06）**：改為**交付後的 blocking 前置**，觸發條件二元可判——`REDIS_PASSWORD` 建立 → 首次部署成功 → 自該次部署起七日內；負責人指定為 Danniel（`REDIS_PASSWORD` 的建立者即量測者，兩件事綁在同一人身上才不會互相等）；量測方式為主機 `docker stats --no-stream` ＋ 以 app 使用者執行 `MEMORY STATS`（`INFO` 不可達，見 R-01）。**不填一個猜測日期**的理由：部署尚未發生、無真實流量可量，猜的日期會讓下一個人以為它被評估過。本節填完之前，這些數字不得被當成已驗證的容量規劃依據。"
+    },
+    {
+      "id": "OPEN-5",
+      "severity": "cross-unit",
+      "text": "`maxmemory` 推導鏈的根需 U10 確認：`BrainSession.messageHistory` 是否有截斷策略。若無，單一 session 可無限成長，256mb 的推導不成立，必須反過來以 maxmemory 約束 messageHistory"
+    },
+    {
+      "id": "OPEN-6",
+      "severity": "cross-unit",
+      "text": "S-11 的收窄（appendonly／maxmemory／maxmemory-policy 歸 command: 獨佔，U10 的 Redis 設定資產不得包含它們）需 U10 的 functional-design 明示接受或反對。本單元不代它決定"
+    },
+    {
+      "id": "OPEN-7",
+      "severity": "cross-unit",
+      "text": "`NFR6.1` 落點 3（真實 PostgreSQL CI job 的 service container）仍被上游兩處逐字釘成 postgres:16-alpine，與本單元的 PG 18 ＋ pgvector 衝突。該 job 是 U5 memory-data 的交付，本單元不回改已核可的上游"
+    },
+    {
+      "id": "OPEN-8",
+      "severity": "known-gap",
+      "text": "`infrastructure-specification.md` §六 的九項無閘門項目原樣成立，本單元**不宣稱** compose 改動有自動化保護。補閘門 (a)–(d)（擴充 validate_env_contract.py 解析 deploy.resources／logging／服務集合差集／redis 關係式）已明文列為不屬本單元交付，未實作"
+    },
+    {
+      "id": "OPEN-9",
+      "severity": "known-gap",
+      "text": "`DEPLOY.md` 的英文半部仍是縮寫版、與中文半部（現已超過 900 行）落差更大。本單元只補第 11 項 blocking 同步要求的 vector extension 一處（中英兩半皆補），**不擴大也不修補**其餘落差，也**不宣稱**它是同步的。「要不要移除英文半部」需一個 repo 級決定（ADR 或使用者裁決），不在本 stage"
+    },
+    {
+      "id": "OPEN-10",
+      "severity": "unpinned-dependency",
+      "text": "`ollama/ollama:latest` 沒有釘版本，而同一輪改動的另兩個 image 都釘了主版本（`pgvector/pgvector:pg18`、`redis:8-alpine`）——**本輪新引入的不一致，conductor 覆核時查出，agent 的 code-summary.md 只記載「tag 實地查證存在」，未記載這個取捨**。後果：本 repo 為 deploy-on-merge，任何一次重新部署都可能靜默拉到不同的 Ollama 版本。模型 volume `ollama_models` 會留存，但 runtime 版本變動可能改變 embedding 行為，或讓以 `ollama list` 為基礎的 healthcheck 語意改變——而本單元的 `§六` 九項無閘門項目已說明 compose 改動沒有自動化保護，所以這種漂移不會被任何 CI 擋下。**本單元不逕自釘一個版本號**：挑版本需確認它與 `bge-m3`（dense 1024）的相容性，憑猜寫一個數字比不釘更糟。處置：在依賴可重現性之前釘一個具體版本，並把該版本與其與 `bge-m3` 的相容性確認結果記入 `DEPLOY.md` §5.6 的既有「暫定值＋複量期限」欄位形狀。與 `team.md` 記載的 backend 依賴未 pin 是同一類問題，但這一項是**新增**而非繼承。 **本輪補入 `DEPLOY.md` §5.9.2（審查 R-05）**：原本這一項只存在於 record 的 open item 裡，部署者看不到；現已寫進部署文件並留下負責人與期限欄位。"
+    },
+    {
+      "id": "OPEN-11",
+      "severity": "pre-existing-drift",
+      "text": "`DEPLOY.md` 的 `#### 2.2.x` 編號序列本來就是亂的，**不是本輪造成的**（conductor 以 `git show HEAD:DEPLOY.md` 核對）：`2.2.4` 與 `2.2.5` 各出現兩次（C1 成本表退場／使用者清單分頁、U2 估價上傳表／Security_Reviewer 取得 J3a），且 `2.2.1`–`2.2.3` 排在那兩對之後。本單元新增的 `2.2.6`（pgvector 擴充）取的是第一個 `2.2.5` 之後的下一個空號，落在已經錯亂的序列中間。**本單元不重排它**——那是 repo 級的文件整理，且該檔另有英文半部漂移（見 OPEN-9）待一併決定。記在此處是為了讓下一個改該檔的人不必重新發現。"
+    }
+  ]
+}

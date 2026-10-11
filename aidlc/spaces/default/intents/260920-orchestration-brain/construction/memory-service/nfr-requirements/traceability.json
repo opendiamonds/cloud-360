@@ -1,0 +1,85 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "memory-service",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.20, NFR3.21, NFR3.22, NFR3.23, NFR3.24",
+      "note": "本單元在 NFR3（首字回應時間 P50 ≤ 2 秒）的關鍵路徑上——K-10 讓 U11 intent-router 在分類時經 MemoryFacade.search 讀記憶——但 NFR3 原文只點名路由層 LLM 呼叫與 Redis 往返，**從未提到記憶檢索**，故上游沒有給本單元切片。[N1] 原答 B（端到端 ≤ 500ms 含向量產生），**經審查 R-01 後由使用者改為 A**：search 本體 P95 ≤ 150ms、不含向量產生。改的原因是新證據而非偏好——所有測試場地都沒有 ollama（docker-compose.test.yml:18 逐字 NO ollama、:102 預設 stub；.env.example:120 預設 fulltext 且該模式不產生向量；ci.yml 的 ollama 命中數為 0，只有 deploy.yml 有 12 處），故 B 之下門檻會以 stub 量出近乎 0 而穩定通過，是一個結構性的橡皮章。Ollama 的 embedding 延遲移出本單元、成為 U6 的義務（N8-11）。NFR3.22（EXPLAIN 斷言）另承審查 R-02 補上判準前提：planner 在小表上幾乎必定選 Seq Scan 即使索引正確，故斷言前須灌足列數或以 enable_seqscan=off 隔離 opclass 正確性（N8-12）。NFR3.24 本質是正確性（同分時的決定性次級排序鍵）。"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.20, NFR4.21, NFR4.22, NFR4.23",
+      "note": "本單元的狀態全在 PostgreSQL，故 NFR4（狀態外部化與重啟還原）天然成立——但 NFR4.20 的判準仍必須存在：repo 內有三處既有行程內狀態容器（collab_router 連線字典、advice_orchestrator 的 _executor/_progress/_inflight、pricing_client 磁碟快取），而 NFR4 明確把它們排除在本 intent 之外，本單元不得照抄那個形狀。NFR4.23（不實作 retry）是刻意的：write 非冪等，自動重試會在一次網路抖動後留下兩筆一樣的記憶。"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "NFR6.20, NFR6.21",
+      "note": "NFR6（記憶層 schema 隔離與其 CI 驗證）的驗證載體由 U5 交付（memory-schema job）。本單元**不宣稱強化它**：grant 邊界目前不構成真實邊界——U9 的 [ND2]=A 已實測 POSTGRES_USER 建立的角色本身即 superuser，故系統內不存在非 superuser 的連線身分；且 OPEN-CG5-1（邊界未被 CI 驗證）仍開著。NFR6.20 保留的是「不要變得更糟」（不新增更高權限的路徑），與 U9 的 NFR6.10 同形。**本單元讓這個缺口更值得補**：它是一個有 DELETE 權的新消費者。NFR6.21 是本站新增的一面——上游談的是稽核**表**不含內容，沒有人談應用程式**日誌**。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.20, NFR7.21, NFR7.22, NFR7.23, NFR7.24, NFR7.25, NFR7.26, NFR7.27, NFR7.28, NFR7.29, NFR7.30, NFR7.31, NFR7.32, NFR7.33, NFR7.34",
+      "note": "NFR7 的三個子題在本單元全部有落點：① 90 天保存——由 U9 已交付的清除承載，本單元以 NFR7.27 宣告依賴它而不重建機制；② 刪除稽核——NFR7.24/NFR7.25（含同交易邊界）；③ 加密要求須於設計階段明確——**已由 U5 的 NFR6.1/NFR6.2 回答**（靜態主機層 LUKS、傳輸 compose 內部），本單元無增量但不寫「不適用」。NFR7.26（建立不留稽核）由 ck_memory_audit_events_action 的封閉集合裁決，它沒有任何可用於建立的值。NFR7.22 的第三個判準（無權＋不存在 → 403 而非 404）是這一條的重點：只測前兩個的話，一個把順序寫反的實作也會通過。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.20",
+      "note": "本單元零新依賴、零新服務、零新容器、零新環境變數，故 NFR8 自然成立（requirements.txt diff 為空 ＋ validate_env_contract.py 綠燈）。**[N2]=B 的 HNSW 索引刻意不列在這裡**：它是結構變更（schema_rbac.sql ＋ DEPLOY.md 的 blocking 同步），不是部署設定變更（deploy/ ＋ .env），兩者的規則與判準不同。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "NFR9 逐字為設計原則而非可量測門檻",
+      "note": "NFR9 逐字：「此為設計原則，**非可量測的門檻**」，且平台的 LLM 花費上限由 OpenRouter 後台承載、本 intent 不建計量機制。本單元的成本面是 embedding 運算，而 [DD:E7]=B 已選 Ollama（零 API 費用，代價是 staging 的第 6 個服務與 RAM）——該決定在 U5 已定案。本單元不新增任何計費呼叫，故無可量測的成本增量。**本站不為它編一個數字**（那會製造另一個沒有依據的門檻）。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "屬 U11 intent-router，非本單元",
+      "note": "NFR10（路由層模型的可替換性／typesafe/jev-1.13 的選定）主題是**路由層的模型**，屬 U11 intent-router。**但它的指派在 per-unit 世界裡是歧義的**：NFR10 逐字把落點寫成「於 nfr-requirements（3.2）在有實測準確率與延遲基準後決定」，而 nfr-requirements 是 for_each: unit-of-work——本 intent 有 24 個單元，所以「nfr-requirements 這一站」實際上是最多 24 個不同的站。NFR10 同時逐字警告「若該站被 skip，本工作流程**沒有自然承接站**」。本站如實記載此歧義並指名真正落點為 **U11 intent-router 的 nfr-requirements**；記為 N8-1。本站不代為決定模型——那會是在錯的單元做一個綁住另一個單元的決定。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "屬 U11 intent-router（意圖識別準確率）",
+      "note": "NFR1 是意圖識別的準確率門檻（80%），主題為路由層的分類品質。本單元是它的**輸入來源之一**（U11 讀語意與程序記憶以輔助判定，見 K-10），但準確率本身不是本單元可量測或可負責的量。上游已逐字記載該 80% 門檻「現在沒有依據——能力 1 尚未存在」。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "屬 U10 session-store（跨頁面上下文保留率）",
+      "note": "NFR2 的量測對象是**跨頁面切換時的上下文保留**，其承載機制是 Redis session（U10 session-store，K-09 逐字「一律放 Redis，不得放行程記憶體」）。本單元的記憶是長期記憶，與 session 層的上下文是兩個不同的資料域與不同的存活期（session TTL 24 小時續期 vs 記憶 90 天）。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "屬 U2 brain-ws-contract（WebSocket 契約閘門）",
+      "note": "NFR5 是 WebSocket 契約的漂移閘門，已由 U2 brain-ws-contract 交付（ws-contract.json ＋ 兩道閘門）。本單元的對外介面是 HTTP（四條端點）與同進程 facade，**不含任何 WebSocket**，故該閘門對本單元無對象。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "屬編排層的使用者流程（跨功能任務的頁面切換次數）",
+      "note": "NFR11 量測的是使用者完成跨功能任務所需的頁面切換次數，其改善來自編排層（U12 work-orchestrator）與入口頁（U14 entry-page-ui）。本單元是一個資料層服務，不擁有任何使用者流程；U15 memory-page-ui 是它的消費端但那是一個獨立頁面，不在 NFR11 的量測情境內。"
+    }
+  ]
+}

@@ -92,6 +92,11 @@ on:
       # estimate-upload-rework：`ci.yml` 新增兩支 boundary 閘門，掃描面隨之擴大。
       - 'scripts/validate_cost_calculator_boundary.py'
       - 'scripts/validate_pricing_lookup_boundary.py'
+      # 260920-orchestration-brain：`ci.yml` 的 backend job 新增 `WS contract spec
+      # drift` 一步，`run:` 直接呼叫這一支，掃描面隨之擴大。少了它 COVERAGE-2 紅
+      # （本分支自 2026-09-28 起即為此紅燈）。它是 `dump_openapi.py` 的 WS 對應物，
+      # 上面那一行早就在清單裡，這一支只是當初漏掉。
+      - 'backend/scripts/dump_ws_contract.py'
   # [US:S-10] 的可展示性需要手動觸發。第一段不碰網路也不用憑證，多按幾次沒有副作用；
   # 第二段有 `if:` 把關，缺憑證或缺測試 Project 時整段跳過。
   workflow_dispatch:

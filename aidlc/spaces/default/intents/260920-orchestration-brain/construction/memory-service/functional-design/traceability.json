@@ -1,0 +1,154 @@
+{
+  "stage": "functional-design",
+  "unit": "memory-service",
+  "upstream_ids": [
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.3.1",
+    "AC4.3.2",
+    "AC4.3.3",
+    "AC4.4.1",
+    "AC4.4.2",
+    "AC4.4.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.1.1",
+      "status": "OK",
+      "target": "BR3.1",
+      "note": "脈絡組裝的結果包含呼叫者可見的先前記憶。斷言對象是**組裝結果**而非回覆散文——stories.md 自記這是原 AC 的改寫，原稿的「反映出」不是二元可判的。流程見 functional-spec.md §1.2。"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "OK",
+      "target": "BR2.2",
+      "note": "讀取只回呼叫者依可見範圍有權讀取的列。過濾在 facade 內完成，呼叫端不得自行過濾（K-08 的 authorization_responsibility 逐字）；這也是 U15 前端不自行過濾的依據。"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "OK",
+      "target": "BR3.1, BR7.1, BR7.2, BR7.3",
+      "note": "三種 kind 皆可被取得。**這一條原本不可滿足**：[FD1]=B 只給了 procedure（BR7.2）與 episodic（BR7.1）寫入端，semantic 完全沒有，故 Given「三種記憶各有資料」對 semantic 那一份不可構造。[FD4]=A 補上手動建立路徑（BR7.3）後三種皆可構造。"
+    },
+    {
+      "id": "AC4.2.1",
+      "status": "OK",
+      "target": "BR4.1, BR3.4",
+      "note": "使用者刪除自己的記憶後，該記憶不再出現在任何脈絡組裝中。授權以**擁有者**判定而非角色（BR4.1 的 note：Platform_Admin 不因角色而能刪他人的記憶）。「不再出現」由 BR3.4 承擔——兩條路徑都是實際刪除，無軟刪除。"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "OK",
+      "target": "BR4.2",
+      "note": "刪除留稽核（deleted_by_user）。稽核寫入與刪除必須在同一交易邊界內，否則會出現「記憶沒了但沒稽核」的半套狀態且事後無法補救。流程見 functional-spec.md §1.4 步 4。"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "OK",
+      "target": "BR3.4",
+      "note": "逾 90 天的情節記憶不再出現在脈絡組裝中。**清除動作本身屬 U9 memory-purge（已交付）**；本單元承擔的是讀取端——已被清除的列不得被回傳，由「列已不存在」自然滿足。只有 episodic 會走這條路徑（EC1：只有它有 expiresAt）。"
+    },
+    {
+      "id": "AC4.3.1",
+      "status": "OK",
+      "target": "BR5.3",
+      "note": "可見範圍被放寬過時，稽核答得出誰在何時由什麼範圍改成什麼範圍。[FD3]=A 的兩值封閉集合使 previousScope／newScope 有確定的值可斷言（EC4 要求兩者非空且互異）。該操作在本 intent 無畫面（stories.md 自記），但端點與稽核都存在。"
+    },
+    {
+      "id": "AC4.3.2",
+      "status": "OK",
+      "target": "BR6.2",
+      "note": "使用者刪除事件可被稽核查詢取得。注意 BR6.3：事件的 memoryId 指不到記憶時仍須回傳——過濾掉它會讓 FR4.7 在 90 天後變成空話。"
+    },
+    {
+      "id": "AC4.3.3",
+      "status": "OK",
+      "target": "BR6.1",
+      "note": "不具檢視權限者被拒絕，且拒絕走既有授權路徑（MemoryForbidden → 403）。**規則由 [FD2]=A 新定**——K-08 只為 widen_scope 指定了角色，對 list_audit_events 僅寫 raises 而未定誰可通過，故本 AC 在本站之前不可實作。"
+    },
+    {
+      "id": "AC4.4.1",
+      "status": "OK",
+      "target": "BR1.1",
+      "note": "擁有者為寫入時的已驗證身分（FR4.3a）。這是賦值規則而非驗證規則。"
+    },
+    {
+      "id": "AC4.4.2",
+      "status": "OK",
+      "target": "BR1.2",
+      "note": "酬載自行指定的擁有者被忽略。**這是本 AC 存在的全部理由**：只有 BR1.1 的話，一個從不檢查酬載的實作也能通過（它碰巧沒讀那個欄位）；BR1.2 要求的是「即使酬載有，也不生效」。刻意靜默忽略而非回 422——回錯誤會讓呼叫端以為換個欄位名就能指定。"
+    },
+    {
+      "id": "AC4.4.3",
+      "status": "OK",
+      "target": "BR2.1",
+      "note": "新記憶的可見範圍預設最窄（owner）。寫入端不接受 visibilityScope 作為輸入；放寬是獨立的、需授權的操作（BR5.*）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR2.3",
+      "status": "N/A",
+      "target": "[FD3]=A 定案的封閉集合驗證",
+      "note": "由本站的裁決而非某條 AC 要求。結構層不擋集合外的值（既有欄位無封閉約束，沿用 U18 先例），故這是應用層的寫入端義務——見 FD8-3。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "MemoryStore.behaviour 的技術性約束（向量空間分群）",
+      "note": "上游無 AC，但這是本單元**唯一完全靜默**的失敗模式：少了它型別、維度、索引與查詢全部仍合法，結果卻是跨向量空間的垃圾且不報錯。code-generation 必須有對應測試。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "fulltext 退路的直接後果",
+      "note": "無向量的列不被向量檢索看到，且這不是錯誤。把它當缺陷去補齊或改成必填會破壞 fulltext 退路。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "N/A",
+      "target": "U6 embedding-port 的契約已定其行為",
+      "note": "提供者偵測不到時大聲失敗、不靜默降級。靜默降級的後果是整批記憶以錯的提供者寫入而無人察覺，之後 BR3.2 的分群使它們永久不可被檢索到。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "K-08 的 retry_and_idempotency",
+      "note": "冪等語意來自契約而非 AC。「不產生稽核事件」這一半很重要：若產生，一個重試迴圈會為同一次刪除製造多筆稽核，使 AC4.3.2 的查詢結果失真。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "GAP",
+      "target": "FR4.3b 與 K-08 的 scope_widening 要求它，但上游無任何 AC",
+      "note": "**這是上游的 AC 缺口，不是本站的。** FR4.3b 逐字要求「僅 Platform_Admin 與 Platform_Owner 得放寬」，而 stories.md 的 US4.3 只為放寬的**稽核**寫了 AC4.3.1，沒有任何 AC 斷言「非管理員不能放寬」。登錄為 GAP 而非 N/A，因為它是一條有來源需求卻無驗收的授權規則——正是最不該沒有驗收的那一類。處置見 FD8-5：code-generation 須補 allow/deny 雙向測試（team.md 的 A 規則）。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "[FD3]=A 的兩值集合逼出的方向性規則",
+      "note": "兩值使「哪個更寬」可判定（owner < platform）。收窄不在本輪語意內——FR4.3b 說的是「放寬」，收窄是否允許、由誰允許上游未定（FD8-4）。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "N/A",
+      "target": "EC4（前後範圍須互異）的行為對應",
+      "note": "範圍未實際改變時不產生稽核事件。依 BR5.2 已先被拒絕；本條獨立列出是為了讓 EC4 有對應的行為規則。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "FR4.7 與 U5 結構決定的直接後果",
+      "note": "稽核事件的 memoryId 指不到記憶時仍須回傳。DG-1 已由 U5 的結構定案為「如此設計」（刻意無外鍵，稽核比記憶活得久），故無人為它寫 AC。過濾掉它會讓 FR4.7 在 90 天後變成空話。"
+    },
+    {
+      "id": "BR7.4",
+      "status": "N/A",
+      "target": "本站裁決 contract-summary.md 內部矛盾的結果",
+      "note": "記憶的建立不產生稽核事件。:643 宣稱 write 也寫稽核、:1386 只列 delete 與 widen_scope；由 action 的封閉集合裁決（無建立值）＋ FR4.7 逐字只約束刪除動作，故採後者。非需求項，故無 AC。"
+    }
+  ]
+}
