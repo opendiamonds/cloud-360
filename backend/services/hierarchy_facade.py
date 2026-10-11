@@ -42,7 +42,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from models import User
-from services.rbac import user_can
+from services.rbac import user_can, user_is_approved
 
 logger = logging.getLogger("cloud360.hierarchy_facade")
 
@@ -120,6 +120,19 @@ class Principal:
     user_id: int
     role: Optional[str]
     _mint_token: Any = None
+    #: 帳號是否已核准（`authorization_status == "approved"`）。由
+    #: `mint_principal` 以 `services.rbac.user_is_approved` 填入——**沿用既有
+    #: 判定，不另寫一份**（`team.md` 單一真實來源）。
+    #:
+    #: 置於 `_mint_token` **之後**且預設 `True`，使既有的位置參數順序不變。
+    #: 預設 `True` 不是放寬：`Principal` 只能經 `mint_principal` 鑄造，而它
+    #: 一律顯式傳入本欄位；預設值只對「不經鑄造入口」的路徑生效，而那條路徑
+    #: 在 `__post_init__` 就被擋掉了。
+    #:
+    #: 目前的讀者只有 `MemoryFacade._authorize_approved`（`U15` 的
+    #: code-generation 補上的待核准帳號缺口）。`HierarchyFacade` **尚未**讀它
+    #: ——同類缺口已記為交接事項，不在本次範圍內。
+    is_approved: bool = True
 
     def __post_init__(self) -> None:
         if self._mint_token is not _MINT:
@@ -130,8 +143,19 @@ class Principal:
 
 
 def mint_principal(user: User) -> Principal:
-    """由已驗證的 `User` 鑄造 `Principal`。這是唯一的鑄造入口。"""
-    return Principal(user_id=user.id, role=user.role, _mint_token=_MINT)
+    """由已驗證的 `User` 鑄造 `Principal`。這是唯一的鑄造入口。
+
+    `is_approved` 以 `services.rbac.user_is_approved(user)` 判定：該函式以
+    `getattr` 讀 `authorization_status`，缺欄位時視為 `approved`——故只帶
+    `.id`／`.role` 的輕量物件（`tests_pg/test_membership_concurrency.py`）
+    鑄造出來的行為與本欄位加入前相同。
+    """
+    return Principal(
+        user_id=user.id,
+        role=user.role,
+        _mint_token=_MINT,
+        is_approved=user_is_approved(user),
+    )
 
 
 class HierarchyFacade:

@@ -62,6 +62,7 @@
 - 2026-10-11T04:24:59Z — **審查 `R-03` 抓到我（經 agent）用一個不成立的機械約束當理由。** 五條規則零斷言的理由寫「8 個案例由 `cicd-pipeline.md` §五 固定」＋「案例名稱是 TCMS 的鍵」。逐字核對後**兩個都不成立**：§五 的標題是「本單元**需要新增**的 e2e 案例」——那是**下限**清單；而 `ui-regression.lock.yml:568` 的註解約束的是 `--summary-template` 不得改（`changing it orphans the old cases`），**新增一個 test 只會新建一個 TCMS 案例、不會讓既有案例變成孤兒**。於是一條規則（`BR26.3`——先前 `R-02` Critical 的修法本身）在零迴歸保護下被合理化掉。**可執行補強**：引用一條機械約束當「不能做 X」的理由時，回去讀那條約束的**標題與作用域**，確認它真的禁止 X；我引用的兩條，一條是下限被讀成上限，另一條的作用域被放大。
 
 - 2026-10-11T04:24:59Z — **我自己跑那 10 個 e2e 第一次得到全部失敗，而原因是我沒讀 agent 已經寫下的環境前提。** `playwright.config.ts:7` 的 `BASE_URL` 預設 `http://localhost:8090`（`docker-compose.test.yml` 的 nginx），本機 docker daemon 未執行。agent 的回報逐字寫了「counting assertions 需要 production build，`npm run dev` 的 StrictMode 雙呼叫會讓 case 2/3/4 假紅」，而我直接跑了預設指令。改以 `npm run build` ＋ `vite preview` ＋ `BASE_URL=http://localhost:4173` 後 10/10 綠。**可執行補強**：複驗別人的綠燈要重現它的**環境**，不只它的**指令**——而環境前提通常已經寫在回報裡。
+- 2026-10-11T14:34:11Z — U15 memory-page-ui：e2e E6 改刪兩則——第 1 頁以 limit=21 取得，第 21 筆已在本地，刪一則時「移除重抓」的突變仍會綠燈；只有刪兩則時第 22 筆必須經重抓才出現。計畫寫的單一刪除情境在突變驗證下證明是恆真的，是 developer 在突變步驟抓到的。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
@@ -110,4 +111,4 @@
 - 2026-10-09T16:25:41Z — **`U10`／審查 `R-01`（Major）：一個被**實際執行**證明的缺陷，而它與本輪稍早的 `NFR4.61` 是同一個形狀。** `set_sharing_mode` 沒有呼叫 `_ensure_meta`（`append_message` 與 `set_work_target` 都有），故它作為對全新 key 的**第一次寫入**時，`load()` 回來的 `segments == {}`——`EC1`（`segments` 必含 `shared`）為假。審查者不是讀出來的，是拿本單元自己的 `FakeRedis`／`make_store` fixture **跑出來的**。可達路徑具體：使用者開 `/workspace` 或 `/assessment`，在送出任何訊息之前先切模式。**為什麼 79 個測試都沒碰到**：每個 `SharingModeTest` 都用 `make_store()` 拿全新的 `FakeRedis`，卻沒有一個在 `set_sharing_mode` 之後斷言 `segments["shared"]`。**與 `NFR4.61` 同根**：白名單斷言驗的是「沒有多餘欄位」，從來沒有驗「沒有缺少欄位」——一個把所有欄位都丟掉的實作也會通過。可執行補強：寫「不得有 X」的斷言時，同一個測試要併一條「必須有 Y」。已修並補回歸測試（兩種第一次寫入順序各一個 subTest）。
 
 - 2026-10-09T16:25:41Z — **`U10`：兩項具名開放項，各有明確 owner，不是無主缺口。** ① `meta.userId` **沒有寫入端**——`entities.md` 宣告它必填，但只有 `set_work_target` 帶 `principal`，僅以 `append_message` 建立的 session 其 `userId` 為 null。owner 為 `U13 brain-gateway` 的 `code-generation`（它是推導 session key 的握手端，唯一能在不改 `K-09` 的前提下供應它的單元）。② `security-design.md §二` 的 `EVAL` ACL 部署時查核**仍未關閉**——本單元新增的還原驗證步驟用 `HSET`／`HGETALL`，**不是** `EVAL`，故它不能替代那道查核。owner 為 `deployment-execution`，動作是以 app ACL 身分實跑一次 `EVAL`。
-
+- 2026-10-11T15:24:02Z — U15 memory-page-ui：第二輪（stale-receipt 復驗）審查判 READY，但 REVIEW_COMPLETED 被拒——審查員跑測試改寫了 gitignore 的 .hypothesis／__pycache__，引擎指紋把它們算進 workspace source（與 project.md 已記的 source-fingerprint-includes-caches 同一死結，第三次出現）。依該規則寫成 reviews/review-02-unreceipted.md，不補跑請求。最終 stage 關卡的審查收據前置條件可能因此擋下，屆時需人工裁決。

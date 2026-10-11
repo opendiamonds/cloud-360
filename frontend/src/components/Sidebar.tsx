@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
 import { useLayoutNav } from './NavChromeContext';
+import { canSeeMemoryEntry } from '../memory/memoryEntry';
 
 export const Sidebar: React.FC = () => {
-  const { user, logout, can, canArch } = useAuth();
+  const { user, logout, can, canArch, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebarCollapsed } = useLayoutNav();
 
@@ -21,6 +22,8 @@ export const Sidebar: React.FC = () => {
   const showMatrixAdmin = can('J3b', 'view');
   const showCoreSection = showArchWorkspace || showAssessment;
   const showAdminSection = showUsersAdmin || showMatrixAdmin;
+  // INV-3（BR31.2）：記憶的兩個入口共用同一個判定，不在此自行判斷。
+  const showMemory = canSeeMemoryEntry({ isAuthenticated });
 
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
@@ -214,6 +217,20 @@ export const Sidebar: React.FC = () => {
             </NavLink>
           </nav>
         </div>
+
+        {/*
+          U15：「我的記憶」。刻意放在上方 DEMO SCOPE 區塊**之外**的獨立 <div>：
+          U14 會整段取代 demo 區塊，放進去就會被連帶刪除。
+        */}
+        {showMemory && (
+          <div className="mb-2">
+            <nav className="space-y-1 px-2">
+              <NavLink to="/memory" data-testid="sidebar-memory-link" className={linkClass}>
+                我的記憶
+              </NavLink>
+            </nav>
+          </div>
+        )}
 
         {showAdminSection && (
           <div className={showCoreSection || showCost ? 'mt-4' : ''}>

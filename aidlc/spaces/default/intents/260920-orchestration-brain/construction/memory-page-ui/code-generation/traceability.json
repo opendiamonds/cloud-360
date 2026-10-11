@@ -1,0 +1,295 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-page-ui" ,
+  "upstream_ids": [
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.4.1",
+    "AC4.4.2",
+    "AC4.4.3",
+    "BR31.1",
+    "BR31.2",
+    "BR31.3",
+    "BR32.1",
+    "BR32.2",
+    "BR32.3",
+    "BR32.4",
+    "BR33.1",
+    "BR33.2",
+    "BR33.3",
+    "BR34.1",
+    "BR34.2",
+    "BR34.3",
+    "BR34.4",
+    "BR34.5",
+    "BR34.6",
+    "BR35.1",
+    "BR35.2",
+    "BR35.3",
+    "NFR4.90",
+    "NFR7.90",
+    "NFR7.91",
+    "NFR8.90",
+    "NFR4.80",
+    "UIP-1",
+    "UIP-2",
+    "UIP-3",
+    "UIP-4",
+    "UIP-5",
+    "UIP-6",
+    "SEC-U15-1",
+    "SEC-U15-2",
+    "SEC-U15-3",
+    "SEC-U15-4",
+    "SEC-U15-5"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.2.1",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "就地確認列與刪除；e2e E5、E6。"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "N/A",
+      "target": "U8 memory-service",
+      "note": "稽核寫入在 U8；查詢面為回補項 N-8。"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "N/A",
+      "target": "U9 memory-purge",
+      "note": "90 天清除為排程。"
+    },
+    {
+      "id": "AC4.4.1",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "擁有者欄位「你／其他使用者」＋ data-owner-user-id；e2e E4。"
+    },
+    {
+      "id": "AC4.4.2",
+      "status": "N/A",
+      "target": "U8 memory-service",
+      "note": "擁有者由已驗證身分決定，伺服器端行為。"
+    },
+    {
+      "id": "AC4.4.3",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "可見範圍欄位；頁面無放寬控件；e2e E4。"
+    },
+    {
+      "id": "BR31.1",
+      "status": "OK",
+      "target": "frontend/src/App.tsx",
+      "note": "/memory 只包 ProtectedRoute；e2e E1。"
+    },
+    {
+      "id": "BR31.2",
+      "status": "OK",
+      "target": "frontend/src/memory/memoryEntry.ts",
+      "note": "canSeeMemoryEntry 單一判定，Sidebar 呼叫；U14 屆時匯入。"
+    },
+    {
+      "id": "BR31.3",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "渲染回應每一列；e2e E4。"
+    },
+    {
+      "id": "BR32.1",
+      "status": "OK",
+      "target": "frontend/src/pages/MemoryPage.tsx",
+      "note": "三區固定順序；e2e E1。"
+    },
+    {
+      "id": "BR32.2",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "每區各自抓取與三態；e2e E2、E3。"
+    },
+    {
+      "id": "BR32.3",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "empty 與 error 分開渲染；e2e E3。"
+    },
+    {
+      "id": "BR32.4",
+      "status": "OK",
+      "target": "frontend/src/memory/memoryPaging.ts",
+      "note": "zoneCountLabel 滿載過保留 N+。"
+    },
+    {
+      "id": "BR33.1",
+      "status": "OK",
+      "target": "frontend/src/memory/memoryPaging.ts",
+      "note": "limit=21 探測；e2e E2。"
+    },
+    {
+      "id": "BR33.2",
+      "status": "OK",
+      "target": "frontend/src/components/memory/EpisodicPager.tsx",
+      "note": "第 N–M 則＋兩鍵，不用 PaginationControl。"
+    },
+    {
+      "id": "BR33.3",
+      "status": "OK",
+      "target": "frontend/src/memory/memoryPaging.ts",
+      "note": "FULL_ZONE_LIMIT=200；e2e E2。"
+    },
+    {
+      "id": "BR34.1",
+      "status": "OK",
+      "target": "frontend/src/components/memory/DeleteConfirmRow.tsx",
+      "note": "就地確認列，文案含「記錄」；e2e E5。"
+    },
+    {
+      "id": "BR34.2",
+      "status": "OK",
+      "target": "frontend/src/components/memory/DeleteConfirmRow.tsx",
+      "note": "焦點與 Escape；e2e E5。"
+    },
+    {
+      "id": "BR34.3",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "deleting 為條目自身 state。"
+    },
+    {
+      "id": "BR34.4",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "filter 就地移除；情節區另加背景補償重抓（計畫 §二 核可的偏離）；e2e E6。"
+    },
+    {
+      "id": "BR34.5",
+      "status": "OK",
+      "target": "frontend/src/memory/memoryApi.ts",
+      "note": "404 映射為 already-gone；其他失敗不移除並顯示錯誤。"
+    },
+    {
+      "id": "BR34.6",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "只由補償重抓回應決定退頁；e2e E8。"
+    },
+    {
+      "id": "BR35.1",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "擁有者與可見範圍欄位；e2e E4。"
+    },
+    {
+      "id": "BR35.2",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "canDelete 只決定控件；e2e E4。"
+    },
+    {
+      "id": "BR35.3",
+      "status": "OK",
+      "target": "frontend/src/pages/MemoryPage.tsx",
+      "note": "頁面無可見範圍控件。"
+    },
+    {
+      "id": "NFR4.90",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "只放 useState；新增檔案儲存 API 命中 0；e2e E10。"
+    },
+    {
+      "id": "NFR7.90",
+      "status": "OK",
+      "target": "frontend/src/pages/MemoryPage.tsx",
+      "note": "卸載即釋放；e2e E10 重進頁面再發 3 個 GET。"
+    },
+    {
+      "id": "NFR7.91",
+      "status": "OK",
+      "target": "frontend/src/components/memory/DeleteConfirmRow.tsx",
+      "note": "確認文案告知會被記錄；e2e E5。"
+    },
+    {
+      "id": "NFR8.90",
+      "status": "OK",
+      "target": "openapi.json",
+      "note": "零新環境變數；validate_env_contract 通過。"
+    },
+    {
+      "id": "NFR4.80",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "U24 識別字，僅作先例引用。"
+    },
+    {
+      "id": "UIP-1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "E13：延遲情節區回應，期間語意區已渲染；突變「三區依序掛載」與「全部完成才顯示」皆使其紅燈。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "E2：情節區請求 offset=0、limit=21；突變「limit 改為 20」紅燈。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "E6：刪除後只發同 kind 同頁的背景重抓；E11、E12：刪除中翻頁不改變頁次、失敗時可重試。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "Deferred",
+      "target": "frontend/tests/e2e/memory-page.spec.ts（E14 部分）",
+      "note": "部分覆蓋：UI 在載入中停用「下一頁」且頁次只在回應後前進，故「連按兩次、晚到回應覆蓋新頁」無法經 UI 構造。E14 驗證防止它的守衛（只發一次請求、停在第 2 頁）；兩個在途請求間丟棄晚到回應由 E7、E11、E12 覆蓋。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "E2：語意／程序區請求 limit=200。"
+    },
+    {
+      "id": "UIP-6",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "E15：同區兩則並行刪除後兩則皆消失且不復現；突變「以點擊當下的 items 而非 prev 過濾」紅燈。"
+    },
+    {
+      "id": "SEC-U15-1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "e2e E4。"
+    },
+    {
+      "id": "SEC-U15-2",
+      "status": "OK",
+      "target": "backend/tests/test_memory_pending_authz.py",
+      "note": "B1–B9：HTTP 五端點雙向、同進程 list_records 與 search（B8，且 embed 呼叫 0 次）、mint_principal 語意（B7、B9）。"
+    },
+    {
+      "id": "SEC-U15-3",
+      "status": "OK",
+      "target": "frontend/src/pages/MemoryPage.tsx",
+      "note": "無放寬控件。"
+    },
+    {
+      "id": "SEC-U15-4",
+      "status": "OK",
+      "target": "frontend/src/components/memory/MemoryItem.tsx",
+      "note": "可見文字不含 id；e2e E4。"
+    },
+    {
+      "id": "SEC-U15-5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "e2e E10 console 不含內容。"
+    }
+  ]
+}

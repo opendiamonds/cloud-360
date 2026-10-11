@@ -65,6 +65,7 @@
 - 2026-10-10T04:35:00Z — **`U24`：stage 自己的兩個機制互相牴觸，而兩種「照規矩做」都會留下一個缺陷。** `produces_kinds` 把 `rules` 限定在 `[service, spec, library]`（`ui` 不在其中），directive 的 `produces` 也只列三份；但**同一個 stage 的 `traceability` sensor 無條件要求 `rules.md`**——缺檔時回 `required upstream artifact is missing: .../rules.md`，且 11 個 `OK` 列全被判 `target must name at least one BRx.y ID`。**兩條路都不乾淨**：不產出就留一個紅燈 sensor （而紅燈會被下一個人讀成「這個 sensor 對 UI 單元不適用」的散文宣稱）；產出就違反 `produces_kinds`。選了產出，但把內容**嚴格限定在本單元自己的 UI 層行為規則**（16 條，全部外部可觀察、Playwright 可驗），**沒有一條從 `U19` 的 `rules.md` 轉抄**——轉抄才是真正不可接受的那一種，因為它讓同一份規則物化第二份。**可執行判準**：當 stage 的兩個機制牴觸時，選那個「違反的是宣告、而非違反一條真實的品質規則」的一邊，並把牴觸本身寫成具名開放項（`OPEN-MP24-4`）。不得直接改 `.claude/` 下的 upstream 檔。
 
 - 2026-10-10T14:30:00Z — **我把另一個單元的 `BR` 識別字寫進自己的 `rules.md` 散文裡，製造了 16 個假孤兒——而這條教訓是我自己在 `U11` 寫下的。** 為了說明「本檔為什麼改用 `BR21`–`BR28`」，我在 §一 逐字列出 `U19` 佔用的識別字；sensor 以 `/\bBR\d+\.\d+\b/g` 掃**整份** `rules.md`，於是那 16 個他單元的 id 全被當成本檔沒有 AC 對應的孤兒規則，`findings_count: 16`。`project.md` 的 `U11` 條目逐字寫過「citing another unit's `BR` ids creates false orphans」。**可執行處置**：談他單元的識別字時一律不寫字面形式——改寫成「群組 1 到 6 的子號全部用掉（各群組依序 6、3、6、4、6、4）」、「群組 6 的第二個子號」。注意 `BR1.x` 這種寫法**不會**命中（`x` 非數字），所以對照表可以保留字面。清掉後 `pass: true`。
+- 2026-10-11T11:25:39Z — U15 memory-page-ui：登入到 /api/auth/me 回來之間 user.id 為 undefined，記憶頁在 id 成為 number 前不掛載三區；照字面比較會把自己的記憶標成「其他使用者」且無刪除鍵。實讀 AuthContext.tsx 的 login 先 setUser 不含 id 才查出，四份上游產出均未提及。
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
@@ -130,6 +131,7 @@
 - 2026-10-10T04:35:00Z — **`U24`：兩個各自合理的答案合起來會重新產生上游剛修掉的缺陷，而這只有把它們代進同一條時序才看得見。** `[F1]`=A 把橫幅掛在 `Layout`（落地即在 DOM），`[F2]`=A 讓它的**內容**在掛載後才到達。各自都對，合起來卻正好是 `[US:D-11]` 警告的形狀——`aria-live` 掛在**稍後才被插入**的元素上不會被朗讀。處置是推導出一條上游沒寫的硬約束：**宿主必須無條件渲染並帶 `role="status"`，即使當下沒有任何待通知事件**（插入到已存在的 `role="status"` 容器裡的內容會被朗讀）。**這是 stage-protocol §3 的矛盾偵測真正抓到東西的一次**，而它不是「兩個答案互相矛盾」那種好認的形狀——是「兩個答案都成立，但它們的時序組合違反第三份文件的約束」。可執行檢查：收齊答案後，把任兩個涉及**時序**的答案代進同一條時間軸走一遍。
 
 - 2026-10-10T14:30:00Z — **我把 redo jump 的代價說成「15 個單元的已完成工作」，實測是 0。** 向使用者提出三個選項時，我把選項 1 的代價寫成「冒險動到本站 15 個已完成單元的 receipt」並據此建議不要做。使用者核可後我才去查，三項全錯或過重：① **12 不是 15**（`UNIT_COMPLETED` 實測 19 列、12 個相異單元，當前 floor `STAGE_JUMPED:2026-10-01T15:08:16Z#15` 上有 12 列）；② `aidlc-jump.ts` 的 `redo` 分支**只把 target 的 checkbox 重設為 pending**（`:393` 逐字「redo: reset target only」），**不刪任何 artifact、不動其他 stage**，`resolve` 也回 `affected_stages: []`；③ 跳完之後引擎**直接路由到 `nfr-requirements`／`brain-infra`**，**我一個單元都不需要重新 complete**——實際代價是零。**而且 `git log` 早就有三次前例**（audit 有三個較早的 floor），那些單元在跳躍後都正常續行過。**教訓不是「我估錯了」，是我把一個沒查過的代價寫進選項並用它勸退使用者**——`project.md` 的 `reverse-engineering:d107c974` 逐字記過「提問前該算的不只是產出裡的數字，也包括**選項代價裡的數字**」，而我在同一個 intent 隔幾站又犯。查證成本是三條指令（`grep` audit 的 floor、讀 jump 的 redo 分支、`resolve`）。
+- 2026-10-11T11:25:39Z — U15 memory-page-ui：「我的記憶」Sidebar 項放在 /brain DEMO SCOPE 區塊之後的獨立 div，而非 mockups M0 所寫的「入口之後」；入口（U14）尚不存在，放進 demo 區塊會在 U14 整段取代時被連帶刪除（Sidebar.tsx:209 註解逐字）。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
@@ -242,3 +244,4 @@
   **審查證實成立的部分**：`role="status"` 的無障礙推導正確（`BR1.1` 的 statement 與 `AC12.4.3` 的覆蓋判定不需重做）、`[F2]`=A 確實不需新端點、七處既有程式引用的定位與事實全對、`OPEN-MP24-1` 的落點有效、六個 `N/A` 有四個正確。
 
 - 2026-10-10T14:30:00Z — **`member-pages-ui` 的 `functional-design` 在新 attempt 下沒有 `UNIT_COMPLETED` 收據，而這次不是我搞錯順序。** 跳躍重設 stage 之後，引擎的覆蓋走訪**立刻**把 `functional-design` 視為已滿足並路由到 `nfr-requirements`／`brain-infra`，於是 `unit start` 回「the engine currently routes ...」——這正是 `project.md` 的 `code-generation:unit-start-window` 記過的那個窗口，但成因不同：那條是「派工跑完才想到要 start」，這次是**跳躍本身關掉了窗口**，中間沒有我可以插入的時點。實質交付是完整的（四份產出、五個 sensor 全綠、`REVIEW_COMPLETED` 已記、15 項發現全數處置並以腳本複驗七個計數），缺的只有新 attempt 下的那一對生命週期事件；舊 attempt 的 `UNIT_STARTED` 與 `UNIT_PAUSED` 仍在 audit 裡。**另有一處已知過期**：state 的 `Unit Pause Reason`／`Unit Next Action` 兩欄仍寫著跳躍前那個「15 個已完成單元」的錯誤代價評估，而 state 是引擎擁有的檔、不得手改；正確數字與實測結果記在本檔上面兩條。
+- 2026-10-11T11:30:43Z — U15 memory-page-ui：審查 R-01（就地移除＋offset 分頁會漏列、刪空第一頁誤顯示 empty）與 R-02（U14 在 B6 早於 U15 的 B7，無法匯入 canSeeMemoryEntry）經使用者裁決帶進 U15 code-generation 計畫處置，設計檔不回改。

@@ -16,6 +16,7 @@ import { CostPage } from './pages/CostPage';
 import { BrainPage } from './pages/BrainPage';
 import { MembersListPage } from './pages/MembersListPage';
 import { MemberDetailPage } from './pages/MemberDetailPage';
+import { MemoryPage } from './pages/MemoryPage';
 
 /** 依權限導向第一個可用頁；pending → 等待授權；皆無則 403 */
 const DefaultRedirect: React.FC = () => {
@@ -92,6 +93,23 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <BrainPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            U15：我的記憶。走 ProtectedRoute、**不包** CapabilityRoute（BR31.1）——
+            把關的是伺服器端的擁有者欄位與帳號核准狀態，不是 story id；包上
+            CapabilityRoute 會要求一個不存在的 story id，使所有人被導向 /403。
+            前例為上方的 /waiting-approval。
+          */}
+          <Route
+            path="/memory"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <MemoryPage />
                 </Layout>
               </ProtectedRoute>
             }

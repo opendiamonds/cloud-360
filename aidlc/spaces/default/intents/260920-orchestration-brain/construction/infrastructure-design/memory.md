@@ -73,6 +73,7 @@
 - **本站問 0 題，而我把判定寫成表而不是留空檔。** 依 `tcms-test-cases:c1` 的同形教訓（判定為 0 時仍須逐項列出標的與分桶理由，空檔會被讀成漏寫），`infrastructure-design-questions.md` 逐項記下 stage 檔六個 focus area 的判定與依據。出題的門檻是「預設錯了會造成真實重工」，而上表六項的預設不是我選的、是實測的現況——此時出題會是 `requirements-analysis:260822-ra-c5` 記過的**單一可行解的假選擇**。（2026-10-11T01:34:12Z）
 
 - **本站未派審查員，這是依核可做法而非我自己決定省略，但我在產出裡明寫了它的代價。** 2026-10-06 核可：per-unit skip 不可行（8 站清單 24 單元共用），不適用的 design 階段改跑精簡 by-reference ＋ 不派 reviewer，`produces` 仍須全部落地。對照：`nfr-design` 我**派了**審查員，因為那站有真實設計內容（結果查出 2 個 Critical）——判準是「這站有沒有可被獨立視角推翻的主張」，不是「這站重不重要」。本站的主張幾乎全是可複驗的實測，故 `cicd-pipeline.md` 檔頭逐字寫明「本檔的主張未經獨立複驗；每一條都附可複驗指令以彌補」。（2026-10-11T01:34:12Z）
+- 2026-10-11T11:53:48Z — U15 memory-page-ui：stage condition 三子句皆不成立（零新服務、零新部署架構、零雲端資源），依 2026-10-06 核可的精簡做法跑 by-reference、不派審查員；與 U24 同形。唯一非零項是使用者裁決併入的後端「已核准」檢查對 OpenAPI 漂移閘門與既有 C3 契約測試（test_memory_contract.py:288）的連帶影響，寫在 cicd-pipeline.md §三。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->

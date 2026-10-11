@@ -5023,6 +5023,9 @@
             },
             "description": "Successful Response"
           },
+          "403": {
+            "description": "授權未通過"
+          },
           "422": {
             "description": "輸入不合封閉集合或欄位約束"
           },
@@ -5043,7 +5046,7 @@
     },
     "/api/memory/records/{memory_id}": {
       "delete": {
-        "description": "刪除自己的記憶（留稽核，`BR4.2`）。\n\n**`memory_id` 宣告為 `str` 而非 `int`**，而這是 `[D1]`=A 的一部分：\n宣告 `int` 會讓 `DELETE /api/memory/records/abc` 回 **422**，而那等於告訴\n呼叫端「id 必須是整數」——`[D1]`=A 的整個目的就是不讓刪除路徑回答任何\n關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`\n（`entities.md`：「對外為不透明識別字」）。\n\n`responses` **刻意不含 403**：非擁有者收斂為 404（見檔頭）。",
+        "description": "刪除自己的記憶（留稽核，`BR4.2`）。\n\n**`memory_id` 宣告為 `str` 而非 `int`**，而這是 `[D1]`=A 的一部分：\n宣告 `int` 會讓 `DELETE /api/memory/records/abc` 回 **422**，而那等於告訴\n呼叫端「id 必須是整數」——`[D1]`=A 的整個目的就是不讓刪除路徑回答任何\n關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`\n（`entities.md`：「對外為不透明識別字」）。\n\n非擁有者收斂為 404（見檔頭）。`responses` 的 403 **只**來自帳號未核准\n——該判定先於取列、對任何 id 都相同，不是非擁有者的 403。",
         "operationId": "delete_memory_api_memory_records__memory_id__delete",
         "parameters": [
           {
@@ -5059,6 +5062,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "授權未通過"
           },
           "404": {
             "description": "找不到該記憶"

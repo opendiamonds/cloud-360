@@ -49,6 +49,7 @@
 - **八項發現是**同一個形狀**的八個實例，而審查員比我更早看出那個形狀：高估我自己提供的保證強度。** `R-02` 把**紀律**寫成結構（「不是靠紀律，是靠欄位集合」）、`R-04` 把**慣例**寫成型別（兩個開放 `string` 卻宣稱「型別層的結構保證」）、`R-05` 把一條**不適用的禁令**當成阻礙、`R-08` 把**零優勢**寫成頭號好處。四者都不是粗心——每一句我當時都相信，而它們共同的毛病是**我沒去驗自己宣稱的那個機制是否真的存在／真的強到那個程度**。可執行補強：凡在產出裡寫「結構保證」「型別層」「不可能」「沒有來源」這類**強度宣稱**，都要附一條能證明它的查證指令；附不出來就把強度降到可證明的程度（例如「由某條 e2e 守住」）。這與我在 `refined-mockups` 記過的「任何『做不到』『沒有前例』的斷言都要附查證指令」是同一條規則的另一面：那條管「不存在」，這條管「很強」。（2026-10-11T01:25:28Z）
 
 - **`R-01`／`R-02` 的根因是同一個：我沒去查前端有沒有全域授權來源，就寫下它沒有。** 實測 `useAuth().can(storyId, action)` 在 `AuthContext.tsx:113-125`（`:119` 的 `hasEdit`），資料來自伺服器下發的 `user.permissions`，型別 `StoryPermission` 含 `view`／`edit`／`review`——而**我自己那張表的上一列就引用了它的消費者** `CapabilityRoute`（`RouteGuard.tsx:35`，`:39` destructure `can`）。更難看的是：上游 `frontend-components.md:157` **已經逐字定案**「`ReselectionBannerHost` 以 `can('K3','view')` 作為發出請求的前置條件」，而那份檔是本站的 `consumes` 之一。**我寫下的結構宣稱與我消費的上游產出直接矛盾**，而我的七項自檢沒有一項是「本站的主張與 `consumes` 清單裡的檔是否一致」——自檢 5 掃的是我改動的事實在**本站產出**間的傳播。（2026-10-11T01:25:28Z）
+- 2026-10-11T11:47:35Z — U15 memory-page-ui：UIP-3 補償重抓失敗時保留就地移除後的畫面而非轉 error——使用者剛完成的刪除是成功的，不應被一次補償失敗蓋掉；代價是 R-01 的「刪空第一頁誤顯示 empty」在補償也失敗時仍可能出現。
 
 ## Deviations
 - 2026-09-28T11:46:42Z — R-07 讓我把 U4-R1 從 N/A 改成 OK。原本的理由是「規則已在上游定好，本站沒有可加的設計」，但 spec 單元的 performance-design 被 produces_kinds 濾掉，於是「截止欄位是哪一欄」「要不要索引」這兩個資料面決定**沒有別的落點**。抽身太快的代價是把決定丟給 S-5 的實作者去猜
@@ -105,6 +106,7 @@
 - **`K3.edit` 在本單元三站 16 檔零命中，而它是本單元全部寫入操作的唯一全域把關。** 實測 `membership_router.py:210`／`:246`／`:283`（邀請／移出／改角色）皆為 `require_story_action("K3","edit")`，與 `:171`／`:311`／`:335` 的 `"view"` 是不同 action。「per-project `project_admin` 但缺全域 `K3.edit`」經兩條獨立路徑證實可達：受邀者把關只要求 view（`membership_service.py:72` 逐字 `REQUIRED_INVITEE_ACTION = "view"`，而 `rbac_seed_data.py:342`／`:346`／`:348` 給三個角色 `K3` 為 `True, False, False`）、自動改選 `select_successor` 後直接 `set_member_role(..., ROLE_PROJECT_ADMIN)` 無任何 `K3.edit` 過濾（`membership_service.py:722`）。初版的後果可構造：四個控件全部渲染 → 每次寫入永久 403 → 而初版對 403 的處方逐字「重抓一次清單（**權限可能剛被改**）」把 403 當成瞬時競態 → 重抓回來的 `role` 不變 → **無上界死循環且對使用者沒有任何說明**。修法是 `canManage` 改兩段式（per-project role **AND** `can("K3","edit")`），與伺服器實際的兩段式檢查同形。（2026-10-11T01:25:28Z）
 
 - **`R-03`：我把一個已核可、已寫成 e2e 斷言的 0 歸因到錯的規則上，而正確機制上游早就寫好了。** `UIP-2` 的量測逐字「以缺 `K3 view` 的角色換頁 N 次後為 **0**」，我把它歸因於 `BR21.3`——但 `BR21.3` 是**重試**規則，而我自己在 `logical-components.md` §二 寫出它的語意是「403 永久失敗本工作階段**不再**發請求」：要先發一次並收到 403 才知道，實際計數是 **1**，e2e 會紅。同一份 artifact 裡我既寫下了正確語意、又據此得出錯的結論——這是 `project.md` 的 `domain-design:72ea0721` 記過的「同一份檔內 behaviour 敘述與宣告自相矛盾」第二次發生。正確機制是 `can("K3","view")` 的發出前置判定，`frontend-components.md:157` 已定案。（2026-10-11T01:25:28Z）
+- 2026-10-11T11:47:35Z — U15 memory-page-ui：traceability sensor 把 nfr-requirements 文件中「僅作為先例被引用」的他單元識別字 NFR4.80 也當成本單元的 NFRx.y，要求列入 upstream_ids；放在 reverse 段不被接受，改列 coverage 並標 N/A。與 U24 的 NFR7.2 同形。
 
 ## Tradeoffs
 - 2026-09-28T11:46:42Z — R-05 是我給使用者的選項描述裡寫了一個假代價（說選 B 會動到 AC9.1.3 的論證，實際上那個數字的範圍只涵蓋既有實體）。已揭露並重新徵詢，使用者維持 A。教訓與 R-03／R-14 同族但更嚴重一級：前兩者是我在產出裡寫錯，這一次是**錯的資訊進了決策選項**，而使用者是拿那個描述在做選擇
@@ -210,4 +212,4 @@
 - **`U11`／記憶降級改變分類結果（審查 `R-03`）是一個已登記的殘留風險**，`OQ-10` 定案後須與 `AC6.1.3` 一併重新檢視。（2026-10-10T00:55:39Z）
 
 - **`OPEN-ND24-1`（本站新增）**：成員頁掛載時文件中有兩個 `role="status"` 區域，同時變動時的播報順序未定義。落點 `U17 a11y-gate`——已查 `unit-of-work.md:428` 的被依賴關係、`:53` 的 `packaging`／`standalone` 登記，且 `construction/a11y-gate/` 在磁碟上**不存在**（未跑過任何 stage，故在游標之後），是有效指派而非死指派。（2026-10-11T01:09:12Z）
-
+- 2026-10-11T11:49:47Z — U15 memory-page-ui：審查判 NOT-READY（2 Critical）。經實讀 AdminPage.tsx:124-131 確認：先例以 requestSeq 序號比對防亂序並在失敗時 toast，而本站設計寫成 effect 的 cancelled flag（管不到事件處理函式發出的重抓）且失敗靜默——宣稱沿用先例卻沒沿用它真正的防護。另 R-03 BR34.4/BR34.6 雙重退頁、R-05 已核准檢查應落在 facade 而非 router（router 契約宣告不做授權、intent_routing.py 進程內直呼 facade、DELETE 403 會觸發 OpenAPI drift）。advisory 收據為終態、產出已凍結，依使用者既有裁決形狀帶進 U15 code-generation 計畫修正，最後關卡可 Request Changes。

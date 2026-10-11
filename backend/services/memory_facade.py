@@ -48,6 +48,22 @@ memory_facade.py — `U8 memory-service` 的授權門面
 ——有，且 `membership_facade` 已經沿用過同一個。附帶好處是 `_MINT` 令牌讓
 「拿不到 principal 就呼叫不了 facade」成為型別層事實。
 
+## 第三道判定：帳號是否已核准（`U15` 的 code-generation 補上）
+
+自行註冊的帳號在 `authorization_status == "pending"` 時**已取得 token**，而
+`memory_router` 的 dependency 只有 `get_current_user`。本層原本不看
+`authorization_status`，於是 pending 帳號可讀到他人設為 `platform` 的記憶
+（`U15` nfr-requirements 審查 `R-01`）。
+
+**落點在本層，不在 router**：`memory_router` 檔頭宣告「本層不做任何授權判定」
+且 `test_memory_contract` 的 `C3` 機械斷言它；而 `services/intent_routing.py`
+**同進程**直呼本層，router 的 dependency 對它無效。故 `_authorize_approved`
+是六個公開方法的**第一行**，先於任何取列——pending 帳號對任何 id（含不存在的）
+都得到同一個 403，不形成存在性 oracle（與角色模型同一手法）。
+
+判定本體沿用 `services.rbac.user_is_approved`（經 `mint_principal` 寫進
+`Principal.is_approved`），本層不另寫一份。
+
 ## 殘留缺口，如實記載
 
 「facade 是唯一入口」**無機械強制**（承接 `K-07` 的 `OQ-N2`）：任何人直接
@@ -89,6 +105,8 @@ logger = logging.getLogger("cloud360.memory_facade")
 
 REASON_OWNER = "owner"
 REASON_SCOPE = "scope"
+#: 帳號未核准（pending／rejected）。見 `_authorize_approved`。
+REASON_PENDING = "pending"
 
 
 def _as_view(record) -> MemoryView:
@@ -163,6 +181,26 @@ class MemoryFacade:
             )
             raise MemoryForbidden(reason=REASON_SCOPE, memory_id=memory_id)
 
+    def _authorize_approved(
+        self, principal: Principal, memory_id: Optional[str] = None
+    ) -> None:
+        """帳號必須已核准：六個公開方法的**第一行**都呼叫本方法。
+
+        **判定先於任何取列**：與 `_authorize_role` 同形，使 pending 帳號在任何
+        id（含不存在的）上都得到同一個 403，`DELETE` 不會因此重開 `[D1]`=A
+        關掉的枚舉 oracle——這個 403 來自**身分**，不來自**列**。
+
+        判定依據是 `principal.is_approved`，由 `mint_principal` 以
+        `services.rbac.user_is_approved` 填入（單一真實來源）。
+        """
+        if not principal.is_approved:
+            memory_service.log_denied(
+                reason=REASON_PENDING,
+                memory_id=memory_id,
+                principal_user_id=principal.user_id,
+            )
+            raise MemoryForbidden(reason=REASON_PENDING, memory_id=memory_id)
+
     def _require_port(self) -> EmbeddingPort:
         """取得 embedding Port，或**大聲失敗**（`BR3.5`／`NFR4.22`）。
 
@@ -231,6 +269,7 @@ class MemoryFacade:
 
         **不產生稽核事件**（`BR7.4`）：`action` 的封閉集合沒有任何可用於建立的值。
         """
+        self._authorize_approved(principal)
         if kind not in MEMORY_KINDS:
             raise MemoryInvalidInput("kind", kind, MEMORY_KINDS)
         if content is None or not str(content).strip():
@@ -273,6 +312,7 @@ class MemoryFacade:
         次級鍵（`NFR3.24`）。**那一步刻意在純函式層**，因為純函式才寫得出
         property-based 測試。
         """
+        self._authorize_approved(principal)
         port = self._require_port()
         embedding_model = port.model_id()
         vectors = port.embed([query])
@@ -306,8 +346,10 @@ class MemoryFacade:
         """列出呼叫者可見的記憶（記憶頁的三區）。
 
         `BR2.2` 的過濾是**過濾而非拒絕**：「看不到別人的記憶」不是一個錯誤狀態，
-        故本方法**不拋任何授權例外**，只回較小的集合。
+        故本方法**不因可見範圍**拋授權例外，只回較小的集合。唯一的例外是
+        帳號未核准（`_authorize_approved`）——那是身分判定，不是可見範圍判定。
         """
+        self._authorize_approved(principal)
         records = memory_service.list_records(
             self._db,
             principal_user_id=principal.user_id,
@@ -343,7 +385,12 @@ class MemoryFacade:
 
         **不產生稽核事件的兩個情境**：不存在（`BR4.3`——若產生，一個重試迴圈
         會為同一次刪除製造多筆稽核，使 `AC4.3.2` 的查詢結果失真）與非擁有者。
+
+        **帳號未核准時回 403，且先於取列**（`_authorize_approved`）。這不違反
+        `[D1]`=A：該 403 只取決於呼叫者身分，對任何 id 都相同，故不回答任何
+        關於 id 空間的問題。
         """
+        self._authorize_approved(principal, memory_id)
         parsed = memory_service.parse_memory_id(memory_id)
         record = (
             memory_service.get_record(self._db, parsed) if parsed is not None else None
@@ -379,6 +426,7 @@ class MemoryFacade:
         步序與刪除**相反**（`NFR7.22`）：先判角色、後取記憶。故無權者在任何 id
         （含不存在的）上都得到 **403**，oracle 本來就不存在，不需要收斂。
         """
+        self._authorize_approved(principal, memory_id)
         self._authorize_role(principal, memory_id)
 
         if new_scope not in VISIBILITY_SCOPES:
@@ -435,6 +483,7 @@ class MemoryFacade:
         `memory_id` 指不到記憶的事件**仍然回傳**，並以 `memory_exists=False`
         讓呼叫端可分辨（`BR6.3`）。過濾掉它會讓 `FR4.7` 在 90 天後變成空話。
         """
+        self._authorize_approved(principal, memory_id)
         self._authorize_role(principal, memory_id)
         parsed = (
             memory_service.parse_memory_id(memory_id) if memory_id is not None else None
@@ -457,6 +506,7 @@ __all__ = [
     "MemoryNotFound",
     "Principal",
     "REASON_OWNER",
+    "REASON_PENDING",
     "REASON_SCOPE",
     "mint_principal",
 ]

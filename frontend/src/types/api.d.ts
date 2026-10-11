@@ -1110,7 +1110,8 @@ export interface paths {
          *     關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`
          *     （`entities.md`：「對外為不透明識別字」）。
          *
-         *     `responses` **刻意不含 403**：非擁有者收斂為 404（見檔頭）。
+         *     非擁有者收斂為 404（見檔頭）。`responses` 的 403 **只**來自帳號未核准
+         *     ——該判定先於取列、對任何 id 都相同，不是非擁有者的 403。
          */
         delete: operations["delete_memory_api_memory_records__memory_id__delete"];
         options?: never;
@@ -4172,6 +4173,13 @@ export interface operations {
                     "application/json": components["schemas"]["MemoryView"];
                 };
             };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description 輸入不合封閉集合或欄位約束 */
             422: {
                 headers: {
@@ -4201,6 +4209,13 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 授權未通過 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

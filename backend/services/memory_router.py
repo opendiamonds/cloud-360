@@ -26,17 +26,23 @@ dependency 上，因為 `K-16` 有「兩層串聯」且指名了第一層的承�
 **沒有** `require_story_action`。記憶的把關全在 facade：擁有者模型用列的欄位、
 角色模型讀 `principal.role`——兩者都不經 `role_permissions` 矩陣。
 
-## `DELETE` 沒有 403，而那是刻意的（`[D1]`=A）
+## `DELETE` 的 403 只來自**身分**，不來自**列**（`[D1]`=A 不受影響）
 
 `K-08` 的 OpenAPI 半邊宣告 `DELETE` 有 `403` 與 `404`。
 `nfr-design/security-design.md §二` 的 `[D1]`=A 把「非擁有者」收斂進 404，
-故**刪除路徑的 403 不再可達**，`responses` 也因此不宣告它。
+故**因列而起的 403（非擁有者）不可達**——非擁有者仍與「不存在」得到同一個 404。
 
 理由：`schema_rbac.sql` 的 `id SERIAL PRIMARY KEY` 是連續整數，403／404 的差異
 讓任何已認證使用者得以走訪 `1..N` 取得整張表哪些 id 存在。
 
-**這是對已核可契約的偏離，已記為 `D8-1`**（下一輪契約修訂追認）；
-`openapi.json` 的回應集合變更已記為 `D8-2`。本單元**不改已核可的契約檔**。
+**`U15` 的 code-generation 之後，`DELETE` 宣告 403，但它的來源不同**：帳號未核准
+（`authorization_status != "approved"`）時，`MemoryFacade._authorize_approved`
+在**取列之前**就拒絕。這個 403 只取決於呼叫者身分、對任何 id（含不存在的）都相同，
+故不回答任何關於 id 空間的問題——`[D1]`=A 的反列舉理由原樣成立。
+`POST` 同理補宣告 403。判定仍全在 facade，本層照舊**不做任何授權判定**。
+
+**對已核可契約的偏離仍記為 `D8-1`**（下一輪契約修訂追認）；
+`openapi.json` 的回應集合變更記為 `D8-2`。本單元**不改已核可的契約檔**。
 
 ## 本檔有五條路由，不是六條
 
@@ -159,7 +165,7 @@ def _translate(exc: Exception) -> HTTPException:
     "/records",
     response_model=MemoryView,
     status_code=status.HTTP_201_CREATED,
-    responses={**UNPROCESSABLE_RESPONSE, **UNAVAILABLE_RESPONSE},
+    responses={**FORBIDDEN_RESPONSE, **UNPROCESSABLE_RESPONSE, **UNAVAILABLE_RESPONSE},
 )
 def create_memory(
     payload: MemoryCreateRequest,
@@ -233,14 +239,14 @@ def list_memories(
 
 
 # ---------------------------------------------------------------------------
-# 3：刪除（`[D1]`=A：**無 403**）
+# 3：刪除（`[D1]`=A：非擁有者為 404；403 只來自帳號未核准）
 # ---------------------------------------------------------------------------
 
 
 @router.delete(
     "/records/{memory_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={**NOT_FOUND_RESPONSE},
+    responses={**FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 def delete_memory(
     memory_id: str,
@@ -255,7 +261,8 @@ def delete_memory(
     關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`
     （`entities.md`：「對外為不透明識別字」）。
 
-    `responses` **刻意不含 403**：非擁有者收斂為 404（見檔頭）。
+    非擁有者收斂為 404（見檔頭）。`responses` 的 403 **只**來自帳號未核准
+    ——該判定先於取列、對任何 id 都相同，不是非擁有者的 403。
     """
     facade = MemoryFacade(db)
     try:

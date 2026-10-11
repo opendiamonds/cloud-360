@@ -59,8 +59,11 @@ class MemoryForbidden(MemoryError):
     `NFR7.30` 拒絕日誌的欄位之一，使日誌與例外可互相對照：
 
     - `"scope"`：**角色模型**（`BR5.1` 放寬、`BR6.1` 稽核查詢）。
-    - `"owner"`：**擁有者模型**（`BR4.1`）。**刪除路徑不拋本例外**——
+    - `"owner"`：**擁有者模型**（`BR4.1`）。**刪除路徑不因擁有者拋本例外**——
       見本檔檔頭的 `[D1]`=A；該值保留給日誌與未來可能的非收斂路徑。
+    - `"pending"`：**帳號未核准**（`MemoryFacade._authorize_approved`，`U15`
+      code-generation 補上）。六個公開方法皆先判它、後取列，故它在刪除路徑上
+      也成立而不重開枚舉 oracle：該 403 只取決於身分，對任何 id 都相同。
 
     `principal` 刻意不放進例外：它是呼叫端已經持有的東西，放進去只會讓錯誤
     訊息多帶一個身分識別（沿用 `MembershipForbidden` 的同一個決定）。
