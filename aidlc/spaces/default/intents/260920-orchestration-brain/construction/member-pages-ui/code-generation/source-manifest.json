@@ -1,0 +1,37 @@
+{
+  "stage": "code-generation",
+  "unit": "member-pages-ui",
+  "version": 1,
+  "writes": [
+    {
+      "path": "frontend/src/membership/failureSignal.ts"
+    },
+    {
+      "path": "frontend/src/membership/membershipApi.ts"
+    },
+    {
+      "path": "frontend/src/components/LiveRegion.tsx"
+    },
+    {
+      "path": "frontend/src/components/membership/ReselectionBanner.tsx"
+    },
+    {
+      "path": "frontend/src/components/membership/InviteMemberDialog.tsx"
+    },
+    {
+      "path": "frontend/src/pages/MembersListPage.tsx"
+    },
+    {
+      "path": "frontend/src/pages/MemberDetailPage.tsx"
+    },
+    {
+      "path": "frontend/src/components/Layout.tsx"
+    },
+    {
+      "path": "frontend/src/App.tsx"
+    },
+    {
+      "path": "frontend/tests/e2e/member-pages.spec.ts"
+    }
+  ]
+}

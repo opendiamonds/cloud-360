@@ -48,9 +48,9 @@
   見 `infrastructure-specification.md` §一 與 `cicd-pipeline.md` §一）。
 
 [Approval Fingerprint]: sha256:v3:db68e8167729d8acd2b2d580f64fc762f7f0e17a9a9ca0a44836a28b1980c329
-[Planned Source]: cb5eca6dd82a354c4bfe8423f2a75d67ec5f773e6c1ba720524f22356a56900d
+[Planned Source]: 9de4140d8296a3ee4f29179c4d3cdcad403cb62f1b55c6a83ef044d8259c531f
 
 - "Approve Plan" — proceed to code generation
 - "Request Changes" — revise the plan
 
-[Answer]:
+[Answer]: Approve Plan
