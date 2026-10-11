@@ -1,0 +1,226 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-data",
+  "upstream_ids": [
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.2",
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.5.1",
+    "AC4.5.2",
+    "AC4.5.3"
+  ],
+  "coverage": [
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "CREATE SCHEMA IF NOT EXISTS memory ＋ 兩表皆以 memory. 前綴建立。斷言 S1（三段：schema 存在、兩表在 memory、public 內為 0 張）。突變 M1 確認 RED——**第一版 M1 是假陰性**（加 SET search_path 對明確前綴無效，突變本身是 no-op），改為整批替換前綴後 RED 並以行為探測確認表真的落在 public。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "grant 以 DO 區塊 ＋ format(%I) 承載，不假設角色名，且只授 memory schema 的 USAGE／DML／SEQUENCE。**無自動化驗證**（OPEN-CG5-1）：需第二個資料庫角色，而 N-2 的 service container 只有 superuser。使用者已於計畫核可時知悉。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "全部 DDL 與索引為 IF NOT EXISTS 形狀。**N-2 套用 schema_rbac.sql 兩次**——「可重跑」只跑一次時永遠是真的。本機實測：第二次套用成功且只有 already exists 的 NOTICE。突變 M9 確認 RED（對照組兩次 rc=0；突變組第二次 rc=3）。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "memory_audit_events 對 memory_records **無任何外鍵**。斷言 S8（schema 形狀）＋ **S11（行為面：刪掉記憶後稽核列仍存在）**——沒有外鍵只是手段，稽核存活才是目的。突變 M6 同時讓兩條紅。COMMENT 寫明兩個壞結果各違反哪一條已核可需求。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "稽核表不含 content／embedding。斷言 S9。COMMENT 寫明它是 BR2.1 的**前提**：稽核比記憶活得久，若含內容則「保留稽核」等於「保留被刪除的使用者資料」。突變 M7 確認 RED。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "action 的 CHECK 限三值。斷言 S10（插入未定義值被拒）。COMMENT 寫明 deleted_by_user 與 purged_by_retention 刻意分開的理由（法遵意義不同）。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "purged_by_retention 的行為者為系統。以 COMMENT 寫明兩種錯誤做法各自的害處（填擁有者會讓稽核謊稱是使用者刪的；留 NULL 會讓「誰做的」在所有事件上失去強制力）。**未寫斷言**：系統行為者的識別值由寫入端（U8／U9）決定，本單元只能約束 NOT NULL。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "embedding_model NOT NULL ＋ 其索引。斷言 S5。COMMENT 逐字寫明這是本層唯一**完全靜默**的失敗模式。**檢索過濾本身不在本單元**（無查詢可寫），落點 U8。突變 M3 確認 RED。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "vector(1024)。斷言 S3（擴充存在 ＋ format_type 恰為 vector(1024)）。突變 M2 確認 RED。CREATE EXTENSION 已存在於 schema_rbac.sql:45（U1／U4 的 X 區塊），本區塊不重複建立。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "embedding 可為空。斷言 S5 的 nullable 檢查。COMMENT 寫明 NULL 是有意義的狀態而非缺漏，收緊為 NOT NULL 或回填會破壞 fulltext 降級路徑。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "ck_memory_records_episodic_has_expiry：kind <> 'episodic' OR expires_at IS NOT NULL。斷言 S7 雙向（episodic＋NULL 被拒、semantic＋NULL 成功）。COMMENT 寫明失敗模式——清除依 expires_at 選列，NULL 的 episodic 列永遠不會被選中，漏填等於永久保留且無跡象。突變 M5 確認 RED。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "清除不得由 backend/ 排程程式承載。**本單元不實作清除**（落點 U9 ＋ N-6），故無程式碼；已於 DEPLOY.md 2.2.8 寫明保存期語意與其鍵。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "清除動作留稽核。本單元提供 action 的 purged_by_retention 值與 occurred_at 索引使該紀錄可寫可清；**寫入行為屬 U9**。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "靜態加密交主機層。DEPLOY.md 2.2.8 已留狀態欄位並逐字寫明「留白不代表已加密」，以及本 repo 為何無法驗證它（CI 不跑在 DB 主機上、PG 看不到區塊裝置）。**不標為已滿足**。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "傳輸為 compose 內部流量、不要求 sslmode。本單元零新連線設定；DATABASE_URL 的主機名不變。殘餘缺口（對外 IP 無檢查）承接自 OPEN-ND5-2。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "稽核保存期 90 天、以自身 occurred_at 為鍵。**occurred_at 索引已建立**（本輪的實質產出，來自 nfr-design 查出的缺漏），斷言 S12。COMMENT 寫明沒有索引即全表掃描、且本輪該表無讀取端故不會有人順手建它。突變 M8 確認 RED。"
+    },
+    {
+      "id": "AC4.1.1",
+      "status": "N/A",
+      "target": "BR1.1",
+      "note": "獨立 schema 的資料層前提已落地並由斷言 S1 守住；行為面屬 U8。"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "N/A",
+      "target": "BR1.2",
+      "note": "grant 邊界已落地（DO 區塊），但**無自動化驗證**（OPEN-CG5-1）；行為面屬 U8。"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "N/A",
+      "target": "BR3.1",
+      "note": "embedding_model NOT NULL 已落地並由 S5 守住，使檢索過濾的資料前提存在；過濾查詢本身屬 U8。"
+    },
+    {
+      "id": "AC4.5.1",
+      "status": "N/A",
+      "target": "BR4.1",
+      "note": "只有 episodic 受 90 天約束，條件必填 CHECK 已落地並由 S7 雙向守住；清除行為屬 U9。"
+    },
+    {
+      "id": "AC4.5.2",
+      "status": "N/A",
+      "target": "BR4.2",
+      "note": "清除的承載形式（gh-aw／Actions）為約束而非本單元實作；本單元提供 expires_at 與其索引。"
+    },
+    {
+      "id": "AC4.5.3",
+      "status": "N/A",
+      "target": "BR4.3",
+      "note": "清除動作留稽核：action 的 purged_by_retention 值與 occurred_at 索引已落地；寫入行為屬 U9。S11 已驗記憶被刪後稽核列仍存在。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-SCHEMA",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "I) 區塊 +109 行：schema、兩表、四條 CHECK、五個索引、grant、八段 COMMENT。COMMENT 刻意寫失敗模式而非只寫用途——三個最易誤讀的點（embedding 可空是刻意的、embeddingModel 的過濾是正確性要求、稽核無外鍵是 DG-1 的處置）都在那裡。"
+    },
+    {
+      "id": "CG-VERIFY",
+      "status": "OK",
+      "target": "backend/scripts/verify_memory_schema.sql",
+      "note": "12 條純 SQL 斷言，分結構類與行為類兩段，行為類以獨立交易 ROLLBACK 收尾。不經 Python 故不受 tests/helpers.py 的驅動替換影響。**已在真實 PostgreSQL 14 上全部通過**。"
+    },
+    {
+      "id": "CG-N2",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "交付物 N-2：pgvector/pgvector:pg18 service container（與兩份 compose 同一 image）、套用 schema **兩次**、執行斷言。兩次套用是刻意的——BR1.3 的可重跑只跑一次時永遠為真。"
+    },
+    {
+      "id": "CG-DEPLOY",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "2.2 表的 I 列 ＋ 2.2.8 節（三件易誤讀的事、四條 psql 驗證指令、OPEN-M5 的部署前決定事項、NFR6.1 的主機加密狀態待填欄位）。project.md 的 blocking 同步兩項皆完成。"
+    },
+    {
+      "id": "CG-NO-ORM",
+      "status": "N/A",
+      "target": "backend/models.py（刻意未動）",
+      "note": "**與 U7 相反的決定**：U7 建 ORM model 是因為 SQLite 測試路徑需要它；而契約 K-05 逐字說 SQLite 沒有 schema 概念，那條路徑對本契約**根本不可用**。建 model 只會把兩表放進 Base.metadata 使每個既有測試都嘗試建立它們（SQLite 會把 memory.memory_records 當含點的表名），並重演 U7 的「改變建表權威」那個洞而無任何好處。讀寫屬 U8。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-CG5-1",
+      "severity": "named-gap",
+      "text": "**`BR1.2`（grant 邊界）沒有任何自動化驗證，而它是資料庫層的唯一邊界。** 驗它需要第二個資料庫角色並以該角色嘗試對 `public` 越界，而 `N-2` 的 service container 只有 superuser。做得到（job 內建角色＋切換連線），本輪未做，**使用者已於計畫核可時明確知悉**。承接站：`U8 memory-service` 的 code-generation（它是第一個真正以受限角色連線的消費端）。"
+    },
+    {
+      "id": "OPEN-CG5-2",
+      "severity": "named-gap",
+      "text": "**本機驗證用 PostgreSQL 14，而 CI 與部署用 18。** 12 條斷言與兩次套用皆在 PG 14 上實測通過，DDL 未使用任何 15+ 專屬語法；但**版本差異本身未被驗證**。`N-2` 在真實 CI（pg18）上的第一次執行才是該版本的首次驗證。若 `N-2` 紅燈，優先懷疑版本差異而非斷言邏輯。"
+    },
+    {
+      "id": "OPEN-M5",
+      "severity": "named-gap",
+      "text": "**承接且仍開啟：既有非空 volume 的 schema 建立路徑未定。** `schema_rbac.sql` 只掛在 `/docker-entrypoint-initdb.d/`（空 volume 才跑），而 `192.168.10.10` 是既有環境。已寫進 `DEPLOY.md` 2.2.8 作為部署前必須決定的事項。對照：`vector` 擴充有兩處承載（initdb ＋ `database.py` 的 `_ensure_vector_extension()`），記憶 schema **沒有**對應的啟動補丁。"
+    },
+    {
+      "id": "OPEN-N5-3",
+      "severity": "resolved",
+      "text": "**已於本站關閉。** 兩份 compose 皆為 `pgvector/pgvector:pg18`，且 `schema_rbac.sql:45` 已有 `CREATE EXTENSION IF NOT EXISTS vector`。不需換 image、不需改部署設定。上游刻意不猜是對的——猜「不含」會導致一次無謂的部署層變更。"
+    },
+    {
+      "id": "OPEN-ND5-1",
+      "severity": "resolved",
+      "text": "**已於本站關閉。** `occurred_at` 索引已建立並由斷言 `S12` ＋ 突變 `M8` 守住。"
+    },
+    {
+      "id": "OPEN-CG5-3",
+      "severity": "process",
+      "text": "**`tcms-test-cases` 未跑**（`project.md ## Mandated` 的 blocking stage，未完成不得進入部署階段）。本單元的 12 條 SQL 斷言屬「已自動化」桶，但覆蓋盤點與 TCMS 同步屬該 stage。"
+    }
+  ]
+}

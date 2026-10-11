@@ -97,7 +97,7 @@ rules:
       IF 計數不為 0 THEN 遷移程序**大聲失敗**。
     violation_behaviour: >
       **必須是失敗，不得是警告。** AC9.1.4 逐字「若不為 0，遷移程序必須大聲失敗，
-      不得以警告帶過」，而 stories.md:426 明寫這條 AC 的目的就是
+      不得以警告帶過」，而 stories.md:445 明寫這條 AC 的目的就是
       「直接否掉照抄既有 logger.warning 形狀的實作」。
     source: AC9.1.4 逐字；K-04 on_violation
 
@@ -147,7 +147,7 @@ rules:
       IF 遷移只存在於啟動路徑的副作用中，或只存在於僅在空資料庫執行的結構定義檔中
       THEN 違反。它必須是一個可被獨立呼叫的單元。
     violation_behaviour: >
-      AC9.1.2 只能手動驗證。stories.md:413–419 逐字記載這個失敗模式：兩個環境走
+      AC9.1.2 只能手動驗證。stories.md:432–419 逐字記載這個失敗模式：兩個環境走
       **不同的結構路徑**，CI 每次重建資料庫，而 AC9.1.2 的 Given（一張在本 intent
       之前建立的架構圖）在每個自動化環境裡**都不可達**。
     source: K-04 migration.entrypoint 逐字

@@ -1,0 +1,810 @@
+{
+  "stage": "code-generation",
+  "unit": "rbac-story-ids",
+  "upstream_ids": [
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3",
+    "FR9.5",
+    "FR12.6",
+    "FR12.6a",
+    "K-03",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR5.5",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR6.4",
+    "BR6.5",
+    "BR7.1",
+    "BR7.2",
+    "BR7.3",
+    "BR7.4",
+    "BR7.5",
+    "EC-1",
+    "EC-2",
+    "EC-3",
+    "EC-4",
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "SEC-5",
+    "SEC-6",
+    "U3-V1",
+    "U3-V2",
+    "U3-V3",
+    "U3-V4",
+    "U3-V5",
+    "U3-A1",
+    "U3-A2",
+    "U3-A3",
+    "U3-D1",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "D-1",
+    "D-2",
+    "D-3",
+    "D-4",
+    "D-5",
+    "D-6",
+    "D-7",
+    "D-8",
+    "D-9",
+    "D-10",
+    "D-11",
+    "D-12",
+    "D-13",
+    "D-14",
+    "D-15",
+    "D-16",
+    "RR-1",
+    "RR-2",
+    "RR-3",
+    "RR-4",
+    "H-1",
+    "H-2",
+    "H-3",
+    "H-4",
+    "H-5",
+    "H-6",
+    "H-7",
+    "H-8",
+    "H-9",
+    "H-10",
+    "H-11"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.4.1",
+      "status": "Deferred",
+      "target": "入口頁的**顯示**不在本單元（零畫面，SEC-1／SEC-3）。本單元交付它需要的授權資料：backend/services/rbac_seed_data.py 的 K1 11 列（view=8）。承接 U14 entry-page-ui"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K1 列使「持有 A1 view 但不持有 K1」可構造（Ops_Lead／Platform_Engineer／SRE 三者）；由 backend/tests/test_rbac_story_ids_seed.py::TestRbacStoryIdSeedMatrix::test_the_matrix_has_exactly_352_rows_and_no_missing_combination 的組合完整性 ＋ BR1.3 的施工後複算鎖住（見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §二）"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "Deferred",
+      "target": "入口頁的導覽與空狀態屬 U14；本單元只保證 K1 的 story id 存在且有預設值（BR1.4 的範圍邊界）"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "Deferred",
+      "target": "同 AC1.4.3——畫面行為落點 U14"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "Deferred",
+      "target": "專案／系統階層的**讀取路徑**屬 U7 hierarchy-service。本單元交付 backend/services/rbac_seed_data.py 的 K2 11 列（view=11、edit=4）"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "Deferred",
+      "target": "階層的建立／修改操作屬 U7；本單元只定義 K2.edit 的持有者集合"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K2 列使「不具 K2.edit」可構造（施工後複算為 **7** 個角色，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §二）；組合完整性由 backend/tests/test_rbac_story_ids_seed.py 的測試 1 鎖住，K2.edit 集合由測試 4 間接鎖住（BR5.4 的前置非空檢查）"
+    },
+    {
+      "id": "FR9.5",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "本單元的處置是**不製造任何可繞過 require_story_action 的路徑**：backend/tests/test_rbac_story_ids_seed.py 與三支改動的 service 檔皆零 APIRouter、零新 service 層讀寫函式；backend/scripts/dump_openapi.py --check 回「規格檔與後端程式碼一致」，證明端點集合未變（SEC-1）"
+    },
+    {
+      "id": "FR12.6",
+      "status": "Deferred",
+      "target": "執行期兩層串聯（全域 role_permissions ＋ per-project 角色）的**判定**屬 U19 的 MembershipFacade（K-16 的 sole_entry）。本單元交付其全域層所需的 K3／K4 資料（backend/services/rbac_seed_data.py）"
+    },
+    {
+      "id": "FR12.6a",
+      "status": "Deferred",
+      "target": "加入時的前置條件（BR7.1／BR7.2）由 U19 執行，本單元只定義檢查什麼（BR5.5）。具名交付條件為 U3-A1／U3-A2"
+    },
+    {
+      "id": "K-03",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "seed 機制（空表全寫 ＋ ensure_missing_role_permissions 補缺失列）原樣沿用；sync_obligations 兩項皆完成（schema_rbac.sql、DEPLOY.md）；消費端 U7／U14／U19／U23／U24 的 story id 已就位"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K1 列：can_view 給八個角色"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K1 列：can_edit／can_review 全 false（view-only）；can_review 另由 backend/tests/test_rbac_story_ids_seed.py 測試 5 鎖住"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "note": "施工後複算：持有 A1 view 而不持有 K1 者 = ['Ops_Lead','Platform_Engineer','SRE']（aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §二）；形狀與 BR5.3 相同，後者由 backend/tests/test_rbac_story_ids_seed.py 測試 2 鎖住並經突變 M3-eff 驗證"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "範圍邊界：本單元零端點零畫面，入口頁的判定與呈現不在此（SEC-1）；backend/tests/test_rbac_story_ids_seed.py 不含任何 HTTP 或畫面斷言"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K2 列：can_view 給全部 11 個角色（施工後複算 view=11）"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "施工後複算：不具 K2.edit 的角色為 7 個（backend/tests/test_rbac_story_ids_seed.py 測試 4 的 K2.edit 集合取自 backend/services/rbac_seed_data.py，另見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §二 的複算輸出），使 AC9.2.3 的 Given 可構造"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K2 列：can_edit 給四個建立者角色（Project_Architect／Project_Editor／Project_Admin／Platform_Admin）"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K2 列：can_review 全 false；由 backend/tests/test_rbac_story_ids_seed.py 測試 5 鎖住（突變 M6）"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "寫入端為既有 backend/services/rbac.py::ensure_missing_role_permissions，已由 backend/database.py 在啟動時呼叫；本單元只改其 log 與它迭代的資料"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "既有環境的 ensure_role_permissions_seeded(force=False) 在表非空時整段 no-op——故 44 列必須靠 ensure_missing_role_permissions 補；backend/tests/test_rbac_story_ids_seed.py::TestRbacSeedWriteAuditLog 以「先刪 44 列再呼叫」重現該路徑並斷言補回 44 列"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "backend/services/rbac.py::ensure_missing_role_permissions 只 INSERT、不 UPDATE／DELETE——本單元未改動該行為（git diff 顯示迴圈體除 inserted_pairs.append 外未變）"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "由 BR3.4′ 取代。backend/tests/test_rbac_story_ids_seed.py 測試 1 同時驗長度 352 與組合完整性；兩個子斷言各有突變（M1／M2）"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "由 BR4.1′ 取代。schema_rbac.sql 的 INSERT 區塊加同樣 44 列（以區塊邊界定位，未寫死行號）＋ 檔頭第 12 行 308→352。驗證註解那一行**未編輯**（既存漂移 RR-4，加完 44 列後碰巧正確）"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "由 BR4.2′ 取代。DEPLOY.md 五處（:577／:591／:596 中文段，:1259／:1270 英文段）308→352；施工後 grep -c 308 回 0"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "由 BR4.3′ 取代。backend/services/user_router.py 的 STORY_FEATURE_LABELS 新增 K1–K4 四鍵（31 鍵 ＋ CATALOG_EXCLUDED_STORIES 的 J1 恰覆蓋 32 個 story id，實算無名稱者 0 個）"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "由 BR4.4′ 取代。backend/tests/test_rbac_story_ids_seed.py::TestRbacSeedCopiesAgree::test_the_sql_seed_block_matches_the_python_default_row_for_row，三段 diff ＋ 突變 M8（第三段確實觸發）"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "backend/services/user_router.py：K1–K4 **未**加入 CATALOG_EXCLUDED_STORIES，照 J3a／J3b 既有先例發布；程式註解就地寫明這是已接受的揭露而非缺陷（ADR-0006 network exposure 面）"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K3 列：can_view 給同八個角色（施工後複算 view=8、全 false=3）"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K3 列：can_edit 給四個建立者角色（複算 edit=4）"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 測試 2（test_a_role_with_a1_view_does_not_hold_k3）＋ 突變 M3-eff。**M3 如字面執行為綠，屬計畫缺陷 PD-2**，已於 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §五 具名記載"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 測試 4（test_every_k2_editor_also_holds_k3_edit，含 K2.edit 集合非空的防恆真檢查）＋ 突變 M5"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "note": "範圍邊界：本單元零判定邏輯。U3-A1–U3-A3 已具名交接 U19（見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七）"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K4 列：can_view 給同八個角色（複算 view=8）"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py 的 K4 列：can_edit 給同四個建立者角色（複算 edit=4）"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "就地記明的對齊修正（不回改 aidlc/spaces/default/intents/260920-orchestration-brain/inception/contract-design/contract-summary.md 的 K-19），無程式落點"
+    },
+    {
+      "id": "BR6.4",
+      "status": "Deferred",
+      "target": "unfilled_count 的隱藏屬 U20 的 read_fields 回應（K-17）＋ U23 的總覽籤。本單元交付它的可觸發前提（BR6.5）"
+    },
+    {
+      "id": "BR6.5",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 測試 3（test_at_least_one_role_does_not_hold_k4）＋ 突變 M4-eff。**M4 如字面執行為綠，屬 PD-2**"
+    },
+    {
+      "id": "BR7.1",
+      "status": "Deferred",
+      "target": "邀請一般成員時檢查 K3.view——本單元定義、U19 執行（BR5.5）。具名交付條件 U3-A1／U3-A2／U3-A3，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七。**本單元刻意不斷言 U19 的測試存在**（D-14：那會製造反向依賴邊）"
+    },
+    {
+      "id": "BR7.2",
+      "status": "Deferred",
+      "target": "邀請／改為專案管理者時檢查 K3.edit——本單元定義、U19 執行（BR5.5）。具名交付條件 U3-A1／U3-A2／U3-A3，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七。**本單元刻意不斷言 U19 的測試存在**（D-14：那會製造反向依賴邊）"
+    },
+    {
+      "id": "BR7.3",
+      "status": "Deferred",
+      "target": "自動改選的候選集合只含持有 K3.edit 的成員；無人符合時擋下停用——本單元定義、U19 執行（BR5.5）。具名交付條件 U3-A1／U3-A2／U3-A3，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七。**本單元刻意不斷言 U19 的測試存在**（D-14：那會製造反向依賴邊）"
+    },
+    {
+      "id": "BR7.4",
+      "status": "Deferred",
+      "target": "挑選純函式不讀 DB，K3.edit 旗標由呼叫端查好後傳入（PBT 標的：排列不變性）——本單元定義、U19 執行（BR5.5）。具名交付條件 U3-A1／U3-A2／U3-A3，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七。**本單元刻意不斷言 U19 的測試存在**（D-14：那會製造反向依賴邊）"
+    },
+    {
+      "id": "BR7.5",
+      "status": "Deferred",
+      "target": "拒絕回應的兩種 reason 代碼——本單元定義、U19 執行（BR5.5）。具名交付條件 U3-A1／U3-A2／U3-A3，見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七。**本單元刻意不斷言 U19 的測試存在**（D-14：那會製造反向依賴邊）"
+    },
+    {
+      "id": "EC-1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "backend/services/rbac_seed_data.py：四個新值不與既有 28 個重複（施工後複算 sids 由 28 增為 32，無交集）"
+    },
+    {
+      "id": "EC-2",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "(role, story_id) 複合唯一——backend/tests/test_rbac_story_ids_seed.py 測試 1 的組合完整性斷言（無重複、無缺漏、無預期外）＋ 測試 7 的 SQL 側重複檢查"
+    },
+    {
+      "id": "EC-3",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "updated_by 為 \"system_seed\"——backend/services/rbac.py 的兩條寫入路徑皆未改動該值"
+    },
+    {
+      "id": "EC-4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 測試 5（test_the_four_new_story_ids_never_grant_review，含 44 列的受測集合完整性檢查）＋ 突變 M6"
+    },
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "backend/scripts/dump_openapi.py",
+      "note": "零新 router 檔、零新 service 層讀寫函式、零 HTTP 可觸達入口。backend/scripts/dump_openapi.py --check 回「規格檔與後端程式碼一致」。唯一碰到的既有 service 層函式是 backend/services/rbac.py::ensure_missing_role_permissions 的 log（SEC-4 的明文例外）"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py",
+      "note": "backend/requirements.txt 與 deploy/render-env.sh／deploy/.env.example 零改動（git diff --numstat 對 backend/requirements.txt 為空）；scripts/validate_env_contract.py 通過；seed 沿用 backend/database.py 既有的 DATABASE_URL 連線，未引入第二個憑證"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "無新 route decorator、無新 include_router。**但本單元改變了既有公開端點 /roles/catalog 的回應內容**（backend/services/user_router.py 的四個標籤）——照 BR4.5 發布並就地註明；RR-1 的殘餘風險指派 observability-setup（D-16），本單元不宣稱已處置"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "backend/services/rbac.py::ensure_missing_role_permissions 的 logger.info 擴充為一行彙總含 role/story_id 配對，層級維持 INFO，不含任何使用者身分；由 backend/tests/test_rbac_story_ids_seed.py 測試 6 以 assertLogs 斷言 ＋ 突變 M7（隔離乾淨，只有測試 6 紅）"
+    },
+    {
+      "id": "SEC-5",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 測試 7：以區塊邊界（INSERT INTO role_permissions → 下一個裸 ;）定位解析，比對五元組集合，三段 diff 各最多 10 筆並附總數；突變 M8 證明第三段必要（兩側列數皆 352，只比列數的測試會放行）"
+    },
+    {
+      "id": "SEC-6",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "note": "本單元不宣稱已驗證任何授權**行為**，只驗授權**資料**的結構前提。allow/deny 雙向具名指派 U19（U3-A1–U3-A3）；aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七 逐項列出"
+    },
+    {
+      "id": "U3-V1",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_a_role_with_a1_view_does_not_hold_k3；失敗訊息逐字點名 AC12.5.1 與 AC12.5.3（D-12）；突變 M3-eff"
+    },
+    {
+      "id": "U3-V2",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_at_least_one_role_does_not_hold_k4；失敗訊息點名 BR6.4；突變 M4-eff"
+    },
+    {
+      "id": "U3-V3",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_every_k2_editor_also_holds_k3_edit；失敗訊息逐字引用 AC12.1.2；突變 M5"
+    },
+    {
+      "id": "U3-V4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_the_matrix_has_exactly_352_rows_and_no_missing_combination；兩個子斷言不合併，各有突變（M1 長度／M2 組合）——D-11 的要求"
+    },
+    {
+      "id": "U3-V5",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_the_four_new_story_ids_never_grant_review；失敗訊息點名 EC-4；突變 M6"
+    },
+    {
+      "id": "U3-A1",
+      "status": "Deferred",
+      "target": "U19 membership-service 的交付條件（邀請一般成員的 allow/deny 雙向）。本單元已交付其資料前提並在 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七 具名列出"
+    },
+    {
+      "id": "U3-A2",
+      "status": "Deferred",
+      "target": "U19 的交付條件（邀請／改為專案管理者的 allow/deny 雙向）。同上"
+    },
+    {
+      "id": "U3-A3",
+      "status": "Deferred",
+      "target": "U19 的交付條件（候選集合過濾 ＋ 挑選純函式的 PBT 排列不變性）。**ADR-0006 的 PBT hard constraint 隨此義務一併移轉，不是豁免**（D-15）"
+    },
+    {
+      "id": "U3-D1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "schema_rbac.sql ＋ DEPLOY.md 的 blocking 同步皆完成（aidlc/spaces/default/memory/project.md ## Mandated 必做 1、必做 2）；scripts/validate_repo_contract.py 通過"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/nfr-requirements/traceability.json 已逐項判定 N/A，本站複驗結論不變（本單元零畫面、零 session、零 WebSocket、零 LLM 呼叫、零新容器；授權讀取端為既有單筆索引查詢）"
+    },
+    {
+      "id": "D-1",
+      "status": "OK",
+      "target": "backend/services/rbac_seed_data.py",
+      "note": "本單元不提供任何讀取端或判定函式：backend/services/rbac_seed_data.py 只有資料、backend/services/rbac.py 的改動只在 log、backend/services/user_router.py 的改動只在標籤字典——三者皆零新公開判定函式"
+    },
+    {
+      "id": "D-2",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "SEC-4 的 log 擴充不構成 SEC-1 的例外：backend/services/rbac.py 的改動只在 log，不新增入口"
+    },
+    {
+      "id": "D-3",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "加入時的前置檢查與執行期兩層串聯的主體不同，已在 backend/tests/test_rbac_story_ids_seed.py 的檔頭與 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md 保持區分；本單元不混讀"
+    },
+    {
+      "id": "D-4",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 的 _sql_seed_rows()：以「INSERT INTO role_permissions 之後、下一個裸 ; 之前」定位，**未寫死 445／755**——本單元自己的 44 列插入已讓區塊尾由 755 位移到 799，測試仍通過即為證明"
+    },
+    {
+      "id": "D-5",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py 的 _render_section()：三段 diff，各最多 10 筆並附該段總數；不用 assertEqual 預設輸出。突變 M8 確認第三段觸發並印出 (key, python, sql) 三元組"
+    },
+    {
+      "id": "D-6",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "backend/services/rbac.py：一行彙總、層級 INFO、含 role/story_id 配對；未採逐列一行"
+    },
+    {
+      "id": "D-7",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py::test_the_seed_write_logs_which_rows_it_inserted，assertLogs(\"cloud360.rbac\", level=\"INFO\")，斷言四個 story id 字串 ＋ 一個角色名"
+    },
+    {
+      "id": "D-8",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "log 文字格式自此為受測契約——已在 backend/tests/test_rbac_story_ids_seed.py 該案例的 @note 就地寫明「下一個改 log 文案的人若讓四個 story id 不再出現在同一行，這條會紅。那是刻意的」"
+    },
+    {
+      "id": "D-9",
+      "status": "OK",
+      "target": "backend/database.py",
+      "note": "backend/database.py 的重複 log **未收斂**（git diff 對該檔為空）；測試 6 的斷言不受其影響"
+    },
+    {
+      "id": "D-10",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "五條 ＋ SEC-5 ＋ D-7 共用一支檔 backend/tests/test_rbac_story_ids_seed.py（7 個案例，3 個 TestCase 類）"
+    },
+    {
+      "id": "D-11",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "U3-V4 有兩個突變：M1（長度紅）與 M2（長度仍 352、組合紅），兩者皆已驗證。兩個子斷言在 backend/tests/test_rbac_story_ids_seed.py::test_the_matrix_has_exactly_352_rows_and_no_missing_combination 內刻意不合併"
+    },
+    {
+      "id": "D-12",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "note": "五條的失敗訊息各自點名它保護的 AC／規則（AC12.5.1＋AC12.5.3／BR6.4／AC12.1.2 逐字／BR3.4′／EC-4）；突變紅燈訊息逐字收錄於 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §四"
+    },
+    {
+      "id": "D-13",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "note": "不機械強制，在 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七 的交接表、traceability 的 U3-A1–U3-A3、以及測試檔檔頭三處留下可追溯錨點"
+    },
+    {
+      "id": "D-14",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "backend/tests/test_rbac_story_ids_seed.py **不含**任何「斷言 U19 的測試存在」的案例——grep U19 於該檔僅出現在說明性註解中"
+    },
+    {
+      "id": "D-15",
+      "status": "OK",
+      "target": "backend/tests/test_rbac_story_ids_seed.py",
+      "note": "BR7.4 的 PBT 義務已在 backend/tests/test_rbac_story_ids_seed.py 檔頭與 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §六 兩處明寫為「隨 U3-A3 移轉、非豁免」"
+    },
+    {
+      "id": "D-16",
+      "status": "Deferred",
+      "target": "RR-1 的承接站為 observability-setup（4.4）。本單元不設計 rate limiting，只讓該指派不落空"
+    },
+    {
+      "id": "RR-1",
+      "status": "Deferred",
+      "target": "公開 /roles/catalog 的 DoS 面——承接 observability-setup（D-16）。本單元新增的四個標籤經該端點揭露，已照 BR4.5 接受並就地註明於 backend/services/user_router.py"
+    },
+    {
+      "id": "RR-2",
+      "status": "N/A",
+      "target": "見 nfr-requirements 的殘餘風險登記；本單元無新增處置"
+    },
+    {
+      "id": "RR-3",
+      "status": "N/A",
+      "target": "兩份 seed 副本**不消除**——backend/services/rbac_seed_data.py 檔頭宣稱的產生腳本不存在（backend/scripts/ 下只有 backend/scripts/dump_openapi.py／backend/scripts/dump_ws_contract.py／backend/scripts/run_hierarchy_migration.py，本站複驗仍成立）。本單元依 aidlc/spaces/default/memory/team.md「單一真實來源」的條件在同一次交付附上鎖住一致的測試（測試 7） 【status 由 `Accepted` 更正為 `N/A`（schema 的封閉集合只有 OK／GAP／ORPHAN／Deferred／N/A）】"
+    },
+    {
+      "id": "RR-4",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "schema_rbac.sql 的驗證註解既存漂移：它本來就寫 -- 352 而區塊實算 308（6f9227d）。本單元加完 44 列後**碰巧變成正確**；該行全程未編輯，git diff 對它為空。不得被讀成「有人修過它」 【status 由 `OK（副作用）` 更正為 `OK`；「副作用」的語意保留在 target 內文】"
+    },
+    {
+      "id": "H-1",
+      "status": "Deferred",
+      "target": "K1 的唯讀／編輯雙態（OQ-K1）——承接 U14。本單元交付 view-only 的 K1（BR1.2）"
+    },
+    {
+      "id": "H-2",
+      "status": "Deferred",
+      "target": "刪除專案／系統時既有資料的處置（OQ-K2）——承接 U7"
+    },
+    {
+      "id": "H-3",
+      "status": "OK",
+      "target": "backend/services/rbac.py",
+      "note": "seed 寫入的稽核粒度——原文記為「無自然承接站的已知缺口」，已由 nfr-requirements 的 [Q2]=A 收為 SEC-4 並**在本單元實作完成**（backend/services/rbac.py ＋ 測試 6 ＋ 突變 M7）"
+    },
+    {
+      "id": "H-4",
+      "status": "Deferred",
+      "target": "入口頁沒有脈絡列（設計落差）——承接 U14"
+    },
+    {
+      "id": "H-5",
+      "status": "Deferred",
+      "target": "沒有「進行中的工作」常駐區（設計落差）——承接 U14"
+    },
+    {
+      "id": "H-6",
+      "status": "Deferred",
+      "target": "八張能力卡 ≠ M2 的反問候選（設計落差）——承接 U14"
+    },
+    {
+      "id": "H-7",
+      "status": "Deferred",
+      "target": "記憶沒有入口（設計落差）——承接 U15／U14"
+    },
+    {
+      "id": "H-8",
+      "status": "Deferred",
+      "target": "BR7.1–BR7.3 的拒絕事件稽核——承接 U19"
+    },
+    {
+      "id": "H-9",
+      "status": "Deferred",
+      "target": "三個維運角色的 K2.view 是否為死資料——承接 U7。本單元的 K2.view 給全部 11 個角色（BR2.1）未改"
+    },
+    {
+      "id": "H-10",
+      "status": "Deferred",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/inception/units-generation/unit-of-work-story-map.md 未把 US11／US12 指給 U3，故本檔 upstream_ids 只能列 US1.4／US9.2 的 7 條 AC；BR5–BR7 實際支撐的 AC12.*／AC11.* 全部掛在別的單元。**本站不自行改已核可的 story map**，缺口仍然存在——見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七 【status 由 `Unresolved` 更正為 `Deferred`——它是已交接的上游文字缺口，不是本站未完成的覆蓋】"
+    },
+    {
+      "id": "H-11",
+      "status": "Deferred",
+      "target": "BR7.3 窄化了 AC12.4.1（原文無資格限定）。**窄化本身正確且不改**；要收斂的是 AC 原文，本站不回改 aidlc/spaces/default/intents/260920-orchestration-brain/inception/user-stories/stories.md。影響範圍施工後複算仍為 4 個角色（Developer／FinOps_Analyst／Security_Reviewer／Platform_Owner 持有 K3.view 而無 K3.edit）——見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §七 【status 由 `Unresolved` 更正為 `Deferred`，理由同 H-10】"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "PD-1",
+      "status": "N/A",
+      "target": "計畫 Step 6e 的「跑綠」在 Step 7a 之前不可能成立（SQL 側 44 列到 Step 7 才加入）。處置：照順序執行並如實記錄其紅燈，Step 7 後複跑取綠；未放寬測試、未調換步驟定義。逐字紅燈訊息見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §五 【status 由 `Reported` 更正為 `N/A`——計畫缺陷是回報項，不是覆蓋項】"
+    },
+    {
+      "id": "PD-2",
+      "status": "N/A",
+      "target": "突變 M3／M4 如字面執行（只改 SRE 一列）無法讓測試 2／3 變紅——BR5.3／BR6.5 的 logic 逐字為存在量化，而三個角色同時符合。處置：照字面執行並記錄為綠，再以 M3-eff／M4-eff（三個角色全改）證明斷言非恆真；**未把測試改寫成預設值快照**。見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §五 【status 由 `Reported` 更正為 `N/A`，理由同 PD-1】"
+    },
+    {
+      "id": "PD-3",
+      "status": "N/A",
+      "target": "M3／M4／M5／M6 必然連帶讓測試 7 紅（任何只改 Python 一側的突變都會破壞 SEC-5 的等值性）。計畫未提及；不影響任何結論，記此以免多個紅燈被讀成突變設計不精準。見 aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md §五 【status 由 `Reported` 更正為 `N/A`，理由同 PD-1】"
+    }
+  ],
+  "reverse_count": 3,
+  "artifact_index": [
+    {
+      "artifact": "backend/services/rbac_seed_data.py",
+      "ids": [
+        "BR1.1",
+        "BR1.2",
+        "BR2.1",
+        "BR2.3",
+        "BR2.4",
+        "BR3.4",
+        "BR5.1",
+        "BR5.2",
+        "BR6.1",
+        "BR6.2",
+        "EC-1",
+        "EC-3",
+        "AC1.4.2",
+        "AC9.2.3"
+      ]
+    },
+    {
+      "artifact": "backend/services/rbac.py",
+      "ids": [
+        "SEC-4",
+        "D-2",
+        "D-6",
+        "BR3.1",
+        "BR3.3",
+        "H-3"
+      ]
+    },
+    {
+      "artifact": "backend/services/user_router.py",
+      "ids": [
+        "BR4.3",
+        "BR4.5",
+        "SEC-3",
+        "RR-1"
+      ]
+    },
+    {
+      "artifact": "schema_rbac.sql",
+      "ids": [
+        "BR4.1",
+        "U3-D1",
+        "RR-4"
+      ]
+    },
+    {
+      "artifact": "DEPLOY.md",
+      "ids": [
+        "BR4.2",
+        "U3-D1"
+      ]
+    },
+    {
+      "artifact": "backend/tests/test_rbac_story_ids_seed.py",
+      "ids": [
+        "U3-V1",
+        "U3-V2",
+        "U3-V3",
+        "U3-V4",
+        "U3-V5",
+        "SEC-5",
+        "BR3.4",
+        "BR4.4",
+        "BR5.3",
+        "BR5.4",
+        "BR6.5",
+        "EC-2",
+        "EC-4",
+        "D-4",
+        "D-5",
+        "D-7",
+        "D-8",
+        "D-10",
+        "D-11",
+        "D-12",
+        "D-14"
+      ]
+    },
+    {
+      "artifact": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/rbac-story-ids/code-generation/code-summary.md",
+      "ids": [
+        "SEC-6",
+        "D-13",
+        "D-15",
+        "H-10",
+        "H-11",
+        "PD-1",
+        "PD-2",
+        "PD-3",
+        "U3-A1",
+        "U3-A2",
+        "U3-A3"
+      ]
+    }
+  ]
+}

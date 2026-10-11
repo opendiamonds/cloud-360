@@ -155,7 +155,7 @@ rules:
       理由不只是 components.md 逐字要求——OQ-10 質疑路由層能否產出可比較的信心值，
       容許 null 使該 OQ 若收斂為「不能」時本型別不需改動。
     violation_behaviour: 若路由層無法產出信心值，必填會讓整個 clarify 路徑無法構造
-    source: components.md 逐字、mockups.md H-2；OQ-10 的風險由 stories.md:655–657 記載
+    source: components.md 逐字、mockups.md H-2；OQ-10 的風險由 stories.md:1269–657 記載
 
   - id: BR2.4
     statement: confidence 若非 null，其值必須落在 0 到 1（含端點）
@@ -487,20 +487,52 @@ rules:
 | `calculation` | 0 | 本單元無計算類規則——它是型別來源，不做任何運算 |
 | **合計** | **31** | 與上表的分組合計相符 |
 
-## 三、本站新增的 10 條規則（上游沒有的）
+## 三、本站新增的 9 條規則（上游沒有的）
 
-`BR1.4`（兩個列舉與 payload 集合等勢同名）、**`BR1.5`（終止事件 payload 的 turnId 必須等於
-envelope 的 turnId——審查 R-12 新增）**、`BR2.2`（clarify 不得空陣列）、
-`BR2.5`（status 與 waitingOn／failureReason 的相依）、`BR3.2`（未知 type 安全忽略）、
-`BR4.4`（型別檔必須保留 sideEffect 註解）。
+**修訂 1 更正（審查 `R-26`）**：標題原寫「10 條」而其下清單只列 **6** 條——「總數對、清單漏項」
+這個形狀本專案已記載多次。本輪以 `source` 欄逐條實算：凡 `source` 含「本站新增」或
+「審查 R-xx 新增」者即為本節標的，得 **9** 條（標題的 10 亦為誤；`BR1.2` 的 `source` 是
+「K-02 envelope；**本站明文化**」，屬上游衍生而非新增，**刻意不計入**）。九條逐一列出：
+
+| # | 規則 | 內容 | `source` 依據 |
+|---|---|---|---|
+| 1 | `BR1.4` | 兩個 type 列舉與對應方向 payload 實體集合等勢同名 | 本站新增（實算實體時發現此不變量無處寫下） |
+| 2 | `BR1.5` | 終止事件 payload 的 turnId 必須等於 envelope 的 turnId | **審查 `R-12` 新增** |
+| 3 | `BR1.6` | 伺服器訊息的 turnId 必為非 null（輪次）或必為 null（非輪次），互斥且窮盡 | **審查 `R-14`（Critical）新增** |
+| 4 | `BR2.2` | clarify 的 candidates 不得為空陣列 | 本站新增（K-02 未規定最小長度） |
+| 5 | `BR2.5` | status 與 waitingOn／failureReason 的欄位相依 | 本站新增（K-02 定義三欄但未定義其關係） |
+| 6 | `BR2.13` | 客戶端訊息不得攜帶 turnId；伺服器收到即為協定違規 | **審查 `R-20`（Major）新增** |
+| 7 | `BR2.14` | `select_clarify_candidate` 的 candidateId 為 null 時伺服器結束該輪且不送狀態訊息 | **審查 `R-19`（Major）＋ `R-15`（Critical）新增** |
+| 8 | `BR3.2` | 前端對未知的 type 必須安全忽略而非崩潰 | 本站新增（契約保證與防禦性實作分開） |
+| 9 | `BR4.4` | 產生的型別檔必須保留 sideEffect 兩個哨兵值的說明註解 | Q3=A 的直接後果；本站新增 |
+
+**第 3、6、7 條是上一輪審查新增的規則，初版清單寫成之後才存在**——這正是標題與清單對不上
+的成因，而不是標題單純數錯。
 
 **其中三條可機械驗證**，建議在 `code-generation` 時實作為斷言：
 
 | 規則 | 斷言落點 | 判定式 |
 |---|---|---|
-| `BR1.4` | `dump_ws_contract.py` | 見該規則的 `logic`（`Payload` 後綴 ＋ snake→Pascal 正規化 ＋ 排除子實體） |
-| `BR1.5` | 後端模型的 validator | `payload.turnId == envelope.turnId` |
-| `BR4.4` | 型別產生後的檢查 | 產生的型別檔在 `sideEffect` 欄位上方存在說明註解 |
+| `BR1.4` | `scripts/dump_ws_contract.py` | 見該規則的 `logic`（`Payload` 後綴 ＋ snake→Pascal 正規化 ＋ 排除子實體） |
+| `BR1.5` | 後端模型的 validator（`backend/services/brain_ws_contract.py`） | `payload.turnId == envelope.turnId` |
+| `BR4.4` | 型別產生後的檢查（`frontend/src/types/ws-contract.d.ts`） | 產生的型別檔在 `sideEffect` 欄位上方存在說明註解 |
+
+**治理這三個落點的決策記錄是 `ADR-0019`**（`inception/decisions/0019-ws-contract-gates-and-generator-supply-chain.md`，
+修訂 1 補上此引用——審查 `R-27` 指出本單元三份產出對 `ADR-0019` 的命中數為 **0**，而它直接
+治理本單元的產生器與 CI 閘門供應鏈）。**本輪實測確認這三個落點都已不是計畫而是既成事實**：
+
+| 落點 | 現況（`git ls-files` ＋ 實讀） |
+|---|---|
+| 型別來源模組 | `backend/services/brain_ws_contract.py` **已進版控**；其 docstring 逐字宣告強制 `BR1.2`／`BR1.5`／`BR1.6` 三條封包層不變量 |
+| 契約產物 | repo 根的 `ws-contract.json` **已進版控** |
+| 前端型別 | `frontend/src/types/ws-contract.d.ts` **已進版控** |
+| 閘門 1／2（spec 漂移） | `.github/workflows/ci.yml:290` 的 `python scripts/dump_ws_contract.py --check`，位於 `backend` job |
+| 閘門 2／2（型別漂移） | `.github/workflows/ci.yml:210` 的 `npm run check:ws-types`，位於 `frontend` job |
+
+`ci.yml` 自己的註解逐字引用「ADR-0019 / NFR5.1」與「ADR-0019 D-4」，其中 `D-4` 的意思是
+該閘門**刻意不設 `env:`**——它不 import `main`，故紅燈只代表契約漂移，不會是某個無關 router
+匯入失敗。本節的設計與該實作**無漂移**（伺服器 9 型別／客戶端 6 型別／22 個實體／上述三條
+不變量皆一致，本輪逐一核對）。
 
 `BR2.5` **無法在型別層強制**（需要相依型別），是後端模型的驗證責任；且它的觸發條件
 （「等待中」狀態的可達性）本身是未解的 H-3——如實記載，不假裝型別能擋住它。

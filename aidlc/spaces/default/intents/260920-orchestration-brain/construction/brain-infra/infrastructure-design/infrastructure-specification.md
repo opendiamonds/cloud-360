@@ -19,12 +19,15 @@
 
 | # | 項目 | 由來 | 為何不是既有範圍的自然延伸 |
 |---|---|---|---|
-| **S-8** | **記憶體上限：deploy stack 六個服務 ＋ CI test stack 四個服務，共十個服務項、兩份檔**（審查 R-13a：初版標題只寫「六個」，低報了 CI 側那四個） | `[I2]`=C ＋ `[I2b]`（本輪經使用者裁決改為「先以公開基準設值、限期複量」，見 `§二`） | 三份 compose 今日**完全沒有資源限制**（`deploy:`／`resources:`／`limits:`／`mem_limit`／`cpus` 零命中），所以這是本 repo 的**新模式**，不是既有形狀的延伸。且它為既有四個服務引入一條今天不存在的失敗路徑（容器被 OOM kill → `restart: unless-stopped` → 重啟迴圈） |
+| **S-8** | **記憶體上限：deploy stack 七個服務 ＋ CI test stack 四個服務，共十一個服務項、兩份檔**（修訂 1：deploy 側由六增為七，新增 `mcp-bridge`，見 `S-11`）（審查 R-13a：初版標題只寫「六個」，低報了 CI 側那四個） | `[I2]`=C ＋ `[I2b]`（本輪經使用者裁決改為「先以公開基準設值、限期複量」，見 `§二`） | 三份 compose 今日**完全沒有資源限制**（`deploy:`／`resources:`／`limits:`／`mem_limit`／`cpus` 零命中），所以這是本 repo 的**新模式**，不是既有形狀的延伸。且它為既有四個服務引入一條今天不存在的失敗路徑（容器被 OOM kill → `restart: unless-stopped` → 重啟迴圈） |
 | **S-9** | **`logging:` 的 `max-size`／`max-file` 加在兩份 compose 的全部服務** | `[I4]`=A | `NFR8.9` 只要求**兩個新容器**。加到全部服務是刻意超出上游字面，理由見 §三 |
 | **S-10** | **`DEPLOY.md` 新增磁碟空間前置條件** | 本站的覆蓋檢查查出（無對應上游 id、無對應問題） | 本單元新增 Ollama 模型（約 1.2GB）＋ Redis AOF，而 `NFR6.3` 的升版窗口內**同時存在三份全庫明文副本**（新 volume、保留中的舊 volume、dump 檔，見 `nfr-design` D-1 的涵蓋範圍表）。**沒有任何一處檢查過主機有沒有空間**，而空間不足的失敗發生在升版中途——最糟的時點 |
 | **S-11** | **收窄 `nfr-requirements` `§五` 交給 `U10` 的決定範圍**：`appendonly`／`maxmemory`／`maxmemory-policy` 三項改為 compose `command:` 獨佔，`U10` 的 Redis 設定資產**不得包含**它們 | 本輪送審前自檢第 2 項查出 `appendonly` 無寫者後的連帶結果（審查 R-44 要求顯性化） | 上游 `security-requirements.md:756–757` 逐字把「`command:` 覆寫還是掛載設定檔」**整件事**交給 `U10`，並要求該資產承載 `NFR4.1(b)` 與 `NFR4.2` 的設定；把 `NFR4.2` 的核心設定從該資產拿走是**縮小已核可的指派**，不是實作細節。技術理由成立（`redis-server` 的 CLI 旗標會讓檔內同名值靜默失效），但需 `U10` 的 `functional-design` 明示接受或反對——**本站不代它決定** |
+| **S-13** | **第七個 compose 服務 `mcp-bridge`（HTTP／SSE）** | `[I6]`=A，定案 `OQ-16`。`unit-of-work.md` 修訂 4 Assumptions 逐字把這一題指派給本站 | `U21 mcp-bridge` 的部署模型在上游逐字為 `standalone`，但**「是否需要 compose 服務」上游明寫不定**。本站定案為需要，故它是本站新增的範圍，不是既有六個服務的自然延伸 |
+| **S-14** | **工具宣告一律自 `openapi.json` 產生（REST→MCP），不手寫；暴露面由 allowlist 治理** | `[I7]`=A（使用者於本站中途提出，原話逐字「平台功能轉mcp，一率使用rest to mcp的概念做」） | `U21` 原交付物只寫「工具宣告與其 schema 的憑證欄位白名單」，**未涵蓋「自 OpenAPI 產生」這個機制**，亦未把產生器列為交付物。回補落點：`U21` 的交付物清單與驗證方式 |
+| **S-15** | **`U21` 新增一個 ADR-0006 PBT 適用標的：`openapi.json` ＋ allowlist → 工具宣告的**產生器** | `[I7]`=A 的連帶後果（本站 `§七` 7.3） | `unit-of-work.md` 修訂 4 的 PBT 逐項判定表把 `U21` 的**工具 schema 白名單**判為「**不適用，但可機械斷言**」（理由逐字「對 schema 的結構斷言，不需產生隨機輸入」）。**本項不推翻該判定**——被判不適用的是那個**結構斷言**，而 `[I7]` 新造出來的是一個**有輸入空間的轉換函式**（任意 OpenAPI 文件 × 任意 allowlist），兩者是不同的受測對象。但它是該表寫成之後才出現的新標的，故須回補進該表 |
 
-四項都需回補進 scope。`S-8`／`S-9` 的後果已在提問當下揭露；`S-10` 是本站覆蓋檢查的產物，
+**七項**都需回補進 scope（`S-8`／`S-9`／`S-10`／`S-11`，＋修訂 1 新增的 `S-13`／`S-14`／`S-15`；修訂 1 更正：原句寫「四項」，當時表為四列，本輪增為七列——審查 `R-16`）。`S-8`／`S-9` 的後果已在提問當下揭露；`S-10` 是本站覆蓋檢查的產物，
 不是選項之一；`S-11` 是本輪送審前自檢與審查 R-44 的產物，**它的回補對象不只 scope，還包括
 `U10` 的指派範圍**——若 `U10` 反對這個收窄，處置是回到「`appendonly` 住在哪裡」重新定案，
 而不是讓兩份文件各自宣稱擁有它。
@@ -35,12 +38,12 @@
 
 | Facet | Choice | Rationale |
 |---|---|---|
-| **運算模型** | 單主機 **Docker Compose**，六個服務（`db`／`backend`／`frontend`／`cloudflared` ＋ 新增 `redis`／`ollama`） | ADR-0007 已定案的既有形狀。本單元只增服務、不改模型。**「第 5、6 個服務」有上游依據**：`components.md` 的 External Dependencies 表逐字寫 `SessionContext` → Redis「session 狀態外部化；**第 5 個部署服務**」、`MemoryStore` → Ollama「staging 的 embedding 運算；**第 6 個部署服務**，零 API 費用」 |
+| **運算模型** | 單主機 **Docker Compose**，**七個服務**（`db`／`backend`／`frontend`／`cloudflared` ＋ 新增 `redis`／`ollama`／**`mcp-bridge`**） | ADR-0007 已定案的既有形狀。本單元只增服務、不改模型。**「第 5、6 個服務」有上游依據**：`components.md` 的 External Dependencies 表逐字寫 `SessionContext` → Redis「session 狀態外部化；**第 5 個部署服務**」、`MemoryStore` → Ollama「staging 的 embedding 運算；**第 6 個部署服務**，零 API 費用」 |
 | **網路拓樸** | **兩個 user-defined bridge**：`edge`（`cloudflared`／`frontend`／`backend`）、`internal`（`backend`／`db`／`redis`／`ollama`）。**不得設 `internal: true`** | `nfr-design` D-3。唯一對外入口仍是 `cloudflared` 的 tunnel；`frontend` 的 host port 供 CI 的 Playwright 與部署後探測使用 |
 | **儲存策略** | 三個具名 volume：PG 資料（本輪**改名**，`NFR6.1` 落點 5）、Redis AOF、Ollama 模型快取。CI test stack **不用具名 volume**（每次重建） | `NFR4.2`／`NFR4.3`。改名的理由是 `NFR6.3` 步驟 4 要求以新 volume 起 PG 18 |
 | **環境佈局** | 三個範圍、**互不共用設定**：本機 dev（repo 根 `docker-compose.yml`）、CI test（`deploy/docker-compose.test.yml`，內嵌值）、部署（`deploy/docker-compose.deploy.yml` ＋ `deploy/.env`） | `project.md ## Mandated` 的三環境分離條款。**production 不在範圍**（ADR-0001／ADR-0002） |
 | **IaC 取徑** | **沒有 IaC**——compose 檔本身即宣告，由 `deploy.yml` 在自架 runner 上 `up -d --build` | 既有形狀。ADR-0001／ADR-0002 把 direct production IaC 列為 out of scope，而 staging 是單主機，引入 Terraform／CDK 沒有承載對象 |
-| **資源配置** | 六個服務全部設記憶體上限（CI test stack 另四個，共十個服務項）；**值以公開基準設暫定值**，`DEPLOY.md` 標記未量測並訂複量期限（見 §二） | `[I2]`=C ＋ `[I2b]` 的**反轉後版本**（問題檔 `I2b` 有逐字的反轉紀錄；審查 R-21） |
+| **資源配置** | **七個**服務全部設記憶體上限（CI test stack 另四個，共**十一**個服務項）；**值以公開基準設暫定值**，`DEPLOY.md` 標記未量測並訂複量期限（見 §二） | `[I2]`=C ＋ `[I2b]` 的**反轉後版本**（問題檔 `I2b` 有逐字的反轉紀錄；審查 R-21） |
 | **磁碟空間** | `DEPLOY.md` 新增前置條件，與全碟加密（`nfr-design` D-1）並列 | `S-10`，見 §四 |
 
 ---
@@ -52,6 +55,7 @@
 | `db` | database | PostgreSQL **18** ＋ pgvector（`NFR6.1` 五個映像落點）。單一實例、**無複寫**。具名 volume（本輪改名）。`healthcheck` 沿用既有 `pg_isready` | 單一 superuser 連線是**既有基線**，最小權限拆分不在本單元範圍（`nfr-design` `§二` 的 `IAM-PG-SUPERUSER`） |
 | `redis` | cache／session store | **AOF 開啟**（僅 deploy stack，`NFR4.2`；承載為 `command:` 的 `--appendonly yes`，見下方「AOF 的承載」專節——映像預設是 `appendonly no`）。**`maxmemory` ＋ `maxmemory-policy allkeys-lru`**（**僅 deploy stack**，比照同列 AOF 的範圍——審查 R-31：初版把它寫成無條件，而承載它的改動清單第 17a 項只列 deploy compose，兩種讀法後果不同），以 compose 的 `command:` 覆寫承載（`[I1]`=A ＋ 審查 R-05）。**CI test stack 不設 `maxmemory`**：該 stack 每次重建、session 不跨 run 累積，淘汰策略沒有作用對象。**ACL 專用使用者**（值不得為 `default`，`NFR4.1`）——**承載者為兩份 compose 各自的 ACL 設定資產或各自的 `command:` `ACL SETUSER`，見 `cicd-pipeline.md` `§五` 第 17b 項**（審查 R-38：初版只寫要求、沒寫承載者，與 `appendonly` 同一個「有讀者無寫者」形狀，而上游 `security-requirements.md:95` 逐字寫明 test stack 缺它的後果是每個 PR 的 `ui-regression` 都紅）。`restart: unless-stopped`。新增 `healthcheck`（`redis-cli ping`） | `appendfsync` 的具體值屬 `U10`，但受 `NFR4.2` 的兩條約束（所選值不得使 `NFR3` 的 P50 預算失守） |
 | `ollama` | embedding provider | 模型 `bge-m3`（dense 維度須為 1024，與 `vector(1024)` 一致）。模型快取具名 volume。**記憶體上限必設**（它是本單元新增的最大消費者）。`restart: unless-stopped`。新增 `healthcheck`（`/api/tags`）。**模型取得機制必設，見下方專節** | 零認證，存取控制只有網段分段那一層（`NFR8.8` ＋ D-3）。資源數字**未在主機實測**，`NFR9.1` 的退路依賴該實測 |
+| `mcp-bridge` | REST→MCP 轉接層（**第 7 個服務**，`[I6]`=A ＋ `[I7]`=A） | **HTTP／SSE**，`build:`（本 repo 新程式，形狀比照 `backend`／`frontend`，非 `image:`）。**`networks: [internal]`、不發佈 `ports:`** —— 與 `redis`／`ollama` 同一姿態（`NFR8.7`／`NFR8.8` 的形狀），故 `OQ-16` 逐字要求的「HTTP／SSE 須本機迴環或加密」以**流量不離開本主機**滿足。`restart: unless-stopped`、`logging: *json_file_bounded`、記憶體上限必設（暫定值 ＋ `DEPLOY.md` 標記未量測，比照 `S-8`／`[I2b]`）。新增 `healthcheck`，見 `monitoring-design.md` `§七` | **不需要任何新的部署環境變數或新 secret**（實測依據：它呼叫 backend 走 `internal` 的 `http://backend:8000`，屬 compose 自行推導的值，而 `validate_env_contract.py` **禁止**把這類值寫進範本——同 `DATABASE_URL`／`VITE_API_BASE_URL`；token 由每次請求的 `Authorization` 標頭帶入，不落地儲存）。故 `tech-stack-decisions.md` `§四` 的**九處**同步點**仍是九處**（那九項是**檔案**，不是變數——加服務讓每一項的內容變長，不讓項數變多）。**不要把它「修正」成十處。** |
 | `frontend` | reverse proxy／static | nginx，唯一有 host port 的服務（`${FRONTEND_HOST_PORT}:80`）。`location /api/` → `backend:8000`，`location /` → `try_files` | 本單元不改它的設定，但部署後探測依賴 `location /api/` 的存在（`PROBE-CONTRACT` P-1） |
 | `cloudflared` | tunnel | 既有。以 uid 1000 執行、憑證檔 0400。**ingress 已為串流與 WebSocket 調過**：`connectTimeout: 30s`（`deploy/cloudflared/config.yml:16`，註解逐字「The A1 design agent streams; don't let the tunnel cut it short.」）、`tcpKeepAlive: 30s`（同檔 `:18`，註解「WebSocket at `/api/collab/ws/{workspace_id}` must survive idle periods.」） | **必須排除在 `internal` 之外**（D-3 的核心理由）。**本單元不改 ingress 設定**，但上述兩項是 `U13 brain-gateway` 的 WS 端點能運作的既有前提——`components.md` 的 External Dependencies 表逐字記載「`BrainGateway` → Cloudflare Tunnel：對外暴露；**已為 WS 設 tcpKeepAlive 30s**」，本站實地複驗成立 |
 | `backend` | application | FastAPI／uvicorn。**唯一橫跨 `edge` 與 `internal` 的服務** | startup 事件同步跑 `init_db()`，含 `create_all` ＋ 六個 `_ensure_*_schema`；這段是部署後探測重試窗口的長度來源 |
@@ -204,7 +208,7 @@ unless-stopped` 之下變成反覆重啟，且它比淘汰難診斷得多（淘�
 
 **初版的三條並存製造了一個死結**：`[I2]`=C（六個全設）＋ `[I2b]`=A（沒量過就不得設）＋
 值硬寫在 compose，使 `code-generation` **不存在任何合規輸出**——它被禁止猜，又必須產出
-deploy 六個 ＋ CI test 四個數字，而量測的**執行者、時點、通過判準三者皆無**（初版的
+deploy **七**個（修訂 1：含 `mcp-bridge`）＋ CI test 四個數字，而量測的**執行者、時點、通過判準三者皆無**（初版的
 Assumptions 自承「量測本身尚未有執行者與時程」）。「不得靜默填一個猜測值」是**禁令，不是
 路徑**。
 
@@ -310,11 +314,11 @@ ubuntu-latest`——**GitHub-hosted runner 的規格是公開文件化的固定�
 > **`max-size` × `max-file` × 服務數 的總量不得超過 2GB。**
 
 **為什麼這個上界不是可有可無的**：`§四` 的磁碟公式把「日誌預算」列為一項輸入，而若這兩個
-值完全自由，該項就是一個**無界的自由變數**——`100m × 5 × 6` 就是 3GB，單這一項吃掉整個
-餘裕，於是 `§四` 的公式失去定義。合規的組合例如 `max-size: 50m`、`max-file: 5`、六個服務
-= 1.5GB。
+值完全自由，該項就是一個**無界的自由變數**——`100m × 5 × 7` 就是 **3.5GB**，單這一項吃掉整個
+餘裕，於是 `§四` 的公式失去定義。合規的組合例如 `max-size: 50m`、`max-file: 5`、**七個**服務
+= **1.75GB**（修訂 1：服務數由六增為七，故此處由 1.5GB 改為 1.75GB；仍在 2GB 上界內）。
 
-**兩份 compose 的服務數不同**（deploy 六個、CI test 四個），所以同一組 `max-size`／
+**兩份 compose 的服務數不同**（deploy **七**個、CI test 四個），所以同一組 `max-size`／
 `max-file` 在兩份的總量不同；上界只約束 deploy stack，CI test 的日誌隨 stack 消失。
 
 **CI test stack 為何也加**：它每次重建、日誌隨 stack 消失，所以*效果*上不需要。加它的理由
@@ -361,11 +365,11 @@ ubuntu-latest`——**GitHub-hosted runner 的規格是公開文件化的固定�
 
 初版寫「＋2GB 涵蓋 Ollama 模型與其他新增項」，而 `§四` 的表把 `json-file` 日誌列為第四個
 消費者——**它的總量是 `max-size × max-file × 服務數`，而 `§三` 把那兩個值完全交給部署者
-且未設上限**。`100m × 5 × 6` 就是 **3GB**，單這一項就吃掉整個餘裕。**一個公式的項由另一節
+且未設上限**。`100m × 5 × 7` 就是 **3.5GB**（修訂 1：服務數由六增為七），單這一項就吃掉整個餘裕。**一個公式的項由另一節
 的自由變數決定，等於公式沒有定義。**
 
 **處置**：`§三` 新增一條上界——**`max-size × max-file × 服務數` 的總量不得超過 2GB**
-（例如 `max-size: 50m`、`max-file: 5`、六個服務 = 1.5GB）。這個上界是上表「日誌預算」那一項
+（例如 `max-size: 50m`、`max-file: 5`、**七個**服務 = **1.75GB**，實算 50×5×7 = 1750m，仍在 2GB 上界內）。這個上界是上表「日誌預算」那一項
 的值，使磁碟公式的每一項都有來源。
 
 **空間不足時不得開始升版。** 理由：`NFR6.3` 的七步程序在中途耗盡空間，會同時失去「新
@@ -447,6 +451,80 @@ deploy stack**——CI test stack 不設 `maxmemory`（見 `§二` 的 redis 列
 `frontend`（`:67`）／`cloudflared`（`:80`）四個，本輪加 `redis` ＋ `ollama` 後為**六個**。
 差集是 **{`cloudflared`, `ollama`} 兩個**。`ollama` 的排除依據是 `[I5]`=A（CI 走 `stub`、
 不起 Ollama）。**照初版那條實作，閘門會在落地第一天紅燈。**
+
+---
+
+## 七、修訂 1：第七個服務 `mcp-bridge` 的設計（`[I6]`=A ＋ `[I7]`=A）
+
+本節是修訂 1 新增。`§五` 的 ADR-0006 判定表涵蓋的是**本站原本的三項設定**（資源上限、
+`logging:`、`healthcheck`）對既有六個服務的影響；下表**只針對第七個服務**，是對 `§五` 的
+**擴充，不是取代**——兩張表若有出入以本表為第七個服務的判定。
+
+### 7.1 傳輸形式與服務形狀（`OQ-16` 定案）
+
+| 項目 | 定案 | 依據 |
+|---|---|---|
+| 傳輸形式 | **HTTP／SSE** | `[I6]`=A。`requirements.md:797` 把 `OQ-16` 指派給本站 |
+| 落地形式 | compose 的**第七個服務**，`build:`（新程式） | `unit-of-work.md` `U21` 逐字「獨立進程，不在 FastAPI process 內；僅供同主機連接」 |
+| 網段與端口 | `networks: [internal]`、**無 `ports:`** | 滿足 `OQ-16` 的「須本機迴環或加密」：流量不離開本主機。與 `redis`／`ollama` 同姿態 |
+| 認證傳遞 | 每次請求的 `Authorization: Bearer <使用者 token>` | 滿足 `C-T11`「token 不得走工具參數」。稽核主體因此自然是該請求的使用者本人 |
+| 新部署變數／secret | **零** | `http://backend:8000` 屬 compose 推導值，`validate_env_contract.py` 禁止寫入範本 |
+
+### 7.2 工具宣告的產生方式（`[I7]`=A）
+
+| 項目 | 定案 | 本站實測依據 |
+|---|---|---|
+| 產生來源 | `openapi.json`（repo 根目錄），**不手寫任何一條工具宣告** | 該檔 **42 個 path、55 個 operation**，其中 **51 個宣告 security** |
+| 認證欄位處置 | 產生時**剝除** `HTTPBearer`，由轉接層自請求上下文注入 | `components.securitySchemes` **只有一個**：`HTTPBearer`。單一 scheme 使 `C-T11` 成為產生器裡的**一條**規則，而非 51 個特例 |
+| 暴露面治理 | 一份 **allowlist** 決定哪些 operation 產生為工具；**預設拒絕** | 初始值 = `U21` 已核可的 `U19 membership-service` ＋ `U20 requirement-field-service` 兩塊。擴充需逐能力明示決定，**不隨 API 自動成長** |
+| 漂移保護 | 產物進版控 ＋ CI `--check` 比對 | 既有先例：`frontend/package.json:12` 的 `gen:types`（`openapi-typescript ../openapi.json -o src/types/api.d.ts`）＋已 commit 的 `frontend/src/types/api.d.ts`；`openapi.json` 自身已有 `ci.yml:280` 的 `dump_openapi.py --check` 守著。落點見 `cicd-pipeline.md` `§六` |
+
+### 7.3 ADR-0006 四面向（**僅第七個服務**）
+
+| 面向 | 處置 | 判定 |
+|---|---|---|
+| **IAM** | 不儲存任何憑證、不新增任何身分；轉遞呼叫者的 bearer token，故稽核主體為使用者本人。**新增的授權面是 allowlist**（預設拒絕），其語意與 `U21` 已核可的「憑證欄位白名單」一致、非放寬。**界限**：allowlist 與工具呼叫的授權判定是 `U21` 的交付，本站只定它存在且預設拒絕 | **有新增，已處置；細節屬 `U21`** |
+| **Encryption** | in transit → 與 `internal` 上既有容器間流量同一姿態（明文，`nfr-design` D-2 已記載並接受），**本站不改變該姿態**；`OQ-16` 的條件以「不離開本主機」滿足。at rest → **無**（不落地儲存 token 或工具結果） | **已處置** |
+| **Network exposure** | **對外暴露面零新增**（無 `ports:`、不在 `edge`）。**但它是 `internal` 的新成員**，故 D-3 的 blast radius 改變，見 7.4 | **對外無新增；內部有** |
+| **Audit logging** | 容器日誌沿用 `logging: *json_file_bounded`（`§三`／`S-9` 的同一組上界，本服務計入 7.5 的重算）。**工具呼叫層的稽核**（誰以何身分呼叫了哪個工具）是 `U21` 的交付，不是本站 | **部分處置，界限已寫明** |
+
+**PBT（ADR-0006 的另一半）**：本站不新增純函式。**但 `[I7]`=A 新增了一個 PBT 的適用標的**
+——`openapi.json` → 工具宣告的**產生器**是純轉換（輸入 OpenAPI 文件 ＋ allowlist，輸出工具
+宣告），落在 `project.md` 點名的形狀內。可測性質例如：產生結果中**不得出現**任何
+`HTTPBearer` 衍生的參數；不在 allowlist 內的 operation **不得出現**；同一輸入兩次產生結果
+相同（決定性）。**承接站為 `U21` 的 `code-generation`**，本站只點名適用，不寫測試。
+
+**與已核可 PBT 判定表的對照（修訂 1 補，審查 `R-15`）**：`unit-of-work.md` 修訂 4 的
+「Property-based testing hard constraint 的逐項判定」表把 `U21` 的**工具 schema 白名單**
+判為「**不適用，但可機械斷言**」，理由逐字為「對 schema 的結構斷言，不需產生隨機輸入」。
+**本站不推翻該判定。** 被判不適用的是那個**對既有 schema 的結構斷言**；而 `[I7]`=A 新造
+出來的是一個**有輸入空間的轉換函式**（任意 OpenAPI 文件 × 任意 allowlist → 工具宣告），
+PBT 咬得住的正是後者。兩者是不同的受測對象，故這是**新增標的**而非翻案。
+該表另記「`U19` 的自動改選挑選邏輯是本輪唯一在單元層第一次有落點的 PBT 標的」——本項
+使 `U21` 成為第二個，**須回補進該表**，追蹤於 `§〇` 的 `S-15`。
+
+### 7.4 **D-3 blast radius 必須重算（前向指標，審查 `R-30` 要求的那一條）**
+
+`nfr-design` 的 `security-design.md` `D-3` 的 blast-radius 表是按「`internal` 成員數減一」
+計的。加入 `mcp-bridge` 後，`internal` 成員由 **4**（`backend`／`db`／`redis`／`ollama`）
+增為 **5**（＋`mcp-bridge`），故：
+
+| 目標 | 分段前 | D-3 分段後（原值） | **加入第七個服務後（本站實算）** |
+|---|---|---|---|
+| `redis` | 5 | 3 | **4**（`backend`／`db`／`ollama`／`mcp-bridge`） |
+| `ollama` | 5 | 3 | **4**（`backend`／`db`／`redis`／`mcp-bridge`） |
+
+**方向要寫對**：這是 D-3 效益的**部分侵蝕**（3 → 4），不是失效——對外暴露面仍為零，
+被移除的仍是 `frontend`／`cloudflared` 這兩個 `edge` 成員。**`security-design.md` 已被本
+attempt 的終局審查收據凍結，本站不得回改**；此表即該檔 `D-3` 的前向指標，由 `D-3` 的下一個
+觸及者（`U21` 或 `U10` 的 construction 迭代，或下一次重走 `nfr-design`）併入。
+
+### 7.5 本服務使 `§三` 的日誌總量上界重算
+
+`§三` 的上界是 `max-size × max-file × 服務數 ≤ 2GB`。服務數由 **6** 增為 **7**，故
+`max-size: 50m`、`max-file: 5` 的組合由 1.5GB 變為 **1.75GB**（實算 50×5×7 = 1750m），
+**仍在 2GB 內**，該組合不需更改。再增第八個服務則為 2.0GB，**恰好觸及上界**——下一個加
+服務的人必須重新選值，這一句是給他的。
 
 ---
 

@@ -171,6 +171,46 @@
       "id": "BR2.13",
       "status": "N/A",
       "target": "客戶端訊息不得攜帶 turnId，伺服器收到即拒絕。審查 R-20 新增。它關閉的是「客戶端可寫一個它不該持有的伺服器端識別」這個缺口，屬協定衛生，無使用者可見行為。"
+    },
+    {
+      "id": "R-01-ENTITY-COUNT-22",
+      "status": "OK",
+      "target": "functional-spec.md §三 導言：18 → 22（由 entities.md 頂層 `- name:` 實算）。審查 R-01／R-21 的殘留計數。"
+    },
+    {
+      "id": "R-23-K02-CITATION-ALIGNED",
+      "status": "OK",
+      "target": "entities.md §三 新增項第 2 點：授權依據與本檔 :162 的更正版對齊——K-02:222 的「下限」主詞是 components.md 的六種，不是「可以多於清單」；該 ready 型別屬超出條款的擴充、需上游追認。審查 R-23。"
+    },
+    {
+      "id": "R-23b-K02-LINE-CORRECTED",
+      "status": "OK",
+      "target": "entities.md 兩處 `K-02:220` 更正為 `K-02:222`（本站自行查出，非審查發現）。contract-summary.md:222 才是 `types: # components.md 逐字列舉的六種為下限，不得更少` 所在；:220 實為 `type: { type: string, required: true }`，與該主張無關。此為本 intent 第五次出現「內容對而行號錯」。"
+    },
+    {
+      "id": "R-24-BR27-DIRECTION",
+      "status": "OK",
+      "target": "entities.md WsEnvelope.description：移除對 BR2.7 的誤引。BR2.7 的 applies_to 逐字為 WsEnvelope（done／error），其 logic 講的是伺服器的 work_target／sharing_mode 不是終止事件，對客戶端的 set_work_target／set_sharing_mode 未置一詞。結論不變，依據改為本實體自身的方向界定。審查 R-24。"
+    },
+    {
+      "id": "R-26-NEW-RULES-ENUMERATED",
+      "status": "OK",
+      "target": "rules.md §三：標題 10 → 9，並以 source 欄逐條實算後列出全部九條（BR1.4／BR1.5／BR1.6／BR2.2／BR2.5／BR2.13／BR2.14／BR3.2／BR4.4）。BR1.2 的 source 為「本站明文化」屬上游衍生，刻意不計入。成因已寫明：第 3、6、7 條是上一輪審查新增、初版清單寫成之後才存在。審查 R-26。"
+    },
+    {
+      "id": "R-27-ADR0019-CITED",
+      "status": "OK",
+      "target": "rules.md §三 機械斷言表之後新增 ADR-0019 引用（inception/decisions/0019-ws-contract-gates-and-generator-supply-chain.md）與三個落點的真實路徑（backend/services/brain_ws_contract.py、scripts/dump_ws_contract.py、frontend/src/types/ws-contract.d.ts），並以表格記下兩道 CI 閘門的實際位置（ci.yml:290 於 backend job、ci.yml:210 於 frontend job）與 D-4 的「刻意不設 env:」理由。審查 R-27。"
+    },
+    {
+      "id": "NO-DRIFT-VS-SHIPPED",
+      "status": "OK",
+      "target": "本輪審查獨立複驗：本單元設計與已出貨實作無漂移——伺服器 9 型別／客戶端 6 型別／22 個實體／BR1.2・BR1.5・BR1.6・BR2.13 四條不變量皆一致。記錄為正面結論，避免下游誤以為需要重新對齊。"
+    },
+    {
+      "id": "R-25-NOT-REVERIFIED",
+      "status": "Deferred",
+      "target": "審查 R-25 未重新查證（問題檔內容因收據綁定不回改，屬如實記載而非待修項）。承接者：下一次觸及 functional-spec.md §四 者確認說明句是否齊備。"
     }
   ]
 }

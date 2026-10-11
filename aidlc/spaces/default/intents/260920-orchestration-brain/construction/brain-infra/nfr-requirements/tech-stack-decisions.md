@@ -47,7 +47,7 @@
 | **為什麼需要它** | `NFR4` 逐字要求 session 與工作狀態「**一律放 Redis，不得放行程記憶體**」。這不是本站的選擇，是上游已核可的決定 |
 | **暴露面** | 不得 `publish port`，僅限 compose 內部網路（`NFR8.7`） |
 | **憑證** | `REDIS_PASSWORD`，`required: true`、無 fallback、不得含 `$`、以 `openssl rand -hex 32` 產生（`NFR4.1`）。**擋阻機制須由本單元擴充，不是既有保證**——`render-env.sh:59` 的 `$` 名單與 `:44–49` 的必填檢查都是固定名單，皆不含 `REDIS_PASSWORD` |
-| **最小權限**（本輪新增，承接 `S-3`） | **不得以 Redis 的預設 `default` 使用者連線**；須以 ACL 建立專用使用者，指令與 key pattern 限於本應用所需。理由：單一 `requirepass` 走 `default` 取得的是 full command access（含 `FLUSHALL`／`CONFIG`／`KEYS`），而 `requirements.md:451` 逐字要求「Redis 連線憑證須最小權限」。可測判準見 `security-requirements.md` `NFR4.1(b)` |
+| **最小權限**（本輪新增，承接 `S-3`） | **不得以 Redis 的預設 `default` 使用者連線**；須以 ACL 建立專用使用者，指令與 key pattern 限於本應用所需。理由：單一 `requirepass` 走 `default` 取得的是 full command access（含 `FLUSHALL`／`CONFIG`／`KEYS`），而 `requirements.md:597` 逐字要求「Redis 連線憑證須最小權限」。可測判準見 `security-requirements.md` `NFR4.1(b)` |
 | **持久化**（`[N5]`=A） | **AOF ＋ 具名 volume** |
 | **為何選 AOF 而非不持久化** | 上游 `NFR4` 的可測不變量只寫了「重啟 **backend** 後可還原」。不持久化時，Redis 自己重啟會清掉全部 session，而**那句不變量仍然通過**——測試不會紅，使用者的對話卻沒了。AOF 把該不變量的真實含意補上 |
 | **為何不選 RDB 快照** | RDB 在崩潰時可能丟失最近幾分鐘的 session，而「大部分情況下會還原」這種不變量**無法寫成二元可判的驗收條件**。本 repo 的測試底線要求可判定 |

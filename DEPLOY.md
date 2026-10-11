@@ -167,6 +167,12 @@ EMBEDDING_PROVIDER=ollama            # ollama｜fastembed｜fulltext｜stub
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_EMBED_MODEL=bge-m3
 FASTEMBED_MODEL=multilingual-e5-large
+EMBEDDING_TIMEOUT_SEC=10             # 本清單原本漏列它；render-env.sh 一直在寫
+
+# session-store（U10）— compose 引用時同樣**無 `:-` fallback**，故 required。
+# 字面值，不是憑證。程式端**刻意無預設**：缺值時 backend 在 startup 拒絕啟動
+# （BR3.5），因為把缺值讀成「無上限」會讓單一 Redis key 無上界成長且無聲。
+BRAIN_SESSION_HISTORY_MAX=200        # 每段歷程筆數上限；段數上界 3，故總量 3 倍
 ```
 
 Azure Retail Prices **不需**寫入金鑰。改完後 `docker compose … up -d`（必要時 `--force-recreate backend`）。
@@ -193,6 +199,23 @@ schema_rbac.sql
 
 執行：
 
+**先看你在哪個環境**——兩種形式不是偏好問題，部署主機上只有第一種能用：
+
+| 環境 | 用哪一種 | 為什麼 |
+|---|---|---|
+| **部署主機**（`192.168.10.10`，`deploy/docker-compose.deploy.yml`） | **`docker exec` 形式**（下方 A） | `db` 服務**沒有 host port**——整個 deploy stack 只有 `frontend` 發布埠（`deploy/docker-compose.deploy.yml` 的 `ports:`）。這是刻意的暴露面控制，**不要為了讓 `psql` 能連就去發布 5432** |
+| **本機開發**，或任何能直連該 DB 的環境 | **`psql "$DATABASE_URL"` 形式**（下方 B） | 本機 PostgreSQL 直接可連 |
+| **CI 的 `ui-regression` stack** | **兩種都不用** | `deploy/docker-compose.test.yml` 把本檔掛進 `/docker-entrypoint-initdb.d/`，空 volume 啟動時自動執行 |
+
+**A — 部署主機（容器內，預設走這條）：**
+
+```bash
+# <db-container> 可用 `docker compose -f deploy/docker-compose.deploy.yml ps -q db` 取得
+docker exec -i <db-container> psql -U postgres -d cloud360 < schema_rbac.sql
+```
+
+**B — 本機或可直連 DB 的環境：**
+
 ```bash
 # 先設好該環境的 DATABASE_URL
 # 注意：這一份是給 psql 用的，**不能**帶 `+psycopg` 後綴——psql 不認得該形式。
@@ -200,10 +223,11 @@ schema_rbac.sql
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DBNAME'
 
 psql "$DATABASE_URL" -f schema_rbac.sql
-
-# 若 DB 在 Docker 內，範例：
-# docker exec -i <db-container> psql -U postgres -d cloud360 < schema_rbac.sql
 ```
+
+> **下文所有 `psql "$DATABASE_URL" -c "..."` 的驗證指令同理**：在部署主機上請改為
+> `docker exec -i <db-container> psql -U postgres -d cloud360 -c "..."`。
+> 本檔不在每一處重複這句，只在此處定義一次。
 
 #### 2.2 這支 SQL 會建立的表／欄位
 
@@ -223,6 +247,9 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
 | H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
 | H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
+| I | **U5 記憶層** `memory` schema ＋ `memory.memory_records`／`memory.memory_audit_events`；**U8 新增** `ix_memory_records_embedding_hnsw` | **本 repo 的第一個獨立 schema**（在此之前全樹無 `CREATE SCHEMA`）。含 `vector(1024)` 欄位、`embedding_model`、grant 邊界。見 2.2.8；向量索引（opclass `vector_cosine_ops`）見 **2.2.12** |
+| J | **U18 專案中繼資料** `project_members`／`reselection_events`／`system_requirement_fields` | **per-project 成員與角色、改選稽核、系統層需求欄位值**。三張表皆為全新，**無資料遷移**。見 2.2.9 |
+| K | **U9 保留系統 actor** `users` 的一列（`SYSTEM.retention-purge`） | **90 天記憶清除的稽核 actor**。不是人、無法登入、零權限。**刪掉它會讓每一次清除的整個交易中止**。見 2.2.11 |
 | D | 預設使用者 `admin` | 見下方 |
 
 #### 2.2.4 C1 成本表退場（U3 `legacy-cost-retirement`）
@@ -468,6 +495,558 @@ SQL
 2. **只碰遷移的產物**。初版的第 1 步寫成 `WHERE system_id IS NOT NULL`——那會連同使用者自己搬過的歸屬一起清掉，與本節第 2 點的宣稱直接矛盾；而初版第 4 步的檢查跑在那個清空之後，恆為 0，**是一個不可能失敗的檢查**（iteration 1 審查 R-02，Major）。現行版本改以「掛在預設系統上」為範圍，並把檢查拆成回復前後兩次比對。
 3. `diagram_change_records` **不在回復範圍內**：本輪它沒有任何寫入端上線（寫入端是後續單元），回復時表應為空。若不為空，那是稽核資料，刪除前須人工確認。另注意 `diagram_id` 是 `ON DELETE CASCADE`——刪除架構圖會連帶銷毀它的變更紀錄，這是已揭露並由人工裁決保留的取捨。
 
+#### 2.2.8 U5 記憶層 schema（`memory-data`）
+
+**本 repo 的第一個 `CREATE SCHEMA`。** 在此之前全樹無 `CREATE SCHEMA`、無
+`search_path`（契約 `K-05` 的 `precedent`）。兩張表**刻意不在 `public`**
+——`BR1.2` 的 grant 邊界整個作用方式就是「只開放 `memory` schema」，
+表落在 `public` 會讓該邊界**完全失效而功能上看不出來**。
+
+| 物件 | 說明 |
+|---|---|
+| `memory` schema | 獨立 schema，非獨立 database——刻意保留原生跨 schema join（兩表皆參照 `public.users`） |
+| `memory.memory_records` | 9 欄。三種 `kind`（`semantic`／`procedure`／`episodic`）共用一張表 |
+| `memory.memory_audit_events` | 刪除與可見範圍變更的稽核軌跡。**對 `memory_records` 沒有外鍵**（見下） |
+
+**三件最容易被誤讀的事：**
+
+1. **`embedding` 可為 NULL 是刻意的，不是缺漏。** `EMBEDDING_PROVIDER=fulltext`
+   模式下建立的列沒有 embedding，之後不會被向量檢索看到，除非重新 embed。
+   把它收緊為 `NOT NULL` 或回填預設值**會破壞該降級路徑**。
+2. **`embedding_model` 必填，且相似度檢索必須附它的過濾條件。**
+   **同維度不等於同向量空間**——不加這道過濾會讓跨模型檢索回垃圾**且不報錯**
+   （`decisions.md` ADR-008）。這是本層唯一**完全靜默**的失敗模式：
+   型別、維度、索引、查詢全部正常，只有結果在語意上無意義。
+3. **稽核表對記憶表沒有外鍵，這是刻意的（`DG-1`）。**
+   `FR4.5` 要 90 天刪除、`FR4.7` 要刪除留稽核；設了外鍵就必須在兩個壞結果中
+   選一個而**兩者都違反已核可需求**（`CASCADE` 使 `FR4.7` 在 90 天後失效、
+   `RESTRICT` 使 `FR4.5` 無法執行）。代價是 `memory_id` **沒有參照完整性保護**。
+
+**只有 `episodic` 受 90 天保存期約束**（`FR4.5` 逐字），且該 `kind` 的
+`expires_at` 由 CHECK 強制必填——清除作業**依 `expires_at` 選列**，
+所以 NULL 的 episodic 列永遠不會被選中，漏填的後果是**永久保留且沒有任何跡象**。
+
+稽核事件自身的保存期為 **90 天，以其 `occurred_at` 為鍵**（不隨記憶消失）。
+`occurred_at` 有索引，否則清除查詢是全表掃描——而這張表本輪**沒有讀取端**，
+不會有人順手建它。
+
+驗證：
+
+```bash
+# schema 與兩張表的位置（兩列，table_schema 皆應為 memory）
+psql "$DATABASE_URL" -c "SELECT table_schema, table_name FROM information_schema.tables
+  WHERE table_name IN ('memory_records','memory_audit_events') ORDER BY 1,2;"
+
+# embedding 的型別應為 vector(1024)
+psql "$DATABASE_URL" -c "SELECT format_type(a.atttypid, a.atttypmod)
+  FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='memory' AND c.relname='memory_records' AND a.attname='embedding';"
+
+# 稽核表**不得**有指向 memory_records 的外鍵（應回 0）
+psql "$DATABASE_URL" -c "SELECT count(*) FROM information_schema.table_constraints tc
+  JOIN information_schema.constraint_column_usage ccu
+    ON ccu.constraint_name=tc.constraint_name
+  WHERE tc.table_schema='memory' AND tc.table_name='memory_audit_events'
+    AND tc.constraint_type='FOREIGN KEY' AND ccu.table_name='memory_records';"
+
+# occurred_at 索引應存在
+psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes
+  WHERE schemaname='memory' AND tablename='memory_audit_events';"
+```
+
+CI 的 `memory-schema` job（交付物 `N-2`）會對真實 PostgreSQL 執行
+`backend/scripts/verify_memory_schema.sql` 的全部斷言，並**套用
+`schema_rbac.sql` 兩次**以驗證可重跑性——「可重跑」只跑一次時永遠是真的。
+
+> 原文寫「全部 12 條斷言」，而該檔之後已被兩個單元擴充：`U9` 加了 `S13`、
+> `U8` 加了 `S14`／`S15`（見 2.2.12）。改為不寫死數字，使它不再隨每次擴充
+> 而過期。（`S2` 在該檔不存在，是既有的編號空缺，非遺漏。）
+
+**既有非空 volume 的建立路徑尚未定案。** `schema_rbac.sql` 只在空 volume 執行
+（掛載為 `/docker-entrypoint-initdb.d/`），而既有環境的演進路徑是
+`backend/database.py` 的啟動補丁。記憶 schema 走哪一條**本輪未決**，
+部署到既有的 `192.168.10.10` 之前必須先決定。
+
+**`NFR6.1`——episodic memory 的靜態加密由主機層承載（磁碟／LUKS），
+不在應用層或資料庫欄位層。** 不選欄位層加密的理由是它會**取消一個已核可的能力**
+（密文無法全文檢索，而 `fulltext` 是支援的降級路徑）。
+
+> **本 repo 無法驗證這一項。** 它不是 CI 可檢查的事實（CI 不跑在資料庫主機上），
+> 也不是應用層可檢查的事實（PG 看不到底層區塊裝置的加密狀態）。
+> 故它是**運維承諾而非閘門**。
+>
+> **`192.168.10.10` 的目前狀態：未經本 repo 確認。** 部署負責人須在此處
+> 填入實際狀態（已啟用磁碟加密／未啟用／不適用）並註明確認日期。
+> 留白不代表已加密。
+
+#### 2.2.9 U18 專案中繼資料三表與一次性結構建立（`project-meta-data`）
+
+per-project 成員與角色、改選稽核、系統層需求欄位值。**三張表皆為全新、沒有既有資料
+要搬**（契約 `K-15` 的 `observable_side_effects` 逐字「不含任何資料寫入」）——這是它
+與 2.2.7 的 `U4` 最大的差別：那裡有資料遷移與靜止前置條件，這裡沒有。
+
+| 物件 | 說明 |
+|---|---|
+| `project_members` | 6 欄。per-project 成員身分與角色，是 per-project 授權判定（`K-16` 的 `MembershipFacade`）的資料基礎。唯一鍵 `(project_id, user_id)` |
+| `reselection_events` | **9 欄**（原 8 欄；第 9 欄 `cause` 由 `U19` 依 `[FD3]`=A 回補）。per-project 角色變更的稽核軌跡，兼橫幅已讀狀態的載體。**對 `projects` 沒有外鍵**（見下） |
+| `system_requirement_fields` | 9 欄。某系統的某個需求欄位的值（agent 需要的架構假設，如 SLA／TPS／預算）。唯一鍵 `(system_id, agent_group, field_key)` |
+
+**五件最容易被誤讀的事：**
+
+1. **`reselection_events` 對 `projects` 沒有外鍵，這是刻意的（`[ND1]`=A）。**
+   `FR12.4b` 存在的理由正是事後查得出某人的 `project_admin` 是怎麼來的，而
+   `CASCADE` 會把答案一起刪掉、`RESTRICT` 會擋住專案刪除。代價是 `project_id`
+   **沒有參照完整性保護**，唯一寫入端是 `K-16` 的 facade（應用層保證，不是資料庫
+   保證）。形狀與 2.2.8 的 `memory.memory_audit_events.memory_id` 一對一對照。
+2. **`reselection_events` 沒有保存期限，而這也是刻意的。**
+   `memory.memory_audit_events` 有 90 天（`NFR7.2`），本表**沒有**：母體不同
+   （記憶稽核的母體是每日對話，改選事件的母體是「專案 owner 帳號被停用」這種罕見
+   事件），且 `components.md:886` 逐字定下「清＝`acknowledged_at`，**事件列本身不刪**
+   ——刪了就失去稽核」。**不要照 2.2.8 的樣子補一個 90 天清除作業**，那會刪掉
+   `FR12.4b` 的稽核。
+3. **`project_members.project_id` 是 `ON DELETE CASCADE`，而這同時是在保護既有程式。**
+   `hierarchy_service.delete_project()` 只守兩道門（預設專案、底下仍有系統），
+   **沒有任何一道關於成員**；而 `U19` 落地後每個新建專案至少有一列成員。
+   若改成 `RESTRICT`，`db.delete(project)` 會在 commit 丟出**未被捕捉的
+   `IntegrityError`**，使用者看到 500 而不是 `BR4.4` 那種帶訊息的衝突回應。
+4. **`project_members.role` 與全域角色同名不同義。**
+   本表的 `project_admin` 是**專案內**的身分，與 `users.role`／`role_permissions`
+   的全域 `Project_Admin` 是兩回事；`FR12.6` 要求**兩層串聯、任一層不過即拒**。
+   資料庫無法強制區分，只在 COMMENT 中標明。
+5. **`reselection_events.cause` 讓兩種角色變更共用一張表，而它改變了兩欄的語意。**
+   `U19` 依 `[FD3]`=A 回補此欄（`auto_reselection`／`manual_role_change`），
+   **關閉了原本留在表 COMMENT 裡的 `OPEN-ND18-3`**。兩項連帶後果都是刻意的：
+   `previous_owner_user_id` 在 `auto_reselection` 下是**被停用的 owner**、在
+   `manual_role_change` 下是**執行變更的管理者**（`BR5.4`，兩者都回答「這次變更
+   是誰造成的」）；`acknowledged_at` **只對 `auto_reselection` 有意義**（`BR5.5`）。
+   因此**橫幅查詢必須同時過濾 `cause = 'auto_reselection'` 與
+   `acknowledged_at IS NULL`**——漏掉 `cause` 過濾會讓每一次人工角色變更都彈出
+   一則文案為「系統自動把管理權交給你」的橫幅，而那對人工變更是錯的訊息。
+   本欄**有** CHECK（`ck_reselection_events_cause`），這是它與 `previous_role`／
+   `new_role`（刻意無 CHECK）的分野：它的兩個值是定案而非未決事項。
+
+**`system_requirement_fields` 的三種狀態必須保持可區分**（`ADR-015`）：
+
+| 狀態 | 列是否存在 | `value` | `cleared_at` |
+|---|---|---|---|
+| 從未填過 | **無列** | — | — |
+| 已填 | 有列 | 有值 | NULL |
+| 曾填後清空 | **有列** | **NULL** | **有值** |
+
+`value` **可為 NULL 是刻意的**：收緊為 `NOT NULL` 會讓前兩種以外的第三態無法表達，
+而畫面要求區分它們——代價是清空動作失去稽核軌跡。
+`ck_system_requirement_fields_cleared_has_null_value` 擋下「同時有值又已清空」的列。
+
+該表的**表 COMMENT 是防呆機制而非文件義務**（`BR2.2`）：欄位定義（`agent_group` →
+`field_key`）是**程式內的常數**，定義被移除後其值列**保留**、畫面不渲染該組、
+未填計數只算**當前已宣告**的欄位。不寫下來的話，「資料庫裡有、畫面上看不到」的列
+會被下一個人當成髒資料清掉——被清掉的是使用者曾經填過的值。
+CI 的 `P12` 斷言會檢查這段 COMMENT 存在且含那三件事。
+
+##### 前進步驟（既有環境的唯一路徑，`NFR8.5`）
+
+`schema_rbac.sql` 只掛在 `/docker-entrypoint-initdb.d/`，故它**只在空 volume 執行**
+——既有的 `192.168.10.10` 這三張表（以及 2.2.8 的 `memory` schema 與兩張表）
+**一張都拿不到**。既有環境的唯一路徑是下面這支獨立指令，它一次建立
+**`U5` ＋ `U18` 的全部新物件**（`[P1]`=A）：
+
+```bash
+# 前置條件：2.2.7 的 run_hierarchy_migration.py 必須**先**跑過
+# （J) 的兩條外鍵指向 projects／systems）。沒跑過的話本指令會以可讀訊息擋下，
+# 不會丟一個生的 UndefinedTable。
+cd backend
+# DATABASE_URL 指向目標資料庫（給應用程式用的那一份，帶 +psycopg 後綴）
+python scripts/run_meta_schema_migration.py
+echo "exit=$?"    # 必須為 0
+```
+
+**這支腳本不複製 DDL**：它直接解析 `schema_rbac.sql` 的 `X)`／`I)`／`J)` 三個區塊
+並執行同一份文字，所以那三個區塊的 DDL 只有一份——**與 2.2.7 的
+`run_hierarchy_migration.py` 刻意不同**（那支在 `services/hierarchy_migration.py`
+另有一份物化，`schema_rbac.sql` 的檔頭逐字「DDL 兩處並存，改一處必須改另一處」）。
+副作用是 CI 的 `memory-schema` job（它套用 `schema_rbac.sql`）與這支腳本
+**不可能漂移**。
+
+全部 DDL 包在**一個交易**內（PostgreSQL 的 DDL 可交易），並在 COMMIT **之前**
+逐項查證後條件，所以：
+
+> **結束碼 0 ⟺ 1 個 schema ＋ 5 張表 ＋ 7 個索引 ＋ 9 條 CHECK／UNIQUE ＋ 3 條外鍵
+> 刪除行為（另驗 1 條必須不存在的外鍵）＋ 4 段表 COMMENT ＋ `memory` 的 grant
+> 全部存在。**
+>
+> （CHECK／UNIQUE 由 8 條增為 9 條：`U19` 依 `[FD3]`=A 回補的
+> `ck_reselection_events_cause`。)
+
+任一項不成立即 rollback 並以非零碼結束（`NFR8.3`）——資料庫維持執行之前的狀態，
+處置後重跑即可（全部 DDL 為 `IF NOT EXISTS` 形狀，`BR2.1`，已實測重跑為 exit 0）。
+**不動啟動路徑**（`NFR8.4`：`backend/database.py` 不新增補丁）——理由是
+`restart: unless-stopped` 之下任何建表失敗會變成**重啟迴圈**，而那比「少幾張表」
+更難診斷。
+
+**誠實的代價**：這仍是**手動步驟，忘了跑就沒有表**，而 `deploy.yml` 不呼叫任何
+遷移腳本（2.2.7 的那支也沒被呼叫）。失敗至少很明顯：`U19`／`U20` 的任何查詢會立即
+報 `relation "project_members" does not exist`，不是靜默降級。
+
+驗證：
+
+```bash
+# 三張表都在 public（三列）
+psql "$DATABASE_URL" -c "SELECT table_name FROM information_schema.tables
+  WHERE table_schema='public' AND table_name IN
+  ('project_members','reselection_events','system_requirement_fields') ORDER BY 1;"
+
+# 欄位數應為 6 / 9 / 9（reselection_events 因 U19 回補 cause 而由 8 增為 9）
+psql "$DATABASE_URL" -c "SELECT table_name, count(*) FROM information_schema.columns
+  WHERE table_schema='public' AND table_name IN
+  ('project_members','reselection_events','system_requirement_fields')
+  GROUP BY 1 ORDER BY 1;"
+
+# joined_at 必須是 NOT NULL（應回 NO）——自動改選直接讀它，可為 null 會讓挑選
+# 在空值上無序，每次選出不同人而沒有任何錯誤
+psql "$DATABASE_URL" -c "SELECT is_nullable FROM information_schema.columns
+  WHERE table_name='project_members' AND column_name='joined_at';"
+
+# project_members → projects 的 ON DELETE 應為 CASCADE（confdeltype 應回 c）
+psql "$DATABASE_URL" -c "SELECT con.confdeltype FROM pg_constraint con
+  JOIN pg_class t ON t.oid=con.conrelid JOIN pg_class rt ON rt.oid=con.confrelid
+  WHERE t.relname='project_members' AND con.contype='f' AND rt.relname='projects';"
+
+# reselection_events **不得**有指向 projects 的外鍵（應回 0）
+psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
+  JOIN pg_class t ON t.oid=con.conrelid JOIN pg_class rt ON rt.oid=con.confrelid
+  WHERE t.relname='reselection_events' AND con.contype='f' AND rt.relname='projects';"
+
+# cause 必須存在且為 NOT NULL（應回一列 NO）——U19/[FD3]=A 回補的第 9 欄
+psql "$DATABASE_URL" -c "SELECT is_nullable FROM information_schema.columns
+  WHERE table_name='reselection_events' AND column_name='cause';"
+
+# cause 的封閉列舉必須在（應回含 auto_reselection 與 manual_role_change 的定義）
+psql "$DATABASE_URL" -c "SELECT pg_get_constraintdef(oid) FROM pg_constraint
+  WHERE conname='ck_reselection_events_cause';"
+
+# 橫幅查詢用的 partial index 必須存在**且仍是 partial**
+# （indexdef 應含 WHERE (acknowledged_at IS NULL)；拿掉 WHERE 只會變慢、不會報錯）
+psql "$DATABASE_URL" -c "SELECT indexdef FROM pg_indexes
+  WHERE indexname='ix_reselection_events_unack';"
+
+# 三態模型的 CHECK 與三欄唯一鍵都在（應有兩列）
+psql "$DATABASE_URL" -c "SELECT conname FROM pg_constraint
+  WHERE conname IN ('ck_system_requirement_fields_cleared_has_null_value',
+                    'uq_system_requirement_fields_group_key') ORDER BY 1;"
+
+# [UG:G9]=A 的防呆 COMMENT 必須非空且含那三件事
+psql "$DATABASE_URL" -c "SELECT obj_description(
+  'public.system_requirement_fields'::regclass, 'pg_class');"
+```
+
+CI 的 `memory-schema` job 會對真實 PostgreSQL 執行全部 **14** 條斷言
+（`backend/scripts/verify_meta_schema.sql`，`P1`–`P12` ＋ `U19` 回補的 `P13`／`P14`），並**套用
+`schema_rbac.sql` 兩次**以驗證可重跑性。**該 job 的名稱比它的內容窄**
+（它同時跑 2.2.8 的 `S1`–`S12` 與本節的 `P1`–`P12`）——刻意不改名，理由是
+GitHub 的 check name 取自 job 的 `name:`，改它會讓 branch protection 的必要檢查
+變成「缺少必要檢查」。
+
+**本單元零應用程式碼、零端點、零畫面**，故沒有新環境變數、沒有 `deploy/.env` 變更、
+沒有前端建置參數變更。成員與需求欄位的讀寫（含授權）屬後續單元
+（`K-16`／`K-17` 的 facade）。
+
+#### 2.2.10 U19 既有專案的成員回填（`membership-service`）
+
+**第三支一次性腳本，而它與前兩支的順序是嚴格的。** `project_members` 是全新表
+（契約 `K-15` 的 `observable_side_effects` 逐字「不含任何資料寫入」），而既有專案
+全部由 `services/hierarchy_migration.py` 建立且**從未寫過任何成員列**
+——所以**每一個既有專案今天都是零成員**。
+
+| # | 動作 | 前置 | 跳過或順序錯誤的後果 |
+|---|---|---|---|
+| 1 | `python scripts/run_hierarchy_migration.py`（見 2.2.7） | — | `J)` 的外鍵指向 `projects`／`systems`，表不存在則第 2 步以可讀訊息擋下 |
+| 2 | `python scripts/run_meta_schema_migration.py`（見 2.2.9） | 第 1 步 | 兩張表不存在 → `U19` 的任何寫入拋 `UndefinedTable` |
+| 3 | **`python scripts/backfill_project_members.py`（本節）** | 第 2 步 | 既有專案的擁有者被 `BR1.6` 判為**非成員**而被拒絕存取自己的專案 |
+
+##### 為什麼必須在**任何消費端上線之前**跑（`NFR12.25`）
+
+後果鏈：`resolve_project_role` 對既有專案的任何使用者（**包括該專案真正的
+owner**）查無列 → 回 `None` → `BR1.6` 要求當成拒絕 → 消費端
+（`U20`／`U13`／`U21`／`U24`）上線時，既有專案的擁有者會被判定為非成員。
+
+**第一次部署不會鎖人在外面**，而這一點要寫清楚以免被誤讀成「不急」：
+
+| 問題 | 答案（實查） |
+|---|---|
+| 這個窗口裡既有專案的擁有者會被鎖在外面嗎？ | **不會。** 本單元的消費端都在後續 Bolt，而 `hierarchy_facade.list_projects` 目前是 **owner-scoped**（讀 `projects.owner_user_id`，不讀 `project_members`），故既有的專案列表路徑不經本單元 |
+| 既有停用端點的新前置檢查會誤判嗎？ | **不會，但方向是「過寬」而非「過嚴」**：零成員列時 `assert_can_deactivate` 的 `HAVING count(*) = 1` 找不到任何專案，故它**放行**。保護在回填之後才生效 |
+| 那什麼時候真的會鎖人在外面？ | **第一個消費端上線時。** 這就是 `NFR12.25` 的理由 |
+
+**對部署批次的交接（`OPEN-ID19-2`）**：本單元與第一個消費端之間是一條
+**手動步驟邊**——它不在依賴圖上，是一個部署程序前置條件。
+「回填已在 staging 執行過」必須是第一個消費端所在批次的前置條件。
+
+##### 前進步驟
+
+```bash
+cd backend
+# DATABASE_URL 指向目標資料庫（給應用程式用的那一份，帶 +psycopg 後綴）
+
+# 先看會動到幾列（交易一律回滾，不寫入）
+python scripts/backfill_project_members.py --dry-run
+echo "exit=$?"    # 必須為 0
+
+# 實際回填
+python scripts/backfill_project_members.py
+echo "exit=$?"    # 必須為 0
+```
+
+對每個**沒有任何成員列**的專案插入一列
+`(project_id, owner_user_id, 'project_admin', now())`。
+
+- **冪等**：條件是「該專案無任何成員列」，故重跑安全。
+- **刻意不處理「已有成員但 owner 不在其中」的專案**——那是人為決定的結果
+  （例如 owner 被移出過），回填不得把他加回去。唯一約束
+  `uq_project_members_project_user` 也因此不會被違反。
+- `joined_at` 用 `now()` 而非專案的 `created_at`：這一列記的是「他**何時成為
+  成員**」。用 `created_at` 會讓 `BR4.2` 的「最早加入者」挑選把一位回填出來的
+  成員排在所有真實邀請之前，而那不是事實。
+- **單一交易 ＋ 自我終檢**（COMMIT 之前斷言「零成員專案數為 0」），故：
+
+> **結束碼 0 ⟺ `projects` 中沒有任何零成員的專案。**
+
+任一項不成立即 rollback 並以非零碼結束——資料庫維持執行之前的狀態。
+
+**刻意不與 2.2.9 的腳本合併**（`OPEN-N19-4` 的定案）：那一支目前**純 DDL、無
+資料寫入**，而那正是它能單一交易並自我終檢的前提；把資料動作混進去會讓
+「結束碼 0 代表什麼」同時涵蓋兩種不同的保證。
+
+**誠實的代價**：這仍是**手動步驟，忘了跑就沒有列**，而 `deploy.yml` 不呼叫任何
+遷移腳本（2.2.7／2.2.9 的那兩支也沒被呼叫）。
+
+驗證：
+
+```bash
+# 零成員專案數必須為 0
+psql "$DATABASE_URL" -c "SELECT count(*) FROM projects p
+  WHERE NOT EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = p.id);"
+
+# 每個專案至少有一位 project_admin（BR2.1 的不變量；應回 0 列）
+psql "$DATABASE_URL" -c "SELECT p.id, p.name FROM projects p
+  WHERE NOT EXISTS (SELECT 1 FROM project_members m
+    WHERE m.project_id = p.id AND m.role = 'project_admin');"
+
+# 回填出來的列：role 為 project_admin、invited_by 為 NULL（系統寫入，無邀請者）
+psql "$DATABASE_URL" -c "SELECT project_id, user_id, role, invited_by
+  FROM project_members WHERE invited_by IS NULL ORDER BY project_id;"
+```
+
+##### 回滾的一項不對稱（`OPEN-ID19-5`）
+
+`deploy.yml` 的回滾還原的是**映像**，而本節是**資料動作**——映像回滾**不會**
+撤銷它。這會壞掉嗎？**不會**：回填寫的是
+`(project_id, owner_user_id, 'project_admin', now())`，而 last-good 的程式
+**不讀這兩張表**（本單元是第一個讀寫者），多出來的列對舊程式不可見。
+故**不需要反向腳本**。**但這個結論只在第一次部署成立**——一旦有消費端上線，
+回滾的語意就要重新評估。
+
+##### 本單元的其他部署面變更：零
+
+不改 `deploy.yml`、不改任一 compose、不改 `deploy/nginx.conf`、不改
+`deploy/render-env.sh`、不改任一 `.env.example`、**不改 `backend/database.py`**
+（`NFR12.5`：該檔 diff 為空）。新端點掛在既有 `/api/` 之下
+（`/api/membership/*`），走既有 nginx 反向代理，**不新增監聽埠、不新增環境
+變數**。唯一的基礎設施變更在 `.github/workflows/ci.yml`（新增 `concurrency`
+job，見該檔內的註解）。
+
+#### 2.2.11 U9 保留系統 actor 與 90 天記憶清除（`memory-purge`）
+
+`K)` 區塊 seed 的是 **`users` 的一列**，而不是一張表。它是 90 天記憶清除
+（`FR4.5`）寫稽核事件時的 actor。
+
+| 欄位 | 值 |
+|---|---|
+| `username` | `SYSTEM.retention-purge` |
+| `role` | `system`（**不在** `role_permissions` 的授權集合內） |
+| `is_active` | `FALSE` |
+| `password_hash` | 一個**格式合法**的 bcrypt hash，其明文是一次性隨機值且從未被記錄 |
+
+**為什麼一定要有它**：`memory.memory_audit_events.actor_user_id` 是
+`NOT NULL REFERENCES users (id)`，而清除是**排程觸發、無人在迴圈內**
+（`FR4.5a`）——沒有自然的使用者可填。填記憶擁有者會讓稽核「對誰刪的」說謊
+（`I)` 區塊該欄的 `COMMENT` 逐字），留 NULL 則 `NOT NULL` 不允許。
+
+##### 它會出現在 Admin 使用者清單上，而且**不要刪掉它**
+
+`/api/auth/list` 不知道要排除它，所以管理者會在清單上看到一個無法登入、
+沒有任何權限的帳號（`total` 會 +1）。那不是髒資料。
+
+**刪掉它的後果**：自那一刻起，清除的稽核 `INSERT` 全部因外鍵違反而失敗，
+而稽核與刪除**在同一個交易內**，所以**整個清除交易中止**、workflow 以非零碼結束。
+那是刻意的大聲失敗，但在它被修好之前，90 天保存期不會前進一列。
+
+##### 既有環境取得這一列的路徑
+
+```bash
+cd backend && python3 scripts/seed_retention_system_actor.py
+```
+
+它 `import` `run_meta_schema_migration.py` 的 `extract_blocks()` 解析本檔的
+`K)` 區塊，**SQL 只有一份**；單一交易，並在 COMMIT 之前逐項查證後條件
+（那一列存在、`is_active` 為 false、`role` 不在授權矩陣內、`password_hash`
+符合 bcrypt 格式），任一項不成立即回滾並以非零碼結束。重跑安全。
+
+> **明文更正（本節最重要的一句）**：
+> **不要為了取得這個 seed 而重跑整支 `schema_rbac.sql`。**
+> 該檔的 `C) RBAC` 區塊開頭那條逐字為 `DELETE FROM role_permissions;` 的敘述會
+> **清掉任何經 Admin UI 調整過的權限矩陣**，然後重播設計預設值（檔頭的注意事項
+> 已警告過，但「重跑整支檔」在既有環境聽起來像一個安全操作）。
+> 上游的 `infrastructure-specification.md §五` 第 2 步把「重跑 `schema_rbac.sql`」
+> 寫成既有環境取得 seed 的**唯一路徑**——那個敘述的代價當時沒有被查證，
+> 本節是它的更正。
+
+##### 驗證
+
+```bash
+psql "$DATABASE_URL" -c "SELECT id, username, role, is_active FROM users WHERE username = 'SYSTEM.retention-purge'"
+#   應回**一列**，且 is_active 為 f
+
+# role 不在授權矩陣內（應為 0）
+psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions WHERE role = 'system';"
+
+# password_hash 是合法 bcrypt 格式（應為 t）
+psql "$DATABASE_URL" -c "SELECT password_hash ~ '^\$2[aby]\$' FROM users WHERE username = 'SYSTEM.retention-purge';"
+```
+
+> 在部署主機上請改為
+> `docker exec -i <db-container> psql -U postgres -d cloud360 -c "..."`（同 2.1 的說明）。
+
+##### 兩個新的 GitHub Actions workflow
+
+| 檔案 | runner | 觸發 | 職責 |
+|---|---|---|---|
+| `.github/workflows/memory-retention-purge.yml` | **自架**（`[self-hosted, linux, x64, cloud360]`） | `schedule` 每日 17:41 UTC ＋ `workflow_dispatch`（含 `dry_run`，預設 `true`） | 執行清除（兩條 DELETE ＋ 一次稽核 INSERT） |
+| `.github/workflows/memory-retention-watchdog.yml` | **GitHub 託管**（`ubuntu-latest`） | `schedule` 每日 06:23 UTC ＋ `workflow_dispatch` | 查清除最後一次**成功的排程** run，逾 3 天開 issue 並以非零碼結束 |
+
+- **排程要到檔案進入預設分支後才會排入**，這是 GitHub 的既有行為；merge 進 `ut`
+  之後不會立刻開始跑。
+- **首次啟用前必須先驗證選取條件**：以 `workflow_dispatch` ＋ `dry_run=true`
+  手動觸發一次，核對它印出的計數與**選取範圍的邊界**（最舊／最新時間戳 ＋ 最多
+  10 筆 id）。理由是**已執行的清除不可回滾**（`OPEN-ID9-4`）——workflow 檔可
+  `git revert`、seed 可重建，但刪掉的記憶與稽核列無法復原。
+- 清除本體**零新 secret、零新環境變數、零新監聽埠**；`db` 不取得 host port。
+  監看者只用內建 `GITHUB_TOKEN`。
+- 監看者需要 **`issues: write`**，而本 repo 的既有排程 workflow **無此先例**
+  （它們持有 `issues: read` ＋ gh-aw 的 `safe-outputs`）。這是本單元唯一的權限
+  增量，替代方案見 `monitoring-design.md §三之三`。
+
+##### 本單元的其他部署面變更：零
+
+不改 `deploy.yml`、不改任一 compose、不改 `deploy/nginx.conf`、不改
+`deploy/render-env.sh`、不改任一 `.env.example`、**不改 `backend/database.py`**
+（該檔 diff 為空）。`ci.yml` 的 `memory-schema` job 新增一個步驟跑
+`backend/scripts/verify_purge_sql.sql`（`R1`–`R10`）。
+
+#### 2.2.12 U8 記憶檢索的 HNSW 向量索引（`memory-service`）
+
+**本單元的唯一結構變更是一個索引**，落在 `schema_rbac.sql` 的 `I)` 區塊
+（`U5` 擁有的區塊）。沒有新表、沒有新欄位、沒有 seed、**沒有資料遷移**。
+
+| 物件 | 說明 |
+|---|---|
+| `memory.ix_memory_records_embedding_hnsw` | `memory_records.embedding` 的 HNSW 索引，opclass 為 **`vector_cosine_ops`** |
+
+##### 三件最容易被誤讀的事
+
+1. **opclass 與查詢的距離運算子必須成對，而不成對是靜默的。**
+   本 repo 的那一對是 `vector_cosine_ops` ↔ **`<=>`**
+   （`backend/services/memory_service.py` 的 `SEARCH_SQL`）。
+   opclass 改錯時索引**被忽略**、查詢**仍然正確**（仍回精確最近鄰）、
+   在空表上延遲**看起來一樣好**——`[N2]`=B 的整個投資落空而沒有任何跡象。
+   故它由兩道斷言鎖住：`verify_memory_schema.sql` 的 **`S14`**（真實 PG 上以
+   `SET enable_seqscan = off` ＋ `EXPLAIN` 驗 planner 真的用得到它）
+   與 `backend/tests/test_memory_contract.py` 的 **`C6`**（鎖住 Python 側的
+   運算子與本索引的 opclass 是同一對）。
+
+2. **HNSW 而非 ivfflat。** ivfflat 的 `lists` 參數需要先有資料才選得合理，
+   而本表在建立索引時是空的；HNSW 可在空表上建立。
+
+3. **`git revert` 不會刪掉這個索引**（`I8-4`）。程式碼可 revert、
+   `openapi.json` 可 revert，但 DDL 已經執行過。回滾後索引會留著，
+   而**留著是無害的**（只佔空間，不改變查詢正確性），故回滾程序**不要求**
+   `DROP INDEX`。寫在這裡只是為了不讓人以為 revert 之後資料庫回到了原狀。
+   真要移除：`DROP INDEX IF EXISTS memory.ix_memory_records_embedding_hnsw;`
+
+##### 既有環境的取得路徑：不需要新腳本
+
+`backend/scripts/run_meta_schema_migration.py` 解析並執行 `I)` 區塊
+（`BLOCKS_TO_RUN = ("X", "I", "J")`），故索引**會被建立**。
+本單元同步把它加進該腳本的 `EXPECTED_INDEXES`——只加 SQL 而不加清單會讓
+索引「被建立但不被驗證」，該腳本「結束碼 0」的語意會悄悄變窄而無人察覺。
+
+**與 `U9` 的對照**：`U9` 的系統 actor seed 不能放 `I)`（該腳本逐字宣告
+「也不塞任何資料」），故它需要新腳本。**索引是 DDL 而非資料**，所以放 `I)`
+完全正確且自動走既有路徑。
+
+##### 後端啟動對 `memory` schema 的新依賴（**部署前必讀**）
+
+本單元為兩張記憶表新增了 ORM 映射（`backend/models.py`），理由是
+in-memory SQLite 的測試環境以 `Base.metadata.create_all()` 建表，沒有 ORM
+模型就**沒有表可查**，連授權測試都跑不起來。
+
+後果：`init_db()` 的 `Base.metadata.create_all()` 現在會走訪
+`memory.memory_records` 與 `memory.memory_audit_events`。
+
+| 情境 | 行為 |
+|---|---|
+| 兩張表已存在（空 volume 初始化、或已跑過 `run_meta_schema_migration.py`） | `checkfirst` 過濾掉它們，**no-op** |
+| `memory` schema **不存在** | `create_all()` 以 `schema "memory" does not exist` 失敗 → **啟動失敗** |
+| schema 存在但表不存在 | 由 `models.py` 的 `before_create` 守門**主動拒絕**並印出處置方式 |
+
+第三列的守門是刻意加的：ORM **刻意省略 `embedding` 欄位**
+（`NFR8.20` 要求 `backend/requirements.txt` 的 diff 為空，而宣告
+`vector(1024)` 需要 `pgvector` 套件）。若放任 `create_all` 建表，會得到一張
+**缺少 `embedding` 的 `memory_records`**，而之後重跑 `schema_rbac.sql`
+也補不回來（`CREATE TABLE IF NOT EXISTS` 整段 no-op）——向量檢索永久失效
+且沒有任何錯誤訊息。大聲失敗遠優於那個結果。
+
+**故部署前置條件（既有環境）**：先跑
+`python backend/scripts/run_meta_schema_migration.py`（見 2.2.9），
+再啟動後端。順序錯誤的後果是啟動失敗，而非資料損壞。
+
+驗證：
+
+```bash
+# 索引存在（應回一列 ix_memory_records_embedding_hnsw）
+psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes
+  WHERE schemaname='memory' AND tablename='memory_records'
+    AND indexname='ix_memory_records_embedding_hnsw';"
+
+# 索引型態與 opclass 應為 hnsw / vector_cosine_ops
+psql "$DATABASE_URL" -c "SELECT am.amname, opc.opcname
+  FROM pg_index i JOIN pg_class ic ON ic.oid=i.indexrelid
+  JOIN pg_namespace n ON n.oid=ic.relnamespace
+  JOIN pg_am am ON am.oid=ic.relam
+  JOIN pg_opclass opc ON opc.oid=i.indclass[0]
+  WHERE n.nspname='memory' AND ic.relname='ix_memory_records_embedding_hnsw';"
+
+# planner 在 seqscan 關閉時真的用得到它（計畫中應出現該索引名）
+psql "$DATABASE_URL" -c "SET enable_seqscan=off;
+  EXPLAIN (COSTS OFF) SELECT id FROM memory.memory_records
+  ORDER BY embedding <=> (SELECT ('[' || array_to_string(
+    array_fill(0.1::real, ARRAY[1024]), ',') || ']')::vector(1024)) LIMIT 5;"
+```
+
+##### 本單元的其他部署面變更：零
+
+不改 `deploy.yml`、不改任一 compose、不改 `deploy/nginx.conf`、不改
+`deploy/render-env.sh`、不改任一 `.env.example`、不改 `backend/requirements.txt`、
+**不改 `backend/database.py`**（該檔 diff 為空），**也不改 `.github/workflows/ci.yml`**
+——`S14`／`S15` 進既有的 `backend/scripts/verify_memory_schema.sql`，
+而 `memory-schema` job 已經在執行它。
+
+> **已知的命名落差，如實記載**：`ci.yml` 裡那個步驟的名稱仍是
+> `Verify memory schema assertions (S1-S13)`，而該檔現在含 `S1`–`S15`。
+> 步驟名因此比內容窄。**刻意不改**：本單元的判準之一是 `ci.yml` 的 diff 為空
+> （`NFR8.20` 的可驗證面）。這與該 job 自身註解記載的同形取捨一致
+> （「這個 job 的 id 與 name 現在都比它的內容窄……刻意不改」）。
+
 #### 2.2.1 A3 `architecture_reviews`（DDL 摘要）
 
 | 欄位 | 說明 |
@@ -574,7 +1153,7 @@ psql "$DATABASE_URL" -c "SELECT role, story_id, can_view, can_edit, updated_by F
 
 執行 `schema_rbac.sql` 後：
 
-1. **`role_permissions`**：寫入設計預設矩陣（約 **308** 列，11 角色 × 各 Story）。  
+1. **`role_permissions`**：寫入設計預設矩陣（約 **352** 列，11 角色 × 各 Story）。  
 2. **`users`**：只建表，不建立固定密碼管理員。
 
 後端若在**空庫**啟動，`init_db()` 也會：建表、必要時 seed `role_permissions`。
@@ -588,12 +1167,12 @@ Local 環境仍會 seed demo persona 帳號；test/ci 只會建立 `admin/admin1
 | 只建空表、**沒有**插入 `role_permissions` | 矩陣**全空**（所有角色對所有功能都無檢視／編輯／審核）→ Sidebar 幾乎看不到功能、API 易 403 |
 | 有跑 `schema_rbac.sql`（或後端空表自動 seed） | 有設計預設權限；需搭配既有管理員或 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD` 建立的 bootstrap admin 調整 |
 
-因此：**新環境請務必執行 `schema_rbac.sql`（或確認啟動後 `role_permissions` 列數約 308）**，不要只建表不塞預設。
+因此：**新環境請務必執行 `schema_rbac.sql`（或確認啟動後 `role_permissions` 列數約 352）**，不要只建表不塞預設。
 
 驗證：
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions;"   -- 預期約 308
+psql "$DATABASE_URL" -c "SELECT count(*) FROM role_permissions;"   -- 預期約 352
 psql "$DATABASE_URL" -c "SELECT username, role FROM users WHERE username='admin';"
 ```
 
@@ -972,19 +1551,85 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 | × 1.5 | Redis 的 `used_memory` 之外還有 allocator 碎片（`mem_fragmentation_ratio` 一般 1.0–1.5）與輸出緩衝。1.5 是實務的保守下界，**作用是讓關係式可被檢查，不是精確預測** |
 | ＋ 256MB | AOF 重寫期間的 copy-on-write 與 `aof_rewrite_buffer`。AOF 由 `NFR4.2` 要求開啟，故此項必存在 |
 
-**關係式不成立的後果**：容器會在 Redis 有機會執行 `allkeys-lru` 淘汰之前就被 OOM kill
-——把一個優雅的淘汰換成硬重啟，而硬重啟在 `restart: unless-stopped` 之下變成反覆重啟，
-且它比淘汰難診斷得多（OOM kill 只在核心日誌裡）。**注意訊號的可達性（審查 R-01）**：淘汰計數雖然在 `INFO` 裡有 `evicted_keys`，但 `INFO` 的 ACL 分類是 `@slow @dangerous`，**本專案設定的兩個身分都不能執行它**——`default` 只有 `@connection`，app 使用者是 `+@all -@admin -@dangerous`。實際可用的替代訊號是以 app 使用者執行 `MEMORY STATS`，以及在主機上跑 `docker stats` 看容器層用量；兩者都不需要放寬任何 ACL。
+**關係式不成立的後果**：容器會在 Redis 有機會以 `OOM` 拒絕寫入之前就被 OOM kill
+——把一個明確的、可被應用層分類的拒絕換成硬重啟，而硬重啟在 `restart: unless-stopped`
+之下變成反覆重啟，且它比拒絕難診斷得多（OOM kill 只在核心日誌裡）。
+
+> ⚠ **本段原本寫的是「在 Redis 有機會執行 `allkeys-lru` 淘汰之前」。`maxmemory-policy`
+> 已於 `U10` 改為 `noeviction`（見下方），所以「優雅的淘汰」這個對照項不再存在**——
+> 現在的對照項是「可偵測的寫入拒絕」。關係式本身與它的下界數字**沒有改變**。**注意訊號的可達性（審查 R-01）**：淘汰計數雖然在 `INFO` 裡有 `evicted_keys`，但 `INFO` 的 ACL 分類是 `@slow @dangerous`，**本專案設定的兩個身分都不能執行它**——`default` 只有 `@connection`，app 使用者是 `+@all -@admin -@dangerous`。實際可用的替代訊號是以 app 使用者執行 `MEMORY STATS`，以及在主機上跑 `docker stats` 看容器層用量；兩者都不需要放寬任何 ACL。
 
 **`maxmemory 256mb` 的暫定依據**（與六個上限同一形狀：公開基準 ＋ 限期複量）：單一 session
 的 key 大小上界（`BrainSession` 除 `messageHistory` 外全是識別碼與短字串，量級由
 `messageHistory` 決定）× 24 小時內活躍 session 數上界（TTL 24 小時、每次互動續期）×
-安全係數。**一項待確認**：`messageHistory` 若沒有截斷策略，單一 session 可無限成長，
-這個推導就不成立，必須反過來以 `maxmemory` 約束 `messageHistory`（`U10` 確認）。
+安全係數。**該項待確認已由 `U10` 關掉**：`messageHistory` 有截斷策略了——每段上限
+`BRAIN_SESSION_HISTORY_MAX`（值 200，required、**無預設**），上限**每段獨立計算**而
+段數上界為 3（`shared`／`workspace`／`assessment`），故單一 session 的歷程上界為
+`3 × 200 × 每則約 500 B ≈ 300 KB`，而 `300 個同時存活 × 300 KB = 90 MB`，為
+`maxmemory 256mb` 的 **35%**。推導因此成立，不需要反過來以 `maxmemory` 約束歷程。
+
+> **這個上界有一項仍然是假設**：每則 500 B 是 *假設值*、不是量測值。單則訊息另有
+> 一道 4000 字元的硬上限（程式常數），故最壞情況遠大於以平均值算出的 300 KB——
+> 「300 個同時存活」在**平均**假設下成立，在最壞情況下不成立。偵測面是
+> `noeviction` 的寫入拒絕與以 app 身分執行的 `MEMORY STATS`，而非事前保證。
+>
+> **另一項不在本上界之內**：同一個 session key 之下的工作項集合由 `U12` 擁有，
+> 它的大小上界不由 `U10` 的歷程上限約束。
 
 **`maxmemory`／`maxmemory-policy`／`appendonly` 三項一律住在 compose 的 `command:`，
 不得移入掛載的 `redis.conf`**：`redis-server` 的 CLI 旗標會**靜默覆寫**檔內同名指令，
 兩處都寫會讓檔內那份無聲失效；且兩個數字在同一個服務區塊內才能一眼核對上面的關係式。
+
+#### `maxmemory-policy` 為 `noeviction`（`U10`／`NFR4.50`，由 `allkeys-lru` 改）
+
+**部署端必須知道的行為變更，不只是一個設定值**：
+
+- **為什麼改**：本設計寫入的**每一個** key 都帶 TTL（五個 `K-09` 方法全部續期，
+  且 `U12` 的工作項集合住在同一個 key 之下），所以 session **只會因 TTL 到期而消失**。
+  `allkeys-lru` 之下它**還會因為容量不足而消失**，而這兩種結果在使用者眼中**完全
+  相同**——一個是正常行為、一個是容量故障。不可區分的故障等於不可偵測，所以改成讓
+  容量問題**有聲**。
+- **`noeviction` 之下實際會發生什麼**：Redis 對**寫入**回
+  `OOM command not allowed when used memory > 'maxmemory'`，對**讀取照常服務**。
+  後端把它對應成 `SessionBackendUnavailable` 並帶原因碼 `redis_oom`，與
+  「Redis 不可達」（`redis_unreachable`）在日誌上**可區分**。
+- **降級形狀，明寫**：既有 session **仍讀得到**，只是**不能再寫**。這比「少數人無聲
+  失去整個 session」好得多，且是**可偵測的**。
+- **運維動作**：日誌出現 `reason=redis_oom` 時，處置是調高 `maxmemory`（連同上面
+  的關係式一起調容器上限）或縮小 `BRAIN_SESSION_HISTORY_MAX`，**不是**改回
+  `allkeys-lru`——改回去只會讓同一個問題變回無聲。
+- **這個設定讀不回來**（與 `maxmemory`／`appendonly` 同）：`CONFIG GET` 與 `ACL LIST`
+  都是 `@admin @dangerous`，兩個設定身分都不能執行。部署時能證明的是**三個旗標都進了
+  容器 argv**（`deploy.yml` 的「Verify the Redis ACL actually took effect」第 3 步會檢查
+  `--maxmemory-policy` 存在，但**不會**檢查它的值）。改值的唯一方式仍是改 compose 再重部署。
+
+#### 部署後的 session 還原驗證（`U10`／`NFR4.64`）
+
+`deploy.yml` 新增一個步驟 **`Verify sessions survive a Redis restart (NFR4.53-57)`**，
+位置在**全部既有健康檢查之後、記錄 last-good 之前**（即部署序列的最後一道驗證）。
+
+它做的事：以 app ACL 身分寫入一個 fixture session（三段、各有訊息、**三組不同的**
+作業對象、`pageModes` 其中一鍵為 `isolated`、TTL 刻意設為 **3600** 而非 86400）→
+`docker compose restart redis` → **以 app 身分實際讀回 fixture 成功**為等待條件 →
+逐欄比對 → 刪除 fixture。
+
+三件部署端必須知道的事：
+
+1. **這一步會中斷當下使用者的 session，而且沒有被緩解。** `cloud360.danniel.cc`
+   經 Cloudflare Tunnel 對外，可能有人正在用。**「反正 stack 剛重啟過」是假的**——
+   上面的部署步驟用 `up -d --build --remove-orphans`、**沒有** `--force-recreate`，
+   所以未變更的 redis 容器**不會**被重建、它的 session **不會**已經消失。
+   能做的只是把這一步放在**最後**，使中斷發生在部署已確認可用之後，不會在一次失敗的
+   部署上再疊一次中斷。
+2. **等待條件刻意不是 healthcheck。** compose 裡的 `redis-cli ping | grep -q PONG`
+   自己的註解就寫著它「**在 AOF 載入期間會通過**」且「不證明 ACL 使用者可用」。
+   等它轉綠可能讀到一個載入中的半套資料集——或更糟，在一個空的資料集上回報成功。
+   AOF 載入期間資料指令會回 `-LOADING`，所以**一次成功的 `HGET`** 才是資料集真的在
+   那裡的最早時刻。重試上限 60 次 × 2 秒 = 總逾時 120 秒。
+3. **失敗時讓 deploy job 失敗**，觸發既有的 rollback job（還原 last-good、開 revert
+   PR、dispatch Deploy Doctor）。**不是**記一行 warning 繼續。
+   `NFR4.57` 的 TTL 斷言是**區間**而非等值（重啟會吃掉幾秒，斷言等值會讓這道檢查
+   變成不穩定的）；用 3600 這個與生產 86400 不同的值，使「被重設為滿額」也會被抓到。
 
 **日誌上限（`logging.options`）**：現值 `max-size: 50m`、`max-file: "5"`，加在**兩份
 compose 的全部服務**上。
@@ -1256,7 +1901,7 @@ Creates: the **`vector` extension** (`CREATE EXTENSION IF NOT EXISTS vector`, th
 statement after `BEGIN;`), `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`,
 **`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`,
 plus `last_opened_diagram_id`.  
-Seeds ~**308** `role_permissions` rows. It does **not** create a fixed-password admin user.
+Seeds ~**352** `role_permissions` rows. It does **not** create a fixed-password admin user.
 
 The whole script is ONE transaction, so a server without pgvector aborts it and creates
 **no tables at all** — not just the memory tables. The db image must be
@@ -1267,6 +1912,6 @@ Chinese half above.
 
 **A3** `architecture_reviews` stores review scores/findings/suggestions. **`wa_lenses`** stores the active Custom Lens JSON editable by users with **A3.review** (default: Security_Reviewer VER; reviews resolve DB-first, then file fallback). Existing DBs: re-run `schema_rbac.sql` (`IF NOT EXISTS`) or rely on backend `_ensure_a3_schema()` on startup.
 
-**If you create empty tables without seeding `role_permissions`, the matrix is entirely empty** — no view/edit/review for any role, Sidebar stays empty, APIs return 403. Always run `schema_rbac.sql` (or confirm ~308 rows after backend empty-DB seed).
+**If you create empty tables without seeding `role_permissions`, the matrix is entirely empty** — no view/edit/review for any role, Sidebar stays empty, APIs return 403. Always run `schema_rbac.sql` (or confirm ~352 rows after backend empty-DB seed).
 
 Re-running **wipes and re-seeds** `role_permissions` (backup first if customized). Bootstrap admin creation is handled by backend startup via `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`, not by this SQL script.

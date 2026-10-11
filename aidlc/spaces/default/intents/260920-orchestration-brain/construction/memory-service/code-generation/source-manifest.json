@@ -1,0 +1,58 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-service",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/memory_types.py"
+    },
+    {
+      "path": "backend/services/memory_errors.py"
+    },
+    {
+      "path": "backend/services/memory_ranking.py"
+    },
+    {
+      "path": "backend/services/memory_service.py"
+    },
+    {
+      "path": "backend/services/memory_facade.py"
+    },
+    {
+      "path": "backend/services/memory_router.py"
+    },
+    {
+      "path": "backend/tests/test_memory_contract.py"
+    },
+    {
+      "path": "backend/tests/test_memory_ranking.py"
+    },
+    {
+      "path": "backend/tests/test_memory_authz.py"
+    },
+    {
+      "path": "backend/models.py"
+    },
+    {
+      "path": "backend/main.py"
+    },
+    {
+      "path": "backend/scripts/run_meta_schema_migration.py"
+    },
+    {
+      "path": "backend/scripts/verify_memory_schema.sql"
+    },
+    {
+      "path": "schema_rbac.sql"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "openapi.json"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
+    }
+  ]
+}

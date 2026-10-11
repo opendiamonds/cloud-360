@@ -438,7 +438,31 @@ class TestHierarchySchema(unittest.TestCase):
         """
         db = helpers.make_session()
         try:
-            db.execute(text("ALTER TABLE user_diagrams ADD COLUMN system_id INTEGER"))
+            # **本段 fixture 於 2026-10-06 調整，斷言完全未動。** 原本直接
+            # `ADD COLUMN system_id`，前提是該欄不在 `Base.metadata` 裡；而
+            # `U7 hierarchy-service` 為了讓 `BR6.3` 的可見性判定與 `W5` 的系統
+            # 篩選讀得到它，已把 `system_id` 映射到 `models.UserDiagram`，
+            # 於是 `make_session()` 的 `create_all()` 就會建出該欄（且帶外鍵），
+            # 原本的 ALTER 直接 `duplicate column name`。
+            # `ALTER ... DROP COLUMN` 在此行不通——SQLite 會回
+            # 「unknown column "system_id" in foreign key definition」，
+            # 因為 ORM 建表時把外鍵**內嵌在表定義裡**，拔掉欄位會讓它懸空。
+            # 故整表重建：以不帶 `system_id` 外鍵的形式重寫 `user_diagrams`，
+            # 精確重現本案例要測的狀態（欄位存在、外鍵缺席）。
+            db.execute(text("DROP TABLE IF EXISTS diagram_change_records"))
+            db.execute(text("DROP TABLE user_diagrams"))
+            db.execute(
+                text(
+                    "CREATE TABLE user_diagrams ("
+                    " id INTEGER NOT NULL PRIMARY KEY,"
+                    " user_id INTEGER NOT NULL REFERENCES users (id),"
+                    " title VARCHAR NOT NULL,"
+                    " xml_data TEXT NOT NULL,"
+                    " updated_at DATETIME,"
+                    " system_id INTEGER"
+                    ")"
+                )
+            )
             db.commit()
 
             with self.assertRaises(HierarchyMigrationError) as ctx:

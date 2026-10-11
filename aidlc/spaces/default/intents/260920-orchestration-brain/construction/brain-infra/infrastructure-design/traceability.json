@@ -274,6 +274,81 @@
       "id": "U6-DEPENDENCY-REASON-VOID",
       "status": "Deferred",
       "target": "**[I5]=A 使 U6 → brain-infra 依賴邊的上游理由不再成立（審查 R-09）。** unit-of-work.md:268 逐字記載「U6 的 depends_on: [brain-infra] 取的是『ollama 與 fastembed 兩個實作要能被驗證』」，而本站把 ollama 排除在 CI test stack 外（[I5]=A）、又以成本理由排除 fastembed（它雖不加服務，但會引入 ONNX 執行期並下載 multilingual-e5-large，對每個 PR 都跑的 ui-regression 是同一類成本）。於是那兩個實作在本 intent 的任何自動化層都沒有可執行的環境。**property-based 不補這個缺口**——它約束純函式，不驗證 provider 真的接得上。**本站不自行定案**，指名兩個承接者：U6 的 functional-design 確認驗證手段（mock 邊界夠不夠？或一次性手動驗證記入 DEPLOY.md？）、U6／U1 的 delivery 順序確認那條邊是否還需要。**本站不擅自移除已核可的依賴邊**，但必須指出它的理由變了"
+    },
+    {
+      "id": "I6-MCP-TRANSPORT",
+      "status": "OK",
+      "target": "infrastructure-specification.md §七 7.1 ＋ §二 的 mcp-bridge 列：OQ-16 定案為 HTTP／SSE，落為第七個 compose 服務，networks: [internal] 且不發佈 ports:，以「流量不離開本主機」滿足 OQ-16 逐字的「須本機迴環或加密」。使用者裁決 [I6]=A。"
+    },
+    {
+      "id": "I7-REST-TO-MCP",
+      "status": "OK",
+      "target": "infrastructure-specification.md §七 7.2 ＋ cicd-pipeline.md §六 6.1：工具宣告一律自 openapi.json 產生（42 path／55 operation／51 宣告 security／單一 HTTPBearer），產生時剝除 HTTPBearer 由轉接層注入以滿足 C-T11；暴露面由預設拒絕的 allowlist 治理，初始值為 U19 ＋ U20。使用者裁決 [I7]=A。"
+    },
+    {
+      "id": "S-11-SEVENTH-SERVICE",
+      "status": "OK",
+      "target": "infrastructure-specification.md §〇 S-11：本階段新增、已核可 scope 尚未涵蓋，須回補 U21 的交付物清單。"
+    },
+    {
+      "id": "S-12-GENERATOR-DELIVERABLE",
+      "status": "OK",
+      "target": "infrastructure-specification.md §〇 S-12：產生器本身與 allowlist 檔是 U21 未涵蓋的新交付物，須回補。"
+    },
+    {
+      "id": "D-3-BLAST-RADIUS-RECOMPUTE",
+      "status": "Deferred",
+      "target": "infrastructure-specification.md §七 7.4：internal 成員由 4 增為 5，故 D-3 的 blast radius 由 3 改為 4（redis 與 ollama 各自的「除它自己以外」計數，本站實算）。security-design.md 已被本 attempt 的終局審查收據凍結，本站不得回改；承接者為 D-3 的下一個觸及者（U21 或 U10 的 construction 迭代，或下一次重走 nfr-design）。此為審查 R-30 要求的前向指標。"
+    },
+    {
+      "id": "PBT-GENERATOR",
+      "status": "Deferred",
+      "target": "infrastructure-specification.md §七 7.3：[I7]=A 新增一個 ADR-0006 PBT 適用標的——openapi.json ＋ allowlist → 工具宣告的產生器是純轉換。可測性質：產物不得含任何 HTTPBearer 衍生參數；不在 allowlist 內的 operation 不得出現；同一輸入兩次產生結果相同。承接站為 U21 的 code-generation。"
+    },
+    {
+      "id": "MCP-GENERATOR-DRIFT-GATE",
+      "status": "OK",
+      "target": "cicd-pipeline.md §六 6.1 第 22 項：新增的 CI 漂移檢查（重產並與已 commit 產物比對）。這是本修訂唯一新增的機械閘門；缺它則 openapi.json 改動後工具宣告會靜默失準，而 dump_openapi.py --check 看不到下游產物。"
+    },
+    {
+      "id": "MCP-LIVENESS-PATH-OPEN",
+      "status": "Deferred",
+      "target": "monitoring-design.md §七：mcp-bridge 的 liveness 端點路徑本站刻意不訂，由 U21 的 code-generation 決定後回寫。必須不需認證（本服務設計前提為零落地憑證）。"
+    },
+    {
+      "id": "MCP-NOT-IN-TEST-STACK",
+      "status": "N/A",
+      "target": "cicd-pipeline.md §六 6.2 第 26 項：本站不把 mcp-bridge 加進 CI test stack，理由與 [I5]=A 對 Ollama 同形（ui-regression 的 e2e 不觸及 MCP 路徑）。若 U21 的驗證需要它，由 U21 與 build-and-test 決定並回寫。"
+    },
+    {
+      "id": "R-14-ORDERING-CLAIM-WITHDRAWN",
+      "status": "OK",
+      "target": "cicd-pipeline.md §六 6.1 第 23 項：初版宣稱漂移檢查須排在 dump_openapi.py --check 之後、且「隱含於 job 順序」。實讀 ci.yml 後撤回——repo-contract(:143)/frontend(:171)/backend(:235)/docker-build(:301) 四個 job 全部且僅 needs: gate，彼此無邊、實際並行。且本來不需要順序：兩道既有閘門都拿已 commit 的位元組互比，各自獨立充分。審查 R-14。"
+    },
+    {
+      "id": "R-15-PBT-RECONCILED",
+      "status": "OK",
+      "target": "infrastructure-specification.md §七 7.3 末段 ＋ §〇 S-15：新 PBT 標的已對照 unit-of-work.md 修訂 4 的 PBT 判定表（該表把 U21 的工具 schema 白名單判為「不適用，但可機械斷言」），明寫本項不推翻該判定（受測對象不同：結構斷言 vs 有輸入空間的轉換函式），並回補進 §〇。審查 R-15。"
+    },
+    {
+      "id": "R-16-ID-COLLISION-FIXED",
+      "status": "OK",
+      "target": "infrastructure-specification.md §〇：本輪新增的兩列原誤用既有的 S-11（既有 S-11 為「收窄 nfr-requirements §五 交給 U10 的決定範圍」），已改編號為 S-13／S-14 並新增 S-15；表列數由 4 增為 7，摘要句「四項」已更正為「七項」並逐一列名。審查 R-16。"
+    },
+    {
+      "id": "R-17-PRECEDENT-STRENGTHENED",
+      "status": "OK",
+      "target": "cicd-pipeline.md §六 6.1 前言：改引更直接的先例 ci.yml:197 的 API type contract drift（npm run check:types），其註解逐字為 Drift gate 2 of 2 並說明 tsc -b 為何結構上看不到此類漂移；同時引出本 repo 的 drift gate N of 2 分置慣例（前端 job 與後端 job 各一半，理由為產生器需要 node）。審查 R-17。"
+    },
+    {
+      "id": "R-18-ENV-REASON-CORRECTED",
+      "status": "OK",
+      "target": "cicd-pipeline.md §六 6.2 第 27 項：撤回「validate_env_contract.py 禁止寫入範本」這個歸因（實讀 :50–53，DEPLOY_DERIVED 是只含 DATABASE_URL／VITE_API_BASE_URL 兩個具名鍵的固定集合，非通用規則）。改為兩條真正的理由：本服務無自有 secret；唯一對外目標是同網段服務名，可硬寫在 compose。並明寫這是條件式的——若 U21 發現需要任何可配置值，blocking env-contract 規則完整適用。審查 R-18。"
+    },
+    {
+      "id": "R-12-UNRESOLVED-CARRIED",
+      "status": "Deferred",
+      "target": "審查 R-12 為唯一未解決的既有 Minor：審查者未重開問題檔逐字核對 Redis 淘汰策略決定的字面修正。infrastructure-specification.md §二 已完整呈現該決定與理由（A≡D、每次互動續期使 LRU 挑中最不活躍 session），不影響 [I1]=A 本身。承接者：下一次觸及該節者。"
     }
   ]
 }

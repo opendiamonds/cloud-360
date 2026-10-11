@@ -1,0 +1,287 @@
+{
+  "stage": "functional-design",
+  "unit": "membership-service",
+  "upstream_ids": [
+    "AC12.1.1",
+    "AC12.1.2",
+    "AC12.1.3",
+    "AC12.2.1",
+    "AC12.2.2",
+    "AC12.2.3",
+    "AC12.2.4",
+    "AC12.3.1",
+    "AC12.3.2",
+    "AC12.3.3",
+    "AC12.4.1",
+    "AC12.4.2",
+    "AC12.4.3",
+    "AC12.4.4",
+    "AC12.5.1",
+    "AC12.5.2",
+    "AC12.5.3",
+    "AC12.6.1",
+    "AC12.6.2",
+    "AC12.6.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC12.1.1",
+      "status": "OK",
+      "target": "BR3.1",
+      "note": "剛建立的專案其成員清單恰有一列、即建立者、角色為管理者。BR3.1 要求該寫入與專案建立同交易——分開交易會出現沒有管理者的專案，而 BR2.1 的守門只在「減少管理者」時觸發，擋不住「一開始就沒有」。畫面側屬 U24。"
+    },
+    {
+      "id": "AC12.1.2",
+      "status": "OK",
+      "target": "BR3.1",
+      "note": "「不需任何額外授權步驟」＝建立者已是 project_admin，故 inviteMember 的授權檢查（BR1.5 經 resolveProjectRole）直接通過。BR3.1 是它成立的唯一前提。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "OK",
+      "target": "BR1.2",
+      "note": "未被邀請者看不到該專案＝兩層串聯的 deny 側。BR1.2 要求任一層不過即拒；具全域權限但非成員者在 per-project 層被拒（BR1.6 的 None 路徑）。"
+    },
+    {
+      "id": "AC12.2.1",
+      "status": "OK",
+      "target": "BR3.5",
+      "note": "把一般成員改為管理者後清單顯示新角色。BR3.5 同時要求不覆寫既有管理者——角色不互斥。"
+    },
+    {
+      "id": "AC12.2.2",
+      "status": "OK",
+      "target": "BR5.3",
+      "note": "成員詳情頁的變更紀錄顯示「誰在何時把角色由什麼改為什麼」。[FD3]=A 讓人工與自動兩種變更寫同一張表，故這是一次查詢、一個來源；BR5.4 說明 previousOwnerUserId 在人工變更時指執行者（即「誰」）；BR5.2 禁止只用 logger.info（UI 讀不到）。"
+    },
+    {
+      "id": "AC12.2.3",
+      "status": "OK",
+      "target": "BR3.5",
+      "note": "清單上沒有可直接改角色的控件——角色只在成員詳情頁變更。本單元的對應約束是 changeRole 只有一個入口（facade 方法），清單讀取路徑不提供變更。畫面側屬 U24；此處記 BR3.5 是因為它是「角色變更」這件事的唯一規則。"
+    },
+    {
+      "id": "AC12.2.4",
+      "status": "OK",
+      "target": "BR3.5",
+      "note": "兩位管理者都能執行管理動作，使「第二位的指定靜默覆寫第一位」成為可觸發的紅燈。BR3.5 的 violation_behaviour 逐字即此。"
+    },
+    {
+      "id": "AC12.3.1",
+      "status": "OK",
+      "target": "BR2.1",
+      "note": "唯一管理者自我降級被拒。[FD1]=A 的不變量（至少一位管理者）直接涵蓋它；守門位於三條路徑的共同上游（BR2.1），不是在 changeRole 內單獨寫一次。"
+    },
+    {
+      "id": "AC12.3.2",
+      "status": "OK",
+      "target": "BR2.1",
+      "note": "唯一成員自我移出被拒。在 [FD1]=A 之下這是推論：該唯一成員必然是該專案的唯一管理者（BR2.2 說明為何不另立成員謂詞）。"
+    },
+    {
+      "id": "AC12.3.3",
+      "status": "OK",
+      "target": "BR6.1, BR6.2",
+      "note": "停用帳號被拒並列出那些專案。BR6.1 定檢查位置（is_active 寫入之前）與回應碼（409）；BR6.2 要求顯式宣告 response model，否則契約不進 spec 而漂移閘門仍綠；LastAdminGuardReport 是酬載形狀。**本 AC 的 Given 措辭與 [FD1]=A 不一致**（它寫「唯一成員」，而 409 條件是「最後一位管理者」）——見 functional-spec.md §四的對齊修正與回補指派。 **BR6.2 併入 target 而非只寫在註記**：本 AC 的 Then 要求 409 **列出那些專案**，而沒有顯式宣告的 response model 時前端產不出該型別，故那條規則是本 AC 可被滿足的一部分，不是旁註。"
+    },
+    {
+      "id": "AC12.4.1",
+      "status": "OK",
+      "target": "BR4.2",
+      "note": "被選中者為最早加入的成員。BR4.2 的排序鍵為 (joinedAt, userId)。"
+    },
+    {
+      "id": "AC12.4.2",
+      "status": "OK",
+      "target": "BR4.2, BR4.1",
+      "note": "加入時間完全相同時多次改選選出同一位，順序不得依賴資料庫回傳順序。userId 進入排序鍵是本 AC 的全部理由；BR4.1（純函式）是讓它能以 PBT 驗證的結構前提，而可失敗的性質是**排列不變性**。 **BR4.1 併入 target**：排列不變性之所以**可被驗證**，前提是該函式為純函式（不讀 DB，PBT 才有作用對象）。兩條規則缺一，本 AC 就只剩恆真命題。"
+    },
+    {
+      "id": "AC12.4.3",
+      "status": "OK",
+      "target": "BR5.5",
+      "note": "被自動改選者下次抵達落地頁看到橫幅。BR5.5 定橫幅查詢的過濾條件（cause = auto_reselection 且 acknowledgedAt IS NULL）——漏掉 cause 過濾會讓每次人工變更都彈一則橫幅且文案是錯的。畫面落點屬 U23／U24。"
+    },
+    {
+      "id": "AC12.4.4",
+      "status": "OK",
+      "target": "BR5.6",
+      "note": "按過「知道了」後換裝置重新登入橫幅不再出現。BR5.6 要求以事件識別字為鍵且狀態在伺服器端——per-user 布林值會讓同一人第二次被改選時看不到橫幅，瀏覽器暫存則跨裝置失效。"
+    },
+    {
+      "id": "AC12.5.1",
+      "status": "OK",
+      "target": "BR3.2",
+      "note": "邀請缺少全域權限者被拒且說明他缺什麼。BR3.2 的 MissingGlobalPermission 承載「缺什麼」這個資訊。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "BR1.2, BR1.6",
+      "note": "具全域權限但非本專案成員者讀取被拒——兩層串聯任一層不過即拒。BR1.6 補上「None 必須當成拒絕、不得當成預設角色」這一腿。 **BR1.6 併入 target**：兩層串聯的 deny 側在實作上就是「resolveProjectRole 回 None 時必須拒絕」；少了那一腿，兩層串聯會退化成一層。"
+    },
+    {
+      "id": "AC12.5.3",
+      "status": "OK",
+      "target": "BR3.2",
+      "note": "被拒的邀請不留下半套狀態。BR3.2 要求整個操作在單一交易內。"
+    },
+    {
+      "id": "AC12.6.1",
+      "status": "OK",
+      "target": "BR3.6",
+      "note": "成功邀請後清單新增一列、角色正確。BR3.6 把「成功是一級行為」寫成規則——只驗拒絕面會讓「邀請其實沒寫進去」通過全部測試。"
+    },
+    {
+      "id": "AC12.6.2",
+      "status": "OK",
+      "target": "BR3.6",
+      "note": "成功移出後清單少一列，且他再次讀取本專案資料被拒。後半句由 resolveProjectRole 的 None 路徑（BR1.6）自動成立，不需另寫邏輯；BR2.1 的守門確保被移出者不是最後一位管理者。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "OK",
+      "target": "BR1.2",
+      "note": "剛被邀請者看得到這個專案——兩層串聯的 allow 側。與 AC12.5.2 是同一條規則的兩面，故兩者必須成對測試（team.md 的 A 規則：allow/deny 雙向）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "N/A",
+      "target": "無機械強制的授權不變量",
+      "note": "「facade 是唯一入口」沒有任何 AC 能斷言它——繞過它的程式不會有使用者可觀察的行為差異。承接 K-07 的 OQ-N2，如實記為殘留缺口而非宣稱已守住。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "消歧義宣告",
+      "note": "「sync 同進程呼叫是允許的」沒有可失敗的行為。寫下它的理由是 ADR-012 明記這兩件事不同，而 ProjectHierarchy 上一輪把它們寫成同一句話而自相矛盾。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "N/A",
+      "target": "介面形狀約束",
+      "note": "principal 由呼叫端傳入、projectId 為具名參數——這是簽章層的約束，由契約 K-16 的方法簽章與 code-generation 的型別檢查承載，沒有對應的使用者可觀察 AC。它真正要保護的是 U13（WebSocket 不經 dependency 鏈）能使用本 facade。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "N/A",
+      "target": "禁止（反規則）",
+      "note": "「不另立成員謂詞」是一條禁止，不是行為。它防的是一段永不獨立命中的死碼。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "N/A",
+      "target": "領域例外 vs HTTP 例外（內部契約形狀）",
+      "note": "拒絕時 raise MembershipForbidden 而非 HTTPException。**沒有 AC 能分辨它**——router 層轉 403 之後，使用者看到的回應與直接 raise HTTPException(403) 完全相同。它保護的是**同進程呼叫端**：U20／U13 被迫處理 HTTP 層型別時會出問題，而 U13 是 WebSocket，根本沒有 HTTP 回應可回。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "N/A",
+      "target": "守門唯讀",
+      "note": "assertCanDeactivate 無副作用。AC12.5.3 斷言的是邀請路徑的半套狀態，不是守門本身；本條沒有自己的 AC，但它是 AC12.3.3 在被拒時不留殘留的前提。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "資料層先擋下的業務語意",
+      "note": "重複邀請會被 project_members 的唯一約束先擋下，故沒有「建立第二列」這個可觀察結果。本條的真正價值是要求**錯誤訊息有業務語意**而不是資料庫層的唯一約束違反。無對應 AC。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "[FD2]=A 的定案",
+      "note": "契約逐字把它留給實作（「由實作定但須一致」），故沒有 AC 斷言它。本條的價值在於把它固定下來，使 U24 不需處理「404 其實是成功」。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "冪等性",
+      "note": "自動改選重跑不得再選一次。沒有 AC 斷言重跑行為（AC12.4.1–.4 都是單次執行的觀察），但部分失敗後的重跑會產生第二次改選事件，使橫幅重複出現且稽核多一筆不曾發生的變更。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "觸發條件與次序",
+      "note": "觸發條件是 owner 帳號**已被**停用（AC12.4.1 的 Given 即此），而本條額外固定的是**次序**：守門先判、改選在停用成功之後。次序本身沒有 AC。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "稽核的五個事實",
+      "note": "AC12.2.2 斷言的是人工變更的紀錄可被檢視；BR5.1 要求自動改選**也**留同一組事實，而自動改選的稽核沒有對應的查詢面 AC（US12.4 的四條 AC 是挑選正確性與橫幅）。這是刻意的：FR12.4b 逐字說自動改選「尤其必要」，因為它由系統發起、無人按按鈕。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "承載形式的禁止",
+      "note": "「不得只沿用 _audit_append」是對實作手段的禁止。AC12.2.2 要求使用者可見，而本條指名那個會讓它失敗的既有捷徑。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "N/A",
+      "target": "消歧義宣告",
+      "note": "previousOwnerUserId 在兩種 cause 下指不同的人。沒有 AC 能分辨它，但下一個人看到同一欄指兩種人會想拆成兩欄，而拆欄會讓 AC12.2.2 的查詢需要依 cause 取不同欄位。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "既有保護不得削弱",
+      "note": "既有兩道保護（自我停用、最後一位可編輯角色的全域管理員）沒有本輪的 AC——它們是既有行為。本條要求它們在修改該端點時不被一併改掉；驗證形式是 code-generation 的回歸測試。"
+    },
+    {
+      "id": "BR6.4",
+      "status": "N/A",
+      "target": "部署批次約束",
+      "note": "「不可分批」是部署層的約束，不是功能行為。本站只陳述它，Bolt 切分仍是 delivery-planning 的決定。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-FD19-1",
+      "severity": "blocking-downstream",
+      "text": "**`[FD3]`=A 依賴一個還不存在的欄位。** `reselection_events` 需新增 `cause`（`auto_reselection`／`manual_role_change`），而該表由 `U18` 擁有且已交付 DDL。在它落地前 `changeRole` 的稽核無處可寫，`AC12.2.2` 不可滿足。落點 `code-generation`（`ALWAYS`，已查證在游標之後）；觸發 `project.md` 的 blocking 同步（`schema_rbac.sql` ＋ `DEPLOY.md`）。本站**不改** `U18` 的產出。"
+    },
+    {
+      "id": "OPEN-FD19-2",
+      "severity": "named-gap",
+      "text": "**`AC12.3.3` 的 Given 措辭與 `[FD1]`=A 不一致。** 該 AC 寫「唯一**成員**」而本定案的 409 條件是「最後一位**管理者**」；`requirements.md:329` 的 `FR12.5` 同樣寫「唯一成員」。分歧情境已寫在 `functional-spec.md` §四的對照表（兩位成員、一位管理者、停用該管理者）。測試依 `[FD1]`=A 撰寫；上游措辭回補由 `code-generation` 在 summary 揭露。"
+    },
+    {
+      "id": "OPEN-FD19-3",
+      "severity": "named-gap",
+      "text": "**`BR1.1`（facade 是唯一入口）無機械強制**，承接 `K-07` 的 `OQ-N2`。任何直接 `SELECT project_members` 的程式就繞過了全部授權。另有一項同形的殘留缺口：per-project 判定結論由伺服器產生、前端不得推導（`I-5`），但**沒有機制擋住前端自己猜**。兩者都如實記載，不宣稱已守住。"
+    },
+    {
+      "id": "OPEN-FD19-4",
+      "severity": "named-gap",
+      "text": "**`BR6.2`（顯式宣告 409 response model）違反後全綠。** 實測 `openapi.json` 的 55 個 operation 宣告的狀態碼只有 `{200:53, 422:45, 201:1, 204:1}`，非 2xx/422 宣告數為 **0**；不顯式宣告則契約不進 spec、前端產不出型別，而 `dump_openapi.py --check` 保持綠燈。這是本單元唯一「違反後沒有任何東西變紅」的規則，故它需要自己的測試（`FR12.5b` 的 DoD）。"
+    },
+    {
+      "id": "OPEN-FD19-5",
+      "severity": "named-gap",
+      "text": "**本單元 20 條 AC 中有 19 條的 Given 在今天不可構造。** `US12.6`（成功邀請）落地前沒有任何東西產生「該專案另有成員」那個人（`[US:review-02 R-01]` 的唯一 Critical）。另 `FR12.1` 的「建立者自動成為 owner」今天**沒有任何寫入端**（`[V-09]`）——唯一寫 `projects.owner_user_id` 的是 `hierarchy_migration.py`（一次性遷移），而 `BR3.1` 要求它與專案建立同交易，那條建立路徑屬 `U7`／`U23`。建議實作順序見 `unit-of-work-story-map.md:230`。"
+    },
+    {
+      "id": "OPEN-FD19-6",
+      "severity": "named-gap",
+      "text": "**`project_members.invitedBy` 有寫入端而無讀取端。** 本站的契約端點三問查出：`inviteMember` 寫它（`BR3.2`／`functional-spec.md` §2.3），而 `MemberView` 的四個欄位（`userId`／`displayName`／`role`／`joinedAt`）不含它，`AC12.2.2` 的變更紀錄只涵蓋**角色**變更而非邀請來源。仍然寫入的理由是它在 `U18` 已核可的 DDL 與 `entities.md` 裡。**本站刻意不把它加進 `MemberView`**——那會擴大一個已核可的回傳形狀而沒有任何 AC 要求它。承接站 `U24`（成員頁；若成員詳情頁要顯示「誰邀請的」，那是它的畫面決定）。"
+    },
+    {
+      "id": "OPEN-FD19-7",
+      "severity": "named-gap",
+      "text": "**契約 `K-16` 的四個 `user_router.py` 行號全部過期**（偏約 9 行）：自我停用守門實為 `:654`／`:655`（契約寫 `:645-646`）、最後一位可編輯角色的全域管理員守門實為 `:676`／`:679`（契約寫 `:667-671`）、`target_user.is_active = request.is_active` 實為 `:682`（契約寫 `:673`）。**事實全部成立，只有定位錯。** 該契約自帶一段更正史（第一次寫 `:651`／`:668-671`、自評「兩者皆錯」），而改過之後仍然錯——因為該檔之後又長大了。本站在 `BR6.3` 寫入實測行號並在 `functional-spec.md` §4.1 記為對齊修正，**不回改** `K-16`。這是本 intent 第三次在同一支檔上踩到同一件事（`_audit_append` 的 `:213` 實為 `:222`、停用端點的 `:673` 實為 `:682`），故引用該檔行號一律須重驗，**包含從已核可契約複製來的**。"
+    },
+    {
+      "id": "OPEN-ND18-3",
+      "severity": "resolved",
+      "text": "**由本站 `[FD3]`=A 關閉。** 人工角色變更的稽核寫進一般化後的 `reselection_events`（以 `cause` 區分），而非另立一張表。`U18` 刻意不對 `previous_role`／`new_role` 加 CHECK 正是為這個決定預留的（其逐字理由：「封閉列舉會替那個決定先下結論」）。"
+    },
+    {
+      "id": "OPEN-FD19-8",
+      "severity": "process",
+      "text": "**ADR-0006 的 encryption 與 network exposure 兩面向，本單元的落點與上游點名的不同。** 上游（`components.md:863`–`:871`）對整個修訂判四面皆**適用**，但它為這兩面點名的唯一落點都是 `McpBridge`（`U21`）。本單元：encryption **無落點**（三張表與五個方法都不經憑證／token／金鑰）；network exposure **有落點但不是上游那一個**（新 HTTP 端點在同一 FastAPI process、不新增監聽埠，加上既有端點的回應契約擴充）。**本站初稿把這兩格寫成「與上游相同」，自檢 7 逐格比對上游原文後查出 encryption 那格與上游直接相反**，已改為「上游判定／上游落點／本單元落點」三欄形式。記為 process 項是因為它揭露的是**自檢方法**的缺陷：只核對自己寫了什麼、沒核對上游同名格的原文，而 `project.md` 已為同形失誤記過一次。"
+    }
+  ]
+}

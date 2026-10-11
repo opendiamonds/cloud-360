@@ -1,0 +1,176 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "embedding-port",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率。本單元不做任何意圖識別、不在路由判定路徑上；承載為 U11 intent-router"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率。本單元零畫面、零 session；承載為 U10 session-store 與 U14 entry-page-ui"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.1, NFR3.2"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.1"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "WebSocket 契約閘門。本單元零 WebSocket、零對外介面；承載為 U2 brain-ws-contract 與 U13 brain-gateway"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "記憶層 schema 隔離與其真 PostgreSQL CI 驗證。本 Port 不讀 DB（K-06 authorization_responsibility 逐字），對 schema 無任何接觸；承載為 U5 memory-data。註：本單元產出的向量經 U8 寫入該 schema，但寫入端不是本單元"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.1, NFR7.2, NFR7.3"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.1, NFR8.2"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.1"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型的可替換性。NFR10 逐字把落點指向 nfr-requirements(3.2) 並寫「若該站被 skip，本工作流程沒有自然承接站」——但它講的是**路由層**模型（typesafe/jev-1.13），承載為 U11 intent-router，不是 embedding 模型。**本站不履行它**，其承接狀態已登記為 RR-3：U11 的 nfr-requirements 為 CONDITIONAL，被 skip 時判定者必須把 NFR10 重新提交使用者"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數。本單元零畫面；承載為 U14 entry-page-ui"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "embed 呼叫落在首字回應路徑上——**本站新發現的連動，NFR3 的預算分析未計入它**。本單元的義務是寫下該事實並交付有上界的呼叫；達成 P50<=2s 不由本單元保證。已登記 RR-4 並具名 U8/U11"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "N/A",
+      "target": "ollama 的 HTTP 呼叫必須帶 timeout，形式為具名常數（沿用 LENS_AGENT_TIMEOUT_SEC 形狀），預設 10 秒、可由環境變數覆寫；逾時歸入既有 EmbeddingProviderUnavailable，不新增第二種例外。[Q3]=A"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "N/A",
+      "target": "ProviderSelection 存於行程記憶體但為啟動期解析一次的不可變設定（BR1.2），非 session 或工作狀態；重啟由環境變數重新推導，NFR4 的可測不變量不受本單元影響"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "啟動時必須驗證 OLLAMA_BASE_URL 的主機名為 compose 內部服務名，不得為 localhost/127.0.0.1/公開 IP；不通過即啟動失敗。[Q1]=A"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "ollama 服務不得 publish host port。此為 U1 brain-infra 的交付，本單元具名為依賴前提——本單元是該服務的唯一消費端"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "N/A",
+      "target": "記憶文字以明文 HTTP 傳輸至零認證服務，為具名殘餘風險 RR-1，不得記為「不適用」；唯一控制是網段隔離（NFR7.1+NFR7.2）。判定的成立條件是 ollama 與 backend 同主機同 compose 網路"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "N/A",
+      "target": "NFR3.2 新增的 timeout 環境變數必須在同一個 PR 內讓 render-env.sh 寫它、兩個 .env.example 列它，並同步更新 LOCAL-DEV.md（project.md ## Mandated，blocking）"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "N/A",
+      "target": "本單元消費的四個既有變數必須在啟動時真的被讀取並驗證。deploy/.env.example:96 已以現在式宣稱「EMBEDDING_PROVIDER 缺值會讓 backend 拒絕啟動」，**實測該宣稱目前為假**（零個 Python 讀取點）；BR1.1/BR1.3 即其實作"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "N/A",
+      "target": "三個實作皆為本機推論或純函式，對外部 LLM/API 的花費貢獻為零"
+    },
+    {
+      "id": "SEC-1",
+      "status": "N/A",
+      "target": "本單元不得讀資料庫、不得做授權判定、不得新增任何 HTTP 入口。可機械斷言：DB session 型別、RBAC 判定函式、FastAPI router 裝飾器三者 grep 須為零。無對應 inception NFR（ADR-0006 IAM 面向）"
+    },
+    {
+      "id": "SEC-2",
+      "status": "N/A",
+      "target": "任何 log 與例外訊息不得含憑證：帶 endpoint 時只帶主機與埠，不得帶 userinfo 區段。無對應 inception NFR（ADR-0006 audit logging / encryption 面向）"
+    },
+    {
+      "id": "SEC-3",
+      "status": "N/A",
+      "target": "fastembed 的供應鏈風險為具名接受（RR-2）：LOCAL-DEV.md 釘已驗證的版本區間、寫明 HuggingFace 下載來源與快取位置、明寫此路徑不經 CI。無對應 inception NFR（OWASP #6 Vulnerable Components）"
+    },
+    {
+      "id": "SEC-4",
+      "status": "N/A",
+      "target": "stub 的 model_id() 不得與任何真實模型名相同（固定 stub-v1），使 CI 寫入的列與 staging 寫入的列在 embeddingModel 上可區分。無對應 inception NFR（完整性面向）"
+    },
+    {
+      "id": "RR-1",
+      "status": "N/A",
+      "target": "具名殘餘風險：明文 HTTP + 零認證的 ollama。失效條件：ollama 移出本主機、被 publish port、或 compose 網路被其他非本 stack 的容器加入"
+    },
+    {
+      "id": "RR-2",
+      "status": "N/A",
+      "target": "具名殘餘風險：fastembed 為使用者自裝、不經 CI 的依賴，首次使用從 HuggingFace 下載約 1GB 權重。失效條件：被加進 requirements.txt 或用於 staging/CI"
+    },
+    {
+      "id": "RR-3",
+      "status": "N/A",
+      "target": "具名殘餘風險：NFR10 未由本單元履行，其承接站 U11 的 nfr-requirements 為 CONDITIONAL；被 skip 時判定者必須把 NFR10 重新提交使用者，不得靜默落空"
+    },
+    {
+      "id": "RR-4",
+      "status": "N/A",
+      "target": "具名殘餘風險：embed 延遲落在 NFR3 的首字路徑上而 NFR3 的預算分析未計入；且正常情況延遲無自動化斷言。10 秒 timeout 是 NFR3 全部預算的 5 倍，故 timeout 不是 NFR3 的保護機制"
+    },
+    {
+      "id": "U8-1",
+      "status": "N/A",
+      "target": "交接給 U8 memory-service：換模型的偵測。啟動時比對目前 model_id 與記憶表中已存在的相異 embeddingModel 集合，不符且表非空即記 WARN 以上訊息寫明「既有 N 列記憶以舊 model 寫入，在重新 embed 之前不會被檢索到」；不自動重算。落點不是本單元，因為偵測需讀 DB 而 BR2.7 禁止本 Port 讀 DB。[Q2]=A"
+    },
+    {
+      "id": "U8-2",
+      "status": "N/A",
+      "target": "交接給 U8 memory-service：寫入記憶時必須以同一次 ProviderSelection 的 model_id() 配對該次 embed 的結果，不得分兩次取。承 BR5.2——向量不攜帶 model_id，配對是呼叫方的責任"
+    },
+    {
+      "id": "U5-1",
+      "status": "N/A",
+      "target": "交接給 U5 memory-data：memory_records.embeddingModel 的值域由 2 擴為 3（新增 stub-v1）且須可為 NULL；schema 端不應寫成封閉 CHECK（會讓換模型變成資料庫錯誤）。承 functional-design 的 H-E1。已實測 memory_records 尚未落地，遷移成本為零"
+    }
+  ]
+}

@@ -123,7 +123,7 @@
     {
       "id": "NFR5.7",
       "status": "Deferred",
-      "target": "建置期那一層已交付：backend/scripts/dump_ws_contract.py 的白名單斷言逐一比對七個客戶端物件的欄位名集合，使任何未宣告欄位（含叫別的名字的身分等價欄位）在建置期紅燈；backend/services/brain_ws_contract.py 使 WsClientEnvelope 與六個 client payload 在型別上不可構造身分或 turnId 欄位。但 security-requirements.md:275-276 逐字把本條分兩層——「型別上不可構造是第一層，伺服器收到即回 error(INVALID_REQUEST)（而非靜默忽略）是第二層，屬 U13」——第二層本單元無法承載。標 Deferred 與 BR2.13 一致（code-generation 審查 R-04：初版標純 OK，是 R-01 同型的兄弟缺陷，修 R-01 時未一併掃出）。落點 U13。"
+      "target": "建置期那一層已交付：backend/scripts/dump_ws_contract.py 的白名單斷言逐一比對七個客戶端物件的欄位名集合，使任何未宣告欄位（含叫別的名字的身分等價欄位）在建置期紅燈；backend/services/brain_ws_contract.py 使 WsClientEnvelope 與六個 client payload 在型別上不可構造身分或 turnId 欄位。但 security-requirements.md:421-276 逐字把本條分兩層——「型別上不可構造是第一層，伺服器收到即回 error(INVALID_REQUEST)（而非靜默忽略）是第二層，屬 U13」——第二層本單元無法承載。標 Deferred 與 BR2.13 一致（code-generation 審查 R-04：初版標純 OK，是 R-01 同型的兄弟缺陷，修 R-01 時未一併掃出）。落點 U13。"
     },
     {
       "id": "BR1.1",

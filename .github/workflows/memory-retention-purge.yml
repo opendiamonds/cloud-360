@@ -1,0 +1,217 @@
+name: Memory retention purge (90d)
+
+# U9 memory-purge — FR4.5 / FR4.5a / NFR7.10-NFR7.15 / NFR6.10 / NFR8.10.
+#
+# Deletes episodic memory whose expires_at has passed, writes one
+# `purged_by_retention` audit row per deleted memory, and deletes audit rows
+# older than 90 days. Runs on the self-hosted runner because `db` has NO host
+# port -- `docker compose exec` is the only way to reach it (NFR7.12, [N1]=A).
+#
+# ---------------------------------------------------------------------------
+# NO LLM ON THIS PATH (NFR7.14 / FR4.5a)
+# ---------------------------------------------------------------------------
+# The file is a plain .yml, NOT a gh-aw `.md`: every deterministic mapping
+# (which rows are expired, what gets deleted) lives in a version-controlled
+# .sql file, run by psql. project.md lists "every LLM path" as one of this
+# repo's three structural blind spots, and a purge is the last place to put
+# a judgement call.
+#
+# ---------------------------------------------------------------------------
+# THE SQL IS NOT INLINE HERE, AND THAT IS DELIBERATE
+# ---------------------------------------------------------------------------
+# backend/scripts/purge_expired_memory.sql is the single source of truth. CI's
+# `memory-schema` job runs the SAME FILE via
+# backend/scripts/verify_purge_sql.sql (which `\i`-includes it) and asserts
+# R1-R10 against a real PostgreSQL. Inlining the SQL here would give CI a copy
+# to verify and production a different one, with nothing keeping them equal.
+#
+# Both transaction boundaries live INSIDE that .sql file. cicd-pipeline.md
+# §三之一 requires steps 1+2 to share one psql call and warns verbatim that
+# splitting them into two Actions steps "looks very natural in YAML" -- putting
+# the BEGIN/COMMIT in the file makes that mistake structurally impossible here.
+#
+# ---------------------------------------------------------------------------
+# WHY --env-file POINTS AT THE TEMPLATE AND NOT AT deploy/.env
+# ---------------------------------------------------------------------------
+# Review R-01 asked for the compose invocation to be pinned the way deploy.yml
+# pins it (`-f deploy/docker-compose.deploy.yml --env-file deploy/.env`, see
+# deploy.yml:124/137/198/250/349/350/364/471). The `-f` half is copied
+# verbatim below. The `--env-file deploy/.env` half CANNOT be:
+#
+#   * deploy.yml DELETES that file at the end of every run -- step "Remove the
+#     generated env file" (deploy.yml:376-378) is `rm -f deploy/.env` with
+#     `if: always()`, and the rollback job does the same (deploy.yml:472).
+#     So between deploys the file does not exist, and
+#     `docker compose --env-file <missing>` is a hard error, not a warning.
+#     A daily schedule pointed at it would fail EVERY DAY.
+#   * Rendering a fresh one here (deploy/render-env.sh writes it) would pull
+#     three deployment secrets into this workflow AND would race a concurrent
+#     deploy over the same path -- our `rm -f` could delete the env file out
+#     from under a running deploy. That trade is strictly worse than the
+#     connection blip R-01 was worried about.
+#   * Omitting --env-file entirely does not work either: compose interpolates
+#     the project model before ANY subcommand, and
+#     `volumes: - ${CLOUDFLARED_CREDENTIALS_FILE}:/etc/cloudflared/creds.json:ro`
+#     (deploy/docker-compose.deploy.yml:345) becomes an invalid volume spec
+#     when that variable is empty.
+#
+# deploy/.env.example is version-controlled, contains NO secret, and
+# scripts/validate_env_contract.py's validate_deploy_template_is_complete()
+# already fails CI if it is missing any variable the deploy compose requires --
+# so it is guaranteed to satisfy interpolation. Its VALUES are irrelevant here
+# and that is provable: `exec` attaches to an ALREADY-RUNNING container and
+# recreates nothing, and the psql call below reads POSTGRES_USER/POSTGRES_DB
+# from the CONTAINER's own environment (baked in at create time from the real
+# deploy/.env), never from the template.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS DOES NOT SHARE deploy.yml's CONCURRENCY GROUP
+# ---------------------------------------------------------------------------
+# Review R-01 also suggested a concurrency group shared with deploy.yml. We
+# deliberately do not, and the four facts behind that are:
+#
+#   1. deploy.yml declares `group: deploy-10-10`, `cancel-in-progress: false`
+#      (deploy.yml:20-22).
+#   2. GitHub allows only ONE pending run per concurrency group; a newly
+#      queued run CANCELS the previously pending one.
+#   3. So a daily purge entering `deploy-10-10` would cancel a QUEUED DEPLOY.
+#   4. Deploying is this repo's main path; the purge is a two-second daily
+#      maintenance job. Trading "a cancelled deploy" for "avoiding one
+#      connection interruption" is the wrong direction.
+#
+# The worst case the shared group would have prevented is instead PROVEN SAFE
+# by an executable test: backend/tests_pg/test_purge_atomicity.py's
+# `test_terminated_before_commit_deletes_nothing` kills the connection with
+# pg_terminate_backend while the purge transaction is open and asserts that not
+# one row was deleted and not one audit row was written. That is the exact
+# shape of `docker compose up -d --build --remove-orphans` rebuilding `db`
+# mid-purge (deploy.yml:124/471).
+#
+# ---------------------------------------------------------------------------
+# PUBLIC REPO / PUBLIC ACTIONS LOG
+# ---------------------------------------------------------------------------
+# This repo is public and Actions logs are publicly readable, while this job
+# touches PERSONAL CONVERSATION HISTORY. Nothing here echoes a connection
+# string, a password, or any memory content:
+#   * the purge SQL may only `RETURNING id` -- never every column. Enforced by
+#     backend/tests/test_retention_purge_contract.py.
+#   * the dry run prints ids, kinds and timestamps only -- never `content` or
+#     `embedding`. Also enforced there.
+#   * no step echoes deploy/.env, DATABASE_URL, or any secret.
+
+on:
+  schedule:
+    # 17:41 UTC = 01:41 at the host's local time (UTC+8): genuinely off-peak for
+    # the self-hosted machine, which also serves deploys. The odd minute avoids
+    # GitHub's top-of-hour backlog, and no other workflow in this repo uses it
+    # (existing schedules: 00:37, 21:13, 22:29, 23:00, and every 6h at :00).
+    - cron: "41 17 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Read-only preview: print what WOULD be deleted and delete nothing.
+          Defaults to true because an executed purge CANNOT be rolled back.
+        type: boolean
+        default: true
+
+# It writes nothing to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  # Its OWN group -- see "WHY THIS DOES NOT SHARE deploy.yml's CONCURRENCY
+  # GROUP" above. cancel-in-progress: false because a purge in flight holds an
+  # open transaction; cancelling it mid-flight is exactly the interruption we
+  # do not want to cause on purpose.
+  group: memory-retention-purge
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    name: purge expired memory
+    runs-on: [self-hosted, linux, x64, cloud360]
+    # MUST be explicit: a stuck psql would otherwise hold this runner for the
+    # default 360 minutes, and this runner also performs deploys. Measured
+    # runtime is seconds.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide dry-run vs real purge
+        id: mode
+        env:
+          # A scheduled run ALWAYS performs the real purge: the `dry_run`
+          # default only shapes manual dispatches (FR4.5 requires the deletion
+          # to be automatic).
+          EVENT: ${{ github.event_name }}
+          REQUESTED: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT}" = "workflow_dispatch" ] && [ "${REQUESTED}" = "true" ]; then
+            echo "sql=backend/scripts/purge_dry_run.sql" >> "$GITHUB_OUTPUT"
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"
+            echo "mode: DRY RUN -- nothing will be deleted"
+          else
+            echo "sql=backend/scripts/purge_expired_memory.sql" >> "$GITHUB_OUTPUT"
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "mode: REAL PURGE -- deletions are NOT reversible"
+          fi
+
+      # ONE psql call. Both transactions are inside the .sql file, so the
+      # boundary cannot be broken by how this workflow splits its steps.
+      #
+      # `-T` is mandatory: this runner has no TTY and `docker compose exec`
+      # without it fails with "the input device is not a TTY" (same reason as
+      # deploy.yml:149).
+      #
+      # Identity: PGUSER/PGDATABASE are taken from the CONTAINER's own
+      # environment, which compose set from the real deploy/.env when the
+      # container was created. There is no `-U` override and no connection
+      # string anywhere in this job -- NFR6.10's binary criterion verbatim is
+      # "the psql call contains no -U override and no extra connection string".
+      # Pinning to $POSTGRES_USER is the identity the design names
+      # (nfr-design/security-design.md §二), not an escalation: that role is
+      # the only database identity this system has.
+      #
+      # Why pin it at all instead of relying on psql's default: psql defaults
+      # to the OS user inside the container and to a database of the same name,
+      # which is NOT $POSTGRES_DB. The design's phrase "the default identity of
+      # `docker compose exec -T db psql` IS POSTGRES_USER" happens to hold only
+      # because POSTGRES_USER is literally `postgres`; the DATABASE would still
+      # be wrong. Reading both from the container removes both assumptions.
+      - name: Run the purge against the deploy stack database
+        env:
+          SQL_FILE: ${{ steps.mode.outputs.sql }}
+        run: |
+          set -euo pipefail
+          COMPOSE=(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env.example)
+
+          # Fail with a readable message instead of a raw compose error when the
+          # stack is not up (e.g. the host rebooted and nothing restarted it).
+          if ! "${COMPOSE[@]}" ps --status running --services | grep -qx db; then
+            echo "::error::The \`db\` service of the deploy stack is not running, so there is nothing to purge. Check the host before re-dispatching; the next scheduled run will retry on its own (the purge is idempotent)." >&2
+            exit 1
+          fi
+
+          echo "running ${SQL_FILE}"
+          "${COMPOSE[@]}" exec -T db \
+            sh -c 'PGUSER="$POSTGRES_USER" PGDATABASE="$POSTGRES_DB" exec psql -v ON_ERROR_STOP=1' \
+            < "${SQL_FILE}"
+
+      - name: Summary
+        if: always()
+        env:
+          DRY_RUN: ${{ steps.mode.outputs.dry_run }}
+        run: |
+          {
+            echo "### Memory retention purge"
+            echo ""
+            echo "- mode: \`${DRY_RUN:-unknown}\` (dry run)"
+            echo "- result: \`${{ job.status }}\`"
+            echo ""
+            echo "Row counts are in the step log above. On failure the"
+            echo "transaction rolled back and the next scheduled run retries"
+            echo "the same rows -- the purge is idempotent and self-converging,"
+            echo "so there is deliberately no retry here."
+          } >> "$GITHUB_STEP_SUMMARY"

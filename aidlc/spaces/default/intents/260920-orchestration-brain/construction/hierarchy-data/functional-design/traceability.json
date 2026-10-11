@@ -17,7 +17,7 @@
     {
       "id": "AC9.1.2",
       "status": "OK",
-      "target": "BR2.3, BR2.4, BR2.5 — 遷移只寫 system_id、不動任何既有欄位（BR2.3），故圖仍能開啟並編輯；遷移為每位持有圖的使用者建立預設專案／系統並把圖掛入（BR2.5）；遷移有可被測試程式匯入呼叫的入口（BR2.4），使這條 AC 在自動化環境可驗——stories.md:413-419 逐字記載它原本不可驗且失敗是靜默的"
+      "target": "BR2.3, BR2.4, BR2.5 — 遷移只寫 system_id、不動任何既有欄位（BR2.3），故圖仍能開啟並編輯；遷移為每位持有圖的使用者建立預設專案／系統並把圖掛入（BR2.5）；遷移有可被測試程式匯入呼叫的入口（BR2.4），使這條 AC 在自動化環境可驗——stories.md:432-419 逐字記載它原本不可驗且失敗是靜默的"
     },
     {
       "id": "AC9.1.3",
@@ -64,7 +64,7 @@
     {
       "id": "BR2.4",
       "status": "N/A",
-      "target": "遷移必須有可被測試程式匯入並呼叫的入口。已於 AC9.1.2 的 target 引用；在此另列是因為它的理由獨立於任何 AC——K-04 migration.entrypoint 逐字要求它，而 stories.md:413-419 說明沒有它時 AC9.1.2 在每個自動化環境裡的 Given 都不可達"
+      "target": "遷移必須有可被測試程式匯入並呼叫的入口。已於 AC9.1.2 的 target 引用；在此另列是因為它的理由獨立於任何 AC——K-04 migration.entrypoint 逐字要求它，而 stories.md:432-419 說明沒有它時 AC9.1.2 在每個自動化環境裡的 Given 都不可達"
     },
     {
       "id": "OQ-H1",
@@ -104,7 +104,7 @@
     {
       "id": "S-4",
       "status": "N/A",
-      "target": "OQ-3 的範圍需擴及 U4 的 requirement_summary／requirement_label。OQ-3 在 requirements.md:597 的自身文字只涵蓋 episodic memory（U5 的記憶內容），而這兩欄同樣承載使用者輸入的需求文字。本站無法修改已核可的 requirements.md，故列為具名待補項。落點 nfr-design（OQ-3 的承接站），需在解 OQ-3 時一併涵蓋或明確排除並說明理由。由審查 R-03 查出：初版只在 U4 自己的 functional-spec 寫一句「也適用」，而 nfr-design 沒有理由會讀到它"
+      "target": "OQ-3 的範圍需擴及 U4 的 requirement_summary／requirement_label。OQ-3 在 requirements.md:784 的自身文字只涵蓋 episodic memory（U5 的記憶內容），而這兩欄同樣承載使用者輸入的需求文字。本站無法修改已核可的 requirements.md，故列為具名待補項。落點 nfr-design（OQ-3 的承接站），需在解 OQ-3 時一併涵蓋或明確排除並說明理由。由審查 R-03 查出：初版只在 U4 自己的 functional-spec 寫一句「也適用」，而 nfr-design 沒有理由會讀到它"
     },
     {
       "id": "AC9.1.x-actor",

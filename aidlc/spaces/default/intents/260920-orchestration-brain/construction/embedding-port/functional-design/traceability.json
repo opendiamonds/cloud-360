@@ -1,0 +1,178 @@
+{
+  "stage": "functional-design",
+  "unit": "embedding-port",
+  "upstream_ids": [
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.1.1",
+      "status": "Deferred",
+      "target": "U8 memory-service（脈絡組裝）＋ U5 memory-data（持久化）。本單元只交付檢索所需的查詢向量（BR2.1–BR2.3）與其向量空間身分（BR3.1）；unit-of-work-story-map.md:52 把 US4.1 指派給 U5／U8／U6 三個單元，本單元無法單獨滿足此 AC"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "N/A",
+      "target": "可見範圍判定屬授權，而 K-06 behaviour_semantics.authorization_responsibility 逐字「無——本 Port 不碰授權，亦不讀 DB」。落點為 U8 memory-service。BR2.7 以可 grep 斷言的形式把這個邊界寫死"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "N/A",
+      "target": "三種記憶（語意／程序／情節）的型別區分屬 U5 的資料模型與 U8 的檢索；本 Port 對記憶型別完全無感——它只把字串變成向量。落點為 U5／U8"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "N/A",
+      "target": "承載 K-01 的 `EMBEDDING_PROVIDER` required/default:null 與 [Q3]=A；設定驗證無對應 AC"
+    },
+    {
+      "id": "BR1.2",
+      "status": "N/A",
+      "target": "承載 K-06 `retry_and_idempotency` 的純函式語意前提；技術約束，無對應 AC"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "承載 K-01 `OLLAMA_BASE_URL` 的條件必填；設定驗證無對應 AC"
+    },
+    {
+      "id": "BR1.4",
+      "status": "N/A",
+      "target": "[Q1]=A 的型別落點（fulltext ⇒ 無 Port）；介面形狀，無對應 AC"
+    },
+    {
+      "id": "BR1.5",
+      "status": "N/A",
+      "target": "[Q3]=A；由 docker-compose.test.yml:18 與 deploy/.env.example:123 兩條既有事實推得，無對應 AC"
+    },
+    {
+      "id": "BR1.6",
+      "status": "N/A",
+      "target": "承載 ADR-008「不得靜默降級」與 phases/construction.md「Errors must be surfaced」；無對應 AC"
+    },
+    {
+      "id": "BR2.1",
+      "status": "N/A",
+      "target": "承載 K-06 public_interface 的回傳形狀；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR2.2",
+      "status": "N/A",
+      "target": "承載 K-06「每個長度 1024」與 ADR-008 的 vector(1024)；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR2.3",
+      "status": "N/A",
+      "target": "承載 K-06 retry_and_idempotency 的純函式語意；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR2.4",
+      "status": "N/A",
+      "target": "本站補入的空輸入語意；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR2.5",
+      "status": "N/A",
+      "target": "本站補入的全有或全無語意；與 [Q1] 選項 D 的拒絕理由同源，無對應 AC"
+    },
+    {
+      "id": "BR2.6",
+      "status": "N/A",
+      "target": "承載 K-06「本 Port 自身不重試」；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR2.7",
+      "status": "N/A",
+      "target": "承載 K-06 authorization_responsibility 逐字「不碰授權，亦不讀 DB」；ADR-0006 IAM 面的可機械斷言形式，無對應 AC"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "[Q2]=A 的值域定案；承載 components.md:432 已核可的兩值 ＋ 新增 stub-v1，無對應 AC"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "BR1.2 的直接後果；無對應 AC"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "**components.md:432-434 逐字指派本站的那一項**；是測試斷言而非使用者可觀察行為，故無對應 AC"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "承載 ADR-008「fulltext 模式的列向量為 NULL」；**其執行落點在 U5／U8，不在本單元**，無對應 AC"
+    },
+    {
+      "id": "BR3.5",
+      "status": "N/A",
+      "target": "[Q2]=A（初答 B 經指名具體壞法後重選）；防的是 ADR-008 Context 的關鍵風險，無對應 AC"
+    },
+    {
+      "id": "BR3.6",
+      "status": "N/A",
+      "target": "[Q2]=A；[Q2] 選項 D 的拒絕理由，無對應 AC"
+    },
+    {
+      "id": "BR4.1",
+      "status": "N/A",
+      "target": "承載 ADR-008 Decision 與 K-06 raises 逐字；無對應 AC"
+    },
+    {
+      "id": "BR4.2",
+      "status": "N/A",
+      "target": "[Q3]=A 的兩類失敗分流；無對應 AC"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "[Q4]=A 的後果；無對應 AC"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "承載 team.md ## Forbidden 的憑證遮罩要求；ADR-0006 audit logging 面，無對應 AC"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "**誠實宣告**本 Port 不保證跨模型不被比較（該過濾在 U8）；邊界宣告，無對應 AC"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "承載 K-06 的回傳型別（向量不攜帶 model_id）；介面契約，無對應 AC"
+    },
+    {
+      "id": "BR6.1",
+      "status": "N/A",
+      "target": "[Q4]=A 的依賴策略；建置期決定，無對應 AC"
+    },
+    {
+      "id": "BR6.2",
+      "status": "N/A",
+      "target": "實測 requirements.txt 的既有形狀沿用；建置期決定，無對應 AC"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "承載 project.md ## Mandated 的 LOCAL-DEV.md blocking 同步；交付條件，無對應 AC"
+    },
+    {
+      "id": "BR7.1",
+      "status": "N/A",
+      "target": "ADR-0006 audit logging 面；可觀測性，無對應 AC"
+    },
+    {
+      "id": "BR7.2",
+      "status": "N/A",
+      "target": "team.md ## Forbidden；ADR-0006 encryption／audit logging 面，無對應 AC"
+    }
+  ]
+}

@@ -1,0 +1,640 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-service",
+  "upstream_ids": [
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.3.1",
+    "AC4.3.2",
+    "AC4.3.3",
+    "AC4.4.1",
+    "AC4.4.2",
+    "AC4.4.3",
+    "BR1.1",
+    "BR1.2",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR7.1",
+    "BR7.2",
+    "BR7.3",
+    "BR7.4",
+    "EC1",
+    "EC2",
+    "EC3",
+    "EC4",
+    "EC5",
+    "EC6",
+    "K-05",
+    "K-06",
+    "K-08",
+    "NFR3.20",
+    "NFR3.21",
+    "NFR3.22",
+    "NFR3.23",
+    "NFR3.24",
+    "NFR4.20",
+    "NFR4.21",
+    "NFR4.22",
+    "NFR4.23",
+    "NFR6.1",
+    "NFR6.10",
+    "NFR6.2",
+    "NFR6.20",
+    "NFR6.21",
+    "NFR7.10",
+    "NFR7.13",
+    "NFR7.15",
+    "NFR7.2",
+    "NFR7.20",
+    "NFR7.21",
+    "NFR7.22",
+    "NFR7.23",
+    "NFR7.24",
+    "NFR7.25",
+    "NFR7.26",
+    "NFR7.27",
+    "NFR7.28",
+    "NFR7.29",
+    "NFR7.30",
+    "NFR7.31",
+    "NFR7.32",
+    "NFR7.33",
+    "NFR7.34",
+    "NFR8.10",
+    "NFR8.20"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.1.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "S15 ①②（真實 PG）, C6",
+      "note": "脈絡組裝取自可見列。**向量路徑的執行期驗證在 psql 的 S15，不在 SQLite** —— SQLite 無向量型別、無距離運算子，該 SQL 編不出來。｜另涉及：backend/services/memory_service.py"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A2, A1, A3",
+      "note": "BR2.2 的讀取過濾，在 SQL 的 WHERE 內；allow/deny 雙向皆有。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "verified_by": "A13d, A13b",
+      "note": "三種 kind 皆可寫入；semantic 由新增的 POST 端點提供（BR7.3），這是本 AC 的 Given 得以構造的原因。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "AC4.2.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A4, A5, A7",
+      "note": "擁有者得刪自己的、不得刪他人的。[D1]=A 使「不得」的對外回應為 404 而非 403。｜另涉及：backend/services/memory_service.py"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A4, A15",
+      "note": "每次刪除留一筆 deleted_by_user；A15 以交易中止證明稽核與刪除不可分離。"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "S7（U5 既有）",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] **清除動作本身屬 U9**（story map：US4.2 橫跨 U8／U15／U9）。本單元只負責讀取端不回傳已清除的列（BR3.4），而那由「列已不存在」自然滿足——無軟刪除。本單元未新增針對 90 天的斷言。"
+    },
+    {
+      "id": "AC4.3.1",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A8",
+      "note": "放寬留稽核並帶前後值；EC4（兩者非空且不同）一併斷言。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "AC4.3.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A11, A11b",
+      "note": "刪除事件可被稽核查詢取得；BR6.3 的懸空事件以 memory_exists 回報。｜另涉及：backend/services/memory_facade.py、backend/services/memory_router.py"
+    },
+    {
+      "id": "AC4.3.3",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A11",
+      "note": "[FD2]=A：僅 Platform_Admin／Platform_Owner；擁有者得到 403（被拒絕）而非 200 ＋ 空集合。"
+    },
+    {
+      "id": "AC4.4.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A13",
+      "note": "ownerUserId 等於已驗證身分。｜另涉及：backend/services/memory_service.py"
+    },
+    {
+      "id": "AC4.4.2",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "verified_by": "A13",
+      "note": "酬載帶擁有者**仍回成功（201）而非 422**——BR1.2 的靜默忽略。這是本 AC 存在的全部理由。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "AC4.4.3",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13",
+      "note": "新記憶一律 owner；酬載帶 platform 不生效。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A13",
+      "note": "擁有者取自 principal，不來自酬載。｜另涉及：backend/services/memory_service.py"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "verified_by": "A13",
+      "note": "`**ignored` ＋ extra=\"ignore\"；回成功而非 422。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13",
+      "note": "create_record 寫死 visibility_scope=\"owner\"。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A1, A2, A3, S15 ①",
+      "note": "過濾在 SQL 的 WHERE 內（列出路徑 _visible_to、檢索路徑 SEARCH_SQL）。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/memory_types.py",
+      "verified_by": "C4, A10b",
+      "note": "VISIBILITY_SCOPES 是唯一防線——DDL 側無約束（FD8-3）。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13d, S15",
+      "note": "_normalise_kinds：未指定則三種皆為候選。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C6, S15 ②",
+      "note": "SEARCH_SQL 的 embedding_model 過濾。**本單元唯一完全靜默的失敗模式**，故靜態與執行期各有一道。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C6, S15",
+      "note": "embedding IS NOT NULL；無向量的列不出現且不回報錯誤。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "",
+      "note": "由「列已不存在」自然滿足——兩條離開路徑都是實際刪除，無軟刪除狀態。無獨立斷言，因為沒有可違反的分支。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] _require_port 大聲失敗且列出可選值。**fulltext 之下另有一個上游契約缺口（CG8-1）**：model_id 為 None 而 embedding_model 為 NOT NULL。未加測試，見 code-summary。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A4, A5, A7",
+      "note": "擁有者判定；**[D1]=A 使對外回應收斂為 404**（偏離 BR4.1 原文的 403，記為 D8-1）。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A4, A15",
+      "note": "delete_with_audit：單一 commit。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A6",
+      "note": "不存在 → MemoryNotFound 且**不產生稽核**（以 assertNoLogs ＋ 稽核列數斷言）。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A8, A9",
+      "note": "**上游無任何 AC（FD8-5）**；本單元以 NFR7.22 的 allow/deny 雙向補上可驗性（team.md 的 A 規則）。｜另涉及：backend/services/memory_types.py"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A10b",
+      "note": "SCOPE_WIDTH 的寬度序；收窄被拒（FD8-4 未決，故明文拒絕）。｜另涉及：backend/services/memory_types.py"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A8",
+      "note": "widen_scope_with_audit：單一 commit ＋ 前後值。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A10b",
+      "note": "範圍未變不產生事件——由 BR5.2 先行拒絕涵蓋。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A11",
+      "note": "與 BR5.1 共用 _authorize_role，**刻意只有一份**。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A11",
+      "note": "稽核查詢可取得 deleted_by_user，並得以 memoryId 收斂。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A11b",
+      "note": "懸空事件仍回傳，以 memory_exists=False 讓呼叫端可分辨。｜另涉及：backend/services/memory_types.py"
+    },
+    {
+      "id": "BR7.1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-service/functional-design/rules.md",
+      "verified_by": "",
+      "note": "episodic 的寫入端是 U13 brain-gateway 的同進程呼叫——**那條邊屬 U13**，本單元只提供 facade.write。"
+    },
+    {
+      "id": "BR7.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-service/functional-design/rules.md",
+      "verified_by": "",
+      "note": "procedure 的寫入端是 U12 work-orchestrator。同上。"
+    },
+    {
+      "id": "BR7.3",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "verified_by": "A13d",
+      "note": "POST /api/memory/records——本站唯一的契約增量。"
+    },
+    {
+      "id": "BR7.4",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13b",
+      "note": "建立不產生稽核；AUDIT_ACTIONS 沒有任何可用於建立的值。｜另涉及：backend/services/memory_types.py"
+    },
+    {
+      "id": "EC1",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13d, S7（U5 既有）",
+      "note": "expiry_for：只有 episodic 有 expires_at；反方向（不得套到長期記憶）一併斷言。｜另涉及：backend/models.py"
+    },
+    {
+      "id": "EC2",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A13c",
+      "note": "content 去除前後空白後非空；ORM 鏡像了 ck_memory_records_content_not_blank，故 SQLite 也擋。｜另涉及：backend/models.py"
+    },
+    {
+      "id": "EC3",
+      "status": "OK",
+      "target": "backend/services/memory_types.py",
+      "verified_by": "C4, A13c, A10b",
+      "note": "kind／action 的 CHECK 已鏡像；visibilityScope 由應用層承載（DDL 無約束）。｜另涉及：backend/services/memory_facade.py、backend/models.py"
+    },
+    {
+      "id": "EC4",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A8",
+      "note": "scope_changed 的前後值皆非空且不同。"
+    },
+    {
+      "id": "EC5",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A4",
+      "note": "非 scope_changed 的事件兩個範圍欄皆為空（A4 明確斷言 None）。"
+    },
+    {
+      "id": "EC6",
+      "status": "OK",
+      "target": "backend/services/memory_types.py",
+      "verified_by": "A11c",
+      "note": "MemoryAuditEventView 不含 content／embedding；以字串比對斷言回應體不含 fixture 前綴。"
+    },
+    {
+      "id": "NFR3.20",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] 查詢設計（單一 SQL ＋ HNSW）已落地，但 **P95 ≤ 150ms 的實測屬 build-and-test**，本站不宣稱達成。｜另涉及：schema_rbac.sql"
+    },
+    {
+      "id": "NFR3.21",
+      "status": "Deferred",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-service/nfr-requirements/performance-requirements.md",
+      "verified_by": "",
+      "note": "[狀態由 `DEFERRED` 更正為 `Deferred`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] 門檻被宣稱達成之前須有一次實測並記錄列數。**本站未量測**，故 NFR3.20 視為未驗證。"
+    },
+    {
+      "id": "NFR3.22",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "verified_by": "S14, C6",
+      "note": "HNSW 索引 ＋ opclass；以 EXPLAIN（enable_seqscan=off）斷言 planner 真的用得到。限定：不證明生產 planner 的選擇傾向（I8-3）。｜另涉及：backend/scripts/run_meta_schema_migration.py、backend/scripts/verify_memory_schema.sql"
+    },
+    {
+      "id": "NFR3.23",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A14, A14b",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] 列出路徑有分頁與上限；**P95 ≤ 300ms 未量測**（同 NFR3.21）。｜另涉及：backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR3.24",
+      "status": "OK",
+      "target": "backend/services/memory_ranking.py",
+      "verified_by": "PBT 性質 1–3, C1",
+      "note": "純函式的決定性次級排序鍵；純度以 ast import 集合斷言（恰為 {__future__, typing}）。"
+    },
+    {
+      "id": "NFR4.20",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C1",
+      "note": "四個新模組皆無模組層可變容器——模組層只有常數與函式。｜另涉及：backend/services/memory_facade.py、backend/services/memory_ranking.py、backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR4.21",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A15",
+      "note": "delete／widen_scope 各為單一交易；A15 以**資料庫層**的 CHECK 違反強制中止，不是應用層的 if。"
+    },
+    {
+      "id": "NFR4.22",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] _require_port 大聲失敗並列出可選值。**未加自動化斷言**（與 CG8-1 同一處缺口）。"
+    },
+    {
+      "id": "NFR4.23",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "",
+      "note": "四個新模組無重試迴圈、無 backoff——以「不存在」滿足，無可斷言的分支。｜另涉及：backend/services/memory_facade.py、backend/services/memory_router.py、backend/services/memory_ranking.py"
+    },
+    {
+      "id": "NFR6.20",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "",
+      "note": "沿用既有 database.py 的 engine；不建第二個 engine、不帶 -U、不組連線字串。database.py 的 diff 為空即是證據。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "NFR6.21",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C5, A12",
+      "note": "日誌欄位白名單；靜態（禁 f-string ＋ 禁整個物件）＋ 執行期字串比對各一道。"
+    },
+    {
+      "id": "NFR7.20",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A13",
+      "note": "擁有者由身分決定，酬載被忽略且不回報錯誤。｜另涉及：backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR7.21",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13",
+      "note": "可見範圍一律最窄；寫入端不接受該參數。｜另涉及：backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR7.22",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A8, A9, A10",
+      "note": "**三個判準齊備**，第三個（無權 ＋ 不存在 → 403 而非 404）是重點：只測前兩個的話，把順序寫反的實作也會通過。"
+    },
+    {
+      "id": "NFR7.23",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A11",
+      "note": "稽核讀取的 allow/deny 雙向。"
+    },
+    {
+      "id": "NFR7.24",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A4, A5, A6, A7",
+      "note": "**判準已被 [D1]=A 修訂**：② 由 403 改為 404（security-design §二之四）。nfr-requirements 的原文不回改。"
+    },
+    {
+      "id": "NFR7.25",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A4, A8, A15",
+      "note": "兩條路徑各留稽核且與資料變更同交易。"
+    },
+    {
+      "id": "NFR7.26",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A13b",
+      "note": "寫入後稽核列數不變。｜另涉及：backend/services/memory_types.py"
+    },
+    {
+      "id": "NFR7.27",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-purge/infrastructure-design/infrastructure-specification.md",
+      "verified_by": "",
+      "note": "成長上界由 U9 已交付的清除 ＋ watchdog 承載；本單元不新增機制，只宣告依賴它。"
+    },
+    {
+      "id": "NFR7.28",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "verified_by": "A14, A14b",
+      "note": "offset／limit 分頁；排序鍵含 id 使相鄰頁邊界穩定（三頁聯集恰為 7 列，無重複無遺漏）。｜另涉及：backend/services/memory_service.py"
+    },
+    {
+      "id": "NFR7.29",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A14",
+      "note": "**收斂而非拒絕**：超大 limit 回 200 ＋ 截斷筆數，不是 422。故上限不寫成 Query(le=...)。｜另涉及：backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR7.30",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "A5, A9",
+      "note": "拒絕日誌含 principal／memory_id／reason 三欄。｜另涉及：backend/services/memory_facade.py"
+    },
+    {
+      "id": "NFR7.31",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C5, A12",
+      "note": "拒絕日誌不含 content／embedding；判準是字串比對。"
+    },
+    {
+      "id": "NFR7.32",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] EmbeddingProviderUnavailable 的訊息含提供者名與可選值（由 U6 的例外型別提供）。**未加斷言**，同 CG8-1。｜另涉及：backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR7.33",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "C7",
+      "note": "三個有 logger 的模組皆為 cloud360.<module>；純函式層刻意 0 個。｜另涉及：backend/services/memory_facade.py、backend/services/memory_router.py"
+    },
+    {
+      "id": "NFR7.34",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "verified_by": "",
+      "note": "_log_empty_search 記錄兩道過濾後的候選筆數。**未加斷言**——SQLite 上 search 的向量路徑不可達，故該函式在 SQLite 測試中到不了。記為 open item。"
+    },
+    {
+      "id": "NFR8.20",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py",
+      "verified_by": "Step 10.2／10.3 的 diff 為空",
+      "note": "requirements.txt／deploy/／ci.yml／.env.example 的 diff 皆為空，且 deploy/ ＋ ci.yml 與本單元開工前的基準**逐位元相同**（它們帶有先前單元的改動）。"
+    },
+    {
+      "id": "K-08",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A1-A15, C2, C3",
+      "note": "[狀態由 `PARTIAL` 更正為 `OK`——sensor 只接受五個值，且 `project.md` 記過「有貢獻者標 OK ＋ 在 note 寫出界線，完全無貢獻者才標 Deferred」] 五個 facade 方法 ＋ 列出共六個介面皆落地。**兩處刻意偏離**：① [D1]=A 使 delete 的 403 不可達（D8-1）；② 分頁參數為 offset／limit，K-08 的 OpenAPI 半邊未宣告（D8-4）。另：search **刻意無 HTTP 端點**（functional-spec §〇 第 2 列逐字「同進程，U11 消費」），故對外是五條路由而非六條。｜另涉及：backend/services/memory_router.py、openapi.json、frontend/src/types/api.d.ts"
+    },
+    {
+      "id": "K-05",
+      "status": "OK",
+      "target": "backend/models.py",
+      "verified_by": "C4, S1-S15",
+      "note": "消費 U5 的結構；本單元只新增一個索引，無新表、無新欄位、無資料遷移。｜另涉及：schema_rbac.sql、backend/scripts/verify_memory_schema.sql、backend/scripts/run_meta_schema_migration.py"
+    },
+    {
+      "id": "K-06",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "verified_by": "A13（以 stub 提供者設定）",
+      "note": "經 EmbeddingPort 的 model_id／embed；不碰提供者內部、不 mock 其內部。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "U5 memory-data（靜態加密，主機層 LUKS）",
+      "note": "本單元引用它說明無加密增量；不新增儲存體。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "U5 memory-data（傳輸加密，compose 內部）",
+      "note": "新增的 POST 走與既有端點同一條 nginx／Tunnel 路徑，前提不變。"
+    },
+    {
+      "id": "NFR6.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（不得以更高權限覆寫身分）",
+      "note": "本單元的 NFR6.20 與它同形；U9 已交付。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "U5 memory-data（稽核保存 90 天，以 occurredAt 為鍵）",
+      "note": "本 intent 唯一外溢到版控 SQL（索引註解）的 NFRx.y。擁有者 U5。"
+    },
+    {
+      "id": "NFR7.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除涵蓋兩個目標）",
+      "note": "本單元引用 U9 的清除作為成長上界機制。"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除漏跑可偵測）",
+      "note": "U9 的 watchdog 是「清除漏跑」這個跨單元失敗的唯一偵測面。"
+    },
+    {
+      "id": "NFR7.15",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除稽核本身不留稽核）",
+      "note": "本單元引用它作為稽核設計的對照。"
+    },
+    {
+      "id": "NFR8.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（零新部署設定）",
+      "note": "本單元的 NFR8.20 與它同形。"
+    }
+  ]
+}

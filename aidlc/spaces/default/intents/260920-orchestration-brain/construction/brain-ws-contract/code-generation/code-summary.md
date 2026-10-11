@@ -446,7 +446,7 @@ R-01／R-02／R-03 皆經審查確認 **Resolved**；新發現 **R-04**。
 ### R-04（Major）— 已修，但**這個修法未經審查**
 
 **發現**：`traceability.json` 把 `NFR5.7` 標成純 `OK`，而
-`nfr-requirements/security-requirements.md:275–276` 逐字把它分兩層：
+`nfr-requirements/security-requirements.md:421–276` 逐字把它分兩層：
 
 > 「`WsClientEnvelope` **不得**含 `turnId` 欄位（`BR2.13`）；型別上不可構造是**第一層**，
 > 伺服器收到即回 `error(INVALID_REQUEST)`（而非靜默忽略）是**第二層**，屬 `U13`。」

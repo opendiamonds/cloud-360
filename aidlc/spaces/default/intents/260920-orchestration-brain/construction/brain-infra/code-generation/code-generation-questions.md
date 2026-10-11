@@ -37,8 +37,38 @@
 3. **第 14 步（`gh api` 複查新 secret）需要 repo 寫入權與 `gh` 認證**。若執行環境無法查，
    計畫要求記為未完成項並在摘要明說，不得靜默跳過——本 repo 為 public、Actions log 公開可讀。
 
-[Approval Fingerprint]: sha256:v3:b5dbdc7961b9a95299b5d0b8ec594f9b0ed70e7984eeecd9af97914e44e3ae51
-[Planned Source]: 135209658be073ed968dfe2e985c33867d41f12cfaf17b0817ac48e5760a35eb
+<!--
+再次取得核可的原因（2026-10-05，conductor 記）：
+
+本計畫先前已由使用者核可，原紀錄為：
+
+    Approval Fingerprint = sha256:v3:b5dbdc7961b9a95299b5d0b8ec594f9b0ed70e7984eeecd9af97914e44e3ae51
+    Planned Source       = 135209658be073ed968dfe2e985c33867d41f12cfaf17b0817ac48e5760a35eb
+    答覆                 = Approve Plan
+
+（上面三行刻意不寫成 tag 形式：Plan Approval 的登記檢查要求全檔
+恰有一個 `[Answer]:` 行，歷史紀錄若保留 tag 形式會讓它數到兩個。）
+
+該核可之後，本單元的實作、對抗式審查六項處置與 conductor 覆核**全部完成**
+（見 `code-summary.md` §三／§六／§七）。`code-generation-plan.md` 與
+`unit-test-instructions.md` 自核可起**位元組未變**——以 `git status` 核對，
+本目錄零修改，兩檔皆為已提交狀態。
+
+重取核可**不是因為計畫內容改變**，而是引擎的核可綁定已失效：
+`plan-approval-guard` 回報 fingerprint 與「active intent、target、stage attempt、
+plan、test instructions、Testing Contract」的現值不符，而 fingerprint 涵蓋
+stage attempt 與 Testing Contract 雜湊（兩者皆非本檔內容）。綁定失效期間，
+守衛拒絕全部工作區改動與全部指令執行，連 `park` 與 `--doctor` 都被拒。
+
+**核可後不會重跑實作。** 13 個檔的改動與兩支測試檔已在工作區內；
+conductor 將逐項複驗落地狀態後登記本站完成，不重新產生程式碼。
+
+此處保留原紀錄，是為了讓「本計畫曾被核可過一次」可追溯——
+依 stage 檔的修訂規則，`[Answer]:` 必須先清空才能重新產生 fingerprint。
+-->
+
+[Approval Fingerprint]: sha256:v3:d28dfe13b1c8be3480fcebb50a2a40ff0cb5d12e4c89f1c89671a01b94e2d077
+[Planned Source]: 060351af583bd73506f4750b02b7071ca4498a048a1e4148670f342a53917c52
 
 - "Approve Plan" — proceed to code generation
 - "Request Changes" — revise the plan

@@ -49,7 +49,7 @@
 且步 6 的終檢緊接其後，三者形成一個「遷移—加鎖—驗收」的序列。
 
 **步 6 的失敗形式**（`BR2.1`）：**必須是失敗，不得是警告。**
-`stories.md:426` 逐字寫明這條 AC 的目的就是「直接否掉照抄既有 `logger.warning`
+`stories.md:445` 逐字寫明這條 AC 的目的就是「直接否掉照抄既有 `logger.warning`
 形狀的實作」。
 
 ### WF-2：遷移的重跑（部分失敗後）
@@ -221,9 +221,9 @@ erDiagram
 | 面向 | 判定 | 本單元的影響與處置 |
 |---|---|---|
 | **IAM** | **適用（處置全在別的單元，但本單元是它保護的對象）** | `K-04` `behaviour_semantics.authorization_responsibility` 逐字「**無**——DDL 與遷移在部署／啟動路徑執行，不經使用者授權」。本單元建立的 `projects`／`systems` 是 `[RA:FR9.5]` 要求「讀、建立、修改、刪除**一律經 `require_story_action`**，不得有任何繞過的路徑，含同進程直呼 service 層」的對象——但那條的承載是 `K-07` 的 facade（`U7`）與 `K2` story id（`U3`）。**本單元的處置是不自建任何存取路徑**：不提供 router、不提供 service 層讀寫函式，使「繞過 facade」在本單元的交付面上不可構造。 |
-| **Encryption** | **適用（無新增敏感面）** | 本單元新增的欄位為名稱、識別碼、時間戳與一段需求摘要。**`requirement_summary` 是唯一需要判斷的**：它承載使用者輸入的需求文字，與 `U5 memory-data` 的對話內容同類。其靜態加密要求是 `OQ-3`（指派 `nfr-design`）。**但 `OQ-3` 自身的文字（`requirements.md:597`）只涵蓋 episodic memory，一個字都沒提 `U4`**——初版只在本檔寫一句「它也適用」，而那句話只活在本單元的產出裡，解 `OQ-3` 的 `nfr-design` 沒有理由會讀到它（審查 R-03）。已升為具名待補項 **`S-4`**，見 `§八` 的回補表。 |
+| **Encryption** | **適用（無新增敏感面）** | 本單元新增的欄位為名稱、識別碼、時間戳與一段需求摘要。**`requirement_summary` 是唯一需要判斷的**：它承載使用者輸入的需求文字，與 `U5 memory-data` 的對話內容同類。其靜態加密要求是 `OQ-3`（指派 `nfr-design`）。**但 `OQ-3` 自身的文字（`requirements.md:784`）只涵蓋 episodic memory，一個字都沒提 `U4`**——初版只在本檔寫一句「它也適用」，而那句話只活在本單元的產出裡，解 `OQ-3` 的 `nfr-design` 沒有理由會讀到它（審查 R-03）。已升為具名待補項 **`S-4`**，見 `§八` 的回補表。 |
 | **Network exposure** | **不適用，附理由** | 本單元不新增任何端點、不開任何連線、不對外暴露任何介面。它交付的是資料結構與一次性遷移程序，兩者都在部署／啟動路徑內執行。對外面由 `K-07`（HTTP）與 `K-12`（WebSocket）承擔，皆不屬本單元。 |
-| **Audit logging** | **適用** | 三處：(1) **遷移程序的失敗必須大聲**（`BR2.1`）——`stories.md:426` 逐字要求否掉 `logger.warning` 形狀，這是可稽核性的直接要求；(2) **遷移的寫入是資料寫入而非只是結構變更**（`K-04` `observable_side_effects` 逐字），故其執行必須留下計數紀錄——**已升格為具名規則 `BR2.6`**，落點 `code-generation`（審查 R-04：初版只寫成一句無 id、無落點、不在回補表內的旁述，而本站其他每一項新增義務都有）；(3) `DiagramChangeRecord` 本身就是一種稽核資料，其 `actor_user_id` 欄位（**審查 R-02 還原**，初版靜默漏掉）正是讓它能回答「是誰讓這張圖變成這樣」的欄位——`WorkOrchestrator` 可能代表一個有多位參與者的共享工作階段行動，沒有該欄位就只答得出「圖變了」。**寫入端是 `U12 WorkOrchestrator`（與 `source` 同一個），但它在多位參與者的共享工作階段裡怎麼認定「行動者是誰」，本站答不出來**——`WorkOrchestrator` 的內部設計不屬本單元，故列為 `U12` 自己 functional-design 的開放問題而不留成隱含假設（審查 R-09：本欄之所以要還原，理由正是多參與者這個情境，那麼「誰來決定是哪一位」就不能空著）。但**本輪無讀取端**（`§五`）——它記得下來，只是沒有人看。 |
+| **Audit logging** | **適用** | 三處：(1) **遷移程序的失敗必須大聲**（`BR2.1`）——`stories.md:445` 逐字要求否掉 `logger.warning` 形狀，這是可稽核性的直接要求；(2) **遷移的寫入是資料寫入而非只是結構變更**（`K-04` `observable_side_effects` 逐字），故其執行必須留下計數紀錄——**已升格為具名規則 `BR2.6`**，落點 `code-generation`（審查 R-04：初版只寫成一句無 id、無落點、不在回補表內的旁述，而本站其他每一項新增義務都有）；(3) `DiagramChangeRecord` 本身就是一種稽核資料，其 `actor_user_id` 欄位（**審查 R-02 還原**，初版靜默漏掉）正是讓它能回答「是誰讓這張圖變成這樣」的欄位——`WorkOrchestrator` 可能代表一個有多位參與者的共享工作階段行動，沒有該欄位就只答得出「圖變了」。**寫入端是 `U12 WorkOrchestrator`（與 `source` 同一個），但它在多位參與者的共享工作階段裡怎麼認定「行動者是誰」，本站答不出來**——`WorkOrchestrator` 的內部設計不屬本單元，故列為 `U12` 自己 functional-design 的開放問題而不留成隱含假設（審查 R-09：本欄之所以要還原，理由正是多參與者這個情境，那麼「誰來決定是哪一位」就不能空著）。但**本輪無讀取端**（`§五`）——它記得下來，只是沒有人看。 |
 
 **`ADR-0006` property-based testing hard constraint**：**不適用，附理由。**
 該約束點名 IaC generator、cost calculator、agent routing 三類純計算模組，
@@ -305,7 +305,7 @@ Construction／部署階段為完成**。
   （`.claude/tools/data/stage-graph.json`）。若 `U12` 的 functional-design 被 skip，
   本項沒有承接站，屆時判定 skip 的人必須把它重新提交給使用者。
 - **`requirement_summary`（與 `requirement_label`）的靜態加密**：**`S-4`，見下方回補表。**
-  `OQ-3` 在 `requirements.md:597` 的**自身範圍逐字只寫 episodic memory**（`U5` 的記憶內容），
+  `OQ-3` 在 `requirements.md:784` 的**自身範圍逐字只寫 episodic memory**（`U5` 的記憶內容），
   一個字都沒提 `U4`。初版只在本檔寫一句「它也適用於本欄位」——
   那句話**只活在 `U4` 自己的產出裡**，而解 `OQ-3` 的是 `nfr-design`，
   它沒有任何理由會打開本單元的 functional-spec（審查 R-03）。
@@ -325,7 +325,7 @@ Construction／部署階段為完成**。
 | **S-1** | `Project`／`System` 各多一個 `is_default` 欄位與一個部分唯一約束 | `Q3=A` |
 | **S-2** | `DiagramChangeRecord` 多一個必填 `source` 封閉列舉欄位 | `Q4=A` 的承載形式 |
 | **S-3** | `U7` 多兩項義務：刪除被拒時的可理解錯誤（`BR3.2`）、刪除前置動作的使用者路徑 | `Q1=A` |
-| **S-4** | **`OQ-3` 的範圍需擴及 `U4` 的 `requirement_summary`／`requirement_label`**——`OQ-3` 自身文字只涵蓋 episodic memory，而這兩欄同樣承載使用者輸入的需求文字。**落點 `nfr-design`**（`OQ-3` 的承接站）；需在該站解 `OQ-3` 時一併涵蓋，或由該站明確排除並說明理由。**落點風險（審查 R-10）**：`nfr-design` 的 `execution` 是 `CONDITIONAL`，其條件依賴 `nfr-requirements` 是否執行（`requirements.md:597` 的 `OQ-3` 列自己也已寫下這個依賴）。**若 `nfr-requirements` 被 skip，`nfr-design` 必然一併 skip，`S-4` 就沒有承接站**——屆時判定 skip 的人必須把 `S-4` 重新提交給使用者，不得讓它靜默落空 | 審查 R-03、R-10 |
+| **S-4** | **`OQ-3` 的範圍需擴及 `U4` 的 `requirement_summary`／`requirement_label`**——`OQ-3` 自身文字只涵蓋 episodic memory，而這兩欄同樣承載使用者輸入的需求文字。**落點 `nfr-design`**（`OQ-3` 的承接站）；需在該站解 `OQ-3` 時一併涵蓋，或由該站明確排除並說明理由。**落點風險（審查 R-10）**：`nfr-design` 的 `execution` 是 `CONDITIONAL`，其條件依賴 `nfr-requirements` 是否執行（`requirements.md:784` 的 `OQ-3` 列自己也已寫下這個依賴）。**若 `nfr-requirements` 被 skip，`nfr-design` 必然一併 skip，`S-4` 就沒有承接站**——屆時判定 skip 的人必須把 `S-4` 重新提交給使用者，不得讓它靜默落空 | 審查 R-03、R-10 |
 
 `S-1`–`S-3` 皆在提問或摘要確認當下向使用者揭露過，非事後補記；
 `S-4` 為 iteration 1 審查後補入（R-03），性質是**把原本只存在於本檔的一句話升格為可追蹤項**，不是新的設計決定。

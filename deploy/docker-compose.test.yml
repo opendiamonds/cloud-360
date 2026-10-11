@@ -100,6 +100,29 @@ services:
       # not vector retrieval, so an e2e assertion resting on similarity order
       # would pass while testing something the product does not do.
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-stub}
+      # U10 session-store. Defaulted inline, like every other value in this
+      # stack: there is no deploy/.env here and no renderer, so an undefaulted
+      # variable would be empty and the backend would refuse to start (BR3.5),
+      # turning every PR's ui-regression red. 200 matches the deploy value so a
+      # trimming bug cannot hide behind a different cap in CI.
+      #
+      # NFR8.42, CONFIRMED by reading this file rather than assumed: the redis
+      # service below sets NO --maxmemory and NO --maxmemory-policy (see its
+      # `command:`), and a policy only takes effect once maxmemory is set. So
+      # the deploy stack's switch to `noeviction` has nothing to mirror here.
+      BRAIN_SESSION_HISTORY_MAX: ${BRAIN_SESSION_HISTORY_MAX:-200}
+      # --- intent-router (U11), contract K-10 ---------------------------------
+      # Defaulted here, exactly like BRAIN_SESSION_HISTORY_MAX above and for the
+      # same reason: there is no deploy/.env in this stack and no renderer, so an
+      # undefaulted BRAIN_ROUTER_CONFIDENCE_THRESHOLD would be empty and the
+      # backend would refuse to start (BR3.4) -- turning every PR's
+      # ui-regression red. The values mirror the deploy stack so a routing bug
+      # cannot hide behind a different threshold in CI.
+      BRAIN_ROUTER_MODEL: ${BRAIN_ROUTER_MODEL:-typesafe/jev-1.13}
+      BRAIN_ROUTER_TIMEOUT_SEC: ${BRAIN_ROUTER_TIMEOUT_SEC:-5}
+      BRAIN_ROUTER_MAX_CALLS_PER_TURN: ${BRAIN_ROUTER_MAX_CALLS_PER_TURN:-1}
+      BRAIN_ROUTER_MAX_RETRIES: ${BRAIN_ROUTER_MAX_RETRIES:-0}
+      BRAIN_ROUTER_CONFIDENCE_THRESHOLD: ${BRAIN_ROUTER_CONFIDENCE_THRESHOLD:-0.7}
     depends_on:
       db:
         condition: service_healthy

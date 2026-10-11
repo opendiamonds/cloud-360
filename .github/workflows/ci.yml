@@ -166,6 +166,15 @@ jobs:
       - name: Validate pricing lookup boundary
         run: python scripts/validate_pricing_lookup_boundary.py
 
+      # H-I3: EMBEDDING_PROVIDER has no default and its deploy value is a
+      # literal in render-env.sh. Nothing else catches a typo there --
+      # validate_env_contract only checks that variables get written, the test
+      # stack runs `stub` so it never exercises the deploy values, and backend
+      # refuses to boot only after deploy is already running. This step imports
+      # the allowed set from the unit itself rather than restating it.
+      - name: Validate embedding provider values
+        run: python scripts/validate_embedding_provider_value.py
+
   frontend:
     name: Frontend (lint + typecheck + build)
     needs: gate
@@ -295,6 +304,189 @@ jobs:
         env:
           JWT_SECRET: ci_only_not_a_real_secret
         run: python -m unittest discover -s tests -v
+
+  memory-schema:
+    # 交付物 N-2（U5 memory-data）。**既有測試對本契約沒有任何驗證路徑**：
+    # backend/tests/helpers.py 改走 in-memory SQLite，而 SQLite 沒有 schema 概念
+    # （契約 K-05 的 why_not_existing_tests 逐字）。故記憶 schema 的驗證只能在
+    # 真實 PostgreSQL 上做，而這個 job 就是那個載體。
+    #
+    # **這個 job 的 id 與 name 現在都比它的內容窄**：U18 project-meta-data 的 12 條
+    # 斷言（P1-P12）也跑在這裡，因為它需要的前置條件（真實 PostgreSQL ＋ 已套用兩次
+    # 的 schema_rbac.sql）與記憶 schema 完全相同，另開一個 job 等於把同一座 service
+    # container 建第二次。**刻意不改 id 也不改 name**：GitHub 的 check name 取自
+    # job 的 name，改它會改掉 check 名稱，而 branch protection 的必要檢查若引用舊名
+    # 就會變成「缺少必要檢查」——那是一個比「名稱比內容窄」嚴重得多的後果。
+    # 新增別的 schema 斷言時，照下方的形狀再加一個步驟即可。
+    name: Memory schema (real PostgreSQL)
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # 與兩份 compose 同一個 image——vector 擴充必須存在於 image 內，
+        # 標準 postgres:*-alpine 不含它。
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cloud360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # 第一次套用：建立 schema 與兩張表。
+      - name: Apply schema_rbac.sql
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f schema_rbac.sql
+
+      # **第二次套用是刻意的**（BR1.3）：契約 K-05 的 retry_and_idempotency 要求
+      # 全部 DDL 與 grant 可重跑，而「可重跑」只跑一次時**永遠是真的**
+      # ——不跑第二次就等於沒驗。此步失敗即表示某處漏了 IF NOT EXISTS。
+      - name: Re-apply schema_rbac.sql (BR1.3 idempotency)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f schema_rbac.sql
+
+      - name: Verify memory schema assertions (S1-S13)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f backend/scripts/verify_memory_schema.sql
+
+      # U18 project-meta-data 的 12 條斷言（P1-P12）。驗的是三張表的約束、
+      # **外鍵缺席**（reselection_events 對 projects 沒有外鍵）、partial index 與
+      # CASCADE 行為——SQLite 對這四件事的語意都不同（外鍵預設關閉、ON DELETE 需
+      # PRAGMA、無 partial index 的同等查詢計畫），所以在既有的 unit suite 裡
+      # 「通過」不構成任何保證。
+      - name: Verify project-meta schema assertions (P1-P12)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f backend/scripts/verify_meta_schema.sql
+
+      # U9 memory-purge 的 10 條行為斷言（R1-R10）。驗的是**清除選到哪些列**，
+      # 而這個 job 是唯一能驗它的地方：既有的 backend job 走 in-memory SQLite，
+      # 而本單元交付的是 SQL——SQLite 沒有 schema、沒有 data-modifying CTE 的同等
+      # 語意，在那裡「通過」不構成任何保證（OPEN-ID9-3）。
+      #
+      # **刻意不新增 job**：這個 job 的前置條件（真實 PostgreSQL ＋ 已套用的
+      # schema_rbac.sql）與本斷言完全相同，另開一個等於把同一座 service container
+      # 建第二次——與上方 P1-P12 併進來的同一個理由。
+      #
+      # **工作目錄必須是 repo 根目錄**：該檔以
+      # `\i backend/scripts/purge_expired_memory.sql` 引入**生產用的那一份**清除
+      # SQL，而 `\i` 的相對路徑是相對於 psql 的工作目錄。本 job 沒有
+      # working-directory 覆寫，故預設即為根目錄。
+      #
+      # **這一步會真的刪除資料**（引入的清除 SQL 自己帶 COMMIT），所以它只能跑在
+      # 這種可丟棄的 service container 上。該檔自己帶前置守衛：資料庫內若存在不屬
+      # 於它 fixture 的逾期列，它會 RAISE EXCEPTION 中止而不是刪掉它們。
+      #
+      # **誠實的限定**：ut 上沒有任何必要狀態檢查，所以本步驟紅燈**不會擋住合併**
+      # ——它是訊號而不是閘門（承 OPEN-ID19-6，不重複立項）。
+      - name: Verify memory purge behaviour (R1-R10)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f backend/scripts/verify_purge_sql.sql
+
+  concurrency:
+    # 交付物 U19 membership-service（[ID1]=A）。**本 job 存在的理由只有一個，
+    # 而那個理由是決定性的**：[N1]=A 為 BR2.1 的守門選的機制（對父 projects 列
+    # 取 FOR UPDATE）在既有測試環境中**靜默消失**。實測（sqlalchemy 2.1.1）：
+    # select(...).with_for_update() 在 SQLite dialect 下編譯出的 SQL 是
+    # `SELECT projects.id FROM projects WHERE projects.id = ?`——鎖子句整段不見，
+    # 且無錯誤、無警告。所以在既有的 backend job 上寫併發測試，它會**綠燈而鎖
+    # 根本不存在**，產生一個假的覆蓋證據。
+    #
+    # **為什麼新增一個 job 而不是擴充 memory-schema**：後者的步驟只跑 psql，
+    # 完全不需要 Python；把 pip install 加進去是**串行**地拖慢它，而
+    # 「Memory schema」這個名字會第三次失真。新增一個 check 不影響任何既有的
+    # 必要狀態檢查（本站以 gh api 實查：ut 完全沒有 required_status_checks，
+    # main 只有一個「Repository contract」，即 repo-contract job 的 name）。
+    # wall-clock 增量約為 0：除 gate 外的每個 job 都只 needs: gate，故全部並行。
+    #
+    # **誠實的限定**：ut 上沒有任何必要狀態檢查，所以本 job 紅燈**不會擋住
+    # 合併**——它是訊號而不是閘門（OPEN-ID19-6）。要讓它真的不可繞過，必須把
+    # 它（以及其餘六個）加進 ut 的必要檢查清單，而那是 repo 層設定決定。
+    name: Concurrency (real PostgreSQL row locks)
+    needs: gate
+    if: needs.gate.outputs.is_sync != 'true'
+    runs-on: ubuntu-latest
+    # **必須明確設定**：併發測試的失敗模式是**卡住**而不是紅燈，而 runner 的
+    # 預設上限是 360 分鐘。15 分鐘遠高於實測值（三條斷言約 3 秒 ＋ pip install），
+    # 又遠低於「把 runner 佔住數小時」。
+    timeout-minutes: 15
+    env:
+      # 零新環境變數：DATABASE_URL 已是既有變數（backend job 的兩個 step 設同一
+      # 形式）。**+psycopg 後綴必須顯式**——裸 postgresql:// 會回頭依賴
+      # SQLAlchemy 的隱含預設，而該預設在 2.1 由 psycopg2 改為 psycopg。
+      # tests_pg 從 os.environ 讀它並在**缺值時大聲失敗**（tests_pg/__init__.py
+      # 的 require_pg_url）：退回 SQLite 是本 job 唯一不可接受的失敗方式，
+      # 它會讓整個 job 綠燈而鎖從未存在。
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
+      JWT_SECRET: ci_only_not_a_real_secret
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        # 與 memory-schema 及兩份 compose 同一個 image——schema_rbac.sql 的第一條
+        # 敘述是 CREATE EXTENSION vector，標準 postgres:*-alpine 跑不過。
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cloud360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          # 與 backend job 同一個 cache-dependency-path，故命中它填的 pip cache。
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      # **一次就夠**：可重跑性（BR1.3）由 memory-schema 的第二次套用驗，
+      # 本 job 不重複那件事。
+      - name: Apply schema_rbac.sql
+        working-directory: .
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f schema_rbac.sql
+
+      # 結構性隔離：backend job 的 `discover -s tests` 看不到 tests_pg，故這裡
+      # 不需要任何 env guard，也沒有東西可以忘記設。理由全文見
+      # backend/tests_pg/__init__.py 的 docstring。
+      - name: Run real-PostgreSQL concurrency tests (C1-C3)
+        run: python -m unittest discover -s tests_pg -v
 
   docker-build:
     name: Docker images build

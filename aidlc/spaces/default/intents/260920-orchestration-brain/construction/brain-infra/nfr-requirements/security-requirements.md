@@ -30,7 +30,7 @@ stage 檔另列了 `functional-spec.md` 與 `rules.md` 兩項上游，**它們�
 |---|---|---|---|
 | **S-1** | **PostgreSQL 主版本由 16 升至 18** | `[N8]`=B（使用者於本輪主動提出） | `scope-document.md` 無「資料庫主版本升級」能力項。本單元原本的範圍是「加 pgvector 擴充」，現擴為對**有現存資料的 staging volume** 做 major upgrade：`NFR6.3` 由「collation 判定 ＋ 必要時重建索引」換成完整的升版程序（含回退窗口）；上游 `requirements.md` NFR6 與 K-05 **兩處**逐字釘選的 `postgres:16-alpine` 由「變體不同」升級為**主版本不同**的衝突；`risk-and-sequencing-rationale.md` 的 **R7（B1 裝不下）**加重 |
 | **S-2** | **repo 根 `docker-compose.yml` 的本機 dev db 由「不改」改為必須改** | `[N8]`=B ＋ 審查 R-13 | 開發者的本機 data volume 須重建（跨主版本 15→18）。**不改的後果是每位開發者的整個本機資料庫建不起來**，見 `NFR6.2a` 與 `NFR8.4` |
-| **S-3** | **Redis 連線的最小權限（ACL 專用使用者）** | 審查 R-15 | `requirements.md:451` 的 ADR-0006 IAM 列**逐字**以「另：Redis 連線憑證須最小權限」結尾，但上游沒有任何 FR／NFR 承載它。本單元以 `NFR4.1` 的最小權限條款承接，屬新增工作量 |
+| **S-3** | **Redis 連線的最小權限（ACL 專用使用者）** | 審查 R-15 | `requirements.md:597` 的 ADR-0006 IAM 列**逐字**以「另：Redis 連線憑證須最小權限」結尾，但上游沒有任何 FR／NFR 承載它。本單元以 `NFR4.1` 的最小權限條款承接，屬新增工作量 |
 | **S-4** | **升版窗口內自動 rollback 的失效處置**（排序不變量 ＋ 窗口內停用 rollback **＋ 窗口後的復原步驟** ＋ 相容性前置檢查） | 審查 R-19（Critical） | `deploy.yml` 的自動自癒是本 repo 唯一的自動還原路徑。`[N8]`=B 的主版本升級在窗口內讓它**不但失效、還會把站台繼續壓在中斷狀態**（它會拿 PG 16 映像去掛 PG 18 的 PGDATA）。`scope-document.md` 無此項；處置本身是新增的部署程序與（可能的）workflow 改動。見 `NFR6.3` §排序不變量 |
 | **S-5** | **Redis 設定資產與連線身分變數**（`REDIS_USER` ＋ **每個 stack 各自的** Redis 設定承載者） | 審查 R-23 | `S-3` 只記了「要最小權限」，沒記它**需要多一個設定資產承載者與多一個變數**。K-01 的 `variables` 是封閉的六項、無 `REDIS_USER`；六處同步點裡也沒有任何 Redis 設定資產。ACL 使用者與 AOF 三組設定都只能由 compose `command:` 覆寫或掛載設定檔承載。落地後同步點由六處變**九處**（另兩處為審查 R-30／R-36 查出的兩份 compose 的 `backend.environment:`，見 `NFR8.1a`／`NFR8.1b`）。見 `NFR4.1(c)` |
 
@@ -65,7 +65,7 @@ agent routing 三類**純計算模組**。`brain-infra` 的交付物是 compose 
 使用者連線**。須以 Redis ACL 建立專用使用者，其可用指令與 key pattern 限於本應用
 所需。理由：以單一 `requirepass` 走 `default` 取得的是 full command access
 （含 `FLUSHALL`／`CONFIG`／`KEYS`），那是最小權限的反面；而
-`requirements.md:451` 的 ADR-0006 IAM 列**逐字**要求「Redis 連線憑證須最小權限」。
+`requirements.md:597` 的 ADR-0006 IAM 列**逐字**要求「Redis 連線憑證須最小權限」。
 
 - **可測判準**：以該連線身分執行一個明確超出所需的指令（例如 `CONFIG GET *`），
   **必須被拒絕**。二元可判。
@@ -809,6 +809,6 @@ Ollama 容器**不得宣告 `ports:`**，僅限 compose 內部網路。
   並需要一次上游對齊的說明 [assumption]
 - `NFR8.9` 的「Ollama 記錄會留下請求的到達」未實測 Ollama 的預設 log 等級，只依其為
   一般 HTTP 服務的通則。若實測發現它預設不記錄請求，則「可辨識性為否」的結論更強 [assumption]
-- `NFR4.1(b)` 的 Redis ACL 條款是本站承接 `requirements.md:451` 的逐字義務而新增
+- `NFR4.1(b)` 的 Redis ACL 條款是本站承接 `requirements.md:597` 的逐字義務而新增
   （`S-3`）。上游沒有任何 FR／NFR 承載它，故它是本階段新增的工作量，需回補進 scope [assumption]
 - 本檔的四面向判定與 PBT 判定是本站對 `project.md` hard constraint 的逐項對照結果 [assumption]

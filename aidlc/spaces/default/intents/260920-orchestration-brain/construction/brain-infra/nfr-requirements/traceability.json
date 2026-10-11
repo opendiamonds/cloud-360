@@ -100,7 +100,7 @@
     {
       "id": "NFR4.1(b)",
       "status": "N/A",
-      "target": "Redis 連線的最小權限（ACL 專用使用者，不共用 default）。requirements.md:451 的 ADR-0006 IAM 列逐字以「另：Redis 連線憑證須最小權限」結尾，但上游沒有任何 FR／NFR 承載它；本單元以此條承接，屬本階段新增工作量（S-3），需回補進 scope"
+      "target": "Redis 連線的最小權限（ACL 專用使用者，不共用 default）。requirements.md:597 的 ADR-0006 IAM 列逐字以「另：Redis 連線憑證須最小權限」結尾，但上游沒有任何 FR／NFR 承載它；本單元以此條承接，屬本階段新增工作量（S-3），需回補進 scope"
     },
     {
       "id": "NFR6.2a",

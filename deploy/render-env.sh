@@ -38,8 +38,14 @@
 #
 # The brain-infra (U1) variables below are LITERALS, not secrets, and therefore
 # deliberately do NOT arrive through the environment: REDIS_USER,
-# EMBEDDING_PROVIDER, REDIS_URL, OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL and
-# FASTEMBED_MODEL. Routing them through deploy.yml's `env:` map would need six
+# EMBEDDING_PROVIDER, REDIS_URL, OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL,
+# FASTEMBED_MODEL and BRAIN_SESSION_HISTORY_MAX (U10; a literal 200, not a
+# credential -- see deploy/.env.example for why it has no default in code), plus
+# the five BRAIN_ROUTER_* variables (U11 intent-router; model name, timeout,
+# per-turn call cap, retry count and the confidence threshold). The threshold is
+# the only one of the five the backend refuses to start without (BR3.4), and it
+# is still a literal, not a credential -- routing it through a repository secret
+# that does not exist would write an EMPTY string and turn a good merge red. Routing them through deploy.yml's `env:` map would need six
 # repository secrets that do not exist, so each would resolve to the EMPTY
 # STRING and be written as such -- and EMBEDDING_PROVIDER is required with no
 # default (contract K-01: "偵測不到選定提供者時須大聲失敗"), so the backend
@@ -125,4 +131,11 @@ EMBEDDING_PROVIDER=ollama
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_EMBED_MODEL=bge-m3
 FASTEMBED_MODEL=multilingual-e5-large
+EMBEDDING_TIMEOUT_SEC=10
+BRAIN_SESSION_HISTORY_MAX=200
+BRAIN_ROUTER_MODEL=typesafe/jev-1.13
+BRAIN_ROUTER_TIMEOUT_SEC=5
+BRAIN_ROUTER_MAX_CALLS_PER_TURN=1
+BRAIN_ROUTER_MAX_RETRIES=0
+BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7
 EOF

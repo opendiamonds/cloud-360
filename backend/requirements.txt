@@ -31,3 +31,19 @@ hypothesis
 openpyxl==3.1.5
 PyYAML>=6.0
 boto3
+# Redis 客戶端（`U10 session-store` 的 `NFR8.41`）。**本 repo 原先沒有任何 Redis
+# 客戶端**（實讀確認），這是本單元唯一的新增依賴。
+#
+# 為什麼不用 `==` 精確釘選：本檔檔頭的釘選紀律只對 `fastapi`／`pydantic` 成立，
+# 理由逐字是「OpenAPI 規格的輸出在同一組版本下是位元決定性的」。本依賴**不進
+# OpenAPI**——`U10` 零 HTTP 端點（`BR5.3`），`openapi.json` 的 diff 為空，故它
+# 不可能讓規格漂移檢查變紅。沿用其餘 12 個套件的未釘選形式。
+#
+# 選型滿足 `NFR8.41` 的兩項硬條件：
+#   (1) 連線層失敗與指令層失敗是**不同的例外型別**
+#       （`ConnectionError`／`TimeoutError` vs `ResponseError`），且
+#       `noeviction` 的 `OOM command not allowed` 有專屬子型別
+#       `OutOfMemoryError(ResponseError)`——`NFR4.62` 的三種原因碼因此是
+#       型別判定，不是純字串比對（字串前綴只作為舊版客戶端的退路）。
+#   (2) 連線池、連線／指令逾時、`EVALSHA` ＋ `NOSCRIPT` 退回 `EVAL` 皆為內建。
+redis

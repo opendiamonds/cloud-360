@@ -1,0 +1,358 @@
+{
+  "stage": "code-generation",
+  "unit": "embedding-port",
+  "upstream_ids": [
+    "US4.1",
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR8.1",
+    "NFR8.2",
+    "NFR9.1",
+    "ADR-0006",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR1.6",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR2.6",
+    "BR2.7",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR3.6",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR5.1",
+    "BR5.2",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR7.1",
+    "BR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "US4.1",
+      "status": "Deferred",
+      "target": "backend/services/embedding_port.py",
+      "note": "本單元是 library，只交付把文字變成向量的 Port 與其向量空間身分。US4.1（系統記得我們之前談過什麼）的使用者可見行為是脈絡組裝，落在 U8 memory-service 與 U5 memory-data。unit-of-work.md:99-104 記載本單元的交付為「EmbeddingPort 四實作 ＋ 設定切換 ＋ 偵測不到時大聲失敗」，不含檢索或組裝。"
+    },
+    {
+      "id": "AC4.1.1",
+      "status": "Deferred",
+      "target": "backend/services/embedding_port.py",
+      "note": "Then 是「組裝結果包含那一筆先前記憶」。本單元不組裝脈絡、不查詢記憶、不讀資料庫（SEC-1 逐字禁止 DB session）。它只讓 U8 有辦法取得可比較的向量；AC 的驗證落點在 U8。"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "Deferred",
+      "target": "backend/services/embedding_port.py",
+      "note": "Then 是「只包含我依可見範圍有權讀取的部分」——這是授權判定，而本單元明文不碰授權（SEC-1／D-9／BR2.7，由 test_port_imports_no_db_session_no_rbac_no_router 以原始碼掃描機械保證 require_story_action 零命中）。可見範圍的執行落點在 U8。"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "Deferred",
+      "target": "backend/services/embedding_port.py",
+      "note": "Then 是「三種記憶（語意／程序／情節）皆可被取得」。三種記憶的 schema 在 U5、取得路徑在 U8。本單元對記憶種類無感知——embed 只看文字。"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "embed() 每次呼叫記一條含 provider、model、批次大小與耗時毫秒的結構化 INFO（D-5 第 2 條），使延遲可由日誌事後統計出 P50/P95。驗證：test_each_embed_logs_provider_model_and_duration（並斷言待向量化的文字本身不進日誌）。**縮小但未關閉 RR-4**：它不是自動化斷言，沒有任何 CI 檢查會因為 embed 變慢而紅燈；關閉需 build-and-test（3.6），已具名 H-N1，見 open_items OPEN-5。"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "模組層具名常數 EMBEDDING_TIMEOUT_SEC（預設 10 秒，可由環境變數覆寫），沿用既有 LENS_AGENT_TIMEOUT_SEC 的形狀；逾時／連線失敗／HTTP 錯誤狀態三者收斂為單一例外型別 EmbeddingProviderUnavailable，且不重試（BR2.6）。驗證：test_timeout_raises_provider_unavailable ＋ test_default_timeout_is_a_named_constant（後者斷言模組內不出現裸數字 timeout，是突變 M6 的唯一攔截點）。 **M6 的攔截方式已更正（審查 R-06）**：test_default_timeout_is_a_named_constant 是**原始碼文字**斷言，不是行為斷言——審查把模組層 EMBEDDING_TIMEOUT_SEC 直接設為 None（無限逾時，正是 M6 聲稱已駁倒的那件事），常數與 httpx 那一行都不動，19 個測試全綠（MUT-A）。套件當時保護的是「有人寫死數字」而非「具名常數解析成無限」。現補 test_timeout_from_env_handles_every_input_shape（缺值／合法／非數字／0／負數，含 WARN 斷言）與test_effective_timeout_is_a_positive_finite_number（後者攔下 MUT-A）。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "resolve_provider_selection 冪等、無副作用：只讀環境變數，不建連線、不載模型、不發請求（D-2／BR1.5）。ProviderSelection 為 frozen dataclass，resolved_at 以 compare=False 排除於相等比較外，使「連續呼叫兩次結果相等」成立。驗證：test_fulltext_yields_no_port 與 test_startup_validation_* 皆以純 env 字典驅動，不需任何外部資源。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "_validate_ollama_endpoint 要求主機名為單一 DNS label 的 compose 內部服務名：localhost、*.localhost、任何 IP 字面值、任何 FQDN 與缺值皆拋 ValueError（釘在 startup hook 呼叫的模組層函式內）。驗證：test_startup_validation_rejects_non_internal_ollama_host（五個被拒值 ＋ 一個必須通過的服務名形式），突變 M5 由它攔下。**連帶處置**：backend/.env.example 與 LOCAL-DEV.md 原本教人在本機設 localhost，與本約束直接矛盾；依使用者裁決改文件而非放寬約束，見 code-summary.md §四 第 3 項。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "本單元是 ollama 的唯一消費端，其網段隔離前提由 U1 brain-infra 承載（ollama 只在 internal 網段、不 publish host port）。本單元的落點是不繞過它：endpoint 必須是服務名（見 NFR7.1），且 EMBEDDING_TIMEOUT_SEC 以無 fallback 形式經 backend.environment 傳入，缺值即空字串而非悄悄取一個預設。"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "明文傳輸的補償控制為網段與設定層，非傳輸加密（RR-1 的失效條件原樣保留，未宣稱已緩解）。本單元的落點是 userinfo 剝除（D-7）：_without_userinfo 處理 detail 與任何由第三方訊息夾帶進來的 URL，_host_and_port 處理 target。驗證：test_exception_message_strips_userinfo ＋ test_exception_constructor_strips_userinfo_from_target_and_detail。**更正**：模組原 docstring 宣稱 _without_userinfo 是唯一剝除點，突變 M7 第一輪存活證實該宣稱為誤（實際有兩個獨立剝除點）；docstring 已就地更正並補上直接打它的測試，見 code-summary.md §三。 **剝除點的關係已更正（審查 R-04）**：兩個剝除點**不是各自獨立，而是在 target 這個欄位上串聯**。detail 只經過一層（_without_userinfo）；target 經過兩層——_host_and_port 先縮到 scheme://host:port，例外建構子再呼叫 _without_userinfo 當後備。審查讓 _host_and_port 改用 netloc 保留 userinfo，19 個測試全綠（MUT-F），正因為外層默默補上了。今天沒有外洩，但縱深防禦的每一層都要有自己的測試，故新增 test_host_and_port_strips_userinfo。"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "EMBEDDING_TIMEOUT_SEC 依 project.md 的 blocking 規則在三處同步：render-env.sh 的 heredoc 寫出字面值 10、deploy/.env.example 列出、docker-compose.deploy.yml 以無 fallback 形式消費。backend/.env.example 亦列出其本機值。驗證：validate_env_contract.py passed（修正前它因 backend 讀得到 EMBEDDING_TIMEOUT_SEC 而 backend/.env.example 未記載而 ERROR——那是本單元半落地狀態造成的真實 CI 紅燈）。"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "backend/main.py",
+      "note": "configure_embedding_env() 由 startup hook 呼叫，位置在 configure_provider_env() 與 init_db() 之間（D-1），失敗即拋（與相鄰的 configure_provider_env 只記日誌刻意不同，因 ADR-008 逐字禁止靜默降級）。**驗證方式已更正（審查 R-01，Critical）**：原註記以「458 tests OK」當作本 hook 的驗證，那是無效證據——審查把整個函式掏空成「驗證什麼都不做、永不拋錯、靜默選 fulltext」的 no-op，458 個測試仍然全綠（MUT-G）。458-green 證明的是這個 hook 不會弄壞既有測試，不是它會動。現在的驗證是四個直接呼叫該函式的測試：test_configure_embedding_env_rejects_missing_and_illegal_provider、test_configure_embedding_env_rejects_non_internal_ollama_host、test_configure_embedding_env_logs_provider_model_host_and_timeout、test_configure_embedding_env_fulltext_logs_no_port。重跑 MUT-G：由三個測試攔下（469 tests）。此測試義務原本就寫在已核可的 nfr-design/security-design.md:47（D-1）逐字「驗證本身以直接呼叫該函式的單元測試覆蓋」，本輪才補齊。"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "backend/tests/test_embedding_port.py",
+      "note": "三個實作皆無計費端點呼叫：ollama 是同主機容器、fastembed 是行程內 ONNX、stub 是純函式。驗證：test_port_imports_no_db_session_no_rbac_no_router 斷言模組層 import 集合是標準庫的子集（因此不可能出現 openrouter／anthropic／openai 客戶端），且 httpx 延到用到它的方法內才 import。附帶效果：這使 scripts/validate_embedding_provider_value.py 能在 CI 的 repo-contract job 內 import 本模組——該 job 不安裝 requirements.txt。"
+    },
+    {
+      "id": "ADR-0006",
+      "status": "OK",
+      "target": "backend/tests/test_embedding_port.py",
+      "note": "四面向逐項：**IAM／授權**——本單元不碰授權判定，以原始碼掃描機械保證（SEC-1）；**encryption**——ollama 為明文同主機傳輸，具名殘餘風險 RR-1，補償控制為網段隔離與 userinfo 剝除，未宣稱已加密；**network exposure**——新增的對外呼叫只有 ollama 一處且限 compose 內部服務名（NFR7.1），fastembed 與 stub 無網路；**audit logging**——每次 embed 一條結構化 INFO（含 provider／model／批次／耗時），且刻意不記待向量化的文字與向量值本身。**PBT hard constraint**：本單元即 ADR-0006 的 property-based 落點（K-06 pbt_note），六個性質 P1–P6 以 hypothesis 的 @given 實作（7 個 @given 測試），突變 M1–M4、M9 逐一驗證其非空洞。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "EMBEDDING_PROVIDER 必填且須在 ALLOWED_PROVIDERS 內，缺值或不合法即拋 ValueError 並列出四個可選值（_reject）。驗證：test_startup_validation_rejects_missing_and_illegal_provider（空字串／未設定／不合法值三種）。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "ProviderSelection 為 frozen dataclass，不支援執行期切換提供者。resolved_at 以 compare=False 排除於相等比較外，使「連續呼叫兩次結果相等」成立（否則時間戳會讓它永遠不等）。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "EMBEDDING_PROVIDER=ollama 時 OLLAMA_BASE_URL 必填且主機名須為 compose 內部服務名（_validate_ollama_endpoint），在 BR1.1 通過之後執行。驗證：test_startup_validation_rejects_non_internal_ollama_host。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "fulltext 回 port_present=False、model_id=None、endpoint=None，resolve_embedding_port 回 None——語意是「不建立 Port」而非一個會算向量的實作。驗證：test_fulltext_yields_no_port（含其餘三者必須回非 None）。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "建構只讀設定：resolve_provider_selection 與三個 Adapter 的 __init__ 皆不發請求、不載模型。FastembedAdapter 的模型載入延到 _load_model() 首次呼叫。驗證：test_empty_input_returns_empty_and_touches_nothing 以 side_effect 斷言 _embed_batch 未被呼叫。"
+    },
+    {
+      "id": "BR1.6",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "設定層錯誤一律終止啟動（_reject 拋 ValueError），不得記 WARN 後繼續。適用範圍逐字為 BR1.1 與 BR1.3；EMBEDDING_TIMEOUT_SEC 為選填值，壞值記 WARN 後取預設 10，刻意不在此範圍內（見 code-summary.md §四）。 **啟動路徑的直接覆蓋於審查 R-01 後補齊**：原先 BR1.6 標 OK 但沒有任何測試走 configure_embedding_env()，現由 test_configure_embedding_env_rejects_missing_and_illegal_provider 覆蓋。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "embed 回傳長度等於輸入長度、順序一一對應，_verify_shape 於執行期斷言；數量不符即拋 EmbeddingProviderUnavailable。驗證：test_embed_returns_one_vector_per_input（P1，@given）。突變 M3 由 7 個測試攔下。 **_verify_shape 的直接覆蓋於審查 R-02 後補齊**：原先這兩條標 OK 並指名 _verify_shape 為執行期強制點，但套件裡每一條維度斷言都跑在 StubAdapter 上（它本來就回 1024），所以該 guard 在任何測試中都不會開火——審查把兩個分支都改成 if False 仍然全綠（MUT-B／MUT-C）。現以刻意misbehaving 的 EmbeddingPort 子類覆蓋：test_verify_shape_rejects_wrong_dimension（回 1023 維）與 test_verify_shape_rejects_wrong_vector_count（少回一筆）。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "每個向量恰為 EMBEDDING_DIMENSIONS（1024）維，_verify_shape 逐筆斷言。驗證：test_every_vector_is_exactly_1024_dimensions（P2，@given）。突變 M2（回傳 1023 維，行為探測確認 dims 1023）由 7 個測試攔下。 **_verify_shape 的直接覆蓋於審查 R-02 後補齊**：原先這兩條標 OK 並指名 _verify_shape 為執行期強制點，但套件裡每一條維度斷言都跑在 StubAdapter 上（它本來就回 1024），所以該 guard 在任何測試中都不會開火——審查把兩個分支都改成 if False 仍然全綠（MUT-B／MUT-C）。現以刻意misbehaving 的 EmbeddingPort 子類覆蓋：test_verify_shape_rejects_wrong_dimension（回 1023 維）與 test_verify_shape_rejects_wrong_vector_count（少回一筆）。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "同輸入同輸出：_stub_vector 以 SHA-256 決定性展開，輸入進了摘要。驗證：test_embedding_is_deterministic_for_the_same_input（P3，@given）。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "空輸入回 [] 且不接觸外部：embed 在 prepared 為空時完全不呼叫 _embed_batch。驗證：test_empty_input_returns_empty_and_touches_nothing 以 OllamaAdapter（會發 HTTP 的實作）加 side_effect 斷言零呼叫（P6）。"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "任一元素失敗則整批拋例外：_embed_batch 的任何失敗路徑都 raise，不回部分結果、不以零向量填補（後者會讓一個看起來合法的 1024 維向量被寫進記憶而檢索回垃圾不報錯）。"
+    },
+    {
+      "id": "BR2.6",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "不重試：OllamaAdapter._embed_batch 的 except 區塊直接 raise，無任何重試迴圈或退避。重試上限由呼叫端決定（交接給 U8）。驗證：test_timeout_raises_provider_unavailable。"
+    },
+    {
+      "id": "BR2.7",
+      "status": "OK",
+      "target": "backend/tests/test_embedding_port.py",
+      "note": "本 Port 不碰授權判定、不讀資料庫、不新增 HTTP 入口。驗證：test_port_imports_no_db_session_no_rbac_no_router 讀模組原始碼斷言 APIRouter／HTTPException／get_db／require_story_action／sqlalchemy／Session( 六者命中數皆為 0，並斷言模組層 import 集合是標準庫的子集。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "model_id() 編碼向量空間身分，預設值域為 {bge-m3, multilingual-e5-large, stub-v1}；fulltext 不參與（model_id 為 None）。驗證：test_model_id_set_matches_the_allowed_value_set_both_ways。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "model_id() 直接回傳不可變 ProviderSelection 的欄位，同一 selection 下恆定。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/tests/test_embedding_port.py",
+      "note": "雙向一致性：test_model_id_set_matches_the_allowed_value_set_both_ways 以 assertLessEqual 兩個方向各驗一次，並斷言 len(declared)==3——後者是突變 M9 的攔截點（少了它，把 STUB_MODEL_ID 改成 bge-m3 會讓兩側同時塌成兩個元素而集合相等照樣成立）。**本輪補強**：另新增 resolve_provider_selection 的啟動檢查，使被設定覆寫的 model_id 也不得逸出宣告集合（見 code-summary.md §五 的 Major 缺陷），回歸測試為 test_model_id_must_be_in_the_declared_set。 **檢查形狀已由集合成員改為提供者對應（審查 R-05，Major）**：原檢查只驗 model_id 在宣告集合內，而審查實測 EMBEDDING_PROVIDER=ollama ＋ OLLAMA_EMBED_MODEL=stub-v1 被放行——stub-v1 確實在集合內，但那會把真實的 ollama 向量蓋上 stub 的身分，正是 BR3.6 註解逐字描述的後果。現以 PROVIDER_LEGAL_MODEL_IDS（provider → 合法身分）取代，蘊含集合檢查；兩份字面值的一致性由 test_provider_model_map_matches_the_declared_set 鎖住，回歸案例為 test_real_provider_cannot_claim_the_stub_identity。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "Deferred",
+      "target": "backend/services/embedding_port.py",
+      "note": "memory_records.embeddingModel 可為 NULL 且 NULL 的唯一意義是「該列在 fulltext 模式下建立」——這是**資料欄位的語意**，其執行落點在 U5 memory-data（schema）與 U8 memory-service（寫入時的不變量：向量與 embeddingModel 必須同時為 NULL）。本模組只在 :85-86 的註解記載該語意，不持有欄位、不寫入任何列，故不宣稱已滿足（交接 H-E1）。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "提供者名稱不得作為 model_id：ollama 回 OLLAMA_EMBED_MODEL（預設 bge-m3）、fastembed 回 FASTEMBED_MODEL（預設 multilingual-e5-large）、stub 回 stub-v1——三者皆為模型名而非提供者名。理由寫在模組 docstring :11-15：OLLAMA_EMBED_MODEL 是可設定的，用提供者名當身分會讓換模型後兩個不同向量空間共用同一標籤。"
+    },
+    {
+      "id": "BR3.6",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "stub 的 model_id 為 stub-v1，且**不可設定**（else 分支直接取常數，不讀環境變數）。若它回 bge-m3，CI 短生命週期 stack 每個 PR 寫入的列會與 staging 寫入的列在資料上不可區分。突變 M9 驗證此條。 **審查 R-05 後強化**：原先只有「stub 的身分不可設定」這一半；反方向（真實提供者宣告 stub-v1）當時是開著的，現由提供者對應檢查擋下。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "EmbeddingProviderUnavailable 為本 Port 的唯一例外型別（K-06 的 raises），三個欄位 selected_provider／target／available_options 皆為契約的一部分；available_options 恆為四個可選值，是 ADR-008「列出可選值」唯一可機械斷言的落點。驗證：test_timeout_raises_provider_unavailable 斷言該三者。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "兩類失敗分開：設定值缺失或不在允許集合內走 ValueError（啟動失敗），提供者連不上才走 EmbeddingProviderUnavailable（執行期）。混用會讓啟動失敗的訊息與執行期例外無法分辨肇因。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "fastembed 未安裝時不讓原始 ImportError 傳出（它不會告訴使用者該裝什麼），改拋 EmbeddingProviderUnavailable 且訊息含 _FASTEMBED_INSTALL_HINT 的安裝指令。驗證：test_missing_fastembed_names_the_install_command（以 sys.modules 設 None 使 import 失敗）。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "例外訊息帶 endpoint 時只帶主機與埠，不帶 userinfo。由兩個獨立剝除點承載：_without_userinfo（detail 與第三方訊息夾帶的 URL）與 _host_and_port（target）。驗證：test_exception_message_strips_userinfo ＋ test_exception_constructor_strips_userinfo_from_target_and_detail（後者為突變 M7 的真正標的，見 code-summary.md §三）。 **剝除點的關係已更正（審查 R-04）**：兩個剝除點**不是各自獨立，而是在 target 這個欄位上串聯**。detail 只經過一層（_without_userinfo）；target 經過兩層——_host_and_port 先縮到 scheme://host:port，例外建構子再呼叫 _without_userinfo 當後備。審查讓 _host_and_port 改用 netloc 保留 userinfo，19 個測試全綠（MUT-F），正因為外層默默補上了。今天沒有外洩，但縱深防禦的每一層都要有自己的測試，故新增 test_host_and_port_strips_userinfo。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "backend/services/embedding_port.py",
+      "note": "本條為**誠實宣告而非禁令**（其 violation_behaviour 逐字「不適用」）：本 Port 不保證不同 model_id 的向量不被互相比較，「檢索只比對同一 embeddingModel 的列」那道過濾在 U8。本單元提供的兩條保證（model_id 恆定、隨向量空間改變而改變）均已滿足，見 BR3.2／BR3.5。故本條對本單元無可驗證的實作落點，不宣稱 OK。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "embed 的回傳型別為 list[list[float]]，無包裝型別、不攜帶 model_id（K-06 逐字）。配對責任在呼叫方，且必須以同一次 ProviderSelection 的 model_id() 配對該批結果（交接 H-E2，已寫入 code-summary.md §七）。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "fastembed 不列入 backend/requirements.txt，其 import 置於 FastembedAdapter._load_model() 內。驗證：test_port_imports_no_db_session_no_rbac_no_router 斷言模組層 import 集合為標準庫子集；requirements.txt 淨變更為零。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "ollama 走既有依賴 httpx，不新增第二個 HTTP 客戶端。httpx 的 import 在 _embed_batch 方法內——理由是 scripts/validate_embedding_provider_value.py 會在 CI 的 repo-contract job 內 import 本模組取允許值集合，而該 job 不安裝 requirements.txt。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "LOCAL-DEV.md",
+      "note": "本單元異動了 backend/.env.example 與 deploy/.env.example，故同一變更一併更新 LOCAL-DEV.md（硬依賴表、第 1 節前置檢查、第 3 節 .env、常見卡關 ＋2 列）。project.md ## Mandated 第三條為 blocking。驗證：validate_env_contract.py passed。"
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "configure_embedding_env() 於設定解析完成後記一條 INFO，含 provider、model、endpoint 主機與埠（經 _host_and_port）與 timeout；fulltext 時改記「無 Port」並說明寫入列的向量與 embeddingModel 同時為 NULL。logger 名稱為 cloud360.embedding_port，符合 team.md 的 cloud360.<module> 慣例。 **直接覆蓋於審查 R-01 後補齊**：由 test_configure_embedding_env_logs_provider_model_host_and_timeout（斷言 provider／model／host:port／timeout 四項皆在 INFO 內）與 test_configure_embedding_env_fulltext_logs_no_port 覆蓋。"
+    },
+    {
+      "id": "BR7.2",
+      "status": "OK",
+      "target": "backend/services/embedding_port.py",
+      "note": "任何 log 與例外訊息不得含憑證：endpoint 一律經 _host_and_port 或 _without_userinfo。另刻意不記待向量化的文字與向量值本身——前者是使用者的對話內容，記進日誌等於在另一個地方複製一份記憶。驗證：test_each_embed_logs_provider_model_and_duration 以哨兵字串斷言輸入文字不出現在 INFO 內。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-1",
+      "severity": "named-gap",
+      "text": "ollama 與 fastembed 的**成功路徑**在 CI 零覆蓋：docker-compose.test.yml:18 逐字「NO ollama」，fastembed 不在 requirements.txt。測不到的具體是「它們實際回傳的向量是否真為 1024 維」。它由 _verify_shape 在首次真實呼叫時攔下（大聲失敗，非靜默，更不是等到寫入 vector(1024) 欄位才變成資料庫錯誤）。缺口由 functional-design/functional-spec.md 的 OQ-E2 與 infrastructure-design/cicd-pipeline.md §三 具名持有，**不在本站關閉**。 **嚴重度已於審查 R-02 後重述**：本項原本把風險整個託付給 _verify_shape，而審查證實該緩解措施本身可被刪除而全套照綠（MUT-C）——當時這一項宣稱了它沒有的保護。_verify_shape 現已有直接覆蓋（test_verify_shape_rejects_wrong_dimension／_wrong_vector_count），故本項的 named-gap 嚴重度自此成立：缺的只是「真實提供者的成功路徑未在 CI 執行」，而「回錯維度會被攔下」已是被測行為。"
+    },
+    {
+      "id": "OPEN-2",
+      "severity": "minor",
+      "text": "EMBEDDING_TIMEOUT_SEC 在 import 時求值（embedding_port.py 模組層呼叫 _timeout_from_env()），所以一個壞值會在 import 期間記一條 WARN。對既有測試無影響（它不拋、取預設 10），但與 D-1「把 env 讀取留在 startup hook」的理由不完全一致。**未修**：改成 lazy 會動到一個已由 __all__ 導出的模組層常數的語意，屬獨立決定而非本單元的交付。 審查 R-06 指出本項不涵蓋整個逾時議題：本項講的是**何時**求值，R-06 講的是**求出的值**當時完全沒有行為斷言（已於本輪補齊）。兩者獨立，本項維持 minor 且維持不修。"
+    },
+    {
+      "id": "OPEN-3",
+      "severity": "named-gap",
+      "text": "PROVIDER_CONTEXT_LIMIT_CHARS 的單位是**字元**不是 token（H-N3）。零新依賴即無 tokenizer，故取保守的 1 token ≈ 1 字元（ollama/stub 8192、fastembed 512）。鍵是提供者而非模型，所以若有人為 ollama 設一個 context 更小的 1024 維模型，這個值會偏大——該情形由提供者回錯而成為 EmbeddingProviderUnavailable，不靜默。 審查 R-05 指出本項與該發現是同一個建模錯誤的兩面（limit 以 provider 為鍵，而它其實是模型屬性）。本輪已引入 PROVIDER_LEGAL_MODEL_IDS 的 provider→model 對應，為日後把 limit 改以模型為鍵鋪好了路；本輪不一併改，因為那會動到 D-4 逐字「選定提供者的 context 上限」的已核可措辭。"
+    },
+    {
+      "id": "OPEN-4",
+      "severity": "named-gap",
+      "text": "覆蓋率未量測。team.md 如實記載本 repo 完全沒有覆蓋率量測機制（無 .coveragerc、無 coverage/pytest-cov、CI 無 coverage step），且本 scope 的 scope_floor 逐字「adds no extra new-test floor beyond the selected test strategy」。本單元**不宣稱**達成 org.md 宣告的 80% line coverage，亦不以「已達成」記錄。"
+    },
+    {
+      "id": "OPEN-5",
+      "severity": "named-gap",
+      "text": "H-N1（embed 延遲的自動化斷言）未提供。D-5 的 INFO log 讓延遲可由日誌事後統計，但沒有任何 CI 檢查會因為 embed 變慢而紅燈（RR-4）。承接站為 build-and-test（3.6）。"
+    },
+    {
+      "id": "OPEN-6",
+      "severity": "process",
+      "text": "本站的 REVIEW_COMPLETED 收據預期無法登記，原因為已查明的結構性工具鏈交互：workspace_requires: true 的站，其 REVIEW_COMPLETED 綁定 workspace source fingerprint，而該 fingerprint 把 git-ignored 的 .hypothesis 與 __pycache__ 也算進去——審查員必須跑測試，跑測試必然改動那些快取。真的發生時留 review-NN-unreceipted.md，不假裝記進去了。"
+    },
+    {
+      "id": "OPEN-7",
+      "severity": "process",
+      "text": "本單元的 audit 歷程非常規，一併記載以免日後誤讀：UNIT_STARTED 於 2026-10-05T01:51:06Z 記下後，引擎路由前移到 brain-infra，使 plan-approval-guard 的核可目標變成一個尚未重新核可的單元，進而拒絕全部工作區改動與指令執行（派工 agent 命中 8 次，交付 2/10 個檔後停止）。該狀態下 park 被自主模式拒絕、autonomy 欄位無 CLI、改該欄位的 Edit 亦被拒，形成無 agent 側出口的死結。解法是重新取得 brain-infra 的 Plan Approval（計畫內容位元組未變，失效的是引擎綁定）。本單元隨後 UNIT_PAUSED（04:50:31Z）→ UNIT_RESUMED（04:51:17Z）並在同一 session 內完成。"
+    },
+    {
+      "id": "OPEN-8",
+      "severity": "process",
+      "text": "審查 iteration 1 判定 NOT-READY（1 Critical／4 Major／1 Minor），六項全部處置完成並以突變複驗（MUT-A／B／C1／F／G 原本全部存活，現全部轉紅；另複驗 M9 與新檢查本身亦為紅）。但 REVIEW_COMPLETED 收據**無法登記**，錯誤逐字為「workspace source changed after REVIEW_REQUESTED iteration 1」——即 OPEN-6 所述的結構性缺陷：審查員必須跑測試才能獨立查證，而跑測試必然改動 .hypothesis 與 __pycache__，而 source fingerprint 把 git-ignored 的快取也算進去。已驗證審查員交還的原始碼與送審狀態一致（兩個檔案 md5 相符、其 mutation 暫存檔已刪除、19 tests 當時仍綠）。依 project.md 的既有裁決：**不得**為了讓收據過關而回頭補跑 REVIEW_REQUESTED（那會把請求時間記在審查實際執行之後），故審查全文與處置留存於 reviews/review-01-unreceipted.md。"
+    }
+  ]
+}

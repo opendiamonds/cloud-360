@@ -48,7 +48,7 @@
     {
       "id": "NFR10",
       "status": "N/A",
-      "target": "路由層模型的可替換性屬 U11 intent-router。**必須明講的一件事**：OQ-4（路由層模型定案）的落點逐字是 nfr-requirements（3.2），也就是本 stage——但它會在 U11 的本站回合定案，不在 U4 這一回合。本單元不得被讀成已經處理了 OQ-4。requirements.md:598 另記載 OQ-4「CONDITIONAL，無自然承接站，skip 時須重新提交使用者」"
+      "target": "路由層模型的可替換性屬 U11 intent-router。**必須明講的一件事**：OQ-4（路由層模型定案）的落點逐字是 nfr-requirements（3.2），也就是本 stage——但它會在 U11 的本站回合定案，不在 U4 這一回合。本單元不得被讀成已經處理了 OQ-4。requirements.md:785 另記載 OQ-4「CONDITIONAL，無自然承接站，skip 時須重新提交使用者」"
     },
     {
       "id": "NFR1",
@@ -75,12 +75,12 @@
     {
       "id": "U4-V1",
       "status": "N/A",
-      "target": "共用那個真實 PostgreSQL CI job，不另開第二個；映像為 pgvector/pgvector:pg16 而非 postgres:16-alpine——K-01 images_and_services 逐字要求該替換，理由是 U5 的 vector(1024) 需要 pgvector，而 U5 是這個共用 job 的同居者；該映像對本單元的三張表是超集（iteration 1 審查 R-05）。**但本站不釘死它（iteration 2 審查 R-10）**：K-01 該句帶 scope 子句「deploy/docker-compose.deploy.yml 與 deploy/docker-compose.test.yml 兩處」，講的是部署與測試 compose、沒提 CI job；**關係更正（iteration 3 審查 R-15）**：不是三方矛盾——requirements.md:377 與 K-05 的 verification.carrier 彼此一致，K-01 被自己的 scope 子句排除在 CI job 之外。真正的問題是沒有任何一份上游說過這個共用 job 該用哪個映像，而 U5 的 vector(1024) 使 postgres:16-alpine 對同居者不足。映像決定權歸 S-6。觸發 Q1=A。無 inception NFR 父項 **更正（nfr-design 站查出）**：brain-infra 的 nfr-requirements 自己的 NFR6.1 逐字把「N-2 的真實 PG CI job service container」列為映像必須一致的四個落點之一，映像 pgvector/pgvector:pg18；deploy/docker-compose.deploy.yml:40 現況亦然。故映像已由上游定案、U4 沿用，不歸 S-6。本站初版宣稱「沒有任何一份上游說過」是錯的——只讀了 K-01 而未讀兄弟單元的 NFR 產出。"
+      "target": "共用那個真實 PostgreSQL CI job，不另開第二個；映像為 pgvector/pgvector:pg16 而非 postgres:16-alpine——K-01 images_and_services 逐字要求該替換，理由是 U5 的 vector(1024) 需要 pgvector，而 U5 是這個共用 job 的同居者；該映像對本單元的三張表是超集（iteration 1 審查 R-05）。**但本站不釘死它（iteration 2 審查 R-10）**：K-01 該句帶 scope 子句「deploy/docker-compose.deploy.yml 與 deploy/docker-compose.test.yml 兩處」，講的是部署與測試 compose、沒提 CI job；**關係更正（iteration 3 審查 R-15）**：不是三方矛盾——requirements.md:523 與 K-05 的 verification.carrier 彼此一致，K-01 被自己的 scope 子句排除在 CI job 之外。真正的問題是沒有任何一份上游說過這個共用 job 該用哪個映像，而 U5 的 vector(1024) 使 postgres:16-alpine 對同居者不足。映像決定權歸 S-6。觸發 Q1=A。無 inception NFR 父項 **更正（nfr-design 站查出）**：brain-infra 的 nfr-requirements 自己的 NFR6.1 逐字把「N-2 的真實 PG CI job service container」列為映像必須一致的四個落點之一，映像 pgvector/pgvector:pg18；deploy/docker-compose.deploy.yml:40 現況亦然。故映像已由上游定案、U4 沿用，不歸 S-6。本站初版宣稱「沒有任何一份上游說過」是錯的——只讀了 K-01 而未讀兄弟單元的 NFR 產出。"
     },
     {
       "id": "U4-V2",
       "status": "N/A",
-      "target": "該 job 必須在跑遷移之前寫入前置狀態：至少兩位持有圖的使用者、其圖 system_id 為空。理由是 stories.md:413-419 逐字記載 AC9.1.2 的 Given 在每個自動化環境都不可達（每個環境的 DB 都是新的）。不造前置狀態，遷移只證明得了不變量在空資料上成立。無 inception NFR 父項"
+      "target": "該 job 必須在跑遷移之前寫入前置狀態：至少兩位持有圖的使用者、其圖 system_id 為空。理由是 stories.md:432-419 逐字記載 AC9.1.2 的 Given 在每個自動化環境都不可達（每個環境的 DB 都是新的）。不造前置狀態，遷移只證明得了不變量在空資料上成立。無 inception NFR 父項"
     },
     {
       "id": "U4-V3",

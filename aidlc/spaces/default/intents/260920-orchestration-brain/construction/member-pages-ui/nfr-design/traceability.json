@@ -1,0 +1,189 @@
+{
+  "stage": "nfr-design",
+  "unit": "member-pages-ui",
+  "upstream_ids": [
+    "NFR4.80",
+    "NFR8.80",
+    "NFR11.80",
+    "NFR11.81",
+    "UIP-1",
+    "UIP-2",
+    "UIP-3",
+    "UIP-4",
+    "UIP-5",
+    "SEC-U24-1",
+    "SEC-U24-2",
+    "SEC-U24-3",
+    "SEC-U24-4",
+    "SEC-U24-5",
+    "SEC-U24-6",
+    "TS-U24-1",
+    "TS-U24-2",
+    "TS-U24-3",
+    "TS-U24-4",
+    "TS-U24-5",
+    "TS-U24-6",
+    "TS-U24-7",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR4.80",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§三：零瀏覽器儲存的設計落點——橫幅已讀狀態一律在伺服器。可測不變量維持上一站的三識別字零命中。"
+    },
+    {
+      "id": "NFR8.80",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§三：零新環境變數，故 `render-env.sh` ＋ `deploy/.env.example` 的同步義務為**空集合**（結構性滿足，非豁免）。"
+    },
+    {
+      "id": "NFR11.80",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：就地更新（`UIP-3` 的同一手段）使改角色的頁面切換次數為 0；不另設機制。"
+    },
+    {
+      "id": "NFR11.81",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：橫幅「查看成員」以被點選事件的 `project_id` 組路由，不走「先回清單再選」。"
+    },
+    {
+      "id": "UIP-1",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：**渲染閘**放在「資料→視圖」轉換點（非 `map` 內部），使「不渲染半套清單」成為結構保證。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一＋§三：不新增任何快取層；請求函式不持有模組層狀態。§二 逐項記載為何不採 cache-aside。**審查 `R-03` 更正**：「缺 `K3 view` 者 0 次」的機制是**發出前**的 `can(\"K3\",\"view\")` 判定（`frontend-components.md:157` 已定案），不是 `BR21.3`（那是重試規則，在其機制下計數為 1、e2e 會紅）。上界形狀寫在 §三 並標明**未設界**。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：就地更新（`map`／`filter`），不呼叫清單抓取函式；先例的分頁補償兩行不適用。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：`canManage` 由同一份 `list_members` 回應推得（`BR22.3`），不另發請求。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "Deferred",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一：渲染閘形狀與 `UIP-1` 一致、排序鍵為時間遞減。**標為 Deferred 而非 OK**：取得變更紀錄的端點不存在（`OPEN-MP24-7`），故此為「端點到位後即適用」的待命設計，不可量測。不宣稱已可驗。"
+    },
+    {
+      "id": "SEC-U24-1",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§四：`FailureSignal` 的兩欄改為**字面值聯集**（`SignalKind` 五個值、`SignalEndpoint` 六個路徑樣板），非列舉值無法編譯。**審查 `R-04` 更正**：初版兩欄為開放 `string` 並宣稱「型別層的結構保證」——那是高估，`kind` 與 `endpoint` 仍可塞進識別字且通過型別檢查；移除 `message`／`detail`／`displayName` 只關掉了最方便的通道。改為封閉列舉後才真的是型別層保證。"
+    },
+    {
+      "id": "SEC-U24-2",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§三：已讀狀態在伺服器、以事件為鍵；零瀏覽器儲存是其結構前提。"
+    },
+    {
+      "id": "SEC-U24-3",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§一：前端不是授權決策點——但這是**紀律**，由 `BR22.3` 的 observable 與 `SEC-U24-5` 兩條 e2e 守住。**審查 `R-02`（Critical）更正**：初版宣稱「前端在結構上沒有第二個授權資料來源可取用……不是靠紀律，是靠欄位集合」，而 `useAuth().can`（`AuthContext.tsx:113-125`，資料來自伺服器下發的 `user.permissions`）**存在且已被 `CapabilityRoute` 消費**。禁令的正確措辭是「可以判定全域能力，不得用它推導 per-project 角色」。"
+    },
+    {
+      "id": "SEC-U24-4",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§二：以 `detail` 的**型別**分流 422 的兩種語意（字串＝缺全域權限、物件陣列＝驗證錯誤）。"
+    },
+    {
+      "id": "SEC-U24-5",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§一之三：四個控件的渲染條件改為**兩段式**——per-project `role` ∈ {owner, admin} **AND** `can(\"K3\",\"edit\")`。**審查 `R-01`（Critical）**：本單元三個寫入端點的唯一全域把關是 `require_story_action(\"K3\",\"edit\")`（`membership_router.py:210`／`:246`／`:283`），而初版三站 16 檔對 `K3.edit` **零命中**；「per-project admin 但缺 `K3.edit`」經兩條路徑證實可達，初版會讓四個控件渲染後每次寫入永久 403，且初版對 403 的處方（重抓清單）構成死循環。"
+    },
+    {
+      "id": "SEC-U24-6",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§四：兜底規則的設計落點，含 `FailureSignal` 的形狀。與 `SEC-U24-1` 的張力以型別層解決而非留給實作各自發明。"
+    },
+    {
+      "id": "TS-U24-1",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§二 的 XSS 面與 §四 的訊號設計皆不需新依賴；`performance-design.md` §二 逐項記載虛擬滾動等需新依賴的樣式為何不採。"
+    },
+    {
+      "id": "TS-U24-2",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "全部效能要求的量測方式皆為 Playwright e2e（`performance-design.md` §一 的達成手段逐條可由 DOM 或請求攔截觀察）。"
+    },
+    {
+      "id": "TS-U24-3",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-design/logical-components.md",
+      "note": "§三：`apiUrl()` 沿用既有、不改。本站無新設計面——列為 N/A 而非 OK，因為沒有任何本站決定作用於它。"
+    },
+    {
+      "id": "TS-U24-4",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/logical-components.md",
+      "note": "§一：抓取函式層列為獨立元件、明載「不碰 state」，使 `react-hooks/set-state-in-effect`（error 級）成為結構約束而非撰寫慣例。"
+    },
+    {
+      "id": "TS-U24-5",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/performance-design.md",
+      "note": "§一 `UIP-3` 列：就地更新沿用 `AdminPage.tsx` 的 `map`／`filter` 形狀，並寫明先例的分頁補償兩行不適用。"
+    },
+    {
+      "id": "TS-U24-6",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/logical-components.md",
+      "note": "§一／§三／§四：`[ND1]`=A 定下形狀——每頁各掛一個實例、props 驅動不持有狀態、`role=\"status\"` 寫死於元件內。§三 說明此形狀使 `U23` 沿用只需 import、不需接線（`HO-U24-1`）。"
+    },
+    {
+      "id": "TS-U24-7",
+      "status": "OK",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "§三：零新環境變數的設計後果（同步義務為空集合）。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "**不是本單元的需求，是 sensor 從上游的一段逐字引文裡抓到的。** `NFR7.2` 出現在本單元 `nfr-requirements/performance-requirements.md` §五 所引用的 `schema_rbac.sql:663` 原文中（「There is deliberately NO retention period here (**unlike memory.memory_audit_events, NFR7.2**)」）——那是記憶層的保存期限要求，屬 `U9 memory-purge` 的範圍，與成員頁無關。引用它的目的正是說明**本表的對比對象**：`reselection_events` 刻意沒有保存期限。`traceability` sensor 以 `NFRx.y` 的字樣比對，不分辨引文與主張，故必須在此宣告。判定 **N/A**：本單元不實作、不繼承、也不違反它。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "canManage-two-stage",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "**本站的設計決定，擴充了一條已核可規則的效果**：`canManage` ＝（per-project `role` ∈ {`project_owner`, `project_admin`}）**AND** `can(\"K3\",\"edit\")`。`BR22.3` 規定 per-project 結論的取得方式，本條在它之外再 AND 一個獨立的全域閘——與伺服器實際的兩段式檢查同形，**不是**用全域能力推導 per-project 結論。不增加請求數（`can()` 讀已載入的 `user.permissions`，`UIP-4` 不變）。因為它擴充了已核可規則的渲染條件，於核可關卡明白揭露而非當成細化吸收。被排除的替代方案是「渲染控件但以 403 為終態」——那讓使用者看得到四個永遠失敗的控件，而本單元是管理成員的唯一入口。"
+    },
+    {
+      "id": "OPEN-ND24-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-design/logical-components.md",
+      "note": "**本站新增的開放項**：成員頁掛載時文件中同時存在**兩個** `role=\"status\"` 區域（`Layout` 的橫幅宿主 ＋ 該頁的 `<LiveRegion />`），兩者同時變動時的播報順序未定義。該組合**可達**（有待確認交棒事件 ＋ 同時觸發載入或錯誤播報）。`[ND1]`=B 不會改善（只把第二個區域從頁面移到 `Layout.tsx`，數量相同）。**審查 `R-05` 更正**：不能共用同一個區域的理由**不是**「宿主內不得放可互動內容」（控件早已被移出宿主，§二之二 的處置逐字如此），而是三條別的——`functional-spec.md:202` 要求無事件時宿主為空、`BR21.3` 要求失敗時不顯示錯誤、§二之二 的可觀察形式要求宿主 `textContent` 在展開／收合時不變。落點 `U17 a11y-gate`（`unit-of-work.md:428`；`construction/a11y-gate/` 磁碟上不存在，故在游標之後，有效指派）。**本站不自行發明順序規則**——無上游需求支持，且不會被任何工具檢查。"
+    },
+    {
+      "id": "FailureSignal",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-design/security-design.md",
+      "note": "**本站新增的型別層設計**，無 inception 父條。它不是 NFR 而是實現 `SEC-U24-1`＋`SEC-U24-6` 兩條的手段：兩欄皆為**字面值聯集**（審查 `R-04` 後改）：`SignalKind` 五個值、`SignalEndpoint` 六個路徑樣板。列在 `reverse` 是為了讓它在追溯上可見——下游若擅自加欄位，`SEC-U24-1` 的 e2e 會紅，但設計意圖必須先寫下來才查得到。"
+    }
+  ]
+}

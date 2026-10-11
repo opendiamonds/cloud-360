@@ -147,7 +147,8 @@ stateDiagram-v2
 
 ## 三、衍生視圖：實體關係圖
 
-**衍生自 `entities.md`；那份 yaml 是真實來源。** 本圖只畫組成關係，不畫 18 個實體的全部欄位。
+**衍生自 `entities.md`；那份 yaml 是真實來源。** 本圖只畫組成關係，不畫 **22** 個實體的全部欄位。
+（修訂 1 更正，審查 `R-01`／`R-21`：初版寫 18，為 `ready` 與 `select_clarify_candidate` 兩型別及其 payload 實體加入前的舊值。22 由 `entities.md` 頂層 `- name:` 實算，非目測。）
 
 ```mermaid
 erDiagram

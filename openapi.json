@@ -79,6 +79,18 @@
         "title": "BulkRolePermissionUpdate",
         "type": "object"
       },
+      "ChangeRoleIn": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/ProjectRole"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "ChangeRoleIn",
+        "type": "object"
+      },
       "ChatRequest": {
         "properties": {
           "current_xml": {
@@ -293,6 +305,32 @@
         "title": "CommitCollabReviewBody",
         "type": "object"
       },
+      "CreateProjectIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateProjectIn",
+        "type": "object"
+      },
+      "CreateSystemIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateSystemIn",
+        "type": "object"
+      },
       "DetectProviderBody": {
         "properties": {
           "xml_data": {
@@ -305,6 +343,56 @@
           "xml_data"
         ],
         "title": "DetectProviderBody",
+        "type": "object"
+      },
+      "DiagramChangeOut": {
+        "properties": {
+          "actor_user_id": {
+            "title": "Actor User Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "requirement_label": {
+            "title": "Requirement Label",
+            "type": "string"
+          },
+          "requirement_summary": {
+            "title": "Requirement Summary",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "diagram_id",
+          "source",
+          "actor_user_id",
+          "requirement_summary",
+          "requirement_label"
+        ],
+        "title": "DiagramChangeOut",
         "type": "object"
       },
       "EstimateSetDetailView": {
@@ -407,6 +495,25 @@
         "title": "EstimateSetDetailView",
         "type": "object"
       },
+      "GuardedProjectRef": {
+        "description": "`LastAdminGuardReport` 的一項。\n\n**必須同時含 id 與名稱**：`entities.md` 逐字「只給 id 的話畫面無法告知\n使用者是哪個專案」。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "name"
+        ],
+        "title": "GuardedProjectRef",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -418,6 +525,40 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InviteMemberIn": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/ProjectRole"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "InviteMemberIn",
+        "type": "object"
+      },
+      "LastAdminGuardReport": {
+        "description": "守門命中時的回報酬載，**同時是既有停用端點 409 的 response model**。\n\n`AC12.3.3` 的 Then 要求停用被拒時**列出那些專案**，故這個形狀就是 409 的\n回應本體（不是 `{\"detail\": ...}` 的包裝）。\n\n`BR6.2`：它**必須**被 `responses={409: {\"model\": LastAdminGuardReport}}`\n顯式宣告。FastAPI 不從 `raise HTTPException` 推導狀態碼，故不宣告則該契約\n不進 `openapi.json`、前端產不出型別，而 `dump_openapi.py --check` 與\n`npm run check:types` **兩道漂移閘門都保持綠燈**——這是本單元唯一\n「違反後沒有任何東西變紅」的規則。",
+        "properties": {
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/GuardedProjectRef"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "projects"
+        ],
+        "title": "LastAdminGuardReport",
         "type": "object"
       },
       "LastOpenedRequest": {
@@ -685,6 +826,194 @@
         "title": "MechanicalCheckView",
         "type": "object"
       },
+      "MemberView": {
+        "description": "facade 對外回傳的成員檢視（`list_members`／`invite_member`／`change_role`）。\n\n**不含 per-project 判定以外的授權結論，也不含全域角色**——前端不得自行\n推導 per-project 權限（不變量 `I-5`），它只讀本元件給的結論。\n\n**不含 `invited_by`**：`entities.md` 逐字把它列為「本輪有寫入端而無讀取端」\n的懸空契約端（`OPEN-FD19-6`），並明文要求**不自行把它加進 `MemberView`**\n——那會擴大一個已核可的回傳形狀而沒有任何 AC 要求它。",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "role",
+          "joined_at"
+        ],
+        "title": "MemberView",
+        "type": "object"
+      },
+      "MemoryAuditEventView": {
+        "description": "`K-08` 的 `MemoryAuditEventView`：`list_audit_events` 的回傳元素。\n\n**刻意不含記憶內容**（`EC6`）：稽核比它描述的記憶活得久（`BR2.1`／`DG-1`），\n若它含內容，「保留稽核」就等於「保留被刪除的使用者資料」——使用者以為刪了\n而它還在，`FR4.5` 的 90 天刪除形同虛設。\n\n`memory_exists` 是 `BR6.3` 要的那一位：`memory_id` 指不到記憶時**仍須回傳\n該事件**，並讓呼叫端**可分辨**這個狀態。少了這個欄位，呼叫端只能自己再查\n一次記憶（而它沒有權限）或把懸空事件誤讀成資料錯誤。",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_user_id": {
+            "title": "Actor User Id",
+            "type": "integer"
+          },
+          "audit_event_id": {
+            "title": "Audit Event Id",
+            "type": "string"
+          },
+          "memory_exists": {
+            "title": "Memory Exists",
+            "type": "boolean"
+          },
+          "memory_id": {
+            "title": "Memory Id",
+            "type": "string"
+          },
+          "new_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Scope"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "previous_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Scope"
+          }
+        },
+        "required": [
+          "audit_event_id",
+          "memory_id",
+          "actor_user_id",
+          "action",
+          "occurred_at",
+          "memory_exists"
+        ],
+        "title": "MemoryAuditEventView",
+        "type": "object"
+      },
+      "MemoryCreateRequest": {
+        "description": "`POST /api/memory/records` 的酬載（`BR7.3`／`[FD4]`=A）。\n\n## `model_config` 刻意**不**設 `extra=\"forbid\"`\n\n`BR1.2`／`NFR7.20` 要求酬載中任何意圖指定擁有者的欄位**被忽略且不回報\n錯誤**。`extra=\"forbid\"` 會讓它回 422，直接違反該規則；而回 422 會讓呼叫端\n以為「換個欄位名就能指定」，**忽略使該能力不存在**。\n\n同理 `visibilityScope` 也不是本模型的欄位（`NFR7.21`）：新記憶的可見範圍\n一律為最窄，放寬是獨立的、需授權的操作（`BR5.1`）。\n\n故本模型**只有兩個欄位**，而這個「少」是規則本身，不是未完成。\n`test_memory_authz` 第 11 條驗的正是帶了那兩欄仍**回成功而非 422**。",
+        "properties": {
+          "content": {
+            "description": "記憶的文字內容；去除前後空白後須非空",
+            "title": "Content",
+            "type": "string"
+          },
+          "kind": {
+            "description": "三種記憶之一：semantic｜procedure｜episodic",
+            "examples": [
+              "semantic"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "content"
+        ],
+        "title": "MemoryCreateRequest",
+        "type": "object"
+      },
+      "MemoryScopeRequest": {
+        "description": "`PUT /api/memory/records/{memoryId}/scope` 的酬載（`BR5.2`）。",
+        "properties": {
+          "visibility_scope": {
+            "description": "目標可見範圍。只接受比現行**更寬**的值（放寬只有一個方向）",
+            "title": "Visibility Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility_scope"
+        ],
+        "title": "MemoryScopeRequest",
+        "type": "object"
+      },
+      "MemoryView": {
+        "description": "`K-08` 的 `MemoryView`：`write`／`search`／`widen_scope` 的回傳元素。\n\n**不含 `embedding`**：1024 個浮點數對 `U11`／`U15` 都無用，而回傳它等於\n把向量搬進消費端的進程。**不含任何他人的資料**——能拿到這個物件就表示\n`BR2.2` 已經放行過。",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "embedding_model": {
+            "title": "Embedding Model",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "memory_id": {
+            "title": "Memory Id",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "integer"
+          },
+          "visibility_scope": {
+            "title": "Visibility Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_id",
+          "kind",
+          "owner_user_id",
+          "visibility_scope",
+          "content",
+          "embedding_model",
+          "created_at"
+        ],
+        "title": "MemoryView",
+        "type": "object"
+      },
       "Message": {
         "properties": {
           "content": {
@@ -768,6 +1097,55 @@
         "title": "PersistReviewDiagramBody",
         "type": "object"
       },
+      "ProjectOut": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner_user_id",
+          "is_default"
+        ],
+        "title": "ProjectOut",
+        "type": "object"
+      },
+      "ProjectRole": {
+        "description": "per-project 角色的封閉列舉（`entities.md` 的 `ProjectRole`）。\n\n**刻意不含 `project_owner`**：`owner` 是 `projects.owner_user_id` 承載的\n**專案屬性**，不是成員角色。建立者同時是 owner 且是 `project_admin`\n（`FR12.1`），兩者是不同的事實——混為一談會讓「改某人的角色」意外改到\n專案的擁有權。\n\n**與全域角色同名不同義**：本列舉的 `project_admin` 是**專案內**的身分，\n與 `services/rbac.py` 的 `CANONICAL_ROLES` 裡的全域 `Project_Admin` 是兩回事\n（`schema_rbac.sql` 的 `project_members.role` COMMENT 逐字記載這一點）。\n`FR12.6` 要求兩層串聯、任一層不過即拒，兩者不互相取代。\n\n封閉性由**應用層**承載（`BR5.4`）：`reselection_events` 的\n`previous_role`／`new_role` 在 DDL 刻意沒有 CHECK。",
+        "enum": [
+          "project_admin",
+          "member"
+        ],
+        "title": "ProjectRole",
+        "type": "string"
+      },
       "PutLensBody": {
         "properties": {
           "lens": {
@@ -822,6 +1200,86 @@
           "xml_data"
         ],
         "title": "RenderDiagramBody",
+        "type": "object"
+      },
+      "ReselectionOut": {
+        "description": "一筆未確認的自動改選事件。\n\n**刻意只含事件本身的欄位，不含專案名稱**：橫幅的**顯示**形狀屬 `U23`／`U24`\n（本單元無前端面——實測 `frontend/src` 對 `projects` 的命中數為 0）。\n這一點與 `LastAdminGuardReport` 刻意帶名稱不同，而差別有依據：後者的名稱\n需求來自 `entities.md` 的逐字約束（「只給 id 的話畫面無法告知使用者是哪個\n專案」），而橫幅的對應需求沒有任何已核可 AC 指定它的欄位集合。消費端若\n需要名稱，那是一次有明確來源的擴充，不是本單元自行放大回傳形狀。",
+        "properties": {
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "cause": {
+            "title": "Cause",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "new_role": {
+            "title": "New Role",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "previous_owner_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Owner User Id"
+          },
+          "previous_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Role"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "promoted_user_id": {
+            "title": "Promoted User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "cause",
+          "promoted_user_id",
+          "new_role"
+        ],
+        "title": "ReselectionOut",
         "type": "object"
       },
       "ResetDefaultsResponse": {
@@ -1073,6 +1531,46 @@
           "title"
         ],
         "title": "SuggestImprovementBody",
+        "type": "object"
+      },
+      "SystemOut": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "is_default"
+        ],
+        "title": "SystemOut",
         "type": "object"
       },
       "TotalReconciledView": {
@@ -2641,6 +3139,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LastAdminGuardReport"
+                }
+              }
+            },
+            "description": "U19/BR6.1：停用被拒——該使用者是列出的每一個專案的**最後一位專案管理者**。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3638,6 +4146,999 @@
         "summary": "List Share Users",
         "tags": [
           "cost-estimate-v1"
+        ]
+      }
+    },
+    "/api/hierarchy/diagram-changes": {
+      "get": {
+        "description": "`W5`／`W8`：查詢變更紀錄。\n\n**回應不是完整變更歷史**（`NFR7.1`）：涵蓋範圍由每一列的 `source` 宣告，\n而非由資料表名稱宣告。經既有 A1 頁面的異動**不會出現在這裡**\n（`BR5.3`：`source` 的允許值只有 `brain_orchestration`）。\n紀錄壽命另有兩個界限：隨架構圖級聯刪除、保存期 90 天（`BR5.5`）。",
+        "operationId": "list_diagram_changes_api_hierarchy_diagram_changes_get",
+        "parameters": [
+          {
+            "description": "以輕量標籤比對",
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "以輕量標籤比對",
+              "title": "Label"
+            }
+          },
+          {
+            "description": "以系統上溯比對。注意：`system_id` 為空的架構圖查不到——新建的圖從未被指派系統歸屬（OPEN-H11）",
+            "in": "query",
+            "name": "system_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "以系統上溯比對。注意：`system_id` 為空的架構圖查不到——新建的圖從未被指派系統歸屬（OPEN-H11）",
+              "title": "System Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DiagramChangeOut"
+                  },
+                  "title": "Response List Diagram Changes Api Hierarchy Diagram Changes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Diagram Changes"
+      }
+    },
+    "/api/hierarchy/projects": {
+      "get": {
+        "description": "`W7`：列出**使用者可見的**專案。\n\n「可見」＝`BR6.1` 的擁有者範圍。**本輪刻意收窄**（`BR6.2`）：被分享或以\n成員身分取得的存取在本輪看不到任何東西；最終模型屬契約 `K-16`（`U19`）。",
+        "operationId": "list_projects_api_hierarchy_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectOut"
+                  },
+                  "title": "Response List Projects Api Hierarchy Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Projects"
+      },
+      "post": {
+        "description": "`W1`：建立專案。**非冪等，不得自動重試**（`BR2.4`）。\n\n**本 handler 自 `U19` 起退化為薄委派**（`[ND1]`=A／`NFR12.18`／`BR3.1`）：\n它呼叫 `MembershipFacade.create_project_with_owner`，後者在**同一個交易**內\n建立專案並寫入建立者的 `project_admin` 成員列。\n\n為什麼不能留在這裡直呼 `HierarchyFacade.create_project`：那一支自己\n`db.commit()`，於是「建專案」與「寫成員列」會是**兩個交易**，中間失敗就\n留下一個**零成員專案**——正是 `[ND1]`=A 要消除的狀態，而 `BR2.1` 的守門只\n在「減少管理者」時觸發，擋不住「一開始就沒有」。\n\n**`K2` 的授權判定沒有改變**：`create_project_with_owner` 內部仍走\n`HierarchyFacade.create_project_nocommit`，而它與 `create_project` 共用\n同一個 `_authorize(principal, \"edit\")`。**路徑、回應模型與狀態碼都不變**，\n故 `openapi.json` 不因本變更漂移。\n\n`U19` 的例外在這裡也要轉譯：`MembershipNotFound` → 404。其餘\n（`HierarchyConflictError` → 409 等）沿用既有的 `_translate`。",
+        "operationId": "create_project_api_hierarchy_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Project"
+      }
+    },
+    "/api/hierarchy/projects/{project_id}": {
+      "delete": {
+        "description": "`W6`（專案）。底下仍有系統時回 **409** 並說明剩餘數量（`BR4.4`）。",
+        "operationId": "delete_project_api_hierarchy_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Project"
+      }
+    },
+    "/api/hierarchy/projects/{project_id}/systems": {
+      "get": {
+        "description": "`W7`：列出該專案的系統。專案不屬請求者時回 **404**，不是 403。",
+        "operationId": "list_systems_api_hierarchy_projects__project_id__systems_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SystemOut"
+                  },
+                  "title": "Response List Systems Api Hierarchy Projects  Project Id  Systems Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "查不到該專案（含「不屬於你」——刻意同一種結果）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Systems"
+      },
+      "post": {
+        "description": "`W2`：在指定專案下建立系統。`BR6.5` 的擁有者檢查在 facade 內。",
+        "operationId": "create_system_api_hierarchy_projects__project_id__systems_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSystemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create System"
+      }
+    },
+    "/api/hierarchy/systems/{system_id}": {
+      "delete": {
+        "description": "`W6`（系統）。仍有架構圖歸屬時回 **409** 並說明張數（`BR4.3`）。",
+        "operationId": "delete_system_api_hierarchy_systems__system_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system_id",
+            "required": true,
+            "schema": {
+              "title": "System Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete System"
+      }
+    },
+    "/api/membership/projects/{project_id}/members": {
+      "get": {
+        "description": "`U24` 成員頁的唯一資料來源。**非成員即拒**（`BR1.6`）。\n\n`AC12.2.3`（清單上沒有改角色的控件）的伺服器側對應：本端點**只回傳**\n成員檢視，不提供任何變更入口。",
+        "operationId": "list_members_api_membership_projects__project_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberView"
+                  },
+                  "title": "Response List Members Api Membership Projects  Project Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+          },
+          "404": {
+            "description": "查不到該專案或該成員"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Members"
+      },
+      "post": {
+        "description": "邀請一位成員。**非冪等，呼叫端不得自動重試**（`BR3.3`）。\n\n成功是一級行為（`BR3.6`）：成功 ⇒ 成員清單必然多一列。\n被拒時成員清單**不新增任何列**（`AC12.5.3`，由 facade 的單一交易保證）。",
+        "operationId": "invite_member_api_membership_projects__project_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+          },
+          "404": {
+            "description": "查不到該專案或該成員"
+          },
+          "422": {
+            "description": "受邀者缺少對應的全域功能權限（`BR3.2`／`AC12.5.1`），或角色不在封閉列舉內"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Invite Member"
+      }
+    },
+    "/api/membership/projects/{project_id}/members/{user_id}": {
+      "delete": {
+        "description": "移出一位成員。**對已非成員回 204**（冪等，`[FD2]`=A）。\n\n守門命中（含**自我移出**最後一位管理者）時回 **409** ＋\n`LastAdminGuardReport`。",
+        "operationId": "remove_member_api_membership_projects__project_id__members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+          },
+          "404": {
+            "description": "查不到該專案或該成員"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LastAdminGuardReport"
+                }
+              }
+            },
+            "description": "守門命中：此操作會讓列出的專案失去最後一位專案管理者（`BR2.1`）。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Member"
+      },
+      "patch": {
+        "description": "變更一位成員的 per-project 角色，並寫一列稽核（`BR5.1`）。\n\n一個專案可同時有**多位** `project_admin`；指定第二位**不覆寫**第一位\n（`BR3.5`）。把最後一位管理者改為 `member`（含**自我降級**）時回 **409**。",
+        "operationId": "change_member_role_api_membership_projects__project_id__members__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRoleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+          },
+          "404": {
+            "description": "查不到該專案或該成員"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LastAdminGuardReport"
+                }
+              }
+            },
+            "description": "守門命中：此操作會讓列出的專案失去最後一位專案管理者（`BR2.1`）。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Member Role"
+      }
+    },
+    "/api/membership/reselections/pending": {
+      "get": {
+        "description": "我自己未確認的**自動改選**事件。\n\n`BR5.5`：查詢同時過濾 `cause = 'auto_reselection'` 與\n`acknowledged_at IS NULL`。漏掉 `cause` 過濾會讓**每一次人工角色變更**都\n彈出一則橫幅，而文案是「系統自動把管理權交給你」——對人工變更是錯的訊息。\n\n只問自己的（以 `principal.user_id` 為條件），故不需要 per-project 判定。",
+        "operationId": "list_pending_reselections_api_membership_reselections_pending_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReselectionOut"
+                  },
+                  "title": "Response List Pending Reselections Api Membership Reselections Pending Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Pending Reselections"
+      }
+    },
+    "/api/membership/reselections/{event_id}/acknowledge": {
+      "post": {
+        "description": "把該**事件列**標為已讀（`BR5.6`）。\n\n以**事件**為鍵而不是 per-user 布林值：後者會讓同一人第二次被改選時看不到\n橫幅，而那正是 `FR12.4c` 要防的情境。狀態在伺服器端，故跨裝置一致\n（`AC12.4.4`）。\n\n已確認或不屬於你的事件回 **404**——重按一次「知道了」不是伺服器錯誤，\n但也不該回 204 說「改到了」。",
+        "operationId": "acknowledge_reselection_api_membership_reselections__event_id__acknowledge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "title": "Event Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "查不到該事件、它不屬於你，或它已被確認"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Acknowledge Reselection"
+      }
+    },
+    "/api/memory/audit-events": {
+      "get": {
+        "description": "稽核事件查詢（`AC4.3.2`／`AC4.3.3`）。\n\n回傳元素帶 `memory_exists`：`memoryId` 指不到記憶的事件**仍然回傳**\n（`BR6.3`）。過濾掉它會讓 `FR4.7` 在 90 天後變成空話——稽核存在的全部\n理由就是記憶消失之後還答得出「誰刪的」。",
+        "operationId": "list_memory_audit_events_api_memory_audit_events_get",
+        "parameters": [
+          {
+            "description": "以 memoryId 收斂；未指定則回全部",
+            "in": "query",
+            "name": "memory_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "以 memoryId 收斂；未指定則回全部",
+              "title": "Memory Id"
+            }
+          },
+          {
+            "description": "分頁位移",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "分頁位移",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每頁筆數；超過伺服器上限時收斂",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "每頁筆數；超過伺服器上限時收斂",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryAuditEventView"
+                  },
+                  "title": "Response List Memory Audit Events Api Memory Audit Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "授權未通過"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Memory Audit Events",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/records": {
+      "get": {
+        "description": "列出當前使用者可見的記憶（`BR2.2` 過濾）。\n\n**`limit` 的伺服器端上限在 service 層**（`memory_service.clamp_page_size`），\n不在這裡：`NFR7.29` 的判準是「以超大 `limit` 呼叫，回傳筆數不超過上限」，\n而把收斂寫成 `Query(le=...)` 會讓超大值得到 **422**——那是「照辦或拒絕」，\n不是「收斂」。`ge=1` 仍然宣告，因為負數與 0 是語意錯誤而非過大。\n\n**本路徑不回 404**：看不到別人的記憶不是錯誤狀態，只是較小的集合\n（`BR2.2` 的 `violation_behaviour` 逐字）。",
+        "operationId": "list_memories_api_memory_records_get",
+        "parameters": [
+          {
+            "description": "以 kind 收斂；未指定則三種皆納入",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "以 kind 收斂；未指定則三種皆納入",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "分頁位移",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "分頁位移",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每頁筆數。**超過伺服器上限時收斂到上限而非照辦**",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "每頁筆數。**超過伺服器上限時收斂到上限而非照辦**",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryView"
+                  },
+                  "title": "Response List Memories Api Memory Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "授權未通過"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Memories",
+        "tags": [
+          "memory"
+        ]
+      },
+      "post": {
+        "description": "手動建立一則記憶（`semantic` 的唯一來源，`BR7.3`）。\n\n**這個端點是 `AC4.1.3` 得以成立的原因**：少了它，`semantic` 永遠沒有資料，\n該 AC 的 Given「三種記憶各有資料」對 `semantic` 那一份不可構造\n（`rules.md` 的 `BR7.3` note）。\n\n`episodic` 與 `procedure` 的正常寫入端是 `U13`／`U12` 的**同進程**呼叫\n（`BR7.1`／`BR7.2`），不經本端點；本端點不限制 `kind`，因為\n`[FD4]`=A 逐字「`kind` 由使用者指定且限於封閉集合」。",
+        "operationId": "create_memory_api_memory_records_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "輸入不合封閉集合或欄位約束"
+          },
+          "503": {
+            "description": "embedding 提供者不可用"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/records/{memory_id}": {
+      "delete": {
+        "description": "刪除自己的記憶（留稽核，`BR4.2`）。\n\n**`memory_id` 宣告為 `str` 而非 `int`**，而這是 `[D1]`=A 的一部分：\n宣告 `int` 會讓 `DELETE /api/memory/records/abc` 回 **422**，而那等於告訴\n呼叫端「id 必須是整數」——`[D1]`=A 的整個目的就是不讓刪除路徑回答任何\n關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`\n（`entities.md`：「對外為不透明識別字」）。\n\n`responses` **刻意不含 403**：非擁有者收斂為 404（見檔頭）。",
+        "operationId": "delete_memory_api_memory_records__memory_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory_id",
+            "required": true,
+            "schema": {
+              "title": "Memory Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "找不到該記憶"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/records/{memory_id}/scope": {
+      "put": {
+        "description": "放寬一則記憶的可見範圍（留稽核並帶前後值，`BR5.3`）。\n\n**本路徑保留 403**，與刪除路徑相反。差別不是不一致：facade 在此\n**先判角色、後取記憶**，故無權者在任何 id（含不存在的）上都得到同一個 403\n——oracle 本來就不存在，不需要收斂（`security-design.md §三`）。",
+        "operationId": "widen_memory_scope_api_memory_records__memory_id__scope_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory_id",
+            "required": true,
+            "schema": {
+              "title": "Memory Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryScopeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "授權未通過"
+          },
+          "404": {
+            "description": "找不到該記憶"
+          },
+          "422": {
+            "description": "輸入不合封閉集合或欄位約束"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Widen Memory Scope",
+        "tags": [
+          "memory"
         ]
       }
     }

@@ -392,6 +392,195 @@ Construction 階段的提問應是**例外而非常規**（stage-protocol §3）
 
 ---
 
+## N11 — 本單元的基礎設施已出貨，Construction 要怎麼繼續走（審查 R-54／R-55 觸發，workflow 層級）
+
+> 置於 Consolidated Summary Confirmation **之前**，避免在該區塊之後新增可見標題
+> （`audit-format.md` 的 `confirmed-content-v1` 規定摘要之後不得有其他可見標題）。
+> 本題不改本單元的任何需求，只決定**剩下的 Construction 怎麼走**。
+
+本輪（2026-10-03）以 Keep 沿用本單元三份產出並派出 advisory 審查，審查回 NOT-READY，
+其 Critical 發現（R-54）我已獨立複驗為真：
+
+- `7ce1bee`（2026-09-27，`功能(brain-infra)`）已把本單元的實作合併進版控；
+  其前三個 commit（`fd0d2bf`／`5c13c11`／`b07e20e`）分別完成本單元的
+  `nfr-requirements`／`nfr-design`／`infrastructure-design`。
+- repo HEAD 實測：`deploy/docker-compose.deploy.yml` 已有 **6 個服務**
+  （`db`／`backend`／`redis`／`ollama`／`frontend`／`cloudflared`）、db image 已是
+  `pgvector/pgvector:pg18`（`:40`）、volume 已改名 `db_pg18`（`:52`／`:382`）、
+  `redis:8-alpine` 在 `:160`；`schema_rbac.sql` 現為 **779 行**，`BEGIN;` 在 `:37`、
+  `CREATE EXTENSION IF NOT EXISTS vector;` 在 `:45`、`COMMIT;` 在 `:757`。
+- 三份產出裡的「現值」表與多處 `<file>:<line>` 引用（`:13`／`:19–20`／`:96`／`:24`／
+  `:633`／644 行）都指向**實作之前**的狀態，內容方向正確但定位已失真。
+
+另一項（R-55，Major）：`unit-of-work.md` 修訂 4 逐字把「`U1 brain-infra` 是否需要為
+`U21 mcp-bridge` 新增**第七個** compose 服務」指派給 `infrastructure-design`（3.4），
+而三份產出對 `MCP`／`mcp-bridge`／`progress-channel` 的命中數為 **0**。若 3.4 判定需要，
+改動對象是**已合併上線**的 compose，不是一份草稿。
+
+現況盤點（實算，24 個單元 × 5 個 per-unit stage ＝ 120 格）：
+
+| 單元 | fd | nfrR | nfrD | infra | codegen |
+|---|---|---|---|---|---|
+| `brain-infra` | . | x | x | x | x |
+| `brain-ws-contract` | x | x | x | . | x |
+| `hierarchy-data` | x | x | x | . | x |
+| `rbac-story-ids` | x | . | . | . | . |
+| 其餘 **20** 個單元 | . | . | . | . | . |
+
+有產出的格數 **13／120**；**20** 個單元完全沒有產出（含全部 7 個新單元）。
+
+**A.** 照原計畫走完 24 個單元 × 5 個 stage。已有產出的 13 格走 Keep ＋ 重新審查 ＋ 重新
+取得完成紀錄（約 13 輪快速迭代），其餘 107 格做真正的工作。MCP 第七個服務的問題留給
+`infrastructure-design`（3.4）在輪到時定案，若判定要加，屆時才是對已上線 compose 的變更。
+
+**B.** 先只處理「MCP 是否需要第七個 compose 服務」這一題（跳到
+`infrastructure-design` 為 `brain-infra` 定案），再回來決定剩下的走法。先把對已上線
+基礎設施的影響面定清楚，再投入 107 格的工作。
+
+**C.** 把已出貨的 4 個單元（`brain-infra`／`brain-ws-contract`／`hierarchy-data`／
+`rbac-story-ids`）排除在本輪 Construction 之外，只走 20 個未動工的單元。需要以
+`recompose` 或人工裁決改變單元集合，且會讓那 4 個單元在本 attempt 沒有完成紀錄。
+
+**D.** 先更正三份產出裡失真的 `<file>:<line>` 引用與「現值」表（讓它們如實記錄
+已出貨的狀態），再繼續走。這會改動 `produces` 檔，因此本單元要重跑一輪審查
+（本站 review class 為 advisory，額度 1 次，已用掉——需以 redo jump 取得新 attempt）。
+
+X. Other (please specify)
+
+[Answer]: B＋X  <!-- answered 2026-10-03T11:44:27Z via picker；使用者原話逐字：「B+jev模型使用」 -->
+
+### 作答的兩個部分
+
+1. **B**：先跳到 `infrastructure-design` 為 `brain-infra` 把「`mcp-bridge` 是否需要
+   第七個 compose 服務」定案，再回來決定剩下的走法。
+2. **`jev模型使用`**（原話逐字）：超出本題四個選項的追加要求。本題未定義它的範圍，
+   故以 `N12` 追問界定，不在此逕自解讀。
+
+## N12 — `jev模型使用` 的範圍界定：`OQ-4` 與 `OQ-10` 的配對（`N11` 追加要求觸發）
+
+> 本題的主題屬 `U11 intent-router`，不屬本單元；之所以記在本檔，是因為它是目前
+> 作用中的 (stage, unit) 配對，而待答問題必須留在作用中 stage 的問題檔內。
+> 使用者裁決後，須隨 `OQ-4`／`OQ-10` 一併帶到 `U11` 的 `nfr-requirements` 迭代。
+
+**使用者原話逐字**：「B+jev模型使用」。`jev` 已查證為 `typesafe/jev-1.13`
+（`requirements.md:727`、`contract-summary.md:1363`），即 `OQ-4` 的兩個候選之一
+（另一為 `gemini-3.7-flash`）。使用者此語即為 `OQ-4` 的定案：**路由層用 Jev**。
+
+**為什麼不能就此結案**：`contract-summary.md:1470` 的 `J-5` 與
+`requirements.md:791` 的 `OQ-10` 逐字要求兩者「**須與 OQ-4 的模型定案一併決定，
+不得分開處理**」。`OQ-10` 問的是**路由層能否產出可比較的信心值**；若不能：
+
+- `FR1.3` 須改採替代觸發條件（候選並列且無單一最高分），
+- `FR1.7` 的數值門檻 **0.7** 隨之不適用，
+- `U11` 責任裡已寫成定案的「0–1 信心值」與「門檻 0.7」兩句都要改寫。
+
+**現有證據的強度（如實記載）**：`ideation/rough-mockups/memory.md:47` 記錄了對
+Jev 的實測，但實測的是**端點中繼資料**——`/api/v1/models/typesafe/jev-1.13/endpoints`
+回 200、`modality` 為 `text->decisions`、`output_modalities` 為 `["decisions"]`、
+context 32000／max completion 28800、prompt $0.042/MTok、completion 0、
+`supported_parameters` 為**空陣列**（不吃 temperature／tools，呼叫形狀與既有
+OpenRouter chat 不同）。該筆同時寫下「型別化決策＋**信心分數**」作為適用面理由，
+但**沒有任何一次真實呼叫證明回傳含可比較的數值信心**；且同一筆自己保留了
+「`decisions` 輸出保證回傳是合法的型別化選擇，**不保證該選擇正確**」。
+`requirements.md:727` 原本要求此定案「在有**實測準確率與延遲基準**後」才做。
+另：本 worktree **沒有** OpenRouter 金鑰（`backend/.env` 不存在，shell 變數未設），
+故我無法自行發出那一次呼叫。
+
+**A.** 兩題一起定案，`OQ-10` 以現有端點中繼資料判為「可以」——`FR1.6`／`FR1.3`／
+`FR1.7`（0.7）維持原文不動。遵守 `J-5` 的「一併決定」。代價：0.7 這個門檻的依據是
+中繼資料而非實測回傳，而 `OQ-10` 問的「可比較」正是中繼資料答不了的部分。
+
+**B.** 兩題一起定案，但先做一次便宜的實證：由你提供 OpenRouter 金鑰（寫進
+`backend/.env`）或你自己以 `! ` 前綴跑一次呼叫並把輸出貼回來，確認回傳真的帶
+可比較的數值信心，然後再把兩題一起記下。遵守 `J-5`，且讓 0.7 有實測依據。
+代價：一次付費呼叫（completion 免費，prompt 極小）與一個往返。
+
+**C.** 只定 `OQ-4`＝Jev，`OQ-10` 留給 `U11` 的 `nfr-requirements` 迭代（屆時會有
+實測準確率與延遲基準）。**這等於明知地偏離 `J-5` 的「不得分開處理」**，且在那之前
+`FR1.7` 的 0.7 是暫定值。需要你知情下的覆寫。
+
+**D.** 兩題都先不定，只把「使用者偏好 Jev」維持在 `contract-summary.md:1364` 已記錄的
+偏好狀態，照原計畫留給 `U11` 的迭代。代價：等於不執行你剛下的「jev模型使用」。
+
+X. Other (please specify)
+
+[Answer]: B  <!-- answered 2026-10-03T11:48:31Z via picker；使用者選「B 先做一次實測（建議）」。更正：初寫時誤填 2026-10-03T11:47:00Z（未先取值），已改為 QUESTION_ANSWERED 審計列的真實時間 -->
+
+### 本題定案的效力
+
+- `OQ-4` 定案：**路由層模型＝`typesafe/jev-1.13`**（使用者裁決，非推論）。
+- `OQ-10` **尚未定案**，但已不是「留給下游」——定案條件已收斂為一次實測：
+  確認 Jev 的回傳帶**可比較的數值信心**。該實測完成後，`OQ-4` 與 `OQ-10`
+  一併記下，遵守 `J-5` 的「不得分開處理」。
+- 兩者的正式落點仍是 `U11 intent-router` 的 `nfr-requirements` 迭代；本檔只記裁決。
+
+## N13 — `OQ-10` 實測呼叫的金鑰來源（`N12`=B 的執行前置）
+
+本 worktree 沒有 OpenRouter 金鑰（`backend/.env` 不存在；`git check-ignore` 確認
+`backend/.env` 由 `.gitignore:19` 忽略，放金鑰在該檔不會進版控）。
+
+**本輪自行查到的新事實（免金鑰的公開中繼資料，`HTTP 200`）**：
+
+- `architecture.modality` = `text->decisions`、`output_modalities` = `["decisions"]`、
+  `supported_parameters` = `[]`（與 `rough-mockups/memory.md:47` 記載一致）。
+- **新發現**：`supports_tool_choice` 的 `none`／`auto`／`required`／`function`
+  **四者皆為 `true`**——亦即取得型別化決策的途徑是 **tool/function calling**，
+  而非一般 chat 文字回應。這一點上游未記載。
+- **同時發現一項與上游記載不符的地方**：公開 `description` 在來源端即被截斷
+  （逐字結尾為「returning a typed choice rather...」），**完全沒有提到信心分數**。
+  `rough-mockups/memory.md:47` 寫的「型別化決策＋**信心分數**」在我能取得的公開
+  中繼資料裡**找不到依據**。這使 `N12`=B（先實測）比選 A 更必要，而不是更不必要。
+
+**打算發出的呼叫**（一次，`tool_choice: required`，刻意給一個**雙意圖**輸入以同時
+探「能力 5 多意圖識別」；會把回應**原始 JSON 全文**保留以檢查任何信心欄位）：
+
+```bash
+# 金鑰自 backend/.env 讀入，不印出
+set -a; . backend/.env; set +a
+curl -sS https://openrouter.ai/api/v1/chat/completions \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "typesafe/jev-1.13",
+    "messages": [
+      {"role":"system","content":"Classify the user request into exactly one intent."},
+      {"role":"user","content":"把這張架構圖的成本算一下，順便看看 RDS 要不要改 instance type"}
+    ],
+    "tools": [{"type":"function","function":{"name":"route_intent",
+      "description":"Route the request to one functional agent",
+      "parameters":{"type":"object","properties":{"intent":{"type":"string",
+      "enum":["architecture_design","cost_finops","memory_query","other"]}},
+      "required":["intent"]}}}],
+    "tool_choice": "required"
+  }'
+```
+
+**A.** 你把金鑰寫進 `backend/.env`（`OPENROUTER_API_KEY=...`），告訴我好了，我發出
+上面那一次呼叫並把原始 JSON 記進產出。金鑰全程不進對話紀錄。
+
+**B.** 你自己在終端機跑上面那段（或用 `! ` 前綴），把回應的原始 JSON 貼回來。
+金鑰不經過我，但輸出會進對話紀錄（輸出本身不含金鑰）。
+
+X. Other (please specify)
+
+[Answer]: A  <!-- answered 2026-10-03T11:50:56Z via picker；使用者選「A 寫進 backend/.env（建議）」 -->
+
+### 待使用者動作
+
+使用者需先把 `OPENROUTER_API_KEY=...` 寫進 `backend/.env`（該檔目前不存在），
+再告知可以發出呼叫。金鑰不進對話紀錄：以 `set -a; . backend/.env; set +a` 讀入。
+
+## N14 — 金鑰就緒確認（`N13`=A 的待辦，待使用者動作）
+
+把 `OPENROUTER_API_KEY=...` 寫進 `backend/.env` 之後告知即可，我會發出 `N13` 記載的
+那一次呼叫。**這一題不阻塞 `N11`=B 的走法**——`brain-infra` 的 `nfr-design` 與
+`infrastructure-design` 兩輪與 `OQ-10` 的實測互不相依，可並行。
+
+- 已寫好，請發出呼叫
+- 先不要發，我改用別的方式
+
+[Answer]:
+
 ## Consolidated Summary Confirmation
 
 - Looks correct

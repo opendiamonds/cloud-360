@@ -311,6 +311,56 @@ compose 註解與 `DEPLOY.md` 標記為**暫定、未量測**。**CI test stack 
 
 ---
 
+## 六、修訂 1：REST→MCP 產生器與第七個服務的管線改動（`[I6]`=A ＋ `[I7]`=A）
+
+### 6.1 產生器的 CI 落點（沿用本 repo 已驗證的模式，不自創）
+
+**修訂 1 更正（審查 `R-17`／`R-14`）**：本節初版引的先例偏弱（只引「產物已進版控」），
+且寫了一條不成立的順序約束。實讀 `.github/workflows/ci.yml` 後改引**更直接的先例**，
+並刪除該順序約束——理由見第 23 項。
+
+**本 repo 已有的先例，逐字可查**：`ci.yml:197` 的步驟名稱就是 **`API type contract drift`**
+（`run: npm run check:types`），其註解逐字寫「**Drift gate 2 of 2** … regenerates the
+committed API types from the committed `openapi.json` and fails if they differ」，並點明
+「`tsc -b` structurally cannot catch this: it checks *usage against the type file*, not
+*type file against the spec*」。配對的另一半是 `ci.yml:280` 的
+`scripts/dump_openapi.py --check`（位於 **`backend`** job），而前者位於 **`frontend`** job
+——註解逐字說明為何分置：「Needs node + the generator, which is why it lives here and not
+in backend」。本 repo 另有同形的 WS 配對（`ci.yml:197` 之下的「WS drift gate 2 of 2」與
+`:283` 之後的「WS drift gate 1 of 2」）。
+
+**所以 REST→MCP 的產生器沿用的不只是「產物進版控」，而是這套 `drift gate N of 2` 慣例**：
+
+| # | 項目 | 內容 | 有閘門？ |
+|---|---|---|---|
+| 21 | 產生器本身 | 輸入 `openapi.json` ＋ allowlist 檔，輸出工具宣告；**剝除 `HTTPBearer`**。產物**進版控** | 否（它是程式，由其自身測試守） |
+| 22 | **漂移檢查** | CI 新增一步：自已 commit 的 `openapi.json` ＋ 已 commit 的 allowlist **重新產生**，與已 commit 的產物比對，不一致即紅燈。**落在哪個 job 由產生器的 runtime 決定**：若以 node 實作則入 `frontend` job（比照 `check:types` 的分置理由），若以 python 實作則入 `backend` job。實作時擇一並在此回寫 | **是**（本項是新增的閘門） |
+| 23 | 順序約束 | **無，刻意如此。**（修訂 1 更正，審查 `R-14`：初版寫「該步必須排在 `ci.yml:280` 的 `dump_openapi.py --check` 之後」並稱「隱含於 job 順序」——**該宣稱不成立**。實讀 `ci.yml`：`repo-contract`（`:143`）／`frontend`（`:171`）／`backend`（`:235`）／`docker-build`（`:301`）四個 job **全部且僅**以 `needs: gate` 為前置，彼此之間沒有任何 `needs:` 邊，實際是**並行**。）**而且本來就不需要順序**：本 repo 的兩道既有閘門都是拿**已 commit 的位元組**互比——`check:types` 自已 commit 的 `openapi.json` 重產型別、`dump_openapi.py --check` 驗已 commit 的 `openapi.json` 對得上程式。兩者各自獨立充分，誰先跑都一樣。第 22 項採同一形狀，故同樣不需要跨 job 排序 | 不適用 |
+| 24 | allowlist 檔 | 進版控，預設拒絕；初始值 = `U19` ＋ `U20` 兩塊 | 否——**擴充它是人的決定，刻意不自動化** |
+
+**一條必須寫下的失敗模式**：若只加產生器而**不**加第 22 項的漂移檢查，`openapi.json` 改了
+而產物沒重產時，工具宣告會與真實 API 不一致，而 `dump_openapi.py --check` **看不到這件事**
+（它只比對 `openapi.json` 與程式，不比對下游產物）。這正是本 repo 已記載過的
+「`tsc -b` 對前後端 schema 落差無效」同型缺口。
+
+### 6.2 第七個服務的部署資產改動
+
+| # | 檔案 | 要加什麼 | 有閘門？ |
+|---|---|---|---|
+| 25 | `deploy/docker-compose.deploy.yml` | `mcp-bridge` 服務：`build:`、`networks: [internal]`、**無 `ports:`**、`restart: unless-stopped`、`logging: *json_file_bounded`、記憶體上限、`healthcheck` | 否（validator 不解析 compose 的 `ports:`／`networks:`） |
+| 26 | `deploy/docker-compose.test.yml` | **本站不把它加進 CI test stack**，理由與 `[I5]`=A 對 Ollama 同形：`ui-regression` 的 e2e 不觸及 MCP 路徑，加進去只是讓每個 PR 多起一個容器。**若 `U21` 的驗證需要它，由 `U21` 與 `build-and-test` 決定並回寫本列** | 否 |
+| 27 | `deploy/render-env.sh`、`deploy/.env.example` | **不改。但理由在修訂 1 更正（審查 `R-18`）**。初版把「不改」歸因於「`validate_env_contract.py` 禁止把這類值寫進範本」，而實讀 `scripts/validate_env_contract.py:50–53`：`DEPLOY_DERIVED` 是一個**只含兩個具名鍵**的固定集合（`DATABASE_URL`、`VITE_API_BASE_URL`），**不是通用規則**，所以它並不涵蓋 `http://backend:8000`。**真正的理由有兩條**：(a) 本服務**沒有自己的 secret**——token 由每次請求的 `Authorization` 標頭帶入、不落地；(b) 它唯一的對外目標是**同一個 compose 網段上的服務名** `backend`，可直接寫在 compose 的 `environment:` 內（硬值，無 fallback 需求），不需要經由 `render-env.sh` 注入。**但這是條件式的**：若 `U21` 的實作發現它需要任何可配置值（例如 allowlist 檔路徑以外的參數、或逾時秒數要能逐環境調），則 `project.md` 的 blocking env-contract 規則**完整適用**——同一個 PR 內 `render-env.sh` 要寫它、`deploy/.env.example` 要列它。故 `tech-stack-decisions.md` `§四` 的**九處**同步點在目前定案下仍是**九處**（那九項是**檔案**不是變數） | 不適用（條件式，見左） |
+| 28 | `DEPLOY.md` | 第七個服務的說明、其記憶體暫定值與複量期限、「它沒有對外端口」的驗證指令 | 否 |
+| 29 | `.github/workflows/deploy.yml` | **env 對照表不改**（無新變數）。但部署後的 `docker compose ps` 類檢查若有硬編服務數，須同步 | 否 |
+
+### 6.3 本節刻意不決定的事
+
+- 產生器用什麼語言／套件實作（`mcp` 套件**不在** `backend/requirements.txt`，本站實測）——屬 `U21` 的 `code-generation`。
+- allowlist 檔的格式。
+- liveness 端點的路徑（見 `monitoring-design.md` `§七`）。
+
+---
+
 ## Assumptions & Open Questions
 
 - **`rollback` job 加上探測後的實際耗時未知**，而它的 `timeout-minutes` 是 20 且內含另外

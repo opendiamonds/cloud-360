@@ -19,9 +19,14 @@ entities:
       `direction: server_to_client`，故本實體只涵蓋那個方向。
       **本站初版錯誤地宣稱「兩個方向皆用同一個封包形狀」**（審查 R-05，Major）：
       那是本站的擴充而非上游原文，且它製造不可構造的訊息——hello 發生在任何一輪之前、
-      set_sharing_mode 與 set_work_target 是狀態訊息不屬任何一輪（BR2.7 明文不計入
-      終止事件上限），三者都無法給出有意義的 turnId，而 turnId 的產生方式又被本站
-      歸給 U13。客戶端方向改由 WsClientEnvelope 定義，不含 turnId。
+      set_sharing_mode 與 set_work_target 是**客戶端**狀態訊息、不屬任何一輪，
+      三者都無法給出有意義的 turnId，而 turnId 的產生方式又被本站歸給 U13。
+      **修訂 1 更正（審查 R-24）**：初版在此引 `BR2.7`「明文不計入終止事件上限」，
+      **引錯方向**——`BR2.7` 的 `applies_to` 逐字為 `WsEnvelope（done／error）`，
+      其 `logic` 講的是**伺服器**的 `work_target` 與 `sharing_mode` 不是終止事件；
+      它對**客戶端**的 `set_work_target`／`set_sharing_mode` 未置一詞（那是兩組不同的
+      訊息：客戶端送 `set_*`，伺服器送不帶 `set_` 的對應型別）。本句的結論不變
+      （這三者確實不屬任何一輪），但依據改為本實體自身的方向界定，不再借 `BR2.7`。客戶端方向改由 WsClientEnvelope 定義，不含 turnId。
     attributes:
       - name: v
         logical_type: integer_literal
@@ -159,7 +164,7 @@ entities:
         x-handshake.step_3 逐字「伺服器比對 v；**相容則回 `ready`**，不相容則以 4400
         關閉並帶原因」（contract-summary.md:948，全檔唯一命中），而 K-02 的 type 清單
         **沒有 ready**——兩個已核可契約在此直接矛盾。
-        **⚠ 授權依據本輪更正（審查 R-23）**：初版寫「K-02:220 逐字寫該清單為下限，
+        **⚠ 授權依據本輪更正（審查 R-23）**：初版寫「K-02:222 逐字寫該清單為下限，
         所以新增在契約自身的條款內」——**那是誤讀**。:220 逐字為
         「`types:` # **components.md 逐字列舉的六種**為下限，不得更少」，
         主詞是 components.md 的六種，該註記說的是「這份清單不得少於那六種」，
@@ -549,9 +554,14 @@ R-03／R-05 各新增一個實體後由 18 增為 22）：
 
 ### 新增（上游沒有的）
 
-2. **`ready` server type ＋ `ReadyPayload`**（R-01）。**在契約條款內**：`K-02:220` 逐字寫
-   server type 清單為「**下限，不得更少**」。由來是 `K-12:948` 要求相容時回 `ready` 而
-   `K-02` 的清單沒有它——兩個已核可契約直接矛盾，本站補上並記下矛盾本身。
+2. **`ready` server type ＋ `ReadyPayload`**（R-01）。**修訂 1 更正（審查 R-23）：授權依據
+   與本檔 `:162` 對齊，初版此處的「在契約條款內」是同一個誤讀的殘留。** `K-02:222` 逐字為
+   「`types:` # **components.md 逐字列舉的六種**為下限，不得更少」——主詞是 components.md
+   的那六種，該註記說的是「這份清單不得少於那六種」，**不是**「可以多於清單」。由來仍是
+   `K-12:948` 要求相容時回 `ready` 而 `K-02` 的清單沒有它——兩個已核可契約直接矛盾，
+   本站補上並記下矛盾本身，但這是**超出條款的擴充、需上游追認**，與第 3 點同性質。
+   （另：行號本輪由 `:220` 更正為 `:222`——`:220` 實為 `type: { type: string, required: true }`，
+   與本主張無關；`:222` 才是該註記所在。內容對而行號錯的引用會通過任何只核對內容的檢查。）
 3. **`select_clarify_candidate` client type ＋ `SelectClarifyCandidatePayload`**（R-02）。
    **⚠ 超出 `K-02` 的條款，需上游追認**：`K-02:270` 的 client 清單**沒有「下限」註記**。
    由來是 `AC1.2.2`／`AC1.2.3` 在原契約下傳輸面不可構造，且 `K-12:920` 一帶逐字寫

@@ -229,6 +229,156 @@ picker 上呈現為「不引入堆疊 ＋ 加 healthcheck」，對應本檔選�
 `healthcheck:`（Redis 用 `redis-cli ping`、Ollama 用 `/api/tags`）。
 
 ---
+## I6 — `OQ-16`：MCP 的傳輸形式，亦即 `brain-infra` 是否需要第七個 compose 服務
+
+> 置於 Consolidated Summary Confirmation **之前**，避免在該區塊之後新增可見標題。
+> 本題是 `requirements.md:797` 把 `OQ-16` **逐字指派給本站**（`infrastructure-design`
+> 3.4）的那一題，也是 `unit-of-work.md` 修訂 4 Assumptions 逐字指派給本站的
+> 「`U1 brain-infra` 是否需要為 `U21 mcp-bridge` 新增第七個 compose 服務」。
+> **兩者是同一個問題**：傳輸形式一旦定了，服務數就跟著定。
+
+### 出題前的唯讀查證（非來源登錄）
+
+- `requirements.md:797` 逐字：`OQ-16` =「MCP 的傳輸形式（stdio 或 HTTP／SSE）——決定
+  Encryption 面的實際要求（stdio 不過網路；HTTP／SSE 須本機迴環或加密）」，承接站
+  `infrastructure-design`（3.4），skip 則轉 `code-generation`。
+- `unit-of-work.md` `U21` 逐字：「跑**獨立進程**的 MCP server」、部署模型
+  「**standalone（獨立進程，不在 FastAPI process 內；僅供同主機連接）**」。
+- `requirements.md:796` 的 `OQ-15` 未定：token 由誰注入該進程、生命週期多長、
+  **如何隨使用者切換**；上限是 `C-T11`「token 不得走工具參數」。
+- **`backend/services/llm_provider.py:5`、`:17` 逐字**：「There is no subprocess in
+  this path.」／「After the migration nothing spawns a subprocess
+  (`create_subprocess_exec` and `Popen` have zero occurrences under `backend/`)」。
+  該移除是 A3 migration（`ut` commit `b4f0cdc`，2026-10-01）的**刻意結果**，且其
+  前身機制曾造成一次無聲失敗（記為該 intent 的 RAID `R-11`）。實測複驗：
+  `create_subprocess_exec`／`Popen` 在 `backend/` 的非測試檔命中數為 **0**。
+- `mcp` 套件**不在** `backend/requirements.txt`。根目錄 `.mcp.json` 列的六個 server
+  （`context7`／`aws-mcp`／`aws-pricing`／`aws-iac`／`aws-serverless`／`mermaid`）是
+  **AI-DLC 框架自己的 client 設定**，與本單元無關——`U21` 的驗證方式逐字要求斷言
+  「須**排除**根目錄的 `.mcp.json`」。
+- 既有先例：`redis`／`ollama` 兩個服務已在 `internal` 網段、**不發佈 `ports:`**，
+  其「對外暴露面為零」由 `NFR8.7`／`NFR8.8` 承載，並由 `nfr-design` 的 `D-3`
+  （`edge`／`internal` 分段）建立。該模式已實際上線（HEAD 的
+  `deploy/docker-compose.deploy.yml` 有 `edge`／`internal` 兩個網段）。
+
+### 選項
+
+**A（建議）— HTTP／SSE，作為 `internal` 網段上的第七個 compose 服務，不發佈 `ports:`。**
+理由（平台工程視角）：(1) 它與本單元**已經做過兩次**的形狀完全相同（`redis`、`ollama`
+都在 `internal`、都無 `ports:`、都已上線），模式已驗證、已寫進 `DEPLOY.md`；
+(2) 它乾淨地解掉 `OQ-15` 最難的那一半——**隨使用者切換**：一個長駐進程，token 走每次
+請求的 `Authorization` 標頭，不進工具參數，稽核主體自然是該請求的使用者；
+(3) 不需要把 subprocess 重新帶回 backend 的執行期路徑。
+代價（逐項，不美化）：新增一個服務會讓 `NFR8` 的九處部署資產同步清單再長一截
+（`render-env.sh`、`deploy/.env.example`、兩份 compose 的 `environment:`、`deploy.yml`
+兩個 job 的 `env:` 對照表）；且它加入 `internal` 後，`nfr-design` 的 blast-radius 表
+必須重算（審查 `R-30` 已點名這件事）。
+
+**B — stdio，由 backend 按 session spawn 子進程，token 走子進程環境變數。**
+好處：**零**新網路暴露面、不需要第七個服務、Encryption 面依 `OQ-16` 逐字為不適用
+（不過網路）。代價：**它反轉一個兩天前才刻意做完的決定**——`llm_provider.py` 把
+「nothing spawns a subprocess」寫成模組契約的一部分，而被移除的那個機制正是上次無聲
+失敗（RAID `R-11`）的來源；另外容器內的子進程生命週期（殭屍回收、SIGTERM 時的優雅
+關閉、per-child 資源上限）目前完全沒有設置，而 `infrastructure-guide` 的容器檢查表
+把這幾項都列為必要。
+
+**C — 本站不定，依 `OQ-16` 的轉移目標交給 `code-generation`（3.5，ALWAYS）。**
+好處：不在資訊不足時押一個方向。代價：本站**正是** `OQ-16` 的指派承接站且本站**沒有
+被 skip**，不定案等於把一個有明確落點的決定變成無落點；且 `code-generation` 要同時決
+定傳輸形式、服務數、env 變數與 blast-radius 影響，那是設計決定而非實作決定。
+
+**D — 讓 MCP 跑在 backend 進程內（掛成 FastAPI 的 SSE 端點），完全不新增服務。**
+**這會推翻一個已核可的決定**：`unit-of-work.md` 的 `U21` 逐字寫「獨立進程，**不在
+FastAPI process 內**」。若要走這條，須先確認是否接受推翻該決定，以及它對
+「agent 身分與使用者身分的對應」與憑證白名單斷言的影響。
+
+X. Other (please specify)
+
+[Answer]: A  <!-- answered 2026-10-03T12:47:03Z via picker；使用者選「A HTTP/SSE，第七個服務（建議）」 -->
+
+### 本題定案的效力
+
+- **`OQ-16` 定案**：MCP 傳輸形式 = **HTTP／SSE**。Encryption 面依 `OQ-16` 逐字
+  「HTTP／SSE 須本機迴環或加密」→ 本案以 **`internal` 網段、不發佈 `ports:`** 滿足，
+  與 `redis`／`ollama` 同一模式（`NFR8.7`／`NFR8.8` 的「對外暴露面為零」形狀）。
+- **`brain-infra` 需要第七個 compose 服務**（`unit-of-work.md` 修訂 4 Assumptions
+  指派給本站的那一題，至此定案為「需要」）。
+- **對 `OQ-15` 的影響（不是定案，是收窄）**：長駐進程 ＋ 每次請求帶
+  `Authorization` 標頭的形狀，使「token 不得走工具參數」（`C-T11`）與「隨使用者
+  切換」同時成立。`OQ-15` 的其餘部分（token 由誰注入、生命週期多長）仍未定，
+  承接站不變（`contract-design` → `code-generation`）。
+- **已知的連帶後果，本站必須寫進產出**：新服務加入 `internal` 後，`nfr-design` 的
+  blast-radius 表（`security-design.md` 的 `D-3`）必須重算。**該檔已被本 attempt 的
+  終局審查收據凍結，本站不得回改**；故前向指標寫在本站產出內，由 `D-3` 的下一個
+  觸及者執行（審查 `R-30` 要求的正是這個前向指標）。
+
+## I7 — 「平台功能轉 MCP，一律用 REST→MCP 的概念做」的範圍（使用者於本站中途提出）
+
+> **本題標示為「本階段新增、已核可 scope 尚未涵蓋（需回補）」**：使用者原話逐字為
+> 「平台功能轉mcp，一率使用rest to mcp的概念做」。它改變 `U21 mcp-bridge` 的**形狀**
+> （由手寫工具宣告改為自 OpenAPI 產生的轉接層），並可能改變它的**暴露範圍**。
+> 依 `project.md`，不得當成既有 `U21` 的自然延伸吸收，須在此明標並回補上游。
+
+### 出題前的唯讀查證（非來源登錄，皆本站實測）
+
+- `openapi.json`（repo 根目錄）：**42 個 path、55 個 operation**；其中
+  **51 個宣告 security**，且 `components.securitySchemes` 只有**一個**：`HTTPBearer`。
+- CI 已有漂移閘門：`.github/workflows/ci.yml:280` 跑 `scripts/dump_openapi.py --check`。
+- 「自 OpenAPI 產生產物」在本 repo 已有先例：`frontend/package.json:12` 的
+  `gen:types` = `openapi-typescript ../openapi.json -o src/types/api.d.ts`
+  （產物 `frontend/src/types/api.d.ts` 已進版控）。
+- `unit-of-work.md` 的 `U21` 逐字交付物包含「工具宣告與其 schema 的**憑證欄位白名單**
+  （宣告允許的欄位集合，**其餘皆不得出現**）」與「代使用者呼叫既有 API 的 token
+  轉遞路徑（**不經工具參數**）」；其依賴逐字為 `U20 requirement-field-service` 與
+  `U19 membership-service`——亦即**已核可的暴露範圍是這兩塊，不是整個 `/api/*`**。
+- `C-T11`（`requirements.md`）：token 不得走工具參數。**單一 securityScheme 使這條
+  成為產生器裡的一條規則，而不是 51 個特例**——這是 REST→MCP 相較手寫宣告的實質優勢。
+
+### 選項
+
+**A（建議）— 機制一律 REST→MCP，暴露範圍用 allowlist 治理，起點為 `U21` 已核可的範圍。**
+一支產生器自 `openapi.json` 產出工具宣告（故工具面與 API 由建構方式保持同步，並受既有
+漂移閘門保護）；產生時**剝除**單一 `HTTPBearer` scheme、改由轉接層自請求上下文注入
+（滿足 `C-T11`）；暴露哪些 operation 由一份 allowlist 決定，**初始值等於 `U21` 的
+`U19`／`U20` 兩塊**，之後逐能力以明示決定擴充。
+這樣「一律用 REST→MCP」在**機制層**完全成立（不手寫任何工具宣告），而**暴露面**仍受治理。
+代價：要維護一份 allowlist（但它正是 `U21` 已核可的「憑證欄位白名單」的同一個東西往上
+一層，不是新增概念）；且每次擴充需要一次明示決定，不是自動跟著 API 長。
+
+**B — 機制與範圍都一律：55 個 operation 全部產生為 MCP 工具。**
+最貼近原話的字面。好處：零維護清單，API 長出什麼就自動有工具。
+代價（逐項）：(1) 它**反轉** `U21` 已核可的「白名單、其餘皆不得出現」——白名單的語意是
+預設拒絕，全量產生是預設允許；(2) 55 個 operation 含帳號停用、RBAC 變更一類的管理端點，
+把它們變成 LLM 驅動 agent 可呼叫的工具，是 ADR-0006 的 **IAM ＋ audit logging** 問題，
+而**沒有任何已核可產出涵蓋它**；(3) 暴露面會隨 API 自動成長，沒有任何關卡。
+
+**C — 只對 `U21` 已核可的兩塊做，且維持手寫工具宣告（即不採 REST→MCP）。**
+維持現狀最小變更。代價：不執行你剛下的指示；且手寫宣告與 API 之間沒有漂移保護，
+`openapi.json` 的閘門幫不上忙。
+
+**D — 機制一律 REST→MCP，範圍先全量產生但以「讀取類（GET）優先」分階段開放。**
+介於 A 與 B。好處：`/api/*` 的 55 個 operation 中，讀取類的風險明顯低於變更類，先開讀取
+可以讓「平台功能轉 MCP」很快有實感。代價：仍需要分級清單（與 A 的 allowlist 成本相同），
+而且 GET 也可能洩漏跨專案資料——per-project 授權正是能力 12 才剛建立的東西，尚未上線。
+
+X. Other (please specify)
+
+[Answer]: A  <!-- answered 2026-10-03T12:50:07Z via picker；使用者選「A 機制一律＋ allowlist 治理（建議）」 -->
+
+### 本題定案的效力
+
+- **機制定案**：`U21 mcp-bridge` 的工具宣告**一律自 `openapi.json` 產生**，不手寫任何
+  一條。產生時剝除單一 `HTTPBearer` scheme，由轉接層自請求上下文注入 token
+  （滿足 `C-T11`「token 不得走工具參數」）。
+- **範圍定案**：暴露哪些 operation 由一份 **allowlist** 決定，**初始值 = `U21` 已核可
+  的 `U19 membership-service` ＋ `U20 requirement-field-service` 兩塊**；之後逐能力以
+  明示決定擴充，不隨 API 自動成長。
+- **`U21` 的「憑證欄位白名單」語意不變**（預設拒絕）；allowlist 是它往上一層的同一個
+  概念，不是新增概念，亦非放寬。
+- **本題為本階段新增、已核可 scope 尚未涵蓋，須回補**：`U21` 原交付物寫的是「工具宣告
+  與其 schema 的憑證欄位白名單」，未涵蓋「自 OpenAPI 產生」這個**機制**，亦未涵蓋
+  產生器本身作為交付物。回補落點見本站產出的 `§〇`。
+
 ## Consolidated Summary Confirmation
 
 - Looks correct

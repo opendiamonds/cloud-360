@@ -1,0 +1,25 @@
+{
+  "stage": "code-generation",
+  "unit": "rbac-story-ids",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/rbac_seed_data.py"
+    },
+    {
+      "path": "backend/services/rbac.py"
+    },
+    {
+      "path": "backend/services/user_router.py"
+    },
+    {
+      "path": "schema_rbac.sql"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "backend/tests/test_rbac_story_ids_seed.py"
+    }
+  ]
+}

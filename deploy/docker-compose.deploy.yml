@@ -121,6 +121,30 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
       FASTEMBED_MODEL: ${FASTEMBED_MODEL}
+      EMBEDDING_TIMEOUT_SEC: ${EMBEDDING_TIMEOUT_SEC}
+      # --- session-store (U10), contract K-09 ---------------------------------
+      # Also WITHOUT `:-`, for the same reason as the seven above: no fallback is
+      # what makes validate_env_contract.py treat it as required. The backend
+      # refuses to start without it (BR3.5) rather than running with no cap --
+      # an uncapped history grows a single Redis key without bound, silently.
+      BRAIN_SESSION_HISTORY_MAX: ${BRAIN_SESSION_HISTORY_MAX}
+      # --- intent-router (U11), contract K-10 ---------------------------------
+      # Also WITHOUT `:-`, same reason as every variable above: no fallback is
+      # what makes validate_env_contract.py treat them as required and keep
+      # render-env.sh + deploy/.env.example honest. Four of the five are
+      # defaulted IN CODE (model name, timeout, per-turn call cap, retries) --
+      # but an empty string here is NOT "unset", it is a value the resolver has
+      # to parse, so they still have to be written.
+      #
+      # BRAIN_ROUTER_CONFIDENCE_THRESHOLD is the one the backend refuses to
+      # start without (BR3.4): reading a missing threshold as some default
+      # would let "does the system ask back or not" be decided by a number
+      # nobody chose, and that decision is the trigger of a Must (FR1.3).
+      BRAIN_ROUTER_MODEL: ${BRAIN_ROUTER_MODEL}
+      BRAIN_ROUTER_TIMEOUT_SEC: ${BRAIN_ROUTER_TIMEOUT_SEC}
+      BRAIN_ROUTER_MAX_CALLS_PER_TURN: ${BRAIN_ROUTER_MAX_CALLS_PER_TURN}
+      BRAIN_ROUTER_MAX_RETRIES: ${BRAIN_ROUTER_MAX_RETRIES}
+      BRAIN_ROUTER_CONFIDENCE_THRESHOLD: ${BRAIN_ROUTER_CONFIDENCE_THRESHOLD}
     depends_on:
       db:
         condition: service_healthy
@@ -231,7 +255,22 @@ services:
       - --maxmemory
       - 256mb
       - --maxmemory-policy
-      - allkeys-lru
+      # NFR4.50 / [N3]=A: `noeviction`, NOT `allkeys-lru`.
+      #
+      # Why the change: EVERY key this design writes carries a TTL (BR1.3 -- all
+      # five K-09 methods renew it, and U12's work-item set lives under the same
+      # key), so a session can only ever disappear because its 24h TTL elapsed.
+      # Under `allkeys-lru` it could ALSO disappear because Redis needed room,
+      # and those two outcomes are indistinguishable to the user -- one is normal
+      # behaviour, the other is a capacity fault. An undetectable fault is the
+      # worst of the two, so the capacity problem is made LOUD instead:
+      # under `noeviction` Redis refuses WRITES with `OOM command not allowed`
+      # while READS keep working (NFR4.51), the backend maps that to
+      # SessionBackendUnavailable with reason `redis_oom`, and that reason code
+      # is distinguishable in the log from "Redis unreachable" (NFR4.62).
+      # Degradation shape, stated plainly: existing sessions stay readable, they
+      # just cannot be written to.
+      - noeviction
       - --user
       - default
       - "on"

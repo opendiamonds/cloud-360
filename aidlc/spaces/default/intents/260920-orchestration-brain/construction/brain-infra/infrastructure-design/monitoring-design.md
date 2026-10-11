@@ -125,7 +125,7 @@ stage 檔要求本檔產出 metrics／alerts／SLI-SLO 三張表。**本 repo �
 
 ---
 
-## 六、本輪唯一的實質新增：兩個 `healthcheck`
+## 六、本輪唯一的實質新增：**三個** `healthcheck`（修訂 1：由兩個增為三個，新增 `mcp-bridge`，見 `§七`）
 
 `[I3]`=D 的 `C` 半邊。這是本單元在監控面**唯一**的交付。
 
@@ -164,6 +164,32 @@ stage 檔要求本檔產出 metrics／alerts／SLI-SLO 三張表。**本 repo �
 **同樣更正 `§一` 第 2 列的措辭**：該處把「`depends_on: condition: service_healthy` 會消費
 它」寫成既有事實，而實際上**今日只對 `db` 成立**；本輪之後對 `redis` 也成立
 （`service_healthy`），對 `ollama` 不成立（`service_started`）。
+
+---
+
+## 七、修訂 1：第三個 `healthcheck` —— `mcp-bridge`（`[I6]`=A）
+
+`§六` 原本的兩個 `healthcheck`（`redis` 的 `redis-cli ping`、`ollama` 的 `/api/tags`）
+不變；本節新增第三個。
+
+| 服務 | 檢查方式 | 它證明什麼 | **它不證明什麼** |
+|---|---|---|---|
+| `mcp-bridge` | **一個不需認證的 liveness 端點**（HTTP 200）。**路徑本站刻意不訂**——它是新程式的介面，由 `U21` 的 `code-generation` 決定後**回寫本表** | HTTP server 已在 `internal` 上接受連線 | **不證明**工具宣告產生正確、allowlist 已生效、或它能成功呼叫 `backend`。那三者是 `U21` 的驗證面（工具 schema 的結構斷言 ＋ 代使用者呼叫的 allow/deny 雙向），不是 healthcheck 的職責 |
+
+**兩條必須寫明的界限：**
+
+1. **不得用需要認證的端點當 healthcheck。** 若拿一個需 bearer token 的端點做檢查，就得在
+   容器裡放一個長期 token——那會製造一個 `§七` 7.1 明確避開的東西（本服務的設計前提是
+   **零落地憑證**，token 只來自每次請求）。
+2. **`depends_on` 不是就緒條件。** 本 record 已記過一次（`nfr-design` `R-18` 的成因）：
+   compose 的 `depends_on` 無 `condition:` 時只是啟動順序。`mcp-bridge` 會呼叫
+   `backend:8000`，而 `backend` 的 `@app.on_event("startup")` 要跑完 `init_db()` 的多個
+   DDL 補丁才開始服務，故 `mcp-bridge` 必須能承受「啟動初期 backend 回 502」而不是
+   直接死掉（`restart: unless-stopped` 會讓它變成重啟迴圈）。這是對 `U21` 的實作約束。
+
+**日誌承載**：`logging: *json_file_bounded`，與其他六個服務同一組上界；本服務使
+`infrastructure-specification.md` `§三` 的總量由 1.5GB 變為 **1.75GB**（實算 50×5×7），
+仍在 2GB 內。
 
 ---
 

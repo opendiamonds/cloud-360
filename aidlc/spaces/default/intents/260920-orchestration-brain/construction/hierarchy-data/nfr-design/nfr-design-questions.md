@@ -7,7 +7,7 @@
 `spec` 單元，`produces_kinds` 濾掉 performance／scalability／reliability／observability
 四份設計與 logical-components，本站只產出 `security-design.md` 與 `traceability.json`。
 
-**本站是 `OQ-3`／`S-4` 的落點**（`requirements.md:597` 逐字：`OQ-3` 的落點為 `nfr-design`（3.3））。
+**本站是 `OQ-3`／`S-4` 的落點**（`requirements.md:784` 逐字：`OQ-3` 的落點為 `nfr-design`（3.3））。
 那是本站最主要的職責：把「使用者輸入的需求文字要不要加密」定下來，或明確排除並說明理由。
 
 ### 上游已定案、本站不重問

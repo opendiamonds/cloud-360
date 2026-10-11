@@ -364,6 +364,153 @@ jobs:
           docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env logs cloudflared --tail=60
           exit 1
 
+      # U10 session-store / NFR4.64: a REPEATABLE verification that NFR4.53-57
+      # really hold -- every segment, every segment's full message history and
+      # order, every segment's own three-level work target, both pageModes keys,
+      # and the REMAINING TTL all survive a Redis restart.
+      #
+      # Why it lives here and not in CI: the backend test suite does not connect
+      # to Redis (it runs against an in-memory double), and the CI test stack has
+      # NO AOF and NO named volume on redis by design, so there is nothing there
+      # to restore. Adding a Redis-connected CI job was considered and rejected
+      # at [I1]. This step is therefore the ONLY place the restore invariant is
+      # ever actually exercised.
+      #
+      # THIS STEP INTERRUPTS LIVE SESSIONS, and that is not mitigated.
+      #   `docker compose restart redis` drops every in-flight session on
+      #   staging. cloud360.danniel.cc is publicly reachable through the
+      #   Cloudflare tunnel, so someone may be mid-conversation.
+      #   It is NOT true that "the stack was just restarted anyway": the deploy
+      #   step above runs `up -d --build --remove-orphans` with NO
+      #   --force-recreate, so an unchanged redis container is NOT recreated and
+      #   its sessions are NOT already gone. An earlier draft of this design
+      #   claimed otherwise; that claim was false for most deploys and has been
+      #   removed rather than reworded.
+      #   What IS done about it: the step is placed LAST, after every other
+      #   health check has passed, so the interruption happens only once the
+      #   deployment is already known good -- it never adds an outage on top of
+      #   a failing deploy.
+      - name: Verify sessions survive a Redis restart (NFR4.53-57)
+        env:
+          # A distinctive TTL, deliberately NOT the production 86400: it makes
+          # the interval assertion below able to detect a RESET (which would
+          # read back as 86400 or -1) as well as a loss (-2).
+          FIXTURE_TTL: '3600'
+          # How much of the window the restart may consume before we call it a
+          # reset rather than normal elapsed time.
+          TTL_GRACE: '300'
+        run: |
+          set -euo pipefail
+          COMPOSE=(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env)
+          # Same sourcing rule as the ACL step above: read the identity from
+          # deploy/.env, never restate it here (team.md single-source-of-truth).
+          REDIS_USER="$(grep -E '^REDIS_USER=' deploy/.env | head -1 | cut -d= -f2-)"
+          REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' deploy/.env | head -1 | cut -d= -f2-)"
+          if [ -z "${REDIS_USER}" ] || [ -z "${REDIS_PASSWORD}" ]; then
+            echo "::error::REDIS_USER or REDIS_PASSWORD is missing from deploy/.env, so the restore check cannot run as the app identity. render-env.sh should have refused earlier -- investigate that step first." >&2
+            exit 1
+          fi
+          # Every command in this step runs as the APP ACL user, never as
+          # `default` -- `default` is narrowed to @connection and could not read
+          # a hash field even if it wanted to (NFR4.44).
+          APP=("${COMPOSE[@]}" exec -T redis redis-cli --user "${REDIS_USER}" --pass "${REDIS_PASSWORD}" --no-auth-warning)
+
+          KEY='cloud360:deploy-fixture:session'
+          # Fixture text is deliberately meaningless `fixture-msg-*` strings.
+          # This repo is public and Actions logs are world-readable, so nothing
+          # that looks like a real conversation may appear here (BR3.6).
+          META='{"userId":0,"pageModes":{"workspace":"isolated","assessment":"shared"},"createdAt":{"shared":"fixture","workspace":"fixture","assessment":"fixture"}}'
+          SEG_SHARED='[{"sequence":1,"role":"user","text":"fixture-msg-1","createdAt":"fixture"},{"sequence":2,"role":"assistant","text":"fixture-msg-2","createdAt":"fixture"}]'
+          SEG_WORKSPACE='[{"sequence":1,"role":"user","text":"fixture-msg-3","createdAt":"fixture"}]'
+          SEG_ASSESSMENT='[{"sequence":1,"role":"user","text":"fixture-msg-4","createdAt":"fixture"}]'
+          # Three DIFFERENT work targets, including a partial triple -- EC7's
+          # {projectId:null,systemId:null,diagramId:X} shape has to survive too.
+          TGT_SHARED='{"projectId":1,"systemId":2,"diagramId":3}'
+          TGT_WORKSPACE='{"projectId":4,"systemId":5,"diagramId":6}'
+          TGT_ASSESSMENT='{"projectId":null,"systemId":null,"diagramId":7}'
+
+          # 1. Write the fixture session and give it the distinctive TTL.
+          "${APP[@]}" del "${KEY}" > /dev/null
+          "${APP[@]}" hset "${KEY}" \
+            meta "${META}" \
+            'seg:shared' "${SEG_SHARED}" \
+            'seg:workspace' "${SEG_WORKSPACE}" \
+            'seg:assessment' "${SEG_ASSESSMENT}" \
+            'tgt:shared' "${TGT_SHARED}" \
+            'tgt:workspace' "${TGT_WORKSPACE}" \
+            'tgt:assessment' "${TGT_ASSESSMENT}" > /dev/null
+          "${APP[@]}" expire "${KEY}" "${FIXTURE_TTL}" > /dev/null
+
+          # 2. Record the five baselines plus the remaining TTL.
+          BEFORE="$("${APP[@]}" hgetall "${KEY}" | sort)"
+          TTL_BEFORE="$("${APP[@]}" ttl "${KEY}")"
+          if [ "${TTL_BEFORE}" -le 0 ]; then
+            echo "::error::the fixture session has no TTL before the restart (TTL=${TTL_BEFORE}). EXPIRE did not take effect, so the restore check would be meaningless." >&2
+            exit 1
+          fi
+          echo "baseline recorded: 7 hash fields, TTL=${TTL_BEFORE}s"
+
+          # 3. Restart Redis.
+          "${COMPOSE[@]}" restart redis
+
+          # 4. Wait for an ACTUAL SUCCESSFUL READ-BACK through the app ACL user.
+          #    NOT the healthcheck: deploy/docker-compose.deploy.yml:258-261
+          #    says in its own comment that `redis-cli ping | grep -q PONG`
+          #    "does NOT prove the ACL user works (ping passes as `default`),
+          #    and it passes during AOF loading". Waiting on it would let this
+          #    step read a half-loaded dataset and report a false failure -- or,
+          #    worse, a false success on an empty one.
+          #    During AOF loading a data command answers -LOADING, so a
+          #    successful HGET is the earliest moment the dataset is really
+          #    there. Retry cap 60 x 2s = 120s overall timeout.
+          READY=0
+          for ATTEMPT in $(seq 1 60); do
+            PROBE="$("${APP[@]}" hget "${KEY}" meta 2>&1 || true)"
+            case "${PROBE}" in
+              '{"userId":0'*)
+                echo "dataset is readable as ${REDIS_USER} after ${ATTEMPT} attempt(s)"
+                READY=1
+                break ;;
+              *)
+                sleep 2 ;;
+            esac
+          done
+          if [ "${READY}" -ne 1 ]; then
+            echo "::error::after restarting redis, the fixture session was still not readable as ${REDIS_USER} within 120s. Last reply: ${PROBE}. Either AOF did not restore the dataset (NFR4.52/NFR4.2) or the ACL user cannot read it." >&2
+            "${COMPOSE[@]}" logs redis --tail=80 || true
+            exit 1
+          fi
+
+          # 5. Compare all five restore items field by field.
+          #    NFR4.53 every segment that existed   -> the seg:* fields
+          #    NFR4.54 each segment's messages+order -> their JSON array order
+          #    NFR4.55 each segment's own work target -> the tgt:* fields
+          #    NFR4.56 both pageModes keys           -> inside meta
+          #    NFR4.57 the REMAINING TTL             -> interval check below
+          AFTER="$("${APP[@]}" hgetall "${KEY}" | sort)"
+          if [ "${BEFORE}" != "${AFTER}" ]; then
+            echo "::error::session state did not survive the Redis restart (NFR4.53-NFR4.56). The most easily missed item is pageModes inside the meta field -- it is an INDICATOR, not data, and losing it shows up as 'the user comes back and the page reads the wrong segment', not as 'data is gone'." >&2
+            diff <(printf '%s\n' "${BEFORE}") <(printf '%s\n' "${AFTER}") || true
+            exit 1
+          fi
+
+          # NFR4.57: an INTERVAL, never an equality. The restart takes time, so
+          # the TTL legitimately loses those seconds; asserting equality would
+          # make this check flaky. Asserting "<= before and > before - grace"
+          # is what actually rules out both failure modes: a reset to the full
+          # window (which would read back as 86400 or -1) and a loss (-2).
+          TTL_AFTER="$("${APP[@]}" ttl "${KEY}")"
+          LOWER=$(( TTL_BEFORE - TTL_GRACE ))
+          if [ "${TTL_AFTER}" -gt "${TTL_BEFORE}" ] || [ "${TTL_AFTER}" -le "${LOWER}" ]; then
+            echo "::error::the remaining TTL did not survive the restart correctly: ${TTL_AFTER}s, expected (${LOWER}, ${TTL_BEFORE}]. A value above the baseline means the window was RESET (which silently extends the 24h retention ADR-005 defines); -1 means the key lost its expiry entirely; -2 means the key is gone." >&2
+            exit 1
+          fi
+          echo "remaining TTL survived: ${TTL_BEFORE}s -> ${TTL_AFTER}s (within ${TTL_GRACE}s grace)"
+
+          # 6. Remove the fixture session.
+          "${APP[@]}" del "${KEY}" > /dev/null
+          echo "NFR4.53-NFR4.57 all verified; fixture session removed"
+
       # Only reached when both health checks passed. This commit is now the
       # known-good the rollback job falls back to next time a deploy breaks.
       - name: Record this commit as the last-good deployment
