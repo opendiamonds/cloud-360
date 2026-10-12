@@ -66,6 +66,7 @@
 
 - 2026-10-10T14:30:00Z — **我把另一個單元的 `BR` 識別字寫進自己的 `rules.md` 散文裡，製造了 16 個假孤兒——而這條教訓是我自己在 `U11` 寫下的。** 為了說明「本檔為什麼改用 `BR21`–`BR28`」，我在 §一 逐字列出 `U19` 佔用的識別字；sensor 以 `/\bBR\d+\.\d+\b/g` 掃**整份** `rules.md`，於是那 16 個他單元的 id 全被當成本檔沒有 AC 對應的孤兒規則，`findings_count: 16`。`project.md` 的 `U11` 條目逐字寫過「citing another unit's `BR` ids creates false orphans」。**可執行處置**：談他單元的識別字時一律不寫字面形式——改寫成「群組 1 到 6 的子號全部用掉（各群組依序 6、3、6、4、6、4）」、「群組 6 的第二個子號」。注意 `BR1.x` 這種寫法**不會**命中（`x` 非數字），所以對照表可以保留字面。清掉後 `pass: true`。
 - 2026-10-11T11:25:39Z — U15 memory-page-ui：登入到 /api/auth/me 回來之間 user.id 為 undefined，記憶頁在 id 成為 number 前不掛載三區；照字面比較會把自己的記憶標成「其他使用者」且無刪除鍵。實讀 AuthContext.tsx 的 login 先 setUser 不含 id 才查出，四份上游產出均未提及。
+- 2026-10-11T22:29:45Z — U20 requirement-field-service：K-17 的 anti_double_check 字面要全域 K4 層由 router 承擔，但同進程呼叫端 U13 不經 dependency 鏈，照字面做該路徑的全域層根本不會被檢查。已交付的 U19（membership_facade.py:93-111）遇到同一件事並改在 facade 以 user_can 評估，本站依該先例辦而不出題，契約字面列入追認項 OPEN-RF20-5。
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
@@ -132,6 +133,8 @@
 
 - 2026-10-10T14:30:00Z — **我把 redo jump 的代價說成「15 個單元的已完成工作」，實測是 0。** 向使用者提出三個選項時，我把選項 1 的代價寫成「冒險動到本站 15 個已完成單元的 receipt」並據此建議不要做。使用者核可後我才去查，三項全錯或過重：① **12 不是 15**（`UNIT_COMPLETED` 實測 19 列、12 個相異單元，當前 floor `STAGE_JUMPED:2026-10-01T15:08:16Z#15` 上有 12 列）；② `aidlc-jump.ts` 的 `redo` 分支**只把 target 的 checkbox 重設為 pending**（`:393` 逐字「redo: reset target only」），**不刪任何 artifact、不動其他 stage**，`resolve` 也回 `affected_stages: []`；③ 跳完之後引擎**直接路由到 `nfr-requirements`／`brain-infra`**，**我一個單元都不需要重新 complete**——實際代價是零。**而且 `git log` 早就有三次前例**（audit 有三個較早的 floor），那些單元在跳躍後都正常續行過。**教訓不是「我估錯了」，是我把一個沒查過的代價寫進選項並用它勸退使用者**——`project.md` 的 `reverse-engineering:d107c974` 逐字記過「提問前該算的不只是產出裡的數字，也包括**選項代價裡的數字**」，而我在同一個 intent 隔幾站又犯。查證成本是三條指令（`grep` audit 的 floor、讀 jump 的 redo 分支、`resolve`）。
 - 2026-10-11T11:25:39Z — U15 memory-page-ui：「我的記憶」Sidebar 項放在 /brain DEMO SCOPE 區塊之後的獨立 div，而非 mockups M0 所寫的「入口之後」；入口（U14）尚不存在，放進 demo 區塊會在 U14 整段取代時被連帶刪除（Sidebar.tsx:209 註解逐字）。
+- 2026-10-11T22:29:45Z — U20 requirement-field-service：本單元改動已交付的 U18 表定義（updated_on_behalf_of 由指向 users 的外鍵改為 agent 組識別字，[FD1]=A）。U18 的 code-summary 已把 OPEN-CG18-6 指派給本單元；改動前以 git branch -r --contains 查證該 DDL 只在本分支、未部署，故不需針對既有環境寫升級，但本機 dev 資料庫可能已用舊定義建表，因此另立 BR47.2 要求可重跑收斂。
+- 2026-10-11T22:29:45Z — U20 requirement-field-service：回應形狀在 K-17 字面之外加了 title／label／filledCount／totalCount 四欄。若只回 fieldKey，U23 必須在前端另抄一份標籤，違反 team.md 的單一真實來源規則；四欄為純增量，列入 OPEN-RF20-5 待契約追認。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
@@ -173,6 +176,8 @@
   **而且兩站的審查品質都沒有因此下降**：`U11` 在純靜態閱讀下找到一個 Critical（`referent_state` 無讀取端），本站找到兩個（`canManage` 無提供者、acknowledge 不冪等）——兩者都是「契約有一端懸空」，正好是靜態閱讀最擅長的那一類。**這把本檔上一站寫下的判斷再收窄一次**：那條說「認真查證與可記錄的收據互斥」，上一站我已改述為「只對缺陷唯一可見處是執行期的站成立」；本站的實證是**連續兩站的主要缺陷都是結構性的**，所以唯讀 brief 應當是預設，付收據的代價只在有具體理由相信缺陷只能在執行期現形時才值得。
 
 - 2026-10-10T14:30:00Z — **advisory 單輪 ＋ stage 級閘門 ＋ review-freeze 三者相乘，在 per-unit stage 上是死結，而唯一出路（redo jump）便宜到不該被我當成最後手段。** 完整路徑：審查回 NOT-READY → `review-freeze` 擋住對四份產出的任何寫入（advisory `max_iterations: 1`，兩種 verdict 都終局）→ guard 的唯一補救是「在閘門上送 Request Changes」→ 但 `functional-design` 的閘門是 **stage 級**，`report --result awaiting-approval` 逐字回「24 個工作項有 9 個未完成」→ `report --result rejected` 又被一個**並未開啟**的 held gate 檢查擋下（state 的 checkbox 是 `[-]` 不是 `[?]`）。四條路全封。**redo jump 是唯一出路，而它只重設 target 的 checkbox、代價實測為零**（見上條）。**可執行判準**：在 per-unit 的 `CONDITIONAL` stage 上收到終局 NOT-READY 時，不要先試 `report --result rejected`／`awaiting-approval`（兩者都會因為閘門不在這一層而失敗，而失敗會消耗 refusal 配額），直接走 `next --stage <slug>` → `jump execute --direction redo`，並在跳之前先查 `resolve` 的 `affected_stages` 與 `redo` 分支實際動了什麼。
+- 2026-10-11T22:29:45Z — U20 requirement-field-service：重複清空為 no-op（clearedAt 與 updatedBy 不變），同值寫入卻仍更新溯源（BR43.4 對 BR43.6）。不對稱是刻意的：重複清空沒有新事實，更新只會讓「誰清的」變成最後一個重複按的人；同值寫入則代表有人再次確認該值，是有意義的溯源。
+- 2026-10-11T23:05:00Z — U20 requirement-field-service：review-01 回 NOT-READY 後，review-freeze 同樣擋寫入（不是只在 READY 之後），而 guard 給的 request-changes 補救在 gate:false 的 per-unit 站被 report 拒絕（沒有開著的閘門可拒）。經使用者同意以 redo jump 重設本站解鎖並修完 R-01～R-08；代價是重設後引擎立即把本站視為已滿足、路由到 nfr-requirements／brain-infra，unit start／unit complete 皆被拒，本單元本站缺 UNIT_COMPLETED 收據，與 2026-10-10 member-pages-ui 同形。修正未經獨立複驗。
 
 ## Open questions
 - 2026-10-08T12:20:00Z — **`OQ-N3`（Critical）在本站落地：`MemoryFacade.write` 無任何呼叫者。** `contract-summary.md:1432` 明文把實務落點指向 `functional-design`（3.1），並逐字警告「**本站不以推論指派**……自行加一條就是審查 R-01／R-07／R-10 的同型錯誤第四次」。受阻單元為 `U5`／`U8`／`U9`／`U15`（無寫入端則 `memory_records` 永不被填、`search` 永遠回空、`U15` 三區永遠空白、`U9` 無物可清）。已出成 `[FD1]` 交使用者裁決，不自行指派。

@@ -1143,6 +1143,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/requirements/systems/{system_id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Requirement Fields
+         * @description 某系統的全部需求欄位：分組明細與未填數，同一次查詢（`US11.2`／`US11.3`）。
+         */
+        get: operations["read_requirement_fields_api_requirements_systems__system_id__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Write Requirement Field
+         * @description 寫入一個欄位。**冪等**：重送相同本體覆寫同一列（`NFR20.21`）。
+         *
+         *     本體 `{ "value": str, "on_behalf_of": str | null }`。不帶 `on_behalf_of` 而值只有
+         *     空白時視為清空（`BR43.2`）；帶 `on_behalf_of` 時空值被拒（`BR42.5`）。
+         */
+        put: operations["write_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__put"];
+        post?: never;
+        /**
+         * Clear Requirement Field
+         * @description 清空一個欄位（保留列、記清空時間與清空者，`ADR-015`）。**冪等**（`NFR20.22`）。
+         */
+        delete: operations["clear_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1303,6 +1350,73 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * FieldGroupView
+         * @description 一個 agent 組的明細。`fields` 恆等於該組宣告的欄位集合（`BR44.5`）。
+         */
+        FieldGroupView: {
+            /** Fields */
+            fields: components["schemas"]["FieldView"][];
+            /** Filled Count */
+            filled_count: number;
+            /** Group Key */
+            group_key: string;
+            /** Title */
+            title: string;
+            /** Total Count */
+            total_count: number;
+        };
+        /**
+         * FieldSetView
+         * @description `read_fields` 的回傳。
+         *
+         *     **`unfilled_count` 與 `groups` 由同一次資料庫查詢推導、在同一個回應內回傳**
+         *     （不變量 `I-4`／`BR44.4`）：總覽籤與需求籤讀的是同一個 `GET` 的同一個回應，
+         *     本 router 刻意沒有「只回計數」的端點（`NFR20.3`）。
+         */
+        FieldSetView: {
+            /** Groups */
+            groups: components["schemas"]["FieldGroupView"][];
+            /** Input Hint */
+            input_hint: string;
+            /** System Id */
+            system_id: number;
+            /** Unfilled Count */
+            unfilled_count: number;
+        };
+        /**
+         * FieldView
+         * @description 單一欄位的檢視（`write_field`／`clear_field` 的回傳、`FieldGroupView` 的元素）。
+         *
+         *     `never_filled`（含第四種列）一律回 null 的 `cleared_at`／`updated_at`／
+         *     `updated_by`／`updated_on_behalf_of`（functional-design `review-02` R-06）：
+         *     回列上的值會讓一個「從未填過」的欄位帶著「最後更新者」，畫面無從判斷該不該顯示。
+         */
+        FieldView: {
+            /** Cleared At */
+            cleared_at?: string | null;
+            /** Field Key */
+            field_key: string;
+            filled_state: components["schemas"]["FilledState"];
+            /** Group Key */
+            group_key: string;
+            /** Label */
+            label: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By */
+            updated_by?: number | null;
+            /** Updated On Behalf Of */
+            updated_on_behalf_of?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * FilledState
+         * @description 三態（`ADR-015`；推導規則見 `BR44.1`）。
+         * @enum {string}
+         */
+        FilledState: "never_filled" | "filled" | "cleared";
         /**
          * GuardedProjectRef
          * @description `LastAdminGuardReport` 的一項。
@@ -1641,6 +1755,14 @@ export interface components {
         RenderDiagramBody: {
             /** Xml Data */
             xml_data: string;
+        };
+        /**
+         * RequirementFieldErrorOut
+         * @description 403／404／422 的回應本體。`detail` 為固定文字，不含任何輸入值。
+         */
+        RequirementFieldErrorOut: {
+            /** Detail */
+            detail: string;
         };
         /**
          * ReselectionOut
@@ -4283,6 +4405,172 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    read_requirement_fields_api_requirements_systems__system_id__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldSetView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統（含非整數的 system_id） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+        };
+    };
+    write_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+                agent_group: string;
+                field_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * On Behalf Of
+                     * @description 代寫標示：大腦代某個 agent 寫入時為該 agent 組（例如 cost）；使用者自填時省略或為 null。只是標示，不授予任何權限
+                     */
+                    on_behalf_of?: string | null;
+                    /**
+                     * Value
+                     * @description 欄位值。去除首尾空白後為空字串時，視為清空（僅限不帶 on_behalf_of 者）
+                     */
+                    value: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統（含非整數的 system_id） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+        };
+    };
+    clear_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+                agent_group: string;
+                field_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統（含非整數的 system_id） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
             };
         };
     };

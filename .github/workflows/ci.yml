@@ -378,6 +378,129 @@ jobs:
           psql -h localhost -U postgres -d cloud360 \
             -v ON_ERROR_STOP=1 -f backend/scripts/verify_meta_schema.sql
 
+      # ---------------------------------------------------------------------
+      # U20 requirement-field-service：updated_on_behalf_of 的收斂（BR47.2）
+      # 步驟 0／A–E。上面兩次 psql -f schema_rbac.sql 驗的是**全新**資料庫，而新的
+      # J) 區塊直接建出 varchar(64)——條件式收斂在那裡永遠不會被走到。staging 會走
+      # 的是「舊定義的表 → run_meta_schema_migration.py」，所以這裡把欄位改回舊定義，
+      # 再以那支腳本收斂，並驗重跑不清掉代寫值、驗 system 的 CASCADE。
+      #
+      # **這是對下方 concurrency job 註解所述取捨的有意違反**：那裡寫「不擴充本 job
+      # 的原因之一是 pip install 會串行地拖慢它」。這裡仍然加進來，理由是步驟 B／D
+      # 驗的是 run_meta_schema_migration.py 的後條件與它經 psycopg 執行 DO 區塊的
+      # 行為——那只存在於那支腳本，而它需要的前置條件（已套用 schema_rbac.sql 並
+      # 跑過 P1-P12 的真實 PostgreSQL）就在本 job；搬到 concurrency job 等於在那裡
+      # 重做一次本 job 的前半段。增量約一分鐘（setup-python 有 pip cache）。
+      #
+      # 位置：P1-P12 之後（verify_meta_schema.sql 以 ROLLBACK 結尾，表是空的，
+      # 步驟 A 的前置守衛依賴這一點）、R1-R10 之前（步驟 E 把 fixture 清乾淨，
+      # 後面的 purge 斷言不需要知道它存在）。
+      #
+      # **誠實的限定**：ut 上沒有任何必要狀態檢查，所以這些步驟紅燈是訊號而不是
+      # 合併閘門（承 OPEN-ID19-6，不重複立項）。
+      # ---------------------------------------------------------------------
+      - name: "U20 step 0: set up Python for run_meta_schema_migration.py"
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: "U20 step 0: install backend requirements"
+        run: pip install -r backend/requirements.txt
+
+      - name: "U20 step A: downgrade updated_on_behalf_of to the U18 definition"
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f backend/scripts/ci/downgrade_requirement_fields.sql
+
+      # 結束碼 0 ⟺ 後條件（含 BR47.3 的欄位級三條）全部成立；再跑一次
+      # verify_meta_schema.sql，讓 P15／P16 面對的是一個**真的經過收斂**的資料庫。
+      - name: "U20 step B: converge with run_meta_schema_migration.py"
+        working-directory: backend
+        env:
+          # +psycopg 後綴必須顯式（與 concurrency job 同一理由）。
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
+          JWT_SECRET: ci_only_not_a_real_secret
+          PGPASSWORD: postgres
+        run: |
+          python scripts/run_meta_schema_migration.py | tee /tmp/u20-step-b.log
+          grep -q "U20 欄位收斂    本次\*\*有執行\*\*" /tmp/u20-step-b.log || {
+            echo "::error::步驟 B 的收斂沒有執行——步驟 A 的舊定義沒有被看到"; exit 1; }
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f scripts/verify_meta_schema.sql
+
+      - name: "U20 step C: commit a fixture row carrying on-behalf-of = 'cost'"
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 \
+            -v ON_ERROR_STOP=1 -f backend/scripts/ci/seed_requirement_field_fixture.sql
+
+      # NFR20.23：重跑不清資料。值斷言用 DO … RAISE EXCEPTION——psql 執行 SELECT 的
+      # 結束碼恆為 0，單純 SELECT 不會讓步驟紅燈。
+      - name: "U20 step D: re-run the migration; the on-behalf-of value must survive"
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
+          JWT_SECRET: ci_only_not_a_real_secret
+          PGPASSWORD: postgres
+        run: |
+          python scripts/run_meta_schema_migration.py | tee /tmp/u20-step-d.log
+          grep -q "U20 欄位收斂    本次未執行" /tmp/u20-step-d.log || {
+            echo "::error::步驟 D 的重跑又執行了收斂——條件式判斷失效"; exit 1; }
+          psql -h localhost -U postgres -d cloud360 -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            v text;
+          BEGIN
+            SELECT f.updated_on_behalf_of INTO v
+              FROM public.system_requirement_fields f
+              JOIN public.systems s ON s.id = f.system_id
+             WHERE s.name = '__u20_ci_fixture__';
+            IF v IS DISTINCT FROM 'cost' THEN
+              RAISE EXCEPTION
+                'NFR20.23 FAILED: 重跑 run_meta_schema_migration.py 之後代寫值應仍為 cost，實際 %',
+                coalesce(v, '<NULL>');
+            END IF;
+            RAISE NOTICE 'NFR20.23 通過：重跑之後代寫值仍為 cost';
+          END $$;
+          SQL
+
+      # NFR20.16：**先刪 system 並斷言 CASCADE**，再依外鍵順序清 project 與 user
+      # （projects.owner_user_id 無 ON DELETE、systems.project_id 為 RESTRICT）。
+      - name: "U20 step E: assert ON DELETE CASCADE, then remove the fixture"
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d cloud360 -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          DO $$
+          DECLARE
+            sid int;
+            n int;
+          BEGIN
+            SELECT id INTO sid FROM public.systems WHERE name = '__u20_ci_fixture__';
+            IF sid IS NULL THEN
+              RAISE EXCEPTION '步驟 E 前置條件不符：找不到 fixture system';
+            END IF;
+            DELETE FROM public.systems WHERE id = sid;
+            SELECT count(*) INTO n FROM public.system_requirement_fields
+             WHERE system_id = sid;
+            IF n <> 0 THEN
+              RAISE EXCEPTION
+                'NFR20.16 FAILED: 刪除 system 之後其需求欄位值應一併消失（ON DELETE CASCADE），實際剩 % 列',
+                n;
+            END IF;
+            RAISE NOTICE 'NFR20.16 通過：刪除 system 時其需求欄位值被 CASCADE 一併刪除';
+          END $$;
+          DELETE FROM public.projects WHERE name = '__u20_ci_fixture__';
+          DELETE FROM public.users WHERE username = '__u20_ci_fixture__';
+          COMMIT;
+          SQL
+
       # U9 memory-purge 的 10 條行為斷言（R1-R10）。驗的是**清除選到哪些列**，
       # 而這個 job 是唯一能驗它的地方：既有的 backend job 走 in-memory SQLite，
       # 而本單元交付的是 SQL——SQLite 沒有 schema、沒有 data-modifying CTE 的同等

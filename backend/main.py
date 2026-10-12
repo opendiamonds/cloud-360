@@ -12,6 +12,7 @@ from services.lens_router import router as lens_router
 from services.hierarchy_router import router as hierarchy_router
 from services.membership_router import router as membership_router
 from services.memory_router import router as memory_router
+from services.requirement_field_router import router as requirement_field_router
 from cost.estimate_intake_router import router as estimate_intake_router
 from cost.advice_stream_router import router as advice_stream_router
 from services.llm_provider import configure_provider_env
@@ -100,6 +101,12 @@ app.include_router(membership_router, prefix="/api/membership")
 # 的角色判定）全在 MemoryFacade 內（契約 K-08 的 sole_entry）。
 # 同進程消費端為 U11 intent-router（經 K-10），故 facade 不得拋 HTTPException。
 app.include_router(memory_router, prefix="/api/memory")
+# U20 requirement-field-service：系統層需求欄位的讀、寫、清空。
+# 授權**不掛在 dependency 上**——K4 的全域層與 per-project 層都在
+# RequirementFieldFacade 內（契約 K-17 的 sole_entry；BR41.2），因為 U13 是同進程
+# 呼叫端、沒有 dependency 鏈。請求本體在授權之後才由 facade 解析，故本 router 的
+# 422 一律晚於授權判定（BR46.4）。
+app.include_router(requirement_field_router, prefix="/api/requirements")
 # DEMO SCOPE：大腦 gateway 的最小垂直切片，非 U13 的正式交付。
 # 移除方式：刪 backend/services/brain_router.py 並移除下面兩行。
 app.include_router(brain_router, prefix="/api/brain")

@@ -666,6 +666,76 @@ class ReselectionEvent(Base):
 
 
 # ###########################################################################
+# U20 requirement-field-service：system_requirement_fields
+#
+# **DDL 的權威來源仍是 `schema_rbac.sql` 的 `J)` 區塊**（表由 `U18` 交付；本單元
+# 只把 `updated_on_behalf_of` 改為 agent 組識別字，`BR47.1`）。本 model 是對應它的
+# ORM 映射（`BR47.4`），由 `tests/test_requirement_field_data.py` 鎖住兩者一致。
+#
+# 約束必須與 DDL 逐條對齊（`U7`／`U19` 已踩過的洞，見上方兩個區塊的註解）：
+#   ① 三欄唯一鍵 `uq_system_requirement_fields_group_key`——它同時是 upsert
+#      （`ON CONFLICT`）的衝突目標，SQLite 在缺它時會以「ON CONFLICT clause does
+#      not match any PRIMARY KEY or UNIQUE constraint」失敗；
+#   ② `ck_system_requirement_fields_cleared_has_null_value`——三態模型的第三態；
+#   ③ `updated_on_behalf_of` 為 `String(64)` 且**不得**宣告 `ForeignKey`（`[FD1]`=A）；
+#   ④ **不得**補 `index=True`：DDL 刻意沒有額外索引（唯一鍵以 `system_id` 為前導欄）。
+#
+# **刻意不掛 `before_create` 守門**（沿用 `U19` 對兄弟表的先例 `OPEN-ID19-1`）：
+# 記憶表的守門擋的是「ORM 缺欄位、建出的表永久壞掉」，而本 model 與 DDL 欄位
+# 完全等價；掛上它反而會讓後端在一個未跑遷移的既有資料庫上**整個起不來**
+# （`database.py` 的 `create_all` 走訪整個 `Base.metadata`）。代價如實記下：
+# 表不存在時，後端啟動的 `create_all` 會建出一張功能等價、**只缺 COMMENT** 的表；
+# 之後執行 `run_meta_schema_migration.py`，`J)` 區塊的 `COMMENT ON` 會補上。
+# ###########################################################################
+
+
+class SystemRequirementField(Base):
+    """某個系統的某個需求欄位的值與其溯源（`ADR-015` 的三態模型）。
+
+    三態以列的有無與欄位組合表達：從未填過＝無列；已填＝`value` 非 null；
+    已清空＝`value` 為 null 且 `cleared_at` 有值。欄位**定義**不在資料庫，
+    在 `services/requirement_field_definitions.py`。
+    """
+
+    __tablename__ = "system_requirement_fields"
+
+    id = Column(Integer, primary_key=True)
+    # DDL 為 ON DELETE CASCADE：系統被刪後其需求欄位值失去意義（`[ND1]`=A）。
+    # SQLite 測試庫未開 PRAGMA foreign_keys，故這條級聯只在 CI 的真實
+    # PostgreSQL 上驗證（`memory-schema` job 的步驟 E）。
+    system_id = Column(
+        Integer,
+        ForeignKey("systems.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    agent_group = Column(String(64), nullable=False)
+    field_key = Column(String(64), nullable=False)
+    # 可為 null 是設計（`ADR-015`）：它讓「從未填過」與「已清空」可區分。
+    value = Column(Text, nullable=True)
+    cleared_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # 實際發起者；由大腦代寫時仍是使用者本人（`BR45.1`）。
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # `[FD1]`=A：agent 組識別字，**刻意沒有外鍵**。null＝使用者自己填的。
+    updated_on_behalf_of = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "system_id",
+            "agent_group",
+            "field_key",
+            name="uq_system_requirement_fields_group_key",
+        ),
+        CheckConstraint(
+            "cleared_at IS NULL OR value IS NULL",
+            name="ck_system_requirement_fields_cleared_has_null_value",
+        ),
+    )
+
+
+# ###########################################################################
 # U8 memory-service：memory.memory_records / memory.memory_audit_events
 #
 # **本單元不擁有 DDL。** 權威來源是 `schema_rbac.sql` 的 `I)` 區塊（由已交付的

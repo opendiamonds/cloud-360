@@ -195,6 +195,43 @@ EXPECTED_FK_DELETE_ACTIONS = (
 # 必須**沒有**外鍵的那一對（[ND1]=A：改選稽核在專案被刪後獨立存活）。
 FORBIDDEN_FKS = (("public", "reselection_events", "projects"),)
 
+# ---------------------------------------------------------------------------
+# U20 的欄位級後條件（BR47.3／NFR20.25）
+#
+# **不能**用上面的 `FORBIDDEN_FKS` 表達：它以（表、被參照表）為鍵，而同一張表的
+# `updated_by` 合法地指向 `users`——加 (system_requirement_fields, users) 會把那條
+# 合法外鍵一起擋掉。所以這裡以**欄位**為單位，並把「`updated_by` 的外鍵仍在」
+# 寫成正向條件，使「收斂時誤刪了 updated_by 的外鍵」也會讓結束碼非零。
+# ---------------------------------------------------------------------------
+
+# (schema, table, column, information_schema.columns.data_type, 字元長度上限)
+EXPECTED_COLUMN_TYPES = (
+    ("public", "system_requirement_fields", "updated_on_behalf_of",
+     "character varying", 64),
+)
+
+# (schema, table, column)：這一欄上不得有任何外鍵（[FD1]=A：agent 組識別字）
+COLUMNS_WITHOUT_FK = (
+    ("public", "system_requirement_fields", "updated_on_behalf_of"),
+)
+
+# (schema, table, column, 被參照的表)：這一欄上必須有指向該表的外鍵
+EXPECTED_COLUMN_FKS = (
+    ("public", "system_requirement_fields", "updated_by", "users"),
+)
+
+# 某一欄上的外鍵：以 conkey 比對欄位，而不是以約束名稱（名稱由 PostgreSQL 自動產生）。
+_COLUMN_FK_SQL = (
+    "SELECT count(*) FROM pg_constraint con "
+    "JOIN pg_class t ON t.oid = con.conrelid "
+    "JOIN pg_namespace ns ON ns.oid = t.relnamespace "
+    "JOIN pg_attribute a ON a.attrelid = con.conrelid "
+    "AND a.attnum = ANY (con.conkey) "
+    "JOIN pg_class rt ON rt.oid = con.confrelid "
+    "WHERE ns.nspname = :s AND t.relname = :t AND con.contype = 'f' "
+    "AND a.attname = :c"
+)
+
 # 表 COMMENT 不得為空的那些（BR2.2 與 U5 的 DG-1 都把 COMMENT 當防呆機制）。
 EXPECTED_TABLE_COMMENTS = (
     "public.system_requirement_fields",
@@ -282,6 +319,61 @@ def assert_prerequisites(conn) -> None:
             "cd backend && python scripts/run_hierarchy_migration.py"
             "（見 DEPLOY.md 第 2.2.7 節）"
         )
+
+
+def verify_column_postconditions(conn) -> list[str]:
+    """`U20` 的欄位級後條件（`BR47.3`／`NFR20.25`）。回傳問題清單。
+
+    單獨成一個函式，是因為它驗的是 `J)` 區塊裡**條件式收斂**的結果：
+    全新建立的表必然通過，真正要擋的是「既有資料庫的收斂沒有發生或做錯了」——
+    而那只有在這支腳本上才會被執行到（`psql -f schema_rbac.sql` 沒有後條件）。
+    """
+    problems: list[str] = []
+
+    for schema, table, column, data_type, max_length in EXPECTED_COLUMN_TYPES:
+        row = conn.execute(
+            _text(
+                "SELECT data_type, character_maximum_length "
+                "FROM information_schema.columns "
+                "WHERE table_schema = :s AND table_name = :t AND column_name = :c"
+            ),
+            {"s": schema, "t": table, "c": column},
+        ).first()
+        if row is None:
+            problems.append(f"欄位 {schema}.{table}.{column} 不存在")
+        elif row[0] != data_type or row[1] != max_length:
+            problems.append(
+                f"欄位 {schema}.{table}.{column} 應為 {data_type}({max_length})，"
+                f"實際 {row[0]}({row[1]})——J) 區塊的收斂沒有發生（BR47.2）"
+            )
+
+    for schema, table, column in COLUMNS_WITHOUT_FK:
+        found = _scalar(conn, _COLUMN_FK_SQL, {"s": schema, "t": table, "c": column})
+        if found:
+            problems.append(
+                f"{schema}.{table}.{column} 不得有外鍵（[FD1]=A：它是 agent 組識別字），"
+                f"實際有 {found} 條"
+            )
+
+    for schema, table, column, referenced in EXPECTED_COLUMN_FKS:
+        found = _scalar(
+            conn,
+            _COLUMN_FK_SQL + " AND rt.relname = :r",
+            {"s": schema, "t": table, "c": column, "r": referenced},
+        )
+        if not found:
+            problems.append(
+                f"{schema}.{table}.{column} 缺少指向 {referenced} 的外鍵"
+                "（收斂只應移除 updated_on_behalf_of 的那一條）"
+            )
+
+    return problems
+
+
+def _text(sql: str):
+    from sqlalchemy import text
+
+    return text(sql)
 
 
 def verify_postconditions(conn) -> list[str]:
@@ -379,6 +471,8 @@ def verify_postconditions(conn) -> list[str]:
                 f"{extra} 條"
             )
 
+    problems.extend(verify_column_postconditions(conn))
+
     for qualified in EXPECTED_TABLE_COMMENTS:
         comment = _scalar(
             conn,
@@ -427,6 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         traceback.print_exc(file=sys.stderr)
         return 1
 
+    convergence_notices: list[str] = []
     try:
         # engine.begin()：成功則 commit、例外則 rollback。PostgreSQL 的 DDL 可交易，
         # 所以「部分成功而回報成功」這個狀態在這裡不存在。
@@ -443,13 +538,25 @@ def main(argv: list[str] | None = None) -> int:
             # cursor 取自 `conn.connection`，與上面的 `engine.begin()` 是同一個
             # 連線、同一個交易。
             dbapi_conn = conn.connection
-            for letter, body in blocks:
-                cursor = dbapi_conn.cursor()
-                try:
-                    cursor.execute(body)
-                finally:
-                    cursor.close()
-                logger.info("已套用 schema_rbac.sql 的 %s) 區塊", letter)
+            # U20（OPEN-RF20-8）：J) 區塊的條件式收斂以 NOTICE 回報它做了什麼。
+            # 只收以「U20 」開頭的那幾則——其餘區塊的 IF NOT EXISTS 會產生大量
+            # 「already exists, skipping」通知，全部印出只會淹沒真正的訊息。
+            driver_conn = getattr(dbapi_conn, "driver_connection", dbapi_conn)
+            notice_handler = _u20_notice_collector(convergence_notices)
+            can_listen = hasattr(driver_conn, "add_notice_handler")
+            if can_listen:
+                driver_conn.add_notice_handler(notice_handler)
+            try:
+                for letter, body in blocks:
+                    cursor = dbapi_conn.cursor()
+                    try:
+                        cursor.execute(body)
+                    finally:
+                        cursor.close()
+                    logger.info("已套用 schema_rbac.sql 的 %s) 區塊", letter)
+            finally:
+                if can_listen:
+                    driver_conn.remove_notice_handler(notice_handler)
 
             problems = verify_postconditions(conn)
             if problems:
@@ -470,7 +577,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    print("meta schema migration 完成（U5 ＋ U18）：")
+    print("meta schema migration 完成（U5 ＋ U18 ＋ U20 的欄位收斂）：")
     print(f"  schema          {len(EXPECTED_SCHEMAS)} 個：memory")
     print(f"  表              {len(EXPECTED_TABLES)} 張："
           + "、".join(f"{s}.{t}" for s, t, _ in EXPECTED_TABLES))
@@ -478,12 +585,37 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  CHECK／UNIQUE   {len(EXPECTED_CONSTRAINTS)} 條")
     print(f"  外鍵刪除行為    {len(EXPECTED_FK_DELETE_ACTIONS)} 條已逐條核對"
           f"（另驗 {len(FORBIDDEN_FKS)} 條**必須不存在**的外鍵）")
+    print(f"  欄位級條件      {len(EXPECTED_COLUMN_TYPES)} 條型別、"
+          f"{len(COLUMNS_WITHOUT_FK)} 條「該欄無外鍵」、"
+          f"{len(EXPECTED_COLUMN_FKS)} 條「該欄外鍵仍在」已核對：\n"
+          "                  system_requirement_fields.updated_on_behalf_of 為 "
+          "character varying(64) 且無外鍵、updated_by 指向 users 的外鍵仍在（BR47.3）")
+    if convergence_notices:
+        print("  U20 欄位收斂    本次**有執行**（欄位原為舊定義 integer）：")
+        for message in convergence_notices:
+            print(f"                  {message}")
+    else:
+        print("  U20 欄位收斂    本次未執行（欄位已是 varchar(64)；重跑不改動任何資料）")
     print("終檢通過：上述每一個物件都已在目標資料庫中查證存在（NFR8.3）。")
     print(
-        "注意：本指令**不驗證** schema_rbac.sql 的其餘區塊，也不塞任何資料"
-        "（契約 K-15 的 observable_side_effects 逐字「不含任何資料寫入」）。"
+        "注意：本指令**不驗證** schema_rbac.sql 的其餘區塊，也不塞任何資料。"
+        "唯一的例外是 U20 的欄位收斂（OPEN-RF20-8）：它只在 updated_on_behalf_of "
+        "仍為舊定義 integer 時執行，型別轉換會重寫該欄並把舊值轉為 NULL"
+        "（被清掉的非空值筆數見上方；契約 K-15 的「不含任何資料寫入」在這一點上"
+        "不再逐字成立）。"
     )
     return 0
+
+
+def _u20_notice_collector(sink: list[str]):
+    """回傳一個 psycopg notice handler：只收 `J)` 區塊收斂敘述發出的通知。"""
+
+    def handle(diagnostic) -> None:
+        message = getattr(diagnostic, "message_primary", None) or ""
+        if message.startswith("U20 "):
+            sink.append(message)
+
+    return handle
 
 
 if __name__ == "__main__":

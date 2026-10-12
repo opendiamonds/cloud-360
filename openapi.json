@@ -495,6 +495,170 @@
         "title": "EstimateSetDetailView",
         "type": "object"
       },
+      "FieldGroupView": {
+        "description": "一個 agent 組的明細。`fields` 恆等於該組宣告的欄位集合（`BR44.5`）。",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldView"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "filled_count": {
+            "title": "Filled Count",
+            "type": "integer"
+          },
+          "group_key": {
+            "title": "Group Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "group_key",
+          "title",
+          "filled_count",
+          "total_count",
+          "fields"
+        ],
+        "title": "FieldGroupView",
+        "type": "object"
+      },
+      "FieldSetView": {
+        "description": "`read_fields` 的回傳。\n\n**`unfilled_count` 與 `groups` 由同一次資料庫查詢推導、在同一個回應內回傳**\n（不變量 `I-4`／`BR44.4`）：總覽籤與需求籤讀的是同一個 `GET` 的同一個回應，\n本 router 刻意沒有「只回計數」的端點（`NFR20.3`）。",
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/FieldGroupView"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "input_hint": {
+            "title": "Input Hint",
+            "type": "string"
+          },
+          "system_id": {
+            "title": "System Id",
+            "type": "integer"
+          },
+          "unfilled_count": {
+            "title": "Unfilled Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "system_id",
+          "unfilled_count",
+          "input_hint",
+          "groups"
+        ],
+        "title": "FieldSetView",
+        "type": "object"
+      },
+      "FieldView": {
+        "description": "單一欄位的檢視（`write_field`／`clear_field` 的回傳、`FieldGroupView` 的元素）。\n\n`never_filled`（含第四種列）一律回 null 的 `cleared_at`／`updated_at`／\n`updated_by`／`updated_on_behalf_of`（functional-design `review-02` R-06）：\n回列上的值會讓一個「從未填過」的欄位帶著「最後更新者」，畫面無從判斷該不該顯示。",
+        "properties": {
+          "cleared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleared At"
+          },
+          "field_key": {
+            "title": "Field Key",
+            "type": "string"
+          },
+          "filled_state": {
+            "$ref": "#/components/schemas/FilledState"
+          },
+          "group_key": {
+            "title": "Group Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_on_behalf_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated On Behalf Of"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "group_key",
+          "field_key",
+          "label",
+          "filled_state"
+        ],
+        "title": "FieldView",
+        "type": "object"
+      },
+      "FilledState": {
+        "description": "三態（`ADR-015`；推導規則見 `BR44.1`）。",
+        "enum": [
+          "never_filled",
+          "filled",
+          "cleared"
+        ],
+        "title": "FilledState",
+        "type": "string"
+      },
       "GuardedProjectRef": {
         "description": "`LastAdminGuardReport` 的一項。\n\n**必須同時含 id 與名稱**：`entities.md` 逐字「只給 id 的話畫面無法告知\n使用者是哪個專案」。",
         "properties": {
@@ -1200,6 +1364,20 @@
           "xml_data"
         ],
         "title": "RenderDiagramBody",
+        "type": "object"
+      },
+      "RequirementFieldErrorOut": {
+        "description": "403／404／422 的回應本體。`detail` 為固定文字，不含任何輸入值。",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "RequirementFieldErrorOut",
         "type": "object"
       },
       "ReselectionOut": {
@@ -5145,6 +5323,279 @@
         "summary": "Widen Memory Scope",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/requirements/systems/{system_id}/fields": {
+      "get": {
+        "description": "某系統的全部需求欄位：分組明細與未填數，同一次查詢（`US11.2`／`US11.3`）。",
+        "operationId": "read_requirement_fields_api_requirements_systems__system_id__fields_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system_id",
+            "required": true,
+            "schema": {
+              "title": "System Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldSetView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "查不到該系統（含非整數的 system_id）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Requirement Fields",
+        "tags": [
+          "requirements"
+        ]
+      }
+    },
+    "/api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}": {
+      "delete": {
+        "description": "清空一個欄位（保留列、記清空時間與清空者，`ADR-015`）。**冪等**（`NFR20.22`）。",
+        "operationId": "clear_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system_id",
+            "required": true,
+            "schema": {
+              "title": "System Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_group",
+            "required": true,
+            "schema": {
+              "title": "Agent Group",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_key",
+            "required": true,
+            "schema": {
+              "title": "Field Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "查不到該系統（含非整數的 system_id）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Requirement Field",
+        "tags": [
+          "requirements"
+        ]
+      },
+      "put": {
+        "description": "寫入一個欄位。**冪等**：重送相同本體覆寫同一列（`NFR20.21`）。\n\n本體 `{ \"value\": str, \"on_behalf_of\": str | null }`。不帶 `on_behalf_of` 而值只有\n空白時視為清空（`BR43.2`）；帶 `on_behalf_of` 時空值被拒（`BR42.5`）。",
+        "operationId": "write_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system_id",
+            "required": true,
+            "schema": {
+              "title": "System Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_group",
+            "required": true,
+            "schema": {
+              "title": "Agent Group",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_key",
+            "required": true,
+            "schema": {
+              "title": "Field Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "`PUT` 的請求本體：`{ \"value\": str, \"on_behalf_of\": str | null }`。\n\n**`extra=\"forbid\"`**：本體帶 `updated_by`（或任何未宣告欄位）→ 422\n（`NFR20.10`，使用者 2026-10-12 同意）。寫入者恆為已驗證的 principal（`BR45.1`）。\n\n**本 model 不由 FastAPI 驗證**：router 讀原始本體，由 facade 在**授權通過之後**\n以 `model_validate_json` 解析（`BR41.5`／`BR46.4`）——否則框架的 422 會早於授權，\n且其 `detail` 會回顯輸入。router 只用它的 JSON schema 宣告 OpenAPI 的\n`requestBody`，使產生的型別檔仍有本體形狀。",
+                "properties": {
+                  "on_behalf_of": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "代寫標示：大腦代某個 agent 寫入時為該 agent 組（例如 cost）；使用者自填時省略或為 null。只是標示，不授予任何權限",
+                    "title": "On Behalf Of"
+                  },
+                  "value": {
+                    "description": "欄位值。去除首尾空白後為空字串時，視為清空（僅限不帶 on_behalf_of 者）",
+                    "title": "Value",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "title": "RequirementFieldWriteIn",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "查不到該系統（含非整數的 system_id）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementFieldErrorOut"
+                }
+              }
+            },
+            "description": "未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Write Requirement Field",
+        "tags": [
+          "requirements"
         ]
       }
     }

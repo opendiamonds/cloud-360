@@ -590,7 +590,7 @@ per-project 成員與角色、改選稽核、系統層需求欄位值。**三張
 |---|---|
 | `project_members` | 6 欄。per-project 成員身分與角色，是 per-project 授權判定（`K-16` 的 `MembershipFacade`）的資料基礎。唯一鍵 `(project_id, user_id)` |
 | `reselection_events` | **9 欄**（原 8 欄；第 9 欄 `cause` 由 `U19` 依 `[FD3]`=A 回補）。per-project 角色變更的稽核軌跡，兼橫幅已讀狀態的載體。**對 `projects` 沒有外鍵**（見下） |
-| `system_requirement_fields` | 9 欄。某系統的某個需求欄位的值（agent 需要的架構假設，如 SLA／TPS／預算）。唯一鍵 `(system_id, agent_group, field_key)` |
+| `system_requirement_fields` | 9 欄。某系統的某個需求欄位的值（agent 需要的架構假設，如 SLA／TPS／預算）。唯一鍵 `(system_id, agent_group, field_key)`。其中 `updated_on_behalf_of` 自 `U20` 起為 **agent 組識別字**（`VARCHAR(64)`，例如 `cost`），**刻意不帶外鍵**；NULL 代表使用者自己填的（`[FD1]`=A／`BR47.1`，見本節末的 `U20` 小節） |
 
 **五件最容易被誤讀的事：**
 
@@ -677,6 +677,10 @@ echo "exit=$?"    # 必須為 0
 >
 > （CHECK／UNIQUE 由 8 條增為 9 條：`U19` 依 `[FD3]`=A 回補的
 > `ck_reselection_events_cause`。)
+>
+> `U20` 起另加三條**欄位級**條件：`system_requirement_fields.updated_on_behalf_of`
+> 為 `character varying(64)`、該欄上沒有任何外鍵、同表 `updated_by` 指向 `users` 的
+> 外鍵仍在（`BR47.3`）。腳本的成功輸出逐行列出它們，並註明本次是否執行了欄位收斂。
 
 任一項不成立即 rollback 並以非零碼結束（`NFR8.3`）——資料庫維持執行之前的狀態，
 處置後重跑即可（全部 DDL 為 `IF NOT EXISTS` 形狀，`BR2.1`，已實測重跑為 exit 0）。
@@ -738,11 +742,17 @@ psql "$DATABASE_URL" -c "SELECT conname FROM pg_constraint
 # [UG:G9]=A 的防呆 COMMENT 必須非空且含那三件事
 psql "$DATABASE_URL" -c "SELECT obj_description(
   'public.system_requirement_fields'::regclass, 'pg_class');"
+
+# U20：updated_on_behalf_of 必須已收斂為 agent 組識別字（應回 character varying | 64）
+psql "$DATABASE_URL" -c "SELECT data_type, character_maximum_length
+  FROM information_schema.columns WHERE table_schema='public'
+  AND table_name='system_requirement_fields' AND column_name='updated_on_behalf_of';"
 ```
 
-CI 的 `memory-schema` job 會對真實 PostgreSQL 執行全部 **14** 條斷言
-（`backend/scripts/verify_meta_schema.sql`，`P1`–`P12` ＋ `U19` 回補的 `P13`／`P14`），並**套用
-`schema_rbac.sql` 兩次**以驗證可重跑性。**該 job 的名稱比它的內容窄**
+CI 的 `memory-schema` job 會對真實 PostgreSQL 執行全部 **16** 條斷言
+（`backend/scripts/verify_meta_schema.sql`，`P1`–`P12` ＋ `U19` 回補的 `P13`／`P14` ＋
+`U20` 的 `P15`／`P16`），並**套用 `schema_rbac.sql` 兩次**以驗證可重跑性；`U20` 另在
+同一個 job 加了收斂驗證步驟 0／A–E（見下方 `U20` 小節）。**該 job 的名稱比它的內容窄**
 （它同時跑 2.2.8 的 `S1`–`S12` 與本節的 `P1`–`P12`）——刻意不改名，理由是
 GitHub 的 check name 取自 job 的 `name:`，改它會讓 branch protection 的必要檢查
 變成「缺少必要檢查」。
@@ -750,6 +760,86 @@ GitHub 的 check name 取自 job 的 `name:`，改它會讓 branch protection �
 **本單元零應用程式碼、零端點、零畫面**，故沒有新環境變數、沒有 `deploy/.env` 變更、
 沒有前端建置參數變更。成員與需求欄位的讀寫（含授權）屬後續單元
 （`K-16`／`K-17` 的 facade）。
+
+##### U20 的欄位收斂：`updated_on_behalf_of` 改為 agent 組識別字（`requirement-field-service`）
+
+`U20` 交付需求欄位的讀寫端點（`GET`／`PUT`／`DELETE /api/requirements/systems/{system_id}/fields…`，
+掛在既有 `/api/` 之下）與這一處**欄位變更**（`[FD1]`=A／`BR47.1`）：
+
+| 欄位 | `U18` 舊定義 | `U20` 新定義 |
+|---|---|---|
+| `system_requirement_fields.updated_on_behalf_of` | `INTEGER REFERENCES users (id)` | `VARCHAR(64)`，**無外鍵** |
+
+它記的是「大腦代**哪個 agent 組**寫入」（例如 `cost`，取自程式內的欄位定義
+`backend/services/requirement_field_definitions.py`），**不是使用者 id**，所以刻意不帶
+外鍵；NULL 代表使用者自己填的。實際寫入者恆為 `updated_by`。它只是**標示、不授予任何
+權限**——任何有寫入權的使用者都能自填它（`BR45.4`／`OPEN-RF20-1`）。
+
+**收斂敘述（`BR47.2`）**：`CREATE TABLE IF NOT EXISTS` 不會改既有欄位，所以 `J)` 區塊在
+建表敘述之後加了一個**條件式** `DO` 區塊：
+
+- **只在該欄仍為 `integer` 時**才做事：以 `pg_constraint.conkey` 查出並移除這一欄的外鍵
+  （不寫死自動產生的名稱，也不碰 `updated_by` 的外鍵），再
+  `ALTER COLUMN … TYPE VARCHAR(64) USING NULL`。舊值一律轉為 NULL——它們是 `users.id`，
+  轉成字串不屬於任何 agent 組。被清掉的非空值筆數以 NOTICE 回報（實際上沒有任何程式
+  寫過舊欄位，預期為 0）。
+- **已收斂的資料庫上整段不做任何事**——重跑不改動任何資料、不取任何鎖。這一點有 CI
+  驗證：寫入一列代寫值 `cost` 後再跑一次腳本，該值仍在（`NFR20.23`）。
+- 轉型時設 `lock_timeout = 5s`（只在真的要轉型時，轉型後還原）：移除外鍵也會對 `users`
+  取 `ACCESS EXCLUSIVE` 鎖，等不到就**大聲失敗**，而不是讓登入排隊。
+- **它讓 `run_meta_schema_migration.py` 不再是純 DDL**（`OPEN-RF20-8`）：型別轉換會
+  重寫該欄。腳本的成功輸出會寫明「`U20 欄位收斂` 本次有執行／未執行」與被清掉的筆數，
+  結尾的「不塞任何資料」聲明也已改寫為如實描述這個例外。
+
+**直接 `psql -f schema_rbac.sql` 的路徑沒有後條件檢查**；既有環境請一律走
+`run_meta_schema_migration.py`，它的欄位級後條件（型別、無外鍵、`updated_by` 外鍵仍在）
+不符即非零結束碼（`NFR20.25`）。
+
+**部署順序**（`deploy.yml` 只部署容器、**不執行任何遷移腳本**，所以「程式已上線、
+資料表尚未收斂」是一個真實的中間狀態）：
+
+| 情境 | 實際會發生什麼 | 處置 |
+|---|---|---|
+| `U18` 與 `U20` 同批上線，遷移**從未**跑過 | 表不存在 → 後端啟動時 `database.py` 的 `Base.metadata.create_all()` 依 ORM 的 `SystemRequirementField` **建出這張表**：欄位、三欄唯一鍵、三態 CHECK、兩條外鍵（`system_id` CASCADE、`updated_by`）與 `VARCHAR(64)` 的 `updated_on_behalf_of` 都與 DDL 等價，**只缺 COMMENT**。端點照常運作，不是 500 | 照常執行一次 `run_meta_schema_migration.py`：`CREATE TABLE IF NOT EXISTS` 整段 no-op、`COMMENT ON` 補上 COMMENT、收斂區塊不做事 |
+| `U18` 已上線並跑過遷移（舊定義），`U20` 後上線、遷移**未重跑** | 欄位仍為 `integer` ＋ 外鍵 → **只有帶代寫標示的寫入**失敗（字串寫進 integer 欄，500）；使用者自填與讀取正常 | 重跑一次同一支腳本即可收斂 |
+
+ORM model **刻意不掛**「不得由 `create_all` 建表」的守門（記憶表有掛）：沿用 `U19` 對兄弟表
+的先例（`OPEN-ID19-1`）——掛上它會讓後端在一個未遷移的資料庫上**整個起不來**，而本表的
+ORM 與 DDL 欄位完全等價（`backend/tests/test_requirement_field_data.py` 鎖住兩者一致）。
+
+前進步驟：合併含 `U20` 的變更後，於 staging 執行
+
+```bash
+cd backend
+python scripts/run_meta_schema_migration.py
+echo "exit=$?"    # 必須為 0；輸出應含「U20 欄位收斂」一行與欄位級條件三條
+```
+
+**上線確認**（只看「儲存成功」不夠：欄位仍為 `integer` 時使用者自填的寫入完全正常，
+只有代寫寫入會壞，所以要直接查欄位型別）：
+
+```bash
+# 應回 character varying | 64；仍是 integer 表示收斂沒跑
+psql "$DATABASE_URL" -c "SELECT data_type, character_maximum_length
+  FROM information_schema.columns WHERE table_schema='public'
+  AND table_name='system_requirement_fields' AND column_name='updated_on_behalf_of';"
+
+# 該欄不得有外鍵（應回 0）
+psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
+  JOIN pg_class t ON t.oid=con.conrelid
+  JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=ANY(con.conkey)
+  WHERE t.relname='system_requirement_fields' AND con.contype='f'
+  AND a.attname='updated_on_behalf_of';"
+```
+
+之後以一個有 `K4.edit` 的專案成員儲存一次需求欄位，後端 log 應出現一行
+`requirement_field.written`，且該行**不含**輸入的值。
+
+**回滾**：程式照既有 `deploy.yml` 的 rollback job 還原；**欄位收斂不回滾**——`U18`
+時期的程式沒有任何寫入此欄的路徑，`VARCHAR` 欄位對它無影響，而回滾成 `integer` 反而
+需要丟棄已寫入的代寫值。
+
+零新環境變數、不改 `deploy/` 任何檔案、不改 `role_permissions` 種子（`K4` 的十一列已在 `backend/services/rbac_seed_data.py`）。
 
 #### 2.2.10 U19 既有專案的成員回填（`membership-service`）
 
@@ -814,7 +904,8 @@ echo "exit=$?"    # 必須為 0
 任一項不成立即 rollback 並以非零碼結束——資料庫維持執行之前的狀態。
 
 **刻意不與 2.2.9 的腳本合併**（`OPEN-N19-4` 的定案）：那一支目前**純 DDL、無
-資料寫入**，而那正是它能單一交易並自我終檢的前提；把資料動作混進去會讓
+資料寫入**（`U20` 之後唯一的例外是 `updated_on_behalf_of` 的條件式欄位收斂，見 2.2.9
+的 `U20` 小節），而那正是它能單一交易並自我終檢的前提；把資料動作混進去會讓
 「結束碼 0 代表什麼」同時涵蓋兩種不同的保證。
 
 **誠實的代價**：這仍是**手動步驟，忘了跑就沒有列**，而 `deploy.yml` 不呼叫任何

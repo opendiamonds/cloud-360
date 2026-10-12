@@ -571,6 +571,12 @@ END $$;
 --    逐字「**不含任何資料寫入**」——與 H) 的關鍵差別是本區塊**沒有資料遷移**，
 --    沒有既有資料要搬。全部敘述為可重跑形狀（BR2.1）。
 --
+--    **U20 之後的一處例外（OPEN-RF20-8，如實記載）**：system_requirement_fields
+--    之後的條件式 DO 區塊會把舊定義的 updated_on_behalf_of（integer ＋ 指向 users
+--    的外鍵）收斂為 VARCHAR(64)、無外鍵。只在欄位仍為 integer 時執行，型別轉換會
+--    重寫該欄並把舊值轉為 NULL——在沒有任何程式寫過舊欄位的前提下不改變資料內容，
+--    但它不再是純 DDL。已收斂的資料庫上整段不做任何事。
+--
 --    既有非空 volume 的唯一建立路徑是
 --      cd backend && python scripts/run_meta_schema_migration.py
 --    該腳本**直接解析本檔的 X)／I)／J) 三個區塊並執行**，所以這三個區塊的 DDL
@@ -687,7 +693,10 @@ CREATE TABLE IF NOT EXISTS system_requirement_fields (
   cleared_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by INTEGER NOT NULL REFERENCES users (id),
-  updated_on_behalf_of INTEGER REFERENCES users (id),
+  -- U20/[FD1]=A／BR47.1：agent 組識別字（例如 'cost'），**刻意不帶外鍵**。
+  -- U18 原定義為 INTEGER REFERENCES users (id)；已用舊定義建過表的資料庫由下方
+  -- 的條件式 DO 區塊收斂（BR47.2），本行只決定全新建表時的形狀。
+  updated_on_behalf_of VARCHAR(64),
   -- 三欄（不是兩欄）：同一個 field_key 字串在不同 agent 組之下是**不同的欄位**，
   -- 因為 K-17 的 read_fields 回傳「按 agentGroup 分組、每組含 fieldKey」。
   -- 兩欄鍵會讓兩組共用的欄位名互相排擠。entities.md 的 entity_constraints 仍寫
@@ -703,6 +712,74 @@ CREATE TABLE IF NOT EXISTS system_requirement_fields (
 
 -- system_id 側不需另建索引：uq_system_requirement_fields_group_key 以它為前導欄，
 -- 同時覆蓋 K-17 的 read_fields（WHERE system_id = ?）與上面那條 CASCADE 的子側掃描。
+
+-- U20/BR47.2：把「已用 U18 舊定義建過表」的資料庫收斂成上面的定義。
+--
+-- CREATE TABLE IF NOT EXISTS 不會改既有欄位，故需要這一段。它**以欄位現況為條件**，
+-- 而這個條件是整段的重點（functional-design review-02 R-01）：
+--   - 只有 updated_on_behalf_of 仍為 integer 時才做任何事。已收斂的資料庫（或全新
+--     建立的表）在第一個 IF 就返回——**重跑不改動任何資料**，也不取任何鎖。
+--     無條件轉型會在每次重跑時把已寫入的代寫溯源（'cost' 等）清成 NULL，而且
+--     不會有任何錯誤。
+--   - 外鍵名稱以 pg_constraint.conkey 比對**這一欄**查得，不寫死自動產生的名稱，
+--     也不會碰到同表 updated_by 那條合法的 users 外鍵。
+--   - 舊值一律轉 NULL：舊定義下它是 users.id，轉成字串（例如 '123'）不屬於任何
+--     agent 組，也無法還原成它代表的 agent。被清掉的非空值筆數以 NOTICE 回報
+--     （實際上沒有任何程式寫過舊欄位，預期為 0）。
+--   - lock_timeout 只在真的要轉型時設定、轉型後還原：DROP CONSTRAINT 也會對
+--     users 取 ACCESS EXCLUSIVE 鎖，等不到就大聲失敗，而不是讓登入排隊。
+-- 這段不再是純 DDL（型別轉換會重寫該欄，OPEN-RF20-8），故 run_meta_schema_migration.py
+-- 的輸出與 DEPLOY.md 2.2.9 都如實寫明它。
+DO $$
+DECLARE
+  current_type text;
+  previous_lock_timeout text;
+  fk_name text;
+  cleared_rows bigint;
+BEGIN
+  SELECT c.data_type INTO current_type
+    FROM information_schema.columns c
+   WHERE c.table_schema = 'public'
+     AND c.table_name = 'system_requirement_fields'
+     AND c.column_name = 'updated_on_behalf_of';
+
+  IF current_type IS DISTINCT FROM 'integer' THEN
+    RETURN;
+  END IF;
+
+  previous_lock_timeout := current_setting('lock_timeout');
+  PERFORM set_config('lock_timeout', '5s', true);
+
+  FOR fk_name IN
+    SELECT con.conname
+      FROM pg_constraint con
+      JOIN pg_class t ON t.oid = con.conrelid
+      JOIN pg_namespace ns ON ns.oid = t.relnamespace
+      JOIN pg_attribute a
+        ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+     WHERE ns.nspname = 'public'
+       AND t.relname = 'system_requirement_fields'
+       AND con.contype = 'f'
+       AND a.attname = 'updated_on_behalf_of'
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE public.system_requirement_fields DROP CONSTRAINT %I', fk_name);
+    RAISE NOTICE 'U20 收斂：已移除 updated_on_behalf_of 的外鍵 %', fk_name;
+  END LOOP;
+
+  SELECT count(*) INTO cleared_rows
+    FROM public.system_requirement_fields
+   WHERE updated_on_behalf_of IS NOT NULL;
+
+  ALTER TABLE public.system_requirement_fields
+    ALTER COLUMN updated_on_behalf_of TYPE VARCHAR(64) USING NULL;
+
+  PERFORM set_config('lock_timeout', previous_lock_timeout, true);
+
+  RAISE NOTICE
+    'U20 收斂：updated_on_behalf_of 已由 integer 轉為 varchar(64)，清掉的非空舊值 % 筆',
+    cleared_rows;
+END $$;
 
 COMMENT ON TABLE system_requirement_fields IS
   'U18/BR2.2/[UG:G9]=A — READ THIS BEFORE DELETING ANY ROW HERE. Field definitions (agentGroup -> fieldKey) are constants in CODE, not data (K-17 field_definition_source). When a definition is removed because an agent goes away, three things follow. They are written down here because not writing them down is exactly how these rows get mistaken for dirty data and deleted, and what gets deleted is a value a user once typed: (1) the value rows of the removed definition are RETAINED, never purged; (2) the screen does NOT render that group, so a retained row is invisible in the UI and that is correct rather than a bug; (3) the unfilled count counts only the fields CURRENTLY DECLARED in code, so removing a definition makes the count go DOWN instead of leaving a ghost field. Consequence accepted by ADR-015: the row count only ever grows. Three distinguishable states: never filled = NO ROW; filled = row with value; cleared = row with value NULL and cleared_at set.';
@@ -721,7 +798,7 @@ COMMENT ON COLUMN system_requirement_fields.updated_at IS
 COMMENT ON COLUMN system_requirement_fields.updated_by IS
   'U18/ADR-015: WHO wrote or cleared this value. NOT NULL on purpose — K-17 clear_field is verbatim "keep the row, set value to null, record clearedAt AND updatedBy", so without this column the "who cleared it" half of that audit simply does not exist.';
 COMMENT ON COLUMN system_requirement_fields.updated_on_behalf_of IS
-  'U18/BR1.5: set ONLY when the brain wrote this value on behalf of an agent; NULL means the user typed it themselves. Always filling it, or always leaving it empty, removes the user''s ability to tell which values are their own — which is the only reason this column exists (K-15 verbatim).';
+  'U18/BR1.5, retyped by U20/[FD1]=A (BR47.1): the AGENT GROUP identifier (for example ''cost'') the brain wrote this value on behalf of; NULL means the user typed it themselves. It is a group key declared in code (backend/services/requirement_field_definitions.py), NOT a user id, so there is DELIBERATELY NO FOREIGN KEY. The person who actually made the write is always updated_by. Clearing a value always sets this column to NULL (BR45.3). It is a label, not an authorization: any user who may write may set it (BR45.4). Always filling it, or always leaving it empty, removes the user''s ability to tell which values are their own — which is the only reason this column exists (K-15 verbatim).';
 
 -- ###########################################################################
 -- K) U9 memory-purge: reserved system actor（NFR7.11）

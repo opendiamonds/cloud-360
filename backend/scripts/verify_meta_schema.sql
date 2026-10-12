@@ -1,5 +1,12 @@
 -- verify_meta_schema.sql — `U18 project-meta-data` 的 12 條斷言（`P1`–`P12`）
 -- ＋ `U19 membership-service` 回補的 2 條（`P13`／`P14`，`[FD3]`=A 的 `cause` 欄）
+-- ＋ `U20 requirement-field-service` 的 2 條（`P15`／`P16`，`[FD1]`=A 的
+--   `updated_on_behalf_of` 欄型別與外鍵缺席，`BR47.3`）
+--
+-- **`P15`／`P16` 在全新資料庫上必然通過**——新的 `J)` 區塊直接建出 varchar(64)。
+-- 它們真正要擋的是「舊定義資料庫的收斂沒發生」，所以 CI 的 `memory-schema` job
+-- 在步驟 A（把欄位改回舊定義）→ B（跑 `run_meta_schema_migration.py`）之後
+-- **再跑一次本檔**，讓這兩條面對的是一個真的經過收斂的資料庫。
 --
 -- 由 CI job `memory-schema` 對**真實 PostgreSQL** 執行（該 job 的名稱比它的內容窄，
 -- 理由見 `.github/workflows/ci.yml` 內該 job 的註解）。
@@ -266,7 +273,55 @@ BEGIN
       '欄位（CURRENTLY DECLARED）';
   END IF;
 
-  RAISE NOTICE '結構類斷言（P1／P2／P3／P5／P6／P8／P9／P12／P13／P14）全部通過';
+  -- P15（U20/[FD1]=A／BR47.1／BR47.3）：updated_on_behalf_of 是 agent 組識別字
+  --      ——character varying(64)。仍為 integer 表示 J) 區塊的條件式收斂沒有發生，
+  --      而那時每一筆帶代寫標示的寫入都會以型別錯誤失敗（500）。
+  SELECT data_type || coalesce('(' || character_maximum_length || ')', '') INTO v
+    FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'system_requirement_fields'
+     AND column_name = 'updated_on_behalf_of';
+  IF v IS DISTINCT FROM 'character varying(64)' THEN
+    RAISE EXCEPTION
+      'P15 FAILED (U20/BR47.1): updated_on_behalf_of 應為 character varying(64)'
+      '（agent 組識別字），實際 %。仍為 integer 表示 schema_rbac.sql J) 區塊的'
+      '收斂沒有執行——請跑 backend/scripts/run_meta_schema_migration.py',
+      coalesce(v, '<欄位不存在>');
+  END IF;
+
+  -- P16（U20/BR47.3）：該欄上**沒有**任何外鍵，而同表 updated_by 指向 users 的
+  --      外鍵**仍在**。兩半都要：只驗前者會讓「收斂時誤刪 updated_by 的外鍵」通過；
+  --      以（表、被參照表）為鍵的查法（run_meta_schema_migration.py 的 FORBIDDEN_FKS）
+  --      分辨不出這兩條，所以這裡以欄位（conkey）比對。
+  SELECT count(*) INTO n
+    FROM pg_constraint con
+    JOIN pg_class t ON t.oid = con.conrelid
+    JOIN pg_namespace ns ON ns.oid = t.relnamespace
+    JOIN pg_attribute a
+      ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+   WHERE ns.nspname = 'public' AND t.relname = 'system_requirement_fields'
+     AND con.contype = 'f' AND a.attname = 'updated_on_behalf_of';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'P16 FAILED (U20/[FD1]=A): updated_on_behalf_of 不得有外鍵，實際 % 條。'
+      '它存的是 agent 組識別字（例如 cost），指向 users 的外鍵會擋下每一筆代寫', n;
+  END IF;
+
+  SELECT count(*) INTO n
+    FROM pg_constraint con
+    JOIN pg_class t ON t.oid = con.conrelid
+    JOIN pg_namespace ns ON ns.oid = t.relnamespace
+    JOIN pg_attribute a
+      ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+    JOIN pg_class rt ON rt.oid = con.confrelid
+   WHERE ns.nspname = 'public' AND t.relname = 'system_requirement_fields'
+     AND con.contype = 'f' AND a.attname = 'updated_by' AND rt.relname = 'users';
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'P16 FAILED (ADR-015): updated_by 指向 users 的外鍵應恰有 1 條，實際 %。'
+      '收斂只應移除 updated_on_behalf_of 的那一條', n;
+  END IF;
+
+  RAISE NOTICE '結構類斷言（P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16）全部通過';
 END $$;
 
 -- =====================================================================
