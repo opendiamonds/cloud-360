@@ -239,6 +239,29 @@ def list_systems(db: Session, *, project_id: int) -> List[System]:
     )
 
 
+
+def list_diagrams_of_system(
+    db: Session, *, system_id: int, owner_user_id: int
+) -> List[tuple]:
+    """`U12 work-orchestrator` 的跨單元新增（`U12` functional-spec 2.4）。
+
+    回傳該系統下、由 `owner_user_id` 擁有的圖的 `(diagram_id, title)`，依 id 遞增。
+    `system_id` 為空的圖不屬於任何系統（`OPEN-H11`：三條建圖路徑都不傳它，故
+    這條查詢在現況下多半回空清單——那是如實的結果，不是錯誤）。
+
+    擁有者範圍由 facade 先以 `assert_system_owned_by` 確認系統屬於呼叫者；本函式
+    另以 `user_diagrams.user_id` 過濾，使同一系統下他人的圖不會被列出
+    （`BR6.3`：圖的可見性以圖自身的擁有者判定）。
+    """
+    rows = (
+        db.query(UserDiagram.id, UserDiagram.title)
+        .filter(UserDiagram.system_id == system_id)
+        .filter(UserDiagram.user_id == owner_user_id)
+        .order_by(UserDiagram.id.asc())
+        .all()
+    )
+    return [(int(row[0]), row[1]) for row in rows]
+
 def resolve_work_target(
     db: Session,
     *,

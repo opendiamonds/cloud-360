@@ -66,6 +66,7 @@
 
 - 2026-10-10T14:30:00Z — **我把另一個單元的 `BR` 識別字寫進自己的 `rules.md` 散文裡，製造了 16 個假孤兒——而這條教訓是我自己在 `U11` 寫下的。** 為了說明「本檔為什麼改用 `BR21`–`BR28`」，我在 §一 逐字列出 `U19` 佔用的識別字；sensor 以 `/\bBR\d+\.\d+\b/g` 掃**整份** `rules.md`，於是那 16 個他單元的 id 全被當成本檔沒有 AC 對應的孤兒規則，`findings_count: 16`。`project.md` 的 `U11` 條目逐字寫過「citing another unit's `BR` ids creates false orphans」。**可執行處置**：談他單元的識別字時一律不寫字面形式——改寫成「群組 1 到 6 的子號全部用掉（各群組依序 6、3、6、4、6、4）」、「群組 6 的第二個子號」。注意 `BR1.x` 這種寫法**不會**命中（`x` 非數字），所以對照表可以保留字面。清掉後 `pass: true`。
 - 2026-10-11T11:25:39Z — U15 memory-page-ui：登入到 /api/auth/me 回來之間 user.id 為 undefined，記憶頁在 id 成為 number 前不掛載三區；照字面比較會把自己的記憶標成「其他使用者」且無刪除鍵。實讀 AuthContext.tsx 的 login 先 setUser 不含 id 才查出，四份上游產出均未提及。
+- 2026-10-12T02:20:00Z — U12 work-orchestrator：K-18 把 U12 列為進度通道 open／close 的消費端，但已交付的 A1 端點自己在每個請求開關通道（U22 交付），而 U12 依 X-02 經 HTTP 呼叫 A1，通道生命週期在 A1 那一側已完整。依已交付程式裁決：U12 不使用 ProgressChannel，K-18 的 U12 消費端與 U12→U22 邊列入契約追認（OPEN-WO12-1／2）。
 - 2026-10-11T22:29:45Z — U20 requirement-field-service：K-17 的 anti_double_check 字面要全域 K4 層由 router 承擔，但同進程呼叫端 U13 不經 dependency 鏈，照字面做該路徑的全域層根本不會被檢查。已交付的 U19（membership_facade.py:93-111）遇到同一件事並改在 facade 以 user_can 評估，本站依該先例辦而不出題，契約字面列入追認項 OPEN-RF20-5。
 
 ## Deviations

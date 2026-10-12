@@ -313,6 +313,26 @@ class HierarchyFacade:
             diagram_id=diagram_id,
         )
 
+    def list_diagrams_of_system(
+        self, principal: Principal, *, system_id: int
+    ) -> list:
+        """系統下呼叫者擁有的圖：`[(diagram_id, title), ...]`。**唯讀、冪等。**
+
+        `U12 work-orchestrator` 的跨單元新增（`U12` functional-spec 2.4／
+        `BR56.1`／`BR56.3`：作業對象只指定系統時，換成目標圖集合）。
+
+        列舉型讀取，套用 `BR6.1` 的擁有者範圍：先 `_authorize(view)`，再以
+        `assert_system_owned_by` 確認系統屬於請求者——不屬於者回「查不到」
+        （`HierarchyNotFound`），與真正的不存在同一種結果。
+        """
+        self._authorize(principal, "view")
+        hierarchy_service.assert_system_owned_by(
+            self._db, system_id=system_id, user_id=principal.user_id
+        )
+        return hierarchy_service.list_diagrams_of_system(
+            self._db, system_id=system_id, owner_user_id=principal.user_id
+        )
+
     def list_diagram_changes(
         self,
         principal: Principal,

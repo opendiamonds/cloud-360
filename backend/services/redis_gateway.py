@@ -201,6 +201,9 @@ class RedisErrorTypes:
     connection: tuple = ()
     oom: tuple = ()
     command: tuple = ()
+    #: `EVALSHA` 冷快取的專屬型別（redis-py 8.x 的 `NoScriptError`）。**預設為空**：
+    #: 舊版客戶端沒有它，此時 `is_noscript_error` 只靠訊息前綴判定（原行為不變）。
+    noscript: tuple = ()
 
 
 def classify_client_error(exc: BaseException, types: RedisErrorTypes) -> Optional[str]:
@@ -240,6 +243,13 @@ def is_noscript_error(exc: BaseException, types: RedisErrorTypes) -> bool:
     處置是以 `EVAL` 送出完整腳本原文。分類成 `redis_command_error` 會讓每次
     Redis 重啟後的第一個 `append_message` 變成一次假故障。
     """
+    # redis-py 8.x 把 `NOSCRIPT` 回覆轉成 `NoScriptError`，訊息為
+    # `No matching script. Please use EVAL.`——**前綴已被剝掉**，只看字串會把每次
+    # Redis 重啟後的冷快取判成 `redis_command_error`，且永遠不會以 `EVAL` 補上快取
+    # （`U12` code-generation 的 F1，以真實 Redis 實測）。故先認型別，字串前綴保留為
+    # 舊版客戶端的退路。
+    if types.noscript and isinstance(exc, types.noscript):
+        return True
     return bool(types.command) and isinstance(exc, types.command) and "NOSCRIPT" in str(exc)
 
 
@@ -254,6 +264,8 @@ def redis_py_error_types() -> RedisErrorTypes:
     from redis import exceptions as redis_exceptions  # 延遲匯入：見 docstring
 
     oom = getattr(redis_exceptions, "OutOfMemoryError", None)
+    # `NoScriptError` 同樣以 `getattr` 取得：舊版客戶端沒有它時不得 import 失敗。
+    noscript = getattr(redis_exceptions, "NoScriptError", None)
     return RedisErrorTypes(
         connection=(
             redis_exceptions.ConnectionError,
@@ -261,6 +273,7 @@ def redis_py_error_types() -> RedisErrorTypes:
         ),
         oom=(oom,) if oom is not None else (),
         command=(redis_exceptions.ResponseError,),
+        noscript=(noscript,) if noscript is not None else (),
     )
 
 

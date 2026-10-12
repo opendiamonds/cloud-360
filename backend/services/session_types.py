@@ -358,6 +358,92 @@ def decode_session(session_key: str, fields: Mapping[str, str]) -> BrainSession:
     )
 
 
+
+# ---------------------------------------------------------------------------
+# `U12 work-orchestrator` 的工作項欄位（跨單元新增；`OPEN-N10-7` 的承接）
+# ---------------------------------------------------------------------------
+#
+# 工作項與 session 共用同一個 key，每項一個欄位 `wi:<workItemId>`（`U12` 的
+# `BR52.4`）。前綴 `wi:` 不與 `seg:`／`tgt:`／`meta` 衝突；`decode_session`
+# 對未知前綴一律忽略，故本段的新增不改變既有任何讀取路徑。
+#
+# 下面兩個 `ref_*` 函式是 `put_work_item.lua`／`update_work_item.lua` 的
+# **參考實作**——與本檔的 `trim_history` 同一個定位：**不是生產載體**，只給
+# in-memory 替身模擬腳本效果、以及 `tests_redis/` 對真實 Redis 逐案比對用。
+# 它們是純函式：輸入一份 Hash 的欄位快照，回傳 `(寫入與否, 新快照)`，不改動
+# 輸入。Hash 不存在以 `None`（或空 dict，Redis 沒有零欄位的 Hash）表示。
+
+#: 工作項欄位前綴。
+WORK_ITEM_FIELD_PREFIX = "wi:"
+
+
+def work_item_field(work_item_id: str) -> str:
+    """`wi:<workItemId>`。"""
+    if not isinstance(work_item_id, str) or not work_item_id:
+        raise ValueError("workItemId 必須是非空字串")
+    return f"{WORK_ITEM_FIELD_PREFIX}{work_item_id}"
+
+
+def decode_work_items(fields: Optional[Mapping[str, str]]) -> dict:
+    """`HGETALL` 的結果 → `{workItemId: 工作項 dict}`。只讀 `wi:*` 欄位。"""
+    items: dict = {}
+    for name, blob in (fields or {}).items():
+        if not name.startswith(WORK_ITEM_FIELD_PREFIX) or blob is None:
+            continue
+        item = json.loads(blob)
+        items[str(item.get("workItemId") or name[len(WORK_ITEM_FIELD_PREFIX):])] = item
+    return items
+
+
+def ref_put_work_item(
+    fields: Optional[Mapping[str, str]], field_name: str, item_json: str
+) -> tuple:
+    """`put_work_item.lua` 的參考實作。
+
+    key 不存在 → `(0, None)`，**不建 key**；欄位已存在 → `(0, 原快照)`；
+    否則 `(1, 新快照)`。不改 TTL（TTL 不在本函式的模型內）。
+    """
+    if not fields:
+        return 0, None
+    if field_name in fields:
+        return 0, dict(fields)
+    updated = dict(fields)
+    updated[field_name] = item_json
+    return 1, updated
+
+
+def ref_update_work_item(
+    fields: Optional[Mapping[str, str]],
+    field_name: str,
+    expected_statuses_json: str,
+    expected_dispatch_stage: str,
+    patch_json: str,
+) -> tuple:
+    """`update_work_item.lua` 的參考實作（比對後以補丁合併寫入）。
+
+    比對 `status ∈ 預期集合` **且** `dispatchStage == 預期值`；皆符合才把補丁
+    合併進**讀到的當前值**（補丁值為 `null` 即設為 null，未出現的欄位不動）。
+    引數與腳本的 `ARGV` 逐一對應（皆為 JSON 字串），使替身與真實 Redis 走同一份
+    編碼。
+    """
+    if not fields:
+        return 0, None
+    raw = fields.get(field_name)
+    if raw is None:
+        return 0, dict(fields)
+    item = json.loads(raw)
+    expected = json.loads(expected_statuses_json)
+    if item.get("status") not in expected:
+        return 0, dict(fields)
+    if item.get("dispatchStage") != expected_dispatch_stage:
+        return 0, dict(fields)
+    patch = json.loads(patch_json)
+    item.update(patch)
+    updated = dict(fields)
+    updated[field_name] = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+    return 1, updated
+
+
 __all__ = [
     "BrainSession",
     "ConversationSegment",
@@ -373,18 +459,23 @@ __all__ = [
     "SHARING_SHARED",
     "SessionMessage",
     "TARGET_FIELD_PREFIX",
+    "WORK_ITEM_FIELD_PREFIX",
     "decode_messages",
     "decode_meta",
     "decode_session",
     "decode_target",
+    "decode_work_items",
     "default_page_modes",
     "encode_messages",
     "encode_meta",
     "encode_target",
     "require_page_scope",
     "require_segment_id",
+    "ref_put_work_item",
+    "ref_update_work_item",
     "require_sharing_mode",
     "segment_field",
     "target_field",
     "trim_history",
+    "work_item_field",
 ]

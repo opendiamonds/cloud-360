@@ -69,6 +69,7 @@ from services.session_types import (
     BrainSession,
     decode_meta,
     decode_session,
+    decode_work_items,
     default_page_modes,
     encode_messages,
     encode_meta,
@@ -78,10 +79,17 @@ from services.session_types import (
     require_sharing_mode,
     segment_field,
     target_field,
+    work_item_field,
 )
 import json as _json
 
 logger = logging.getLogger("cloud360.session_store")
+
+#: `U12 work-orchestrator` 的兩支 Lua（`session_scripts/` 內同名檔）。名稱放在
+#: 本模組而非 `redis_gateway`：gateway 不認識 session 語意，而它以名稱從
+#: `scripts_dir` 讀檔，不需要先登錄。
+SCRIPT_PUT_WORK_ITEM = "put_work_item"
+SCRIPT_UPDATE_WORK_ITEM = "update_work_item"
 
 #: `NFR8.40`：每段訊息筆數上限的**具名環境變數**，**無預設值**。
 HISTORY_MAX_ENV = "BRAIN_SESSION_HISTORY_MAX"
@@ -399,6 +407,76 @@ class SessionStore:
         self._gateway.expire(method, session_key, self._ttl_seconds)
         return self._reload(method, session_key)
 
+    # -- 工作項（`U12 work-orchestrator` 的跨單元新增；`BR52.4`／`BR52.7`）----
+    #
+    # 三個方法**都不續期 TTL**：工作項隨工作階段既有的到期時間到期（`U12` 的
+    # `BR52.4`）。這是對本類別「五個方法全部續期」的**刻意例外**——續期的語意
+    # 是「使用者有互動」，而背景執行推進工作項不是使用者互動；若它續期，一個
+    # 背景輪詢就能讓使用者早已離開的 session 無限延長。
+    #
+    # 兩個寫入方法皆為 Lua、皆以 `idempotent=False` 執行（傳輸層不自動重送）：
+    # 比對後寫入不是冪等的，重送可能在第一次已成功時把第二次判為「比對不符」，
+    # 呼叫端便誤以為被別人搶先。連線錯誤時的結果未知由呼叫端重讀確認。
+
+    def load_work_items(self, session_key: str) -> dict:
+        """讀出所有 `wi:*` 欄位 → `{workItemId: 工作項 dict}`。key 不存在回 `{}`。"""
+        self._require_session_key(session_key)
+        return decode_work_items(self._gateway.hgetall("load_work_items", session_key))
+
+    def put_work_item(self, session_key: str, item: dict) -> bool:
+        """新建一個工作項欄位。key 不存在或欄位已存在 → 回 False 且不寫入。
+
+        **不得以 `HSET`／`HSETNX` 直接寫**：key 已到期時那會重建一個沒有到期
+        時間、沒有 `meta` 的 key（`U12` 的 `NFR12.18`）。
+        """
+        method = "put_work_item"
+        self._require_session_key(session_key)
+        field = work_item_field(item.get("workItemId"))
+        payload = _json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+        result = self._gateway.eval_script(
+            method,
+            SCRIPT_PUT_WORK_ITEM,
+            [session_key],
+            [field, payload],
+            idempotent=False,
+        )
+        return int(result or 0) == 1
+
+    def update_work_item(
+        self,
+        session_key: str,
+        work_item_id: str,
+        expected_statuses,
+        expected_dispatch_stage: str,
+        patch: dict,
+    ) -> bool:
+        """比對 `status ∈ expected_statuses` 且 `dispatchStage ==
+        expected_dispatch_stage` 後，以**補丁**合併寫入（`U12` 的 `BR52.7`）。
+
+        `patch` 只含要改的欄位；值為 `None` 即設為 null，未出現的欄位不動——
+        故呼叫端不可能以過期副本覆寫別人剛寫入的欄位（例如 `estimateSetId`）。
+        """
+        method = "update_work_item"
+        self._require_session_key(session_key)
+        statuses = list(expected_statuses)
+        if not statuses:
+            raise ValueError("expected_statuses 不得為空")
+        if not isinstance(patch, dict) or not patch:
+            raise ValueError("patch 必須是非空的 dict")
+        result = self._gateway.eval_script(
+            method,
+            SCRIPT_UPDATE_WORK_ITEM,
+            [session_key],
+            [
+                work_item_field(work_item_id),
+                _json.dumps(statuses, ensure_ascii=False, separators=(",", ":")),
+                expected_dispatch_stage,
+                _json.dumps(patch, ensure_ascii=False, separators=(",", ":")),
+            ],
+            idempotent=False,
+        )
+        return int(result or 0) == 1
+
     # -- 內部 --------------------------------------------------------------
 
     @staticmethod
@@ -478,6 +556,8 @@ class SessionStore:
 
 __all__ = [
     "DEFAULT_MESSAGE_MAX_CHARS",
+    "SCRIPT_PUT_WORK_ITEM",
+    "SCRIPT_UPDATE_WORK_ITEM",
     "HISTORY_MAX_ENV",
     "SessionStore",
     "configure_session_env",
