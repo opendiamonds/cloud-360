@@ -82,6 +82,13 @@ interface Recorder {
  * 權限與 per-project 角色是**兩個獨立的旋鈕**，這正是 `canManage` 兩段式所需：
  * `k3` 控制全域 `can("K3", …)`，`members` 裡自己那一列的 `role` 控制 per-project。
  */
+/**
+ * 被 Layout 包覆、且**沒有** CapabilityRoute 的中性落地頁。原本是 DEMO 的 `/brain`，該頁已隨 U13 移除
+ * （`[IG2]`=A）；`/memory` 是剩下唯一同形的頁面。它會打 `/api/memory/records`，故 `setupApp` 一併以空清單攔截，
+ * 使本檔的計數與 console 斷言不受記憶頁影響。
+ */
+const NEUTRAL_LANDING = '/memory';
+
 async function setupApp(page: Page, cfg: StubConfig): Promise<Recorder> {
   const recorder: Recorder = {
     all: [],
@@ -119,6 +126,11 @@ async function setupApp(page: Page, cfg: StubConfig): Promise<Recorder> {
         pending_request: null,
       }),
     });
+  });
+
+  // 中性落地頁（記憶頁）的讀取：一律空清單，不打到真後端。
+  await page.route('**/api/memory/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
 
   // 單一 dispatcher 處理全部六個端點：避免 Playwright 的「後註冊者優先」造成
@@ -233,7 +245,7 @@ test.describe('U24 member pages', () => {
   /**
    * @purpose 橫幅查詢每次 Layout 掛載恰一次且不快取；缺 K3 view 的角色完全不發出該請求。
    * @api GET /api/membership/reselections/pending -> 200 | 回傳自己未確認的改選事件
-   * @ui /brain | 任何被 Layout 包覆的落地頁（本案例用不需 K3 的 /brain 以隔離變數）
+   * @ui /memory | 任何被 Layout 包覆的落地頁（本案例用不需 K3 的 /memory 以隔離變數）
    * @given 兩個瀏覽器環境，唯一差異是 K3 的 view 旗標（其餘設定完全相同）
    * @step 以具 K3 view 的帳號連續落地兩次 | 對 reselections/pending 的請求數為 2
    * @step 以 K3 三旗標皆 false 的帳號連續落地兩次 | 對 reselections/pending 的請求數為 0
@@ -245,7 +257,7 @@ test.describe('U24 member pages', () => {
   }: {
     browser: Browser;
   }) => {
-    // 兩個分支都落在 `/brain`——它由 Layout 包覆但**沒有** CapabilityRoute，
+    // 兩個分支都落在中性頁 `/memory`——它由 Layout 包覆但**沒有** CapabilityRoute，
     // 故兩個分支唯一的差異就是 K3 旗標。若用成員頁，缺 K3 view 者會被
     // CapabilityRoute 導去 /403（不含 Layout），那樣的 0 是「橫幅沒渲染」
     // 而不是「渲染了但沒發請求」——兩者在計數上長得一樣，但只有後者是 `UIP-2`。
@@ -261,7 +273,7 @@ test.describe('U24 member pages', () => {
     const recA = await setupApp(pageA, { k3: K3_FULL, reselections: [] });
     for (const landing of [1, 2]) {
       const mePromise = pageA.waitForResponse('**/api/auth/me');
-      await pageA.goto('/brain');
+      await pageA.goto(NEUTRAL_LANDING);
       await mePromise;
       await expect(pageA.getByTestId('reselection-banner-host')).toBeAttached();
       // 等到第 N 次落地的請求真的被記錄，才進行下一次落地。
@@ -275,7 +287,7 @@ test.describe('U24 member pages', () => {
     const recB = await setupApp(pageB, { k3: K3_NONE, reselections: [] });
     for (const landing of [1, 2]) {
       const mePromise = pageB.waitForResponse('**/api/auth/me');
-      await pageB.goto('/brain');
+      await pageB.goto(NEUTRAL_LANDING);
       // 兩個 happens-after 訊號，使「0」不是「還沒來得及發」的假 0：
       //   ① `/api/auth/me` 的回應已到（權限已送達）；
       //   ② 側欄已顯示使用者名稱——它來自 `user?.username`，故這一格只在
@@ -535,14 +547,14 @@ test.describe('U24 member pages', () => {
     // 宿主保持空、不顯示錯誤），故訊號是它唯一的可觀察面。
     await page.unrouteAll();
     await setupApp(page, { k3: K3_FULL, members: [], reselectionsStatus: 403 });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     await expect.poll(() => lines.some((l) => l.includes('banner-forbidden'))).toBe(true);
 
     // ③ 橫幅查詢的 500。`SEC-U24-6` 的兜底規則逐字要求「任何非 2xx 與網路失敗」
     // 都有訊號——**不只 403**。只為 403 訂義務會讓 5xx 與網路錯誤成為新的靜默面。
     await page.unrouteAll();
     await setupApp(page, { k3: K3_FULL, members: [], reselectionsStatus: 500 });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     await expect.poll(() => lines.some((l) => l.includes('banner-fetch-failed'))).toBe(true);
 
     // ④ 邀請的 422＋**物件陣列** detail（pydantic 驗證錯誤）。使用者只看到一句
@@ -588,7 +600,7 @@ test.describe('U24 member pages', () => {
   /**
    * @purpose 交棒橫幅的宿主無條件渲染且帶 role="status"，即使查詢失敗、即使零筆事件。
    * @api GET /api/membership/reselections/pending -> 500 | 橫幅查詢失敗
-   * @ui /brain | Layout 內的常駐橫幅宿主
+   * @ui /memory | Layout 內的常駐橫幅宿主
    * @given 以具 K3 view 的帳號落地，橫幅查詢分別構造為失敗與回傳兩筆事件
    * @step 令 reselections/pending 回 500 並落地 | 宿主存在、role 屬性等於 status、textContent 為空、畫面無錯誤文字
    * @step 改為回兩筆事件並落地 | 宿主出現彙總文案，role 仍為 status
@@ -601,7 +613,7 @@ test.describe('U24 member pages', () => {
     // 而 `role="status"` 正是 `BR21.1` 自述的結構前提——`aria-live` 掛在稍後
     // 才插入的元素上不會被朗讀。
     await setupApp(page, { k3: K3_FULL, reselectionsStatus: 500 });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     const host = page.getByTestId('reselection-banner-host');
     await expect(host).toBeAttached();
     await expect(host).toHaveAttribute('role', 'status');
@@ -619,7 +631,7 @@ test.describe('U24 member pages', () => {
         { id: 12, project_id: 72, cause: 'auto_reselection', promoted_user_id: SELF_ID, new_role: 'project_admin' },
       ],
     });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     const host2 = page.getByTestId('reselection-banner-host');
     await expect(host2).toHaveAttribute('role', 'status');
     await expect(host2).toContainText('2 個專案');
@@ -639,7 +651,7 @@ test.describe('U24 member pages', () => {
   /**
    * @purpose 確認交棒事件時，404 視為成功（事件消失）；而真正的失敗不得被當成成功。
    * @api POST /api/membership/reselections/{event_id}/acknowledge -> 204 | 404 | 500
-   * @ui /brain | Layout 內的交棒橫幅與「知道了」按鈕
+   * @ui /memory | Layout 內的交棒橫幅與「知道了」按鈕
    * @given 以具 K3 view 的帳號落地，橫幅回兩筆未確認事件
    * @step 令其中一筆 acknowledge 回 404、另一筆回 204，按「知道了」 | 兩筆都被清掉，橫幅文案消失
    * @step 重新落地並令其中一筆回 500，按「知道了」 | 回 500 的那一筆仍在，橫幅文案仍在
@@ -664,7 +676,7 @@ test.describe('U24 member pages', () => {
       const id = new URL(route.request().url()).pathname.split('/').at(-2);
       await route.fulfill({ status: id === '11' ? 404 : 204, body: '' });
     });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     const host = page.getByTestId('reselection-banner-host');
     await expect(host).not.toHaveText('');
     await page.getByTestId('reselection-banner-acknowledge').click();
@@ -679,7 +691,7 @@ test.describe('U24 member pages', () => {
       const id = new URL(route.request().url()).pathname.split('/').at(-2);
       await route.fulfill({ status: id === '11' ? 500 : 204, body: '' });
     });
-    await page.goto('/brain');
+    await page.goto(NEUTRAL_LANDING);
     const host2 = page.getByTestId('reselection-banner-host');
     await expect(host2).not.toHaveText('');
     await page.getByTestId('reselection-banner-acknowledge').click();

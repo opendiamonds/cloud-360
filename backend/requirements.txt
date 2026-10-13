@@ -47,3 +47,10 @@ boto3
 #       型別判定，不是純字串比對（字串前綴只作為舊版客戶端的退路）。
 #   (2) 連線池、連線／指令逾時、`EVALSHA` ＋ `NOSCRIPT` 退回 `EVAL` 皆為內建。
 redis
+# WebSocket 的伺服器端實作（`U13 brain-gateway` 的 `/api/brain/ws`）。uvicorn 以它處理
+# WebSocket 升級、keepalive ping（偵測半開連線、釋放佔位）與訊框；`starlette.testclient`
+# 的 WebSocket 測試與部署後實測腳本也用它。原本只經 `langgraph-sdk`／`langsmith` **傳遞**
+# 進來（infrastructure-design review R-04）——上游一旦拿掉這條依賴，uvicorn 找不到 WebSocket
+# 實作，`/api/brain/ws` 的升級即失敗，而單元測試（TestClient 不經 uvicorn）不會紅燈。故明列。
+# 不 pin：理由同上方 redis（不進 OpenAPI，不影響規格漂移檢查）。
+websockets

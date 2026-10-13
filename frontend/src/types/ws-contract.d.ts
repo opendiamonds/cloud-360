@@ -44,6 +44,12 @@ export interface components {
              * @description BR2.2：**不得為空陣列**。空陣列在語意上無意義——若無候選則不應送 clarify（改送 error 或依 U11 的規格處置）。使用者看到「請選一個」卻沒有可選項是本規則要防的畫面。
              */
             candidates: components["schemas"]["ClarifyCandidate"][];
+            /**
+             * Kind
+             * @description ADR-0020 C-7：反問的種類，**必填、無預設**。intent ＝ 分類信心不足，候選是同一句話的不同解讀（依 capability 與 label 呈現）；target ＝ 意圖已確定，候選是名稱相符的不同作業對象（**只顯示 label**，capability 不表達意圖）。兩者在選定後的處置不同，前端不得以同一種畫面呈現。
+             * @enum {string}
+             */
+            kind: "intent" | "target";
         };
         /**
          * CorrectWorkItemPayload
@@ -173,6 +179,12 @@ export interface components {
              * @enum {string}
              */
             mode: "shared" | "isolated";
+            /**
+             * Scope
+             * @description ADR-0020 C-6：要切換哪一頁的共享模式，**必填、無預設**。入口頁恆為共享，不可切換。
+             * @enum {string}
+             */
+            scope: "workspace" | "assessment";
         };
         /**
          * SetWorkTargetPayload
@@ -190,6 +202,12 @@ export interface components {
              */
             projectId: string | null;
             /**
+             * Segment
+             * @description ADR-0020 C-5：要設定哪一段對話的作業對象，**必填、無預設**。值為送出頁面目前讀取的段（入口頁恆為 shared）。
+             * @enum {string}
+             */
+            segment: "shared" | "workspace" | "assessment";
+            /**
              * Systemid
              * @description null 表示清除該層的選定。
              */
@@ -206,6 +224,12 @@ export interface components {
              * @enum {string}
              */
             mode: "shared" | "isolated";
+            /**
+             * Scope
+             * @description ADR-0020 C-3：本則共享模式屬於哪一頁，**必填、無預設**。入口頁恆為共享、不需狀態訊息，故只有兩值。前端依它過濾，只套用到同名頁面。
+             * @enum {string}
+             */
+            scope: "workspace" | "assessment";
         };
         /**
          * TokenPayload
@@ -223,6 +247,12 @@ export interface components {
          * @description 使用者送出的一句需求。**非冪等**——每則觸發一輪分類與可能的交辦（BR3.4）。
          */
         UserMessagePayload: {
+            /**
+             * Page
+             * @description ADR-0020 C-2：送出這句話的頁面，**必填、無預設**——預設為 entry 會讓獨立對話的訊息靜默寫進共享段。伺服器以它與該頁的共享模式決定寫入哪一段對話。
+             * @enum {string}
+             */
+            page: "entry" | "workspace" | "assessment";
             /**
              * Text
              * @description 使用者輸入的原文。
@@ -297,6 +327,12 @@ export interface components {
              * @description null 表示尚未選定。
              */
             projectId: string | null;
+            /**
+             * Segment
+             * @description ADR-0020 C-4：本則作業對象屬於哪一段對話，**必填、無預設**。shared ＝ 共享段（入口頁與處於共享模式的頁面）；workspace／assessment ＝ 該頁的獨立段。前端只套用到目前讀取該段的頁面。
+             * @enum {string}
+             */
+            segment: "shared" | "workspace" | "assessment";
             /**
              * Systemid
              * @description null 表示尚未選定。
@@ -383,7 +419,8 @@ export interface components {
         WsServerMessageType: "ready" | "token" | "clarify" | "work_items" | "cost_card" | "sharing_mode" | "work_target" | "done" | "error";
         /**
          * WsSubprotocol
-         * @description 握手用 subprotocol 的格式；實際值為 ``f"{scheme}{separator}{token}"``。
+         * @description 握手用 subprotocol 的格式：客戶端同時提供 ``protocolName`` 與
+         *     ``f"{scheme}{separator}{token}"`` 兩項，伺服器只回送 ``protocolName``（ADR-0020 C-1）。
          *
          *     為何它在契約檔內：`K-12:876` 只規定「token 走 `Sec-WebSocket-Protocol`
          *     標頭」，**全檔未定其值格式**。它是前後端必須逐字一致的共用字串，而在納入
@@ -402,6 +439,12 @@ export interface components {
          *     取兩段——後者在任何真實 token 上都會拿到四段。
          */
         WsSubprotocol: {
+            /**
+             * Protocolname
+             * @description ADR-0020 C-1：握手時與 bearer 項**同時**提供的協定名，**必填、無預設**。伺服器只回送這一個值，token 因此不出現在回應標頭；未提供它的握手不被接受。前端須以 Sub['protocolName'] 取值，不得寫字面量（ADR-0019 §5）。
+             * @constant
+             */
+            protocolName: "cloud360.brain.v1";
             /**
              * Scheme
              * @description subprotocol 的前綴，與 HTTP 的 Bearer 慣例一致。

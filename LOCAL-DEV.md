@@ -19,11 +19,13 @@
 | **A3「優化」（Design↔Review 協作）** | 同上 | 失敗 |
 | **Offline Lens agent 填答** | 同上 | 降級為規則啟發式（會寫 WARNING log） |
 | 動態 SVG 圖示 | n8n webhook（**選填**，見下方「圖示目錄」） | 用灰底 fallback 圖示，不中斷 |
+| **大腦入口頁（U13 起，`/api/brain/ws`）** | PostgreSQL ＋ **Redis** ＋ **`OPENROUTER_API_KEY`**（分類走 OpenRouter） | 缺金鑰：連線照常建立，但**每一輪**都回「內部錯誤」（`error(INTERNAL_ERROR)`，不降級）；本機與 staging 同形。staging 部署時此金鑰為必要 secret（`deploy.yml` 缺它即中止） |
 | **建庫本身（全部功能的前提）** | PostgreSQL ＋ **pgvector 擴充**（見第 2 節 H4） | `schema_rbac.sql` 整個交易中止，**一張表都建不出來** |
-| 大腦編排的 session 還原（跨頁脈絡） | **Redis**（見第 1 節的 `redis-cli ping`） | session 相關功能不可用 |
+| **後端啟動本身（U13 起）＋ 大腦入口頁** | **Redis** 的三個變數 `REDIS_URL`／`REDIS_USER`／`REDIS_PASSWORD`（見第 1 節的 `redis-cli ping`） | 三者缺任一，或 `REDIS_USER=default` → **後端拒絕啟動**。Redis 只是**暫時連不上**時後端照常啟動（client 延遲連線），入口頁的連線在握手時以 **1011** 關閉；連上之後才斷則該輪回「工作階段暫時無法存取」、連線保留 |
 | **後端啟動本身（U10 起）** | `backend/.env` 的 **`BRAIN_SESSION_HISTORY_MAX`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。這不是降級，是大聲失敗——把缺值讀成「無上限」會讓單一 Redis key 無上界成長，而那是無聲的（`BR3.5`） |
+| **後端啟動本身（U13 起）** | `backend/.env` 的 **`REDIS_URL`／`REDIS_USER`／`REDIS_PASSWORD`**（三者皆 required） | **後端直接拒絕啟動**：缺任一（`KeyError`）或 `REDIS_USER=default`（`ValueError`，`default` 已被收窄為 `+@connection`）。啟動時**不連線**，所以 Redis 暫時不可達不會擋啟動 |
 | **後端啟動本身（U11 起）** | `backend/.env` 的 **`BRAIN_ROUTER_CONFIDENCE_THRESHOLD`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。同樣是大聲失敗——門檻缺值時「信心不足就先問、不要亂做」這條路徑的判定基準不存在，而把缺值讀成某個預設門檻，等於讓它由一個沒有人選過的數字決定（`BR3.4`）。另四個 `BRAIN_ROUTER_*` 缺值只會記 WARN／INFO 並取預設 |
-| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務 |
+| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務。選 `fulltext` 時入口頁**每個有交辦的輪次**都會記一筆 `episodic_write_failed` WARNING（`fulltext` 下寫不了記憶），屬預期（`OPEN-GW13-18`） |
 
 ### 兩個「不在 requirements.txt 裡」的硬依賴
 
@@ -76,7 +78,8 @@ pg_isready -h localhost -p 5432     # 需要一個跑著的 server
 psql "postgresql://postgres:postgres@localhost:5432/postgres" \
   -c "SELECT name, default_version FROM pg_available_extensions WHERE name='vector';"
 
-# Redis：session store（第 5 服務）。沒有它，大腦編排的 session 相關功能不可用。
+# Redis：session store（第 5 服務）。沒有它的三個變數，後端（U13 起）拒絕啟動；
+# 它暫時斷線時入口頁握手失敗（1011）。
 redis-cli ping                      # 應回 PONG；沒有的話 brew install redis / apt install redis
 
 # U10 session-store：每段歷程上限。required、**無預設**——沒設它，後端在
@@ -590,7 +593,8 @@ docker compose -f deploy/docker-compose.test.yml down -v
 | 設了 `EMBEDDING_PROVIDER=ollama`，後端**正常啟動**，但一用到記憶檢索就拋 `EmbeddingProviderUnavailable`，訊息夾著 `ConnectError`（名稱無法解析） | 範本的 `http://ollama:11434` **過得了** `NFR7.1` 的驗證（它驗主機名的形式，不驗可解析性；`BR1.5` 禁止啟動探測），但 `ollama` 這個名字只在部署 stack 的 compose 網路裡解析得到 | **本機改用 `fastembed`**（`pip install 'fastembed>=0.7,<0.8'`）。`ollama` 只在部署 stack 內成立 |
 | 設了 `EMBEDDING_PROVIDER=ollama` 且把主機改成 `localhost`／IP／網域後，後端**拒絕啟動**，訊息提到主機名必須是 compose 內部服務名 | 這是 `NFR7.1` 的刻意行為，不是 bug。該服務零認證、靠網段隔離保護，指到 compose 網路外就是繞過它——記憶文字會以明文送到那個位址 | 同上：本機改用 `fastembed`。不要為了「讓它啟動」而放寬主機名檢查 |
 | 後端啟動就掛，訊息提到 model id 不在合法的 `embeddingModel` 集合內 | 改了 `OLLAMA_EMBED_MODEL`／`FASTEMBED_MODEL`，但沒同步 `MEMORY_RECORD_EMBEDDING_MODELS`。擋在啟動是刻意的——否則新舊向量會共用同一個標籤，檢索時被當成可比較而回垃圾且不報錯（ADR-008） | 改回宣告集合內的值，或連同既有列的遷移方式一起改 |
-| session／跨頁脈絡相關功能連不上 | 本機沒跑 Redis，或 `REDIS_USER` 用了 `default`／ACL 使用者沒建 | `redis-cli ping` 應回 PONG；ACL 建法見第 3 節的 `.env` 註解 |
+| 後端啟動就掛，訊息提到 `REDIS_URL`／`REDIS_USER`／`REDIS_PASSWORD`（`KeyError`）或 `REDIS_USER 不得為 default` | U13 起這三個變數是**後端啟動**的必要條件；`default` 使用者已被收窄為 `+@connection` | 在 `backend/.env` 設齊三個變數，`REDIS_USER` 用 ACL 使用者（建法見第 3 節的 `.env` 註解） |
+| 入口頁連線立刻被關閉（關閉碼 **1011**），或對話回「工作階段暫時無法存取」 | 後端起得來（client 延遲連線），但 Redis 此刻連不上：本機沒跑 Redis、或 ACL 使用者沒建／密碼不符 | `redis-cli ping` 應回 PONG；再以 `REDIS_USER` 的身分 `AUTH` 一次確認 ACL |
 | 後端啟動就掛，訊息提到 `BRAIN_SESSION_HISTORY_MAX` | 它是 required、**無預設**（`BR3.5`／`NFR8.40`）。缺值不會被讀成「無上限」——那會讓單一 Redis key 無上界成長且無聲 | 在 `backend/.env` 設 `BRAIN_SESSION_HISTORY_MAX=200` |
 | 後端啟動就掛，訊息提到 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD` | 它是 required、**無預設**（`BR3.4`／`NFR8.60`）。缺值不會被讀成某個預設門檻——那等於讓「信心不足要不要先問」由一個沒有人選過的數字決定 | 在 `backend/.env` 設 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7` |
 | 後端啟動就掛，訊息提到門檻必須落在 `0 < t <= 1` | 設了 `0`（或大於 1）。擋在啟動是刻意的：門檻 0 會讓反問路徑**永不觸發**，而文件上看起來已解決 | 設一個 0 與 1 之間的值；初版是 `0.7` |

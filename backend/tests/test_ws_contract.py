@@ -26,6 +26,12 @@ from typing import get_args
 from pydantic import ValidationError
 
 from services.brain_ws_contract import (
+    ClarifyPayload,
+    SetSharingModePayload,
+    SetWorkTargetPayload,
+    SharingModePayload,
+    UserMessagePayload,
+    WorkTargetPayload,
     WsClientEnvelope,
     WsEnvelope,
     WsServerMessageType,
@@ -47,7 +53,8 @@ _SERVER_PAYLOAD_SAMPLES = {
     WsServerMessageType.CLARIFY: {
         "candidates": [
             {"id": "c1", "label": "建一張架構圖", "capability": "A1", "confidence": 0.42}
-        ]
+        ],
+        "kind": "intent",
     },
     WsServerMessageType.WORK_ITEMS: {"items": []},
     WsServerMessageType.COST_CARD: {
@@ -58,8 +65,13 @@ _SERVER_PAYLOAD_SAMPLES = {
         "unavailableReasons": None,
         "costPageUrl": "/cost",
     },
-    WsServerMessageType.SHARING_MODE: {"mode": "shared"},
-    WsServerMessageType.WORK_TARGET: {"projectId": None, "systemId": None, "diagramId": None},
+    WsServerMessageType.SHARING_MODE: {"mode": "shared", "scope": "workspace"},
+    WsServerMessageType.WORK_TARGET: {
+        "projectId": None,
+        "systemId": None,
+        "diagramId": None,
+        "segment": "shared",
+    },
     WsServerMessageType.DONE: {"turnId": None},
     WsServerMessageType.ERROR: {
         "code": "INTERNAL_ERROR",
@@ -274,20 +286,91 @@ class WsSubprotocolTest(unittest.TestCase):
               `npm run build`（前端的 const SCHEME: Sub['scheme'] = 'bearer'），
               不在本檔——本檔只保證那兩個欄位真的是字面型別。
         """
+        protocol_literals = get_args(WsSubprotocol.model_fields["protocolName"].annotation)
         scheme_literals = get_args(WsSubprotocol.model_fields["scheme"].annotation)
         separator_literals = get_args(WsSubprotocol.model_fields["separator"].annotation)
+        self.assertEqual(len(protocol_literals), 1)
         self.assertEqual(len(scheme_literals), 1)
         self.assertEqual(len(separator_literals), 1)
 
+        protocol_name = protocol_literals[0]
         scheme, separator = scheme_literals[0], separator_literals[0]
-        subprotocol = WsSubprotocol(scheme=scheme, separator=separator)
+        subprotocol = WsSubprotocol(protocolName=protocol_name, scheme=scheme, separator=separator)
+        self.assertEqual(subprotocol.protocolName, protocol_name)
         self.assertEqual(subprotocol.scheme, scheme)
         self.assertEqual(subprotocol.separator, separator)
 
         with self.assertRaises(ValidationError):
-            WsSubprotocol(scheme=scheme + "x", separator=separator)
+            WsSubprotocol(protocolName=protocol_name, scheme=scheme + "x", separator=separator)
         with self.assertRaises(ValidationError):
-            WsSubprotocol(scheme=scheme, separator=separator + separator)
+            WsSubprotocol(protocolName=protocol_name, scheme=scheme, separator=separator + separator)
+        with self.assertRaises(ValidationError):
+            WsSubprotocol(protocolName=protocol_name + "x", scheme=scheme, separator=separator)
+        with self.assertRaises(ValidationError):
+            WsSubprotocol(scheme=scheme, separator=separator)
+
+
+# ADR-0020 的七個欄位增量：(模型, 新欄位, 一個合法值, 其餘必填欄位的最小樣本)。
+# 合法值逐一取自欄位的字面型別（而非寫死），錯值則是「合法值加一個字元」——兩者都從
+# 模型推得，理由同上方 WsSubprotocol 測試的 note。
+_ADR0020_FIELDS = (
+    ("C-1", WsSubprotocol, "protocolName", {"scheme": "bearer", "separator": "."}),
+    ("C-2", UserMessagePayload, "page", {"text": "畫一張架構圖"}),
+    ("C-3", SharingModePayload, "scope", {"mode": "isolated"}),
+    ("C-4", WorkTargetPayload, "segment", {"projectId": "1", "systemId": None, "diagramId": None}),
+    ("C-5", SetWorkTargetPayload, "segment", {"projectId": "1", "systemId": None, "diagramId": None}),
+    ("C-6", SetSharingModePayload, "scope", {"mode": "shared"}),
+    (
+        "C-7",
+        ClarifyPayload,
+        "kind",
+        {"candidates": [{"id": "target-1", "label": "訂單系統（專案：電商）", "capability": "A1", "confidence": None}]},
+    ),
+)
+
+
+class Adr0020FieldIncrementTest(unittest.TestCase):
+    """`ADR-0020` C-1～C-7 — 七個新欄位皆為必填字面型別，每個合法值可構造、錯值與缺欄位皆被拒。"""
+
+    def test_each_new_field_accepts_every_literal_value(self):
+        """
+        @purpose 七個新欄位的每個合法值都必須可構造，否則閘道送出的狀態訊息或客戶端送來的
+                 訊息會在契約層被誤拒，整條入口頁連線即無法運作。
+        @given 契約模組已載入；ADR-0020 已核可
+        @step 對七個欄位逐一取出其字面型別的全部值 | 每個欄位至少一個值
+        @step 以每個值加上其餘必填欄位構造該模型 | 皆構造成功且讀回同值
+        @pass 七個欄位的全部合法值皆可構造
+        @story US8.1
+        """
+        for code, model, field, base in _ADR0020_FIELDS:
+            values = get_args(model.model_fields[field].annotation)
+            self.assertGreaterEqual(len(values), 1, code)
+            for value in values:
+                with self.subTest(code=code, value=value):
+                    instance = model(**{**base, field: value})
+                    self.assertEqual(getattr(instance, field), value)
+
+    def test_each_new_field_rejects_wrong_value_and_absence(self):
+        """
+        @purpose 新欄位必填且封閉：錯值或缺欄位必須被拒。若缺欄位可構造（例如給了預設值），
+                 page 缺漏的訊息會被靜默寫進共享段，scope／segment 缺漏的狀態訊息會讓前端套錯頁。
+        @given 契約模組已載入
+        @step 對七個欄位各以「合法值加一個字元」構造 | 皆拋 ValidationError
+        @step 對七個欄位各以省略該欄位構造 | 皆拋 ValidationError
+        @step 檢視每個欄位在模型上的 is_required() | 皆為真
+        @pass 七個欄位的錯值與缺漏皆無法構造，且全部為必填
+        @story US8.1
+        """
+        for code, model, field, base in _ADR0020_FIELDS:
+            valid = get_args(model.model_fields[field].annotation)[0]
+            with self.subTest(code=code, case="wrong"):
+                with self.assertRaises(ValidationError):
+                    model(**{**base, field: valid + "x"})
+            with self.subTest(code=code, case="missing"):
+                with self.assertRaises(ValidationError):
+                    model(**base)
+            self.assertTrue(model.model_fields[field].is_required(), code)
+            self.assertTrue(model.model_fields[field].description, code)
 
 
 if __name__ == "__main__":

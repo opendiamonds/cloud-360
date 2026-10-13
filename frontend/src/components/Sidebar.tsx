@@ -209,18 +209,9 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* DEMO SCOPE：大腦入口的正式落點是 U14（含權限掛載與分層），屆時整段取代 */}
-        <div className="mt-4 mb-2">
-          <nav className="space-y-1 px-2">
-            <NavLink to="/brain" className={linkClass}>
-              大腦（示範）
-            </NavLink>
-          </nav>
-        </div>
-
         {/*
-          U15：「我的記憶」。刻意放在上方 DEMO SCOPE 區塊**之外**的獨立 <div>：
-          U14 會整段取代 demo 區塊，放進去就會被連帶刪除。
+          U15：「我的記憶」。獨立的 <div>（原本刻意與 DEMO 大腦入口分開，DEMO 已隨 U13 移除；
+          大腦入口的正式落點是 U14）。
         */}
         {showMemory && (
           <div className="mb-2">

@@ -29,10 +29,11 @@ export default defineConfig([
       // 必須是 `error`：CI 跑 `npm run lint` = `eslint .`，**未加**
       // `--max-warnings 0`，所以 warn 級規則等於沒有閘門。
       //
-      // 正確寫法（現例 `src/pages/BrainPage.tsx`）：
+      // 正確寫法（ADR-0020 C-1 起須同時帶協定名；原現例 DEMO 頁已隨 U13 移除，正式消費端為 U14）：
+      //   const PROTOCOL_NAME: Sub['protocolName'] = 'cloud360.brain.v1';
       //   const SUBPROTOCOL_SCHEME: Sub['scheme'] = 'bearer';
       //   const SUBPROTOCOL_SEPARATOR: Sub['separator'] = '.';
-      //   new WebSocket(url, [SUBPROTOCOL_SCHEME + SUBPROTOCOL_SEPARATOR + token])
+      //   new WebSocket(url, [PROTOCOL_NAME, SUBPROTOCOL_SCHEME + SUBPROTOCOL_SEPARATOR + token])
       //
       // 擋不住的（誠實記載，ADR-0019 §5 已接受此殘餘）：先把字串存進變數再傳入。
       // AST 選擇器碰不到跨陳述的資料流，而 TypeScript 的模板字面量型別也無法區分

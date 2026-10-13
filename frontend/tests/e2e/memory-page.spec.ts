@@ -216,6 +216,17 @@ async function setup(page: Page, records: MemoryStub[]): Promise<MemoryServerStu
   return stub;
 }
 
+/**
+ * 不重新載入頁面的 SPA 導覽：推入歷史紀錄並送出 popstate，React Router 的 BrowserRouter 據以換頁。
+ * 用於「離開再回來」的情境——整頁重載會掩蓋模組層快取的缺陷。
+ */
+async function spaNavigate(page: Page, path: string): Promise<void> {
+  await page.evaluate((target) => {
+    window.history.pushState(null, '', target);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+}
+
 /** 開啟記憶頁並等三區的初次載入都結束（頁面播報「記憶已載入」）。 */
 async function openMemoryPage(page: Page): Promise<void> {
   await page.goto('/memory');
@@ -252,7 +263,7 @@ test.describe('U15 memory page', () => {
   /**
    * @purpose 「我的記憶」入口出現在 Sidebar，點擊進入記憶頁，且三區固定存在、順序固定。
    * @given 已登入的一般使用者（無任何 story 權限）；三區皆有至少一則記憶
-   * @step 開啟 `/brain` | Sidebar 出現「我的記憶」（`sidebar-memory-link`）
+   * @step 直接開啟 `/memory`（DEMO 的 `/brain` 已隨 U13 移除，無其他不需 story 權限的 Layout 頁） | Sidebar 出現「我的記憶」（`sidebar-memory-link`）
    * @step 點「我的記憶」 | 網址變為 `/memory`，出現 `memory-page`
    * @step 檢視區塊順序 | 依序為語意、程序、情節三個 region，各有 `h2`
    * @pass 入口可見、導向正確、三區順序為 semantic → procedural → episodic
@@ -269,7 +280,7 @@ test.describe('U15 memory page', () => {
       memory('procedure', `${CONTENT_PREFIX}p1`),
       ...episodes(1),
     ]);
-    await page.goto('/brain');
+    await page.goto('/memory');
     const link = page.getByTestId('sidebar-memory-link');
     await expect(link).toBeVisible();
     await expect(link).toHaveText('我的記憶');
@@ -585,16 +596,17 @@ test.describe('U15 memory page', () => {
    * @given 已登入；三區皆有記憶；一次刪除失敗（回 500）以觸發失敗路徑的 console 輸出
    * @step 記下 localStorage／sessionStorage 的鍵集合後開啟 `/memory` | 發出 3 個 GET
    * @step 刪除一則但伺服器回 500 | 該則仍在，顯示刪除失敗
-   * @step 經 Sidebar 離開到 `/brain` 再點「我的記憶」回來 | 再發出 3 個 GET（共 6 個）
+   * @step 以 SPA 導覽離開到 `/403` 再以瀏覽器「上一頁」回來 | 再發出 3 個 GET（共 6 個）
    * @step 比對兩種儲存的鍵集合與 console 輸出 | 鍵集合與開頁前相同；console 不含任何記憶內容
    * @pass GET 共 6 個、儲存鍵無新增、console 不含 `e2e-memory-`
    * @story US4.4
    * @api GET /api/memory/records -> 200 | 每次進頁各區一次
    * @api DELETE /api/memory/records/{memory_id} -> 404 | 失敗路徑（以 500 模擬）
    * @ui /memory | 記憶頁
-   * @ui /brain | 離開記憶頁的落點（Sidebar 仍在）
-   * @note 經 Sidebar 的 SPA 導覽離開與回來（不重新載入頁面），模組層快取才不會被
-   *       整頁重載掩蓋。
+   * @ui /403 | 離開記憶頁的落點（記憶頁卸載）
+   * @note 以 SPA 導覽離開與回來（history.pushState ＋ popstate、再 goBack；不重新載入頁面），模組層快取
+   *       才不會被整頁重載掩蓋。原本經 Sidebar 的 DEMO 頁 `/brain` 離開，該頁已隨 U13 移除（`[IG2]`=A），
+   *       而無 story 權限的使用者沒有其他 Layout 頁可去。
    */
   test('re-entering the page refetches and leaves no browser storage or console trace', async ({ page }) => {
     const consoleLines: string[] = [];
@@ -610,9 +622,9 @@ test.describe('U15 memory page', () => {
         session: Object.keys(sessionStorage).sort(),
       }));
 
-    await page.goto('/brain');
+    await page.goto('/403');
     const before = await storageKeys();
-    await page.getByTestId('sidebar-memory-link').click();
+    await spaNavigate(page, '/memory');
     await expect(page.getByTestId('memory-page').getByTestId('live-region')).toHaveText('記憶已載入');
     expect(stub.gets).toHaveLength(3);
 
@@ -621,10 +633,10 @@ test.describe('U15 memory page', () => {
     await expect(item(page, '1')).toContainText('刪除失敗');
     await expect(page.getByTestId('memory-item-1-delete')).toBeVisible();
 
-    await page.getByRole('link', { name: '大腦（示範）' }).click();
-    await expect(page).toHaveURL(/\/brain$/);
+    await spaNavigate(page, '/403');
+    await expect(page).toHaveURL(/\/403$/);
     await expect(page.getByTestId('memory-page')).toHaveCount(0);
-    await page.getByTestId('sidebar-memory-link').click();
+    await page.goBack();
     await expect(page.getByTestId('memory-page').getByTestId('live-region')).toHaveText('記憶已載入');
     expect(stub.gets).toHaveLength(6);
 

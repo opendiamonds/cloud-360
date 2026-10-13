@@ -21,7 +21,7 @@
 
 | 元件 | 角色 | 缺了會怎樣 |
 |---|---|---|
-| `OPENROUTER_API_KEY` | 真正計費、出模型回應 | A1／A3／優化 API 回 500 或錯誤訊息 |
+| `OPENROUTER_API_KEY` | 真正計費、出模型回應 | A1／A3／優化 API 回 500 或錯誤訊息；**大腦入口頁（U13 起）每一輪都回內部錯誤**。staging 部署時為**必要** secret：`deploy.yml` 的必要 secret 檢查缺它即中止部署（`render-env.sh` 不擋，回滾仍可執行） |
 | `langgraph`／`langchain-openai` 等 | Python 依賴（`requirements.txt`） | 後端無法 import／相關路由掛掉 |
 
 **仍使用 OpenRouter。** credits／402 等錯誤來自 OpenRouter 額度或 `max_tokens` 預扣。`backend/Dockerfile` **不再**安裝 Node／`@anthropic-ai/claude-code`。

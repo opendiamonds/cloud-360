@@ -1,0 +1,428 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-gateway",
+  "upstream_ids": [
+    "NFR13.1",
+    "NFR13.2",
+    "NFR13.3",
+    "NFR13.4",
+    "NFR13.5",
+    "NFR13.6",
+    "NFR13.7",
+    "NFR13.8",
+    "NFR13.9",
+    "NFR13.10",
+    "NFR13.11",
+    "NFR13.12",
+    "NFR13.13",
+    "NFR13.14",
+    "NFR13.15",
+    "NFR13.16",
+    "NFR13.17",
+    "NFR13.18",
+    "NFR13.19",
+    "NFR13.20",
+    "NFR13.21",
+    "NFR13.22",
+    "NFR13.23",
+    "NFR13.24",
+    "NFR13.25",
+    "NFR13.26",
+    "NFR13.27",
+    "NFR13.28",
+    "NFR13.29",
+    "NFR13.30",
+    "NFR13.31",
+    "NFR13.32",
+    "NFR13.33",
+    "NFR13.34",
+    "NFR13.35",
+    "NFR13.36",
+    "NFR13.37",
+    "NFR13.38",
+    "NFR13.39",
+    "NFR13.40",
+    "NFR13.41",
+    "NFR13.42",
+    "NFR13.43",
+    "NFR13.44",
+    "AC1.1.5",
+    "AC7.1.1",
+    "AC7.1.2",
+    "AC7.1.3",
+    "AC8.1.1",
+    "AC8.1.2",
+    "AC8.1.3",
+    "AC8.1.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR13.1",
+      "status": "Deferred",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "量測落點 build-and-test（本 repo 無延遲量測機制）。本站可先驗的部分：ObservabilityTest.test_turn_end_log_attributes_time_to_each_segment——每輪恰一筆 turn_end，preClassifyMs／classifyMs／toFirstContentMs 歸因正確；三段為各自獨立的預算、不相加（帶入項 14）。"
+    },
+    {
+      "id": "NFR13.2",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "FirstContentTest.test_first_token_is_sent_before_dispatch_returns_and_episodic_does_not_delay_done：dispatch 未回傳前 1 秒內收到 token；done 送達時記憶寫入仍阻塞，放行後恰 1 次。"
+    },
+    {
+      "id": "NFR13.3",
+      "status": "Deferred",
+      "target": "backend/tests/test_brain_gateway_memory.py",
+      "note": "② 已驗：PrefetchIntegrationTest.test_prefetch_wait_limit_degrades_classification_without_waiting（等待上限一到即降級、熔斷開啟）。① 量測表在 code-summary 第十節，僅有 stub 的數字、現值 3.0 秒為暫定（偏離 D5）；Ollama 實測轉 build-and-test。"
+    },
+    {
+      "id": "NFR13.4",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "ThreadAndOutboundTest.test_blocking_calls_leave_the_event_loop_and_no_outbound_connection：握手、帶 referent 的交辦（觸發對象目錄）、set_work_target、set_sharing_mode、correct_work_item 期間，認證、SessionStore 五個方法與目錄替身的執行緒皆非事件迴圈執行緒。U12 替身的同步呼叫屬 OPEN-GW13-4，排除於斷言外。"
+    },
+    {
+      "id": "NFR13.5",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_memory.py",
+      "note": "MemoryWorkerTest.test_busy_skip_does_not_open_breaker_and_timed_out_jobs_keep_their_slot（已逾時仍佔位、第 5 件 BUSY_SKIPPED、熔斷不開；突變 X2）、test_slot_is_returned_when_wait_expires_before_job_starts；PrefetchIntegrationTest.test_prefetch_reaches_u11_through_contextvar_on_memory_threads（brain-memory 執行緒）。"
+    },
+    {
+      "id": "NFR13.6",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "ThreadAndOutboundTest（一輪完整交辦期間 0 次出站連線）；StructuralTest.test_forbidden_imports_names_and_hand_built_messages（AST：不 import llm_provider／openai／langchain／langgraph）；四類違規 classify 0 次見 RateLimitTest 兩案、turn 的 invalid／guard 案。"
+    },
+    {
+      "id": "NFR13.7",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "SubprotocolTest.test_accepts_with_protocol_name_only_and_never_echoes_token：accepted_subprotocol 為 cloud360.brain.v1，回應標頭不含 token；突變 M9。"
+    },
+    {
+      "id": "NFR13.8",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "SubprotocolTest.test_token_only_in_query_string_is_rejected_in_both_shapes（兩種形狀）；AST 禁 query_params（limits）。限制：未 accept 在 TestClient 為 1000、真實 uvicorn 為 HTTP 403。"
+    },
+    {
+      "id": "NFR13.9",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "AuthorizationTest.test_failed_auth_reads_no_frame_and_touches_no_session：無效 token 收 4401，Redis 指令 0 個、登錄為空、佔位歸零。"
+    },
+    {
+      "id": "NFR13.10",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "AuthorizationTest.test_k1_allow_deny_and_disabled_account：ready／4403（無 K1）／4403（未核准）／4401（停用）／4401（無效）；突變 X3（user_can 恆真 → 紅）。"
+    },
+    {
+      "id": "NFR13.11",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "RevalidationTest 三案：逐則 record=True 與停用後 4401（classify 不增）；閒置 60 秒背景重驗 record=False 且 4401／4403；非認證例外不關閉（訊息路徑 INTERNAL_ERROR、背景 WARNING）。"
+    },
+    {
+      "id": "NFR13.12",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "DispatchTest.test_invalid_messages_never_reach_classify：夾帶 userId、turnId、缺 page 皆 INVALID_REQUEST，classify 0 次。"
+    },
+    {
+      "id": "NFR13.13",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "GuardTest.test_prompt_guard_refuses_before_any_llm_history_or_memory：兩層攔截（prompt_guard、PlatformSelfModificationRefused）皆 token(REFUSAL_MESSAGE)＋done，classify／預取／歷程／寫入皆 0。"
+    },
+    {
+      "id": "NFR13.14",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "ErrorForTest.test_every_listed_exception_maps_to_closed_code_without_leaking（含「訊息太頻繁」）；limits StructuralTest.test_close_reasons_are_ascii_short_and_token_free。"
+    },
+    {
+      "id": "NFR13.15",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "LogHygieneTest.test_logs_never_contain_token_text_referent_or_labels：根 logger DEBUG 擷取，無 token 與 uuid 標記（原句、referent、專案名、候選標籤）。"
+    },
+    {
+      "id": "NFR13.16",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "StructuralTest.test_forbidden_imports_names_and_hand_built_messages：AST（含函式內 import）禁止清單、無 importlib／__import__、無 request_key／query_params／execute。"
+    },
+    {
+      "id": "NFR13.17",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "SlotTest.test_concurrent_handshakes_cannot_exceed_global_limit：併發 4 條、上限 3，認證恰 3 次、第 4 條未 accept、佔位歸零；突變 M2。"
+    },
+    {
+      "id": "NFR13.18",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "SlotTest.test_per_key_limit_refuses_extra_tab_without_affecting_open_ones（[GWN1]=A）。"
+    },
+    {
+      "id": "NFR13.19",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "RateLimitTest.test_oversized_frame_rejected_before_parsing_and_rejections_close_connection（65537 位元組回「訊息太長」、classify 0；4000 字照常）；startup 斷言 Dockerfile CMD 無 --ws-max-size。審查 R-04：hello 也套用上限並計入頻率窗（handshake test_oversized_hello_is_rejected）。"
+    },
+    {
+      "id": "NFR13.20",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "RateLimitTest：跨分頁每人 20 則、重連不重置（突變 M6）、推進 60 秒恢復；每連線 120 訊框；rules RateLimiterTest 的視窗 PBT。hello 計入每連線窗（test_per_connection_frame_limit 改為 hello＋119）。"
+    },
+    {
+      "id": "NFR13.21",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "ReferentTest.test_more_than_fifty_projects：51 個專案未選定 → 「專案太多…」且 list_systems 0 次；已選定 → 更新對象並交辦；未指名 → 直接交辦。③（恰 50 個）未單獨成案（偏離 D13）。"
+    },
+    {
+      "id": "NFR13.22",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "LoadingQueueTest.test_overflow_closes_1011_and_exact_limit_is_delivered（257 → 1011 並移出登錄；256 全部送達）。審查 R-02：溢位發生在快照送出期間也以 1011 關閉（test_overflow_during_snapshot_send_closes_1011；突變 X6）。"
+    },
+    {
+      "id": "NFR13.23",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "① LoadFailureTest.test_redis_unavailable_during_handshake_closes_1011_and_unregisters；② turn DispatchTest.test_redis_failure_after_ready_keeps_connection。審查 R-03：握手期未預期例外 → 1011（handshake test_unexpected_error_during_snapshot_closes_1011），連線後 → error(INTERNAL_ERROR)、連線保留（turn test_unexpected_error_in_a_message_keeps_connection；突變 X8）。"
+    },
+    {
+      "id": "NFR13.24",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_memory.py",
+      "note": "PrefetchIntegrationTest.test_episodic_only_after_dispatched_done_and_failure_only_warns（交辦輪寫 1 次、攔截 0、失敗只一筆 WARNING 且只含類別名）；(b)(c) 0 次見 turn 的 referent 案。其餘三類由程式結構保證（偏離 D12）。"
+    },
+    {
+      "id": "NFR13.25",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_memory.py",
+      "note": "PrefetchIntegrationTest.test_breaker_opens_on_wrapped_timeout_only_and_recovers（ValueError 不開、包住 ReadTimeout 開、30 秒後恢復）；突變 M3。"
+    },
+    {
+      "id": "NFR13.26",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "LoadingQueueTest.test_message_arriving_while_draining_is_delivered_once_and_last；突變 X1。"
+    },
+    {
+      "id": "NFR13.27",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "ClarifyTest.test_scan_after_select_uses_longest_name_and_always_asks、test_generic_single_hit_still_asks_and_no_hit_dispatches；ReferentTest.test_unselected_unique_system_name_updates_target_then_dispatches（高信心唯一相符不反問）；突變 M1。審查 R-01：最壞輸入有界（rules test_worst_case_input_is_bounded；突變 R01）。偏離 D6（使用者 2026-10-14 核可）由 test_selected_project_truncated_scan_without_hit_dispatches_current_target 鎖住。"
+    },
+    {
+      "id": "NFR13.28",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "ScanTargetsTest.test_property_five_longest_complete_name（(a)(b)(c)）與 example；MatchReferentTest.test_project_and_its_own_same_named_system_are_one_target、test_unique_many_none_and_normalisation（頭尾空白相同、內部空白不同）。"
+    },
+    {
+      "id": "NFR13.29",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "TurnLedgerTest.test_property_three_at_most_one_terminal_and_done_iff_content；turn DispatchTest.test_empty_response_and_routing_failure（無 token → EMPTY_RESPONSE）。"
+    },
+    {
+      "id": "NFR13.30",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "SendFailureTest.test_failed_send_unregisters_and_closes_1011_without_affecting_others（三條中一條送出失敗：它收 1011、其餘兩條照收、登錄剩 2）；突變 M7。審查 R-05：連線之間並行送出，一條卡住的分頁不延後其他分頁（test_slow_tab_does_not_delay_other_tabs；突變 X7）。"
+    },
+    {
+      "id": "NFR13.31",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "RestartTest.test_state_survives_gateway_rebuild_through_redis：重建閘道元件後新連線的 sharing_mode／work_target／work_items 與重建前逐欄相同。"
+    },
+    {
+      "id": "NFR13.32",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_startup.py",
+      "note": "StartupFailureTest 兩案（缺任一變數或 REDIS_USER=default 啟動失敗；不可達 Redis 啟動成功、握手 1011——後者需 redis-py，本機未裝時 skip，CI 會跑）；handshake test_missing_gateway_component_closes_1011。"
+    },
+    {
+      "id": "NFR13.33",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_startup.py",
+      "note": "SingleProcessGuardTest.test_dockerfile_compose_and_templates_keep_a_single_worker（含帶入項 16 的 WEB_CONCURRENCY／UVICORN_WORKERS 與 compose 無 env_file）。"
+    },
+    {
+      "id": "NFR13.34",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "StructuralTest.test_env_reads_logger_name_and_single_log_exit：getLogger 引數恰為 cloud360.brain_gateway、logger 直接呼叫只有 _log 一處。"
+    },
+    {
+      "id": "NFR13.35",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "ObservabilityTest.test_turn_end_log_attributes_time_to_each_segment。"
+    },
+    {
+      "id": "NFR13.36",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "ObservabilityTest.test_connection_lifecycle_and_refusals_are_logged_with_close_codes（4401 的 closeCode、no_protocol 拒絕、accept／ready／closed）；global_limit／per_key_limit／handshake_rate 的拒絕 log 在 handshake 各案實跑可見，未逐案斷言。"
+    },
+    {
+      "id": "NFR13.37",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_memory.py",
+      "note": "MemoryWorkerTest.test_breaker_open_logs_one_warning_and_close_one_info（1 筆 open WARNING、1 筆 close INFO 含 skipped=5）。"
+    },
+    {
+      "id": "NFR13.38",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "DispatchTest.test_plain_dispatch_writes_history_and_passes_turn_id（classify 與 dispatch 收到的 turn_id 等於客戶端的 turnId）；turn_end 帶同一 turnId（ObservabilityTest）。"
+    },
+    {
+      "id": "NFR13.39",
+      "status": "OK",
+      "target": "backend/requirements.txt",
+      "note": "唯一新增行為 websockets——既有的傳遞依賴明列（帶入項 35、計畫交付 #9），非新套件；frontend/package.json 無變更。取代關係見 code-summary 5.1。"
+    },
+    {
+      "id": "NFR13.40",
+      "status": "OK",
+      "target": "backend/tests/brain_gateway_fakes.py",
+      "note": "recv_json 對本單元送出的每一則做 WsEnvelope.model_validate（全部測試皆經此路徑）；AST 斷言模組內無以 \"type\" 為鍵的 dict 字面。"
+    },
+    {
+      "id": "NFR13.41",
+      "status": "OK",
+      "target": "backend/tests/test_ws_contract.py",
+      "note": "Adr0020FieldIncrementTest 兩案與既有五處修改；dump_ws_contract.py --check、npm run check:ws-types 綠；ADR-0020 已移入 inception/decisions/；突變「只改模型不重產」→ --check 紅。"
+    },
+    {
+      "id": "NFR13.42",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "五個性質各至少一個 @given（性質一～五）；另有 BreakerState 活性與 RateLimiter 視窗兩個狀態性質；error_for、match_referent 為 example-based。"
+    },
+    {
+      "id": "NFR13.43",
+      "status": "OK",
+      "target": "LOCAL-DEV.md",
+      "note": "「session 相關功能不可用」0 次、含 REDIS_USER=default（grep -c 為 2）；同一批 diff 同時含 backend/main.py 與 LOCAL-DEV.md。"
+    },
+    {
+      "id": "NFR13.44",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_limits.py",
+      "note": "StructuralTest.test_env_reads_logger_name_and_single_log_exit：os.environ[...]（下標形式）、os.environ.get、os.getenv 的鍵集合恰為三個 REDIS_* 變數；validate_env_contract.py 綠。"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_turn.py",
+      "note": "ReferentTest.test_unselected_unique_system_name_updates_target_then_dispatches（脈絡列未選定、系統名唯一 → 更新作業對象並交辦）。成立條件：專案數 ≤ 50 或已選定專案（test_more_than_fifty_projects；帶入項 4）。"
+    },
+    {
+      "id": "AC7.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "FanoutTest.test_push_goes_only_to_the_dispatchers_connections：交辦者的兩條連線各收到三輪推播（token → done、新 turnId）。"
+    },
+    {
+      "id": "AC7.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "同上：「失敗：…」「逾時：…」句型原樣轉送、可分辨。"
+    },
+    {
+      "id": "AC7.1.3",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_fanout.py",
+      "note": "同上：另一使用者的連線沒有任何訊息。"
+    },
+    {
+      "id": "AC8.1.1",
+      "status": "Deferred",
+      "target": "OPEN-GW13-15",
+      "note": "使用者裁決 Deferred：本輪無逐字內容來源；傳輸層逐則送出的能力已驗（NFR13.2）。未新增任何 LLM 呼叫。"
+    },
+    {
+      "id": "AC8.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "AuthorizationTest.test_handshake_records_last_activity；逐則 record=True 見 limits RevalidationTest；突變 M10。"
+    },
+    {
+      "id": "AC8.1.3",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_handshake.py",
+      "note": "SubprotocolTest.test_token_only_in_query_string_is_rejected_in_both_shapes（帶協定名 → 4401；不帶 → 未 accept）。"
+    },
+    {
+      "id": "AC8.1.4",
+      "status": "OK",
+      "target": "backend/main.py",
+      "note": "既有 5 個 SSE 端點的 router 檔（agent_router／review_router／lens_router／collab_router／advice_stream_router）git diff 為 0 行；main.py 只動 brain 相關三處（BR67.9）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-RULES",
+      "status": "OK",
+      "target": "backend/services/brain_gateway_rules.py",
+      "note": "純函式與純狀態機（子協定、session key、段、TurnLedger、error_for、match_referent、scan_targets_in_utterance、熔斷、限流）；無 I/O、無 logger 呼叫。"
+    },
+    {
+      "id": "CG-GATEWAY",
+      "status": "OK",
+      "target": "backend/services/brain_gateway.py",
+      "note": "/api/brain/ws handler、佔位與登錄、GatewaySink、MemoryPrefetchAdapter、MemoryWorker、GatewayTiming、build_brain_gateway。"
+    },
+    {
+      "id": "CG-CONTRACT",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py",
+      "note": "ADR-0020 C-1～C-7；衍生物 ws-contract.json 與 frontend/src/types/ws-contract.d.ts 已重產；dump 白名單同步。"
+    },
+    {
+      "id": "CG-ADR",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/inception/decisions/0020-brain-ws-contract-page-scope-fields.md",
+      "note": "由草案原樣移入，Status Accepted。"
+    },
+    {
+      "id": "CG-STARTUP",
+      "status": "OK",
+      "target": "backend/main.py",
+      "note": "startup 順序（configure_intent_routing_env → build_brain_gateway → init_db）、shutdown hook、掛載；移除 DEMO。"
+    },
+    {
+      "id": "CG-DEMO-REMOVAL",
+      "status": "OK",
+      "target": "frontend/src/App.tsx",
+      "note": "刪 backend/services/brain_router.py、frontend/src/pages/BrainPage.tsx；App.tsx／Sidebar.tsx 移除路由與入口；兩支 e2e 的 /brain 落地頁改寫（e2e 由 CI ui-regression 執行，本機未跑）。"
+    },
+    {
+      "id": "CG-DEPLOY",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "必要 secret 檢查加 OPENROUTER_API_KEY（render-env.sh 不動）；deploy/.env.example、DEPLOY.md:24、LOCAL-DEV.md 同步；合併前 secret 確認由使用者執行（code-summary 6.1）。"
+    },
+    {
+      "id": "CG-FAKES",
+      "status": "OK",
+      "target": "backend/tests/brain_gateway_fakes.py",
+      "note": "共用替身與組裝；替身限制見 code-summary 第八節。"
+    },
+    {
+      "id": "CG-REVIEW-01",
+      "status": "OK",
+      "target": "backend/services/brain_gateway_rules.py",
+      "note": "審查 review-01 的 R-01～R-07 處置見 code-summary 第十二節；deploy/render-env.sh 檔頭註解同步（R-07）。"
+    }
+  ]
+}

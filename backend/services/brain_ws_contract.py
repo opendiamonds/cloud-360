@@ -35,7 +35,8 @@ brain_ws_contract.py — `U2 brain-ws-contract`：大腦 WebSocket 訊息契約
   入站第一步的寬鬆封包
       `WsUnvalidatedEnvelope`：`v: int`、`type: str`（`BR1.1` 的明文例外）
   握手
-      `Sec-WebSocket-Protocol: f"{scheme}{separator}{token}"`，格式見 `WsSubprotocol`
+      `Sec-WebSocket-Protocol: {protocolName}, f"{scheme}{separator}{token}"`（順序不限），
+      格式見 `WsSubprotocol`；伺服器只回送 `protocolName`（ADR-0020 C-1）
 
 為何欄位名是 camelCase 而不是本 repo 的 Python 慣例 snake_case：
   這些名稱**就是線上契約本身**，前端型別檔逐字沿用它們。改成 snake_case 會需要
@@ -224,6 +225,14 @@ class ClarifyPayload(BaseModel):
             "使用者看到「請選一個」卻沒有可選項是本規則要防的畫面。"
         ),
     )
+    kind: Literal["intent", "target"] = Field(
+        description=(
+            "ADR-0020 C-7：反問的種類，**必填、無預設**。"
+            "intent ＝ 分類信心不足，候選是同一句話的不同解讀（依 capability 與 label 呈現）；"
+            "target ＝ 意圖已確定，候選是名稱相符的不同作業對象（**只顯示 label**，"
+            "capability 不表達意圖）。兩者在選定後的處置不同，前端不得以同一種畫面呈現。"
+        ),
+    )
 
 
 class WorkItemsPayload(BaseModel):
@@ -262,6 +271,12 @@ class SharingModePayload(BaseModel):
     model_config = _CONTRACT_CONFIG
 
     mode: Literal["shared", "isolated"] = Field(description="共享或獨立對話。")
+    scope: Literal["workspace", "assessment"] = Field(
+        description=(
+            "ADR-0020 C-3：本則共享模式屬於哪一頁，**必填、無預設**。"
+            "入口頁恆為共享、不需狀態訊息，故只有兩值。前端依它過濾，只套用到同名頁面。"
+        )
+    )
 
 
 class WorkTargetPayload(BaseModel):
@@ -276,6 +291,13 @@ class WorkTargetPayload(BaseModel):
             "null 表示尚未選定。**三層之間的階層一致性規則不由本契約定義**"
             "（例如 systemId 非 null 時 projectId 是否必須非 null）——那是 "
             "U7 hierarchy-service 的責任。這是刻意的界線，不是遺漏。"
+        )
+    )
+    segment: Literal["shared", "workspace", "assessment"] = Field(
+        description=(
+            "ADR-0020 C-4：本則作業對象屬於哪一段對話，**必填、無預設**。"
+            "shared ＝ 共享段（入口頁與處於共享模式的頁面）；workspace／assessment ＝ 該頁的獨立段。"
+            "前端只套用到目前讀取該段的頁面。"
         )
     )
 
@@ -353,6 +375,12 @@ class UserMessagePayload(BaseModel):
     model_config = _CONTRACT_CONFIG
 
     text: str = Field(description="使用者輸入的原文。")
+    page: Literal["entry", "workspace", "assessment"] = Field(
+        description=(
+            "ADR-0020 C-2：送出這句話的頁面，**必填、無預設**——預設為 entry 會讓獨立對話的"
+            "訊息靜默寫進共享段。伺服器以它與該頁的共享模式決定寫入哪一段對話。"
+        )
+    )
 
 
 class SelectClarifyCandidatePayload(BaseModel):
@@ -390,6 +418,9 @@ class SetSharingModePayload(BaseModel):
     model_config = _CONTRACT_CONFIG
 
     mode: Literal["shared", "isolated"] = Field(description="要切換到的模式。")
+    scope: Literal["workspace", "assessment"] = Field(
+        description="ADR-0020 C-6：要切換哪一頁的共享模式，**必填、無預設**。入口頁恆為共享，不可切換。"
+    )
 
 
 class SetWorkTargetPayload(BaseModel):
@@ -400,6 +431,12 @@ class SetWorkTargetPayload(BaseModel):
     projectId: Optional[str] = Field(description="null 表示清除該層的選定。")
     systemId: Optional[str] = Field(description="null 表示清除該層的選定。")
     diagramId: Optional[str] = Field(description="null 表示清除該層的選定。")
+    segment: Literal["shared", "workspace", "assessment"] = Field(
+        description=(
+            "ADR-0020 C-5：要設定哪一段對話的作業對象，**必填、無預設**。"
+            "值為送出頁面目前讀取的段（入口頁恆為 shared）。"
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +445,8 @@ class SetWorkTargetPayload(BaseModel):
 
 
 class WsSubprotocol(BaseModel):
-    """握手用 subprotocol 的格式；實際值為 ``f"{scheme}{separator}{token}"``。
+    """握手用 subprotocol 的格式：客戶端同時提供 ``protocolName`` 與
+    ``f"{scheme}{separator}{token}"`` 兩項，伺服器只回送 ``protocolName``（ADR-0020 C-1）。
 
     為何它在契約檔內：`K-12:876` 只規定「token 走 `Sec-WebSocket-Protocol`
     標頭」，**全檔未定其值格式**。它是前後端必須逐字一致的共用字串，而在納入
@@ -429,6 +467,13 @@ class WsSubprotocol(BaseModel):
 
     model_config = _CONTRACT_CONFIG
 
+    protocolName: Literal["cloud360.brain.v1"] = Field(
+        description=(
+            "ADR-0020 C-1：握手時與 bearer 項**同時**提供的協定名，**必填、無預設**。"
+            "伺服器只回送這一個值，token 因此不出現在回應標頭；未提供它的握手不被接受。"
+            "前端須以 Sub['protocolName'] 取值，不得寫字面量（ADR-0019 §5）。"
+        )
+    )
     scheme: Literal["bearer"] = Field(description="subprotocol 的前綴，與 HTTP 的 Bearer 慣例一致。")
     separator: Literal["."] = Field(description="前綴與 token 之間的分隔字元。")
 

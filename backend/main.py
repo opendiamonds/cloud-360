@@ -4,7 +4,7 @@ from env_bootstrap import BACKEND_DIR, load_backend_dotenv
 import logging
 import os
 from services.agent_router import router as agent_router
-from services.brain_router import router as brain_router
+from services.brain_gateway import build_brain_gateway, router as brain_gateway_router
 from services.user_router import router as user_router
 from services.collab_router import router as collab_router
 from services.review_router import router as review_router
@@ -74,7 +74,23 @@ def on_startup():
     # 同樣掛在 startup hook 而非 import 時：既有測試完全不設定這些變數，
     # 而以 TestClient(app) 不觸發本 hook。
     configure_intent_routing_env()
+    # U13 brain-gateway（BR67.11）：在既有設定檢查**之後**、init_db **之前**建立
+    # 閘道元件（Redis client、SessionStore、記憶執行器、三個 IntentRouter、
+    # WorkOrchestrator、連線登錄），存於 app.state。REDIS_URL／REDIS_USER／
+    # REDIS_PASSWORD 缺值或 REDIS_USER=default → **啟動失敗**；Redis 暫時不可達
+    # 不阻止啟動（client 延遲連線），在入口頁握手時以 1011 呈現。
+    # 同樣掛在 startup hook 而非 import 時：CI 的 import smoke 與 OpenAPI dump
+    # 只設 DATABASE_URL／JWT_SECRET，而以 TestClient(app) 不觸發本 hook。
+    app.state.brain_gateway = build_brain_gateway(app)
     init_db()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    # U13：只關閉本行程閘道自己的記憶執行器與背景 task（帶入項 22）。
+    gateway = getattr(app.state, "brain_gateway", None)
+    if gateway is not None:
+        gateway.shutdown()
 
 app.include_router(agent_router, prefix="/api/architecture")
 app.include_router(review_router, prefix="/api/architecture")
@@ -107,9 +123,11 @@ app.include_router(memory_router, prefix="/api/memory")
 # 呼叫端、沒有 dependency 鏈。請求本體在授權之後才由 facade 解析，故本 router 的
 # 422 一律晚於授權判定（BR46.4）。
 app.include_router(requirement_field_router, prefix="/api/requirements")
-# DEMO SCOPE：大腦 gateway 的最小垂直切片，非 U13 的正式交付。
-# 移除方式：刪 backend/services/brain_router.py 並移除下面兩行。
-app.include_router(brain_router, prefix="/api/brain")
+# U13 brain-gateway：大腦唯一的 WebSocket 端點 /api/brain/ws（BR61.1）。掛在
+# /api/ 之下，nginx 的 location /api/ 才會帶 Upgrade 標頭。認證在 handler 內
+# （子協定帶 token、accept 前判定 K1），不掛 dependency——WebSocket 端點不走
+# HTTPBearer。單一行程假設見 services/brain_gateway.py 檔頭。
+app.include_router(brain_gateway_router, prefix="/api/brain")
 
 @app.get("/")
 def read_root():

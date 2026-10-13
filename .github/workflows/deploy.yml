@@ -73,12 +73,14 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
           missing=""
           [ -n "${POSTGRES_PASSWORD}" ] || missing="${missing} POSTGRES_PASSWORD"
           [ -n "${JWT_SECRET}" ] || missing="${missing} JWT_SECRET"
           [ -n "${REDIS_PASSWORD}" ] || missing="${missing} REDIS_PASSWORD"
+          [ -n "${OPENROUTER_API_KEY}" ] || missing="${missing} OPENROUTER_API_KEY"
           if [ -n "${missing}" ]; then
             echo "::error::Missing required repository secret(s):${missing}" >&2
             echo "JWT_SECRET signs every login token. Without it auth.py uses the" >&2
@@ -86,6 +88,9 @@ jobs:
             echo "REDIS_PASSWORD is the password of the Redis ACL user the app" >&2
             echo "connects as; empty means an ACL user with an empty password," >&2
             echo "which Redis accepts silently." >&2
+            echo "OPENROUTER_API_KEY: without it the brain entry page (U13) fails" >&2
+            echo "every turn with INTERNAL_ERROR. It is checked here only, not in" >&2
+            echo "deploy/render-env.sh, so the rollback job can still render." >&2
             echo "Generate one with: openssl rand -hex 32" >&2
             exit 1
           fi

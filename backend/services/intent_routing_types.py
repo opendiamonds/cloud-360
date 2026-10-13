@@ -44,11 +44,9 @@ from typing import Final, Optional, Tuple
 #: `BR2.2`／`V-2`：`capability` 的**封閉**值域。值域由既有能力集合決定，
 #: **不由本單元發明**（`entities.md` 的 `CandidateIntent.capability` 逐字）。
 #:
-#: 單一真實來源的處置（`team.md` 的「單一真實來源」規則）：同一份能力 id 清單
-#: 也存在於 `brain_router.py` 的 DEMO `_CAPABILITIES`（該檔自述為 DEMO SCOPE，
-#: `U13` 落地時整支取代）。兩份並存期間由
-#: `tests/test_intent_routing_structure.py` 的一條測試鎖住兩者一致——
-#: 規則逐字要求「新增副本的同一個 PR 必須一併新增鎖住兩者一致的測試」。
+#: 單一真實來源的處置（`team.md` 的「單一真實來源」規則）：本常數是能力 id 的**唯一**
+#: 清單。DEMO 閘道 `brain_router.py` 曾持有一份副本，已隨 `U13 brain-gateway` 落地整支
+#: 刪除；`tests/test_intent_routing_structure.py` 改為鎖住正式閘道不得再長出副本。
 ROUTABLE_CAPABILITIES: Final[Tuple[str, ...]] = (
     "architecture-design",
     "well-architected-review",

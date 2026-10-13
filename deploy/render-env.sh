@@ -18,7 +18,11 @@
 #   JWT_SECRET         required   signs every login token
 #   REDIS_PASSWORD     required   Redis ACL password for the REDIS_USER below
 #   CLOUD360_BOOTSTRAP_ADMIN_PASSWORD optional one-time admin bootstrap password
-#   OPENROUTER_API_KEY optional   A1 design agent; empty disables generation
+#   OPENROUTER_API_KEY required for a staging deploy -- enforced by the deploy job
+#                      in .github/workflows/deploy.yml, NOT here: this script
+#                      accepts it empty so the rollback job can always render.
+#                      Empty = A1 generation disabled and the brain entry page
+#                      (U13) fails every turn.
 #   N8N_WEBHOOK_URL    optional   dynamic architecture icons
 #   N8N_USER           optional   basic auth for the n8n webhook
 #   N8N_PASSWORD       optional   basic auth for the n8n webhook

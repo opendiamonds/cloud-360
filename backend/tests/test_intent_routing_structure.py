@@ -59,7 +59,8 @@ from services.session_types import (
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 SERVICES_DIR = BACKEND_DIR / "services"
 MAIN_PATH = BACKEND_DIR / "main.py"
-DEMO_GATEWAY_PATH = SERVICES_DIR / "brain_router.py"
+#: `U13 brain-gateway` 的兩個模組。DEMO 閘道（`brain_router.py`）已由 `U13` 整支取代並刪除（`[IG2]`=A）。
+GATEWAY_PATHS = (SERVICES_DIR / "brain_gateway.py", SERVICES_DIR / "brain_gateway_rules.py")
 
 ROUTING_PATH = SERVICES_DIR / "intent_routing.py"
 TYPES_PATH = SERVICES_DIR / "intent_routing_types.py"
@@ -310,40 +311,23 @@ class NoAuthorizationOfItsOwnTest(unittest.TestCase):
 
 
 class CapabilityEnumHasASingleSourceTest(unittest.TestCase):
-    """`team.md` 的「單一真實來源」：副本必須有一條鎖住一致性的測試。
+    """`team.md` 的「單一真實來源」：能力 id 清單只有 `ROUTABLE_CAPABILITIES` 一份。
 
-    同一份能力 id 清單也存在於 `brain_router.py` 的 DEMO `_CAPABILITIES`。
-    規則逐字要求「新增副本的同一個 PR 必須一併新增鎖住兩者一致的測試」——
-    本條即是。`U13` 落地時 DEMO 整支被取代，屆時本條應改為鎖住正式閘道。
+    DEMO 閘道（`brain_router.py`）曾持有一份副本 `_CAPABILITIES`，本條原本鎖住兩者一致；`U13` 落地時
+    DEMO 整支刪除（`[IG2]`=A），本條隨之改為鎖住正式閘道：**閘道不得再長出第二份能力 id 清單**——
+    它只轉送 `U11` 判定出的 capability，不需要自己的字面值。
     """
 
-    def test_the_demo_gateway_capability_ids_match_the_closed_enum(self):
-        tree = parse(DEMO_GATEWAY_PATH)
-        demo_ids = None
-        for node in ast.walk(tree):
-            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                name = node.target.id
-            elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(
-                node.targets[0], ast.Name
-            ):
-                name = node.targets[0].id
-            else:
-                continue
-            if name != "_CAPABILITIES" or node.value is None:
-                continue
-            demo_ids = tuple(
-                elt.elts[0].value
-                for elt in node.value.elts
-                if isinstance(elt, ast.Tuple) and elt.elts
-            )
-        self.assertIsNotNone(
-            demo_ids, "找不到 brain_router.py 的 _CAPABILITIES——副本一致性無從鎖住"
-        )
-        self.assertEqual(
-            set(demo_ids),
-            set(ROUTABLE_CAPABILITIES),
-            "DEMO 閘道與本單元的封閉列舉已漂移（team.md 單一真實來源）",
-        )
+    def test_the_gateway_holds_no_copy_of_the_capability_ids(self):
+        self.assertFalse((SERVICES_DIR / "brain_router.py").exists(), "DEMO 閘道應已刪除（[IG2]=A）")
+        for path in GATEWAY_PATHS:
+            with self.subTest(module=path.name):
+                literals = {
+                    node.value
+                    for node in ast.walk(parse(path))
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                }
+                self.assertEqual(literals & set(ROUTABLE_CAPABILITIES), set())
 
 
 class ReferentMemoryKindsExcludeEpisodicTest(unittest.TestCase):

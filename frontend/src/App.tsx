@@ -13,7 +13,6 @@ import { WaitingApprovalPage } from './pages/WaitingApprovalPage';
 import { AuthorizationRequestsPage } from './pages/AuthorizationRequestsPage';
 import { AssessmentPage } from './pages/AssessmentPage';
 import { CostPage } from './pages/CostPage';
-import { BrainPage } from './pages/BrainPage';
 import { MembersListPage } from './pages/MembersListPage';
 import { MemberDetailPage } from './pages/MemberDetailPage';
 import { MemoryPage } from './pages/MemoryPage';
@@ -82,18 +81,6 @@ function App() {
                     <CostPage />
                   </Layout>
                 </CapabilityRoute>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* DEMO SCOPE：大腦入口的正式落點是 U14，屆時應連同權限掛載一併取代本區塊 */}
-          <Route
-            path="/brain"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <BrainPage />
-                </Layout>
               </ProtectedRoute>
             }
           />

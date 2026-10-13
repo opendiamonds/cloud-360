@@ -108,11 +108,11 @@ CLIENT_TYPE_ENUM = "WsClientMessageType"
 CLIENT_FIELD_WHITELIST: dict[str, frozenset[str]] = {
     "WsClientEnvelope": frozenset({"v", "type", "payload"}),
     "HelloPayload": frozenset({"v"}),
-    "UserMessagePayload": frozenset({"text"}),
+    "UserMessagePayload": frozenset({"text", "page"}),
     "SelectClarifyCandidatePayload": frozenset({"candidateId"}),
     "CorrectWorkItemPayload": frozenset({"workItemId"}),
-    "SetSharingModePayload": frozenset({"mode"}),
-    "SetWorkTargetPayload": frozenset({"projectId", "systemId", "diagramId"}),
+    "SetSharingModePayload": frozenset({"mode", "scope"}),
+    "SetWorkTargetPayload": frozenset({"projectId", "systemId", "diagramId", "segment"}),
 }
 
 
