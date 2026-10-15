@@ -109,7 +109,7 @@ python3 --version                   # CI 用 3.12
 ### 先確認 port 沒被佔用
 
 ```bash
-for p in 5432 6379 8000 5173; do
+for p in 5432 6379 8000 5173 8080; do   # 8080：MCP bridge（可選，見 3. 後端的「本機啟動 MCP bridge」）
   lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1 \
     && echo ":$p 被佔用 → $(lsof -nP -iTCP:$p -sTCP:LISTEN | awk 'NR==2{print $1}')" \
     || echo ":$p 可用"
@@ -438,6 +438,22 @@ INFO:cloud360.database:J3a 權限套用：已跳過（...）
 ```
 
 **這些行是遷移的實際證據，不是裝飾。** 任何 `warning` 等級的行都要看 —— 例如 `J3a 權限套用：未命中目標列` 代表權限沒生效。
+
+### 本機啟動 MCP bridge（可選，`U21`）
+
+bridge 是獨立行程（部署上是 compose 的第七個服務），把需求欄位的讀／寫／清空包成 MCP 工具。本機開發平常**不需要**它；
+要手動試工具呼叫時，在 backend 起來之後另開一個終端：
+
+```bash
+cd backend
+python -m mcp_bridge --backend-url http://127.0.0.1:8010
+```
+
+- 預設監聽 `127.0.0.1:8080`（`--host`／`--port` 可改）；**不讀任何環境變數**，`backend/.env` 對它沒有作用。
+- 啟動成功會看到一行 `startup port=8080 tools=3`；工具宣告檔不合格時是一行 `startup_failed subject=...` 並以非零碼退出。
+- 它需要 `mcp` 套件（`backend/requirements.txt` 已釘 `mcp==2.3.0`，照常 `pip install -r requirements.txt` 即可）。
+  **建議在 venv 內安裝**：本機的系統 Python 若另裝了要求 `mcp<2` 的工具（例如 `claude-agent-sdk`），裝進同一個直譯器會互相衝突。
+- 本單元的測試（`backend/tests/test_mcp_bridge_*.py`）缺 `mcp` 或版本不對時以 `AssertionError` 失敗並指出安裝指令，**不是 skip**。
 
 ---
 

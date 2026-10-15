@@ -1,0 +1,693 @@
+{
+  "stage": "code-generation",
+  "unit": "mcp-bridge",
+  "upstream_ids": [
+    "AC11.4.1",
+    "AC11.4.2",
+    "AC11.4.3",
+    "BR71.1",
+    "BR71.2",
+    "BR71.3",
+    "BR71.4",
+    "BR71.5",
+    "BR71.6",
+    "BR72.1",
+    "BR72.2",
+    "BR72.3",
+    "BR72.4",
+    "BR72.5",
+    "BR72.6",
+    "BR72.7",
+    "BR72.8",
+    "BR72.9",
+    "BR72.10",
+    "BR72.11",
+    "BR73.1",
+    "BR73.2",
+    "BR73.3",
+    "BR73.4",
+    "BR73.5",
+    "BR74.1",
+    "BR74.2",
+    "BR74.3",
+    "BR74.4",
+    "BR74.5",
+    "BR74.6",
+    "BR75.1",
+    "BR75.2",
+    "BR75.3",
+    "BR75.4",
+    "BR76.1",
+    "BR76.2",
+    "BR76.3",
+    "BR76.4",
+    "BR77.1",
+    "BR77.2",
+    "BR77.3",
+    "BR77.4",
+    "BR78.1",
+    "BR78.2",
+    "BR78.3",
+    "BR78.4",
+    "BR78.5",
+    "NFR21.1",
+    "NFR21.2",
+    "NFR21.3",
+    "NFR21.4",
+    "NFR21.5",
+    "NFR21.6",
+    "NFR21.7",
+    "NFR21.8",
+    "NFR21.9",
+    "NFR21.10",
+    "NFR21.11",
+    "NFR21.12",
+    "NFR21.13",
+    "NFR21.14",
+    "NFR21.15",
+    "NFR21.16",
+    "NFR21.17",
+    "NFR21.18",
+    "NFR21.19",
+    "NFR21.20",
+    "NFR21.21",
+    "NFR21.22",
+    "NFR21.23",
+    "NFR21.24",
+    "NFR21.25",
+    "NFR21.26",
+    "NFR21.27",
+    "NFR21.28",
+    "NFR21.29",
+    "NFR21.30",
+    "NFR21.31",
+    "NFR21.32",
+    "NFR21.33",
+    "NFR21.34",
+    "NFR21.35",
+    "NFR21.36",
+    "NFR21.37",
+    "NFR21.38",
+    "NFR21.39",
+    "NFR21.40",
+    "NFR21.41"
+  ],
+  "coverage": [
+    {
+      "id": "AC11.4.1",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "AcceptanceTest.test_ac11_4_1_non_member_rejected_with_same_reason：非成員經 MCP 讀取得 forbidden，message 等於同 token 直接 GET 的 detail；記錄包裝恰 1 筆且帶該使用者 token；legacy 與 auto 兩種協定版本皆跑。"
+    },
+    {
+      "id": "AC11.4.2",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_artifacts.py",
+      "note": "LiteralWhitelistTest（T-5，字面白名單、任何深度無黑名單名稱）＋ e2e AcceptanceTest.test_ac11_4_2（tools/list 兩種協定版本）＋ generator PBT 性質一。"
+    },
+    {
+      "id": "AC11.4.3",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "AcceptanceTest.test_ac11_4_3_member_read_equals_direct_get：structuredContent 與文字內容皆等於直接 GET 的 FieldSetView（BR76.4）；兩種協定版本。"
+    },
+    {
+      "id": "BR71.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/cli.py",
+      "note": "獨立進程、零環境變數：test_mcp_bridge_static（無 os.environ、main 與 router 不 import mcp_bridge）、test_mcp_bridge_deploy（compose 無 environment／env_file／${）。"
+    },
+    {
+      "id": "BR71.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/app.py",
+      "note": "stateless＋json_response：test_mcp_bridge_app（無 Mcp-Session-Id、content-type JSON）、e2e TransportBehaviourTest；網段改為專屬 mcp（取代字面，見 code-summary 取代關係表）由 test_mcp_bridge_deploy 鎖住。"
+    },
+    {
+      "id": "BR71.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/guards.py",
+      "note": "PathRouter 的 /healthz 位於全部閘門之外：guards test_healthz_exempt_when_saturated、app test_healthz_fixed_body、e2e 5 次 /healthz 無存取紀錄。"
+    },
+    {
+      "id": "BR71.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/server.py",
+      "note": "啟動不呼叫 backend（惰性 client）；e2e test_timeout_is_backend_unavailable_and_process_survives、NoLeakTest refused 分支後 /healthz 仍 200。"
+    },
+    {
+      "id": "BR71.5",
+      "status": "OK",
+      "target": "backend/mcp_bridge/startup.py",
+      "note": "test_mcp_bridge_startup T-8 十二案皆回傳 1、恰一行 ERROR、無 traceback、驗證失敗不進 serve；validate_tool_specs 另比對 binding 映射、inject 與 pattern（程式審查 R-10）。"
+    },
+    {
+      "id": "BR71.6",
+      "status": "OK",
+      "target": "backend/mcp_bridge/limits.py",
+      "note": "derive_allowed_hosts（pure 兩案）＋ SDK Host 檢查：app 與 topology 以 evil.example 得 421、實際埠通過。"
+    },
+    {
+      "id": "BR72.1",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "純函式、決定性、檢查順序固定：八個 @given 各斷言單一錯誤碼並驗性質四；突變 M01–M06 全紅。"
+    },
+    {
+      "id": "BR72.2",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "預設拒絕、三項：missing_op 類別恰為 missing_operation；repo example 恰三個工具。"
+    },
+    {
+      "id": "BR72.3",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "security 不產生屬性、header／cookie 參數失敗：consistent 類別性質三。"
+    },
+    {
+      "id": "BR72.4",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "strip on_behalf_of 並 inject：consistent 性質三、repo example 斷言 write 工具無 on_behalf_of、e2e 寫入的 updated_on_behalf_of 來自登錄表。"
+    },
+    {
+      "id": "BR72.5",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "field_key → field：repo example（binding 反向映射回 field_key）、renamed_clean 類別。"
+    },
+    {
+      "id": "BR72.6",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "白名單相等：whitelist_drift 類別；T-5 另以測試檔字面值為期望（artifacts）。"
+    },
+    {
+      "id": "BR72.7",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "黑名單底線（改名之後、遞迴）：credential_injected、renamed_dirty 類別；突變 M01、M03、M04。"
+    },
+    {
+      "id": "BR72.8",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "名稱與描述取自 allowlist：repo example 與 generated_tools.json 內容。"
+    },
+    {
+      "id": "BR72.9",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "產物進版控、--check 漂移閘門、讀取封閉：test_mcp_bridge_artifacts T-6 與 --check 紅綠；ci.yml S-1 由 deploy 測試鎖住。"
+    },
+    {
+      "id": "BR72.10",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "requires_agent 綁定：agent_mismatch 類別；啟動重驗見 startup test_write_tool_without_requires_agent。"
+    },
+    {
+      "id": "BR72.11",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "路徑前綴白名單：out_of_scope 類別；啟動重驗見 startup test_membership_path_added（產物與 allowlist 同改）。"
+    },
+    {
+      "id": "BR73.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/credentials.py",
+      "note": "pure CredentialTest（缺漏、多值、非 Bearer、空、超 8192 位元組）；dispatch 本地拒絕不呼叫 backend；e2e 兩種格式錯分支。"
+    },
+    {
+      "id": "BR73.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/executor.py",
+      "note": "dispatch test_authorization_only_from_credential_and_no_redirect：只送 Authorization、不送 X-Cloud360-Agent、302 不跟隨。"
+    },
+    {
+      "id": "BR73.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/guards.py",
+      "note": "CredentialContext 的 ContextVar＋finally 重設；確定性交錯的 T-1（讀與寫，M09／M09w 紅）；agent 標頭改存模組變數的 M35 紅；拒收 cookie 的 jar（M25）。"
+    },
+    {
+      "id": "BR73.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/dispatch.py",
+      "note": "T-2 逐分支不外洩（兩種協定版本）；總攔截含結果序列化（程式審查 R-05，突變 M41）；突變 M10、M11。"
+    },
+    {
+      "id": "BR73.5",
+      "status": "OK",
+      "target": "backend/mcp_bridge/credentials.py",
+      "note": "static test_no_jwt_decoding（jwt／jose／base64 import 為 0）。"
+    },
+    {
+      "id": "BR74.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/guards.py",
+      "note": "X-Cloud360-Agent 由 CredentialContext 取全部原值、逐請求隔離（e2e 兩位使用者宣告不同 agent，M35 紅）；pure AgentTest。"
+    },
+    {
+      "id": "BR74.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/agents.json",
+      "note": "artifacts PatternConsistencyTest：agents.json 值 ⊆ GROUPS_BY_KEY；啟動以 SEGMENT_PATTERN 驗值（startup test_agent_value_outside_pattern）。"
+    },
+    {
+      "id": "BR74.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/agents.py",
+      "note": "pure AgentTest；dispatch 本地拒絕（寫入與清空缺宣告或未登錄 → agent_not_declared、不呼叫 backend）；讀取不要求。"
+    },
+    {
+      "id": "BR74.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/calls.py",
+      "note": "pure test_write_body_injects_registry_group；e2e 交錯寫入逐筆斷言請求本體 on_behalf_of 屬於宣告的 agent（owner＝cost、outsider＝architecture），持久列 updated_on_behalf_of 亦然；突變 M35 紅。"
+    },
+    {
+      "id": "BR74.5",
+      "status": "N/A",
+      "target": "backend/mcp_bridge/agents.py",
+      "note": "已知限制（自報不可驗證），無可測行為；揭露於 code-summary（OPEN-MB21-2）。"
+    },
+    {
+      "id": "BR74.6",
+      "status": "OK",
+      "target": "backend/mcp_bridge/calls.py",
+      "note": "pure test_blank_value_rejected_with_hint；e2e NoLeakTest 空白 value 分支。"
+    },
+    {
+      "id": "BR75.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/dispatch.py",
+      "note": "每次呼叫至多一次 exchange；e2e 記錄包裝筆數＝呼叫次數（T-1、AC11.4.1）；static 授權函式為 0。"
+    },
+    {
+      "id": "BR75.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/dispatch.py",
+      "note": "static test_no_authorization_logic；授權全在 facade（e2e 走真實 get_current_user 與 facade）。"
+    },
+    {
+      "id": "BR75.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/",
+      "note": "static test_bridge_never_imports_backend_services；ADR-0021 C-5 移除 U21 → U19 邊。"
+    },
+    {
+      "id": "BR75.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/calls.py",
+      "note": "pure 性質六（以 httpx build_request 的 URL 為判準）與 T-4 單元層；e2e PathInjectionTest；突變 M07、M08。"
+    },
+    {
+      "id": "BR76.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/outcomes.py",
+      "note": "pure MapOutcomeTest 封閉表逐列、TransportKind 恰四值；e2e NoLeakTest 逐分支錯誤碼與 retryable。"
+    },
+    {
+      "id": "BR76.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/outcomes.py",
+      "note": "pure DetailFilterTest（多鍵、非字串、超長、控制字元、空字串）；e2e AC11.4.1 理由相同。"
+    },
+    {
+      "id": "BR76.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/app.py",
+      "note": "17-A：未知工具為 JSON-RPC -32602、固定訊息不回顯（app 兩種協定版本，legacy HTTP 200／現代 HTTP 400）；其餘錯誤為 isError；突變 M26。"
+    },
+    {
+      "id": "BR76.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/app.py",
+      "note": "to_call_tool_result：structuredContent＝backend 本體並附同內容文字；e2e AC11.4.3。"
+    },
+    {
+      "id": "BR77.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/observability.py",
+      "note": "dispatch test_each_branch_writes_exactly_one_line、test_token_never_logged_and_write_body_shape（欄位與順序）；tool／agent 正規化（突變 M23）。"
+    },
+    {
+      "id": "BR77.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/observability.py",
+      "note": "httpx／mcp logger WARNING；BridgeFormatter 單行；T-2 log 不含 token、參數、本體；未預期例外只記型別名。"
+    },
+    {
+      "id": "BR77.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/dispatch.py",
+      "note": "寫入與清空的 updated_by 為使用者本人（e2e write／clear、T-1 寫入變體）；讀取面無主體紀錄為已接受殘留（OPEN-MB21-14）。"
+    },
+    {
+      "id": "BR77.4",
+      "status": "OK",
+      "target": "backend/mcp_bridge/calls.py",
+      "note": "清空走 DELETE、無本體（pure test_clear_has_no_body、e2e 記錄包裝方法為 DELETE；log 的 agent 欄留代寫溯源）。"
+    },
+    {
+      "id": "BR78.1",
+      "status": "OK",
+      "target": "backend/tests/mcp_test_client.py",
+      "note": "官方 SDK client（mode legacy／auto），帶 Authorization 與 X-Cloud360-Agent；topology 自測兩種協定版本。"
+    },
+    {
+      "id": "BR78.2",
+      "status": "OK",
+      "target": "backend/tests/mcp_topology.py",
+      "note": "路線 A：uvicorn 真實 HTTP ＋ ASGITransport 直達記錄包裝(main.app)；MCP_ROUTE 常數、前置條件缺失為 AssertionError（突變 M33）。"
+    },
+    {
+      "id": "BR78.3",
+      "status": "OK",
+      "target": "backend/mcp_bridge/app.py",
+      "note": "唯一組裝點 create_app（四必填＋limits）；server.serve 與 topology 皆經它，且共用 build_uvicorn_server／serve_until_stopped。"
+    },
+    {
+      "id": "BR78.4",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "IdentityIsolationTest（程式審查 R-01）：create_app 的 call_hook 測試縫＋CallHookBarrier 在處理函式讀取身分材料前確定性安排交錯（回合數 ≥ 10）；讀取與寫入兩案、兩種協定版本；突變 M09、M09w 連跑 5 次皆紅。"
+    },
+    {
+      "id": "BR78.5",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "NoLeakTest：BR76.1 每列（本地與 backend 兩種來源）＋成功讀寫，兩種協定版本；突變 M10、M11 紅。"
+    },
+    {
+      "id": "NFR21.1",
+      "status": "OK",
+      "target": "backend/mcp_bridge/executor.py",
+      "note": "httpx.Timeout(connect=3) ＋ asyncio.timeout(10)；牆鐘 13 秒＝2＋10＋1（程式審查 R-02，pure 嚴格大於、M38 紅）；牆鐘逾時以真實 SDK 驗證處理函式一併取消（R-06）。P 值量測屬 build-and-test。"
+    },
+    {
+      "id": "NFR21.2",
+      "status": "OK",
+      "target": "backend/mcp_bridge/",
+      "note": "static test_file_io_only_in_startup、test_no_blocking_io。"
+    },
+    {
+      "id": "NFR21.3",
+      "status": "Deferred",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "附加時間 P50 ≤ 50 ms 由 build-and-test 量測並留裁決紀錄（R-07）；本站不量測。"
+    },
+    {
+      "id": "NFR21.4",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_artifacts.py",
+      "note": "T-5 字面白名單；e2e AC11.4.2。"
+    },
+    {
+      "id": "NFR21.5",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_artifacts.py",
+      "note": "T-6 讀取封閉（兩種模式、.mcp.json 從未開啟）；突變 M13。"
+    },
+    {
+      "id": "NFR21.6",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_startup.py",
+      "note": "T-8 十二案（含程式審查 R-10 四案：inject 被移除、body_params 改成 on_behalf_of、path_params 映射被改、pattern 被移除）；具名入口；突變 M16a–d、M27、M42–M44。"
+    },
+    {
+      "id": "NFR21.7",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "T-1（見 BR78.4），確定性交錯、讀與寫、兩種協定版本。"
+    },
+    {
+      "id": "NFR21.8",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "T-2（見 BR78.5）；app 層總攔截兩種協定版本。"
+    },
+    {
+      "id": "NFR21.9",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_pure.py",
+      "note": "性質六＋T-4（單元與端到端）；fullmatch（R-13，突變 M08）。"
+    },
+    {
+      "id": "NFR21.10",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_artifacts.py",
+      "note": "T-7：SEGMENT_PATTERN.pattern＝KEY_PATTERN.pattern＝allowlist property_patterns；突變 M14、M15。"
+    },
+    {
+      "id": "NFR21.11",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_pure.py",
+      "note": "CredentialTest（含 8192 位元組邊界兩側）。"
+    },
+    {
+      "id": "NFR21.12",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "allow（AC11.4.3）／deny（AC11.4.1）雙向走真實 facade；static 授權函式為 0。"
+    },
+    {
+      "id": "NFR21.13",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "只轉 Authorization、不轉 X-Cloud360-Agent、不跟隨重導。"
+    },
+    {
+      "id": "NFR21.14",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "Set-Cookie 不入 jar、後續請求無 Cookie；突變 M25。"
+    },
+    {
+      "id": "NFR21.15",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "寫入 on_behalf_of 來自登錄表；本地 agent_not_declared。"
+    },
+    {
+      "id": "NFR21.16",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_deploy.py",
+      "note": "①--host 預設 127.0.0.1（startup，突變 M28）；②compose 只在 mcp、無 ports（突變 M29a／b）；③derive_allowed_hosts 與 421。"
+    },
+    {
+      "id": "NFR21.17",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "無環境變數讀取；compose 服務區塊無 ${。"
+    },
+    {
+      "id": "NFR21.18",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "jwt／jose／base64 import 為 0。"
+    },
+    {
+      "id": "NFR21.19",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_app.py",
+      "note": "/healthz 固定本體；tools/list 只含 name／description／inputSchema、無 binding、免認證。"
+    },
+    {
+      "id": "NFR21.20",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_guards.py",
+      "note": "Content-Length 與 chunked 超量皆 413、內層未呼叫、恰一行 request_rejected；突變 M19。"
+    },
+    {
+      "id": "NFR21.21",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_guards.py",
+      "note": "判準 ①–⑤（guards）；e2e 斷線迴圈斷言峰值＝上限 16、抵達 backend ≥ 16（程式審查 R-03）；突變 M17、M18、M36、M37。"
+    },
+    {
+      "id": "NFR21.22",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "read_bounded 對 2 MiB 串流停止；e2e 回應過大 → internal_error。"
+    },
+    {
+      "id": "NFR21.23",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_guards.py",
+      "note": "實例獨立（⑤）；無 Mcp-Session-Id。"
+    },
+    {
+      "id": "NFR21.24",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "七個常數各定義恰一次、65536／1048576 只出現在 limits.py。"
+    },
+    {
+      "id": "NFR21.25",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "refused／逾時／503 → backend_unavailable 且進程存活。"
+    },
+    {
+      "id": "NFR21.26",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "歸類表逐值；dns 以真實 .invalid 解析驗證（K-10）。"
+    },
+    {
+      "id": "NFR21.27",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "記錄包裝筆數＝呼叫次數；exchange 內不重送。"
+    },
+    {
+      "id": "NFR21.28",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_guards.py",
+      "note": "單元層（內層拋例外後下一請求為空）＋ e2e test_credential_context_cleared_after_backend_exception；突變 M24。"
+    },
+    {
+      "id": "NFR21.29",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "SECRET-MARKER 不進結果與 log、下一次成功；結果序列化失敗亦為 internal_error（app test_result_serialization_failure_is_internal_error）。"
+    },
+    {
+      "id": "NFR21.30",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "路線 A；本單元測試 skip 為 0（13 個檔）。"
+    },
+    {
+      "id": "NFR21.31",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_deploy.py",
+      "note": "ci.yml backend job 的 MCP tool spec drift 步驟（無 env、位置）。"
+    },
+    {
+      "id": "NFR21.32",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_deploy.py",
+      "note": "compose 形狀（restart、healthcheck 覆寫、512m、depends_on 無 condition、json_file_bounded、stop_grace_period 15s＝牆鐘 13＋1 < 15）；部署後健康步驟的阻擋觸發條件掃描 backend／frontend／scripts／deploy（程式審查 R-09，M31、M45、M46）。"
+    },
+    {
+      "id": "NFR21.33",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "configure_logging 層級與單行 formatter；BridgeFormatter 單行（startup）。"
+    },
+    {
+      "id": "NFR21.34",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_dispatch.py",
+      "note": "每分支恰一行 tool_call；tool／agent 注入正規化；e2e 斷線後恰一行。"
+    },
+    {
+      "id": "NFR21.35",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_topology.py",
+      "note": "startup port=<實際埠> tools=N；startup_failed 恰一行 ERROR；lifespan 啟動失敗記 subject=\"lifespan\" 並以非零碼結束、--port／--max-concurrency 範圍外亦同（程式審查 R-04，突變 M39、M40）。"
+    },
+    {
+      "id": "NFR21.36",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "uvicorn access_log=False：5 次 /healthz 無 uvicorn.access 紀錄。"
+    },
+    {
+      "id": "NFR21.37",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "requirements.txt 恰一行 mcp==2.3.0；linux amd64 binary-only 乾跑 98 個套件全有 wheel（程式審查 R-07，記於 code-summary 第十三節）；傳遞依賴未釘為已揭露事項。"
+    },
+    {
+      "id": "NFR21.38",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "新增直接依賴只有 mcp；fastapi／pydantic 釘選不變；無 requirements-mcp.txt。"
+    },
+    {
+      "id": "NFR21.39",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_generator.py",
+      "note": "八個類別各一個 @given、derandomize、database=None。"
+    },
+    {
+      "id": "NFR21.40",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_static.py",
+      "note": "純函式模組不 import mcp／httpx／sqlalchemy／fastapi／starlette。"
+    },
+    {
+      "id": "NFR21.41",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_deploy.py",
+      "note": "路線 A：Dockerfile 無 mcp 字樣（未改）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-PURE",
+      "status": "OK",
+      "target": "backend/mcp_bridge/generator.py",
+      "note": "五個純函式模組（generator／calls／outcomes／credentials／agents）＋ limits；PBT 落點。"
+    },
+    {
+      "id": "CG-GUARDS",
+      "status": "OK",
+      "target": "backend/mcp_bridge/guards.py",
+      "note": "PathRouter → MethodGuard → ConcurrencyGate → WallClock → BodyLimit → ExactPath → CredentialContext。"
+    },
+    {
+      "id": "CG-DISPATCH",
+      "status": "OK",
+      "target": "backend/mcp_bridge/dispatch.py",
+      "note": "run_tool_call：總攔截、恰一行 tool_call、16-A 無 shield。"
+    },
+    {
+      "id": "CG-EXECUTOR",
+      "status": "OK",
+      "target": "backend/mcp_bridge/executor.py",
+      "note": "全單元唯一 import httpx；拒收 cookie 的 jar；四值歸類。"
+    },
+    {
+      "id": "CG-APP",
+      "status": "OK",
+      "target": "backend/mcp_bridge/app.py",
+      "note": "create_app 唯一組裝點；SDK 2.3.0 接線（on_call_tool、get_tool_input_schema、stateless＋json_response、Host 檢查）。"
+    },
+    {
+      "id": "CG-ENTRY",
+      "status": "OK",
+      "target": "backend/mcp_bridge/cli.py",
+      "note": "cli／startup／server／__main__／observability。"
+    },
+    {
+      "id": "CG-ARTIFACTS",
+      "status": "OK",
+      "target": "backend/mcp_bridge/generated_tools.json",
+      "note": "allowlist.json、agents.json、generated_tools.json；gen_mcp_tools.py。"
+    },
+    {
+      "id": "CG-TOPOLOGY",
+      "status": "OK",
+      "target": "backend/tests/mcp_topology.py",
+      "note": "驗證拓樸、記錄包裝與屏障、LogSource、preserve_logging；mcp_test_client.py。"
+    },
+    {
+      "id": "CG-DEPLOY",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "第七個服務與 mcp 網段；ci.yml S-1／S-2；deploy.yml 非阻擋健康步驟；DEPLOY.md／LOCAL-DEV.md；requirements.txt。"
+    },
+    {
+      "id": "CG-REVIEW",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_e2e.py",
+      "note": "程式審查 review-01 的 R-01..R-10 全數處置；新增突變 13 列全紅（code-summary 第十三節）。"
+    }
+  ]
+}

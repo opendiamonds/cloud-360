@@ -54,3 +54,18 @@ redis
 # 實作，`/api/brain/ws` 的升級即失敗，而單元測試（TestClient 不經 uvicorn）不會紅燈。故明列。
 # 不 pin：理由同上方 redis（不進 OpenAPI，不影響規格漂移檢查）。
 websockets
+# MCP SDK（`U21 mcp-bridge`，`NFR21.37`）。只有獨立行程 `python -m mcp_bridge`（compose 的第七個服務）
+# import 它；backend 行程（`main.py` 與全部 router）**不 import** `mcp_bridge`，由
+# `tests/test_mcp_bridge_static.py` 鎖住。
+#
+# 為什麼用 `==` 精確釘選（比照檔頭的釘選紀律，但理由不同——它不進 OpenAPI）：2.x 的伺服器 API
+# 在小版本間仍標為 provisional，且 bridge 依賴的 SDK 行為（無狀態 streamable HTTP、Host 檢查、
+# 未知工具的協定錯誤、client 斷線不取消處理函式、例外字串在舊式協定版本會原樣外洩）都是在
+# `2.3.0` 上**實測**的（`U21` code-summary 的「Step 1 實測紀錄」與 SDK 行為假設總表）。
+# 升版前必須重跑該紀錄的 K-1–K-11。
+#
+# 相容條件（K-1）：在 Python < 3.14 上，`mcp==2.3.0` 只要求 `starlette>=0.27`，與
+# `fastapi==0.111.0` 的 `starlette<0.38.0,>=0.37.2` 相容，既有 87 個套件版本零變動。
+# **在 Python >= 3.14 上 mcp 要求 `starlette>=0.48.0`，與上方 FastAPI 釘選衝突**——
+# backend 映像與 CI 目前是 3.12；日後升到 3.14 時本行與 FastAPI 釘選要一起重新判定。
+mcp==2.3.0

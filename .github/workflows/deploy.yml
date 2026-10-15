@@ -369,6 +369,55 @@ jobs:
           docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env logs cloudflared --tail=60
           exit 1
 
+      # U21 mcp-bridge (7th service): post-deploy health RECORD. NON-BLOCKING on
+      # purpose (user ruling 2026-10-15T00:38:42Z): no client calls the bridge yet,
+      # so a broken bridge must not roll back an unrelated merge. It leaves a
+      # ::warning:: and one step-summary line instead -- nobody is notified.
+      #
+      # TRIGGER TO MAKE IT BLOCKING: the PR that merges the FIRST real MCP client
+      # into `ut` (any code under backend/ outside mcp_bridge/ and tests/ that dials
+      # mcp-bridge:8080) MUST, in that same PR, turn the final `exit 0` of the
+      # failure path into `exit 1` and drop `continue-on-error`.
+      # backend/tests/test_mcp_bridge_deploy.py turns that rule into a red build.
+      #
+      # Budget: at most 12 x 5s = 60s, counted INSIDE this job's 30-minute budget
+      # (the one whose failure triggers rollback + revert PR) -- DEPLOY.md §5.9.1.
+      # Never calls /mcp and never uses a token: this repo's Actions log is public.
+      # Every value is read inside an `if` condition (PROBE-CONTRACT P-5 above):
+      # a missing container makes `ps`/`inspect` fail, which must not abort the step.
+      - name: Record mcp-bridge health (non-blocking)
+        continue-on-error: true
+        env:
+          ATTEMPTS: "12"
+        run: |
+          set -uo pipefail
+          compose() { docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env "$@"; }
+          STATUS=missing
+          CID=""
+          for _ in $(seq 1 "${ATTEMPTS}"); do
+            if OUT=$(compose ps -q mcp-bridge) && [ -n "${OUT}" ]; then
+              CID="${OUT}"
+              if OUT=$(docker inspect --format '{{.State.Health.Status}}' "${CID}"); then
+                STATUS="${OUT}"
+              fi
+            fi
+            if [ "${STATUS}" = "healthy" ]; then
+              echo "mcp-bridge healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          RESTARTS=unknown
+          if [ -n "${CID}" ] && OUT=$(docker inspect --format '{{.RestartCount}}' "${CID}"); then
+            RESTARTS="${OUT}"
+          fi
+          echo "::warning::mcp-bridge not healthy after ${ATTEMPTS} checks (last status ${STATUS}, RestartCount ${RESTARTS}). Deploy continues: no MCP client uses the bridge yet."
+          echo "- mcp-bridge not healthy (status ${STATUS}, RestartCount ${RESTARTS}); non-blocking until the first MCP client merges" >> "${GITHUB_STEP_SUMMARY}"
+          if ! compose logs mcp-bridge --tail=40; then
+            echo "could not read mcp-bridge logs"
+          fi
+          exit 0
+
       # U10 session-store / NFR4.64: a REPEATABLE verification that NFR4.53-57
       # really hold -- every segment, every segment's full message history and
       # order, every segment's own three-level work target, both pageModes keys,

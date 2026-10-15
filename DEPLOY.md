@@ -1578,7 +1578,7 @@ checkpoint 會回收，故比例式餘裕取 `DBSIZE × 0.5`；**但 `max_wal_si
 
 #### 5.6 記憶體上限與日誌上限（本輪為**暫定值**）
 
-**六個服務全部設了 `deploy.resources.limits.memory`，值寫在 `deploy/docker-compose.deploy.yml`
+**七個服務全部設了 `deploy.resources.limits.memory`，值寫在 `deploy/docker-compose.deploy.yml`
 裡（不走環境變數）。** 硬寫的理由是：新增一個 compose 消費的變數就多一個同步點，而本 repo
 有這件事的**無聲失敗前例**（`N8N_USER`／`N8N_PASSWORD` 從未被寫入，導致每次部署的架構圖
 icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量要走 PR，變成可審查、有版本的變更。
@@ -1594,6 +1594,7 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 > | `ollama` | `4g` | `bge-m3` 約 1.2GB ＋ runtime 常駐約 2GB × 安全係數（**兩個數字取自一般認知，未在本主機實測**） |
 > | `frontend` | `128m` | nginx 常駐極小 |
 > | `cloudflared` | `128m` | tunnel client 常駐極小 |
+> | `mcp-bridge` | `512m` | 緩衝位元組上界 16 ×（64 KiB 請求＋1 MiB 回應）＝ 17 MiB，× 放大係數上緣 10 倍（JSON 解碼、structured content 與文字各一份、回應再序列化）＝ 170 MiB，＋ 行程常駐估計 ≤ 200 MiB ＝ 約 370 MiB，取 512m（**三個數字皆為估計，未量測**；`U21` `infrastructure-specification.md` 第二節之二） |
 >
 > **兩項給定假設**（本設計給定，可日後複量推翻）：(1) 單主機 staging、單一 uvicorn
 > worker、同時處理的 LLM 請求數上限為**個位數**；(2) 同時活躍的 session 數為**個位數到
@@ -1610,10 +1611,10 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 > **負責人**：Danniel（`REDIS_PASSWORD` 的建立者即量測者——建立 secret 的人是唯一知道首次部署何時
 > 發生的人，把兩件事綁在同一個人身上才不會互相等）。
 >
-> **量測方式（不需放寬任何 ACL，見 §5.11）**：主機上 `docker stats --no-stream` 取六個容器的穩態用量；
+> **量測方式（不需放寬任何 ACL，見 §5.11）**：主機上 `docker stats --no-stream` 取七個容器的穩態用量；
 > Redis 另以 app 使用者執行 `MEMORY STATS`（`INFO` 不可達，審查 R-01）。
 >
-> **未完成的後果**：十個記憶體上限與 `maxmemory` 全部停留在「以公開基準推導的暫定值」，
+> **未完成的後果**：十一個記憶體上限與 `maxmemory` 全部停留在「以公開基準推導的暫定值」，
 > 而 `OPEN-4` 自己寫明「沒有日期的限期複量會退化成永遠暫定」。**本節被填完之前，
 > 不得把這些數字當成已驗證的容量規劃依據。**
 >
@@ -1622,7 +1623,7 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 > ```text
 > 複量負責人：Danniel（已指定，見上）
 > 複量期限（日期）：首次部署成功日 + 7 日（實際日期：____________）
-> 複量方式：部署後在正常負載下取 `docker stats` 的穩態峰值，改 PR 更新這六個數字
+> 複量方式：部署後在正常負載下取 `docker stats` 的穩態峰值，改 PR 更新這七個數字
 > 複量完成日期與所得數字：____________
 > ```
 
@@ -1650,7 +1651,7 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 > 已於 `U10` 改為 `noeviction`（見下方），所以「優雅的淘汰」這個對照項不再存在**——
 > 現在的對照項是「可偵測的寫入拒絕」。關係式本身與它的下界數字**沒有改變**。**注意訊號的可達性（審查 R-01）**：淘汰計數雖然在 `INFO` 裡有 `evicted_keys`，但 `INFO` 的 ACL 分類是 `@slow @dangerous`，**本專案設定的兩個身分都不能執行它**——`default` 只有 `@connection`，app 使用者是 `+@all -@admin -@dangerous`。實際可用的替代訊號是以 app 使用者執行 `MEMORY STATS`，以及在主機上跑 `docker stats` 看容器層用量；兩者都不需要放寬任何 ACL。
 
-**`maxmemory 256mb` 的暫定依據**（與六個上限同一形狀：公開基準 ＋ 限期複量）：單一 session
+**`maxmemory 256mb` 的暫定依據**（與七個上限同一形狀：公開基準 ＋ 限期複量）：單一 session
 的 key 大小上界（`BrainSession` 除 `messageHistory` 外全是識別碼與短字串，量級由
 `messageHistory` 決定）× 24 小時內活躍 session 數上界（TTL 24 小時、每次互動續期）×
 安全係數。**該項待確認已由 `U10` 關掉**：`messageHistory` 有截斷策略了——每段上限
@@ -1726,8 +1727,8 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 compose 的全部服務**上。
 
 > **總量上界：`max-size` × `max-file` × 服務數 不得超過 2GB。**
-> 本輪：`50m × 5 × 6 = 1.5GB`，成立。這個上界是 5.5 磁碟公式裡「日誌預算」那一項的值
-> ——若這兩個值完全自由，該項就是一個無界的自由變數（`100m × 5 × 6` 就是 3GB，單這一項
+> 本輪：`50m × 5 × 7 = 1.75GB`，成立（`U21` 加入第七個服務 `mcp-bridge` 之前為 `× 6 = 1.5GB`；第八個服務將恰達 2GB）。這個上界是 5.5 磁碟公式裡「日誌預算」那一項的值
+> ——若這兩個值完全自由，該項就是一個無界的自由變數（`100m × 5 × 7` 就是 3.5GB，單這一項
 > 吃掉整個餘裕），公式會失去定義。
 >
 > 上界**只約束 deploy stack**；CI test 的日誌隨 stack 消失。
@@ -1857,18 +1858,19 @@ ls -la "$HOME/cloud360-upgrade/"      # 應無殘留 .sql
 | Redis ACL 反向探測 | 三個 `exec`／`inspect`，數秒 | 有界 |
 | 資料面探測 | `30 × (10 + 5) = 450s` | 有界 |
 | 等待 tunnel 迴圈 | `24 × (10 + 5) = 360s` | 有界（同樣是本輪補 `--max-time` 才有界） |
+| `mcp-bridge` 健康紀錄（`U21`） | `12 × 5 = 60s` | 有界。**非阻擋**（失敗只留 warning，不讓部署失敗），但這 60 秒**計入**本 job 會觸發 rollback 的預算 |
 
-**約束式**：`450 + 450 + 360 + (up -d --build 實測) + (ollama pull 實測) + 數秒 ≤ 1800s`。
-已知有界部分合計 **1260s**，所以兩個無界項合計必須 **≤ 540s（9 分鐘）**。
+**約束式**：`450 + 450 + 360 + 60 + (up -d --build 實測) + (ollama pull 實測) + 數秒 ≤ 1800s`。
+已知有界部分合計 **1320s**（`U21` 加入 60 秒之前為 1260s），所以兩個無界項合計必須 **≤ 480s（8 分鐘）**。
 
 **必填欄位（實測後補上，留空等於沒有預算）**：
 
 - `up -d --build` 實測耗時（冷快取／熱快取）: ____ / ____
 - `ollama pull` 實測耗時（首次下載／模型已在 volume）: ____ / ____
-- 兩者合計是否 ≤ 540s: ____
+- 兩者合計是否 ≤ 480s: ____
 - 量測日期與量測者: ____
 
-**若合計超過 540s**，處置是降低探測的重試次數（`N`）而不是延長 `timeout-minutes`——
+**若合計超過 480s**，處置是降低探測的重試次數（`N`）而不是延長 `timeout-minutes`——
 把逾時放寬會同時延長「站台已經壞掉但 job 還在等」的時間。
 
 #### 5.9.2 Ollama 的版本不可重現（審查 R-05）
@@ -1917,11 +1919,13 @@ openssl rand -hex 32     # 產生它。值不得含 `$`（見下）
 
 #### 5.11 Redis ACL 與網段分段：兩件不要「順手修正」的事
 
-1. **`deploy/docker-compose.deploy.yml` 的 `networks:` 一律不帶 `internal: true`。**
+1. **`deploy/docker-compose.deploy.yml` 的 `edge` 與 `internal` 兩個網段不帶 `internal: true`。**
    它會斷開該網段的**對外出口**，而 `ollama` 只掛在 `internal` 上——模型永遠拉不下來，
    且失敗形式是啟動時的網路錯誤，不是設定錯誤訊息。分段本身不需要它：一個普通的
    user-defined bridge 沒有 `ports:` 就沒有 host 端口映射，跨 bridge 流量本就被 Docker
-   的隔離規則阻擋。
+   的隔離規則阻擋。**例外是 `U21` 新增的 `mcp` 網段：它刻意設 `internal: true`**——成員只有
+   `backend` 與 `mcp-bridge`，斷開出口正是目的（bridge 只需要 `backend:8000`）；`backend` 經
+   `edge`／`internal` 仍有出口，不受影響。本條禁令只適用於既有的兩個網段，見 5.12。
 2. **`cloudflared` 不得加進 `internal`。** 它是本 stack 唯一對網際網路持續開著連線的
    容器；把它移出資料面（3 → 0 個可直達的資料面服務）就是分段的主要價值。
 
@@ -1930,14 +1934,81 @@ openssl rand -hex 32     # 產生它。值不得含 `$`（見下）
 session 與零認證的 Ollama；而 bridge 網段的 subnet 從 host 直接可路由，所以
 `192.168.10.10` 上的**任何行程**（包含自架 runner）都能以容器 IP 直連 `redis:6379` 與
 `ollama:11434`，**完全不需要 `ports:`**。分段隔離的是容器之間，不隔離 host 與容器。
+`mcp-bridge` **不在** `internal` 上：`db`、`redis`、`ollama` 碰不到它，它也碰不到它們；能連
+`mcp-bridge:8080` 的容器只有 `backend`（`mcp` 網段）。host 行程是否可達 `internal: true` 網段
+上的容器依引擎版本而異，部署後實測並填入 5.12。
 
-**三個 healthcheck 的已知盲點（刻意接受，不是漏洞）**：
+**四個 healthcheck 的已知盲點（刻意接受，不是漏洞）**：
 
 | healthcheck | 不證明什麼 |
 |---|---|
 | `redis-cli ping` | **不證明 ACL 使用者可用**——`ping` 在 `default` 下也會過；且它在 AOF 載入期間即可回應，所以 `service_healthy` 通過之後、資料集載入完成之前，其他指令會回 `LOADING` |
 | `ollama list`（即 `/api/tags`） | **不證明模型存在**——無模型時回空清單而非錯誤。「模型在不在」由部署後的 `ollama pull` 步驟保證 |
 | `pg_isready` | 在 **db 容器內部**執行，不證明 `backend` 連得到它。那由 5.7 的探測負責 |
+| `mcp-bridge` 的 `/healthz` | **不證明工具宣告正確、allowlist 生效，也不證明能呼叫 `backend`**——它在 bridge 的全部閘門之外、不連 backend，只證明 HTTP server 在接受連線。工具宣告的正確性由 CI 的漂移閘門與啟動自我驗證（宣告不合格即退出、容器重啟）保證 |
+
+#### 5.12 MCP bridge（第七個服務，`U21`）
+
+**角色**：把需求欄位的讀、寫、清空三個 backend 端點包成 MCP 工具（streamable HTTP、無狀態，端點
+`/mcp`），供未來的大腦側 MCP client 以**使用者本人的 token** 呼叫。本版**沒有任何實際 client**
+（`OPEN-MB21-1`），正式流量為 0。
+
+| 項目 | 內容 |
+|---|---|
+| 映像 | 與 `backend` **同一個映像**（同一份 `backend/Dockerfile`，build context 相同），只換 `command`：`python -m mcp_bridge --backend-url http://backend:8000 --host 0.0.0.0 --port 8080` |
+| 對外埠 | **零**：沒有 `ports:`、不在 `edge`、沒有 nginx `location`、沒有 tunnel ingress |
+| 環境變數／secret | **零**：全部設定走命令列參數；`render-env.sh`、`deploy/.env.example` 不需改 |
+| 網段 | 只在 `mcp`（`internal: true`，成員只有 `backend` 與 `mcp-bridge`）；**不在** `internal` |
+| healthcheck | 覆寫映像內建的 `HEALTHCHECK`（映像探 8000，bridge 不聽該埠）：容器內以 `urllib` 探 `http://127.0.0.1:8080/healthz` |
+| 記憶體上限 | `512m`（暫定，見 5.6 的表） |
+| `stop_grace_period` | `15s`：bridge 單一請求的牆鐘上限 13 秒（本體讀取 2 秒 ＋ backend 交換 10 秒 ＋ 1 秒餘裕）＋ 1 秒 ＝ 14 < 15 |
+| 預期的 client 路徑 | `backend` 容器經 `mcp` 網段以 `Host: mcp-bridge:8080` 連線。`backend` **不加** `depends_on: mcp-bridge`（client 惰性連線）。執行期的呼叫環（backend → bridge → backend）分屬不同請求，不構成啟動依賴 |
+
+**驗證指令**（維運者在 `192.168.10.10` 手動執行，不需 token）：
+
+```bash
+# 1. 沒有對外埠：無輸出或錯誤（未映射）即通過
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env port mcp-bridge 8080
+
+# 2. 只在 mcp 網段：鍵集合恰為 cloud360_mcp
+docker inspect --format '{{json .NetworkSettings.Networks}}' "$(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env ps -q mcp-bridge)"
+
+# 3. 健康：輸出 healthy
+docker inspect --format '{{.State.Health.Status}}' "$(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env ps -q mcp-bridge)"
+
+# 4. host 行程是否可達（實測欄位）：以容器 IP 從主機 curl /healthz
+docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env ps -q mcp-bridge)"
+curl -s --max-time 5 http://<上一行的 IP>:8080/healthz
+```
+
+**host 可達性（實測後填寫）**：`internal: true` 網段上的容器從 host 是否可路由，依 Docker 引擎版本而異。
+
+```text
+引擎版本：____________　實測日期：____________　量測者：____________
+host 可連 mcp-bridge:8080/healthz：是／否
+```
+
+即使可達，能拿到的也只有 `/healthz` 與 `tools/list` 的公開工具宣告；任何工具呼叫都須帶有效的使用者 JWT，
+並由 backend 的 facade 判權。
+
+**Encryption 是經使用者接受的例外，不是符合**：上游要求 HTTP 須為「本機迴環或加密」，本服務兩者皆非——
+使用者 JWT 以**明文**在 `mcp` 網段上往返（使用者 2026-10-14T23:02:07Z 接受）。改走專屬網段後，能在同網段
+竊聽的容器只剩 `backend`；但主機或 `backend` 被攻破時 token 仍可被截取。
+
+**部署後健康步驟不擋部署**：`deploy.yml` 的 `Record mcp-bridge health (non-blocking)` 讀不到 `healthy`
+時只印 `::warning::` 與一行 step summary，**沒有通知**。**改為阻擋的觸發條件**：第一個實際 MCP client
+（`backend/` 中 `mcp_bridge/`、`tests/` 以外，出現 `mcp-bridge:8080` 的程式）合併進 `ut` 的**同一個 PR**，
+必須把該步驟改為失敗即 `exit 1` 並拿掉 `continue-on-error`；`backend/tests/test_mcp_bridge_deploy.py`
+會在這件事被忘記時讓 CI 紅燈——它掃描 `backend/`（`mcp_bridge/` 與測試除外）、`frontend/`、`scripts/`、`deploy/`
+的程式與設定檔中的 `mcp-bridge`（任何埠）與 `:8080/mcp`。**人工檢查項**（掃描比對不到的寫法，例如以變數拼出服務名）：
+審查任何新增 MCP client 的 PR 時，確認該 PR 同時把這個步驟改為阻擋。
+
+**止損**：
+
+- 暫停服務：`docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env stop mcp-bridge`。
+  **這不持久**——下一次部署的 `up -d` 會把它拉回來。
+- 持久止損：開 PR 移除 compose 的 `mcp-bridge` 服務區塊（與 `backend/requirements.txt` 的 `mcp==` 一行），
+  合併後 `up -d --remove-orphans` 移除容器。bridge 無狀態、無 volume，停用不影響其他服務。
 
 ---
 

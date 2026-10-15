@@ -1,9 +1,9 @@
 # Cloud-360 deployment stack for 192.168.10.10.
 #
 # Public path:  internet -> Cloudflare tunnel -> frontend (nginx) -> backend
-# Only nginx is reachable from outside. backend, db, redis and ollama have no
-# host ports and no tunnel ingress; they exist solely on the compose networks
-# declared at the bottom of this file.
+# Only nginx is reachable from outside. backend, db, redis, ollama and mcp-bridge
+# have no host ports and no tunnel ingress; they exist solely on the compose
+# networks declared at the bottom of this file.
 #
 #   docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build
 #
@@ -62,7 +62,7 @@ services:
     logging: &json_file_bounded
       driver: json-file
       options:
-        # 50m x 5 x 6 services = 1.5GB, inside the 2GB total cap that the disk
+        # 50m x 5 x 7 services = 1.75GB, inside the 2GB total cap that the disk
         # formula in infrastructure-specification.md §四 takes as an input.
         max-size: "50m"
         max-file: "5"
@@ -164,9 +164,12 @@ services:
         # runs AFTER `up -d`. Waiting for "healthy" would look like waiting for
         # readiness while waiting for the wrong thing.
         condition: service_started
-    # backend is the ONLY service on both networks: it is the bridge between the
-    # public side and the data plane.
-    networks: [edge, internal]
+    # backend is the ONLY service on both edge and internal: it is the bridge
+    # between the public side and the data plane. It is also the only service
+    # sharing the dedicated `mcp` network with mcp-bridge, so the bridge reaches
+    # backend:8000 (and the future in-backend MCP client reaches mcp-bridge:8080)
+    # without the bridge ever joining `internal`.
+    networks: [edge, internal, mcp]
     logging: *json_file_bounded
     deploy:
       resources:
@@ -174,7 +177,7 @@ services:
           # Python interpreter + dependencies are already a few hundred MB
           # resident; times the given concurrency assumption (single uvicorn
           # worker, single-digit concurrent LLM requests). This is the most
-          # variable of the six and the one most worth measuring first.
+          # variable of the seven and the one most worth measuring first.
           # PROVISIONAL.
           memory: 2g
 
@@ -394,11 +397,60 @@ services:
         limits:
           memory: 128m
 
+  mcp-bridge:
+    # MCP tool server (U21, 7th service). Same image as backend, different
+    # command; it is a separate process and backend never imports it.
+    # Zero environment variables on purpose: every setting is a command-line
+    # flag, so no `environment:` / `env_file:` and no variable interpolation
+    # here -- adding one
+    # would pull this service into render-env.sh / .env.example sync (IC-1).
+    build:
+      context: ../backend
+      network: host
+    restart: unless-stopped
+    # --host 0.0.0.0 is explicit here because the program default is 127.0.0.1
+    # (a container listening on loopback is unreachable from backend).
+    command: ["python", "-m", "mcp_bridge", "--backend-url", "http://backend:8000", "--host", "0.0.0.0", "--port", "8080"]
+    # MUST override the image HEALTHCHECK (backend/Dockerfile probes :8000,
+    # which this container never listens on -- it would be unhealthy forever).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # No condition: the bridge never calls backend at startup; a request made
+    # while backend is down just returns backend_unavailable.
+    depends_on:
+      - backend
+    # REQUIRED RELATIONSHIP: stop_grace_period > REQUEST_WALL_TIMEOUT_S (13s,
+    # backend/mcp_bridge/limits.py = 2s body read + 10s backend exchange + 1s
+    # margin) + 1s = 14s < 15s. Raise this in the SAME PR if that wall-clock
+    # limit grows, otherwise SIGKILL truncates in-flight tool calls.
+    stop_grace_period: 15s
+    # `mcp` ONLY -- not `internal`, not `edge`, no ports:. Shared with backend
+    # and nobody else, and internal: true cuts the bridge's outbound path.
+    networks: [mcp]
+    logging: *json_file_bounded
+    deploy:
+      resources:
+        limits:
+          # 16 x (64 KiB request + 1 MiB response) = 17 MiB buffered-bytes upper
+          # bound, x10 amplification (upper end of the estimate) + <=200 MiB
+          # resident estimate ~= 370 MiB -> 512m. PROVISIONAL, NOT MEASURED.
+          memory: 512m
+
 networks:
-  # Two plain user-defined bridges. `internal: true` is deliberately NOT set,
-  # and must not be "helpfully" added later: it severs the OUTBOUND path for
-  # services attached only to that network, and `ollama` is one of them -- the
-  # model pull would fail with a network error rather than a config error.
+  # `edge` and `internal` are two plain user-defined bridges. `internal: true` is
+  # deliberately NOT set on THOSE TWO, and must not be "helpfully" added later:
+  # it severs the OUTBOUND path for services attached only to that network, and
+  # `ollama` is one of them -- the model pull would fail with a network error
+  # rather than a config error.
+  #
+  # `mcp` is the exception and sets `internal: true` ON PURPOSE: its only
+  # members are backend and mcp-bridge, and cutting the outbound path is the
+  # point -- the bridge needs nothing but backend:8000. backend keeps its
+  # outbound path through `edge`/`internal`, so this costs it nothing.
   #
   # It is also not needed for the segmentation this buys: a user-defined bridge
   # has no host port mapping unless `ports:` says so, and Docker's isolation
@@ -411,9 +463,14 @@ networks:
   #     reaches redis and ollama.
   #   * host-local processes -- a bridge subnet is routable from the host, so
   #     any process on 192.168.10.10 (including the self-hosted runner) reaches
-  #     redis:6379 and ollama:11434 with no ports: at all.
+  #     redis:6379 and ollama:11434 with no ports: at all. Whether host processes
+  #     also reach mcp-bridge:8080 on the internal: true `mcp` network depends
+  #     on the engine version; it is measured after deploy (DEPLOY.md §5.12).
+  #     Only /healthz and the public tool list answer without a user JWT.
   edge:
   internal:
+  mcp:
+    internal: true
 
 volumes:
   # Declared names; the actual Docker volumes carry the `cloud360_` project

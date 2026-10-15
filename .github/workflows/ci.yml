@@ -244,6 +244,11 @@ jobs:
     needs: gate
     if: needs.gate.outputs.is_sync != 'true'
     runs-on: ubuntu-latest
+    # Hard ceiling (U21 mcp-bridge, cicd-pipeline.md S-2): the suite now includes
+    # end-to-end MCP cases that start a real uvicorn server; each case is bounded
+    # at 30s in-test, and this stops a hung run from holding the runner for the
+    # 6h default. Recent successful runs took 82-107s.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -298,6 +303,15 @@ jobs:
       # requirements.txt so the output stays byte-deterministic.
       - name: WS contract spec drift
         run: python scripts/dump_ws_contract.py --check
+
+      # MCP tool drift gate (U21 mcp-bridge, BR72.9). Regenerates
+      # mcp_bridge/generated_tools.json from the committed openapi.json and
+      # mcp_bridge/allowlist.json and fails if the committed artifact differs.
+      # NO env block on purpose, same reasoning as the WS gate above: the script
+      # imports only the pure mcp_bridge.generator (never main, mcp or httpx),
+      # so a red light here can only mean the tool declarations drifted.
+      - name: MCP tool spec drift
+        run: python scripts/gen_mcp_tools.py --check
 
       # Unit suite (SQLite in-memory; psycopg mocked in tests/helpers.py)
       - name: Run unit tests
