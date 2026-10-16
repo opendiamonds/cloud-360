@@ -153,13 +153,16 @@ def list_projects(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """`W7`：列出**使用者可見的**專案。
+    """`W7`：列出**使用者可見的**專案，依 id 遞增。
 
-    「可見」＝`BR6.1` 的擁有者範圍。**本輪刻意收窄**（`BR6.2`）：被分享或以
-    成員身分取得的存取在本輪看不到任何東西；最終模型屬契約 `K-16`（`U19`）。
+    「可見」＝請求者有成員列的專案 ∪ 請求者是擁有者、且該專案尚無任何成員列的專案
+    （`U23`，`BR87.1`）。被邀請的成員看得到專案；被另一位管理者移出的建立者看不到。
+    缺 `K2 view` 時回 403——即使可見集合為空。
     """
     try:
-        return _facade(db).list_projects(mint_principal(current_user))
+        return membership_facade.MembershipFacade(db).list_visible_projects(
+            mint_principal(current_user)
+        )
     except Exception as exc:  # noqa: BLE001 - 轉譯後重新拋出
         raise _translate(exc) from exc
 
@@ -217,9 +220,14 @@ def list_systems(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """`W7`：列出該專案的系統。專案不屬請求者時回 **404**，不是 403。"""
+    """`W7`：列出該專案的系統，依 id 遞增。
+
+    只對該專案的可見者回 200（`U23`，`BR87.2`：成員；或擁有者且專案尚無任何成員列）。
+    缺 `K2 view` 一律 403（不論專案是否存在）；專案不存在與存在但不可見一律 **404**，
+    且兩者的回應本體相同。
+    """
     try:
-        return _facade(db).list_systems(
+        return membership_facade.MembershipFacade(db).list_visible_systems(
             mint_principal(current_user), project_id=project_id
         )
     except Exception as exc:  # noqa: BLE001
@@ -239,9 +247,20 @@ def create_system(
     db: Session = Depends(get_db),
 ):
     """`W2`：在指定專案下建立系統。`BR6.5` 的擁有者檢查在 facade 內。"""
+    # `U23`（functional-design `R-01` 使用者裁決）：可見性守門也在 facade 內，判定由
+    # `U19` 的 `MembershipFacade.project_visibility` 產生並注入。不在請求者可見集合內
+    # 的專案（含被移出的建立者）回 404，與真正的不存在逐位元相同。
+    # 刻意寫成註解而非 docstring：docstring 是 operation 的 description，改它會讓
+    # `openapi.json` 多漂移一支（本單元只讓兩支列舉端點的 description 漂移，`BR87.4`）。
     try:
+        principal = mint_principal(current_user)
         return _facade(db).create_system(
-            mint_principal(current_user), project_id=project_id, name=payload.name
+            principal,
+            project_id=project_id,
+            name=payload.name,
+            project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
         )
     except Exception as exc:  # noqa: BLE001
         raise _translate(exc) from exc
@@ -263,9 +282,15 @@ def delete_project(
     db: Session = Depends(get_db),
 ):
     """`W6`（專案）。底下仍有系統時回 **409** 並說明剩餘數量（`BR4.4`）。"""
+    # `U23`：可見性守門早於擁有者檢查與 409——不可見者一律 404「查不到專案」。
     try:
+        principal = mint_principal(current_user)
         _facade(db).delete_project(
-            mint_principal(current_user), project_id=project_id
+            principal,
+            project_id=project_id,
+            project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
         )
     except Exception as exc:  # noqa: BLE001
         raise _translate(exc) from exc
@@ -283,8 +308,17 @@ def delete_system(
     db: Session = Depends(get_db),
 ):
     """`W6`（系統）。仍有架構圖歸屬時回 **409** 並說明張數（`BR4.3`）。"""
+    # `U23`：可見性守門早於擁有者檢查與 409——系統不存在、或其所屬專案不在請求者的
+    # 可見集合內，一律 404「查不到系統」。
     try:
-        _facade(db).delete_system(mint_principal(current_user), system_id=system_id)
+        principal = mint_principal(current_user)
+        _facade(db).delete_system(
+            principal,
+            system_id=system_id,
+            project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
+        )
     except Exception as exc:  # noqa: BLE001
         raise _translate(exc) from exc
     return None

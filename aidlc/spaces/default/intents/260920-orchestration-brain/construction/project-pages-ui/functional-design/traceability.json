@@ -1,0 +1,113 @@
+{
+  "stage": "functional-design",
+  "unit": "project-pages-ui",
+  "upstream_ids": [
+    "AC11.1.1",
+    "AC11.1.2",
+    "AC11.1.3",
+    "AC11.2.1",
+    "AC11.2.2",
+    "AC11.2.3",
+    "AC11.3.1",
+    "AC11.3.2",
+    "AC11.3.3",
+    "AC12.1.3",
+    "AC12.6.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC11.1.1",
+      "status": "OK",
+      "target": "BR82.4, BR82.5",
+      "note": "建立專案成功後導向總覽籤（BR82.5），擁有者在「系統 0」旁看到建立系統動作（BR82.4）。e2e 斷言該動作存在且可點。"
+    },
+    {
+      "id": "AC11.1.2",
+      "status": "OK",
+      "target": "BR84.1",
+      "note": "無系統時需求籤不渲染選擇器與欄位組，改渲染說明 ＋ 建立系統動作。e2e 斷言選擇器數為 0、說明文字與動作存在。"
+    },
+    {
+      "id": "AC11.1.3",
+      "status": "OK",
+      "target": "BR82.4",
+      "note": "建立系統成功後重讀系統清單，「系統 N」由清單長度得出，0 → 1。突變候選：改為本地加一則與伺服器回應不同時紅。"
+    },
+    {
+      "id": "AC11.2.1",
+      "status": "OK",
+      "target": "BR84.2",
+      "note": "「未填」為文字節點，且為欄位 aria-describedby 指向的元素。e2e 以文字與可及描述斷言，不以顏色。"
+    },
+    {
+      "id": "AC11.2.2",
+      "status": "OK",
+      "target": "BR84.3",
+      "note": "組標題與組內欄位集合取自回應；e2e 比對每個 fieldset 的 legend 與其內 label 集合，欄位錯綁到別組即紅。"
+    },
+    {
+      "id": "AC11.2.3",
+      "status": "OK",
+      "target": "BR84.5, BR85.6",
+      "note": "以路由攔截讓某欄位 PUT 失敗：畫面顯示失敗文字、該輸入框仍為使用者輸入的值；部分失敗時成功欄位以重讀結果呈現。第二條失敗路徑（審查 R-08）：PUT 成功但儲存後的重讀 GET 失敗——攔截重讀請求，斷言成功欄位仍為輸入值並標「已儲存、重新整理失敗」、總覽未填顯示「無法取得」、[重新整理] 存在（BR85.6）。以具 K4 edit 的角色構造（BR84.7）。"
+    },
+    {
+      "id": "AC11.3.1",
+      "status": "OK",
+      "target": "BR85.1, BR85.2",
+      "note": "總覽「未填需求欄位」= 各系統 unfilled_count 總和，與需求籤讀同一份狀態。e2e 預言機（審查 R-07）：以**單一系統專案**構造，斷言總覽數字等於需求籤「未填」文字節點數。多系統時兩者不相等是設計如此（BR85.2：總覽等於逐一選過每個系統的未填數總和），故 AC 的「需求籤有 N 個未填」只在單一系統專案中逐字成立。"
+    },
+    {
+      "id": "AC11.3.2",
+      "status": "OK",
+      "target": "BR85.3",
+      "note": "填滿一欄並儲存後重讀 GET，切到總覽為 N−1；切籤不發請求（可以請求計數斷言）。e2e 預言機：單一系統專案（同 AC11.3.1），N 取自儲存前的總覽數字。"
+    },
+    {
+      "id": "AC11.3.3",
+      "status": "OK",
+      "target": "BR85.4",
+      "note": "全部已填時總覽顯示 0，需求籤「未填」文字節點數為 0。e2e 預言機：單一系統專案，或多系統專案中**全部系統**皆已填（逐一選過每個系統斷言未填文字數為 0）；不得以「所選系統已填、另一系統未填」構造，那時總覽不為 0 是正確行為（BR85.2）。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "OK",
+      "target": "BR87.1, BR87.5",
+      "note": "承接 U24 的 OPEN-MP24-5（[PP1]=A）。伺服器側：非成員的專案清單不含該專案，由 TestClient 的非成員案斷言（BR87.5）。畫面側：非成員的清單頁不出現該專案名稱（e2e）。已核可的 story map 未把 US12.1 映射到本單元，本單元依 OPEN-MP24-5 的指派承接，不回改 story map。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "OK",
+      "target": "BR87.1, BR87.5",
+      "note": "承接 U24 的 OPEN-MP24-5（[PP1]=A）。可見集合納入成員後，被邀請者的專案清單含該專案；TestClient 的成員案斷言，突變（拿掉成員那一半）須紅。e2e 另以被邀請者登入斷言清單出現該專案。story map 同上，不回改。"
+    }
+  ],
+  "reverse": [
+    { "id": "BR81.1", "status": "N/A", "target": "K2 能力層把關：沿用既有 CapabilityRoute，屬 U3 的規則 6.3 在畫面層的落地，無對應 AC" },
+    { "id": "BR81.2", "status": "N/A", "target": "清單頁四態：K-19 的 required_accessible_behaviour 與 mockups.md M10，無 US11 AC 直接斷言清單頁的 error 態" },
+    { "id": "BR81.3", "status": "N/A", "target": "error 與 empty 文案區分：mockups.md M10" },
+    { "id": "BR81.4", "status": "N/A", "target": "列的邊界態（尚無系統、系統清單讀取失敗）：mockups.md M10" },
+    { "id": "BR82.1", "status": "N/A", "target": "共用寫入路徑：interaction-spec.md 的 INV-2，屬結構約束" },
+    { "id": "BR82.2", "status": "N/A", "target": "建立失敗的三類文案：interaction-spec.md ObjectCreateAction" },
+    { "id": "BR82.3", "status": "N/A", "target": "非冪等不自動重試：U7 的規則 2.4 在畫面層的落地" },
+    { "id": "BR83.1", "status": "N/A", "target": "三籤 tablist 與網址定址：線框 §16 無障礙註記與 K-19 的 axe 掃描義務" },
+    { "id": "BR83.2", "status": "N/A", "target": "需求籤的 K4 把關：U3 的規則 6.3" },
+    { "id": "BR83.3", "status": "N/A", "target": "頁首只有 [成員]：[PP2]=A 與 U24 的 F-1，OPEN-PP23-4" },
+    { "id": "BR83.4", "status": "N/A", "target": "查不到態：BR87.2 的 404 在畫面上的呈現" },
+    { "id": "BR84.4", "status": "N/A", "target": "更新者三值：mockups.md M12 第 2 點。agent 標題以 updated_on_behalf_of 對回應 groups 的 group_key 比對取得，比對不到降級為「由大腦」（審查 R-06）；e2e 以 on_behalf_of 指向**另一組**的代寫構造，斷言顯示的是請求組的標題而非欄位所屬組" },
+    { "id": "BR84.6", "status": "N/A", "target": "空值即清空的誠實宣告：[US:D-15]，無 AC（清空控件不在本輪範圍）" },
+    { "id": "BR84.7", "status": "N/A", "target": "無 K4 edit 唯讀呈現：U3 的規則 6.3 在畫面層的落地，無對應 AC（審查 R-02）。e2e allow／deny 兩案：allow＝具 K4 edit 的角色（如 Project_Editor）看到可編輯欄位與 requirements-save、儲存成功；deny＝K4 view=True／edit=False 的角色（如 Developer，rbac_seed_data.py:350）看到 readOnly 欄位、requirements-save 不在 DOM、requirements-readonly-notice 存在，且「未填」文字與更新者照常顯示" },
+    { "id": "BR85.5", "status": "N/A", "target": "無 K4 隱藏未填指標：U3 的規則 6.4" },
+    { "id": "BR86.1", "status": "N/A", "target": "架構圖計數佔位：[PP2]=A、OPEN-PP23-1" },
+    { "id": "BR86.2", "status": "N/A", "target": "最近變更的部分來源標示：[PP2]=A、OPEN-PP23-2" },
+    { "id": "BR86.3", "status": "N/A", "target": "記憶摘要籤佔位：[PP2]=A、OPEN-PP23-3" },
+    { "id": "BR87.2", "status": "N/A", "target": "成員可讀系統清單：AC12.6.3 的連帶前提（看得到專案卻打不開即無意義），無獨立 AC。另承擔 AC12.6.2（屬 U24 的 AC）在本單元兩支端點上的讀取拒絕：被移出的擁有者 → 404（[PP3]=A，BR87.5 第 ④ 案）。缺 K2 view 一律 403（審查 R-04），既有回歸鎖為 tests/test_hierarchy_service.py:130-141" },
+    { "id": "BR87.3", "status": "N/A", "target": "呼叫方向與六個新增方法的名稱與簽章：結構約束，避免 U7↔U19 循環（審查 R-03）" },
+    { "id": "BR87.4", "status": "N/A", "target": "契約形狀不變、description 重新 dump：CI 漂移閘門承擔" },
+    { "id": "BR87.6", "status": "N/A", "target": "放寬範圍宣告：誠實宣告；含大腦目錄不變（OPEN-PP23-6 ③）與被移出建立者的擁有者寫入（OPEN-PP23-10）" },
+    { "id": "BR87.7", "status": "N/A", "target": "繞過擁有者檢查的 facade 方法只准 MembershipFacade 呼叫：ast 靜態測試 backend/tests/test_project_visibility_static.py，突變為在 hierarchy_router 直呼（審查 R-03），無對應 AC" },
+    { "id": "BR88.1", "status": "N/A", "target": "兩層抓取形狀：team.md Code Style（lint error 級）" },
+    { "id": "BR88.2", "status": "N/A", "target": "live region 播報：[US:D-08] 與共同 DoD" },
+    { "id": "BR88.3", "status": "N/A", "target": "扇出並行上限 4、不截斷：OPEN-PP23-5 未定案前的預設（審查 R-11），無對應 AC" }
+  ]
+}

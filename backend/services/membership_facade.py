@@ -47,12 +47,13 @@ membership_facade.py — `U19 membership-service` 的授權門面
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from sqlalchemy.orm import Session
 
 from models import ReselectionEvent
 from services.hierarchy_facade import (
+    PROJECT_NOT_FOUND_DETAIL,
     HierarchyFacade,
     HierarchyForbidden,
     HierarchyNotFound,
@@ -465,6 +466,71 @@ class MembershipFacade:
         except Exception:
             self._db.rollback()
             raise
+
+    # -- 專案可見性（`U23`；`BR87.1`–`BR87.3`，`[PP1]`=A、`[PP3]`=A）----------
+    #
+    # 呼叫方向為 router → 本 facade → `HierarchyFacade`；`U7` 不呼叫 `U19`。
+    # `K2` 判定**不在這裡**：它只有一份，在 `HierarchyFacade` 內，由下列方法經
+    # `project_exists`／`list_projects_by_ids`／`list_systems_unscoped` 的第一行觸發。
+    # 可見性判定只呼叫 `membership_service.visible_project_ids`／`is_project_visible`
+    # ——兩者都由同一個私有選取式組出，謂詞只有一份。
+
+    def list_visible_projects(self, principal: Principal) -> List:
+        """`GET /api/hierarchy/projects` 的資料來源：請求者可見的專案，依 id 遞增。
+
+        可見 ＝ 成員列 ∪（擁有者 且 該專案零成員列）。`K2 view` 由
+        `list_projects_by_ids` 的第一行判定——可見集合為空也判定，故缺 `K2` 者一律
+        403 而非 200 `[]`。
+
+        **如實記載的順序**：可見 id 的查詢早於 `K2` 判定一條語句（`list_projects_by_ids`
+        需要 id 集合作參數）。被拒時該結果直接丟棄、不回傳任何東西，故不外洩；
+        但「判定先於任何讀取」在這一支是**先讀一次 id、再判定**。
+        """
+        project_ids = membership_service.visible_project_ids(
+            self._db, user_id=principal.user_id
+        )
+        return HierarchyFacade(self._db).list_projects_by_ids(
+            principal, project_ids=project_ids
+        )
+
+    def list_visible_systems(self, principal: Principal, *, project_id: int) -> List:
+        """`GET /api/hierarchy/projects/{project_id}/systems` 的資料來源（`BR87.2`）。
+
+        判定順序固定為三步：
+
+        1. `HierarchyFacade.project_exists`——其第一行即 `K2 view` 判定，
+           `HierarchyForbidden` **原樣上拋**（router 轉 403）。**不得**改走
+           `_assert_project_exists`：它把 `HierarchyForbidden` 轉成
+           `MembershipNotFound`，會讓缺 `K2` 者得到 404（既有 `T2b` 紅燈）。
+        2. 專案不存在 → `MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)` → 404。
+        3. 不在可見集合內 → **同一個例外、同一句訊息** → 404，與第 2 步的回應逐位元
+           相同（nfr-requirements `R-01`）。可見 → `list_systems_unscoped`。
+        """
+        hierarchy = HierarchyFacade(self._db)
+        if not hierarchy.project_exists(principal, project_id=project_id):
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)
+        if not membership_service.is_project_visible(
+            self._db, project_id=project_id, user_id=principal.user_id
+        ):
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)
+        return hierarchy.list_systems_unscoped(principal, project_id=project_id)
+
+    def project_visibility(self, principal: Principal) -> Callable[[int], bool]:
+        """`HierarchyFacade` 三條寫入路徑的守門判定（注入用，`security-design.md` §二之一）。
+
+        回傳一個只在本次請求內存活的閉包；`HierarchyFacade` 只知道它是
+        `Callable[[int], bool]`，原始碼不 import 任何成員關係符號（`BR87.3`）。
+        **非測試程式唯一合法的 `project_visible` 來源就是本方法**（ast 靜態鎖第 3 條）。
+        """
+        db = self._db
+        user_id = principal.user_id
+
+        def _visible(project_id: int) -> bool:
+            return membership_service.is_project_visible(
+                db, project_id=project_id, user_id=user_id
+            )
+
+        return _visible
 
     # -- 橫幅（`BR5.5`／`BR5.6`）-------------------------------------------
 

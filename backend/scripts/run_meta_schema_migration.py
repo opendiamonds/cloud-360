@@ -114,6 +114,8 @@ BLOCK_SENTINELS = {
         "CREATE TABLE IF NOT EXISTS reselection_events",
         "CREATE TABLE IF NOT EXISTS system_requirement_fields",
         "ix_reselection_events_unack",
+        # U23（[PPN1]=A）：有人把這個 CREATE INDEX 移出 `J)` 區塊時在解析階段就失敗。
+        "ix_project_members_user_id",
     ),
     # U9 memory-purge 的保留系統 actor seed。**不在 `BLOCKS_TO_RUN` 內**（見該處
     # 註解：本腳本宣告它不塞任何資料，契約 K-15）；登錄在此是為了讓
@@ -168,6 +170,10 @@ EXPECTED_INDEXES = (
     ("memory", "memory_audit_events", "ix_memory_audit_events_memory_id"),
     ("public", "reselection_events", "ix_reselection_events_unack"),
     ("public", "reselection_events", "ix_reselection_events_project_id"),
+    # U23（[PPN1]=A）：專案清單改讀成員列，可見性查詢的成員那一半以 user_id 出發。
+    # 與 `BLOCK_SENTINELS["J"]` 的哨兵不同：哨兵只證明 DDL 文字在區塊內，這一列
+    # 才證明索引真的被建立（test_membership_data.test_M3b 鎖住這一列）。
+    ("public", "project_members", "ix_project_members_user_id"),
 )
 
 EXPECTED_CONSTRAINTS = (

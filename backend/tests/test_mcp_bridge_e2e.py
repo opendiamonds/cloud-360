@@ -26,7 +26,7 @@ from mcp_bridge.startup import load_and_validate
 from models import SystemRequirementField
 from services.auth import create_access_token
 from services.hierarchy_facade import HierarchyFacade, mint_principal
-from tests.helpers import close_session
+from tests.helpers import ALWAYS_VISIBLE, close_session
 from tests.mcp_test_client import MODES, SdkClientPort
 from tests.mcp_topology import BridgeTopology, CallHookBarrier, bounded, preserve_logging
 from tests.test_requirement_field_facade import RequirementFieldFixture
@@ -59,7 +59,8 @@ class E2EBase(RequirementFieldFixture, unittest.IsolatedAsyncioTestCase):
         preserve_logging(self)
         self.build_fixture()
         self.system2 = HierarchyFacade(self.db).create_system(
-            mint_principal(self.outsider), project_id=self.other_project.id, name="S2")
+            mint_principal(self.outsider), project_id=self.other_project.id, name="S2",
+            project_visible=ALWAYS_VISIBLE)
         self.db.commit()
         self.owner_token = "Bearer " + create_access_token({"sub": self.owner.username})
         self.outsider_token = "Bearer " + create_access_token({"sub": self.outsider.username})

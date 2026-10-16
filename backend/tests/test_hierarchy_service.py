@@ -37,7 +37,13 @@ from services.hierarchy_facade import (
     mint_principal,
 )
 import services.hierarchy_service as hierarchy_service
-from tests.helpers import close_session, make_diagram, make_session, make_user
+from tests.helpers import (
+    ALWAYS_VISIBLE,
+    close_session,
+    make_diagram,
+    make_session,
+    make_user,
+)
 
 ROLE_EDIT = "Project_Architect"   # K2 view+edit
 ROLE_VIEW_ONLY = "Developer"      # K2 view 但 edit=False
@@ -217,7 +223,7 @@ class TestRowVisibility(HierarchyTestBase):
         bob_p = self.a_project(self.bob, "bob-p")
         with self.assertRaises(HierarchyNotFound):
             self.facade.create_system(
-                self.p_alice, project_id=bob_p.id, name="sneaky"
+                self.p_alice, project_id=bob_p.id, name="sneaky", project_visible=ALWAYS_VISIBLE
             )
         self.assertEqual(
             self.db.query(System).filter(System.project_id == bob_p.id).count(), 0
@@ -228,9 +234,9 @@ class TestRowVisibility(HierarchyTestBase):
         bob_p = self.a_project(self.bob, "bob-p")
         bob_s = self.a_system(bob_p, "bob-s")
         with self.assertRaises(HierarchyNotFound):
-            self.facade.delete_system(self.p_alice, system_id=bob_s.id)
+            self.facade.delete_system(self.p_alice, system_id=bob_s.id, project_visible=ALWAYS_VISIBLE)
         with self.assertRaises(HierarchyNotFound):
-            self.facade.delete_project(self.p_alice, project_id=bob_p.id)
+            self.facade.delete_project(self.p_alice, project_id=bob_p.id, project_visible=ALWAYS_VISIBLE)
         self.assertIsNotNone(self.db.get(System, bob_s.id))
         self.assertIsNotNone(self.db.get(Project, bob_p.id))
 
@@ -321,14 +327,14 @@ class TestCreateAndNaming(HierarchyTestBase):
         project = self.facade.create_project(self.p_alice, name="P")
         self.assertFalse(project.is_default)
         system = self.facade.create_system(
-            self.p_alice, project_id=project.id, name="S"
+            self.p_alice, project_id=project.id, name="S", project_visible=ALWAYS_VISIBLE
         )
         self.assertFalse(system.is_default)
 
     def test_T15_creating_a_system_under_a_missing_project_is_not_found(self):
         """`T15`／`BR2.2`：目標專案不存在即拒絕。"""
         with self.assertRaises(HierarchyNotFound):
-            self.facade.create_system(self.p_alice, project_id=999999, name="S")
+            self.facade.create_system(self.p_alice, project_id=999999, name="S", project_visible=ALWAYS_VISIBLE)
 
 
 # ===========================================================================
@@ -343,12 +349,12 @@ class TestDeletion(HierarchyTestBase):
         project.is_default = True
         self.db.commit()
         with self.assertRaises(HierarchyConflictError):
-            self.facade.delete_project(self.p_alice, project_id=project.id)
+            self.facade.delete_project(self.p_alice, project_id=project.id, project_visible=ALWAYS_VISIBLE)
         system = self.a_system(project, "default-s")
         system.is_default = True
         self.db.commit()
         with self.assertRaises(HierarchyConflictError):
-            self.facade.delete_system(self.p_alice, system_id=system.id)
+            self.facade.delete_system(self.p_alice, system_id=system.id, project_visible=ALWAYS_VISIBLE)
 
     def test_T17_deleting_a_project_with_systems_states_the_remaining_count(self):
         """`T17`／`BR4.4`：訊息**必須含剩餘系統數**。"""
@@ -356,7 +362,7 @@ class TestDeletion(HierarchyTestBase):
         self.a_system(project, "s1")
         self.a_system(project, "s2")
         with self.assertRaises(HierarchyConflictError) as ctx:
-            self.facade.delete_project(self.p_alice, project_id=project.id)
+            self.facade.delete_project(self.p_alice, project_id=project.id, project_visible=ALWAYS_VISIBLE)
         self.assertIn("2", str(ctx.exception))
         c = self.client_as(self.alice)
         r = c.delete(f"/api/hierarchy/projects/{project.id}")
@@ -371,7 +377,7 @@ class TestDeletion(HierarchyTestBase):
         diagram.system_id = system.id
         self.db.commit()
         with self.assertRaises(HierarchyConflictError) as ctx:
-            self.facade.delete_system(self.p_alice, system_id=system.id)
+            self.facade.delete_system(self.p_alice, system_id=system.id, project_visible=ALWAYS_VISIBLE)
         self.assertIn("1", str(ctx.exception))
 
     def test_T19_a_clean_delete_succeeds_and_never_cascades(self):
@@ -384,11 +390,11 @@ class TestDeletion(HierarchyTestBase):
         # 先把圖移出系統，刪系統才會成功
         diagram.system_id = None
         self.db.commit()
-        self.facade.delete_system(self.p_alice, system_id=system.id)
+        self.facade.delete_system(self.p_alice, system_id=system.id, project_visible=ALWAYS_VISIBLE)
         self.assertIsNone(self.db.get(System, system.id))
         # **圖沒有被連帶刪除**
         self.assertIsNotNone(self.db.get(UserDiagram, diagram.id))
-        self.facade.delete_project(self.p_alice, project_id=project.id)
+        self.facade.delete_project(self.p_alice, project_id=project.id, project_visible=ALWAYS_VISIBLE)
         self.assertIsNone(self.db.get(Project, project.id))
         self.assertIsNotNone(self.db.get(UserDiagram, diagram.id))
 

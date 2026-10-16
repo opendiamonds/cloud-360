@@ -576,11 +576,14 @@ class ProjectMember(Base):
     # 與 `entities.md` 裡；**不自行加進 `MemberView`**。
     invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # **刻意沒有額外索引**（兩個方向各有理由，見 `schema_rbac.sql` 的 `J)` 區塊）：
+    # 索引兩個方向（見 `schema_rbac.sql` 的 `J)` 區塊）：
     # `project_id` 側由 `uq_project_members_project_user` 以它為前導欄覆蓋
     # （`resolve_project_role` 的最熱路徑、`list_members`、挑選過濾、CASCADE 的
-    # 子側掃描全在其中）；`user_id` 側刻意不建——不需要的索引有寫入成本。
-    # **不得自行補 `index=True`**，那會讓 ORM 與 DDL 的索引集合不相等。
+    # 子側掃描全在其中），不另建；`user_id` 側由 `U23` 建立
+    # `ix_project_members_user_id`——專案清單改讀成員列（`[PP1]`=A、`[PPN1]`=A），
+    # 可見性查詢的成員那一半以 `user_id` 為條件從本表出發。
+    # 本檔與 DDL 的索引名稱集合必須相等（`test_membership_data.test_M3`）；
+    # **以具名 `Index` 宣告，不得改用 `index=True`**（後者產生的名稱與 DDL 不同）。
     __table_args__ = (
         CheckConstraint(
             "role IN ('project_admin', 'member')",
@@ -589,6 +592,7 @@ class ProjectMember(Base):
         UniqueConstraint(
             "project_id", "user_id", name="uq_project_members_project_user"
         ),
+        Index("ix_project_members_user_id", "user_id"),
     )
 
 

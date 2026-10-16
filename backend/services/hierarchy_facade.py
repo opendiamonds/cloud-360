@@ -31,13 +31,24 @@ hierarchy_facade.py — `U7 hierarchy-service` 的授權門面
 - **判定支援型查詢**（`project_exists`／`get_project_owner`／
   `get_project_of_system`）**刻意不套列範圍**（`BR6.4`）——否則契約
   `K-16`／`K-17` 不可實作。改以三道約束取代，見各方法 docstring。
+
+`U23` 起另有兩組新增：
+
+- **成員範圍的列舉來源**（`list_projects_by_ids`／`list_systems_unscoped`）：
+  不做擁有者檢查、回傳 model 物件，**唯一合法呼叫端是 `MembershipFacade`**
+  （由它以成員可見性決定 id 集合；`BR87.3`／`BR87.7`，ast 靜態鎖在
+  `tests/test_project_visibility_static.py`）。
+- **三條寫入路徑的可見性守門**（`create_system`／`delete_project`／`delete_system`
+  的 `project_visible` 參數）：判定由呼叫端注入，本模組**不 import 任何成員關係
+  符號**——`U7` 不呼叫 `U19`（`BR87.3`），而守門仍在 `K2 edit` 之後、擁有者檢查與
+  一切 409 之前（`security-design.md` §二之二）。
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, List, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -81,6 +92,20 @@ class HierarchyNotFound(HierarchyError):
     **也用於「存在但不屬於請求者」**（`BR6.1`／`BR6.5`）——刻意與真正的
     不存在**回同一種結果**，否則回應本身就是一個存在性預言機。
     """
+
+
+# 「查不到」的固定訊息（`U23`，nfr-requirements `R-01` 使用者裁決；`PPN-13`）。
+#
+# **不含任何 id，而這是刻意的**：`hierarchy_router._translate` 以 `str(exc)` 轉成
+# HTTP `detail`。訊息帶 id 時，「從未存在的 id」與「存在但你看不到的 id」雖然狀態碼
+# 相同，回應本體仍因 id 不同而不同——測試只能比狀態碼，無法以 `response.content`
+# 逐位元證明兩者不可區分。固定成常數後，「同一個例外型別 ＋ 同一個常數」即保證
+# 回應本體相同。
+#
+# 定義在例外型別旁邊、而非 `hierarchy_service`：service 層已從本檔匯入例外，
+# `membership_facade` 也已從本檔匯入，**不新增任何匯入方向**。
+PROJECT_NOT_FOUND_DETAIL = "查不到專案"
+SYSTEM_NOT_FOUND_DETAIL = "查不到系統"
 
 
 class HierarchyValidationError(HierarchyError):
@@ -210,9 +235,36 @@ class HierarchyFacade:
             self._db, owner_user_id=principal.user_id, name=name
         )
 
-    def create_system(self, principal: Principal, *, project_id: int, name: str):
-        """`W2`。**非冪等**（`BR2.4`）。"""
+    # 三條寫入路徑的共同順序（`U23`，`security-design.md` §二之二；functional-design
+    # `R-01` 使用者裁決、nfr-requirements `R-03`／`R-04`）：
+    #
+    #   1. `_authorize(principal, "edit")`           → 403（`K2` 判定只有這一份）
+    #   2. （僅 `delete_system`）取系統所屬專案       → 不存在 404「查不到系統」
+    #   3. `project_visible(project_id)` 為假         → 404（不存在與不可見同一句）
+    #   4. 既有擁有者檢查（`BR6.5`）                  → 404
+    #   5. service 層（含 409：預設組、底下仍有東西）
+    #
+    # **守門在第 3 步，同時早於擁有者檢查與一切 409**：被移出的建立者（`owner_user_id`
+    # 仍是他，但已不是成員）對「底下仍有系統」的專案只能得到 404，無法以 409 的剩餘數
+    # 探測內容。放在擁有者檢查之前，使守門的語意不依賴擁有者檢查的存在。
+    #
+    # `project_visible` **必填、無預設、keyword-only**：漏傳時 Python 在呼叫當下拋
+    # `TypeError`（fail-closed）。給 `None` 預設並在方法內略過守門，任何未來的呼叫端
+    # 漏傳就會靜默繞過——那正是 nfr-requirements `R-03` 點名的風險。非測試程式的唯一
+    # 合法來源是 `MembershipFacade.project_visibility(principal)`（ast 靜態鎖）。
+
+    def create_system(
+        self,
+        principal: Principal,
+        *,
+        project_id: int,
+        name: str,
+        project_visible: Callable[[int], bool],
+    ):
+        """`W2`。**非冪等**（`BR2.4`）。順序見上方註解。"""
         self._authorize(principal, "edit")
+        if not project_visible(project_id):
+            raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
         # BR6.5：擁有者檢查**先於** BR2.2 的存在檢查，且兩者回同一種結果。
         hierarchy_service.assert_project_owned_by(
             self._db, project_id=project_id, user_id=principal.user_id
@@ -221,23 +273,62 @@ class HierarchyFacade:
             self._db, project_id=project_id, name=name
         )
 
-    def delete_project(self, principal: Principal, *, project_id: int) -> None:
-        """`W6`（專案）。**任何情況都不級聯。**"""
+    def delete_project(
+        self,
+        principal: Principal,
+        *,
+        project_id: int,
+        project_visible: Callable[[int], bool],
+    ) -> None:
+        """`W6`（專案）。本方法不級聯刪除系統；成員列由 DDL 的 `ON DELETE CASCADE` 連帶刪除。
+
+        成功後記一行 INFO，含刪除者 `actor_user_id`（`[PPD1]`=A）。只記 id，不記名稱；
+        **不記連帶刪除的筆數**——計數需讀成員關係與需求欄位的表，那會讓本層碰
+        `U19`／`U20` 的資料，違反 `BR87.3` 的方向（殘留，見 code-summary）。
+        """
         self._authorize(principal, "edit")
+        if not project_visible(project_id):
+            raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
         # BR6.5 必須在 BR4.2／BR4.4 之前——那兩條完全不涉及擁有者
         # （它們管預設標記與底下還有沒有東西），擋不住「刪除他人的專案」。
         hierarchy_service.assert_project_owned_by(
             self._db, project_id=project_id, user_id=principal.user_id
         )
         hierarchy_service.delete_project(self._db, project_id=project_id)
+        logger.info(
+            "刪除專案 project_id=%s actor_user_id=%s", project_id, principal.user_id
+        )
 
-    def delete_system(self, principal: Principal, *, system_id: int) -> None:
-        """`W6`（系統）。**任何情況都不級聯。**"""
+    def delete_system(
+        self,
+        principal: Principal,
+        *,
+        system_id: int,
+        project_visible: Callable[[int], bool],
+    ) -> None:
+        """`W6`（系統）。本方法不級聯刪除架構圖；需求欄位值由 DDL 連帶刪除。
+
+        第 2 步**只取所屬專案、不做擁有者檢查**：若沿用 `assert_system_owned_by` 來載入
+        系統（它同時做擁有者檢查），守門只能排在它之後，於是非成員對既有系統會先被
+        擁有者檢查以**專案句**擋下，而不存在的系統回**系統句**——兩者可區分，構成存在性
+        預言機（`security-design.md` §十 自檢 1）。守門判定為假時回**系統句**。
+
+        直呼 service 層的 `get_project_of_system`、不經 `self.get_project_of_system`：
+        後者會再做一次 `K2 view` 判定，而第 1 步的 `K2 edit` 已涵蓋讀取。
+        """
         self._authorize(principal, "edit")
+        project_id = hierarchy_service.get_project_of_system(
+            self._db, system_id=system_id
+        )
+        if not project_visible(project_id):
+            raise HierarchyNotFound(SYSTEM_NOT_FOUND_DETAIL)
         hierarchy_service.assert_system_owned_by(
             self._db, system_id=system_id, user_id=principal.user_id
         )
         hierarchy_service.delete_system(self._db, system_id=system_id)
+        logger.info(
+            "刪除系統 system_id=%s actor_user_id=%s", system_id, principal.user_id
+        )
 
     def record_diagram_change(
         self,
@@ -359,6 +450,41 @@ class HierarchyFacade:
             system_id=system_id,
         )
 
+    # -- 成員範圍列舉的資料來源（`U23`；**唯一合法呼叫端是 `MembershipFacade`**）--
+    #
+    # 這兩支**不做擁有者檢查**、回傳 model 物件——它們不屬於上面 `BR6.4` 的
+    # 「判定支援型查詢」（那一組只回 `bool`／`int`），而是 `[PP1]`=A 的列舉放寬的資料
+    # 來源：哪些 id 可見由 `MembershipFacade` 以成員可見性決定（`BR87.3`），本層只負責
+    # `K2 view` 判定與取資料。
+    #
+    # **任何其他呼叫端直呼它們即繞過成員判定，且不會報錯**——故以 ast 靜態測試鎖住
+    # 呼叫位置（`BR87.7`，`tests/test_project_visibility_static.py`）。docstring 的
+    # 宣告只是說明，機械強制以該測試為準。
+
+    def list_projects_by_ids(
+        self, principal: Principal, *, project_ids: Sequence[int]
+    ) -> List[Any]:
+        """以 id 集合取專案，依 id 遞增。**唯一合法呼叫端：`MembershipFacade`。**
+
+        第一行即 `K2 view` 判定——**集合為空也先判定**（`BR87.1`）：缺 `K2` 的使用者
+        即使可見集合為空，也必須得到 403 而不是 200 `[]`（`M5` 突變的必要構造）。
+        """
+        self._authorize(principal, "view")
+        return hierarchy_service.list_projects_by_ids(
+            self._db, project_ids=project_ids
+        )
+
+    def list_systems_unscoped(
+        self, principal: Principal, *, project_id: int
+    ) -> List[Any]:
+        """取該專案的全部系統，**不做擁有者檢查**。**唯一合法呼叫端：`MembershipFacade`。**
+
+        呼叫端已確認專案存在且在請求者的可見集合內（`BR87.2` 的三步）。第一行仍做
+        `K2 view` 判定：`K2` 判定只有這一份落點，不假設呼叫端已檢查。
+        """
+        self._authorize(principal, "view")
+        return hierarchy_service.list_systems(self._db, project_id=project_id)
+
     # -- 判定支援型查詢（**刻意不套列範圍**，`BR6.4`）------------------------
     #
     # 三道約束取代範圍過濾，**缺一即不成立**：
@@ -403,6 +529,8 @@ class HierarchyFacade:
 import services.hierarchy_service as hierarchy_service  # noqa: E402
 
 __all__ = [
+    "PROJECT_NOT_FOUND_DETAIL",
+    "SYSTEM_NOT_FOUND_DETAIL",
     "HierarchyError",
     "HierarchyForbidden",
     "HierarchyNotFound",

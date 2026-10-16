@@ -41,7 +41,7 @@ from services.requirement_field_errors import (
 )
 from services.requirement_field_facade import RequirementFieldFacade
 from services.requirement_field_types import FilledState
-from tests.helpers import close_session, make_session, make_user
+from tests.helpers import ALWAYS_VISIBLE, close_session, make_session, make_user
 from tests.test_requirement_field_service import QueryCounter
 
 LOGGER = "cloud360.requirement_fields"
@@ -85,7 +85,10 @@ class RequirementFieldFixture:
             mint_principal(self.owner), name="P"
         )
         self.system = HierarchyFacade(self.db).create_system(
-            mint_principal(self.owner), project_id=self.project.id, name="S"
+            mint_principal(self.owner),
+            project_id=self.project.id,
+            name="S",
+            project_visible=ALWAYS_VISIBLE,
         )
         for user, role in (
             (self.editor, ProjectRole.MEMBER),

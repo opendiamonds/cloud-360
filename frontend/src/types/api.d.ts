@@ -814,10 +814,11 @@ export interface paths {
         };
         /**
          * List Projects
-         * @description `W7`：列出**使用者可見的**專案。
+         * @description `W7`：列出**使用者可見的**專案，依 id 遞增。
          *
-         *     「可見」＝`BR6.1` 的擁有者範圍。**本輪刻意收窄**（`BR6.2`）：被分享或以
-         *     成員身分取得的存取在本輪看不到任何東西；最終模型屬契約 `K-16`（`U19`）。
+         *     「可見」＝請求者有成員列的專案 ∪ 請求者是擁有者、且該專案尚無任何成員列的專案
+         *     （`U23`，`BR87.1`）。被邀請的成員看得到專案；被另一位管理者移出的建立者看不到。
+         *     缺 `K2 view` 時回 403——即使可見集合為空。
          */
         get: operations["list_projects_api_hierarchy_projects_get"];
         put?: never;
@@ -878,7 +879,11 @@ export interface paths {
         };
         /**
          * List Systems
-         * @description `W7`：列出該專案的系統。專案不屬請求者時回 **404**，不是 403。
+         * @description `W7`：列出該專案的系統，依 id 遞增。
+         *
+         *     只對該專案的可見者回 200（`U23`，`BR87.2`：成員；或擁有者且專案尚無任何成員列）。
+         *     缺 `K2 view` 一律 403（不論專案是否存在）；專案不存在與存在但不可見一律 **404**，
+         *     且兩者的回應本體相同。
          */
         get: operations["list_systems_api_hierarchy_projects__project_id__systems_get"];
         put?: never;

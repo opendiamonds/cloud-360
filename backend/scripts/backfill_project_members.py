@@ -16,9 +16,9 @@ owner**）查無列 → 回 `None` → `BR1.6` 要求當成拒絕 → 任何消�
 而被拒絕存取自己的專案。
 
 **第一次部署不會鎖人在外面**，而這一點必須寫清楚以免被誤讀成「不急」：
-本單元的消費端都在後續 Bolt，而 `hierarchy_facade.list_projects` 目前是
-**owner-scoped**（讀 `projects.owner_user_id`，不讀 `project_members`），故
-既有的專案列表路徑不經本單元；零成員列時 `assert_can_deactivate` 的
+`U23` 落地後專案清單改讀成員列；擁有者只在零成員列時可見，故回填未跑時擁有者
+仍看得到自己的專案，但需求籤與成員頁會拒絕他（`U23` 之前此處寫的是「`list_projects`
+為 owner-scoped、既有列表路徑不經本單元」，已不成立）；零成員列時 `assert_can_deactivate` 的
 `HAVING count(*) = 1` 找不到任何專案，故它**放行**（方向是過寬而非過嚴）。
 **真正會鎖人在外面的時點是第一個消費端上線時**——這就是 `NFR12.25` 逐字要求
 「回填必須在任何消費端上線之前」的理由（`OPEN-ID19-2`）。

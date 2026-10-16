@@ -588,7 +588,7 @@ per-project 成員與角色、改選稽核、系統層需求欄位值。**三張
 
 | 物件 | 說明 |
 |---|---|
-| `project_members` | 6 欄。per-project 成員身分與角色，是 per-project 授權判定（`K-16` 的 `MembershipFacade`）的資料基礎。唯一鍵 `(project_id, user_id)` |
+| `project_members` | 6 欄。per-project 成員身分與角色，是 per-project 授權判定（`K-16` 的 `MembershipFacade`）的資料基礎。唯一鍵 `(project_id, user_id)`。索引：`uq_project_members_project_user`（唯一鍵本身，`project_id` 前導）、`ix_project_members_user_id`（`U23` 新增，專案清單改讀成員列；既有環境的建立步驟見本節末的 `U23` 小節） |
 | `reselection_events` | **9 欄**（原 8 欄；第 9 欄 `cause` 由 `U19` 依 `[FD3]`=A 回補）。per-project 角色變更的稽核軌跡，兼橫幅已讀狀態的載體。**對 `projects` 沒有外鍵**（見下） |
 | `system_requirement_fields` | 9 欄。某系統的某個需求欄位的值（agent 需要的架構假設，如 SLA／TPS／預算）。唯一鍵 `(system_id, agent_group, field_key)`。其中 `updated_on_behalf_of` 自 `U20` 起為 **agent 組識別字**（`VARCHAR(64)`，例如 `cost`），**刻意不帶外鍵**；NULL 代表使用者自己填的（`[FD1]`=A／`BR47.1`，見本節末的 `U20` 小節） |
 
@@ -671,9 +671,14 @@ echo "exit=$?"    # 必須為 0
 全部 DDL 包在**一個交易**內（PostgreSQL 的 DDL 可交易），並在 COMMIT **之前**
 逐項查證後條件，所以：
 
-> **結束碼 0 ⟺ 1 個 schema ＋ 5 張表 ＋ 7 個索引 ＋ 9 條 CHECK／UNIQUE ＋ 3 條外鍵
+> **結束碼 0 ⟺ 1 個 schema ＋ 5 張表 ＋ 9 個索引 ＋ 9 條 CHECK／UNIQUE ＋ 3 條外鍵
 > 刪除行為（另驗 1 條必須不存在的外鍵）＋ 4 段表 COMMENT ＋ `memory` 的 grant
 > 全部存在。**
+>
+> （索引由 7 改為 9：`U23` 新增 `ix_project_members_user_id`。**改前的 7 已與腳本不符**
+> ——腳本的 `EXPECTED_INDEXES` 在 `U23` 之前實為 **8** 筆，`U8` 的 HNSW 索引
+> `ix_memory_records_embedding_hnsw` 加入時本行未同步——本次一併更正。數字以腳本成功
+> 輸出的「索引 N 個」那一行為準，它由 `len(EXPECTED_INDEXES)` 計算。）
 >
 > （CHECK／UNIQUE 由 8 條增為 9 條：`U19` 依 `[FD3]`=A 回補的
 > `ck_reselection_events_cause`。)
@@ -841,6 +846,68 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
 
 零新環境變數、不改 `deploy/` 任何檔案、不改 `role_permissions` 種子（`K4` 的十一列已在 `backend/services/rbac_seed_data.py`）。
 
+##### `U23` 起：部署後再跑一次遷移腳本（建 `ix_project_members_user_id`）
+
+`U23 project-pages-ui` 把專案清單與系統清單改為**成員範圍**（請求者有成員列的專案 ∪
+請求者是擁有者、且該專案尚無任何成員列的專案），可見性查詢的成員那一半以 `user_id`
+為條件從 `project_members` 出發，故新增索引 `ix_project_members_user_id`。DDL 寫在
+`schema_rbac.sql` 的 `J)` 區塊，**既有環境只有重跑上面那支遷移腳本才會建出它**
+（`deploy.yml` 不呼叫任何遷移腳本；`schema_rbac.sql` 只在空 volume 執行）。
+**不動啟動路徑**：`backend/database.py` 沒有新增補丁，故 `LOCAL-DEV.md` 無須同步。
+
+在 staging 主機（`192.168.10.10`）的 repo 根目錄、合併部署完成之後，依序執行：
+
+1. **前置**：2.2.7 的 `run_hierarchy_migration.py` 已跑過（`J)` 的外鍵指向
+   `projects`／`systems`）。沒跑過就依 2.2.7 先跑——本腳本會以可讀訊息擋下，不會建出半套。
+2. **先把 `schema_rbac.sql` 放進 backend 容器，再在容器內重跑遷移腳本**（容器自帶
+   `DATABASE_URL`；映像的工作目錄為 `/app` 且 `scripts/` 隨 `COPY . .` 進入映像）。
+
+   **為什麼要先複製**：腳本以 `REPO_ROOT = BACKEND_DIR.parent` 讀 `schema_rbac.sql`
+   （`backend/scripts/run_meta_schema_migration.py` 的 `SCHEMA_FILE`）。容器內 `BACKEND_DIR`
+   為 `/app`，故它讀的是 **`/schema_rbac.sql`**；而 backend 映像的 build context 只有
+   `backend/`，compose 也只把 `schema_rbac.sql` 掛給 `db` 服務——不先複製就直接執行，腳本會在
+   讀檔時失敗並 `exit=1`（「無法從 schema_rbac.sql 取出 DDL：No such file or directory」），
+   索引不會建出。
+
+   ```bash
+   # 2a. 複製（由 docker daemon 寫入，不受容器內 appuser 權限影響；檔案權限沿用來源的 644，appuser 可讀）
+   docker compose -f deploy/docker-compose.deploy.yml cp schema_rbac.sql backend:/schema_rbac.sql
+   # 2b. 執行
+   docker compose -f deploy/docker-compose.deploy.yml exec backend python scripts/run_meta_schema_migration.py; echo "exit=$?"
+   # 必須為 exit=0；成功輸出的「索引」那一行應為 9 個
+   ```
+
+   複製進去的檔案只存在於這個容器的可寫層，下一次部署重建容器時自然消失；不需要也不應該
+   把它加進映像或 compose 的掛載。
+
+   - `deploy/.env` 已被部署流程清理時，compose 只會對空白變數發出警告，不會失敗
+     （compose 檔沒有 `${VAR:?}` 形式的必填插值）。
+   - 在沒有 TTY 的環境（例如經由腳本執行）加 `-T`：`... exec -T backend python ...`。
+   - 全部 DDL 為 `IF NOT EXISTS` 形狀、包在單一交易內：已跑過 `U18`／`U20` 的環境只會多建這一個
+     索引；失敗即 rollback、資料庫維持原狀，處置後重跑即可。
+3. **驗證**（形式與本檔 2.1 的 A 相同）：
+
+   ```bash
+   # <db-container> 可用 `docker compose -f deploy/docker-compose.deploy.yml ps -q db` 取得
+   docker exec -i <db-container> psql -U postgres -d cloud360 -c "SELECT indexname FROM pg_indexes WHERE tablename='project_members' AND indexname='ix_project_members_user_id';"
+   # 應回 1 列。POSTGRES_USER／POSTGRES_DB 若非預設值，比照 2.1 代換 -U 與 -d
+   ```
+
+4. **不要**為此發布 5432；也**不要**改以重跑整支 `schema_rbac.sql` 取代第 2 步——它的
+   `C) RBAC` 區塊含 `DELETE FROM role_permissions;`，會覆寫線上的權限矩陣。
+5. **遺漏時的後果是無聲的**：功能完全正常，只是專案清單的成員那一半不走索引、隨成員列數
+   線性變慢。部署冒煙檢查不碰 `/api/hierarchy/*`，`ut` 也沒有必要狀態檢查——**沒有任何
+   自動化會發現它**，只有第 3 步的人工驗證會。
+6. **三種資料庫狀態**：
+   - 空 volume：initdb 執行 `schema_rbac.sql`，索引自動建立，第 2 步無事可做但仍應回 exit=0；
+   - 表尚不存在（後端啟動的 `create_all` 先建表）：`create_all` 會連同索引一起建表，但**缺
+     COMMENT**（`OPEN-ID19-1`）——仍須跑一次第 2 步；
+   - 表已存在而無此索引（`192.168.10.10` 的現況）：**只有第 2 步能建出它**。
+
+   `U23` 與其他分支的合併先後不影響上述步驟。
+7. **回滾**：程式回滾不需要動索引（多一個索引對舊程式無影響）。只有索引本身出問題時才
+   `DROP INDEX IF EXISTS ix_project_members_user_id;`，之後重跑第 2 步即可重建。
+
 #### 2.2.10 U19 既有專案的成員回填（`membership-service`）
 
 **第三支一次性腳本，而它與前兩支的順序是嚴格的。** `project_members` 是全新表
@@ -864,7 +931,7 @@ owner**）查無列 → 回 `None` → `BR1.6` 要求當成拒絕 → 消費端
 
 | 問題 | 答案（實查） |
 |---|---|
-| 這個窗口裡既有專案的擁有者會被鎖在外面嗎？ | **不會。** 本單元的消費端都在後續 Bolt，而 `hierarchy_facade.list_projects` 目前是 **owner-scoped**（讀 `projects.owner_user_id`，不讀 `project_members`），故既有的專案列表路徑不經本單元 |
+| 這個窗口裡既有專案的擁有者會被鎖在外面嗎？ | **清單不會，但需求籤與成員頁會。** `U23` 落地後專案清單改讀成員列；擁有者只在該專案**零成員列**時可見，故回填未跑時擁有者仍看得到自己的專案（清單與系統清單照常），但需求籤與成員頁以 per-project 角色判定，會拒絕他。（`U23` 之前的敘述是「`hierarchy_facade.list_projects` 目前是 owner-scoped、既有列表路徑不經本單元」——那是歷史狀態，`U23` 起不再成立。） |
 | 既有停用端點的新前置檢查會誤判嗎？ | **不會，但方向是「過寬」而非「過嚴」**：零成員列時 `assert_can_deactivate` 的 `HAVING count(*) = 1` 找不到任何專案，故它**放行**。保護在回填之後才生效 |
 | 那什麼時候真的會鎖人在外面？ | **第一個消費端上線時。** 這就是 `NFR12.25` 的理由 |
 

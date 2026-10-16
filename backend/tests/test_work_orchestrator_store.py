@@ -16,7 +16,13 @@ import unittest
 from services import session_types as T
 from services.hierarchy_facade import HierarchyFacade, HierarchyNotFound, mint_principal
 from services.session_errors import SessionBackendUnavailable
-from tests.helpers import close_session, make_diagram, make_session, make_user
+from tests.helpers import (
+    ALWAYS_VISIBLE,
+    close_session,
+    make_diagram,
+    make_session,
+    make_user,
+)
 from tests.test_session_store_behaviour import FakeConnectionError
 from tests.work_orchestrator_fakes import SESSION_KEY, make_store
 
@@ -195,8 +201,12 @@ class ListDiagramsOfSystemTest(unittest.TestCase):
         self.alice_p = mint_principal(self.alice)
         self.bob_p = mint_principal(self.bob)
         project = facade.create_project(self.alice_p, name="P")
-        self.system = facade.create_system(self.alice_p, project_id=project.id, name="S")
-        self.empty_system = facade.create_system(self.alice_p, project_id=project.id, name="E")
+        self.system = facade.create_system(
+            self.alice_p, project_id=project.id, name="S", project_visible=ALWAYS_VISIBLE
+        )
+        self.empty_system = facade.create_system(
+            self.alice_p, project_id=project.id, name="E", project_visible=ALWAYS_VISIBLE
+        )
         self.d1 = make_diagram(self.db, owner=self.alice, title="一號")
         self.d2 = make_diagram(self.db, owner=self.alice, title="二號")
         self.unattached = make_diagram(self.db, owner=self.alice, title="未掛")

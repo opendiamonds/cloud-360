@@ -11,6 +11,7 @@
 --      ＋ user_diagrams.system_id（歸屬的權威來源）＋ 兩個部分唯一索引
 --   J) U18：project_members / reselection_events / system_requirement_fields 三表
 --      （per-project 成員與角色、改選稽核、系統層需求欄位值）
+--      ＋ U23：project_members 的 user_id 索引 ix_project_members_user_id
 --   K) U9：保留系統 actor 的 seed（users 的一列，90 天記憶清除的稽核 actor）
 --   C) RBAC：role_permissions + 預設矩陣（352 列）
 --   D) 不建立固定密碼管理員；bootstrap admin 由後端依環境變數建立
@@ -605,14 +606,19 @@ CREATE TABLE IF NOT EXISTS project_members (
   CONSTRAINT uq_project_members_project_user UNIQUE (project_id, user_id)
 );
 
--- **本表刻意沒有額外索引**，兩個方向各有理由：
+CREATE INDEX IF NOT EXISTS ix_project_members_user_id ON project_members (user_id);
+
+-- 本表的索引，兩個方向：
 --   project_id 側不需另建——uq_project_members_project_user 以它為前導欄，同時
 --   覆蓋 K-16 的 resolve_project_role（最熱路徑）、list_members、FR12.4 的挑選
 --   過濾，以及上面那條 ON DELETE CASCADE 的子側掃描。
---   user_id 側**刻意不建**（security-design.md §四之三）：它成為缺口的兩個條件
---   本輪都不成立——① 以成員身分列出「我參與的專案」尚未存在（
---   hierarchy_facade.list_projects 目前 owner-scoped，是 [F8/R-02] 的已核可結果）；
---   ② 使用者硬刪除行為是 OQ-H1，上游刻意未決。不需要的索引有寫入成本。承接站 U19。
+--   user_id 側由 U23 建立（ix_project_members_user_id，[PPN1]=A）：原本「刻意不建」
+--   的兩個條件中，條件 ① 已成立（專案清單改讀成員列，[PP1]=A——可見性查詢的成員
+--   那一半以 user_id 為條件從本表出發）；條件 ② 仍未決（使用者硬刪除行為是 OQ-H1），
+--   與本索引無關。
+--   **不加 schema 前綴、維持單行**：test_membership_data.py 的 ddl_indexes 正規式以
+--   `ON project_members` 擷取，寫成 `ON public.project_members` 會讓 test_M3 認不出。
+--   既有環境由 backend/scripts/run_meta_schema_migration.py 重跑建立（DEPLOY.md 2.2.9）。
 
 COMMENT ON TABLE project_members IS
   'U18/K-15: per-project membership and role — the data basis for per-project authorization (K-16 MembershipFacade). This unit delivers DDL ONLY: no read, no write, no endpoint (K-15 authorization_responsibility is verbatim "none — DDL runs on the deploy/startup path and is not subject to user authorization"). Access authorization to these rows belongs to the K-16 facade.';
@@ -1269,6 +1275,9 @@ COMMIT;
 --   WHERE table_schema='public' AND table_name='system_requirement_fields';-- 9
 -- SELECT confdeltype FROM pg_constraint WHERE conname='project_members_project_id_fkey';
 --   -- 應為 c（CASCADE）
+-- SELECT indexname FROM pg_indexes WHERE tablename='project_members'
+--   AND indexname='ix_project_members_user_id';
+--   -- 應回 1 列（U23；既有環境須重跑 run_meta_schema_migration.py 才會有）
 -- SELECT count(*) FROM information_schema.table_constraints tc
 --   JOIN information_schema.constraint_column_usage ccu
 --     ON ccu.constraint_name = tc.constraint_name

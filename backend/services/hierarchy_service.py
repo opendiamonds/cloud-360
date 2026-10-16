@@ -14,12 +14,14 @@ hierarchy_service.py — `U7 hierarchy-service` 的服務層
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
 from models import DiagramChangeRecord, Project, System, UserDiagram
 from services.hierarchy_facade import (
+    PROJECT_NOT_FOUND_DETAIL,
+    SYSTEM_NOT_FOUND_DETAIL,
     HierarchyConflictError,
     HierarchyNotFound,
     HierarchyValidationError,
@@ -61,20 +63,24 @@ def _validated_name(name: str) -> str:
 # 三者都 raise `HierarchyNotFound`，**刻意與真正的不存在回同一種結果**
 # ——否則回應本身就是一個存在性預言機（`BR6.1` 逐字：回「查不到」而非
 # 「無權限」，不以錯誤碼洩漏該資源存在）。
+#
+# 專案與系統的訊息自 `U23` 起為**不含 id 的固定常數**（`PROJECT_NOT_FOUND_DETAIL`／
+# `SYSTEM_NOT_FOUND_DETAIL`，定義與理由見 `hierarchy_facade.py`）。架構圖那一句
+# 仍帶 id：它不在 `U23` 的五條路徑內。
 # ---------------------------------------------------------------------------
 
 
 def assert_project_owned_by(db: Session, *, project_id: int, user_id: int) -> Project:
     project = db.query(Project).filter(Project.id == project_id).first()
     if project is None or project.owner_user_id != user_id:
-        raise HierarchyNotFound(f"查不到專案 {project_id}")
+        raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
     return project
 
 
 def assert_system_owned_by(db: Session, *, system_id: int, user_id: int) -> System:
     system = db.query(System).filter(System.id == system_id).first()
     if system is None:
-        raise HierarchyNotFound(f"查不到系統 {system_id}")
+        raise HierarchyNotFound(SYSTEM_NOT_FOUND_DETAIL)
     # 系統的擁有者是**其所屬專案的**擁有者——systems 表本身沒有 owner 欄位。
     assert_project_owned_by(db, project_id=system.project_id, user_id=user_id)
     return system
@@ -177,7 +183,7 @@ def delete_project(db: Session, *, project_id: int) -> None:
     """`W6`（專案）。呼叫端已完成 `BR6.5` 的擁有者檢查。"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if project is None:
-        raise HierarchyNotFound(f"查不到專案 {project_id}")
+        raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
     # BR4.2：預設組不可刪除（保護遷移的冪等性載體）
     if project.is_default:
         raise HierarchyConflictError("預設專案不可刪除")
@@ -196,7 +202,7 @@ def delete_system(db: Session, *, system_id: int) -> None:
     """`W6`（系統）。呼叫端已完成 `BR6.5` 的擁有者檢查。"""
     system = db.query(System).filter(System.id == system_id).first()
     if system is None:
-        raise HierarchyNotFound(f"查不到系統 {system_id}")
+        raise HierarchyNotFound(SYSTEM_NOT_FOUND_DETAIL)
     if system.is_default:
         raise HierarchyConflictError("預設系統不可刪除")
     # BR4.3：仍有架構圖歸屬於它即拒絕。保護的是「遷移後歸屬為空的架構圖
@@ -224,6 +230,26 @@ def list_projects(db: Session, *, owner_user_id: int) -> List[Project]:
     return (
         db.query(Project)
         .filter(Project.owner_user_id == owner_user_id)
+        .order_by(Project.id)
+        .all()
+    )
+
+
+def list_projects_by_ids(db: Session, *, project_ids: Sequence[int]) -> List[Project]:
+    """`U23`：以 id 集合取專案，依 id 遞增。**不做任何範圍過濾。**
+
+    呼叫端（`HierarchyFacade.list_projects_by_ids`）已完成 `K2 view` 判定，
+    id 集合由 `MembershipFacade` 以成員可見性算出（`BR87.3`）。
+
+    空集合直接回 `[]`、**不發** `IN ()`——那在部分方言是語法錯誤，且沒有任何列可回。
+    一條語句取全部（`PPN-06`：語句數與 P 無關），不得改成逐 id 取。
+    """
+    ids = sorted({int(pid) for pid in project_ids})
+    if not ids:
+        return []
+    return (
+        db.query(Project)
+        .filter(Project.id.in_(ids))
         .order_by(Project.id)
         .all()
     )
@@ -378,12 +404,12 @@ def project_exists(db: Session, *, project_id: int) -> bool:
 def get_project_owner(db: Session, *, project_id: int) -> int:
     row = db.query(Project.owner_user_id).filter(Project.id == project_id).first()
     if row is None:
-        raise HierarchyNotFound(f"查不到專案 {project_id}")
+        raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
     return int(row[0])
 
 
 def get_project_of_system(db: Session, *, system_id: int) -> int:
     row = db.query(System.project_id).filter(System.id == system_id).first()
     if row is None:
-        raise HierarchyNotFound(f"查不到系統 {system_id}")
+        raise HierarchyNotFound(SYSTEM_NOT_FOUND_DETAIL)
     return int(row[0])

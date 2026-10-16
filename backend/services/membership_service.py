@@ -34,7 +34,7 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select, union
 from sqlalchemy.orm import Session
 
 from models import Project, ProjectMember, ReselectionEvent, User
@@ -313,6 +313,70 @@ def project_ids_where_admin(db: Session, *, user_id: int) -> List[int]:
         .scalars()
         .all()
     )
+
+
+# ---------------------------------------------------------------------------
+# 專案可見性（`U23`，`BR87.1`／`BR87.3`；`[PP1]`=A、`[PP3]`=A）
+#
+# **可見性只有這一份定義**（`_visible_project_ids_select`）。列舉（專案清單、系統
+# 清單）與寫入守門（`HierarchyFacade` 三條寫入路徑經注入的 `project_visible`）都
+# 由下面兩支公開函式組出，而兩支都只呼叫它——`hierarchy_service`／
+# `hierarchy_facade` 不得另寫一份（`PPN-14b`，靜態檢查見
+# `tests/test_project_visibility_static.py`）。
+#
+# 可見集合 = {請求者有成員列的專案}
+#          ∪ {請求者是擁有者、且該專案在 project_members 中**零列**的專案}
+#
+# 擁有者那一半只在零成員列時生效：新專案必有建立者的成員列（`[ND1]`=A），零成員列的
+# 專案無人能邀請，而最後一位管理者不可被移除——故「有成員列而擁有者不在其中」只能由
+# **擁有者被移出**產生，那正是 `AC12.6.2` 要求拒絕的狀態。零成員列只出現在回填未跑
+# （`backfill_project_members.py`）時。
+# ---------------------------------------------------------------------------
+
+
+def _visible_project_ids_select(user_id: int):
+    """唯一的可見性定義：回傳**一個** `UNION` 選取式（欄名 `project_id`）。
+
+    **刻意寫成 `UNION` 而不是以 `projects` 驅動的 `OR`**（`performance-design.md`
+    §二之一）：`WHERE EXISTS(成員列) OR (擁有者 AND NOT EXISTS(...))` 會逐列探測全部
+    專案，成本隨**全部專案數**線性增加，`ix_project_members_user_id` 永遠用不上。
+    拆成兩半後，成員那一半以 `user_id` 從 `project_members` 出發（`U23` 的新索引）、
+    擁有者那一半走 `ix_projects_owner_user_id`，`NOT EXISTS` 走
+    `uq_project_members_project_user`（`project_id` 前導）。
+
+    不讀任何 state、不 commit；唯一呼叫端是下面兩支公開函式。
+    """
+    member_half = select(ProjectMember.project_id.label("project_id")).where(
+        ProjectMember.user_id == user_id
+    )
+    owner_half = select(Project.id.label("project_id")).where(
+        Project.owner_user_id == user_id,
+        ~exists().where(ProjectMember.project_id == Project.id),
+    )
+    return union(member_half, owner_half)
+
+
+def visible_project_ids(db: Session, *, user_id: int) -> List[int]:
+    """請求者可見的全部專案 id（遞增）。**一條 SQL**，與可見專案數無關（`PPN-06`）。"""
+    sub = _visible_project_ids_select(user_id).subquery()
+    return sorted(
+        int(pid) for pid in db.execute(select(sub.c.project_id)).scalars().all()
+    )
+
+
+def is_project_visible(db: Session, *, project_id: int, user_id: int) -> bool:
+    """該專案是否在請求者的可見集合內。**一條 SQL**。
+
+    `project_id` 條件放在外層：PostgreSQL 會把它推入兩個分支，成員那一半因而變成
+    `(project_id, user_id)` 的唯一索引探測。**外層這個條件是本函式的全部意義**——
+    拿掉它就退化成「請求者有任何可見專案」（`M6` 突變：「另一專案的成員」會被當成
+    目標專案的可見者）。
+    """
+    sub = _visible_project_ids_select(user_id).subquery()
+    row = db.execute(
+        select(sub.c.project_id).where(sub.c.project_id == project_id)
+    ).first()
+    return row is not None
 
 
 def admin_count_after(

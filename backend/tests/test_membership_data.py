@@ -141,8 +141,11 @@ class MembershipSchemaAlignmentTest(unittest.TestCase):
 
         `T25` 的射程只有欄位名，所以「習慣性多加一條 `CheckConstraint`」或
         「漏掉一個 `Index`」在它之下完全看不到。本測試同時擋下
-        `previous_role`／`new_role` 被加上 CHECK（`U18` 刻意不加）與
-        `project_members.user_id` 被補上 `index=True`（刻意不建）。
+        `previous_role`／`new_role` 被加上 CHECK（`U18` 刻意不加），以及
+        `project_members.user_id` 的索引只出現在 ORM 與 DDL 其中一邊——該索引自
+        `U23` 起**存在**（`ix_project_members_user_id`，`[PPN1]`=A：專案清單改讀
+        成員列），兩邊必須以同一個名稱宣告。只靠集合相等時，兩邊**同時漏掉**仍綠，
+        故另以點名斷言對 ORM 與 DDL 各驗一次。
         """
         for model, table in (
             (ProjectMember, "project_members"),
@@ -162,6 +165,19 @@ class MembershipSchemaAlignmentTest(unittest.TestCase):
                 ddl_indexes(table),
                 f"{table}：索引名稱集合與 DDL 不一致",
             )
+        # U23：點名 `ix_project_members_user_id`，ORM 與 DDL 各一次（集合相等
+        # 擋不住「兩邊同時漏掉」）。
+        self.assertIn(
+            "ix_project_members_user_id",
+            {i.name for i in ProjectMember.__table__.indexes},
+            "ORM 缺 ix_project_members_user_id（models.py 的 ProjectMember.__table_args__）",
+        )
+        self.assertIn(
+            "ix_project_members_user_id",
+            ddl_indexes("project_members"),
+            "schema_rbac.sql 的 J) 區塊缺 ix_project_members_user_id"
+            "（或寫成了 ON public.project_members，正規式認不出）",
+        )
         # 點名這一條：`cause` 的 CHECK 是本單元新增的，而它與
         # `previous_role`／`new_role` 的**刻意無 CHECK** 必須同時成立。
         self.assertIn(
@@ -174,6 +190,38 @@ class MembershipSchemaAlignmentTest(unittest.TestCase):
             if con.name == "ck_reselection_events_cause"
         }
         self.assertTrue(check_targets, "ck_reselection_events_cause 必須掛在 cause 上")
+
+    def test_M3b_migration_script_verifies_the_user_id_index(self):
+        """`M3b`（`U23`，infrastructure-design `R-02`）：遷移腳本的後條件清單含該索引。
+
+        @purpose 鎖住「既有環境重跑 `run_meta_schema_migration.py` 後，結束碼 0 代表
+                 `ix_project_members_user_id` 存在」——只加 SQL 不加這一列，索引會被建立
+                 但不被驗證，結束碼 0 的語意悄悄變窄。
+        @story AC12.6.3
+
+        以 `ast` 取 `EXPECTED_INDEXES` 的**值**比對三元組，**不做整檔字串比對**：同名
+        字串也出現在 `BLOCK_SENTINELS["J"]` 與註解中，整檔 `assertIn` 在只刪掉
+        `EXPECTED_INDEXES` 那一列時仍會綠（`D1` 突變即構造這個情形）。
+        """
+        import ast
+
+        script = (
+            Path(__file__).resolve().parents[1] / "scripts" / "run_meta_schema_migration.py"
+        )
+        tree = ast.parse(script.read_text(encoding="utf-8"))
+        values = [
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(t, ast.Name) and t.id == "EXPECTED_INDEXES" for t in node.targets
+            )
+        ]
+        self.assertEqual(len(values), 1, "EXPECTED_INDEXES 必須恰有一個模組層定義")
+        self.assertIn(
+            ("public", "project_members", "ix_project_members_user_id"),
+            values[0],
+        )
 
     def test_M4_unack_index_is_partial_on_both_dialects(self):
         """`M4`：`ix_reselection_events_unack` 必須帶 `where` 條件。

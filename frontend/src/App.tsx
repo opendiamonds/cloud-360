@@ -16,6 +16,9 @@ import { CostPage } from './pages/CostPage';
 import { MembersListPage } from './pages/MembersListPage';
 import { MemberDetailPage } from './pages/MemberDetailPage';
 import { MemoryPage } from './pages/MemoryPage';
+import { ProjectsListPage } from './pages/ProjectsListPage';
+import { ProjectCreatePage } from './pages/ProjectCreatePage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
 
 /** 依權限導向第一個可用頁；pending → 等待授權；皆無則 403 */
 const DefaultRedirect: React.FC = () => {
@@ -98,6 +101,51 @@ function App() {
                 <Layout>
                   <MemoryPage />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/*
+            U23：專案清單／建立／詳情。三條都以 K2 把關（BR81.1）：清單與詳情需 view、
+            建立需 edit。react-router v7 以具體度排序，靜態段 `/projects/new` 優先於
+            參數段 `/projects/:projectId`，也不與下方 U24 的 `/projects/:projectId/members`
+            系列互相遮蔽。需求籤的 K4 把關在頁內（BR83.2），不是路由層。
+          */}
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="K2" action="view">
+                  <Layout>
+                    <ProjectsListPage />
+                  </Layout>
+                </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/projects/new"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="K2" action="edit">
+                  <Layout>
+                    <ProjectCreatePage />
+                  </Layout>
+                </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/projects/:projectId"
+            element={
+              <ProtectedRoute>
+                <CapabilityRoute storyId="K2" action="view">
+                  <Layout>
+                    <ProjectDetailPage />
+                  </Layout>
+                </CapabilityRoute>
               </ProtectedRoute>
             }
           />

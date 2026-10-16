@@ -24,6 +24,8 @@ export const Sidebar: React.FC = () => {
   const showAdminSection = showUsersAdmin || showMatrixAdmin;
   // INV-3（BR31.2）：記憶的兩個入口共用同一個判定，不在此自行判斷。
   const showMemory = canSeeMemoryEntry({ isAuthenticated });
+  // U23（BR81.1）：「專案」第一層獨立項，以 K2 view 把關，與 /projects 的 CapabilityRoute 同一判定。
+  const showProjects = can('K2', 'view');
 
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
@@ -206,6 +208,20 @@ export const Sidebar: React.FC = () => {
                 </NavLink>
               </nav>
             )}
+          </div>
+        )}
+
+        {/*
+          U23：「專案」。第一層獨立項，位置在「我的記憶」之前（線框 §14：「入口」之後、
+          「我的記憶」之前；U14 的「入口」尚未落地）。
+        */}
+        {showProjects && (
+          <div className="mb-2">
+            <nav className="space-y-1 px-2" aria-label="專案">
+              <NavLink to="/projects" data-testid="sidebar-projects-link" className={linkClass}>
+                專案
+              </NavLink>
+            </nav>
           </div>
         )}
 

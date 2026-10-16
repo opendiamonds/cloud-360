@@ -98,3 +98,17 @@ def make_diagram(
     db.commit()
     db.refresh(diagram)
     return diagram
+
+
+def ALWAYS_VISIBLE(_project_id: int) -> bool:  # noqa: N802 - 以常數語意命名
+    """`U23`：`HierarchyFacade` 三條寫入路徑的 `project_visible` 測試替身，恆為真。
+
+    **只供「驗擁有者檢查等其他行為」的既有測試補參數用**——它們在 `U23` 之前
+    沒有可見性守門，補上恆真的判定使語意與修改前完全相同。
+    要驗守門本身的測試（`test_project_write_guard.py`）走 HTTP、由 router 注入
+    真實判定，不用本替身。
+
+    非測試程式**不得**傳這個形狀：`tests/test_project_visibility_static.py` 的第 3 條
+    斷言每個非 service 層的寫入呼叫都帶 `project_visible=<…>.project_visibility(...)`。
+    """
+    return True

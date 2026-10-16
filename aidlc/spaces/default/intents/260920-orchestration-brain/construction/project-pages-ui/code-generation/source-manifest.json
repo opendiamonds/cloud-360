@@ -1,0 +1,124 @@
+{
+  "stage": "code-generation",
+  "unit": "project-pages-ui",
+  "version": 1,
+  "writes": [
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "backend/models.py"
+    },
+    {
+      "path": "backend/scripts/backfill_project_members.py"
+    },
+    {
+      "path": "backend/scripts/run_meta_schema_migration.py"
+    },
+    {
+      "path": "backend/services/hierarchy_facade.py"
+    },
+    {
+      "path": "backend/services/hierarchy_router.py"
+    },
+    {
+      "path": "backend/services/hierarchy_service.py"
+    },
+    {
+      "path": "backend/services/membership_facade.py"
+    },
+    {
+      "path": "backend/services/membership_service.py"
+    },
+    {
+      "path": "backend/tests/helpers.py"
+    },
+    {
+      "path": "backend/tests/test_hierarchy_service.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_e2e.py"
+    },
+    {
+      "path": "backend/tests/test_membership_data.py"
+    },
+    {
+      "path": "backend/tests/test_project_visibility_endpoints.py"
+    },
+    {
+      "path": "backend/tests/test_project_visibility_queries.py"
+    },
+    {
+      "path": "backend/tests/test_project_visibility_static.py"
+    },
+    {
+      "path": "backend/tests/test_project_write_guard.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_facade.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_store.py"
+    },
+    {
+      "path": "frontend/src/App.tsx"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/MemorySummaryTab.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/OverviewTab.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/ProjectTabs.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/RecentChanges.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/RequirementField.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/RequirementsTab.tsx"
+    },
+    {
+      "path": "frontend/src/components/projects/SystemCreateAction.tsx"
+    },
+    {
+      "path": "frontend/src/pages/ProjectCreatePage.tsx"
+    },
+    {
+      "path": "frontend/src/pages/ProjectDetailPage.tsx"
+    },
+    {
+      "path": "frontend/src/pages/ProjectsListPage.tsx"
+    },
+    {
+      "path": "frontend/src/projects/fanoutQueue.ts"
+    },
+    {
+      "path": "frontend/src/projects/objectCreateAction.ts"
+    },
+    {
+      "path": "frontend/src/projects/projectsApi.ts"
+    },
+    {
+      "path": "frontend/src/projects/requirementsApi.ts"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/project-pages.spec.ts"
+    },
+    {
+      "path": "openapi.json"
+    },
+    {
+      "path": "schema_rbac.sql"
+    }
+  ]
+}
