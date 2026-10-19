@@ -68,6 +68,7 @@
 - 2026-10-11T11:25:39Z — U15 memory-page-ui：登入到 /api/auth/me 回來之間 user.id 為 undefined，記憶頁在 id 成為 number 前不掛載三區；照字面比較會把自己的記憶標成「其他使用者」且無刪除鍵。實讀 AuthContext.tsx 的 login 先 setUser 不含 id 才查出，四份上游產出均未提及。
 - 2026-10-12T02:20:00Z — U12 work-orchestrator：K-18 把 U12 列為進度通道 open／close 的消費端，但已交付的 A1 端點自己在每個請求開關通道（U22 交付），而 U12 依 X-02 經 HTTP 呼叫 A1，通道生命週期在 A1 那一側已完整。依已交付程式裁決：U12 不使用 ProgressChannel，K-18 的 U12 消費端與 U12→U22 邊列入契約追認（OPEN-WO12-1／2）。
 - 2026-10-11T22:29:45Z — U20 requirement-field-service：K-17 的 anti_double_check 字面要全域 K4 層由 router 承擔，但同進程呼叫端 U13 不經 dependency 鏈，照字面做該路徑的全域層根本不會被檢查。已交付的 U19（membership_facade.py:93-111）遇到同一件事並改在 facade 以 user_can 評估，本站依該先例辦而不出題，契約字面列入追認項 OPEN-RF20-5。
+- 2026-10-17T23:58:50Z — U16 object-picker-ui：一個 UI 同時消費「列出」與「作用」兩個後端時，要分別查兩者的可見範圍是否相同——選單的清單（GET /api/hierarchy/projects）是成員可見範圍（membership_facade.py:482-498），而選定後的 set_work_target 經 resolve_work_target 套擁有者範圍（hierarchy_service.py:73-77）。U23 已把這個落差記為 OPEN-PP23-6 ③，但它要到本單元才會變成一個「看得到、點了被拒、沒有解釋」的控件；只讀清單端點會漏掉它，必須沿著選定動作一路讀到閘道的 error 分支（brain_gateway.py:1558-1561）才看得見。處置為 [OP3]=A（照列、停用、附說明）。
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
@@ -136,6 +137,7 @@
 - 2026-10-11T11:25:39Z — U15 memory-page-ui：「我的記憶」Sidebar 項放在 /brain DEMO SCOPE 區塊之後的獨立 div，而非 mockups M0 所寫的「入口之後」；入口（U14）尚不存在，放進 demo 區塊會在 U14 整段取代時被連帶刪除（Sidebar.tsx:209 註解逐字）。
 - 2026-10-11T22:29:45Z — U20 requirement-field-service：本單元改動已交付的 U18 表定義（updated_on_behalf_of 由指向 users 的外鍵改為 agent 組識別字，[FD1]=A）。U18 的 code-summary 已把 OPEN-CG18-6 指派給本單元；改動前以 git branch -r --contains 查證該 DDL 只在本分支、未部署，故不需針對既有環境寫升級，但本機 dev 資料庫可能已用舊定義建表，因此另立 BR47.2 要求可重跑收斂。
 - 2026-10-11T22:29:45Z — U20 requirement-field-service：回應形狀在 K-17 字面之外加了 title／label／filledCount／totalCount 四欄。若只回 fieldKey，U23 必須在前端另抄一份標籤，違反 team.md 的單一真實來源規則；四欄為純增量，列入 OPEN-RF20-5 待契約追認。
+- 2026-10-17T23:58:50Z — U16 object-picker-ui：補寫問題檔 §八之一 的小節標題時，我先寫了一個時間「23:55」才去跑 date -u，實際是 23:52:24Z——寫下的時間比真實時間晚約三分鐘，正是 user-stories:260822-us-L1 記過的編造形狀。寫完下一個動作就查到並改正。成因是把時間當成標題文字的一部分順手寫出，而不是當成一個要先取值的資料；可執行做法：任何要寫進產出的時間，先跑 date -u 再動筆，不在草擬文字時預填。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
@@ -179,6 +181,7 @@
 - 2026-10-10T14:30:00Z — **advisory 單輪 ＋ stage 級閘門 ＋ review-freeze 三者相乘，在 per-unit stage 上是死結，而唯一出路（redo jump）便宜到不該被我當成最後手段。** 完整路徑：審查回 NOT-READY → `review-freeze` 擋住對四份產出的任何寫入（advisory `max_iterations: 1`，兩種 verdict 都終局）→ guard 的唯一補救是「在閘門上送 Request Changes」→ 但 `functional-design` 的閘門是 **stage 級**，`report --result awaiting-approval` 逐字回「24 個工作項有 9 個未完成」→ `report --result rejected` 又被一個**並未開啟**的 held gate 檢查擋下（state 的 checkbox 是 `[-]` 不是 `[?]`）。四條路全封。**redo jump 是唯一出路，而它只重設 target 的 checkbox、代價實測為零**（見上條）。**可執行判準**：在 per-unit 的 `CONDITIONAL` stage 上收到終局 NOT-READY 時，不要先試 `report --result rejected`／`awaiting-approval`（兩者都會因為閘門不在這一層而失敗，而失敗會消耗 refusal 配額），直接走 `next --stage <slug>` → `jump execute --direction redo`，並在跳之前先查 `resolve` 的 `affected_stages` 與 `redo` 分支實際動了什麼。
 - 2026-10-11T22:29:45Z — U20 requirement-field-service：重複清空為 no-op（clearedAt 與 updatedBy 不變），同值寫入卻仍更新溯源（BR43.4 對 BR43.6）。不對稱是刻意的：重複清空沒有新事實，更新只會讓「誰清的」變成最後一個重複按的人；同值寫入則代表有人再次確認該值，是有意義的溯源。
 - 2026-10-11T23:05:00Z — U20 requirement-field-service：review-01 回 NOT-READY 後，review-freeze 同樣擋寫入（不是只在 READY 之後），而 guard 給的 request-changes 補救在 gate:false 的 per-unit 站被 report 拒絕（沒有開著的閘門可拒）。經使用者同意以 redo jump 重設本站解鎖並修完 R-01～R-08；代價是重設後引擎立即把本站視為已滿足、路由到 nfr-requirements／brain-infra，unit start／unit complete 皆被拒，本單元本站缺 UNIT_COMPLETED 收據，與 2026-10-10 member-pages-ui 同形。修正未經獨立複驗。
+- 2026-10-17T23:58:50Z — U16 object-picker-ui：K-13 承諾的 ContextBar props（onObjectSelected／currentTarget）在已交付程式中不存在（ContextBar.tsx:22 只收 sharingToggle），本單元選擇在 ContextBar 內直接以 useBrainSession() 取作業對象與 setWorkTarget，而不是補上那兩個 prop。補 prop 才符合契約字面，但已交付的 U14 改用 context 傳遞，再加 prop 會讓同一份作業對象有兩條資料路徑；代價是本單元必須修改一個已交付單元的檔案，且 U14 code-generation 追溯中「U16 未提供選單時不渲染」的敘述從此不再描述現況——記為 OPEN-OP16-4 揭露，並以「既有 brain e2e 全綠」作為未破壞 U14 斷言的證據。
 
 ## Open questions
 - 2026-10-08T12:20:00Z — **`OQ-N3`（Critical）在本站落地：`MemoryFacade.write` 無任何呼叫者。** `contract-summary.md:1432` 明文把實務落點指向 `functional-design`（3.1），並逐字警告「**本站不以推論指派**……自行加一條就是審查 R-01／R-07／R-10 的同型錯誤第四次」。受阻單元為 `U5`／`U8`／`U9`／`U15`（無寫入端則 `memory_records` 永不被填、`search` 永遠回空、`U15` 三區永遠空白、`U9` 無物可清）。已出成 `[FD1]` 交使用者裁決，不自行指派。

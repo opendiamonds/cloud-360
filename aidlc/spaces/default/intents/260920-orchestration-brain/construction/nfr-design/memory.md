@@ -50,8 +50,11 @@
 
 - **`R-01`／`R-02` 的根因是同一個：我沒去查前端有沒有全域授權來源，就寫下它沒有。** 實測 `useAuth().can(storyId, action)` 在 `AuthContext.tsx:113-125`（`:119` 的 `hasEdit`），資料來自伺服器下發的 `user.permissions`，型別 `StoryPermission` 含 `view`／`edit`／`review`——而**我自己那張表的上一列就引用了它的消費者** `CapabilityRoute`（`RouteGuard.tsx:35`，`:39` destructure `can`）。更難看的是：上游 `frontend-components.md:157` **已經逐字定案**「`ReselectionBannerHost` 以 `can('K3','view')` 作為發出請求的前置條件」，而那份檔是本站的 `consumes` 之一。**我寫下的結構宣稱與我消費的上游產出直接矛盾**，而我的七項自檢沒有一項是「本站的主張與 `consumes` 清單裡的檔是否一致」——自檢 5 掃的是我改動的事實在**本站產出**間的傳播。（2026-10-11T01:25:28Z）
 - 2026-10-11T11:47:35Z — U15 memory-page-ui：UIP-3 補償重抓失敗時保留就地移除後的畫面而非轉 error——使用者剛完成的刪除是成功的，不應被一次補償失敗蓋掉；代價是 R-01 的「刪空第一頁誤顯示 empty」在補償也失敗時仍可能出現。
+- 2026-10-18T02:14:17Z — U16 object-picker-ui：`F-02` 的「斷線即關閉」在本 repo 有一個 lint 陷阱——`react-hooks/set-state-in-effect` 是 error 級，effect 裡直接 `setPickerOpen(false)` 會讓 CI 紅。設計改為衍生可見性（`pickerOpen && status === 'ready'`）負責「立即消失」，`pickerOpen` 的清除給兩種寫法並要求 code-generation 以 `npm run lint` 實證——全 repo 找不到「依前值調整 state」的先例（`setPrev*` 零命中），我無法事先證明哪一種會過，所以如實寫成待實證而不是假裝已定。
+- 2026-10-18T02:14:17Z — U16 object-picker-ui：lint 區塊必須展開 `WS_SUBPROTOCOL_RESTRICTIONS`——flat config 對同一條規則以後者取代前者，`eslint.config.js:8-10` 的註解逐字記過 tests 區塊踩過這個坑；只列新選擇器會讓選單檔案失去 ADR-0019 §5 的三條。
 
 ## Deviations
+- 2026-10-18T02:23:48Z — U16 object-picker-ui：審查 READY（2 Major）。`R-01` 是我在同一份檔裡寫了「state 在兩次事件之間是舊的，所以單發鎖要用 ref」，卻在上一節讓 `ensureSystems` 讀 state 判冪等——同一個推理只套了一半。`R-02` 是我列的突變在 Playwright 的逐次點擊下根本不會紅（React 在兩次離散事件之間已提交渲染、按鈕已停用），等於恆綠測試。另外審查讀了 `eslint-plugin-react-hooks` 原始碼，證實我留給下游「待實證」的寫法其實可以在本站定案——我當時沒去讀規則原始碼，就把一個查得到答案的問題推給下游。處置寫成 `nfr-design-corrections.md`（`D-01`–`D-07`）。
 - 2026-09-28T11:46:42Z — R-07 讓我把 U4-R1 從 N/A 改成 OK。原本的理由是「規則已在上游定好，本站沒有可加的設計」，但 spec 單元的 performance-design 被 produces_kinds 濾掉，於是「截止欄位是哪一欄」「要不要索引」這兩個資料面決定**沒有別的落點**。抽身太快的代價是把決定丟給 S-5 的實作者去猜
 
 - 2026-09-28T11:23:40Z — Q1 使用者以自由文字答「不需要做任何加密」，比選項 A 更乾脆。我沒有直接當成 A 寫進去，也沒有整題重問——改為一次窄化確認：結論照他的，但 ADR-0006 的判定、理由與殘餘風險照寫（那是 hard constraint，要求每個面向都有明確判定且不得留空）。這是「不猜使用者的意思」與「不放棄 hard constraint」兩者同時成立的最短路徑
@@ -108,6 +111,8 @@
 - **`R-03`：我把一個已核可、已寫成 e2e 斷言的 0 歸因到錯的規則上，而正確機制上游早就寫好了。** `UIP-2` 的量測逐字「以缺 `K3 view` 的角色換頁 N 次後為 **0**」，我把它歸因於 `BR21.3`——但 `BR21.3` 是**重試**規則，而我自己在 `logical-components.md` §二 寫出它的語意是「403 永久失敗本工作階段**不再**發請求」：要先發一次並收到 403 才知道，實際計數是 **1**，e2e 會紅。同一份 artifact 裡我既寫下了正確語意、又據此得出錯的結論——這是 `project.md` 的 `domain-design:72ea0721` 記過的「同一份檔內 behaviour 敘述與宣告自相矛盾」第二次發生。正確機制是 `can("K3","view")` 的發出前置判定，`frontend-components.md:157` 已定案。（2026-10-11T01:25:28Z）
 - 2026-10-11T11:47:35Z — U15 memory-page-ui：traceability sensor 把 nfr-requirements 文件中「僅作為先例被引用」的他單元識別字 NFR4.80 也當成本單元的 NFRx.y，要求列入 upstream_ids；放在 reverse 段不被接受，改列 coverage 並標 N/A。與 U24 的 NFR7.2 同形。
 - 2026-10-12T00:05:06Z — U20 requirement-field-service：上一站審查殘留（nfr-requirements review-01 的 R-01～R-08）原裁決為「帶進程式產生」，但其中屬設計層者（授權矩陣補列、RETURNING、條件式清空、CI 收斂步驟、422 裁決）在本站直接落實；這不推翻裁決，而是把落點提前到能被審查看到的地方，問題檔第〇節逐項記載。同時修正上一站兩處判準：NFR20.4 的「INSERT／UPDATE 各 1」改為「單一 upsert 敘述」；清空由「先讀後改」改為單一條件式 UPDATE（先讀後改在兩個併發清空下會兩者皆寫入）。
+- 2026-10-17T15:01:59Z — U17 a11y-gate：前一站漏收兩個由其他單元明文指派給本單元的開放項（`OPEN-ND24-1` 兩個 role=status 的播報順序、`OPEN-MP15-4` 記憶頁 test id 映射）。它們寫在 `member-pages-ui`／`memory-page-ui` 的 construction 產出裡，不在 nfr-requirements 的 consumes 上，只有以單元名 grep 全部 construction 產出才找得到。本站補收並處置。可執行補強：**每個單元開工時，先以單元名與 `U<n>` 各 grep 一次全部 construction 產出**，找出別人指派過來的事項——consumes 清單不涵蓋同層的兄弟單元。
+- 2026-10-17T15:01:59Z — U17 a11y-gate：設計基準清單的過期檢查時，第一版用記憶體集合 ＋ `afterAll`；查 `playwright.config.ts`（`retries: 1`、`workers: 1`）後改為寫檔——Playwright 失敗後換 worker 重試，記憶體集合會丟掉前半段，使一個 flaky 掃描點就讓過期檢查誤紅。另查出契約 `K-19`／`K-20` 的 `data_testid_prefix: "brain-*"` 與 U23／U24 實作不符（實為 `project-*`／`member-*` 等），就緒規格以程式為準。
 
 ## Tradeoffs
 - 2026-09-28T11:46:42Z — R-05 是我給使用者的選項描述裡寫了一個假代價（說選 B 會動到 AC9.1.3 的論證，實際上那個數字的範圍只涵蓋既有實體）。已揭露並重新徵詢，使用者維持 A。教訓與 R-03／R-14 同族但更嚴重一級：前兩者是我在產出裡寫錯，這一次是**錯的資訊進了決策選項**，而使用者是拿那個描述在做選擇

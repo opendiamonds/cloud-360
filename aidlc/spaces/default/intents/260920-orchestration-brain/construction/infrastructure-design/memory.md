@@ -34,6 +34,7 @@
 - **`U24`／本站判定為無標的，而三項查證各有一條可複驗指令——「什麼都不用改」若沒有證據，與「沒查」在文件上長得一樣。** ① CI 不用改：`ui-regression.lock.yml:558` 逐字 `run: timeout 15m npx playwright test`（裸指令、無檔案清單）＋ `frontend/playwright.config.ts:10` 的 `testDir: './tests/e2e',`——新 spec 丟進該目錄即被撿到。② nginx 不用加規則：`frontend/nginx.conf:16-17` 的 `location /api/` ＋ `proxy_pass` 已涵蓋全部六個 membership 端點。③ CI 測試 stack 不用改：`docker-compose.test.yml` 的 `backend.environment` 全部自帶預設，而本單元 `TS-U24-7` 為零新環境變數。（2026-10-11T01:34:12Z）
 
 - **本站的實質工作不是設計，是把「六道閘門只有一道對本單元有效」寫成可追溯的事實。** `cicd-pipeline.md` §四 逐道判定：`repo-contract` 的 secret 掃描結構上看不到 `frontend/`、lint 不管讀錯欄位、**`tsc -b` 對手寫 interface 無效**（`team.md` 已逐字記載 `AdminPage.tsx` 的 `DbUser` 與 `return data` 把 `any` 放行）、OpenAPI drift 對本單元不觸發（本單元不改後端）、backend `unittest` 無標的——**只有第 6 道 `ui-regression` 有效**。寫下它的用途是：若該閘門被停用或變成非阻擋，本單元沒有任何替代防護，而這件事在任何單一閘門的設定檔裡都看不出來。已列入 `traceability.json` 的 `reverse` 為 `gate-6-of-6`。（2026-10-11T01:34:12Z）
+- 2026-10-18T02:25:30Z — U16 object-picker-ui：精簡 by-reference 執行、不派審查員（2026-10-06 核可的處置）。本單元無後端、無部署元件、無環境變數；唯一的「基礎設施」面是三個共用檔（`eslint.config.js`、`U17` 的 `a11y.spec.ts`、`U14` 的 `ContextBar.tsx`）與連線池，寫進 Shared Infrastructure 表。traceability sensor 同樣要求列出上游引為先例的 `NFR11.100`／`NFR11.140`，照 nfr-design 的處置標 N/A。
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
@@ -74,6 +75,7 @@
 
 - **本站未派審查員，這是依核可做法而非我自己決定省略，但我在產出裡明寫了它的代價。** 2026-10-06 核可：per-unit skip 不可行（8 站清單 24 單元共用），不適用的 design 階段改跑精簡 by-reference ＋ 不派 reviewer，`produces` 仍須全部落地。對照：`nfr-design` 我**派了**審查員，因為那站有真實設計內容（結果查出 2 個 Critical）——判準是「這站有沒有可被獨立視角推翻的主張」，不是「這站重不重要」。本站的主張幾乎全是可複驗的實測，故 `cicd-pipeline.md` 檔頭逐字寫明「本檔的主張未經獨立複驗；每一條都附可複驗指令以彌補」。（2026-10-11T01:34:12Z）
 - 2026-10-11T11:53:48Z — U15 memory-page-ui：stage condition 三子句皆不成立（零新服務、零新部署架構、零雲端資源），依 2026-10-06 核可的精簡做法跑 by-reference、不派審查員；與 U24 同形。唯一非零項是使用者裁決併入的後端「已核准」檢查對 OpenAPI 漂移閘門與既有 C3 契約測試（test_memory_contract.py:288）的連帶影響，寫在 cicd-pipeline.md §三。
+- 2026-10-17T15:07:58Z — U17 a11y-gate：本站對 packaging／CI-only 單元大致不適用（無執行期資源、無部署），依 2026-10-06 核可的精簡做法寫 by-reference 產出且**不派審查**。精簡不等於空白：查 `ui-regression.md` 時發現它沒有 `upload-artifact`，axe 的違規附件綠燈時零留存、紅燈時只剩 agent 留言摘要——上一站 Audit logging 變形的處置（附件附進報告）因此只有半套。本單元不改 gh-aw 工作流程，記為已知缺口交 build-and-test 判定。traceability sensor 照預期回 no NFRx.y IDs（上游無無障礙 NFR）。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
