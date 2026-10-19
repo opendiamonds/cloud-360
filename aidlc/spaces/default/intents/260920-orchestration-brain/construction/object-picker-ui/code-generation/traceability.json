@@ -1,0 +1,346 @@
+{
+  "stage": "code-generation",
+  "unit": "object-picker-ui",
+  "upstream_ids": [
+    "NFR11.100",
+    "NFR11.140",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3",
+    "BR11.1",
+    "BR11.2",
+    "BR11.3",
+    "BR11.4",
+    "BR12.1",
+    "BR12.2",
+    "BR12.3",
+    "BR12.4",
+    "BR13.1",
+    "BR13.2",
+    "BR13.3",
+    "BR13.4",
+    "BR14.1",
+    "BR14.2",
+    "BR14.3",
+    "BR14.4",
+    "BR14.5",
+    "BR14.6",
+    "BR15.1",
+    "BR15.2",
+    "BR15.3",
+    "BR15.4",
+    "NFR2.160",
+    "NFR5.160",
+    "NFR8.160",
+    "NFR11.160",
+    "OPN-01",
+    "OPN-02",
+    "OPN-03",
+    "OPN-04",
+    "OPN-05",
+    "OPN-06",
+    "OPN-07",
+    "OPN-11",
+    "OPN-12",
+    "OPN-13",
+    "OPN-14",
+    "OPN-15",
+    "OPN-16",
+    "OPN-21",
+    "OPN-22",
+    "OPN-23",
+    "OPN-24",
+    "OPN-25",
+    "OPN-26"
+  ],
+  "coverage": [
+    {
+      "id": "AC9.2.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "就地建立專案並切過去、零系統專案可選；e2e「具建立權限者建立專案後切過去且再開可選」「選零系統的專案送出 systemId 為 null」"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "群組旁建立系統並切過去、系統列可選；e2e「擁有者在群組旁建立系統後切到新系統」「選系統送出字串三層 id 且回推前脈絡列不變」"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "Deferred",
+      "target": "F-01：AC 字面「經由 require_story_action」與 U7 已交付實作（facade user_can）矛盾，本單元無權裁決，交關卡 G-2；畫面面已交付"
+    },
+    {
+      "id": "BR11.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "鈕只在 ready 渲染、三處共用同一元件、不新增 prop"
+    },
+    {
+      "id": "BR11.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "選定即 setWorkTarget、不本地改脈絡列；回 false 就地顯示（e2e 切換送不出案）"
+    },
+    {
+      "id": "BR11.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "送出成功即關閉、焦點回切換鈕（ContextBar closePicker）"
+    },
+    {
+      "id": "BR11.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/object-picker.spec.ts",
+      "note": "未修改 useWorkspaceTargetSync；e2e「子頁面選取帶本頁所讀段並出現已改為提示」"
+    },
+    {
+      "id": "BR12.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "每次開啟重抓專案清單；依 F-05／N-02 改為展開才抓系統、搜尋時以 fanoutQueue 補抓"
+    },
+    {
+      "id": "BR12.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "專案清單失敗→error 與重試、403 文案；依 F-05 群組失敗只影響該群組"
+    },
+    {
+      "id": "BR12.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 F-03／D-04 衍生 identity，refreshMe 一次後轉 failed"
+    },
+    {
+      "id": "BR12.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "卸載時 cancel 佇列、mountedRef 丟棄在途結果；e2e 證據為「補抓進行中關閉後不再發出系統請求」（「關閉後晚到的舊回應永不出現」依 review-01 R-03 不能證明丟棄，僅附帶觀察）"
+    },
+    {
+      "id": "BR13.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPickerGroup.tsx",
+      "note": "專案列與系統列皆可選；零系統顯示「尚無系統」"
+    },
+    {
+      "id": "BR13.2",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "isOwnedByMe 單一判定；非擁有者 aria-disabled＋說明（ObjectPickerGroup）"
+    },
+    {
+      "id": "BR13.3",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "currentRowKey／rowKey 字串比較；「目前」＋aria-current"
+    },
+    {
+      "id": "BR13.4",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "normalize＋includes 子字串比對、no-match 保留建立入口"
+    },
+    {
+      "id": "BR14.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPickerCreateForm.tsx",
+      "note": "只經 objectCreateAction；lint 禁匯入 createProject／createSystem"
+    },
+    {
+      "id": "BR14.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "「+ 新增專案」只在 can(K2, edit)"
+    },
+    {
+      "id": "BR14.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "「+ 新增系統」= isOwnedByMe && can(K2, edit)，與可選性同一判定"
+    },
+    {
+      "id": "BR14.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPickerCreateForm.tsx",
+      "note": "useRef 單發鎖、失敗就地文案、名稱保留、Escape 收表單焦點回入口"
+    },
+    {
+      "id": "BR14.5",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "建立成功即切換並以頁面 LiveRegion 播報；回 false 依 D-03 不重抓"
+    },
+    {
+      "id": "BR14.6",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "無 K2 edit 的空清單只顯示說明"
+    },
+    {
+      "id": "BR15.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "role=dialog、aria-modal、aria-labelledby、焦點進搜尋框"
+    },
+    {
+      "id": "BR15.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "Tab 焦點陷阱、Escape、各關閉路徑焦點返還"
+    },
+    {
+      "id": "BR15.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "方向鍵 roving tabIndex、首尾不循環、停用列可聚焦不可啟用"
+    },
+    {
+      "id": "BR15.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 F-04 改為時間分工：開啟中寫 brain-object-picker-live，關閉後寫頁面 LiveRegion"
+    },
+    {
+      "id": "NFR2.160",
+      "status": "OK",
+      "target": "frontend/tests/e2e/object-picker.spec.ts",
+      "note": "e2e：回推前脈絡列不變、回推後更新、換頁後三元組相同"
+    },
+    {
+      "id": "NFR5.160",
+      "status": "OK",
+      "target": "frontend/eslint.config.js",
+      "note": "lint 禁 new WebSocket；ws-contract.json 雜湊前後相同"
+    },
+    {
+      "id": "NFR8.160",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py",
+      "note": "零新環境變數、零 compose 變更；該檢查通過，deploy/ 本單元零變更"
+    },
+    {
+      "id": "NFR11.160",
+      "status": "OK",
+      "target": "frontend/tests/e2e/object-picker.spec.ts",
+      "note": "e2e「三個頁面內換對象與建立都不切頁」"
+    },
+    {
+      "id": "OPN-01",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 N-02：開啟 1～2 次、展開至多 1 次；e2e 30 專案案"
+    },
+    {
+      "id": "OPN-02",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "mountedRef／cancelled 丟棄晚到結果；守衛由程式碼審查承載——e2e「關閉後晚到的舊回應永不出現」移除守衛仍綠，不算證據（review-01 R-03）"
+    },
+    {
+      "id": "OPN-03",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPickerCreateForm.tsx",
+      "note": "useRef 單發鎖；e2e 同任務雙送出（M9 實見紅燈）"
+    },
+    {
+      "id": "OPN-04",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 N-01：refreshMe 至多一次＋重試；e2e 兩情境"
+    },
+    {
+      "id": "OPN-05",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "斷線即關、焦點到脈絡列、播報一次；e2e 斷線案"
+    },
+    {
+      "id": "OPN-06",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 N-02：第一次輸入後補抓，之後輸入 0 請求"
+    },
+    {
+      "id": "OPN-07",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "兩個新 axe 掃描點零違規；鍵盤與播報計次在 object-picker.spec.ts"
+    },
+    {
+      "id": "OPN-11",
+      "status": "OK",
+      "target": "frontend/eslint.config.js",
+      "note": "lint 禁直接匯入建立函式；e2e 無 K2 edit 案"
+    },
+    {
+      "id": "OPN-12",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "owner_user_id 比較只在 isOwnedByMe；e2e 非擁有者案"
+    },
+    {
+      "id": "OPN-13",
+      "status": "OK",
+      "target": "frontend/eslint.config.js",
+      "note": "lint 禁 dangerouslySetInnerHTML／innerHTML；e2e 惡意名稱案"
+    },
+    {
+      "id": "OPN-14",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "子字串比對；lint 禁 RegExp；e2e 特殊字元案"
+    },
+    {
+      "id": "OPN-15",
+      "status": "OK",
+      "target": "frontend/eslint.config.js",
+      "note": "lint 禁主控台與四種儲存；e2e 主控台計數與儲存鍵集合"
+    },
+    {
+      "id": "OPN-16",
+      "status": "OK",
+      "target": "frontend/tests/e2e/object-picker.spec.ts",
+      "note": "e2e「建立系統回 404 顯示其他錯誤文案」；他人專案入口不可達（M2）"
+    },
+    {
+      "id": "OPN-21",
+      "status": "OK",
+      "target": "frontend/src/brain/objectPickerModel.ts",
+      "note": "String() 轉換集中於 targetIdsFor*／rowKey"
+    },
+    {
+      "id": "OPN-22",
+      "status": "OK",
+      "target": "frontend/package.json",
+      "note": "依賴鍵集合前後相同（本單元未修改此檔）"
+    },
+    {
+      "id": "OPN-23",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "只新增兩個掃描點；U17 全部 24 test 綠；a11y-baseline.json 不變"
+    },
+    {
+      "id": "OPN-24",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ObjectPicker.tsx",
+      "note": "依 N-02 更正：fanoutQueue 只用於搜尋補抓，開啟與展開為單一請求"
+    },
+    {
+      "id": "OPN-25",
+      "status": "Deferred",
+      "target": "automation-test-plan.md 屬 tcms-test-cases stage；突變與 lint 逐條結果已記於 code-summary.md §五供轉錄"
+    },
+    {
+      "id": "OPN-26",
+      "status": "OK",
+      "target": "frontend/tests/e2e/object-picker.spec.ts",
+      "note": "C 規則適用：本檔 32 案＋a11y 兩掃描點；A／B 不適用（code-summary §九）"
+    },
+    { "id": "NFR11.100", "status": "N/A", "target": "屬 U23 project-pages-ui 的需求，上游僅引為處置先例，本單元不承接" },
+    { "id": "NFR11.140", "status": "N/A", "target": "屬 U14 entry-page-ui 的需求，上游僅引為處置先例，本單元不承接" }
+  ]
+}
