@@ -2079,6 +2079,38 @@ host 可連 mcp-bridge:8080/healthz：是／否
 
 ---
 
+#### 5.13 入口頁部署後實測（U14 entry-page-ui）
+
+入口頁（路由 `/`，具 `K1 view` 者的落點）是大腦 WebSocket（`/api/brain/ws`）第一次對使用者可見。下列檢查補在每次含大腦前後端變更的部署之後。
+
+**自動：`deploy.yml` 的步驟 6a「Verify the brain WS subprotocol survives the tunnel」**（`[EPI1]`=A）
+
+- 位置在「Verify sessions survive a Redis restart」之後、「Record this commit as the last-good deployment」之前；**擋部署**（失敗 → deploy job 失敗 → `rollback` 還原 last-good、開 revert PR、交 Deploy Doctor）。刻意**不**放進 `rollback` job：last-good 可能早於 `U13`，該版本沒有 `/api/brain/ws`。
+- 原理：對公開網址送一個**只帶協定名** `cloud360.brain.v1`、不帶任何身分項的升級請求；閘道會接受並回送協定名，再以 4401 關閉。步驟不讀任何 secret，輸出只有狀態列、協定標頭有無與 curl 結束碼。最多 12 輪、每輪間隔 5 秒。
+- 失敗時的判讀（步驟最後印出的三行）：
+
+| 最後一輪狀態列 | 協定標頭 | 意義 | 處置 |
+|---|---|---|---|
+| `HTTP/1.1 403 …` | 無 | 協定名在**請求方向**被剝（Cloudflare 或 nginx 沒把 `Sec-WebSocket-Protocol` 轉給閘道） | 依下方人工第 2 步比對 nginx；nginx 正確則為 Cloudflare 剝除 |
+| `HTTP/1.1 101 …` | 無 | 協定名在**回應方向**被剝（瀏覽器會因此拒絕連線） | 同上 |
+| `(no status line)` | 無 | tunnel 或 DNS 問題（curl 結束碼非 0，例如 7、28） | 先看同次部署「Wait for the public hostname to answer through the tunnel」與 `cloudflared` 日誌 |
+
+  Cloudflare 剝除**沒有不改契約的修法**：以 revert PR 回滾並交使用者裁決（`U13` code-summary 第 4.5 節）。
+- 本機驗證：對 `docker compose -f deploy/docker-compose.test.yml up -d` 起的 stack，以該步驟 `run` 的內容、環境變數 `BRAIN_WS_URL=http://localhost:8090/api/brain/ws` 執行一次，應以 0 結束；拿掉 `Sec-WebSocket-Protocol` 標頭後應以非 0 結束並印出上述三行。Cloudflare 那一跳只在真正部署時才被驗證。
+
+**人工（維運者，在部署主機與一台能開公開網址的瀏覽器）**——第一次部署成功後、宣告入口頁可用之前；之後每次改 `frontend/nginx.conf`、`cloudflared` 映像或 ingress 時重跑。結果記入 `build-and-test` 的產出（每步一列：操作、`date -u` 時間、觀察值、通過與否）。
+
+1. **`U13` 的三層實測（帶身分）**：依 `aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-gateway/code-generation/code-summary.md` 第 6.2 節第 1–4 項執行（身分值的取得與遮罩方式以該節為準，本節不重抄）。三層皆協商出 `cloud360.brain.v1` 並收到 `ready`——這是 bearer 項在 Cloudflare 那一跳存活的**唯一**證據。
+2. **確認執行中的 nginx 就是 repo 的設定**：`docker exec cloud360-frontend-1 nginx -T | grep -n -A16 'location /api/'`，輸出與 `frontend/nginx.conf` 一致、沒有隱藏 `Sec-WebSocket-Protocol` 的設定。
+3. **免身分的協定名探測**：在主機上執行步驟 6a 的 curl 一次（不需任何變數），應見 `HTTP/1.1 101` 與 `sec-websocket-protocol: cloud360.brain.v1`。6a 失敗回滾後用它定位。
+4. **瀏覽器端**：以**公開網址**開頁，以具 `K1 view` 的測試帳號登入 → 落在 `/`；開發者工具 Network 篩 WS、點 `/api/brain/ws`：狀態 `101`、回應標頭有協定名、網址**不含** `?`、Messages 先見送出的 `hello` 再見 `ready` 與快照；畫面不出現「無法連線到大腦」。**不得**截圖或複製請求標頭。
+
+**不得以區網 IP 開頁驗證**：前端 bundle 內嵌的 WS 基底是公開網址，以區網 IP 開頁時瀏覽器仍連公開網址（或因來源不同被擋），結果不代表任一路徑的實況。
+
+**結案條件**：未完成上述第 1、4 步，不得宣稱 `OPEN-EP14-13`（Cloudflare 兩跳的子協定透傳）與 `OPEN-GW13-6` 結案。
+
+---
+
 ### 6. 相關文件
 
 | 文件 | 說明 |

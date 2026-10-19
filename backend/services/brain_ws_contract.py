@@ -300,6 +300,30 @@ class WorkTargetPayload(BaseModel):
             "前端只套用到目前讀取該段的頁面。"
         )
     )
+    # ADR-0022 C-8：三層名稱。**必存在、無預設**（給預設會使產生的 TS 欄位變為可選，
+    # 漏送也不會被契約測試抓到）。名稱不儲存，每次推送由閘道重查。
+    projectName: Optional[str] = Field(
+        description=(
+            "ADR-0022 C-8：專案名稱，**必存在、可為 null、無預設**。null 的五種成因："
+            "projectId 為 null、查不到、不屬請求者、請求者不可見該專案、或查詢失敗——"
+            "五者對前端逐位元相同，不另送 error。名稱為空字串時原樣送出（前端顯示「（未命名）」）。"
+        )
+    )
+    systemName: Optional[str] = Field(
+        description=(
+            "ADR-0022 C-8：系統名稱，**必存在、可為 null、無預設**。null 的五種成因："
+            "systemId 為 null、查不到、不屬請求者、所屬專案對請求者不可見、或查詢失敗。"
+            "名稱為空字串時原樣送出。"
+        )
+    )
+    diagramName: Optional[str] = Field(
+        description=(
+            "ADR-0022 C-8：架構圖名稱，**必存在、可為 null、無預設**。null 的五種成因："
+            "diagramId 為 null、查不到、不屬請求者、明確指定的上層專案對請求者不可見、或查詢失敗。"
+            "只指定圖（projectId／systemId 皆 null）時不判可見性、照常帶圖名。"
+            "名稱為空字串時原樣送出。"
+        )
+    )
 
 
 class DonePayload(BaseModel):

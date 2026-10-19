@@ -9,6 +9,13 @@ import { ShareModal } from '../components/ShareModal';
 import { useAuth } from '../context/auth-context';
 import { useCollaboration } from '../hooks/useCollaboration';
 import { apiUrl } from '../config/api';
+import { isCanvasDirty } from '../utils/unsavedWork';
+import { useBrainConnection } from '../brain/useBrainConnection';
+import { useWorkspaceTargetSync } from '../brain/useWorkspaceTargetSync';
+import { BrainSession } from '../components/brain/BrainSession';
+import { ContextBar } from '../components/brain/ContextBar';
+import { SyncNotice } from '../components/brain/SyncNotice';
+import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
 
 interface Diagram {
   id: number;
@@ -94,6 +101,23 @@ export const WorkspacePage = () => {
   });
   const [canvasLayoutEpoch, setCanvasLayoutEpoch] = useState(0);
 
+  // U14：大腦掛點（脈絡列、同步提示、「問大腦」面板）只在 K1 view 時掛載；無 K1 時不開連線，
+  // 同步掛點的全部入口為 no-op（security-design §六之二、nfr-design R-05）。
+  const brainEnabled = can('K1', 'view');
+  const brain = useBrainConnection('workspace', { enabled: brainEnabled });
+  // 首次對齊要開的圖交給既有 handleLoadDiagram（定義在下方）；以 ref 轉送，只在事件回呼內被讀取。
+  const loadDiagramRef = useRef<(id: number) => void>(() => undefined);
+  const openDiagramForBrain = useCallback((id: number) => loadDiagramRef.current(id), []);
+  const brainSync = useWorkspaceTargetSync(brain, {
+    currentDiagramId,
+    diagrams,
+    saveStatus,
+    xml,
+    openDiagram: openDiagramForBrain,
+  });
+  const onBrainPageReady = brainSync.onPageReady;
+  const markBrainOrigin = brainSync.markOrigin;
+
   const toggleChatCollapsed = useCallback(() => {
     setChatCollapsed((prev) => {
       const next = !prev;
@@ -114,11 +138,9 @@ export const WorkspacePage = () => {
   }, [sidebarCollapsed]);
 
   const handleCanvasExit = useCallback(() => {
-    // no-file 但畫布已有 XML（例如 AI 剛產圖尚未建檔）也視為有風險離開
-    const dirty =
-      saveStatus === 'unsaved' ||
-      saveStatus === 'saving' ||
-      (saveStatus === 'no-file' && !!xml.trim());
+    // no-file 但畫布已有 XML（例如 AI 剛產圖尚未建檔）也視為有風險離開。
+    // U14：判定抽成 utils/unsavedWork.ts 的 isCanvasDirty（原樣抽出，與大腦同步掛點共用一份）。
+    const dirty = isCanvasDirty(saveStatus, xml);
     if (dirty) {
       if (!window.confirm('有未儲存的變更，確定要退出編輯模式？')) {
         return;
@@ -149,7 +171,8 @@ export const WorkspacePage = () => {
     [token]
   );
 
-  const fetchDiagrams = async () => {
+  /** U14（functional-design R-06 前半）：回傳 { ok, list }，僅 response.ok 分支 ok＝true；既有呼叫端忽略回傳值。 */
+  const fetchDiagrams = async (): Promise<{ ok: boolean; list: Diagram[] }> => {
     try {
       const response = await fetch(`${API_COLLAB}/diagrams`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -157,10 +180,12 @@ export const WorkspacePage = () => {
       if (response.ok) {
         const data = await response.json();
         setDiagrams(data);
+        return { ok: true, list: Array.isArray(data) ? data : [] };
       }
     } catch (err) {
       console.error('Failed to load diagram list', err);
     }
+    return { ok: false, list: [] };
   };
 
   /** A4：將 messages 寫回該 user×diagram */
@@ -269,9 +294,14 @@ export const WorkspacePage = () => {
   useEffect(() => {
     if (!token) return;
 
+    // U14（performance-design §四）：就緒時交給大腦同步掛點的值以區域變數明確傳入（setState 尚未 commit，不讀 ref）。
+    let listResult: { ok: boolean; list: Diagram[] } = { ok: false, list: [] };
+    let openedDiagramId: number | null = null;
+    let openedStatus: DiagramSaveStatus = 'no-file';
+    let openedXml = '';
     const bootstrap = async () => {
       try {
-        await fetchDiagrams();
+        listResult = await fetchDiagrams();
         const response = await fetch(`${API_COLLAB}/workspace/bootstrap`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -279,7 +309,11 @@ export const WorkspacePage = () => {
         const data = await response.json();
         if (data.diagram) {
           setXml(data.diagram.xml_data || '');
+          markBrainOrigin('bootstrap');
           setCurrentDiagramId(data.diagram.id);
+          openedDiagramId = data.diagram.id;
+          openedXml = data.diagram.xml_data || '';
+          openedStatus = data.diagram.xml_data ? 'saved' : 'unsaved';
           setSaveStatus(data.diagram.xml_data ? 'saved' : 'unsaved');
           setIsShared(
             !data.diagram.is_owner ||
@@ -295,11 +329,19 @@ export const WorkspacePage = () => {
         console.error('Workspace bootstrap failed', err);
       } finally {
         setBootstrapDone(true);
+        // BR97.5 的就緒閘門：bootstrap 結束（圖清單請求已先結束）。
+        onBrainPageReady({
+          openedDiagramId,
+          openedBy: openedDiagramId === null ? null : 'bootstrap',
+          diagrams: listResult.list,
+          listOk: listResult.ok,
+          unsaved: isCanvasDirty(openedStatus, openedXml),
+        });
       }
     };
 
     bootstrap();
-  }, [token]);
+  }, [token, onBrainPageReady, markBrainOrigin]);
 
   const handleLoadDiagram = async (id: number) => {
     try {
@@ -310,6 +352,7 @@ export const WorkspacePage = () => {
         const data = await response.json();
         if (data.xml_data !== undefined) {
           setXml(data.xml_data);
+          brainSync.markOrigin('user');
           setCurrentDiagramId(data.id);
           setSaveStatus('saved');
           setIsShared(
@@ -323,6 +366,12 @@ export const WorkspacePage = () => {
       console.error('Failed to load diagram', err);
     }
   };
+
+  useEffect(() => {
+    loadDiagramRef.current = (id: number) => {
+      void handleLoadDiagram(id);
+    };
+  });
 
   const handleNewDiagram = async () => {
     if (!canEditArch) {
@@ -373,6 +422,8 @@ export const WorkspacePage = () => {
       setIsShared(false);
       setSaveStatus('no-file');
       setMessages([DEFAULT_WELCOME]);
+      // BR97.6 ③：被刪的圖等於作業對象的圖時，同步掛點送保留上兩層、diagramId 為 null 的設定。
+      brainSync.onDiagramDeleted(diagramId);
       await setLastOpened(null);
       await fetchDiagrams();
       showToast('架構圖已刪除', 'success', {
@@ -872,7 +923,16 @@ export const WorkspacePage = () => {
   };
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full flex-col">
+    {/* U14（BR97.1、BR97.4）：脈絡列（可切換共享）、同步提示與收合的「問大腦」面板；只在 K1 view 時掛載。 */}
+    {brainEnabled && (
+      <BrainSession connection={brain}>
+        <ContextBar sharingToggle />
+        <SyncNotice sync={brainSync} />
+        <SubpageBrainPanel />
+      </BrainSession>
+    )}
+    <div className="relative flex flex-1 min-h-0 w-full overflow-hidden">
       {toast?.type === 'error' && (
         <div className={`absolute top-8 ${chatCollapsed ? 'left-12' : 'left-[420px]'} right-0 z-50 flex justify-center pointer-events-none px-4 transition-[left] duration-300`}>
         <div className="pointer-events-auto bg-white/90 backdrop-blur-xl border border-red-100 px-6 py-4 rounded-2xl shadow-[0_12px_40px_rgba(239,68,68,0.15)] flex flex-col gap-3 animate-[slideInDown_0.4s_ease-out] max-w-lg w-[min(92vw,28rem)]">
@@ -1189,6 +1249,7 @@ export const WorkspacePage = () => {
         diagramId={currentDiagramId}
         token={token || ''}
       />
+    </div>
     </div>
   );
 };

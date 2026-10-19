@@ -42,6 +42,13 @@ hierarchy_facade.py — `U7 hierarchy-service` 的授權門面
   的 `project_visible` 參數）：判定由呼叫端注入，本模組**不 import 任何成員關係
   符號**——`U7` 不呼叫 `U19`（`BR87.3`），而守門仍在 `K2 edit` 之後、擁有者檢查與
   一切 409 之前（`security-design.md` §二之二）。
+
+`U14`（ADR-0022）起再加：
+
+- **四個讀取路徑的可見性守門**（`describe_work_target`／`list_projects`／`list_systems`／
+  `resolve_work_target` 的 `project_visible` 參數）：大腦的名稱推送、對象目錄與直接設定
+  作業對象三條路，由「擁有者範圍」收緊為「擁有者範圍 ∩ `U23` 可見性」。判定同樣由呼叫端
+  注入、本模組仍不 import 任何成員關係符號。
 """
 
 from __future__ import annotations
@@ -235,6 +242,9 @@ class HierarchyFacade:
             self._db, owner_user_id=principal.user_id, name=name
         )
 
+    # 四個讀取路徑與三個寫入路徑的 `project_visible` 守門（`U14` ADR-0022 D-2–D-4 把讀取
+    # 路徑納入；以下先寫三條寫入路徑，讀取路徑的順序見各方法 docstring）。
+    #
     # 三條寫入路徑的共同順序（`U23`，`security-design.md` §二之二；functional-design
     # `R-01` 使用者裁決、nfr-requirements `R-03`／`R-04`）：
     #
@@ -248,10 +258,11 @@ class HierarchyFacade:
     # 仍是他，但已不是成員）對「底下仍有系統」的專案只能得到 404，無法以 409 的剩餘數
     # 探測內容。放在擁有者檢查之前，使守門的語意不依賴擁有者檢查的存在。
     #
-    # `project_visible` **必填、無預設、keyword-only**：漏傳時 Python 在呼叫當下拋
-    # `TypeError`（fail-closed）。給 `None` 預設並在方法內略過守門，任何未來的呼叫端
-    # 漏傳就會靜默繞過——那正是 nfr-requirements `R-03` 點名的風險。非測試程式的唯一
-    # 合法來源是 `MembershipFacade.project_visibility(principal)`（ast 靜態鎖）。
+    # `project_visible` **必填、無預設、keyword-only**（七個方法皆同）：漏傳時 Python 在
+    # 呼叫當下拋 `TypeError`（fail-closed）。給 `None` 預設並在方法內略過守門，任何未來的
+    # 呼叫端漏傳就會靜默繞過——那正是 nfr-requirements `R-03` 點名的風險。非測試程式的唯一
+    # 合法來源是 `MembershipFacade.project_visibility(principal)`（ast 靜態鎖 `S2`／`S3`；
+    # `S3` 唯一例外為 `session_store.py` 經注入轉接器的 `resolve_work_target`，ADR-0022 D-8）。
 
     def create_system(
         self,
@@ -361,27 +372,41 @@ class HierarchyFacade:
             actor_user_id=actor_user_id,
         )
 
-    # -- 列舉型讀取（套用 `BR6.1` 的擁有者範圍）-----------------------------
+    # -- 列舉型讀取（套用 `BR6.1` 的擁有者範圍 ∩ `U23` 可見性，ADR-0022）---------
 
-    def list_projects(self, principal: Principal):
-        """`W7`。只回傳 `owner_user_id` 等於請求者的列（`BR6.1`）。"""
+    def list_projects(self, principal: Principal, *, project_visible: Callable[[int], bool]):
+        """`W7`。擁有者範圍（`BR6.1`）列舉後**只保留可見者**（ADR-0022 D-3）。
+
+        唯一的應用程式呼叫端是大腦目錄（`brain_gateway._build_catalog`）。可見性閉包為
+        批次形狀（ADR-0022 D-5），故語句數固定 3（授權、列舉、可見集合各 1），與擁有專案數無關。
+        """
         self._authorize(principal, "view")
-        return hierarchy_service.list_projects(
+        projects = hierarchy_service.list_projects(
             self._db, owner_user_id=principal.user_id
         )
+        return [p for p in projects if project_visible(p.id)]
 
-    def list_systems(self, principal: Principal, *, project_id: int):
-        """`W7`。先確認專案屬請求者，否則回「查不到」（`BR6.1`）。"""
+    def list_systems(
+        self,
+        principal: Principal,
+        *,
+        project_id: int,
+        project_visible: Callable[[int], bool],
+    ):
+        """`W7`。先確認專案屬請求者，再判可見性；任一不成立回同一句「查不到專案」（ADR-0022 D-3）。"""
         self._authorize(principal, "view")
         hierarchy_service.assert_project_owned_by(
             self._db, project_id=project_id, user_id=principal.user_id
         )
+        if not project_visible(project_id):
+            raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
         return hierarchy_service.list_systems(self._db, project_id=project_id)
 
     def resolve_work_target(
         self,
         principal: Principal,
         *,
+        project_visible: Callable[[int], bool],
         project_id: Optional[int] = None,
         system_id: Optional[int] = None,
         diagram_id: Optional[int] = None,
@@ -394,15 +419,64 @@ class HierarchyFacade:
         `BR6.1`：解析的目標若不屬請求者，回「查不到」。少了這一步，
         `SessionContext` 可以把任何人的識別碼解析成合法的作業對象——
         而這是**同進程**路徑，**沒有任何 router 層會替它補上範圍檢查**。
+
+        ADR-0022 D-4（`[EPD1]`=A）：解析出的 `projectId` 非 null 且不可見時——
+        明確指定了 `project_id` 或 `system_id` → `HierarchyNotFound`（與指定別人的專案或
+        系統逐字相同）；只由圖推導 → 回 `{projectId: None, systemId: None, diagramId: <圖>}`、
+        無錯誤（圖屬請求者本人）。
         """
         self._authorize(principal, "view")
-        return hierarchy_service.resolve_work_target(
+        resolved = hierarchy_service.resolve_work_target(
             self._db,
             owner_user_id=principal.user_id,
             project_id=project_id,
             system_id=system_id,
             diagram_id=diagram_id,
         )
+        pid = resolved["projectId"]
+        if pid is None or project_visible(pid):
+            return resolved
+        if project_id is not None or system_id is not None:
+            raise HierarchyNotFound(
+                PROJECT_NOT_FOUND_DETAIL if project_id is not None else SYSTEM_NOT_FOUND_DETAIL
+            )
+        return {"projectId": None, "systemId": None, "diagramId": resolved["diagramId"]}
+
+    def describe_work_target(
+        self,
+        principal: Principal,
+        *,
+        project_visible: Callable[[int], bool],
+        project_id: Optional[int] = None,
+        system_id: Optional[int] = None,
+        diagram_id: Optional[int] = None,
+    ) -> dict:
+        """ADR-0022 D-2：作業對象三層名稱。**唯讀、冪等、不寫稽核、不拋查不到。**
+
+        | 步 | 動作 | SQL |
+        |---|---|---|
+        | ① | `_authorize(principal, "view")`；`HierarchyForbidden` **不在本方法捕捉** | 1 |
+        | ② | `hierarchy_service.describe_work_target`（擁有者範圍逐層查） | ≤ 3 |
+        | ③ | 明確指定路徑且三元組中出現的任一所屬專案不可見 → 三名稱皆 null | ≤ 1 |
+        | ④ | 否則回 ② 的名稱（只有圖的路徑：不判可見性、不推導上層） | 0 |
+
+        「不存在」「不屬請求者」「不可見」對呼叫端逐位元相同（三名稱 null、不另拋錯），
+        不新增探測面。回傳 dict 鍵：`projectName`／`systemName`／`diagramName`。
+        """
+        self._authorize(principal, "view")
+        found = hierarchy_service.describe_work_target(
+            self._db,
+            owner_user_id=principal.user_id,
+            project_id=project_id,
+            system_id=system_id,
+            diagram_id=diagram_id,
+        )
+        if found.explicit and any(not project_visible(pid) for pid in sorted(found.project_ids)):
+            return {"projectName": None, "systemName": None, "diagramName": None}
+        if not found.explicit:
+            # 只有圖的路徑：上層名稱恆為 None（服務層本就不查），不判可見性（nfr-design R-01）。
+            return {"projectName": None, "systemName": None, "diagramName": found.names["diagramName"]}
+        return dict(found.names)
 
     def list_diagrams_of_system(
         self, principal: Principal, *, system_id: int

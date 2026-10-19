@@ -581,5 +581,222 @@ class RestartTest(_Base):
         self.assertEqual(snapshot[-1]["payload"], items_before["payload"])
 
 
+class WorkTargetNamesAndVisibilityTest(_Base):
+    """ADR-0022：扇出的 `work_target` 帶名稱（D-7）；目錄與直接設定同受可見性守門（D-3／D-4）。"""
+
+    NAMES_3 = {"projectName": "e2e-u14-電商", "systemName": None, "diagramName": None}
+
+    def set_target_msg(self, pid=None, sid=None, did=None, segment="shared"):
+        return {
+            "v": 1,
+            "type": "set_work_target",
+            "payload": {
+                "projectId": None if pid is None else str(pid),
+                "systemId": None if sid is None else str(sid),
+                "diagramId": None if did is None else str(did),
+                "segment": segment,
+            },
+        }
+
+    def test_GT1_set_work_target_fanout_carries_names(self):
+        """
+        @purpose 頁面直接設定作業對象後扇出的 work_target 必須帶名稱，否則脈絡列在換對象後顯示不出名稱（BR97.2；G4 突變）。
+        @given /api/brain/ws；專案 3「e2e-u14-電商」；替身對 (3, None, None) 回名稱
+        @step 送 set_work_target(projectId="3") | 收到一則 work_target
+        @step 檢視名稱 | projectName＝e2e-u14-電商、其餘 null
+        @pass 扇出帶名稱
+        @story US1.1
+        """
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商")]
+        self.h.hierarchy.names_by_triple = {(3, None, None): self.NAMES_3}
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(self.set_target_msg(3))
+            msg = recv_json(ws)
+        self.assertEqual(msg["type"], "work_target")
+        self.assertEqual(msg["payload"]["projectId"], "3")
+        self.assertEqual(
+            (msg["payload"]["projectName"], msg["payload"]["systemName"], msg["payload"]["diagramName"]),
+            ("e2e-u14-電商", None, None),
+        )
+
+    def test_GT2_removed_user_naming_former_project_gets_not_found(self):
+        """
+        @purpose 被移出者說出前專案名稱，大腦目錄不得命中它：回 not_found_message、0 則 clarify、0 次設定
+                 （nfr-requirements R-01；H1 突變：list_projects 不過濾）。
+        @given /api/brain/ws；目錄只有專案 1「e2e-u14-前專案」且對請求者不可見；分類回 referent＝e2e-u14-前專案
+        @step 送一句 | token 為「找不到名為「e2e-u14-前專案」…」、done；無 clarify、無 work_target
+        @step 檢視 session 與交辦 | 作業對象仍為 (None, None)、dispatch 0 次
+        @pass 前專案名稱不被解析
+        @story US1.1
+        """
+        self.h.hierarchy.projects = [(1, "e2e-u14-前專案")]
+        self.h.visibility.invisible = {1}
+        self.h.router_script.default = decision(referent="e2e-u14-前專案")
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "改 e2e-u14-前專案 的架構")
+            turn = read_turn(ws)
+        self.assertEqual(types_of(turn), ["token", "done"])
+        self.assertTrue(turn[0]["payload"]["text"].startswith("找不到名為「e2e-u14-前專案」"))
+        self.assertNotIn("clarify", types_of(turn))
+        self.assertEqual(self.target(), (None, None))
+        self.assertEqual(self.h.orchestrator.dispatch_calls, [])
+
+    def test_GT3_visible_same_name_project_is_unique_hit_and_set(self):
+        """
+        @purpose 對照（雙向）：兩個同名專案只有一個可見時，可見者成為唯一命中並被設定——守門只排除不可見者，
+                 不得把可見的同名專案也藏起來或改成反問。
+        @given /api/brain/ws；專案 1、2 皆名為「e2e-u14-同名」，1 不可見、2 可見；分類回 referent＝e2e-u14-同名
+        @step 送一句 | 先 work_target（projectId＝"2"），無 clarify，最後 done
+        @step 檢視 session | 作業對象為 (2, None)
+        @pass 可見的同名專案唯一命中並設定
+        @story US1.1
+        """
+        self.h.hierarchy.projects = [(1, "e2e-u14-同名"), (2, "e2e-u14-同名")]
+        self.h.visibility.invisible = {1}
+        self.h.router_script.default = decision(referent="e2e-u14-同名")
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "改 e2e-u14-同名 的架構")
+            turn = read_turn(ws)
+        self.assertNotIn("clarify", types_of(turn))
+        self.assertEqual(turn[0]["type"], "work_target")
+        self.assertEqual(turn[0]["payload"]["projectId"], "2")
+        self.assertEqual(self.target(), (2, None))
+
+    def test_GT4_explicit_former_project_id_is_error_and_target_unchanged(self):
+        """
+        @purpose [EPD1]=A ①：頁面明確送被移出者的前專案 id，必須回一則 error（查不到）且作業對象不變（H3 突變）。
+        @given /api/brain/ws；專案 5 存在但對請求者不可見
+        @step 送 set_work_target(projectId="5") | 恰一則 error，code＝INVALID_REQUEST 且訊息為「查不到」固定句
+        @step 檢視 session | 作業對象仍為 (None, None)；之後沒有 work_target
+        @pass 明確指定被拒且無寫入
+        @story US2.1
+        """
+        from services import brain_gateway_rules as R
+
+        self.h.hierarchy.projects = [(5, "e2e-u14-前專案")]
+        self.h.visibility.invisible = {5}
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(self.set_target_msg(5))
+            msg = recv_json(ws)
+            self.assertTrue(nothing_more(ws))
+        self.assertEqual(msg["type"], "error")
+        self.assertEqual(msg["payload"]["code"], R.CODE_INVALID)
+        self.assertEqual(msg["payload"]["message"], R.ERROR_MESSAGES["target_not_found"])
+        session = self.h.store.load(KEY)  # 解析失敗不寫入：session 可能根本不存在
+        self.assertTrue(session is None or self.target() == (None, None))
+
+    def test_e2_diagram_only_under_former_project_sets_diagram_and_names(self):
+        """
+        @purpose [EPD1]=A ②：只送自己掛在前專案下的圖，作業對象為 {null, null, 圖}、名稱為 {null, null, 圖名}、
+                 無 error（nfr-design R-01；W3、H4 突變）。
+        @given /api/brain/ws；圖 77 掛在系統 50、系統 50 屬專案 5，專案 5 對請求者不可見；替身對 (None, None, 77) 回圖名
+        @step 送 set_work_target(diagramId="77") | 一則 work_target，無 error
+        @step 檢視 payload | projectId／systemId 為 null、diagramId＝"77"；名稱 (null, null, "e2e-u14-自己的圖")
+        @pass 只留圖與圖名
+        @story US2.1
+        """
+        self.h.hierarchy.projects = [(5, "e2e-u14-前專案")]
+        self.h.hierarchy.systems = {5: [(50, "e2e-u14-前系統")]}
+        self.h.hierarchy.diagrams = {77: 50}
+        self.h.visibility.invisible = {5}
+        self.h.hierarchy.names_by_triple = {
+            (None, None, 77): {"projectName": None, "systemName": None, "diagramName": "e2e-u14-自己的圖"}
+        }
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(self.set_target_msg(did=77))
+            msg = recv_json(ws)
+            self.assertTrue(nothing_more(ws))
+        self.assertEqual(msg["type"], "work_target")
+        p = msg["payload"]
+        self.assertEqual((p["projectId"], p["systemId"], p["diagramId"]), (None, None, "77"))
+        self.assertEqual((p["projectName"], p["systemName"], p["diagramName"]), (None, None, "e2e-u14-自己的圖"))
+
+    def test_GT5_ordinary_owner_same_shape_resolves_three_layers(self):
+        """
+        @purpose [EPD1]=A ③ 對照（雙向）：一般擁有者以同形狀（只送圖）照常解析三層，守門不誤傷可見者。
+        @given /api/brain/ws；圖 77 掛在系統 50、系統 50 屬專案 5，專案 5 可見
+        @step 送 set_work_target(diagramId="77") | 一則 work_target
+        @step 檢視 payload | projectId＝"5"、systemId＝"50"、diagramId＝"77"
+        @pass 三層照常解析
+        @story US2.1
+        """
+        self.h.hierarchy.projects = [(5, "e2e-u14-專案")]
+        self.h.hierarchy.systems = {5: [(50, "e2e-u14-系統")]}
+        self.h.hierarchy.diagrams = {77: 50}
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(self.set_target_msg(did=77))
+            msg = recv_json(ws)
+        p = msg["payload"]
+        self.assertEqual((p["projectId"], p["systemId"], p["diagramId"]), ("5", "50", "77"))
+
+    def test_b_prime_invisible_and_nonexistent_serialize_identically(self):
+        """
+        @purpose 「不可見」與「不存在」對前端必須逐位元相同（名稱 null、不另送 error），不新增探測面（EPN-12；G8 突變）。
+        @given /api/brain/ws；共享段作業對象為專案 3（設定時可見）；之後分兩種情境推送 work_target
+        @step 情境 A：專案 3 變為不可見後觸發扇出（set_sharing_mode） | 記下 work_target 的原始文字
+        @step 情境 B：專案 3 可見但已不存在（替身查無名稱）後觸發同一扇出 | 記下原始文字
+        @step 比較兩段原始文字 | 完全相同，且兩者名稱皆 null、皆非 error
+        @pass 兩種情境的序列化逐位元相同
+        @story US2.1
+        """
+        import json
+
+        from tests.brain_gateway_fakes import recv
+
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商")]
+        self.h.hierarchy.names_by_triple = {(3, None, None): self.NAMES_3}
+        raw = {}
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(self.set_target_msg(3))
+            self.assertEqual(recv_json(ws)["payload"]["projectName"], "e2e-u14-電商")
+            for case in ("A", "B"):
+                if case == "A":
+                    self.h.visibility.invisible = {3}
+                else:
+                    self.h.visibility.invisible = set()
+                    self.h.hierarchy.names_by_triple = {}
+                ws.send_json({"v": 1, "type": "set_sharing_mode", "payload": {"mode": "shared", "scope": "workspace"}})
+                recv_json(ws)  # sharing_mode
+                raw[case] = recv(ws)["text"]
+        self.assertEqual(raw["A"], raw["B"])
+        data = json.loads(raw["A"])
+        self.assertEqual(data["type"], "work_target")
+        p = data["payload"]
+        self.assertEqual((p["projectName"], p["systemName"], p["diagramName"]), (None, None, None))
+
+    def test_GT6_set_sharing_mode_fanout_carries_names(self):
+        """
+        @purpose set_sharing_mode 扇出的 work_target 同樣帶名稱（BR97.2）：切換到獨立對話時，該段的作業對象名稱必須隨之推送。
+        @given /api/brain/ws；workspace 已為獨立模式且該段作業對象為專案 3（以 SessionStore 預先設定）；替身對 (3, None, None) 回名稱
+        @step 送 set_sharing_mode(isolated, workspace) | sharing_mode 後接 work_target(segment＝workspace)
+        @step 檢視 work_target 名稱 | projectName＝e2e-u14-電商
+        @pass 扇出帶名稱
+        @story US3.1
+        """
+        from services.hierarchy_facade import mint_principal
+
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商")]
+        self.h.hierarchy.names_by_triple = {(3, None, None): self.NAMES_3}
+        # 獨立段只在該頁為獨立模式時存在；先以 SessionStore 設為獨立並寫入該段的作業對象
+        self.h.store.set_sharing_mode(KEY, "workspace", "isolated")
+        self.h.store.set_work_target(KEY, "workspace", mint_principal(self.h.users["alice"]), 3, None, None)
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json({"v": 1, "type": "set_sharing_mode", "payload": {"mode": "isolated", "scope": "workspace"}})
+            mode = recv_json(ws)
+            target = recv_json(ws)
+        self.assertEqual(mode["type"], "sharing_mode")
+        self.assertEqual(target["type"], "work_target")
+        self.assertEqual(target["payload"]["segment"], "workspace")
+        self.assertEqual(target["payload"]["projectName"], "e2e-u14-電商")
+
+
 if __name__ == "__main__":
     unittest.main()

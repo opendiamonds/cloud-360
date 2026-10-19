@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { BrainTranscriptProvider } from './brain/BrainTranscriptContext';
 import { useAuth } from './context/auth-context';
 import { ProtectedRoute, CapabilityRoute } from './components/RouteGuard';
 import { Layout } from './components/Layout';
@@ -19,12 +20,24 @@ import { MemoryPage } from './pages/MemoryPage';
 import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectCreatePage } from './pages/ProjectCreatePage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { EntryPage } from './pages/EntryPage';
 
-/** 依權限導向第一個可用頁；pending → 等待授權；皆無則 403 */
+/**
+ * 依權限導向第一個可用頁；pending → 等待授權；皆無則 403。
+ * U14（BR91.1）：`K1 view` 直接渲染入口頁——位在 isPending 之後（未核准帳號不得落進入口頁，AC1.4.3）、
+ * 其他權限之前；不具 K1 者沿用既有瀑布（BR91.2）。
+ */
 const DefaultRedirect: React.FC = () => {
   const { canArch, can, isLoading, isPending } = useAuth();
   if (isLoading) return null;
   if (isPending) return <Navigate to="/waiting-approval" replace />;
+  if (can('K1', 'view')) {
+    return (
+      <Layout>
+        <EntryPage />
+      </Layout>
+    );
+  }
   if (canArch('view')) return <Navigate to="/workspace" replace />;
   if (can('A3', 'view')) return <Navigate to="/assessment" replace />;
   if (can('C1', 'view')) return <Navigate to="/cost" replace />;
@@ -36,6 +49,8 @@ const DefaultRedirect: React.FC = () => {
 function App() {
   return (
     <AuthProvider>
+      {/* U14：對話紀錄在路由之外（換頁不丟）；清除綁登入／登出事件，此處不帶任何 key（R-03）。 */}
+      <BrainTranscriptProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -231,16 +246,18 @@ function App() {
               </ProtectedRoute>
             }
           />
+          {/* BR91.3：萬用路由導回 /，再由落地判斷決定落點（網址列與畫面一致）。 */}
           <Route
             path="*"
             element={
               <ProtectedRoute>
-                <DefaultRedirect />
+                <Navigate to="/" replace />
               </ProtectedRoute>
             }
           />
         </Routes>
       </BrowserRouter>
+      </BrainTranscriptProvider>
     </AuthProvider>
   );
 }

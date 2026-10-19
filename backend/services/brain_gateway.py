@@ -24,6 +24,9 @@ brain_gateway.py — `U13 brain-gateway`：大腦唯一的 WebSocket 端點（`/
 4. **log 只經 `_log`**，欄位只限 `_ALLOWED`：不含 token、使用者文字、回覆、referent、候選標籤
    （`BR67.3`）；例外只記類別名。
 5. **送出一律經契約模型**（`NFR13.40`）：不手組訊息 dict。
+6. **唯一的成員關係依賴經注入**（ADR-0022 D-6）：本模組不 import 任何成員關係符號；名稱推送、
+   對象目錄與直接設定作業對象三條讀取路徑所需的可見性判定，一律由建構時注入的
+   `membership_facade_factory(db).project_visibility(principal)` 取得（唯一組裝點 `main.py`）。
 
 單一行程假設（`BR63.1`）：連線登錄與限流都在行程記憶體內；多 worker 會讓扇出與推播**靜默**
 失效。守門見 `tests/test_brain_gateway_startup.py`（Dockerfile、compose、範本不得設 worker 數）。
@@ -69,7 +72,7 @@ from services.brain_ws_contract import (
     WsUnvalidatedEnvelope,
 )
 from services.embedding_port import EMBEDDING_TIMEOUT_SEC
-from services.hierarchy_facade import HierarchyFacade, mint_principal
+from services.hierarchy_facade import HierarchyFacade, HierarchyForbidden, mint_principal
 from services.intent_routing import IntentRouter
 from services.intent_routing_errors import PlatformSelfModificationRefused
 from services.intent_routing_types import Intent, IntentDecision
@@ -557,20 +560,53 @@ class GatewaySink:
 
 
 # ---------------------------------------------------------------------------
+# 名稱推送的共用小工具（ADR-0022 D-7）
+_NO_NAMES = {"projectName": None, "systemName": None, "diagramName": None}
+
+
+def _snapshot_segment_ids(session: Optional[BrainSession]) -> List[str]:
+    """快照會送出 `work_target` 的段：session 內已有的段（依 `SEGMENT_IDS` 順序），無則只有共享段。"""
+    segments = (session.segments or {}) if session is not None else {}
+    return [s for s in SEGMENT_IDS if s in segments] or [SEGMENT_SHARED]
+
+
+def _target_triple(session: Optional[BrainSession], segment_id: str) -> Tuple[Any, Any, Any]:
+    segment = (session.segments or {}).get(segment_id) if session is not None else None
+    return (
+        getattr(segment, "project_id", None),
+        getattr(segment, "system_id", None),
+        getattr(segment, "diagram_id", None),
+    )
+
+
+# ---------------------------------------------------------------------------
 # SessionStore 的 hierarchy 轉接器（每次呼叫開獨立 DB session，BR66.1）
 # ---------------------------------------------------------------------------
 
 
 class _HierarchyResolver:
-    def __init__(self, session_factory: Callable[[], Any], facade_factory: Callable[[Any], Any]) -> None:
+    def __init__(
+        self,
+        session_factory: Callable[[], Any],
+        facade_factory: Callable[[Any], Any],
+        *,
+        membership_facade_factory: Callable[[Any], Any],
+    ) -> None:
         self._session_factory = session_factory
         self._facade_factory = facade_factory
+        # ADR-0022 D-6：必填、無預設——預設只能是恆可見（靜默繞過）或恆不可見（大腦失效）。
+        self._membership_facade_factory = membership_facade_factory
 
     def resolve_work_target(self, principal, *, project_id=None, system_id=None, diagram_id=None):
         db = self._session_factory()
         try:
+            # `[EPD1]`=A：直接設定作業對象同受 `U23` 可見性守門；判定綁同一個 session。
             return self._facade_factory(db).resolve_work_target(
-                principal, project_id=project_id, system_id=system_id, diagram_id=diagram_id
+                principal,
+                project_visible=self._membership_facade_factory(db).project_visibility(principal),
+                project_id=project_id,
+                system_id=system_id,
+                diagram_id=diagram_id,
             )
         finally:
             db.close()
@@ -600,6 +636,7 @@ class BrainGateway:
         timing: Optional[GatewayTiming] = None,
         memory_facade_factory: Callable[[Any], Any] = MemoryFacade,
         hierarchy_facade_factory: Callable[[Any], Any] = HierarchyFacade,
+        membership_facade_factory: Callable[[Any], Any],
         registry: Optional[ConnectionRegistry] = None,
         rate_limiter: Optional[rules.RateLimiter] = None,
         memory_worker: Optional[MemoryWorker] = None,
@@ -614,6 +651,8 @@ class BrainGateway:
         self.session_factory = session_factory or _default_session_factory
         self.memory_facade_factory = memory_facade_factory
         self.hierarchy_facade_factory = hierarchy_facade_factory
+        # ADR-0022 D-6：唯一的成員關係依賴，必填、無預設（`main.py` 傳 `MembershipFacade`）。
+        self.membership_facade_factory = membership_facade_factory
         self.registry = registry or ConnectionRegistry()
         self.rate = rate_limiter or rules.RateLimiter()
         self.memory = memory_worker or MemoryWorker(self.timing)
@@ -836,11 +875,19 @@ class BrainGateway:
             await self.close_ws(ws, 1011)
             return 1011
 
+        # 快照各段作業對象的三層名稱（ADR-0022 D-7）：一次 to_thread、一個 session；
+        # `_names_for` 絕不往外拋，失敗只使名稱為 null，不讓握手 1011。
+        snapshot_triples = {
+            segment_id: _target_triple(session, segment_id) for segment_id in _snapshot_segment_ids(session)
+        }
+        names = await self._names_for(conn, list(snapshot_triples.values()))
+        names_by_segment = {segment_id: names[t] for segment_id, t in snapshot_triples.items()}
+
         # ready ＋ 快照（只對本連線）。握手期內的未預期例外一律 1011（審查 R-03；[GW3]=A 的握手分界）。
         try:
             if not await conn.send(self.envelope(WsServerMessageType.READY, None, ReadyPayload(protocolVersion=1))):
                 return 1011
-            for envelope in self._snapshot_envelopes(session, items):
+            for envelope in self._snapshot_envelopes(session, items, names_by_segment):
                 if not await conn.send(envelope):
                     return 1011
             # 送出暫存佇列：「確認已空」與「改為 ready」之間無任何 await（帶入項 3；NFR13.26）
@@ -866,7 +913,12 @@ class BrainGateway:
         _log(logging.INFO, "ws_ready", connId=conn.conn_id, sessionKey=conn.session_key)
         return await self._receive_loop(conn)
 
-    def _snapshot_envelopes(self, session: Optional[BrainSession], items: Any) -> List[WsEnvelope]:
+    def _snapshot_envelopes(
+        self,
+        session: Optional[BrainSession],
+        items: Any,
+        names_by_segment: Mapping[str, Mapping[str, Optional[str]]],
+    ) -> List[WsEnvelope]:
         page_modes = dict(default_page_modes())
         if session is not None:
             page_modes.update(session.page_modes or {})
@@ -878,9 +930,8 @@ class BrainGateway:
             )
             for scope in PAGE_SCOPES
         ]
-        segments = (session.segments or {}) if session is not None else {}
-        for segment_id in [s for s in SEGMENT_IDS if s in segments] or [SEGMENT_SHARED]:
-            out.append(self._work_target_envelope(session, segment_id))
+        for segment_id in _snapshot_segment_ids(session):
+            out.append(self._work_target_envelope(session, segment_id, names_by_segment.get(segment_id, _NO_NAMES)))
         out.append(
             self.envelope(
                 WsServerMessageType.WORK_ITEMS,
@@ -890,7 +941,12 @@ class BrainGateway:
         )
         return out
 
-    def _work_target_envelope(self, session: Optional[BrainSession], segment_id: str) -> WsEnvelope:
+    def _work_target_envelope(
+        self,
+        session: Optional[BrainSession],
+        segment_id: str,
+        names: Mapping[str, Optional[str]],
+    ) -> WsEnvelope:
         segment = (session.segments or {}).get(segment_id) if session is not None else None
 
         def _s(value: Optional[int]) -> Optional[str]:
@@ -904,8 +960,74 @@ class BrainGateway:
                 systemId=_s(getattr(segment, "system_id", None)),
                 diagramId=_s(getattr(segment, "diagram_id", None)),
                 segment=segment_id,
+                projectName=names.get("projectName"),
+                systemName=names.get("systemName"),
+                diagramName=names.get("diagramName"),
             ),
         )
+
+    async def _names_for(self, conn: "Connection", triples: List[Tuple[Any, Any, Any]]) -> Dict[tuple, dict]:
+        """ADR-0022 D-7：一批作業對象三元組的三層名稱。**絕不往外拋。**
+
+        去重（保序）、一次 `asyncio.to_thread`、一個 DB session、每組呼叫一次
+        `describe_work_target`。`HierarchyForbidden` → 該組三名稱 null、**不記 log**（被拒絕是
+        正常結果，nfr-design `R-04`）；其他例外 → 該組三名稱 null、記一筆 WARNING
+        `work_target_names_failed`（只帶 `connId` 與例外類別名）、`rollback` 後繼續下一組；
+        thread 外層失敗 → 全部 null ＋ 一筆 log。名稱不儲存、每次推送重查。
+        """
+        unique = list(dict.fromkeys(triples))
+
+        def _run() -> Dict[tuple, dict]:
+            out = {t: dict(_NO_NAMES) for t in unique}
+            try:
+                db = self.session_factory()
+            except Exception as exc:
+                _log(logging.WARNING, "work_target_names_failed", connId=conn.conn_id, exc=type(exc).__name__)
+                return out
+            try:
+                facade = self.hierarchy_facade_factory(db)
+                vis = self.membership_facade_factory(db)
+                for pid, sid, did in unique:
+                    try:
+                        out[(pid, sid, did)] = dict(
+                            facade.describe_work_target(
+                                conn.principal,
+                                project_visible=vis.project_visibility(conn.principal),
+                                project_id=pid,
+                                system_id=sid,
+                                diagram_id=did,
+                            )
+                        )
+                    except HierarchyForbidden:
+                        pass  # 被拒絕是正常結果，不記（nfr-design R-04）；名稱維持 null
+                    except Exception as exc:
+                        _log(
+                            logging.WARNING,
+                            "work_target_names_failed",
+                            connId=conn.conn_id,
+                            exc=type(exc).__name__,
+                        )
+                        try:
+                            db.rollback()
+                        except Exception:  # rollback 再失敗只會使後續組也失敗；本組的 log 已記
+                            pass
+            finally:
+                db.close()
+            return out
+
+        try:
+            return await asyncio.to_thread(_run)
+        except Exception as exc:  # 絕不往外拋：名稱失敗不得讓握手或扇出失敗
+            _log(logging.WARNING, "work_target_names_failed", connId=conn.conn_id, exc=type(exc).__name__)
+            return {t: dict(_NO_NAMES) for t in unique}
+
+    async def _named_work_target_envelope(
+        self, conn: "Connection", session: Optional[BrainSession], segment_id: str
+    ) -> WsEnvelope:
+        """扇出點共用：取該段三元組的名稱後組 `work_target`（ADR-0022 D-7 的三個扇出點）。"""
+        triple = _target_triple(session, segment_id)
+        names = await self._names_for(conn, [triple])
+        return self._work_target_envelope(session, segment_id, names[triple])
 
     # -- 背景重驗（BR62.6）---------------------------------------------------
 
@@ -1227,16 +1349,31 @@ class BrainGateway:
         db = self.session_factory()
         try:
             facade = self.hierarchy_facade_factory(db)
-            projects = [(p.id, p.name) for p in facade.list_projects(principal)]
+            # nfr-requirements `R-01`：目錄（反問標籤與唯一命中）同受 `U23` 可見性守門；
+            # 同一個 facade 實例使可見集合只查一次（ADR-0022 D-5）。
+            vis = self.membership_facade_factory(db)
+            projects = [
+                (p.id, p.name)
+                for p in facade.list_projects(principal, project_visible=vis.project_visibility(principal))
+            ]
             systems: List[Tuple[int, int, str]] = []
             truncated = len(projects) > rules.CATALOG_PROJECT_MAX
             if not truncated:
                 for pid, _name in projects:
-                    systems.extend((pid, s.id, s.name) for s in facade.list_systems(principal, project_id=pid))
+                    systems.extend(
+                        (pid, s.id, s.name)
+                        for s in facade.list_systems(
+                            principal, project_id=pid, project_visible=vis.project_visibility(principal)
+                        )
+                    )
             elif selected_project_id is not None and any(pid == selected_project_id for pid, _ in projects):
                 systems.extend(
                     (selected_project_id, s.id, s.name)
-                    for s in facade.list_systems(principal, project_id=selected_project_id)
+                    for s in facade.list_systems(
+                        principal,
+                        project_id=selected_project_id,
+                        project_visible=vis.project_visibility(principal),
+                    )
                 )
             return rules.TargetCatalog(projects=tuple(projects), systems=tuple(systems), truncated=truncated)
         finally:
@@ -1320,7 +1457,7 @@ class BrainGateway:
         except Exception as exc:
             await self._error_for_request(conn, turn, exc)
             return False
-        await self.fanout(conn.session_key, self._work_target_envelope(session, segment_id))
+        await self.fanout(conn.session_key, await self._named_work_target_envelope(conn, session, segment_id))
         return True
 
     async def _reread_target(self, conn: Connection, segment_id: str, target: rules.TargetRef):
@@ -1423,7 +1560,7 @@ class BrainGateway:
         except Exception as exc:
             await self._send_single_error(conn, *rules.error_for(exc))
             return
-        await self.fanout(conn.session_key, self._work_target_envelope(session, segment_id))
+        await self.fanout(conn.session_key, await self._named_work_target_envelope(conn, session, segment_id))
 
     async def _on_set_sharing_mode(self, conn: Connection, payload: Any) -> None:
         scope, mode = payload.scope, payload.mode
@@ -1441,12 +1578,13 @@ class BrainGateway:
             await self._send_single_error(conn, *rules.error_for(exc))
             return
         segment_id = rules.resolve_segment(scope, session.page_modes or {})
+        work_target = await self._named_work_target_envelope(conn, session, segment_id)
         # 兩則同一次扇出：每條連線依序收兩則，連線之間並行（審查 R-05）。
         await self.fanout_many(
             conn.session_key,
             [
                 self.envelope(WsServerMessageType.SHARING_MODE, None, SharingModePayload(mode=mode, scope=scope)),
-                self._work_target_envelope(session, segment_id),
+                work_target,
             ],
         )
 
@@ -1566,11 +1704,14 @@ async def brain_ws(websocket: WebSocket) -> None:
     await gateway.handle(websocket)
 
 
-def build_brain_gateway(app: Any) -> BrainGateway:
+def build_brain_gateway(app: Any, *, membership_facade_factory: Callable[[Any], Any]) -> BrainGateway:
     """startup hook 呼叫（`configure_intent_routing_env` 之後、`init_db` 之前）。
 
     三個 Redis 變數缺值 → `KeyError`；`REDIS_USER=default` → `ValueError`；兩者皆使啟動失敗。
     client 延遲連線，Redis 暫時不可達不阻止啟動，在握手時以 1011 呈現（`F-29`）。
+
+    `membership_facade_factory`（ADR-0022 D-6）**必填、無預設**：漏傳即 `TypeError`、啟動失敗。
+    同一個 factory 交給 `_HierarchyResolver`（直接設定作業對象）與 `BrainGateway`（名稱、目錄）。
     """
     client = build_redis_client(
         os.environ["REDIS_URL"],
@@ -1580,7 +1721,9 @@ def build_brain_gateway(app: Any) -> BrainGateway:
     session_factory = _default_session_factory
     store = SessionStore(
         RedisGateway(client, error_types=redis_py_error_types()),
-        hierarchy_facade=_HierarchyResolver(session_factory, HierarchyFacade),
+        hierarchy_facade=_HierarchyResolver(
+            session_factory, HierarchyFacade, membership_facade_factory=membership_facade_factory
+        ),
         history_max=resolve_history_max(),
     )
     timing = GatewayTiming()
@@ -1593,6 +1736,7 @@ def build_brain_gateway(app: Any) -> BrainGateway:
         orchestrator=orchestrator,
         session_factory=session_factory,
         timing=timing,
+        membership_facade_factory=membership_facade_factory,
         memory_worker=MemoryWorker(timing),
         prefetch_adapter=adapter,
     )

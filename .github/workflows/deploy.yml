@@ -565,6 +565,59 @@ jobs:
           "${APP[@]}" del "${KEY}" > /dev/null
           echo "NFR4.53-NFR4.57 all verified; fixture session removed"
 
+      # U14 step 6a ([EPI1]=A, OPEN-EP14-13): the brain WebSocket's protocol-name
+      # subprotocol must survive BOTH Cloudflare hops. An upgrade request carrying
+      # ONLY cloud360.brain.v1 (no bearer item, no token, no secret) is accepted by
+      # the gateway, which echoes the protocol name and then closes with 4401.
+      #   HTTP/1.1 101 + sec-websocket-protocol line -> both directions pass
+      #   403                                        -> stripped on the REQUEST side
+      #   101 without the line                       -> stripped on the RESPONSE side
+      #   network failure / timeout without headers  -> tunnel or DNS
+      # BLOCKING on purpose: a failure fails the deploy job, so the rollback job
+      # restores last-good. Never add continue-on-error, and never copy this step
+      # into the rollback job: last-good may predate /api/brain/ws (U13), which
+      # would make the rollback itself fail.
+      # `set -e` is deliberately absent: after a 101 curl waits for --max-time and
+      # exits 28, which is normal here; the exit code is captured with `|| RC=$?`.
+      # Output is limited to the status line, whether the protocol line was seen,
+      # and curl's exit code -- no header values beyond that, no token (public log).
+      # BRAIN_WS_URL is overridable only for the local check against the compose
+      # test stack (http://localhost:8090/api/brain/ws); see DEPLOY.md.
+      - name: Verify the brain WS subprotocol survives the tunnel
+        env:
+          ATTEMPTS: "12"
+          BRAIN_WS_URL: https://cloud360.danniel.cc/api/brain/ws
+        run: |
+          set -uo pipefail
+          STATUS_LINE="(no response)"
+          HAS_PROTO="無"
+          RC=0
+          for _ in $(seq 1 "${ATTEMPTS}"); do
+            RC=0
+            HDRS=$(curl -sS -o /dev/null -D - --http1.1 --max-time 5 \
+              -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+              -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+              -H 'Sec-WebSocket-Protocol: cloud360.brain.v1' \
+              "${BRAIN_WS_URL}" 2>/dev/null) || RC=$?
+            HDRS=$(printf '%s\n' "${HDRS:-}" | tr -d '\r')
+            STATUS_LINE=$(printf '%s\n' "${HDRS}" | grep -m1 '^HTTP/' || echo "(no status line)")
+            if printf '%s\n' "${HDRS}" | grep -qi '^sec-websocket-protocol: *cloud360\.brain\.v1 *$'; then
+              HAS_PROTO="有"
+            else
+              HAS_PROTO="無"
+            fi
+            if printf '%s\n' "${STATUS_LINE}" | grep -q '^HTTP/1\.1 101' && [ "${HAS_PROTO}" = "有" ]; then
+              echo "brain WS: subprotocol survives the tunnel both ways (${STATUS_LINE})"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "last round status line: ${STATUS_LINE}"
+          echo "協定標頭：${HAS_PROTO}"
+          echo "curl exit=${RC}"
+          echo "::error::brain WS handshake through the tunnel did not return 101 + cloud360.brain.v1 (see OPEN-EP14-13; 403 = request side stripped, 101 without the protocol line = response side stripped, no status line = tunnel/DNS)" >&2
+          exit 1
+
       # Only reached when both health checks passed. This commit is now the
       # known-good the rollback job falls back to next time a deploy breaks.
       - name: Record this commit as the last-good deployment

@@ -369,5 +369,115 @@ class LoadFailureTest(_Base):
         self.assertEqual(types_of(msgs)[0], "ready")
 
 
+class WorkTargetNamesSnapshotTest(_Base):
+    """ADR-0022 D-7：握手快照的 `work_target` 帶三層名稱；名稱失敗不讓握手失敗。"""
+
+    KEY = "brain:session:1"
+
+    def _set(self, segment, pid, sid=None, did=None):
+        from services.hierarchy_facade import mint_principal
+
+        self.h.store.set_work_target(self.KEY, segment, mint_principal(self.alice), pid, sid, did)
+
+    def _snapshot_targets(self):
+        with TestClient(self.h.app) as client:
+            with client.websocket_connect(WS_PATH, subprotocols=protocols(self.token)) as ws:
+                messages = hello(ws)
+        self.assertEqual(types_of(messages)[0], "ready")
+        return {m["payload"]["segment"]: m["payload"] for m in messages if m["type"] == "work_target"}
+
+    def test_snapshot_work_target_carries_names_with_one_session(self):
+        """
+        @purpose 連線建立時推送的作業對象必須帶名稱（AC1.1.5、AC9.1.1）；三段的名稱查詢共用一個 DB
+                 session（G3 突變：每組各開一個 session）。
+        @given /api/brain/ws；workspace、assessment 為獨立模式；三段各設不同作業對象；替身回三組名稱
+        @step 連線並送 hello | 收到 ready 與快照
+        @step 檢視三則 work_target | 各段名稱與替身設定逐一相同
+        @step 檢視名稱查詢所用的 DB session | describe_work_target 呼叫 3 次、全部落在同一個 session
+        @pass 快照帶名稱且只開一個 session
+        @story US1.1
+        """
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商"), (4, "e2e-u14-金流")]
+        self.h.hierarchy.systems = {3: [(30, "e2e-u14-訂單系統")], 4: [(40, "e2e-u14-支付")]}
+        # 獨立段只在該頁為獨立模式時存在於 session（快照才會推送該段的 work_target）
+        self.h.store.set_sharing_mode(self.KEY, "workspace", "isolated")
+        self.h.store.set_sharing_mode(self.KEY, "assessment", "isolated")
+        self._set("shared", 3)
+        self._set("workspace", None, 30)
+        self._set("assessment", None, 40)
+        names = {
+            (3, None, None): {"projectName": "e2e-u14-電商", "systemName": None, "diagramName": None},
+            (3, 30, None): {"projectName": "e2e-u14-電商", "systemName": "e2e-u14-訂單系統", "diagramName": None},
+            (4, 40, None): {"projectName": "e2e-u14-金流", "systemName": "e2e-u14-支付", "diagramName": None},
+        }
+        self.h.hierarchy.names_by_triple = names
+        sessions_seen = []
+        original = self.h.gw.hierarchy_facade_factory
+
+        def recording_factory(db):
+            sessions_seen.append(db)
+            return original(db)
+
+        self.h.gw.hierarchy_facade_factory = recording_factory
+        targets = self._snapshot_targets()
+        self.assertEqual(
+            {seg: (t["projectName"], t["systemName"], t["diagramName"]) for seg, t in targets.items()},
+            {
+                "shared": ("e2e-u14-電商", None, None),
+                "workspace": ("e2e-u14-電商", "e2e-u14-訂單系統", None),
+                "assessment": ("e2e-u14-金流", "e2e-u14-支付", None),
+            },
+        )
+        self.assertEqual(len(self.h.hierarchy.describe_calls), 3)
+        self.assertEqual(set(self.h.hierarchy.describe_calls), set(names))
+        self.assertEqual(len({id(db) for db in sessions_seen}), 1)
+
+    def test_names_failure_still_completes_handshake_and_logs_once(self):
+        """
+        @purpose 名稱查詢失敗只使名稱為 null：握手照常完成（不得 1011），並記一筆不含名稱的
+                 work_target_names_failed（G1 突變：_names_for 往外拋即得 1011）。
+        @given /api/brain/ws；共享段作業對象為專案 3；describe_work_target 拋含標記字串的 RuntimeError
+        @step 連線並送 hello | 收到 ready 與快照、無關閉碼
+        @step 檢視 work_target | 三名稱皆 null、projectId 仍為 "3"
+        @step 檢視 log | 恰一筆 work_target_names_failed、exc=RuntimeError、不含標記與名稱
+        @pass 握手完成、名稱 null、log 一筆
+        @story US2.1
+        """
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商")]
+        self._set("shared", 3)
+        self.h.hierarchy.describe_raises = RuntimeError("e2e-u14-SECRET-MARKER")
+        with self.assertLogs("cloud360.brain_gateway", level="WARNING") as logs:
+            targets = self._snapshot_targets()
+        shared = targets["shared"]
+        self.assertEqual(shared["projectId"], "3")
+        self.assertEqual((shared["projectName"], shared["systemName"], shared["diagramName"]), (None, None, None))
+        failed = [line for line in logs.output if "work_target_names_failed" in line]
+        self.assertEqual(len(failed), 1, logs.output)
+        self.assertIn("exc=RuntimeError", failed[0])
+        joined = "\n".join(logs.output)
+        self.assertNotIn("e2e-u14-SECRET-MARKER", joined)
+        self.assertNotIn("e2e-u14-電商", joined)
+
+    def test_forbidden_names_are_null_without_any_log(self):
+        """
+        @purpose K2 view 撤銷（HierarchyForbidden）是正常的拒絕結果：名稱為 null 且不記任何 WARNING
+                 （nfr-design R-04；G2 突變：HierarchyForbidden 也記 log）。
+        @given /api/brain/ws；共享段作業對象為專案 3；describe_work_target 拋 HierarchyForbidden
+        @step 連線並送 hello | 收到 ready 與快照
+        @step 檢視 work_target 與 log | 三名稱皆 null；cloud360.brain_gateway 無 WARNING
+        @pass 名稱 null 且無 log
+        @story US2.1
+        """
+        from services.hierarchy_facade import HierarchyForbidden
+
+        self.h.hierarchy.projects = [(3, "e2e-u14-電商")]
+        self._set("shared", 3)
+        self.h.hierarchy.describe_raises = HierarchyForbidden(story_id="K2", action="view")
+        with self.assertNoLogs("cloud360.brain_gateway", level="WARNING"):
+            targets = self._snapshot_targets()
+        shared = targets["shared"]
+        self.assertEqual((shared["projectName"], shared["systemName"], shared["diagramName"]), (None, None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -47,7 +47,7 @@ membership_facade.py — `U19 membership-service` 的授權門面
 from __future__ import annotations
 
 import logging
-from typing import Callable, List, Optional
+from typing import Callable, Dict, FrozenSet, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -88,6 +88,10 @@ class MembershipFacade:
 
     def __init__(self, db: Session) -> None:
         self._db = db
+        # ADR-0022 D-5：`project_visibility` 閉包的可見集合暫存（user_id → 可見專案 id 集合）。
+        # 只有 `project_visibility` 產生的閉包讀寫它；本實例的其他方法（`list_visible_*`、
+        # 成員寫入）**不讀**這份暫存。存活範圍＝本實例（一次 HTTP 請求或一次 `to_thread` 呼叫）。
+        self._visible_ids: Dict[int, FrozenSet[int]] = {}
 
     # -- 授權判定（唯一一份）------------------------------------------------
 
@@ -521,14 +525,24 @@ class MembershipFacade:
         回傳一個只在本次請求內存活的閉包；`HierarchyFacade` 只知道它是
         `Callable[[int], bool]`，原始碼不 import 任何成員關係符號（`BR87.3`）。
         **非測試程式唯一合法的 `project_visible` 來源就是本方法**（ast 靜態鎖第 3 條）。
+
+        **批次形狀**（ADR-0022 D-5，nfr-design `R-02` 裁決）：判定定義不變（仍只由
+        `_visible_project_ids_select` 組出）；同一實例內、同一位使用者**第一次**被判定時以
+        `membership_service.visible_project_ids` 取得整份可見集合（**一條 SQL**），存進
+        `self._visible_ids`，之後每一次判定（含本實例再呼叫本方法產生的新閉包）都以集合成員
+        判斷、**零 SQL**。暫存的存活範圍＝本實例；本實例的其他方法不讀它，故實例內的成員
+        寫入不會被暫存遮蔽（ADR-0022 Consequences 殘留 4）。
         """
-        db = self._db
         user_id = principal.user_id
 
         def _visible(project_id: int) -> bool:
-            return membership_service.is_project_visible(
-                db, project_id=project_id, user_id=user_id
-            )
+            ids = self._visible_ids.get(user_id)
+            if ids is None:
+                ids = frozenset(
+                    membership_service.visible_project_ids(self._db, user_id=user_id)
+                )
+                self._visible_ids[user_id] = ids
+            return int(project_id) in ids
 
         return _visible
 

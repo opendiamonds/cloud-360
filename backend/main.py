@@ -5,6 +5,7 @@ import logging
 import os
 from services.agent_router import router as agent_router
 from services.brain_gateway import build_brain_gateway, router as brain_gateway_router
+import services.membership_facade as membership_facade  # ADR-0022 D-6：大腦可見性判定的唯一組裝點
 from services.user_router import router as user_router
 from services.collab_router import router as collab_router
 from services.review_router import router as review_router
@@ -81,7 +82,12 @@ def on_startup():
     # 不阻止啟動（client 延遲連線），在入口頁握手時以 1011 呈現。
     # 同樣掛在 startup hook 而非 import 時：CI 的 import smoke 與 OpenAPI dump
     # 只設 DATABASE_URL／JWT_SECRET，而以 TestClient(app) 不觸發本 hook。
-    app.state.brain_gateway = build_brain_gateway(app)
+    # ADR-0022 D-6：唯一的成員關係依賴在此注入（`main.py` 是對 membership_facade 的唯一
+    # 靜態邊）。漏傳時啟動失敗（TypeError）；import smoke 不觸發本 hook，故抓不到漏傳——
+    # 會發現的是 test_brain_gateway_startup.py 與 ui-regression 的 stack 起不來。
+    app.state.brain_gateway = build_brain_gateway(
+        app, membership_facade_factory=membership_facade.MembershipFacade
+    )
     init_db()
 
 

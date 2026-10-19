@@ -19,6 +19,7 @@ from starlette.routing import WebSocketRoute
 from starlette.testclient import TestClient
 
 import main
+import services.membership_facade as membership_facade
 from services import brain_gateway as G
 from tests.brain_gateway_fakes import WS_PATH, protocols, recv_json
 from tests.helpers import close_session, make_session, make_user
@@ -53,17 +54,42 @@ class StartupOrderTest(unittest.TestCase):
         @story US8.1
         """
         order = []
+        captured = {}
         fake_gateway = mock.Mock()
         with mock.patch.object(main, "configure_provider_env"), mock.patch.object(main, "configure_embedding_env"), \
                 mock.patch.object(main, "configure_session_env"), \
                 mock.patch.object(main, "configure_intent_routing_env", side_effect=lambda: order.append("routing")), \
-                mock.patch.object(main, "build_brain_gateway", side_effect=lambda app: order.append("gateway") or fake_gateway), \
+                mock.patch.object(main, "build_brain_gateway", side_effect=lambda app, **kw: captured.update(kw) or order.append("gateway") or fake_gateway), \
                 mock.patch.object(main, "init_db", side_effect=lambda: order.append("init_db")):
             with TestClient(main.app):
                 pass
         self.assertEqual(order, ["routing", "gateway", "init_db"])
+        # ADR-0022 D-6：唯一組裝點傳入真實的 MembershipFacade（漏傳＝啟動失敗，G7 突變）。
+        self.assertIs(captured["membership_facade_factory"], membership_facade.MembershipFacade)
         fake_gateway.shutdown.assert_called_once()
         del main.app.state.brain_gateway
+
+    def test_build_without_membership_facade_factory_is_type_error(self):
+        """
+        @purpose membership_facade_factory 必填、無預設（ADR-0022 D-6）：漏傳必須在組裝當下 TypeError，
+                 不得以恆可見（靜默繞過）或恆不可見（大腦失效）的預設值啟動。
+        @given Redis client、redis-py 例外型別與 IntentRouter 的建構以 mock 隔離；三個 Redis 變數已設
+        @step 不帶 membership_facade_factory 呼叫 build_brain_gateway(app) | 拋 TypeError
+        @step 帶入 MembershipFacade 呼叫 | 回傳 BrainGateway，且其 membership_facade_factory 即為傳入者
+        @pass 漏傳即失敗、正確組裝可建立
+        @story US8.1
+        """
+        with mock.patch.dict(os.environ, _ENV, clear=False), \
+                mock.patch.object(G, "build_redis_client", return_value=mock.Mock()), \
+                mock.patch.object(G, "redis_py_error_types", return_value=()), \
+                mock.patch.object(G, "IntentRouter", return_value=mock.Mock()):
+            with self.assertRaises(TypeError):
+                G.build_brain_gateway(main.app)
+            gateway = G.build_brain_gateway(main.app, membership_facade_factory=membership_facade.MembershipFacade)
+            try:
+                self.assertIs(gateway.membership_facade_factory, membership_facade.MembershipFacade)
+            finally:
+                gateway.shutdown()
 
 
 class StartupFailureTest(unittest.TestCase):

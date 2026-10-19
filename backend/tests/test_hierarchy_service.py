@@ -188,7 +188,7 @@ class TestRowVisibility(HierarchyTestBase):
         """`T5`／`BR6.1`：清單不含他人的專案。"""
         self.a_project(self.alice, "alice-p")
         self.a_project(self.bob, "bob-p")
-        names = [p.name for p in self.facade.list_projects(self.p_alice)]
+        names = [p.name for p in self.facade.list_projects(self.p_alice, project_visible=ALWAYS_VISIBLE)]
         self.assertEqual(names, ["alice-p"])
         self.assertNotIn("bob-p", names)
 
@@ -196,7 +196,7 @@ class TestRowVisibility(HierarchyTestBase):
         """`T6`／`BR6.1`：回「查不到」而非「無權限」，不洩漏存在性。"""
         bob_p = self.a_project(self.bob, "bob-p")
         with self.assertRaises(HierarchyNotFound):
-            self.facade.list_systems(self.p_alice, project_id=bob_p.id)
+            self.facade.list_systems(self.p_alice, project_id=bob_p.id, project_visible=ALWAYS_VISIBLE)
         c = self.client_as(self.alice)
         r = c.get(f"/api/hierarchy/projects/{bob_p.id}/systems")
         self.assertEqual(r.status_code, 404)
@@ -209,12 +209,12 @@ class TestRowVisibility(HierarchyTestBase):
         bob_p = self.a_project(self.bob, "bob-p")
         bob_s = self.a_system(bob_p, "bob-s")
         with self.assertRaises(HierarchyNotFound):
-            self.facade.resolve_work_target(self.p_alice, project_id=bob_p.id)
+            self.facade.resolve_work_target(self.p_alice, project_id=bob_p.id, project_visible=ALWAYS_VISIBLE)
         with self.assertRaises(HierarchyNotFound):
-            self.facade.resolve_work_target(self.p_alice, system_id=bob_s.id)
+            self.facade.resolve_work_target(self.p_alice, system_id=bob_s.id, project_visible=ALWAYS_VISIBLE)
         alice_p = self.a_project(self.alice, "alice-p")
         resolved = self.facade.resolve_work_target(
-            self.p_alice, project_id=alice_p.id
+            self.p_alice, project_id=alice_p.id, project_visible=ALWAYS_VISIBLE
         )
         self.assertEqual(resolved["projectId"], alice_p.id)
 
@@ -566,6 +566,133 @@ class TestContractAndNfr(HierarchyTestBase):
                         name, {"CONFLICT_RESPONSE", "ALLOWED_CHANGE_SOURCES"},
                         f"{module.__name__}.{name} 是模組級可變狀態（違反 NFR4.1）",
                     )
+
+
+# ===========================================================================
+# H 群——大腦讀取路徑的可見性守門（`U14` ADR-0022 D-3／D-4，`[EPD1]`=A）
+# ===========================================================================
+
+
+class BrainReadVisibilityTest(HierarchyTestBase):
+    """`list_projects`／`list_systems`／`resolve_work_target` 的 `project_visible` 守門。
+
+    走真實的 `MembershipFacade.project_visibility`（不 mock 授權）。身分：
+    (b) 被移出的建立者——alice 建立 `p_removed` 後，bob 被加為 `project_admin`、alice 的成員列被刪；
+    (c) 零成員列建立者——alice 以 ORM 直接擁有 `p_zero`、無任何成員列。
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        from models import ProjectMember
+        from services.membership_facade import MembershipFacade
+
+        self.MembershipFacade = MembershipFacade
+        self.p_removed = MembershipFacade(self.db).create_project_with_owner(self.p_alice, name="前專案")
+        self.s_removed = self.a_system(self.p_removed, "前系統")
+        self.db.add(ProjectMember(project_id=self.p_removed.id, user_id=self.bob.id, role="project_admin"))
+        self.db.query(ProjectMember).filter(
+            ProjectMember.project_id == self.p_removed.id, ProjectMember.user_id == self.alice.id
+        ).delete()
+        self.db.commit()
+        self.p_zero = Project(name="零成員專案", owner_user_id=self.alice.id, is_default=False)
+        self.db.add(self.p_zero)
+        self.db.commit()
+        self.db.refresh(self.p_zero)
+        self.own_diagram = make_diagram(self.db, owner=self.alice, title="自己的圖")
+        self.own_diagram.system_id = self.s_removed.id
+        self.db.commit()
+
+    def vis(self, principal):
+        return self.MembershipFacade(self.db).project_visibility(principal)
+
+    def test_list_projects_excludes_former_project_of_removed_creator(self):
+        """
+        @purpose 大腦目錄的專案列舉不得列出被移出者的前專案（nfr-requirements R-01；H1 突變）。
+        @given alice 是 p_removed 的被移出建立者
+        @step list_projects(alice, project_visible=真實閉包) | 不含「前專案」
+        @pass 前專案不在列舉中
+        @story US2.1
+        """
+        names = [p.name for p in self.facade.list_projects(self.p_alice, project_visible=self.vis(self.p_alice))]
+        self.assertNotIn("前專案", names)
+
+    def test_list_projects_includes_zero_member_project_of_creator(self):
+        """
+        @purpose 對照：零成員列專案的建立者仍可見，目錄必須列出（雙向，避免恆空清單通過上一案）。
+        @given alice 以 ORM 擁有 p_zero、無成員列
+        @step list_projects | 含「零成員專案」
+        @pass 零成員專案在列舉中
+        @story US2.1
+        """
+        names = [p.name for p in self.facade.list_projects(self.p_alice, project_visible=self.vis(self.p_alice))]
+        self.assertIn("零成員專案", names)
+
+    def test_list_systems_of_former_project_is_not_found_with_project_detail(self):
+        """
+        @purpose 不可見專案的系統列舉回「查不到專案」，與不屬請求者同一句（不洩漏存在性；H2 突變）。
+        @given alice 是 p_removed 的被移出建立者（擁有者檢查會過）
+        @step list_systems(alice, project_id=p_removed) | 拋 HierarchyNotFound，訊息為 PROJECT_NOT_FOUND_DETAIL
+        @pass 以固定句回查不到
+        @story US2.1
+        """
+        from services.hierarchy_facade import PROJECT_NOT_FOUND_DETAIL
+
+        with self.assertRaises(HierarchyNotFound) as ctx:
+            self.facade.list_systems(
+                self.p_alice, project_id=self.p_removed.id, project_visible=self.vis(self.p_alice)
+            )
+        self.assertEqual(str(ctx.exception), PROJECT_NOT_FOUND_DETAIL)
+
+    def test_EPD1_1_explicit_former_project_is_not_found(self):
+        """
+        @purpose [EPD1]=A ①：被移出者明確指定前專案（或其系統）不得被解析成作業對象（H3 突變）。
+        @given alice 是 p_removed 的被移出建立者
+        @step resolve_work_target(project_id=p_removed) | 拋 HierarchyNotFound（專案句）
+        @step resolve_work_target(system_id=s_removed) | 拋 HierarchyNotFound（系統句）
+        @pass 兩種明確指定皆被拒
+        @story US2.1
+        """
+        from services.hierarchy_facade import PROJECT_NOT_FOUND_DETAIL, SYSTEM_NOT_FOUND_DETAIL
+
+        with self.assertRaises(HierarchyNotFound) as ctx:
+            self.facade.resolve_work_target(
+                self.p_alice, project_id=self.p_removed.id, project_visible=self.vis(self.p_alice)
+            )
+        self.assertEqual(str(ctx.exception), PROJECT_NOT_FOUND_DETAIL)
+        with self.assertRaises(HierarchyNotFound) as ctx:
+            self.facade.resolve_work_target(
+                self.p_alice, system_id=self.s_removed.id, project_visible=self.vis(self.p_alice)
+            )
+        self.assertEqual(str(ctx.exception), SYSTEM_NOT_FOUND_DETAIL)
+
+    def test_EPD1_2_diagram_only_under_former_project_keeps_only_diagram(self):
+        """
+        @purpose [EPD1]=A ②：只送自己掛在前專案下的圖，回 {None, None, 圖}、無錯誤（H3、H4 突變）。
+        @given alice 自己的圖掛在 s_removed 下
+        @step resolve_work_target(diagram_id=own_diagram) | {projectId: None, systemId: None, diagramId: 圖}
+        @pass 上層被清空、圖保留、不拋例外
+        @story US2.1
+        """
+        got = self.facade.resolve_work_target(
+            self.p_alice, diagram_id=self.own_diagram.id, project_visible=self.vis(self.p_alice)
+        )
+        self.assertEqual(got, {"projectId": None, "systemId": None, "diagramId": self.own_diagram.id})
+
+    def test_EPD1_3_ordinary_owner_same_shape_resolves_three_layers(self):
+        """
+        @purpose [EPD1]=A ③ 對照：一般擁有者以同形狀（只送圖）照常解析三層，守門不誤傷可見者。
+        @given bob 擁有可見的 p_b／s_b，他的圖掛在 s_b 下
+        @step resolve_work_target(bob, diagram_id=圖) | 三層皆為實際 id
+        @pass 三層照常解析
+        @story US2.1
+        """
+        p_b = self.MembershipFacade(self.db).create_project_with_owner(self.p_bob, name="bob-專案")
+        s_b = self.a_system(p_b, "bob-系統")
+        d_b = make_diagram(self.db, owner=self.bob, title="bob 的圖")
+        d_b.system_id = s_b.id
+        self.db.commit()
+        got = self.facade.resolve_work_target(self.p_bob, diagram_id=d_b.id, project_visible=self.vis(self.p_bob))
+        self.assertEqual(got, {"projectId": p_b.id, "systemId": s_b.id, "diagramId": d_b.id})
 
 
 if __name__ == "__main__":

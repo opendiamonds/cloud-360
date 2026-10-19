@@ -323,10 +323,20 @@ export interface components {
              */
             diagramId: string | null;
             /**
+             * Diagramname
+             * @description ADR-0022 C-8：架構圖名稱，**必存在、可為 null、無預設**。null 的五種成因：diagramId 為 null、查不到、不屬請求者、明確指定的上層專案對請求者不可見、或查詢失敗。只指定圖（projectId／systemId 皆 null）時不判可見性、照常帶圖名。名稱為空字串時原樣送出。
+             */
+            diagramName: string | null;
+            /**
              * Projectid
              * @description null 表示尚未選定。
              */
             projectId: string | null;
+            /**
+             * Projectname
+             * @description ADR-0022 C-8：專案名稱，**必存在、可為 null、無預設**。null 的五種成因：projectId 為 null、查不到、不屬請求者、請求者不可見該專案、或查詢失敗——五者對前端逐位元相同，不另送 error。名稱為空字串時原樣送出（前端顯示「（未命名）」）。
+             */
+            projectName: string | null;
             /**
              * Segment
              * @description ADR-0020 C-4：本則作業對象屬於哪一段對話，**必填、無預設**。shared ＝ 共享段（入口頁與處於共享模式的頁面）；workspace／assessment ＝ 該頁的獨立段。前端只套用到目前讀取該段的頁面。
@@ -338,6 +348,11 @@ export interface components {
              * @description null 表示尚未選定。
              */
             systemId: string | null;
+            /**
+             * Systemname
+             * @description ADR-0022 C-8：系統名稱，**必存在、可為 null、無預設**。null 的五種成因：systemId 為 null、查不到、不屬請求者、所屬專案對請求者不可見、或查詢失敗。名稱為空字串時原樣送出。
+             */
+            systemName: string | null;
         };
         /**
          * WsClientEnvelope

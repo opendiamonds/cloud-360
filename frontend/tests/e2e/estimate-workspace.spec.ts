@@ -14,7 +14,8 @@ async function login(page: Page, username: string, password: string) {
   await page.getByPlaceholder('請輸入您的帳號').fill(username);
   await page.getByPlaceholder('請輸入密碼').fill(password);
   await page.getByRole('button', { name: '登入系統' }).click();
-  await expect(page).toHaveURL(/\/(workspace|cost)/);
+  // U14：具 K1 者的落點為入口頁 /；以「離開 /login」判定登入完成，正向錨點為呼叫端隨後的 /cost 斷言。
+  await expect(page).not.toHaveURL(/\/login$/);
 }
 
 test.describe('估價工作區（U8）', () => {
@@ -32,7 +33,7 @@ test.describe('估價工作區（U8）', () => {
    */
   test('上傳 AWS CSV 後顯示明細與檢查', async ({ page }) => {
     await login(page, ADMIN.username, ADMIN.password);
-    await expect(page).toHaveURL(/\/(workspace|cost)/);
+    await expect(page).not.toHaveURL(/\/login$/);
     await page.goto('/cost');
     await expect(page.getByTestId('cost-page')).toBeVisible();
     await expect(page.getByTestId('estimate-workload-form')).toBeVisible();

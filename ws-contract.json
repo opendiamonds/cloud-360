@@ -544,6 +544,18 @@
             "description": "null 表示尚未選定。**三層之間的階層一致性規則不由本契約定義**（例如 systemId 非 null 時 projectId 是否必須非 null）——那是 U7 hierarchy-service 的責任。這是刻意的界線，不是遺漏。",
             "title": "Diagramid"
           },
+          "diagramName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0022 C-8：架構圖名稱，**必存在、可為 null、無預設**。null 的五種成因：diagramId 為 null、查不到、不屬請求者、明確指定的上層專案對請求者不可見、或查詢失敗。只指定圖（projectId／systemId 皆 null）時不判可見性、照常帶圖名。名稱為空字串時原樣送出。",
+            "title": "Diagramname"
+          },
           "projectId": {
             "anyOf": [
               {
@@ -555,6 +567,18 @@
             ],
             "description": "null 表示尚未選定。",
             "title": "Projectid"
+          },
+          "projectName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0022 C-8：專案名稱，**必存在、可為 null、無預設**。null 的五種成因：projectId 為 null、查不到、不屬請求者、請求者不可見該專案、或查詢失敗——五者對前端逐位元相同，不另送 error。名稱為空字串時原樣送出（前端顯示「（未命名）」）。",
+            "title": "Projectname"
           },
           "segment": {
             "description": "ADR-0020 C-4：本則作業對象屬於哪一段對話，**必填、無預設**。shared ＝ 共享段（入口頁與處於共享模式的頁面）；workspace／assessment ＝ 該頁的獨立段。前端只套用到目前讀取該段的頁面。",
@@ -577,13 +601,28 @@
             ],
             "description": "null 表示尚未選定。",
             "title": "Systemid"
+          },
+          "systemName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0022 C-8：系統名稱，**必存在、可為 null、無預設**。null 的五種成因：systemId 為 null、查不到、不屬請求者、所屬專案對請求者不可見、或查詢失敗。名稱為空字串時原樣送出。",
+            "title": "Systemname"
           }
         },
         "required": [
           "projectId",
           "systemId",
           "diagramId",
-          "segment"
+          "segment",
+          "projectName",
+          "systemName",
+          "diagramName"
         ],
         "title": "WorkTargetPayload",
         "type": "object"

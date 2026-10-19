@@ -27,7 +27,12 @@ from services import brain_gateway as G
 from services import brain_gateway_rules as rules
 from services.auth import create_access_token
 from services.brain_ws_contract import TokenPayload, WorkItem, WorkItemsPayload
-from services.hierarchy_facade import HierarchyForbidden, HierarchyNotFound
+from services.hierarchy_facade import (
+    PROJECT_NOT_FOUND_DETAIL,
+    SYSTEM_NOT_FOUND_DETAIL,
+    HierarchyForbidden,
+    HierarchyNotFound,
+)
 from services.intent_routing_types import ClarifyCandidate, Intent, IntentDecision
 from services.redis_gateway import RedisGateway
 from services.session_store import SessionStore
@@ -231,40 +236,107 @@ class FakeOrchestrator:
         return None
 
 
+_NO_NAMES = {"projectName": None, "systemName": None, "diagramName": None}
+
+
 class FakeHierarchy:
-    """`HierarchyFacade` 的替身（只實作本單元用到的三個方法）。"""
+    """`HierarchyFacade` 的替身（只實作本單元用到的四個方法）。
+
+    `U14`（ADR-0022）起四個讀取方法都接受並**套用** `project_visible`，語意與真實 facade 相同：
+    列舉排除不可見專案、`list_systems` 對不可見專案拋 `HierarchyNotFound`、
+    `resolve_work_target` 依 D-4 兩分支、`describe_work_target` 依 D-2（明確指定且任一所屬
+    專案不可見 → 三名稱 null；只有圖 → 不判可見性、只留圖名）。
+    """
 
     def __init__(self) -> None:
         self.projects: List[tuple] = []          # (id, name)
         self.systems: Dict[int, List[tuple]] = {}  # pid -> [(sid, name)]
+        self.diagrams: Dict[int, Optional[int]] = {}  # did -> 所屬 sid（None ＝ 孤兒圖）
         self.list_projects_calls = 0
         self.list_systems_calls = 0
         self.forbidden_list = False
         self.forbidden_ids: set = set()
         self.threads: list = []
+        # describe_work_target：(pid, sid, did) -> {"projectName", "systemName", "diagramName"}
+        self.names_by_triple: Dict[tuple, dict] = {}
+        self.describe_raises: Optional[BaseException] = None
+        self.describe_calls: list = []
 
     def factory(self, db):
         return self
 
-    def list_projects(self, principal):
+    def _project_of_system(self, system_id):
+        for pid, systems in self.systems.items():
+            if any(sid == system_id for sid, _ in systems):
+                return pid
+        return None
+
+    def list_projects(self, principal, *, project_visible):
         self.threads.append(threading.get_ident())
         self.list_projects_calls += 1
         if self.forbidden_list:
             raise HierarchyForbidden(story_id="K2", action="view")
-        return [SimpleNamespace(id=pid, name=name) for pid, name in self.projects]
+        return [SimpleNamespace(id=pid, name=name) for pid, name in self.projects if project_visible(pid)]
 
-    def list_systems(self, principal, *, project_id):
+    def list_systems(self, principal, *, project_id, project_visible):
         self.list_systems_calls += 1
+        if not project_visible(project_id):
+            raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL)
         return [SimpleNamespace(id=sid, name=name) for sid, name in self.systems.get(project_id, [])]
 
-    def resolve_work_target(self, principal, *, project_id=None, system_id=None, diagram_id=None):
+    def resolve_work_target(self, principal, *, project_visible, project_id=None, system_id=None, diagram_id=None):
         self.threads.append(threading.get_ident())
         if project_id in self.forbidden_ids:
             raise HierarchyForbidden(story_id="K2", action="view")
         known = {pid for pid, _ in self.projects}
         if project_id is not None and project_id not in known:
             raise HierarchyNotFound("查不到")
-        return {"projectId": project_id, "systemId": system_id, "diagramId": diagram_id}
+        resolved = {"projectId": project_id, "systemId": system_id, "diagramId": diagram_id}
+        if system_id is not None and self._project_of_system(system_id) is not None:
+            resolved["projectId"] = self._project_of_system(system_id)
+        if diagram_id is not None and self.diagrams.get(diagram_id) is not None:
+            resolved["systemId"] = self.diagrams[diagram_id]
+            resolved["projectId"] = self._project_of_system(self.diagrams[diagram_id])
+        pid = resolved["projectId"]
+        if pid is None or project_visible(pid):
+            return resolved
+        if project_id is not None or system_id is not None:
+            raise HierarchyNotFound(PROJECT_NOT_FOUND_DETAIL if project_id is not None else SYSTEM_NOT_FOUND_DETAIL)
+        return {"projectId": None, "systemId": None, "diagramId": diagram_id}
+
+    def describe_work_target(self, principal, *, project_visible, project_id=None, system_id=None, diagram_id=None):
+        self.threads.append(threading.get_ident())
+        self.describe_calls.append((project_id, system_id, diagram_id))
+        if self.describe_raises is not None:
+            raise self.describe_raises
+        names = dict(self.names_by_triple.get((project_id, system_id, diagram_id), _NO_NAMES))
+        explicit = project_id is not None or system_id is not None
+        if not explicit:
+            return {"projectName": None, "systemName": None, "diagramName": names.get("diagramName")}
+        pids = {p for p in (project_id, self._project_of_system(system_id) if system_id is not None else None) if p is not None}
+        if diagram_id is not None and self.diagrams.get(diagram_id) is not None:
+            dp = self._project_of_system(self.diagrams[diagram_id])
+            if dp is not None:
+                pids.add(dp)
+        if any(not project_visible(p) for p in pids):
+            return dict(_NO_NAMES)
+        return names
+
+
+class FakeVisibility:
+    """`MembershipFacade(db)` 的替身：只提供 `project_visibility`（語意同真實閉包：不在 `invisible` 即可見）。"""
+
+    def __init__(self) -> None:
+        self.invisible: set = set()
+        self.factory_calls = 0
+
+    def factory(self, db):
+        self.factory_calls += 1
+        return self
+
+    def project_visibility(self, principal):
+        invisible = self.invisible
+        return lambda pid: pid not in invisible
 
 
 class FakeMemory:
@@ -317,9 +389,12 @@ class Harness:
         self.redis = redis if redis is not None else WorkItemFakeRedis()
         clock = StubClock()
         self.hierarchy = FakeHierarchy()
+        self.visibility = FakeVisibility()
         self.store = SessionStore(
             RedisGateway(self.redis, error_types=FAKE_ERROR_TYPES, clock=clock, sleep=clock.sleep, jitter=lambda: 0.0),
-            hierarchy_facade=G._HierarchyResolver(self.Session, self.hierarchy.factory),
+            hierarchy_facade=G._HierarchyResolver(
+                self.Session, self.hierarchy.factory, membership_facade_factory=self.visibility.factory
+            ),
             history_max=50,
         )
         self.memory = FakeMemory()
@@ -348,6 +423,7 @@ class Harness:
             timing=timing,
             memory_facade_factory=self.memory.factory,
             hierarchy_facade_factory=self.hierarchy.factory,
+            membership_facade_factory=self.visibility.factory,
             registry=self.registry,
             rate_limiter=rate,
             memory_worker=G.MemoryWorker(timing),

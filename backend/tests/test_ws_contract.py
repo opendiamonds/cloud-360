@@ -71,6 +71,9 @@ _SERVER_PAYLOAD_SAMPLES = {
         "systemId": None,
         "diagramId": None,
         "segment": "shared",
+        "projectName": None,
+        "systemName": None,
+        "diagramName": None,
     },
     WsServerMessageType.DONE: {"turnId": None},
     WsServerMessageType.ERROR: {
@@ -317,7 +320,19 @@ _ADR0020_FIELDS = (
     ("C-1", WsSubprotocol, "protocolName", {"scheme": "bearer", "separator": "."}),
     ("C-2", UserMessagePayload, "page", {"text": "畫一張架構圖"}),
     ("C-3", SharingModePayload, "scope", {"mode": "isolated"}),
-    ("C-4", WorkTargetPayload, "segment", {"projectId": "1", "systemId": None, "diagramId": None}),
+    (
+        "C-4",
+        WorkTargetPayload,
+        "segment",
+        {
+            "projectId": "1",
+            "systemId": None,
+            "diagramId": None,
+            "projectName": None,
+            "systemName": None,
+            "diagramName": None,
+        },
+    ),
     ("C-5", SetWorkTargetPayload, "segment", {"projectId": "1", "systemId": None, "diagramId": None}),
     ("C-6", SetSharingModePayload, "scope", {"mode": "shared"}),
     (
@@ -371,6 +386,52 @@ class Adr0020FieldIncrementTest(unittest.TestCase):
                     model(**base)
             self.assertTrue(model.model_fields[field].is_required(), code)
             self.assertTrue(model.model_fields[field].description, code)
+
+
+# ADR-0022 C-8：`WorkTargetPayload` 的三個名稱欄位。
+_ADR0022_NAME_FIELDS = ("projectName", "systemName", "diagramName")
+_WORK_TARGET_BASE = {"projectId": "1", "systemId": "2", "diagramId": "3", "segment": "shared"}
+
+
+class Adr0022NameFieldTest(unittest.TestCase):
+    """`ADR-0022` D-1 — 三個名稱欄位必存在、可為 null、無預設；空字串原樣保留。"""
+
+    def test_missing_any_name_field_is_rejected(self):
+        """
+        @purpose 名稱欄位必須「必存在、無預設」。若給了 None 預設，產生的 TS 欄位會變成可選，
+                 閘道漏送名稱時前端多一個 undefined 分支、契約測試也抓不到（ADR-0022 D-1）。
+        @given 契約模組已載入；ADR-0022 已核可；其餘欄位齊全
+        @step 三個名稱欄位逐一省略其一、其餘兩個給 None 構造 WorkTargetPayload | 三次皆拋 ValidationError
+        @step 檢視三欄在模型上的 is_required() 與 description | 皆為真
+        @pass 缺任一名稱欄位都無法構造，且三欄皆為必填並帶說明
+        @story US2.1
+        """
+        for missing in _ADR0022_NAME_FIELDS:
+            with self.subTest(missing=missing):
+                kwargs = {**_WORK_TARGET_BASE, **{f: None for f in _ADR0022_NAME_FIELDS if f != missing}}
+                with self.assertRaises(ValidationError):
+                    WorkTargetPayload(**kwargs)
+                self.assertTrue(WorkTargetPayload.model_fields[missing].is_required(), missing)
+                self.assertTrue(WorkTargetPayload.model_fields[missing].description, missing)
+
+    def test_null_text_and_empty_string_round_trip(self):
+        """
+        @purpose 名稱的三種合法值（null、一般字串、空字串）必須原樣構造並讀回；空字串不得被轉成
+                 null，否則前端無法區分「（未命名）」與「（無法顯示名稱）」（functional-design R-06）。
+        @given 契約模組已載入
+        @step 三欄皆給 None、皆給 "訂單系統"、皆給 "" 各構造一次 | 皆構造成功
+        @step 讀回三欄並序列化為 dict | 值與輸入逐一相同（"" 仍為 ""）
+        @pass 三種值皆可構造且原樣讀回
+        @story US2.1
+        """
+        for value in (None, "訂單系統", ""):
+            with self.subTest(value=value):
+                payload = WorkTargetPayload(**_WORK_TARGET_BASE, **{f: value for f in _ADR0022_NAME_FIELDS})
+                dumped = payload.model_dump()
+                for field in _ADR0022_NAME_FIELDS:
+                    self.assertEqual(getattr(payload, field), value)
+                    self.assertIn(field, dumped)
+                    self.assertEqual(dumped[field], value)
 
 
 if __name__ == "__main__":

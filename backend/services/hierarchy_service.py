@@ -14,7 +14,7 @@ hierarchy_service.py — `U7 hierarchy-service` 的服務層
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence
+from typing import FrozenSet, List, NamedTuple, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -321,6 +321,78 @@ def resolve_work_target(
             if system is not None:
                 resolved["projectId"] = system.project_id
     return resolved
+
+
+class WorkTargetNames(NamedTuple):
+    """`describe_work_target` 的回傳（ADR-0022 D-2 ②）。
+
+    - `names`：`projectName`／`systemName`／`diagramName` 三鍵，查不到或不屬請求者的層為 `None`。
+    - `project_ids`：三元組中**出現**的相異所屬專案 id——`project_id` 參數（若專案層查得）、
+      系統列所屬專案、圖所屬系統的專案。facade 的第 ③ 步對它們逐一判可見性（nfr-design `R-06`）。
+    - `explicit`：是否為**明確指定路徑**（`project_id` 或 `system_id` 非 null）。只有圖的路徑
+      不判可見性、不推導上層（nfr-design `R-01` 使用者裁決）。
+    """
+
+    names: dict
+    project_ids: FrozenSet[int]
+    explicit: bool
+
+
+def describe_work_target(
+    db: Session,
+    *,
+    owner_user_id: int,
+    project_id: Optional[int] = None,
+    system_id: Optional[int] = None,
+    diagram_id: Optional[int] = None,
+) -> WorkTargetNames:
+    """ADR-0022 D-2 ②：以擁有者範圍逐層取名稱。**純查詢：唯讀、冪等、不拋查不到、不寫稽核。**
+
+    每層至多一條 SQL（`performance-design.md` §三之一）：
+      - 專案層：主鍵 ＋ 擁有者一條；
+      - 系統層：`systems` join `projects` 一條（**不**沿用兩條的 `assert_system_owned_by`，
+        否則每組上界變 6，超過裁決的 5——`W5` 突變）；
+      - 圖層：`user_diagrams` left join `systems` 一條，同時取圖所屬系統的 `project_id`
+        （孤兒圖的 `system_id` 為 null，left join 使它仍查得到圖名）。
+    查不到或不屬請求者的層為 `None`；空字串名稱原樣保留（不轉 null）。
+    """
+    names: dict = {"projectName": None, "systemName": None, "diagramName": None}
+    project_ids: set = set()
+    if project_id is not None:
+        row = (
+            db.query(Project.name)
+            .filter(Project.id == project_id, Project.owner_user_id == owner_user_id)
+            .first()
+        )
+        if row is not None:
+            names["projectName"] = row[0]
+            project_ids.add(int(project_id))
+    if system_id is not None:
+        row = (
+            db.query(System.name, System.project_id)
+            .join(Project, Project.id == System.project_id)
+            .filter(System.id == system_id, Project.owner_user_id == owner_user_id)
+            .first()
+        )
+        if row is not None:
+            names["systemName"] = row[0]
+            project_ids.add(int(row[1]))
+    if diagram_id is not None:
+        row = (
+            db.query(UserDiagram.title, System.project_id)
+            .outerjoin(System, System.id == UserDiagram.system_id)
+            .filter(UserDiagram.id == diagram_id, UserDiagram.user_id == owner_user_id)
+            .first()
+        )
+        if row is not None:
+            names["diagramName"] = row[0]
+            if row[1] is not None:
+                project_ids.add(int(row[1]))
+    return WorkTargetNames(
+        names=names,
+        project_ids=frozenset(project_ids),
+        explicit=project_id is not None or system_id is not None,
+    )
 
 
 # ---------------------------------------------------------------------------
