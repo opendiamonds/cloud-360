@@ -4,20 +4,63 @@
   ],
   "permissions": {
     "allow": [
+      "Edit(/**)",
+      "Task",
+      "WebSearch",
+      "Bash(aidlc engine *)",
+      "Bash(aidlc doctor)",
+      "Bash(aidlc doctor --verbose)",
+      "Bash(aidlc version)",
+      "Bash(aidlc --doctor)",
+      "Bash(aidlc --doctor --verbose)",
+      "Bash(aidlc --version)",
+      "Bash(aidlc status)",
+      "Bash(aidlc --status)",
+      "Bash(aidlc config --help)",
+      "Bash(aidlc config --show)",
+      "Bash(aidlc config --show --json)",
+      "Bash(aidlc config models --show)",
+      "Bash(aidlc config models --show --json)",
+      "Bash(aidlc config models --help)",
+      "Bash(aidlc config runtime --show)",
+      "Bash(aidlc config runtime --show --json)",
+      "Bash(aidlc config runtime --help)",
+      "Bash(aidlc config providers --show)",
+      "Bash(aidlc config providers --show --json)",
+      "Bash(aidlc config providers --help)",
+      "Bash(aidlc config trust --show)",
+      "Bash(aidlc config trust --show --json)",
+      "Bash(aidlc config trust --help)",
+      "Bash(aidlc config flags --show)",
+      "Bash(aidlc config flags --show --json)",
+      "Bash(aidlc config flags --help)",
+      "Bash(aidlc config project --show)",
+      "Bash(aidlc config project --show --json)",
+      "Bash(aidlc config project --help)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_SKIP_ARTIFACT_GUARD --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_SKIP_REVISION_BACKSTOP --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_SKIP_SUMMARY_CONFIRMATION_GUARD --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_SKIP_HUMAN_PRESENCE_GUARD --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_ENSEMBLE_EVIDENCE --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_PLAN_APPROVAL_GUARD --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_REVIEWER_SCOPE_HOOK --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_REVIEW_FREEZE_HOOK --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_USAGE_TRACKING --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_SENSORS --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_LEARNINGS --yes)",
+      "Bash(aidlc config flags --clear-bypass AIDLC_DISABLE_SUMMARY_CONFIRMATION --yes)",
       "Read",
       "Edit",
       "Write",
       "Bash(bun .claude/tools/*)",
       "Bash(date -u *)",
       "Glob",
-      "Grep",
-      "Task",
-      "WebSearch"
+      "Grep"
     ]
   },
   "statusLine": {
     "type": "command",
-    "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine statusline"
+    "command": "aidlc engine statusline"
   },
   "env": {},
   "hooks": {
@@ -27,7 +70,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook fold-usage"
+            "command": "aidlc engine hook fold-usage",
+            "timeout": 1800
           }
         ]
       },
@@ -36,7 +80,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook deliver-stage-rules"
+            "command": "aidlc engine hook deliver-stage-rules",
+            "timeout": 1800
           }
         ]
       },
@@ -45,15 +90,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook state-transition-guard"
+            "command": "aidlc engine hook state-transition-guard",
+            "timeout": 1800
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook reviewer-scope"
+            "command": "aidlc engine hook reviewer-scope",
+            "timeout": 1800
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook review-freeze"
+            "command": "aidlc engine hook review-freeze",
+            "timeout": 1800
           }
         ]
       },
@@ -62,7 +110,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook plan-approval-guard"
+            "command": "aidlc engine hook plan-approval-guard",
+            "timeout": 1800
           }
         ]
       }
@@ -73,7 +122,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook record-human-turn"
+            "command": "aidlc engine hook record-human-turn",
+            "timeout": 1800
           }
         ]
       }
@@ -84,7 +134,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook session-start"
+            "command": "aidlc engine hook session-start",
+            "timeout": 1800
           }
         ]
       }
@@ -95,7 +146,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook session-end"
+            "command": "aidlc engine hook session-end",
+            "timeout": 60
           }
         ]
       }
@@ -106,11 +158,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook write-audit-log"
+            "command": "aidlc engine hook write-audit-log",
+            "timeout": 1800
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook run-sensors"
+            "command": "aidlc engine hook run-sensors",
+            "timeout": 3600
           }
         ]
       },
@@ -119,7 +173,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook sync-workflow-state"
+            "command": "aidlc engine hook sync-workflow-state",
+            "timeout": 1800
           }
         ]
       },
@@ -128,7 +183,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook record-human-turn"
+            "command": "aidlc engine hook record-human-turn",
+            "timeout": 1800
           }
         ]
       },
@@ -137,7 +193,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook rebuild-stage-graph"
+            "command": "aidlc engine hook rebuild-stage-graph",
+            "timeout": 1800
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "aidlc engine hook deliver-stage-rules",
+            "timeout": 1800
           }
         ]
       },
@@ -146,7 +213,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook fold-usage"
+            "command": "aidlc engine hook fold-usage",
+            "timeout": 1800
           }
         ]
       }
@@ -157,7 +225,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook validate-state"
+            "command": "aidlc engine hook validate-state",
+            "timeout": 1800
           }
         ]
       }
@@ -168,7 +237,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook log-subagent"
+            "command": "aidlc engine hook log-subagent",
+            "timeout": 1800
           }
         ]
       }
@@ -179,7 +249,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/.claude/tools/aidlc.ts\" engine hook continue-workflow"
+            "command": "aidlc engine hook continue-workflow",
+            "timeout": 3600
           }
         ]
       }

@@ -20,6 +20,7 @@
       ".agents",
       ".codex",
       ".gitignore",
+      "AGENTS.md",
       "aidlc"
     ]
   },
@@ -32,6 +33,7 @@
       ".aidlc",
       ".github",
       ".gitignore",
+      ".vscode",
       "AGENTS.md",
       "aidlc"
     ]
