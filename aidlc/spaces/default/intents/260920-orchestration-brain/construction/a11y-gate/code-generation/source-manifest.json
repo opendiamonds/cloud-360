@@ -1,0 +1,31 @@
+{
+  "stage": "code-generation",
+  "unit": "a11y-gate",
+  "version": 1,
+  "writes": [
+    {
+      "path": "frontend/package.json"
+    },
+    {
+      "path": "frontend/package-lock.json"
+    },
+    {
+      "path": "frontend/tests/e2e/a11y.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/a11y-baseline.json"
+    },
+    {
+      "path": "frontend/src/components/brain/ContextBar.tsx"
+    },
+    {
+      "path": "frontend/src/pages/MemberDetailPage.tsx"
+    },
+    {
+      "path": "frontend/src/components/membership/ReselectionBanner.tsx"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "a11y-gate",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率屬 U11 intent-router；a11y-gate 不在該路徑上，掃描在攔截層進行且不觸及路由層"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率屬 U10 session-store 與 build-and-test 的量測；a11y-gate 不讀寫 session"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "首字回應時間屬大腦執行期路徑；a11y-gate 只在 CI 執行，不在任何使用者請求路徑上。CI 耗時另由 security-requirements.md 交接 H-2 交 build-and-test 實測"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "狀態外部化屬 U10；a11y-gate 無執行期狀態"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "WebSocket 契約閘門屬 U2 brain-ws-contract。a11y-gate 同為 CI 閘門但檢查的是無障礙，掛在 NFR5 下會讓下游以為 NFR5 涵蓋無障礙；本單元需求改以單元內編號 A11Y-S1 至 A11Y-S9 表達，理由見 security-requirements.md「需求 ID 的來源」"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "記憶層 schema 隔離屬 U5 memory-data；a11y-gate 不碰資料庫"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "episodic memory 的保存與刪除稽核屬 U8／U9；a11y-gate 不儲存資料。掃描報告附件不得含真實憑證由 A11Y-S6 承接"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "部署設定完整性要防的是新增 compose 變數未被 render-env.sh 寫入；a11y-gate 只新增 devDependency，不新增環境變數或 compose 服務。同類的「兩檔不同步」風險（package.json 與 package-lock.json）由 A11Y-S2 承接"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "成本原則談的是本平台 LLM 花費；a11y-gate 不呼叫 LLM，且 A11Y-S5 明文禁止 spec 觸及 LLM 路徑"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型可替換性屬 U11；與 a11y-gate 無關"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數屬 U14 的入口頁行為；a11y-gate 只掃描不量測導航"
+    }
+  ]
+}

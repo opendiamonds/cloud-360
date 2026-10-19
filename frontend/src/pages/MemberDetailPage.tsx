@@ -236,6 +236,7 @@ export const MemberDetailPage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   data-testid="member-detail-role-select"
+                  aria-label="專案角色"
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
                   disabled={saving}

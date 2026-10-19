@@ -109,7 +109,7 @@ const ReselectionBannerActions: React.FC<ActionsProps> = ({
         data-testid="reselection-banner-acknowledge"
         onClick={onAcknowledge}
         disabled={acknowledging}
-        className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+        className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-800 disabled:opacity-50"
       >
         {acknowledging ? '處理中…' : '知道了'}
       </button>
