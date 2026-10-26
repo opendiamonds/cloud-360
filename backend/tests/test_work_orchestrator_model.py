@@ -31,6 +31,7 @@ from services.intent_routing_types import Intent, IntentDecision
 from services.work_orchestrator import WorkOrchestrator, _Ctx, _StepAborted
 from tests.work_orchestrator_fakes import (
     SESSION_KEY,
+    UPDATE_CAPACITY_ARGS,
     CostListApp,
     FacadeRecorder,
     FakeClock,
@@ -137,6 +138,7 @@ class WorkItemMachine(RuleBasedStateMachine):
                         _, updated = T.ref_update_work_item(
                             self.redis.hashes[keys[0]], f"wi:{wid}", '["處理中"]',
                             current["dispatchStage"], '{"dispatchStage":"%s"}' % nxt,
+                            *UPDATE_CAPACITY_ARGS,
                         )
                         self.redis.hashes[keys[0]] = updated
 

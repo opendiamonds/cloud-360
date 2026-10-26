@@ -326,7 +326,7 @@ jobs:
     # 真實 PostgreSQL 上做，而這個 job 就是那個載體。
     #
     # **這個 job 的 id 與 name 現在都比它的內容窄**：U18 project-meta-data 的 12 條
-    # 斷言（P1-P12）也跑在這裡，因為它需要的前置條件（真實 PostgreSQL ＋ 已套用兩次
+    # 斷言（P1-P16）也跑在這裡，因為它需要的前置條件（真實 PostgreSQL ＋ 已套用兩次
     # 的 schema_rbac.sql）與記憶 schema 完全相同，另開一個 job 等於把同一座 service
     # container 建第二次。**刻意不改 id 也不改 name**：GitHub 的 check name 取自
     # job 的 name，改它會改掉 check 名稱，而 branch protection 的必要檢查若引用舊名
@@ -380,12 +380,12 @@ jobs:
           psql -h localhost -U postgres -d cloud360 \
             -v ON_ERROR_STOP=1 -f backend/scripts/verify_memory_schema.sql
 
-      # U18 project-meta-data 的 12 條斷言（P1-P12）。驗的是三張表的約束、
+      # U18 project-meta-data 的斷言（P1-P16；P13–P16 由 U20 加入）。驗的是三張表的約束、
       # **外鍵缺席**（reselection_events 對 projects 沒有外鍵）、partial index 與
       # CASCADE 行為——SQLite 對這四件事的語意都不同（外鍵預設關閉、ON DELETE 需
       # PRAGMA、無 partial index 的同等查詢計畫），所以在既有的 unit suite 裡
       # 「通過」不構成任何保證。
-      - name: Verify project-meta schema assertions (P1-P12)
+      - name: Verify project-meta schema assertions (P1-P16)
         env:
           PGPASSWORD: postgres
         run: |
@@ -403,10 +403,10 @@ jobs:
       # 的原因之一是 pip install 會串行地拖慢它」。這裡仍然加進來，理由是步驟 B／D
       # 驗的是 run_meta_schema_migration.py 的後條件與它經 psycopg 執行 DO 區塊的
       # 行為——那只存在於那支腳本，而它需要的前置條件（已套用 schema_rbac.sql 並
-      # 跑過 P1-P12 的真實 PostgreSQL）就在本 job；搬到 concurrency job 等於在那裡
+      # 跑過 P1-P16 的真實 PostgreSQL）就在本 job；搬到 concurrency job 等於在那裡
       # 重做一次本 job 的前半段。增量約一分鐘（setup-python 有 pip cache）。
       #
-      # 位置：P1-P12 之後（verify_meta_schema.sql 以 ROLLBACK 結尾，表是空的，
+      # 位置：P1-P16 之後（verify_meta_schema.sql 以 ROLLBACK 結尾，表是空的，
       # 步驟 A 的前置守衛依賴這一點）、R1-R10 之前（步驟 E 把 fixture 清乾淨，
       # 後面的 purge 斷言不需要知道它存在）。
       #
@@ -522,7 +522,7 @@ jobs:
       #
       # **刻意不新增 job**：這個 job 的前置條件（真實 PostgreSQL ＋ 已套用的
       # schema_rbac.sql）與本斷言完全相同，另開一個等於把同一座 service container
-      # 建第二次——與上方 P1-P12 併進來的同一個理由。
+      # 建第二次——與上方 P1-P16 併進來的同一個理由。
       #
       # **工作目錄必須是 repo 根目錄**：該檔以
       # `\i backend/scripts/purge_expired_memory.sql` 引入**生產用的那一份**清除

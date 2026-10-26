@@ -26,6 +26,9 @@ membership_facade.py — `U19 membership-service` 的授權門面
   **具名**參數，不得藏在 payload 內。facade **不自行從 request 取身分**。
 - `BR1.5`：拒絕時 raise `MembershipForbidden`／`MissingGlobalPermission`，
   **不是** `HTTPException`；判定先於任何寫入，失敗即中止。
+  **例外**（合併前必修第 14 項）：**非成員**改 raise `MembershipNotFound`
+  （訊息 `PROJECT_NOT_FOUND_DETAIL`），與「專案不存在」逐位元相同，不以 403／404
+  洩漏專案是否存在；成員之內的角色不足仍是 `MembershipForbidden`。
 - `BR1.6`：`resolve_project_role` 回 `None` 代表**非成員**，呼叫端須當成拒絕。
 
 **殘留缺口，如實記載**：`BR1.1` 的「facade 是唯一入口」**無機械強制**
@@ -128,17 +131,21 @@ class MembershipFacade:
         存在」。一個缺 `K2.view` 的呼叫端沒有理由得知某個專案是否存在。
         實務上這條分支極罕見：全部 11 個 canonical role 的 `K2.view` 都是 True，
         故只有非 canonical role 會走到它。
+
+        **訊息固定為 `PROJECT_NOT_FOUND_DETAIL`、不含 id**（合併前必修第 14 項，
+        `[PP-MB14]`=A）：與 `_require_project_role` 對非成員的 404 逐位元相同，
+        也與階層端點同一句（單一真實來源在 `hierarchy_facade`，本檔不另抄字串）。
         """
         try:
             exists = HierarchyFacade(self._db).project_exists(
                 principal, project_id=project_id
             )
         except HierarchyForbidden as exc:
-            raise MembershipNotFound(f"查不到專案 {project_id}") from exc
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL) from exc
         except HierarchyNotFound as exc:
-            raise MembershipNotFound(f"查不到專案 {project_id}") from exc
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL) from exc
         if not exists:
-            raise MembershipNotFound(f"查不到專案 {project_id}")
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)
 
     def _require_project_role(
         self, principal: Principal, *, project_id: int, action: str, admin: bool
@@ -149,11 +156,25 @@ class MembershipFacade:
         非成員（`resolve_project_role` 回 `None`）一律拒絕（`BR1.6`）——
         這正是 `AC12.5.2` 的 deny 側：具全域權限但非本專案成員的人不得讀到
         專案資料。
+
+        **非成員回 404、不是 403**（合併前必修第 14 項，`[PP-MB14]`=A，2026-10-24）：
+        丟 `MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)`，與 `_assert_project_exists`
+        對「專案不存在」的例外與訊息**逐位元相同**——否則有 `K3` 的人能以 403／404
+        探出專案編號是否存在。拒絕 log（`log_denied`）照記，稽核不因對外改 404 而消失。
+        **成員之內**的權限不足（是成員、但要求 `project_admin`）維持 `MembershipForbidden`
+        （403）：此時呼叫者已知該專案存在，403 不洩漏任何新事實。
         """
         role = membership_service.resolve_project_role(
             self._db, project_id=project_id, user_id=principal.user_id
         )
-        if role is None or (admin and role != membership_service.ROLE_PROJECT_ADMIN):
+        if role is None:
+            membership_service.log_denied(
+                action=action,
+                project_id=project_id,
+                principal_user_id=principal.user_id,
+            )
+            raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)
+        if admin and role != membership_service.ROLE_PROJECT_ADMIN:
             membership_service.log_denied(
                 action=action,
                 project_id=project_id,
@@ -406,6 +427,15 @@ class MembershipFacade:
         而不擋會留下一個沒有任何管理者的專案，故 `[FD1]`=A 選擇擋下。
         `AC12.3.3` 的 Given 措辭（「唯一成員」）與本定案不一致，**上游不回改**，
         由本單元的測試依 `[FD1]`=A 的條件撰寫（`functional-spec.md §四`）。
+
+        **合併前必修第 1 ＋ 4 項（2026-10-20 使用者裁決）收窄了擋下的條件**：
+        只擋「該使用者是管理者、且專案內沒有任何**合格接手人**」的專案；有合格
+        接手人時放行，由停用成功後的自動改選補位。合格與否由
+        `membership_service.is_qualified_successor` 單一謂詞判定，改選用同一個。
+        在此之前守門擋下最後一位管理者的全部情況、而改選只在沒有其他管理者時
+        執行，兩者互斥，`AC12.4.1` 不可達。上游 `BR2.1`／`BR6.1`（停用即擋）與
+        `AC12.4.1` 字面互斥，本處以 `BR7.3` 收斂（`code-generation-plan.md`
+        Step 15a 的對齊紀錄）。
         """
         blocked = membership_service.projects_losing_last_admin(
             self._db, target_user_id=target_user_id
@@ -574,8 +604,14 @@ class MembershipFacade:
 
     # -- 自動改選（系統發起；無 principal，因為沒有人按按鈕）---------------
 
-    def run_auto_reselection(self, *, deactivated_user_id: int) -> List[ReselectionEvent]:
-        """`BR4.4`：停用帳號**成功之後**對該使用者擁有的專案各跑一次改選。
+    def run_auto_reselection(
+        self, *, deactivated_user_id: int
+    ) -> "membership_service.ReselectionOutcome":
+        """`BR4.4`：停用帳號**成功之後**對該使用者擁有／管理的專案各跑一次改選。
+
+        回傳 `ReselectionOutcome`：成功事件與**失敗的專案清單**（合併前必修
+        第 10 項）。呼叫端（既有停用端點）負責把失敗轉成 500／503 回給操作者，
+        而不是像過去一樣只記 log 回 200。
 
         **沒有 `principal` 參數，而這是刻意的**：它由系統發起、無人按下按鈕
         （`BR5.1` 逐字「自動改選尤其必要：它由系統發起、無人按下按鈕」）。

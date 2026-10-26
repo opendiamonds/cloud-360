@@ -206,34 +206,91 @@ def default_page_modes() -> dict:
 # ---------------------------------------------------------------------------
 
 
-def trim_history(messages: Sequence, cap: int) -> list:
-    """把一段的歷程修剪到 `cap` 筆，**自最舊端丟棄**（`BR3.4`）。
+#: 每段**序列化後**的位元組上限（UTF-8 位元組，`merge-blockers.md` 第 18 項）。
+#:
+#: 與筆數上限（`BRAIN_SESSION_HISTORY_MAX`）**兩個條件取較嚴者**：超過任一個就
+#: 從最舊的訊息開始丟，直到兩者都成立。筆數上限單獨無法封住容量——單則訊息可達
+#: 4000 字元，3 段 × 200 則 × 4000 個中文字 ≈ 7 MB／session，`maxmemory 256mb`
+#: 在最壞情況下約 35 個 session 就滿，而 `noeviction` 之下滿了就是**所有**
+#: session 都不能寫。有了本上限，最壞情況是 3 × 200 KB ≈ 600 KB／session。
+#:
+#: **刻意不做環境變數**（使用者裁決，理由同 `OPEN-ND19-6`）：環境設定契約要求
+#: `render-env.sh`、兩份 `.env.example` 與 compose 三處同步，而這個數值沒有
+#: 依環境而異的理由。
+DEFAULT_SEGMENT_MAX_BYTES = 200 * 1024
+
+
+def cjson_encoded_size(item: Any) -> int:
+    """`item` 經 Redis 內建 lua-cjson `cjson.encode` 之後的**位元組數**。
+
+    生產載體（`append_message.lua`）以 `string.len(cjson.encode(...))` 計算段的
+    大小，所以參考實作必須量**同一個東西**，否則兩邊在臨界值附近會丟不同筆數
+    ——那正是本檔檔頭「兩份實作遲早分歧」所警告的形狀。
+
+    Python 的 `json.dumps(ensure_ascii=False, separators=(",", ":"))` 與 cjson
+    只有兩處長度不同（以 Redis 8.8 實測）：
+
+    * cjson 把 `/` 跳脫成 `\\/`（多 1 位元組）；Python 不跳脫。
+    * cjson 把 `0x7f`（DEL）跳脫成 `\\u007f`（6 位元組）；Python 原樣輸出 1 位元組。
+
+    其餘（非 ASCII 原樣輸出 UTF-8、`"`／`\\`／控制字元的跳脫）兩者長度一致。
+    鍵的順序不同但不影響長度。本函式的對象是訊息物件（字串與小整數）；超過
+    14 位有效數字的整數 cjson 會改用科學記號，不在本函式的對象內。
+    """
+    text = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+    return len(text.encode("utf-8")) + text.count("/") + 5 * text.count("\x7f")
+
+
+def segment_size_bytes(messages: Sequence) -> int:
+    """整段 JSON 陣列（`[a,b,…]`）的位元組數：括號 2 ＋ 各則 ＋ 逗號 n−1。"""
+    sizes = [cjson_encoded_size(item) for item in messages]
+    return 2 + sum(sizes) + max(len(sizes) - 1, 0)
+
+
+def trim_history(
+    messages: Sequence, cap: int, max_bytes: int = DEFAULT_SEGMENT_MAX_BYTES
+) -> list:
+    """把一段的歷程修剪到「≤ `cap` 筆**且** ≤ `max_bytes` 位元組」，**自最舊端
+    丟棄**（`BR3.4`；位元組條件為 `merge-blockers.md` 第 18 項）。
 
     ⚠ **這不是生產載體。** 生產環境的修剪在
-    `session_scripts/append_message.lua` 的 `while #arr > cap do
-    table.remove(arr, 1) end`。本函式只在兩個地方被呼叫：
-    `test_session_types.py` 的三條 property，以及
+    `session_scripts/append_message.lua` 的修剪迴圈。本函式只在兩個地方被呼叫：
+    `test_session_types.py` 的 property，以及
     `test_session_store_behaviour.py` 的 in-memory Redis 替身（它以本函式模擬
     腳本效果，見 `unit-test-instructions.md §四`）。
 
     **`session_store.py` 與 `redis_gateway.py` 都不得呼叫它**——
     `test_session_contract.py` 以 AST 斷言這一點。
 
-    三條 property（`test_session_types.py`）：
+    Property（`test_session_types.py`）：
 
     1. 輸出長度 ≤ `cap`
     2. 輸出是輸入的**後綴**（丟的是最舊的，不是最新的）
-    3. 輸入長度 ≤ `cap` 時輸出**等於**輸入（已達上限時不動）
+    3. 輸入同時在兩個上限內時輸出**等於**輸入（已在上限內時不動）
+    4. 輸出整段位元組數 ≤ `max_bytes`，且是**最長**的合格後綴（不多丟）
 
-    `cap` 必須為正整數——`BR3.5` 禁止把「無值」解讀為「無上限」，而 `cap <= 0`
-    會讓整段歷程被清空，那是比無上限更壞的靜默行為。
+    **最新的一則永遠保留**：迴圈在剩一則時停止。單則訊息不可能超過 `max_bytes`
+    （`session_store.SessionStore` 建構時以算式確認此前提並在不成立時拒絕啟動），
+    故這條界線在生產上不會被觸發；它存在是為了讓「段被清空」——cjson 會把空表
+    編成 `{}` 而非 `[]`——在任何設定下都不可能發生。
+
+    `cap` 與 `max_bytes` 必須為正整數——`BR3.5` 禁止把「無值」解讀為「無上限」，
+    而 `cap <= 0` 會讓整段歷程被清空，那是比無上限更壞的靜默行為。
     """
     if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
         raise ValueError(f"筆數上限必須是正整數，收到 {cap!r}（BR3.5）")
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+        raise ValueError(f"位元組上限必須是正整數，收到 {max_bytes!r}")
     items = list(messages)
-    if len(items) <= cap:
-        return items
-    return items[len(items) - cap :]
+    sizes = [cjson_encoded_size(item) for item in items]
+    total = 2 + sum(sizes) + max(len(sizes) - 1, 0)
+    start = 0
+    while len(items) - start > 1 and (
+        len(items) - start > cap or total > max_bytes
+    ):
+        total -= sizes[start] + 1
+        start += 1
+    return items[start:]
 
 
 # ---------------------------------------------------------------------------
@@ -395,18 +452,38 @@ def decode_work_items(fields: Optional[Mapping[str, str]]) -> dict:
     return items
 
 
+def _work_item_statuses(fields: Mapping[str, str]):
+    """`(欄位名, status, createdAt)` 的序列；只看 `wi:*` 欄位（與兩支 Lua 的掃描同形）。"""
+    for name, blob in fields.items():
+        if not name.startswith(WORK_ITEM_FIELD_PREFIX) or blob is None:
+            continue
+        item = json.loads(blob)
+        created = item.get("createdAt")
+        yield name, item.get("status"), created if isinstance(created, str) else ""
+
+
 def ref_put_work_item(
-    fields: Optional[Mapping[str, str]], field_name: str, item_json: str
+    fields: Optional[Mapping[str, str]],
+    field_name: str,
+    item_json: str,
+    max_active: str,
+    terminal_statuses_json: str,
 ) -> tuple:
     """`put_work_item.lua` 的參考實作。
 
     key 不存在 → `(0, None)`，**不建 key**；欄位已存在 → `(0, 原快照)`；
-    否則 `(1, 新快照)`。不改 TTL（TTL 不在本函式的模型內）。
+    非終態（進行中）的工作項已達 `max_active` 筆 → `(-1, 原快照)`，不寫入；
+    否則 `(1, 新快照)`。不改 TTL（TTL 不在本函式的模型內）。引數與腳本的
+    `ARGV` 逐一對應（`max_active` 為整數字串、終態集合為 JSON 陣列）。
     """
     if not fields:
         return 0, None
     if field_name in fields:
         return 0, dict(fields)
+    terminal = set(json.loads(terminal_statuses_json))
+    active = sum(1 for _, status, _ in _work_item_statuses(fields) if status not in terminal)
+    if active >= int(max_active):
+        return -1, dict(fields)
     updated = dict(fields)
     updated[field_name] = item_json
     return 1, updated
@@ -418,13 +495,17 @@ def ref_update_work_item(
     expected_statuses_json: str,
     expected_dispatch_stage: str,
     patch_json: str,
+    max_terminal: str,
+    terminal_statuses_json: str,
 ) -> tuple:
     """`update_work_item.lua` 的參考實作（比對後以補丁合併寫入）。
 
     比對 `status ∈ 預期集合` **且** `dispatchStage == 預期值`；皆符合才把補丁
     合併進**讀到的當前值**（補丁值為 `null` 即設為 null，未出現的欄位不動）。
-    引數與腳本的 `ARGV` 逐一對應（皆為 JSON 字串），使替身與真實 Redis 走同一份
-    編碼。
+    補丁使本項由非終態轉為終態時，終態項（含本項）超過 `max_terminal` 筆即依
+    `(createdAt, 欄位名)` 由舊到新刪除**其他**終態項（本項不在候選內），進行中項
+    永不刪除——語意逐條見 `update_work_item.lua` 檔頭。引數與腳本的 `ARGV` 逐一
+    對應（皆為字串），使替身與真實 Redis 走同一份編碼。
     """
     if not fields:
         return 0, None
@@ -437,16 +518,33 @@ def ref_update_work_item(
         return 0, dict(fields)
     if item.get("dispatchStage") != expected_dispatch_stage:
         return 0, dict(fields)
+    terminal = set(json.loads(terminal_statuses_json))
+    was_terminal = item.get("status") in terminal
     patch = json.loads(patch_json)
     item.update(patch)
     updated = dict(fields)
     updated[field_name] = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+    if not was_terminal and item.get("status") in terminal:
+        keep = int(max_terminal)
+        finished = [
+            (created, name)
+            for name, status, created in _work_item_statuses(updated)
+            if status in terminal
+        ]
+        excess = len(finished) - keep
+        if excess > 0:
+            candidates = sorted(entry for entry in finished if entry[1] != field_name)
+            for _, name in candidates[:excess]:
+                del updated[name]
     return 1, updated
 
 
 __all__ = [
     "BrainSession",
     "ConversationSegment",
+    "DEFAULT_SEGMENT_MAX_BYTES",
+    "cjson_encoded_size",
+    "segment_size_bytes",
     "META_FIELD",
     "PAGE_SCOPES",
     "SEGMENT_ASSESSMENT",

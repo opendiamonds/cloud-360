@@ -878,4 +878,109 @@ test.describe('U15 memory page', () => {
     await expect(item(page, '3')).toBeVisible();
     await expect(page.getByTestId('memory-zone-semantic-count')).toHaveText('1 則');
   });
+
+  // -------------------------------------------------------------------------
+  // 合併前必修第 6 項（計畫 §四之一）：404 不等於已刪除，重讀清單確認。
+  // 計畫與 unit-test-instructions §四之三把這三支編為 E11–E13，與修補輪既有的
+  // E11–E15 撞號，故註解以 `MB6-E11`…`MB6-E13` 區分。
+  // -------------------------------------------------------------------------
+
+  /**
+   * @purpose DELETE 回 404 時重讀該區清單，確認已不含該則才視同已刪除：該列消失並播報（合併前必修第 6 項 MB6-E11，BR34.5）。
+   * @given 已登入；語意區兩則自己的記憶；開頁之後伺服器端已清除第 1 則（模擬 90 天清除）
+   * @step 對第 1 則確認刪除 | 伺服器回 404；前端隨即再發 1 個語意區 GET（limit=200，不帶 offset）
+   * @step 重讀結果不含第 1 則 | 第 1 則消失；播報「已刪除：e2e-memory-purged」；區標題為「1 則」
+   * @pass 404 之後恰多 1 個與該區相同參數的 GET，且該列被移除並播報
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 404 | 該則已不在伺服器
+   * @api GET /api/memory/records -> 200 | 404 之後的確認重讀
+   * @ui /memory | 語意記憶區的條目與刪除鍵
+   */
+  test('a 404 delete counts as deleted only after a re-read no longer lists the record', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}purged`),
+      memory('semantic', `${CONTENT_PREFIX}kept`),
+    ]);
+    await openMemoryPage(page);
+    // 開頁後才從伺服器移除：畫面上仍有它，DELETE 會自然得到 404。
+    stub.records = stub.records.filter((r) => r.memory_id !== '1');
+    const getsBefore = stub.gets.filter((g) => g.kind === 'semantic').length;
+
+    await deleteViaUi(page, '1');
+    await expect(item(page, '1')).toHaveCount(0);
+    expect(stub.deletes).toEqual(['1']);
+    const semanticGets = stub.gets.filter((g) => g.kind === 'semantic');
+    expect(semanticGets).toHaveLength(getsBefore + 1);
+    expect(semanticGets[semanticGets.length - 1]).toEqual({ kind: 'semantic', offset: null, limit: '200' });
+    await expect(page.getByTestId('memory-page').getByTestId('live-region')).toHaveText(
+      `已刪除：${CONTENT_PREFIX}purged`
+    );
+    await expect(item(page, '2')).toBeVisible();
+    await expect(page.getByTestId('memory-zone-semantic-count')).toHaveText('1 則');
+  });
+
+  /**
+   * @purpose DELETE 回 404 但重讀該頁仍列出該則（例如路徑錯誤或代理回的 404）時，不得宣稱刪除成功（合併前必修第 6 項 MB6-E12）。
+   * @given 已登入；情節區 25 則；伺服器的 DELETE 一律回 404 且不刪除任何東西
+   * @step 翻到第 2 頁，對 ep-22 確認刪除 | 伺服器回 404；前端以第 2 頁的參數（offset=20、limit=21）重讀情節區
+   * @step 重讀結果仍含 ep-22 | ep-22 仍在畫面上並顯示「刪除失敗」；播報「刪除失敗：e2e-memory-ep-22」
+   * @pass ep-22 未被移除、條目內出現「刪除失敗」，確認重讀的 offset 為 20
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 404 | 伺服器實際沒有刪除
+   * @api GET /api/memory/records -> 200 | 404 之後以當前頁參數重讀
+   * @ui /memory | 情節記憶區的條目、刪除鍵與分頁控件
+   * @note 突變「404 一律視同已刪除」會讓 ep-22 消失，本案即紅。
+   */
+  test('a 404 delete whose re-read still lists the record fails and keeps the row', async ({ page }) => {
+    const stub = await setup(page, episodes(25));
+    await openMemoryPage(page);
+    await page.getByTestId('memory-pagination-next').click();
+    await expect(page.getByTestId('memory-pagination-range')).toHaveText('第 21–25 則');
+    stub.deleteStatus = 404;
+    const getsBefore = stub.episodicGets().length;
+
+    await deleteViaUi(page, '22');
+    await expect(item(page, '22')).toContainText('刪除失敗');
+    expect(stub.deletes).toEqual(['22']);
+    const episodicGets = stub.episodicGets();
+    expect(episodicGets).toHaveLength(getsBefore + 1);
+    expect(episodicGets[episodicGets.length - 1]).toEqual({ kind: 'episodic', offset: '20', limit: '21' });
+    await expect(page.getByTestId('memory-page').getByTestId('live-region')).toHaveText(
+      `刪除失敗：${CONTENT_PREFIX}ep-22`
+    );
+    await expect(item(page, '22')).toBeVisible();
+    await expect(page.getByTestId('memory-item-22-delete')).toBeVisible();
+  });
+
+  /**
+   * @purpose DELETE 回 404 且確認重讀本身失敗時，保守視為未刪除：顯示刪除失敗、保留該列（合併前必修第 6 項 MB6-E13）。
+   * @given 已登入；語意區兩則自己的記憶；伺服器的 DELETE 回 404，之後的語意區 GET 回 500
+   * @step 對第 1 則確認刪除 | 伺服器回 404；前端重讀語意區，得到 500
+   * @step 觀察條目 | 第 1 則仍在並顯示「刪除失敗」；區塊沒有進入錯誤態（其餘列照常顯示）
+   * @pass 第 1 則未被移除且含「刪除失敗」，`memory-zone-semantic-error` 不存在
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 404 | 是否已刪除未知
+   * @api GET /api/memory/records -> 500 | 確認重讀失敗
+   * @ui /memory | 語意記憶區的條目與刪除鍵
+   */
+  test('a 404 delete whose re-read fails is reported as a failure and keeps the row', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}unknown`),
+      memory('semantic', `${CONTENT_PREFIX}other`),
+    ]);
+    await openMemoryPage(page);
+    stub.deleteStatus = 404;
+    stub.getHook = (q) => (q.kind === 'semantic' ? 500 : undefined);
+
+    await deleteViaUi(page, '1');
+    await expect(item(page, '1')).toContainText('刪除失敗');
+    expect(stub.deletes).toEqual(['1']);
+    await expect(page.getByTestId('memory-page').getByTestId('live-region')).toHaveText(
+      `刪除失敗：${CONTENT_PREFIX}unknown`
+    );
+    await expect(item(page, '1')).toBeVisible();
+    await expect(item(page, '2')).toBeVisible();
+    await expect(page.getByTestId('memory-zone-semantic-error')).toHaveCount(0);
+    await expect(page.getByTestId('memory-zone-semantic-count')).toHaveText('2 則');
+  });
 });

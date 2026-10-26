@@ -336,6 +336,9 @@ async function announcements(page: Page): Promise<{ src: string | null; text: st
   return page.evaluate(() => (window as unknown as { __announcements: { src: string | null; text: string }[] }).__announcements.slice());
 }
 
+/** 去掉重唸用的零寬空白（R-09：相同文案的第二次寫入以它造成內容變更）。 */
+const stripMark = (text: string) => text.split(String.fromCharCode(0x200b)).join('');
+
 async function activeTestId(page: Page): Promise<string | null> {
   return page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('data-testid') ?? null);
 }
@@ -1327,14 +1330,14 @@ test.describe('U16 object picker', () => {
   });
 
   /**
-   * @purpose 同一種建立錯誤連續發生兩次時，選單內播報區兩次都播報（每輪送出先清空失敗文案；F-04、BR14.4；review-01 R-06）。
+   * @purpose 同一種建立錯誤連續發生兩次時，選單內播報區兩次都播報（相同文案的第二次以零寬空白造成一次內容變更；F-04、BR14.4；review-01 R-06、review-02 R-09）。
    * @ui / | brain-object-create-error、brain-object-picker-live
    * @given 具 K2 edit；清單為空；POST /api/hierarchy/projects 一律回 409
    * @step 建立專案送出 | 顯示「已有同名的專案，請換一個名稱」，選單內播報區播報 1 次
    * @step 不改名稱再送出一次 | 播報區對同一句累計播報 2 次
    * @pass 相同的失敗文案第二次仍被播報
    * @story US9.2
-   * @note 擋的是「送出時不清空 formFailure」（突變 M22）——那時第二次的文字與第一次相同，播報區不變、不重唸。
+   * @note 擋的是「相同文案第二次寫入不造成內容變更」——第二次的文字與第一次相同時播報區不變、不重唸。播報比對前去掉零寬空白（review-02 R-09 起的重唸機制）。
    */
   test('連續兩次同樣的建立失敗都被播報', async ({ page }) => {
     const h = await setup(page, { hierarchy: { postProjectStatus: 409 } });
@@ -1344,7 +1347,7 @@ test.describe('U16 object picker', () => {
     await page.getByTestId('brain-object-create-name').fill(`${M}-同名`);
     const dup = '已有同名的專案，請換一個名稱';
     const dupAnnouncements = async () =>
-      (await announcements(page)).filter((a) => a.text === dup && a.src === 'brain-object-picker-live').length;
+      (await announcements(page)).filter((a) => stripMark(a.text) === dup && a.src === 'brain-object-picker-live').length;
     await page.getByTestId('brain-object-create-submit').click();
     await expect(page.getByTestId('brain-object-create-error')).toHaveText(dup);
     await expect.poll(dupAnnouncements).toBe(1);
@@ -1353,5 +1356,36 @@ test.describe('U16 object picker', () => {
     await expect.poll(() => count(h.hier, 'POST /api/hierarchy/projects')).toBe(2);
     await expect.poll(dupAnnouncements).toBe(2);
     await expect(page.getByTestId('brain-object-create-error')).toHaveText(dup);
+  });
+
+  /**
+   * @purpose 重試建立時選單內播報區不得在兩次失敗之間退回清單狀態文字：螢幕報讀器使用者每次重試只聽到錯誤，不會多聽到一句與建立無關的「已載入 N 個專案」；同一句錯誤仍兩次都播報（F-04、BR14.4；review-02 R-09——舊實作每輪送出先清空失敗文案，播報區因此先唸清單狀態再唸錯誤）。
+   * @ui / | brain-object-create-error、brain-object-picker-live
+   * @given 具 K2 edit；清單有 1 個自有專案；POST /api/hierarchy/projects 一律回 409；選單內播報區的每次內容變更被記錄
+   * @step 開啟選單並開啟建立專案表單 | 選單內播報區為「已載入 1 個專案」
+   * @step 送出 | 顯示「已有同名的專案，請換一個名稱」
+   * @step 不改名稱再送出一次 | 送出 2 次 POST；自第一次送出起，播報區沒有任何一次內容含「已載入」，且（去掉零寬空白後）等於該錯誤的播報恰 2 次
+   * @pass 重試之間不播報清單狀態，相同錯誤仍各播報一次
+   * @story US9.2
+   */
+  test('重試建立時播報區不在兩次失敗之間退回清單狀態', async ({ page }) => {
+    const h = await setup(page, { hierarchy: { projects: [proj(7, `${M}-r9-專案七`)], postProjectStatus: 409 } });
+    await gotoReady(page);
+    await openPicker(page);
+    const live = page.getByTestId('brain-object-picker-live');
+    await expect(live).toHaveText('已載入 1 個專案');
+    await page.getByTestId('brain-object-create-project').click();
+    await page.getByTestId('brain-object-create-name').fill(`${M}-r9-同名`);
+    const dup = '已有同名的專案，請換一個名稱';
+    const before = (await announcements(page)).length;
+    const since = async () =>
+      (await announcements(page)).slice(before).filter((a) => a.src === 'brain-object-picker-live');
+    await page.getByTestId('brain-object-create-submit').click();
+    await expect(page.getByTestId('brain-object-create-error')).toHaveText(dup);
+    await expect(page.getByTestId('brain-object-create-submit')).toBeEnabled();
+    await page.getByTestId('brain-object-create-submit').click();
+    await expect.poll(() => count(h.hier, 'POST /api/hierarchy/projects')).toBe(2);
+    await expect.poll(async () => (await since()).filter((a) => stripMark(a.text) === dup).length).toBe(2);
+    expect((await since()).filter((a) => a.text.includes('已載入'))).toEqual([]);
   });
 });

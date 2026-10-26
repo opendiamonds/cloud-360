@@ -102,28 +102,37 @@ class AcceptanceTest(E2EBase):
             direct = await self.direct("GET", f"/api/requirements/systems/{self.system.id}/fields",
                                        self.owner_token)
             self.assertEqual(direct.status_code, 200)
-            for mode in MODES:
-                with self.subTest(mode=mode):
-                    result = await self.call(topo, mode, "read_requirement_fields",
-                                             {"system_id": str(self.system.id)}, token=self.owner_token)
-                    self.assertFalse(result.is_error, result.raw)
-                    self.assertEqual(result.structured, direct.json())
-                    self.assertEqual(json.loads(result.text), direct.json())
+            # R4（merge-blockers 第 8 項）：經 MCP 的成功讀取，backend 端記了帶發起者 user_id 的讀取稽核行。
+            with self.assertLogs("cloud360.requirement_fields", level="INFO") as audit:
+                for mode in MODES:
+                    with self.subTest(mode=mode):
+                        result = await self.call(topo, mode, "read_requirement_fields",
+                                                 {"system_id": str(self.system.id)},
+                                                 token=self.owner_token)
+                        self.assertFalse(result.is_error, result.raw)
+                        self.assertEqual(result.structured, direct.json())
+                        self.assertEqual(json.loads(result.text), direct.json())
             self.assertEqual([r.authorization for r in topo.recorder.records], [self.owner_token] * 2)
+            reads = [r for r in audit.records
+                     if r.getMessage().split()[0] == "requirement_field.read"]
+            self.assertEqual([(r.user_id, r.system_id) for r in reads],
+                             [(self.owner.id, self.system.id)] * len(MODES))
 
     @bounded
     async def test_ac11_4_1_non_member_rejected_with_same_reason(self):
         async with self.topology() as topo:
             direct = await self.direct("GET", f"/api/requirements/systems/{self.system.id}/fields",
                                        self.outsider_token)
-            self.assertEqual(direct.status_code, 403)
+            # 合併前必修第 14 項（`[PP-MB14]`=A）：非成員直接存取為 404（不洩漏系統存在），
+            # 經 MCP 的結果仍須等於直接存取——由 `forbidden` 形狀變為 `not_found` 形狀。
+            self.assertEqual(direct.status_code, 404)
             for mode in MODES:
                 with self.subTest(mode=mode):
                     before = len(topo.recorder.records)
                     result = await self.call(topo, mode, "read_requirement_fields",
                                              {"system_id": str(self.system.id)}, token=self.outsider_token)
                     self.assertTrue(result.is_error)
-                    self.assertEqual(result.structured["error"], "forbidden")
+                    self.assertEqual(result.structured["error"], "not_found")
                     self.assertEqual(result.structured["message"], direct.json()["detail"])
                     self.assertFalse(result.structured["retryable"])
                     new = topo.recorder.records[before:]
@@ -256,7 +265,14 @@ class NoLeakTest(E2EBase):  # T-2、BR78.5
     @bounded
     async def test_every_branch_and_success_leak_nothing(self):
         sid = str(self.system.id)
-        tampered = self.owner_token[:-1] + ("A" if self.owner_token[-1] != "A" else "B")
+        # 竄改簽章段的**第一個**字元（滿 6 位元）。不可改最後一個字元：HS256 簽章 32 位元組＝43 個
+        # base64url 字元，最後一字元的低 2 位元是被捨棄的填充位，原字元為 "A" 時改成 "B" 解出的位元組
+        # 完全相同、簽章仍有效，約 1/16 的機率讓「backend 401」分支變成成功讀取（review-02 的
+        # `KeyError: 'error'` 偶發即此）。
+        head, payload, signature = self.owner_token.split(".")
+        tampered = ".".join((head, payload, ("A" if signature[0] != "A" else "B") + signature[1:]))
+        self.assertNotEqual(tampered, self.owner_token)
+        no_k4_token = "Bearer " + create_access_token({"sub": self.no_k4.username})
         write = {"system_id": sid, "agent_group": "cost", "field": "sla", "value": "v1"}
         branches = [
             ("unauthenticated (缺標頭)", "read_requirement_fields", {"system_id": sid}, None, None, None,
@@ -273,8 +289,11 @@ class NoLeakTest(E2EBase):  # T-2、BR78.5
              None, "invalid_argument"),
             ("invalid 空白", "write_requirement_field", dict(write, value="  "), self.owner_token, "cost",
              None, "invalid_argument"),
-            ("forbidden", "read_requirement_fields", {"system_id": sid}, self.outsider_token, None, None,
-             "forbidden"),
+            # 合併前必修第 14 項：非成員改為 not_found；forbidden 分支改由缺 K4 的成員承擔。
+            ("forbidden (成員缺 K4)", "read_requirement_fields", {"system_id": sid}, no_k4_token, None,
+             None, "forbidden"),
+            ("not_found (非成員)", "read_requirement_fields", {"system_id": sid}, self.outsider_token,
+             None, None, "not_found"),
             ("not_found", "read_requirement_fields", {"system_id": "987654"}, self.owner_token, None,
              None, "not_found"),
             ("backend 422", "write_requirement_field", dict(write, field="no_such_key"),
@@ -301,7 +320,8 @@ class NoLeakTest(E2EBase):  # T-2、BR78.5
                         else:
                             self.assertEqual(result.structured["error"], code, result.raw)
                             self.assertEqual(result.structured["retryable"], code == "backend_unavailable")
-                        self.assert_clean(topo, result, self.owner_token, self.outsider_token, tampered)
+                        self.assert_clean(topo, result, self.owner_token, self.outsider_token, tampered,
+                                          no_k4_token)
                 topo.recorder.fault = None
 
     @bounded

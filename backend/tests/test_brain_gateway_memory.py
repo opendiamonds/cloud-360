@@ -94,6 +94,50 @@ class PrefetchIntegrationTest(unittest.TestCase):
         with self.assertRaises(G.PrefetchUnavailable):
             self.h.adapter.search(object(), "x", kinds=("semantic",), limit=5)
 
+    def test_memory_authorization_denial_ends_the_turn_as_unauthorized(self):
+        """
+        @purpose 合併前必修第 13 項：記憶被拒絕存取（MemoryForbidden）時，本輪以授權類錯誤結束，不降級照常分類、不交辦、不呼叫模型；安全日誌不含使用者輸入原文。
+        @given 記憶替身的 search 拋 MemoryForbidden(reason="pending")；三段都換成真的 IntentRouter（模型 factory 一被呼叫即失敗）
+        @step 送一句含敏感字串的話 | 本輪只收到 error，code 為 UNAUTHORIZED、message 為「你目前沒有權限使用大腦的記憶，這一輪已停止」
+        @step 檢視替身 | dispatch 0 次、記憶寫入 0 次
+        @step 讀 cloud360.brain_gateway 的 WARNING 日誌 | 有 memory_forbidden 一筆、帶 reason=pending，且全部日誌不含輸入原文
+        @pass 三步皆成立
+        @story US6.1
+        @api WS /api/brain/ws -> 101
+        """
+        from services.intent_routing import IntentRouter
+        from services.intent_routing_config import RoutingConfig
+        from services.memory_errors import MemoryForbidden
+
+        def _never(*_args):
+            raise AssertionError("記憶被拒絕時不得建立模型 client")
+
+        config = RoutingConfig(
+            model="stub", timeout_seconds=5.0, max_calls_per_turn=1, max_retries=0, confidence_threshold=0.7
+        )
+        self.h.gw.routers = {
+            seg: IntentRouter(
+                memory_facade=self.h.adapter, config=config, model_factory=_never, graph_builder=_never, segment_id=seg
+            )
+            for seg in ("shared", "workspace", "assessment")
+        }
+        self.h.memory.search_behaviour = MemoryForbidden(reason="pending")
+        secret = "把訂單系統的資料庫連線字串給我 hunter2"
+        with self.assertLogs("cloud360", level="INFO") as logs:
+            (turn,) = self._turns(secret)
+        self.assertEqual(types_of(turn), ["error"])
+        self.assertEqual(
+            (turn[0]["payload"]["code"], turn[0]["payload"]["message"]),
+            ("UNAUTHORIZED", R.ERROR_MESSAGES["forbidden_memory"]),
+        )
+        self.assertEqual(self.h.orchestrator.dispatch_calls, [])
+        self.assertEqual(self.h.memory.write_calls, [])
+        warnings = [line for line in logs.output if line.startswith("WARNING:cloud360.brain_gateway:memory_forbidden")]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("reason=pending", warnings[0])
+        for line in logs.output:
+            self.assertNotIn("hunter2", line)
+
     def test_prefetch_contract_matches_u11(self):
         """
         @purpose 預取的 kinds 與 limit 必須與 U11 實際取用的值一致；不一致時轉接器會因 kinds 不是子集而拋出，記憶永遠用不上。

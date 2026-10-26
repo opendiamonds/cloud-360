@@ -23,7 +23,8 @@ requirement_field_facade.py — `U20 requirement-field-service` 的授權門面
 3. **系統存在與所屬專案**經 `HierarchyFacade.get_project_of_system`（`BR41.3`）；
    查不到、非整數的 `system_id`、或呼叫端缺 `K2.view` 一律 404。
 4. **per-project 層**經 `MembershipFacade.resolve_project_role`（`BR41.4`，判定只有一份，
-   `ADR-012`）：非成員 → 403；`project_admin` 與 `member` 都放行——寫入是否允許已由
+   `ADR-012`）：非成員 → 404（合併前必修第 14 項：與「系統不存在」逐位元相同，
+   拒絕 WARNING 照記）；`project_admin` 與 `member` 都放行——寫入是否允許已由
    第 2 步的 `K4.edit` 決定（`[FD4]`=A）。
 
 **依賴失敗即拒**（`NFR20.11`）：只把**已知的**領域例外轉成 404；其他例外一律不捕捉、
@@ -49,7 +50,8 @@ requirement_field_facade.py — `U20 requirement-field-service` 的授權門面
 log（logger `"cloud360.requirement_fields"`，`observability-design.md`）
 ------------------------------------------------------------------------
 
-`requirement_field.denied`（WARNING）、`requirement_field.written`／`.cleared`（INFO）。
+`requirement_field.denied`（WARNING）、`requirement_field.read`／`.written`／`.cleared`（INFO）。
+`.read` 只在授權通過後記，帶讀取者的 `user_id`（merge-blockers 第 8 項）。
 欄位以 `extra=` 結構化帶入，並以**同一組白名單欄位**作為訊息參數（使容器 log 的預設
 格式也看得到它們）——全部是整數或封閉集合的字串，**永不**含欄位值或代寫標示的值
 （`NFR20.27`／`NFR20.28`）。no-op 清空不記 INFO（`NFR20.29`）。
@@ -261,14 +263,28 @@ class RequirementFieldFacade:
         except MembershipNotFound as exc:
             raise RequirementFieldNotFound(known_id) from exc
         if role is None:
-            self._deny(principal, action, known_id, "not_member")
+            # 合併前必修第 14 項（`[PP-MB14]`=A）：非成員對外回 404，與「系統不存在」
+            # 逐位元相同（`RequirementFieldNotFound` 的訊息不含 id），不以 403／404
+            # 洩漏該系統存在；拒絕 WARNING 照記（reason=not_member），稽核不消失。
+            self._log_denied(principal, action, known_id, "not_member")
+            raise RequirementFieldNotFound(known_id)
         return known_id
 
     @staticmethod
     def _deny(
         principal: Principal, action: str, system_id: Optional[int], reason: str
     ) -> None:
-        """`BR41.6`／`NFR20.27`：一行 WARNING，然後拒絕。不記值、不記代寫標示。"""
+        """`BR41.6`／`NFR20.27`：一行 WARNING，然後拒絕（403）。不記值、不記代寫標示。"""
+        RequirementFieldFacade._log_denied(principal, action, system_id, reason)
+        raise RequirementFieldForbidden(
+            action=action, reason=reason, system_id=system_id
+        )
+
+    @staticmethod
+    def _log_denied(
+        principal: Principal, action: str, system_id: Optional[int], reason: str
+    ) -> None:
+        """拒絕的那一行 WARNING（`requirement_field.denied`）。只記，不拋。"""
         logger.warning(
             "requirement_field.denied story_id=%s action=%s system_id=%s "
             "user_id=%s reason=%s",
@@ -280,9 +296,6 @@ class RequirementFieldFacade:
                 "user_id": principal.user_id,
                 "reason": reason,
             },
-        )
-        raise RequirementFieldForbidden(
-            action=action, reason=reason, system_id=system_id
         )
 
     @staticmethod
@@ -302,7 +315,9 @@ class RequirementFieldFacade:
         """`K-17` 的 `read_fields`：全部已宣告欄位的三態與計數，一次查詢（`BR44.4`）。"""
         known_id = self._authorize(principal, system_id, "view")
         rows = requirement_field_service.fetch_rows(self._db, system_id=known_id)
-        return compose_field_set(known_id, rows)
+        field_set = compose_field_set(known_id, rows)
+        self._log_read(principal, known_id)
+        return field_set
 
     # -- 2. 寫入 -------------------------------------------------------------
 
@@ -356,6 +371,13 @@ class RequirementFieldFacade:
                 raise RequirementFieldValidationError("on_behalf_of", "unknown_group")
         if not isinstance(value, str):
             raise RequirementFieldValidationError("value", "type")
+        if "\x00" in value:
+            # 合併前必修第 24 項：PostgreSQL 的 text 欄位不能含 NUL，psycopg 在 dump 階段
+            # 拋 `DataError`，下方的 `except Exception: rollback; raise` 會讓它成為 500。
+            # 擋在這裡（`write_field` 與 `write_field_from_body` 的共同上游，也是本單元
+            # 唯一把值寫進資料庫的入口），且在 `strip()` 之前——NUL 不是空白，
+            # `strip()` 不會去掉它。`on_behalf_of` 已在上方以白名單擋下，不需另檢。
+            raise RequirementFieldValidationError("value", "nul_char")
 
         stripped = value.strip()
         if not stripped:
@@ -439,6 +461,26 @@ class RequirementFieldFacade:
         return build_field_view(group, definition, row)
 
     # -- log -----------------------------------------------------------------
+
+    @staticmethod
+    def _log_read(principal: Principal, system_id: int) -> None:
+        """成功讀取的稽核行（merge-blockers 第 8 項推翻 `[MBN1]`=A；`requirements.md:620` ③）。
+
+        只在授權通過、取得資料之後記；被拒的讀取只有 `_deny` 那一行。`system_id` 是授權後的
+        `known_id`。不記欄位值、欄位 key 清單、使用者原句或 token。讀取沒有代寫語意，
+        `on_behalf` 固定為 False。
+        """
+        logger.info(
+            "requirement_field.read system_id=%s user_id=%s on_behalf=%s",
+            system_id, principal.user_id, False,
+            extra={
+                "story_id": STORY_ID,
+                "action": "view",
+                "system_id": system_id,
+                "user_id": principal.user_id,
+                "on_behalf": False,
+            },
+        )
 
     @staticmethod
     def _log_change(

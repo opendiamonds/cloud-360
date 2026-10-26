@@ -15,6 +15,7 @@ from services.prompt_guard import REFUSAL_MESSAGE
 from tests.brain_gateway_fakes import (
     WS_PATH,
     Harness,
+    assert_non_turn_error,
     decision,
     hello,
     low_confidence,
@@ -216,6 +217,119 @@ class ClarifyTest(_Base):
             ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": None}})
             self.assertTrue(nothing_more(ws))
         self.assertEqual(len(self.h.orchestrator.dispatch_calls), 1)
+
+    @staticmethod
+    def _routed(*slots):
+        """以真的 `U11` L5（`decide`）產生判定，使替身回的澄清判定與正式路徑同形（含行程內對照）。"""
+        from services.intent_routing_predicate import decide
+        from services.intent_routing_types import CandidateRanking, ClassificationResult
+
+        result = ClassificationResult(
+            slots=tuple(CandidateRanking(candidates=tuple(s)) for s in slots),
+            slot_labels=tuple(f"第{i}件事" for i in range(len(slots))),
+        )
+        out = decide(result, 0.7)
+        assert out.below_threshold
+        return out
+
+    @staticmethod
+    def _cand(capability, rank, referent, *, tied=False):
+        from services.intent_routing_types import CandidateIntent
+
+        return CandidateIntent(
+            capability=capability, rank=rank, label=f"讀法{rank}", tied_with_next=tied,
+            referent_state="resolved" if referent else "absent", referent=referent, score=None,
+        )
+
+    def test_select_keeps_the_referent_of_the_chosen_reading(self):
+        """
+        @purpose 合併前必修第 5 項：選定澄清候選後，交辦的 Intent 必須帶該候選原本解析出的 referent，不得被重建成 referent=None。
+        @given 單槽位、兩個並列讀法，referent 分別為「訂單系統」「會員系統」；原句不含目錄名稱
+        @step 送一句 | clarify(kind=intent)，2 個候選
+        @step 選第 1 個候選 | work_items、token、done
+        @step 檢視 dispatch 收到的判定 | 恰 1 個 Intent：architecture-design／訂單系統
+        @pass referent 被保留
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = self._routed(
+            (self._cand("architecture-design", 1, "訂單系統", tied=True), self._cand("well-architected-review", 2, "會員系統"))
+        )
+        from services.intent_routing_types import Intent
+
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "改那張圖")
+            clarify = read_turn(ws)[-1]
+            ids = [c["id"] for c in clarify["payload"]["candidates"]]
+            self.assertEqual(len(ids), 2)
+            ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": ids[0]}})
+            self.assertEqual(types_of(read_turn(ws)), ["work_items", "token", "done"])
+        self.assertEqual(
+            self.h.orchestrator.dispatch_calls[0].decision.intents,
+            (Intent("architecture-design", "訂單系統"),),
+        )
+
+    def test_select_dispatches_the_settled_slot_too_in_sentence_order(self):
+        """
+        @purpose 合併前必修第 5 項：一句兩件事（「改這張圖，順便估成本」），其一需澄清、另一件已確定；選定後兩件事都要交辦，順序與原句一致。
+        @given 槽位 0 需澄清（cost-finops／well-architected-review 並列），槽位 1 已確定（architecture-design／訂單系統）
+        @step 送一句 | clarify(kind=intent)，只列槽位 0 的 2 個候選
+        @step 選 well-architected-review 那一個 | work_items、token、done
+        @step 檢視 dispatch 收到的判定 | 2 個 Intent：well-architected-review 在前、architecture-design／訂單系統在後
+        @pass 已確定的那件事沒有被丟棄且順序正確
+        @story US5.1
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = self._routed(
+            (self._cand("cost-finops", 1, None, tied=True), self._cand("well-architected-review", 2, None)),
+            (self._cand("architecture-design", 1, "訂單系統"),),
+        )
+        from services.intent_routing_types import Intent
+
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "改這張圖，順便看看")
+            clarify = read_turn(ws)[-1]
+            cands = clarify["payload"]["candidates"]
+            self.assertEqual(len(cands), 2)
+            chosen = next(c["id"] for c in cands if c["capability"] == "well-architected-review")
+            ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": chosen}})
+            self.assertEqual(types_of(read_turn(ws)), ["work_items", "token", "done"])
+        self.assertEqual(
+            self.h.orchestrator.dispatch_calls[0].decision.intents,
+            (Intent("well-architected-review", None), Intent("architecture-design", "訂單系統")),
+        )
+
+    def test_none_stays_silent_and_a_foreign_id_is_invalid_request(self):
+        """
+        @purpose 第 5 項的修正不得改變既有兩條路徑：選「都不是」安靜結束（AC1.2.3）；不在候選集合內的 id 回 INVALID_REQUEST、不交辦。
+        @given 單槽位兩個並列讀法（真 L5 產生的澄清判定）
+        @step 送一句後選 null | 之後沒有任何訊息
+        @step 再送一句後選一個不存在的 id | error，code 為 INVALID_REQUEST
+        @step 檢視 dispatch | 0 次
+        @pass 兩條既有行為不變
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = self._routed(
+            (self._cand("architecture-design", 1, "訂單系統", tied=True), self._cand("well-architected-review", 2, None))
+        )
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "改那張圖")
+            read_turn(ws)
+            ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": None}})
+            self.assertTrue(nothing_more(ws))
+            user_message(ws, "再改那張圖")
+            clarify = read_turn(ws)[-1]
+            ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": "s9r1:cost-finops"}})
+            err = read_turn(ws)[-1]
+        self.assertEqual((err["type"], err["payload"]["code"]), ("error", "INVALID_REQUEST"))
+        # BR2.8 T6：格式正確但不在候選內的 id 屬於該輪——以原輪 turnId 結束（合併前必修第 2 項(a)）。
+        self.assertEqual(err["turnId"], clarify["turnId"])
+        self.assertEqual(err["payload"]["turnId"], clarify["turnId"])
+        self.assertEqual(self.h.orchestrator.dispatch_calls, [])
 
     def test_scan_after_select_uses_longest_name_and_always_asks(self):
         """
@@ -796,6 +910,256 @@ class WorkTargetNamesAndVisibilityTest(_Base):
         self.assertEqual(target["type"], "work_target")
         self.assertEqual(target["payload"]["segment"], "workspace")
         self.assertEqual(target["payload"]["projectName"], "e2e-u14-電商")
+
+
+class WorkCapacityTurnTest(_Base):
+    def test_dispatch_over_capacity_ends_the_turn_with_invalid_request(self):
+        """
+        @purpose 合併前必修第 18 項：交辦被 U12 以進行中上限拒絕時，經既有的 _fail_turn_exc 以 INVALID_REQUEST 加固定句結束本輪
+        @given U12 替身的 dispatch 丟 WorkCapacityExceeded
+        @step 送一句需求 | 本輪最後一則為 error，code＝INVALID_REQUEST、message 為固定句，turnId 與本輪一致
+        @pass 不是 INTERNAL_ERROR，訊息逐字相符
+        @story US1.1
+        @api WS /api/brain/ws -> 101
+        """
+        from services import brain_gateway_rules as R
+        from services.work_orchestrator import WorkCapacityExceeded
+
+        self.h.orchestrator.dispatch_error = WorkCapacityExceeded(4, 2)
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "畫圖、做檢視")
+            turn = read_turn(ws)
+        last = turn[-1]
+        self.assertEqual(last["type"], "error")
+        self.assertEqual(last["payload"]["code"], R.CODE_INVALID)
+        self.assertEqual(
+            last["payload"]["message"],
+            "同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。",
+        )
+
+
+SELECT_C1 = {"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": "c1"}}
+
+
+class ErrorTurnIdTest(_Base):
+    """BR2.8 錯誤 `turnId` 規則表的 T3／T5／T9（合併前必修第 2 項(a)；`[GW-MB2]`=A）。"""
+
+    def test_malformed_select_while_clarifying_keeps_the_clarify(self):
+        """
+        @purpose T3（[GW-MB2]=A）：反問等待中收到格式錯誤的選擇訊息（candidateId 型別不對）不算輪內——以 turnId=null 回
+                 INVALID_REQUEST，反問保留；使用者重選合法候選後以原輪 turnId 繼續交辦。
+        @given 分類低信心；已收到 clarify(kind=intent)，記下其 turnId T
+        @step 送 select_clarify_candidate，candidateId=123（數字） | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null
+        @step 送 select_clarify_candidate，candidateId="c1" | 收到 work_items、token、done，token 與 done 的 turnId 皆為 T
+        @pass 反問未被格式錯誤的訊息清除，原輪可繼續
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = low_confidence("建一張架構圖")
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "弄一下")
+            clarify = read_turn(ws)[-1]
+            self.assertEqual(clarify["type"], "clarify")
+            ws.send_json({"v": 1, "type": "select_clarify_candidate", "payload": {"candidateId": 123}})
+            assert_non_turn_error(self, recv_json(ws), "INVALID_REQUEST")
+            ws.send_json(SELECT_C1)
+            rest = read_turn(ws)
+        self.assertEqual(types_of(rest), ["work_items", "token", "done"])
+        self.assertEqual({m["turnId"] for m in rest[1:]}, {clarify["turnId"]})
+        self.assertEqual(len(self.h.orchestrator.dispatch_calls), 1)
+
+    def test_select_without_pending_clarify_has_null_turn_id(self):
+        """
+        @purpose T5：沒有待選反問時送 select_clarify_candidate → INVALID_REQUEST，不屬於任何輪次（turnId=null），不交辦。
+        @given 已連線、沒有任何反問
+        @step 送 select_clarify_candidate，candidateId="c1" | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null
+        @pass 非輪次錯誤，dispatch 0 次
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            ws.send_json(SELECT_C1)
+            assert_non_turn_error(self, recv_json(ws), "INVALID_REQUEST")
+        self.assertEqual(self.h.orchestrator.dispatch_calls, [])
+
+    def _break_resolve_and_dispatch(self):
+        async def boom(*a, **k):
+            raise RuntimeError("SECRET-MARKER unexpected")
+
+        self.h.gw._resolve_and_dispatch = boom
+
+    def _restore(self, name):
+        del self.h.gw.__dict__[name]
+
+    def test_unexpected_exception_inside_a_turn_ends_that_turn(self):
+        """
+        @purpose T9：輪內流程拋未預期例外時，必須以該輪的 turnId 送 error(INTERNAL_ERROR) 結束該輪——否則前端會一直等
+                 一個永遠不來的終止事件；該輪之後不再收到任何訊息，下一則 user_message 正常開新輪。
+        @given 交辦前的對象解析改為拋 RuntimeError
+        @step 送一句 | 最後一則為 error(INTERNAL_ERROR)，turnId 非 null，且等於 classify 收到的 turn_id 與 payload.turnId
+        @step 檢視 error 的 message 與 cloud360.brain_gateway 的 log | 皆不含例外字串中的 SECRET-MARKER
+        @step 等待片刻 | 沒有其他訊息
+        @step 恢復後再送一句 | work_items、token、done，turnId 與上一輪不同
+        @pass 開啟中的輪次被正確終止、例外內容不外洩，且不影響下一輪
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        self._break_resolve_and_dispatch()
+        with self.assertLogs("cloud360.brain_gateway", level="DEBUG") as logs:
+            with TestClient(self.h.app) as client, self.connect(client) as ws:
+                hello(ws)
+                user_message(ws, "畫一張架構圖")
+                failed = read_turn(ws)
+                err = failed[-1]
+                self.assertEqual((err["type"], err["payload"]["code"]), ("error", "INTERNAL_ERROR"))
+                self.assertIsNotNone(err["turnId"])
+                self.assertEqual(err["payload"]["turnId"], err["turnId"])
+                self.assertEqual(err["turnId"], self.h.router_script.calls[0].turn_id)
+                self.assertTrue(nothing_more(ws))
+                self._restore("_resolve_and_dispatch")
+                user_message(ws, "再畫一張")
+                nxt = read_turn(ws)
+        self.assertEqual(types_of(nxt), ["work_items", "token", "done"])
+        self.assertNotEqual(nxt[-1]["turnId"], err["turnId"])
+        self.assertNotIn("SECRET-MARKER", err["payload"]["message"])
+        self.assertNotIn("SECRET-MARKER", "\n".join(logs.output))
+
+    def test_unexpected_exception_after_select_ends_the_clarified_turn(self):
+        """
+        @purpose T9：選定反問候選後（接續原輪）拋未預期例外，以原輪 turnId 結束；之後再送選擇屬於「沒有待選反問」。
+        @given 分類低信心，已收到 clarify（turnId T）；對象解析改為拋 RuntimeError
+        @step 送 select_clarify_candidate c1 | error(INTERNAL_ERROR)，turnId 為 T；message 與 log 皆不含 SECRET-MARKER
+        @step 再送一次 select c1 | error(INVALID_REQUEST)，turnId 為 null
+        @pass 原輪被終止、沒有懸空的反問、例外內容不外洩
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = low_confidence("建一張架構圖")
+        with self.assertLogs("cloud360.brain_gateway", level="DEBUG") as logs:
+            with TestClient(self.h.app) as client, self.connect(client) as ws:
+                hello(ws)
+                user_message(ws, "弄一下")
+                clarify = read_turn(ws)[-1]
+                self._break_resolve_and_dispatch()
+                ws.send_json(SELECT_C1)
+                err = read_turn(ws)[-1]
+                self.assertEqual(
+                    (err["type"], err["payload"]["code"], err["turnId"]), ("error", "INTERNAL_ERROR", clarify["turnId"])
+                )
+                ws.send_json(SELECT_C1)
+                assert_non_turn_error(self, recv_json(ws), "INVALID_REQUEST")
+        self.assertNotIn("SECRET-MARKER", err["payload"]["message"])
+        self.assertNotIn("SECRET-MARKER", "\n".join(logs.output))
+
+    def test_unexpected_exception_after_ledger_finished_but_before_done_ends_the_turn_once(self):
+        """
+        @purpose T9 的縫隙（review-02 發現 1）：`ledger.finish()` 已把該輪記為終止、但 done 還沒送出時拋未預期例外，
+                 前端仍必須收到**恰好一個**帶該輪 turnId 的終止事件——不能是 turnId=null 的 error（那會讓前端一直等）。
+        @given 交辦正常產出 token；組 done 信封的那一步拋含 SECRET-MARKER 的 RuntimeError（僅第一次）
+        @step 送一句 | work_items、token、error(INTERNAL_ERROR)；error 的 envelope 與 payload turnId 皆等於 token 的 turnId
+        @step 等待片刻 | 沒有其他訊息（沒有第二個終止事件、沒有 turnId=null 的 error）
+        @step 檢視 error 的 message 與 log | 皆不含 SECRET-MARKER
+        @step 再送一句 | work_items、token、done，turnId 與上一輪不同
+        @pass 縫隙中的例外仍以該輪 turnId 終止一次，連線保留
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        from services.brain_ws_contract import WsServerMessageType
+
+        gw = self.h.gw
+        original = gw.envelope
+        state = {"raised": False}
+
+        def envelope(msg_type, turn_id, payload):
+            if msg_type is WsServerMessageType.DONE and not state["raised"]:
+                state["raised"] = True
+                raise RuntimeError("SECRET-MARKER in the done gap")
+            return original(msg_type, turn_id, payload)
+
+        gw.envelope = envelope
+        with self.assertLogs("cloud360.brain_gateway", level="DEBUG") as logs:
+            with TestClient(self.h.app) as client, self.connect(client) as ws:
+                hello(ws)
+                user_message(ws, "畫一張架構圖")
+                turn = read_turn(ws)
+                self.assertTrue(nothing_more(ws))
+                user_message(ws, "再畫一張")
+                nxt = read_turn(ws)
+        self.assertTrue(state["raised"])
+        self.assertEqual(types_of(turn), ["work_items", "token", "error"])
+        token, err = turn[1], turn[2]
+        self.assertEqual(err["payload"]["code"], "INTERNAL_ERROR")
+        self.assertIsNotNone(err["turnId"])
+        self.assertEqual(err["turnId"], token["turnId"])
+        self.assertEqual(err["payload"]["turnId"], token["turnId"])
+        self.assertNotIn("SECRET-MARKER", err["payload"]["message"])
+        self.assertNotIn("SECRET-MARKER", "\n".join(logs.output))
+        self.assertEqual(types_of(nxt), ["work_items", "token", "done"])
+        self.assertNotEqual(nxt[-1]["turnId"], token["turnId"])
+
+    def test_unexpected_exception_after_done_was_sent_never_sends_a_second_terminal(self):
+        """
+        @purpose T9 的反方向：done 已送達之後才拋未預期例外 → 只回 turnId=null 的 error，不得再以該輪 turnId 送第二個終止事件。
+        @given 交辦正常；done 送出後記 turn_end log 的那一步拋 RuntimeError（僅第一次）
+        @step 送一句 | work_items、token、done（turnId T）
+        @step 接著讀下一則 | error(INTERNAL_ERROR)，envelope 與 payload 的 turnId 皆為 null
+        @step 等待片刻 | 沒有其他訊息
+        @pass 每輪恰有一個帶 turnId 的終止事件
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        gw = self.h.gw
+        original = gw._log_turn
+        state = {"raised": False}
+
+        def log_turn(turn, outcome):
+            if outcome == "done" and not state["raised"]:
+                state["raised"] = True
+                raise RuntimeError("after done")
+            return original(turn, outcome)
+
+        gw._log_turn = log_turn
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "畫一張架構圖")
+            turn = read_turn(ws)
+            after = recv_json(ws)
+            self.assertTrue(nothing_more(ws))
+        self.assertTrue(state["raised"])
+        self.assertEqual(types_of(turn), ["work_items", "token", "done"])
+        assert_non_turn_error(self, after, "INTERNAL_ERROR")
+
+    def test_unexpected_exception_in_a_non_turn_request_is_null_and_keeps_the_clarify(self):
+        """
+        @purpose T9 的另一半：非輪次訊息拋未預期例外 → turnId=null；即使當時有一個等待選擇的反問，也不得把錯誤歸給它或結束它
+                 （「最近一則開啟的輪次」每則訊息處理前清空，不跨訊息殘留）。
+        @given 分類低信心，已收到 clarify（turnId T）；set_sharing_mode 的處理改為拋 RuntimeError
+        @step 送 set_sharing_mode | error(INTERNAL_ERROR)，envelope 與 payload 的 turnId 皆為 null
+        @step 恢復後送 select c1 | work_items、token、done，turnId 為 T
+        @pass 非輪次錯誤不碰進行中的反問
+        @story US1.2
+        @api WS /api/brain/ws -> 101
+        """
+        self.h.router_script.default = low_confidence("建一張架構圖")
+
+        async def boom(*a, **k):
+            raise RuntimeError("unexpected")
+
+        with TestClient(self.h.app) as client, self.connect(client) as ws:
+            hello(ws)
+            user_message(ws, "弄一下")
+            clarify = read_turn(ws)[-1]
+            self.h.gw._on_set_sharing_mode = boom
+            ws.send_json({"v": 1, "type": "set_sharing_mode", "payload": {"mode": "isolated", "scope": "workspace"}})
+            assert_non_turn_error(self, recv_json(ws), "INTERNAL_ERROR")
+            self._restore("_on_set_sharing_mode")
+            ws.send_json(SELECT_C1)
+            rest = read_turn(ws)
+        self.assertEqual(types_of(rest), ["work_items", "token", "done"])
+        self.assertEqual({m["turnId"] for m in rest[1:]}, {clarify["turnId"]})
 
 
 if __name__ == "__main__":

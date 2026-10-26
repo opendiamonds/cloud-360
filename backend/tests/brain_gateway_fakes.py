@@ -33,7 +33,8 @@ from services.hierarchy_facade import (
     HierarchyForbidden,
     HierarchyNotFound,
 )
-from services.intent_routing_types import ClarifyCandidate, Intent, IntentDecision
+from services.intent_routing_types import ClarifyCandidate, ClarifyOption, ClarifyResolution, Intent, IntentDecision
+from services.memory_errors import MemoryForbidden
 from services.redis_gateway import RedisGateway
 from services.session_store import SessionStore
 from services.work_orchestrator import WorkItemNotFound
@@ -120,11 +121,16 @@ def decision(capability: str = "architecture-design", referent: Optional[str] = 
 
 
 def low_confidence(*labels: str) -> IntentDecision:
+    """單槽位、無 referent 的澄清判定。與真的 `U11` 同形：附帶行程內的 `resolution`。"""
     cands = tuple(
         ClarifyCandidate(id=f"c{i}", label=label, capability="architecture-design", confidence=0.4)
         for i, label in enumerate(labels or ("建一張架構圖",), start=1)
     )
-    return IntentDecision(intents=(), confidence=0.4, below_threshold=True, candidates=cands)
+    resolution = ClarifyResolution(
+        options=tuple(ClarifyOption(c.id, 0, Intent(c.capability, None)) for c in cands),
+        settled=(),
+    )
+    return IntentDecision(intents=(), confidence=0.4, below_threshold=True, candidates=cands, resolution=resolution)
 
 
 class FakeRouter:
@@ -147,6 +153,9 @@ class FakeRouter:
         try:
             hits = self._adapter.search(principal, utterance, kinds=("semantic", "procedure"), limit=5)
             shared.memory_seen.append(("hits", len(hits)))
+        except MemoryForbidden:  # 與 U11 同形：授權拒絕不降級，原樣向上（合併前必修第 13 項）
+            shared.memory_seen.append(("forbidden", "MemoryForbidden"))
+            raise
         except Exception as exc:  # 與 U11 同形：轉接器拋出即降級
             shared.memory_seen.append(("degraded", type(exc).__name__))
         if shared.before_return is not None:
@@ -505,6 +514,19 @@ def read_turn(ws, timeout: float = 5.0) -> list:
         out.append(msg)
         if "__close__" in msg or msg.get("type") in ("done", "error", "clarify"):
             return out
+
+
+def assert_non_turn_error(test, msg: dict, code: str) -> None:
+    """BR2.8：不屬於任何輪次的 `error`——envelope 與 payload 的 `turnId` 都必須存在且為 null，並通過契約模型。"""
+    from services.brain_ws_contract import WsEnvelope
+
+    WsEnvelope.model_validate(msg)
+    test.assertEqual(msg.get("type"), "error", msg)
+    test.assertIn("turnId", msg)
+    test.assertIsNone(msg["turnId"])
+    test.assertIn("turnId", msg["payload"])
+    test.assertIsNone(msg["payload"]["turnId"])
+    test.assertEqual(msg["payload"]["code"], code)
 
 
 def types_of(messages: list) -> list:

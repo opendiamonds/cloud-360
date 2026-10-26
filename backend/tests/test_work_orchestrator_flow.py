@@ -24,6 +24,7 @@ from services.work_orchestrator import WorkItemNotFound, WorkOrchestrator
 from tests.test_session_store_behaviour import FakeConnectionError
 from tests.work_orchestrator_fakes import (
     SESSION_KEY,
+    UPDATE_CAPACITY_ARGS,
     CostListApp,
     FacadeRecorder,
     FakeClock,
@@ -408,7 +409,7 @@ class CorrectTest(unittest.TestCase):
                 fields = h.redis.hashes[keys[0]]
                 _, updated = T.ref_update_work_item(
                     fields, f"wi:{wid}", '["處理中"]', "not_dispatched",
-                    '{"dispatchStage":"request_sent"}',
+                    '{"dispatchStage":"request_sent"}', *UPDATE_CAPACITY_ARGS,
                 )
                 h.redis.hashes[keys[0]] = updated
 
@@ -895,6 +896,190 @@ class RobustnessTest(unittest.TestCase):
         for p in payloads:
             self.assertIsInstance(p, (TokenPayload, CostCardPayload))
         self.assertTrue(h.sink.session)
+
+
+# ---------------------------------------------------------------------------
+# 合併前必修第 18 項（`OPEN-N10-3`；計畫 §六 Step 16）：工作項容量
+# ---------------------------------------------------------------------------
+
+
+class WorkCapacityFlowTest(unittest.TestCase):
+    """`dispatch` 的整批預檢、併發越線時的同批收尾、轉終態瘦身。"""
+
+    @staticmethod
+    async def _fill(h, count):
+        """以真實 `dispatch` 建 `count` 筆處理中（能力永不返回，維持進行中）。"""
+        h.app.hang = {"GET /api/collab"}
+        for _ in range(count):
+            await h.dispatch(ARCH)
+        await asyncio.sleep(0)
+
+    def test_batch_over_the_limit_is_rejected_whole_and_writes_nothing(self):
+        """
+        @purpose 已有 4 筆進行中時交辦 2 個意圖，整批拒絕——不得只建第 1 筆而留下半批
+        @given 同一工作階段已有 4 筆處理中
+        @step 交辦「架構設計＋成本」| 丟 WorkCapacityExceeded（active=4、requested=2）
+        @step 檢視 Redis 與 sink | 工作項仍是原本 4 筆，本輪沒有送任何建立訊息，也沒有新的背景執行
+        @pass 整批未寫入
+        @story US1.1
+        """
+        from services.work_orchestrator import WorkCapacityExceeded
+
+        async def scenario():
+            h = Harness()
+            await self._fill(h, 4)
+            before = set(h.items())
+            in_turn_before = len(h.sink.in_turn)
+            tasks_before = len(h.orchestrator._tasks)
+            with self.assertRaises(WorkCapacityExceeded) as caught:
+                await h.dispatch(ARCH, COST)
+            snapshot = (
+                caught.exception, before, set(h.items()), in_turn_before, len(h.sink.in_turn),
+                tasks_before, len(h.orchestrator._tasks),
+            )
+            await h.stop_all()
+            return snapshot
+
+        exc, before, after, in_turn_before, in_turn_after, tasks_before, tasks_after = run(scenario())
+        self.assertEqual((exc.active, exc.requested), (4, 2))
+        self.assertEqual(after, before)
+        self.assertEqual(len(after), 4)
+        self.assertEqual(in_turn_after, in_turn_before)
+        self.assertEqual(tasks_after, tasks_before)
+
+    def test_batch_exactly_at_the_limit_is_accepted(self):
+        """邊界：3 筆進行中＋本批 2 筆＝5，不超過上限，照常建立。"""
+
+        async def scenario():
+            h = Harness()
+            await self._fill(h, 3)
+            made = await h.dispatch(ARCH, COST)
+            await asyncio.sleep(0)
+            count = len(h.items())
+            await h.stop_all()
+            return made, count
+
+        made, count = run(scenario())
+        self.assertEqual(len(made), 2)
+        self.assertEqual(count, 5)
+
+    def test_terminal_items_do_not_block_a_new_dispatch(self):
+        """終態項不佔名額：5 筆都停掉後，再交辦照常建立。"""
+
+        async def scenario():
+            h = Harness()
+            await self._fill(h, 5)
+            for wid in list(h.items()):
+                await h.correct(wid)
+            made = await h.dispatch(ARCH)
+            await asyncio.sleep(0)
+            await h.stop_all()
+            return made
+
+        self.assertEqual(len(run(scenario())), 1)
+
+    def test_concurrent_dispatch_marks_the_written_part_of_the_batch_failed(self):
+        """
+        @purpose 預檢通過後 Lua 仍回「已達上限」（同一工作階段併發交辦）時，本批已寫入的項轉為失敗，不留下會被執行的半批
+        @given 已有 3 筆處理中；本批「架構設計＋成本」寫第 1 筆之後，另一個交辦搶先寫入 1 筆
+        @step 交辦 | 丟 WorkCapacityExceeded
+        @step 檢視本批第 1 筆 | status＝失敗、failureReason＝固定句、sideEffect＝none、deadlineAt 為 null
+        @step 檢視本批第 2 筆與背景執行 | 第 2 筆不存在；本批沒有啟動任何背景執行
+        @pass 同批已寫入項收尾為失敗
+        @story US1.1
+        """
+        from services import work_orchestrator_rules as R
+        from services.work_orchestrator import WorkCapacityExceeded
+
+        async def scenario():
+            h = Harness()
+            await self._fill(h, 3)
+            existing = set(h.items())
+            tasks_before = set(h.orchestrator._tasks)
+            original = h.redis._script_put_work_item
+            calls = {"n": 0}
+
+            def racing_put(keys, argv):
+                result = original(keys, argv)
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    # 另一個交辦在本批第 1 筆之後搶先佔掉最後一個名額。
+                    intruder = json.loads(argv[1])
+                    intruder["workItemId"] = "intruder"
+                    h.redis.hashes[keys[0]]["wi:intruder"] = json.dumps(intruder, ensure_ascii=False)
+                return result
+
+            h.redis._script_put_work_item = racing_put
+            with self.assertRaises(WorkCapacityExceeded):
+                await h.dispatch(ARCH, COST, utterance="長" * 1500)
+            items = h.items()
+            ours = [i for wid, i in items.items() if wid not in existing and wid != "intruder"]
+            snapshot = (ours, set(h.orchestrator._tasks) - tasks_before, len(items))
+            await h.stop_all()
+            return snapshot
+
+        ours, new_tasks, total = run(scenario())
+        self.assertEqual(len(ours), 1)
+        failed = ours[0]
+        self.assertEqual(failed["capability"], ARCH)
+        self.assertEqual(failed["status"], R.STATUS_FAILED)
+        self.assertEqual(failed["failureReason"], R.PHRASES["capacity_exceeded"])
+        self.assertEqual(failed["sideEffect"], R.SIDE_EFFECT_NONE)
+        self.assertIsNone(failed["deadlineAt"])
+        self.assertLessEqual(len(failed["requestText"]), 200)
+        self.assertEqual(new_tasks, set())
+        self.assertEqual(total, 5)  # 3 筆既有 ＋ 搶先者 ＋ 本批已轉失敗的 1 筆
+
+    def test_request_text_is_truncated_to_200_when_an_item_ends(self):
+        """
+        @purpose 轉為已結束時 requestText 瘦身（先取 200 字，再封頂於 300 B，中文即 100 字），進行中的項仍保留原句前 2000 字
+        @given 交辦一句 1500 字的中文需求（兩個意圖）
+        @step 停掉其中一項 | 該項 requestText 恰為原句前 100 字（300 B）
+        @step 檢視另一項（仍在進行中）| requestText 仍是 1500 字全文
+        @pass 只有轉終態的項被瘦身
+        @story US1.1
+
+        方法名保留「200」：它是 TCMS 案例名稱的一部分，改名會讓既有案例成為孤兒；
+        位元組封頂是 U12 審查 review-01 R-01 後加上的。
+        """
+        text = "需" * 1500
+
+        async def scenario():
+            h = Harness()
+            h.app.hang = {"GET /api/collab"}
+            made = await h.dispatch(ARCH, ARCH, utterance=text)
+            await asyncio.sleep(0)
+            await h.correct(made[0].workItemId)
+            items = h.items()
+            await h.stop_all()
+            return items[made[0].workItemId], items[made[1].workItemId]
+
+        stopped, active = run(scenario())
+        self.assertEqual(stopped["status"], "已停掉")
+        from services import work_orchestrator_rules as R
+
+        self.assertEqual(stopped["requestText"], text[:100])
+        self.assertEqual(R.TERMINAL_REQUEST_TEXT_MAX_BYTES, 300)
+        self.assertEqual(active["requestText"], text)
+
+    def test_request_text_is_truncated_on_failure_too(self):
+        """失敗（逾時）也是轉終態：同一個落點（`_cas`）負責瘦身。"""
+        text = "敗" * 900
+
+        async def scenario():
+            h = Harness()
+            h.app.hang = {"GET /api/collab"}
+            made = await h.dispatch(ARCH, utterance=text)
+            await asyncio.sleep(0)
+            h.clock.advance(10_000)
+            await h.list_items()  # 復原掃描把逾期的處理中判為失敗
+            item = h.items()[made[0].workItemId]
+            await h.stop_all()
+            return item
+
+        item = run(scenario())
+        self.assertEqual(item["status"], "失敗")
+        self.assertEqual(item["requestText"], text[:100])
 
 
 if __name__ == "__main__":

@@ -161,9 +161,8 @@ class Principal:
     #: 一律顯式傳入本欄位；預設值只對「不經鑄造入口」的路徑生效，而那條路徑
     #: 在 `__post_init__` 就被擋掉了。
     #:
-    #: 目前的讀者只有 `MemoryFacade._authorize_approved`（`U15` 的
-    #: code-generation 補上的待核准帳號缺口）。`HierarchyFacade` **尚未**讀它
-    #: ——同類缺口已記為交接事項，不在本次範圍內。
+    #: 讀者：`MemoryFacade._authorize_approved`（`U15` 補上的待核准帳號缺口）與
+    #: `HierarchyFacade._authorize`（2026-10-20 補上同類缺口）。
     is_approved: bool = True
 
     def __post_init__(self) -> None:
@@ -204,7 +203,16 @@ class HierarchyFacade:
         **判定先於任何讀寫**，失敗即中止（契約 `K-07` 的 `hard_rule`）。
         刻意不走 `require_story_action` 這個 FastAPI dependency——它 raise
         `HTTPException`，而本層的拒絕必須是 `HierarchyForbidden`。
+
+        **待核准帳號一律拒絕**（2026-10-20 補，hierarchy-service code-generation
+        review-01 的 Major）：自行註冊而尚未核准的帳號已持有 token，而
+        `get_user_from_token` 只擋 `is_active`；少了這一行，角色落在 `K2` 矩陣內的
+        待核准帳號能列舉、建立與刪除專案／系統。判定沿用 `Principal.is_approved`
+        （`mint_principal` 以 `user_is_approved` 填入），與 `MemoryFacade` 同一個
+        來源；拒絕形狀與角色不足相同，不另開一種錯誤。
         """
+        if not principal.is_approved:
+            raise HierarchyForbidden(story_id="K2", action=action)
         if not user_can(self._db, principal.role, "K2", action):
             raise HierarchyForbidden(story_id="K2", action=action)
 

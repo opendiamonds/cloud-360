@@ -76,6 +76,9 @@ type OpenForm = { kind: 'project' } | { kind: 'system'; projectId: number } | nu
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** 零寬空白：螢幕報讀器不唸，但使相同文字的第二次寫入仍是一次 DOM 內容變更（review-02 R-09）。 */
+const REANNOUNCE_MARK = String.fromCharCode(0x200b);
+
 function withEntry(prev: ReadonlyMap<number, SystemsEntry>, pid: number, entry: SystemsEntry): Map<number, SystemsEntry> {
   const next = new Map(prev);
   next.set(pid, entry);
@@ -297,6 +300,13 @@ export const ObjectPicker: React.FC<ObjectPickerProps> = ({ onClose, anchorRef, 
     setOpenForm(form);
   };
 
+  // 建立失敗寫入選單內播報區（R-06／review-02 R-09）：與目前文字相同時附一個零寬空白（再相同就拿掉），使相同錯誤
+  // 連續兩次仍是一次內容變更而被重唸；不先清空，播報區因此不會在兩次失敗之間退回清單狀態文字。
+  // 與 useBrainConnection 的 announceFresh 同一做法；更新式為純函式。
+  const reportFormFailure = (message: string) => {
+    setFormFailure((prev) => (prev === message ? `${message}${REANNOUNCE_MARK}` : message));
+  };
+
   const cancelForm = () => {
     const form = openForm;
     setOpenForm(null);
@@ -435,7 +445,7 @@ export const ObjectPicker: React.FC<ObjectPickerProps> = ({ onClose, anchorRef, 
         token={authToken}
         onCreated={onCreated}
         onCancel={cancelForm}
-        onFailure={setFormFailure}
+        onFailure={reportFormFailure}
       />
     ) : null;
 
@@ -565,7 +575,7 @@ export const ObjectPicker: React.FC<ObjectPickerProps> = ({ onClose, anchorRef, 
                       token={authToken}
                       onCreated={onCreated}
                       onCancel={cancelForm}
-                      onFailure={setFormFailure}
+                      onFailure={reportFormFailure}
                     />
                   ) : null
                 }

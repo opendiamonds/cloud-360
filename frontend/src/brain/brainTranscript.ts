@@ -29,6 +29,11 @@ export const PENDING_ANCHOR = '__next-brain__';
 export type BrainTurnStatus = 'streaming' | 'done' | 'empty' | 'error' | 'interrupted';
 export type ClarifyState = 'default' | 'picking' | 'dismissed' | 'stale' | 'resolved';
 export type InterruptReason = 'disconnect' | 'unmount';
+/**
+ * 使用者原句的未送達原因：除了斷線／離開頁面，還有「伺服器以非輪次錯誤拒絕了這句」（`rejected`；
+ * code-generation review-02 R-08、`[EP-R2]`=A：最後送出的請求是 user_message 且尚未收到任何輪次訊息）。
+ */
+export type UserInterruptReason = InterruptReason | 'rejected';
 
 export interface UserItem {
   kind: 'user';
@@ -36,7 +41,7 @@ export interface UserItem {
   text: string;
   /** 送出它的連線；任一輪終止或連線關閉即清為 null（BR93.3）。 */
   pendingConnId: string | null;
-  interrupted: InterruptReason | null;
+  interrupted: UserInterruptReason | null;
   retried: boolean;
 }
 
@@ -65,7 +70,20 @@ export interface ClarifyItem {
   pickedId: string | null;
 }
 
-export type TranscriptItem = UserItem | BrainItem | ClarifyItem;
+/**
+ * 系統提示（非輪次錯誤，`turnId === null`；合併前必修第 2 項(b)，`[EP-MB2]`=A）。
+ *
+ * 不歸屬任何輪次：不進 `turnSegment`、不被 `updateTurn` 找到，每則各自保留（不互相覆寫）。
+ */
+export interface NoticeItem {
+  kind: 'notice';
+  id: string;
+  code: ErrorCode;
+  message: string;
+  segment: SegmentId;
+}
+
+export type TranscriptItem = UserItem | BrainItem | ClarifyItem | NoticeItem;
 
 export interface SegmentTranscript {
   items: TranscriptItem[];
@@ -96,6 +114,18 @@ export type TranscriptAction =
       segment: SegmentId;
       connId: string;
       id: string;
+    }
+  | {
+      type: 'systemNotice';
+      code: ErrorCode;
+      message: string;
+      segment: SegmentId;
+      id: string;
+      connId: string;
+      /** 非 null：這則錯誤被判定為拒絕了該則使用者原句（連線依「最後送出的請求」判斷，`[EP-R2]`=A）。 */
+      undeliveredUserId: string | null;
+      /** true：最後送出的請求是反問選擇，本段處於 picking 的反問回到 default。 */
+      reopenPicking: boolean;
     }
   | { type: 'clarify'; turnId: string | null; payload: ClarifyPayload; segment: SegmentId; connId: string; id: string }
   | { type: 'clarifyState'; id: string; state: ClarifyState; pickedId?: string | null }
@@ -301,6 +331,35 @@ export function transcriptReducer(state: TranscriptState, action: TranscriptActi
           interruptReason: null,
         }),
       );
+    case 'systemNotice': {
+      // 非輪次錯誤一律 append 一則系統提示：不 clearPending、不 updateTurn——進行中的輪次不受影響
+      // （merge-blockers 第 2 項(b)）。是否另外動到原句或反問，由連線依「最後送出的請求」判定後帶進來
+      // （code-generation review-02 R-08／R-09、`[EP-R2]`=A）：
+      // - undeliveredUserId：被拒的正是那句 user_message → 解除它的等待旗標並標為未送達（沿用既有重試）。
+      // - reopenPicking：被拒的是反問選擇（`[GW-MB2]`=A 的 T3）→ 本段 picking 的反問回 default 可重選。
+      const reopened = !action.reopenPicking
+        ? state
+        : mapItems(state, (item, segment) =>
+            segment === action.segment && item.kind === 'clarify' && item.state === 'picking'
+              ? { ...item, state: 'default', pickedId: null }
+              : item,
+          );
+      const released =
+        action.undeliveredUserId === null
+          ? reopened
+          : mapItems(reopened, (item) =>
+              item.kind === 'user' && item.id === action.undeliveredUserId && item.pendingConnId === action.connId
+                ? { ...item, pendingConnId: null, interrupted: 'rejected' }
+                : item,
+            );
+      return append(released, action.segment, {
+        kind: 'notice',
+        id: action.id,
+        code: action.code,
+        message: action.message,
+        segment: action.segment,
+      });
+    }
     case 'clarify': {
       const next = clearPending(resolvePicking(state), action.connId);
       return append(next, action.segment, {
@@ -322,7 +381,14 @@ export function transcriptReducer(state: TranscriptState, action: TranscriptActi
       return resolvePicking(state);
     case 'anchorWorkItems': {
       const seg = state.segments[action.segment];
-      const last = seg.items[seg.items.length - 1];
+      // 系統提示不屬任何輪次，不當錨點：往前找最後一則非提示的項目（code-generation review-02 R-10）。
+      let last: TranscriptItem | undefined;
+      for (let i = seg.items.length - 1; i >= 0; i -= 1) {
+        if (seg.items[i].kind !== 'notice') {
+          last = seg.items[i];
+          break;
+        }
+      }
       const anchor = !last ? '' : last.kind === 'brain' ? last.id : last.kind === 'user' ? PENDING_ANCHOR : last.id;
       let anchors = seg.anchors;
       for (const id of action.workItemIds) {

@@ -78,6 +78,7 @@ from services.hierarchy_facade import (
 from services.intent_routing_types import ROUTABLE_CAPABILITIES
 from services.memory_facade import MemoryFacade
 from services.session_errors import SessionBackendUnavailable
+from services.session_store import WorkItemPutResult
 from services.work_orchestrator_capabilities import (
     ADVICE_COMPLETED,
     ADVICE_TIMEOUT,
@@ -113,6 +114,20 @@ class WorkItemNotFound(LookupError):
     def __init__(self, work_item_id: str) -> None:
         super().__init__(f"找不到工作項 {work_item_id}")
         self.work_item_id = work_item_id
+
+
+class WorkCapacityExceeded(Exception):
+    """合併前必修第 18 項：同一工作階段的進行中工作項已達 `MAX_ACTIVE_WORK_ITEMS`。
+
+    `dispatch` 在寫入任何一筆**之前**預檢整批；預檢通過後 Lua 仍擋下（同一工作階段
+    的併發交辦）時，本批已寫入的項先轉為失敗再丟出。`U13` 的 `error_for` 把它對到
+    既有代碼 `INVALID_REQUEST`（不改 WS 契約）。訊息不含任何使用者內容。
+    """
+
+    def __init__(self, active: int, requested: int) -> None:
+        super().__init__(f"active={active} requested={requested}")
+        self.active = active
+        self.requested = requested
 
 
 class _UserDisabled(Exception):
@@ -248,13 +263,38 @@ class WorkOrchestrator:
         if unknown:
             raise ValueError(f"不可路由的能力：{unknown}")
 
+        # 合併前必修第 18 項：**整批**預檢——現有進行中＋本批超過上限即整批不寫，
+        # 避免一則請求只建了一半（Lua 的逐筆上限只能擋單筆，擋不住「半批」）。
+        active_now = sum(
+            1
+            for existing in self._store.load_work_items(session_key).values()
+            if existing.get("status") not in R.TERMINAL_STATUSES
+        )
+        if active_now + len(capabilities) > R.MAX_ACTIVE_WORK_ITEMS:
+            logger.warning(
+                "work_capacity_exceeded active=%d requested=%d", active_now, len(capabilities)
+            )
+            raise WorkCapacityExceeded(active_now, len(capabilities))
+
         items = self._build_items(
             session_key, segment, segment_id, capabilities, (utterance or "")
         )
+        written: list = []
         for item in items:
-            if not self._store.put_work_item(session_key, item):
+            result = self._store.put_work_item(session_key, item)
+            if result is WorkItemPutResult.CAPACITY_EXCEEDED:
+                # 預檢之後、寫入之前，同一工作階段的另一個交辦搶先佔了名額。
+                self._abandon_batch(session_key, written)
+                if written:
+                    await self._push_items(sink, session_key)
+                logger.warning(
+                    "work_capacity_exceeded active=concurrent requested=%d", len(capabilities)
+                )
+                raise WorkCapacityExceeded(R.MAX_ACTIVE_WORK_ITEMS, len(capabilities))
+            if not result:
                 # BR52.4：key 已到期——由 U13 依既有的工作階段失效路徑處理。
                 raise ValueError("工作階段已到期，無法建立工作項（BR52.4）")
+            written.append(item)
             self._log_transition(item, None, item["status"])
 
         await self._push_items(sink, session_key)
@@ -374,11 +414,35 @@ class WorkOrchestrator:
                     "segmentId": segment_id,
                     "deadlineAt": None if waiting else self._deadline_iso(capability, now),
                     "dispatchStage": R.STAGE_NOT_DISPATCHED,
-                    "requestText": utterance[:REQUEST_TEXT_MAX_CHARS],
+                    # BR52.6 的前 2000 字，再以序列化後位元組封頂（審查 review-01 R-01）。
+                    "requestText": R.truncate_to_encoded_bytes(
+                        utterance[:REQUEST_TEXT_MAX_CHARS], R.REQUEST_TEXT_MAX_BYTES
+                    ),
                     "dispatchIndex": index,
                 }
             )
         return items
+
+    def _abandon_batch(self, session_key: str, written: list) -> None:
+        """併發越過上限：把本批**已寫入**的項轉為失敗（合併前必修第 18 項）。
+
+        這些項還沒有任何背景執行（`_start` 在整批寫完之後才呼叫）、`dispatchStage`
+        仍是 `not_dispatched`，故 sideEffect 恆為 none。比對失敗（例如復原掃描或
+        另一個呼叫者已動過它）只記 WARNING：那一項已由別人推進，不在此覆寫。
+        """
+        for item in written:
+            patch = {
+                "status": R.STATUS_FAILED,
+                "failureReason": R.PHRASES["capacity_exceeded"],
+                "sideEffect": R.SIDE_EFFECT_NONE,
+                "deadlineAt": None,
+                "waitingOn": None,
+                "dependsOn": None,
+            }
+            if self._cas(session_key, item, R.ACTIVE_STATUSES, patch):
+                self._log_transition(item, item["status"], R.STATUS_FAILED)
+            else:
+                logger.warning("work_item=%s abandon_cas_failed", item["workItemId"])
 
     def _deadline_iso(self, capability: str, now: Optional[datetime] = None) -> str:
         base = now if now is not None else self._clock()
@@ -393,7 +457,21 @@ class WorkOrchestrator:
 
         寫入時遇 `SessionBackendUnavailable`（結果未知）：重讀該項，若補丁的每個
         欄位都已是目標值，視為成功；讀不到則**不做副作用**並記 WARNING。
+
+        **轉終態瘦身**（合併前必修第 18 項）：補丁把 status 設為終態時，一併帶
+        `requestText` 截成 `CHANGE_SUMMARY_MAX_CHARS` 字、再封頂於
+        `TERMINAL_REQUEST_TEXT_MAX_BYTES`（序列化後位元組，審查 review-01 R-01）——
+        終態項不再需要原句全文。截斷在 Python 端於字元邊界做，**不在 Lua 以位元組
+        截斷**，避免切壞 UTF-8。所有轉終態都經本方法，故這是唯一落點。
         """
+        if patch.get("status") in R.TERMINAL_STATUSES and "requestText" not in patch:
+            patch = {
+                **patch,
+                "requestText": R.truncate_to_encoded_bytes(
+                    (item.get("requestText") or "")[:CHANGE_SUMMARY_MAX_CHARS],
+                    R.TERMINAL_REQUEST_TEXT_MAX_BYTES,
+                ),
+            }
         try:
             return self._store.update_work_item(
                 session_key,
@@ -637,7 +715,10 @@ class WorkOrchestrator:
                     {
                         "dispatchStage": R.STAGE_REQUEST_SENT,
                         "targetDiagramId": diagram_id,
-                        "targetDiagramTitle": title,
+                        # 只截存入工作項的顯示名稱；回存 PUT 仍用原標題 `title`。
+                        "targetDiagramTitle": R.truncate_to_encoded_bytes(
+                            title, R.DIAGRAM_TITLE_MAX_BYTES
+                        ),
                     },
                 )
                 result = await client.generate_architecture(
@@ -1085,6 +1166,7 @@ __all__ = [
     "PERSIST_TIMEOUT_SECONDS",
     "POLL_INTERVAL_SECONDS",
     "REQUEST_TEXT_MAX_CHARS",
+    "WorkCapacityExceeded",
     "WorkItemNotFound",
     "WorkOrchestrator",
 ]

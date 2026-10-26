@@ -23,10 +23,13 @@ from services.session_errors import SessionBackendUnavailable
 from tests.brain_gateway_fakes import (
     WS_PATH,
     Harness,
+    assert_non_turn_error,
     hello,
     protocols,
+    read_turn,
     recv_json,
     types_of,
+    user_message,
 )
 from tests.test_session_store_behaviour import FakeConnectionError
 
@@ -206,6 +209,25 @@ class VersionTest(_Base):
         joined = "\n".join(logs.output)
         self.assertIn("handshake_unexpected", joined)
         self.assertNotIn("SECRET-MARKER", joined)
+
+    def test_second_hello_after_ready_is_a_non_turn_error(self):
+        """
+        @purpose BR2.8 T4：ready 之後再收到 hello 回 INVALID_REQUEST，該錯誤不屬於任何輪次（turnId 為 null），連線保留。
+        @given 已完成握手
+        @step 再送一次 hello | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null；未收到關閉碼
+        @step 送一句 | 正常以 done 結束
+        @pass 非輪次錯誤且連線可用
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        with TestClient(self.h.app) as client:
+            with client.websocket_connect(WS_PATH, subprotocols=protocols(self.token)) as ws:
+                hello(ws)
+                ws.send_json({"v": 1, "type": "hello", "payload": {"v": 1}})
+                assert_non_turn_error(self, recv_json(ws), "INVALID_REQUEST")
+                user_message(ws, "畫一張架構圖")
+                self.assertEqual(types_of(read_turn(ws))[-1], "done")
+
 
 class SlotTest(unittest.TestCase):
     def tearDown(self):

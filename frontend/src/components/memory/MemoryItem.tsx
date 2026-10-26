@@ -42,9 +42,12 @@ export interface MemoryItemProps {
    * 非擁有者（`SEC-U15-2`）；移除這個判定只會多出一個必然失敗的按鈕。
    */
   canDelete: boolean;
-  /** 發出 `DELETE`。回 `'deleted'`／`'already-gone'`，其餘拋例外。 */
+  /**
+   * 發出 `DELETE`。回 `'deleted'`（204）或 `'already-gone'`（404 **且**重讀清單已不含
+   * 該則，由 `MemoryZone` 確認），其餘——含 404 後重讀仍列出該則或重讀失敗——拋例外。
+   */
   deleteRecord: (memoryId: string) => Promise<'deleted' | 'already-gone'>;
-  /** 204 或 404 之後由區塊就地移除本則（`BR34.4`／`BR34.5`）。 */
+  /** 204，或經重讀確認的 404 之後，由區塊就地移除本則（`BR34.4`／`BR34.5`）。 */
   onRemoved: (memoryId: string, summary: string) => void;
   announce: (message: string) => void;
 }
@@ -84,7 +87,7 @@ export const MemoryItem: React.FC<MemoryItemProps> = ({
     setErrorText('');
     deleteRecord(id)
       .then(() => {
-        // 204 與 404 同一條路徑：移除並播報（`BR34.5`）。焦點由區塊移到區標題。
+        // 204 與「經重讀確認」的 404 同一條路徑：移除並播報（`BR34.5`）。焦點由區塊移到區標題。
         onRemoved(id, summary);
       })
       .catch((err) => {

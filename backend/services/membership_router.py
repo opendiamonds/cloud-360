@@ -52,6 +52,7 @@ from models import User
 from services.membership_errors import (
     LastAdminGuard,
     MembershipForbidden,
+    MembershipLockTimeout,
     MembershipNotFound,
     MissingGlobalPermission,
 )
@@ -115,16 +116,31 @@ LAST_ADMIN_GUARD_RESPONSE = {
 """`BR6.2`：必須顯式宣告，否則不進 `openapi.json`，而 CI 保持綠燈。"""
 
 NOT_FOUND_RESPONSE = {
-    404: {"description": "查不到該專案或該成員"}
+    404: {
+        "description": (
+            "查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、"
+            "不含專案 id，合併前必修第 14 項），或查不到該成員"
+        )
+    }
 }
 FORBIDDEN_RESPONSE = {
     403: {
         "description": (
-            "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，"
-            "或不是該專案的成員／管理者"
+            "缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者"
+            "（`BR1.2` 兩層串聯；非成員回 404，不回 403）"
         )
     }
 }
+LOCK_TIMEOUT_RESPONSE = {
+    503: {
+        "description": (
+            "取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）："
+            "另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，"
+            "請稍後再試"
+        )
+    }
+}
+"""只宣告在**會取鎖**的三個端點（邀請、移出、改角色）；清單與橫幅不取鎖。"""
 
 
 def _facade(db: Session) -> MembershipFacade:
@@ -144,6 +160,10 @@ def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, MissingGlobalPermission):
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+    if isinstance(exc, MembershipLockTimeout):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         )
     raise exc
 
@@ -196,6 +216,7 @@ def list_members(
     responses={
         **FORBIDDEN_RESPONSE,
         **NOT_FOUND_RESPONSE,
+        **LOCK_TIMEOUT_RESPONSE,
         422: {
             "description": (
                 "受邀者缺少對應的全域功能權限（`BR3.2`／`AC12.5.1`），"
@@ -238,6 +259,7 @@ def invite_member(
         **FORBIDDEN_RESPONSE,
         **NOT_FOUND_RESPONSE,
         **LAST_ADMIN_GUARD_RESPONSE,
+        **LOCK_TIMEOUT_RESPONSE,
     },
 )
 def remove_member(
@@ -274,6 +296,7 @@ def remove_member(
         **FORBIDDEN_RESPONSE,
         **NOT_FOUND_RESPONSE,
         **LAST_ADMIN_GUARD_RESPONSE,
+        **LOCK_TIMEOUT_RESPONSE,
     },
 )
 def change_member_role(

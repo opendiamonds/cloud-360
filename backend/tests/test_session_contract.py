@@ -287,7 +287,15 @@ class LuaIsTheOnlyTrimCarrierTest(unittest.TestCase):
         """
         source = APPEND_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("table.remove(arr, 1)", source)
-        self.assertIn("while #arr > cap do", source)
+        # 修剪條件是「筆數上限**或**位元組上限」任一超過就丟（兩者取較嚴者，
+        # `merge-blockers.md` 第 18 項）。兩個條件都必須在迴圈條件裡——只剩筆數
+        # 那一半時，最壞情況回到每 session 約 7 MB。
+        self.assertIn(
+            "while #arr > 1 and (#arr > cap or total > max_bytes) do", source
+        )
+        # 位元組以 `string.len`（位元組數）量 cjson 的輸出，而不是 `#`（Lua 的 `#`
+        # 對字串也是位元組數，但用具名函式讓「量的是位元組」在原始碼上可讀）。
+        self.assertIn("string.len(cjson.encode(arr[i]))", source)
 
     def test_scripts_are_static_files_with_a_dispatch_marker(self):
         """`security-design.md §二`：腳本為**靜態常數**，使用者資料一律經

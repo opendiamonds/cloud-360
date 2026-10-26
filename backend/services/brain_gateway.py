@@ -75,7 +75,9 @@ from services.embedding_port import EMBEDDING_TIMEOUT_SEC
 from services.hierarchy_facade import HierarchyFacade, HierarchyForbidden, mint_principal
 from services.intent_routing import IntentRouter
 from services.intent_routing_errors import PlatformSelfModificationRefused
-from services.intent_routing_types import Intent, IntentDecision
+from services.intent_routing_predicate import intents_after_choice
+from services.intent_routing_types import IntentDecision
+from services.memory_errors import MemoryForbidden
 from services.memory_facade import MemoryFacade
 from services.prompt_guard import REFUSAL_MESSAGE, is_platform_self_modification
 from services.rbac import user_can
@@ -226,6 +228,9 @@ class Connection:
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     revalidate_task: Optional[asyncio.Task] = field(default=None, repr=False)
     pending_clarify: Optional["PendingClarify"] = field(default=None, repr=False)
+    # 目前這則訊息開啟（或接續）的輪次：`user_message` 建立 `Turn`、`select_clarify_candidate`
+    # 取出待選反問時設定；每則訊息處理前清空。未預期例外時據以判斷錯誤屬於哪一輪（BR2.8 T9）。
+    open_turn: Optional["Turn"] = field(default=None, repr=False)
 
     async def send(self, envelope: WsEnvelope) -> bool:
         """經契約模型序列化後送出；失敗即移出登錄、標記 dead 並主動以 1011 關閉（帶入項 21）。"""
@@ -328,6 +333,9 @@ class MemoryPrefetch:
     query: str = field(repr=False)
     kinds: Tuple[str, ...]
     hits: Optional[Tuple[Any, ...]] = field(default=None, repr=False)
+    #: 合併前必修第 13 項：facade 以 `MemoryForbidden` 拒絕時的 `reason`。非 None 時
+    #: 轉接器對同一個 principal 重拋 `MemoryForbidden`，而**不是**當成預取失敗降級。
+    forbidden_reason: Optional[str] = None
 
     @property
     def failed(self) -> bool:
@@ -343,11 +351,25 @@ class PrefetchUnavailable(RuntimeError):
     """預取失敗、熔斷、或請求與預取不符。`U11` 依其既有設計降級為不帶記憶分類。"""
 
 
+@dataclass(frozen=True)
+class _PrefetchForbidden:
+    """預取工作的回傳值：facade 以 `MemoryForbidden` 拒絕（只帶 `reason`，不帶任何記憶內容）。"""
+
+    reason: str
+
+
 class MemoryPrefetchAdapter:
     """注入 `IntentRouter(memory_facade=...)` 的轉接器。**內部無任何 I/O**：只讀 `ContextVar`。"""
 
     def search(self, principal: Any, query: str, kinds: Any = None, limit: Optional[int] = None):
         prefetch = _PREFETCH.get()
+        if (
+            prefetch is not None
+            and prefetch.forbidden_reason is not None
+            and getattr(principal, "user_id", None) == prefetch.user_id
+        ):
+            # 授權拒絕不是預取失敗：原樣交給 `U11`，由它向上傳遞（合併前必修第 13 項）。
+            raise MemoryForbidden(reason=prefetch.forbidden_reason)
         if prefetch is None or prefetch.failed:
             raise PrefetchUnavailable("no-prefetch")
         if getattr(principal, "user_id", None) != prefetch.user_id or query != prefetch.query:
@@ -478,6 +500,10 @@ class Turn:
     t_classify_end: Optional[float] = None
     t_first_content: Optional[float] = None
     prefetch: Optional[str] = None
+    # 終止事件（done／error）**實際送達**之後才設為 True（`_send_terminal`）。T9 以它而非
+    # `ledger.is_terminal` 判斷「前端是否已收到終止事件」：`ledger.finish()` 先於 done 的送出，
+    # 兩者之間拋例外時 ledger 已終止、前端卻什麼都沒收到（審查 review-02 發現 1）。
+    terminal_sent: bool = False
 
 
 @dataclass(eq=False)
@@ -1104,13 +1130,48 @@ class BrainGateway:
                 WsUnvalidatedEnvelope.model_validate(data)
                 envelope = WsClientEnvelope.model_validate(data)
             except (ValidationError, rules.GatewayInvalidRequest) as exc:
+                # BR2.8 T3：不屬於任何輪次（turnId=null）；不碰 pending_clarify——反問等待中格式錯誤的
+                # 選擇訊息不算輪內，反問保留、使用者可重選（[GW-MB2]=A）。
                 await self._send_single_error(conn, *rules.error_for(exc))
                 continue
+            conn.open_turn = None
             try:
                 await self._dispatch_client_message(conn, envelope, t_received)
             except Exception as exc:  # 未預期例外：封閉表的 error，連線保留（審查 R-03；[GW3]=A）
                 _log(logging.WARNING, "message_unexpected", connId=conn.conn_id, exc=type(exc).__name__)
-                await self._send_single_error(conn, *rules.error_for(exc))
+                await self._on_unexpected(conn, exc)
+            finally:
+                conn.open_turn = None
+
+    async def _on_unexpected(self, conn: Connection, exc: BaseException) -> None:
+        """BR2.8 T9：這則訊息已開啟一輪且該輪的終止事件尚未送達 → 以該輪 turnId 結束它；否則 turnId=null。
+
+        不結束那一輪的話，前端會一直等一個永遠不來的終止事件。若該輪正等待反問選擇，
+        一併清除待選反問，使之後的選擇走 T5（無待選反問）而不是接續一個已終止的輪。
+
+        判準是 `turn.terminal_sent`（終止事件是否**實際送出**），不是 `ledger.is_terminal`：`_end_turn`
+        先 `ledger.finish()` 再送 done，兩者之間的例外會讓 ledger 已終止而前端沒收到任何終止事件
+        （review-02 發現 1）。已送過終止事件 → 只回 turnId=null 的 error，絕不送第二個終止事件。
+        刻意安靜結束的輪（`ended_silent`，AC1.2.3）依契約不送終止事件，也走 turnId=null。
+        """
+        turn = conn.open_turn
+        if turn is not None and not turn.terminal_sent and turn.ledger.state != rules.TURN_ENDED_SILENT:
+            if conn.pending_clarify is not None and conn.pending_clarify.turn is turn:
+                conn.pending_clarify = None
+            turn.ledger.fail()  # 已因 finish() 終止時為 no-op；送出與否由 terminal_sent 決定
+            code, message = rules.error_for(exc)
+            await self._send_terminal(
+                conn,
+                turn,
+                self.envelope(
+                    WsServerMessageType.ERROR,
+                    turn.turn_id,
+                    ErrorPayload(code=code, message=message, turnId=turn.turn_id),
+                ),
+            )
+            self._log_turn(turn, f"error:{code}")
+            return
+        await self._send_single_error(conn, *rules.error_for(exc))
 
     async def _reject(self, conn: Connection, reason: str, exc: BaseException) -> bool:
         """被拒訊框：回一則 error，並計入關閉門檻（帶入項 29）。回傳是否已關閉連線。"""
@@ -1124,10 +1185,14 @@ class BrainGateway:
         await self._send_single_error(conn, *rules.error_for(exc))
         return False
 
-    async def _send_single_error(self, conn: Connection, code: str, message: str, turn_id: Optional[str] = None) -> None:
-        tid = turn_id or _mint_turn_id()
+    async def _send_single_error(self, conn: Connection, code: str, message: str) -> None:
+        """不屬於任何輪次的錯誤（BR2.8 T1–T5、T7）：envelope 與 payload 的 turnId 一律為 null。
+
+        契約逐字要求伺服器**不得**為非輪次錯誤捏造 turnId（`brain_ws_contract.py` 的 `ErrorPayload`）；
+        輪內錯誤一律走 `_fail_turn`／`_end_turn`，帶該輪的 turnId。
+        """
         await conn.send(
-            self.envelope(WsServerMessageType.ERROR, tid, ErrorPayload(code=code, message=message, turnId=tid))
+            self.envelope(WsServerMessageType.ERROR, None, ErrorPayload(code=code, message=message, turnId=None))
         )
 
     async def _dispatch_client_message(self, conn: Connection, envelope: WsClientEnvelope, t_received: float) -> None:
@@ -1166,9 +1231,18 @@ class BrainGateway:
             turn.t_first_content = self.timing.monotonic()
         return True
 
+    async def _send_terminal(self, conn: Connection, turn: Turn, envelope: WsEnvelope) -> bool:
+        """送出該輪的終止事件（done／error）；**送達之後**才標記 `turn.terminal_sent`（T9 的判準）。"""
+        sent = await conn.send(envelope)
+        if sent:
+            turn.terminal_sent = True
+        return sent
+
     async def _fail_turn(self, conn: Connection, turn: Turn, code: str, message: str) -> None:
         if turn.ledger.fail():
-            await conn.send(
+            await self._send_terminal(
+                conn,
+                turn,
                 self.envelope(
                     WsServerMessageType.ERROR,
                     turn.turn_id,
@@ -1186,7 +1260,9 @@ class BrainGateway:
         if result is None:
             return
         if result == rules.FINISH_EMPTY:
-            await conn.send(
+            await self._send_terminal(
+                conn,
+                turn,
                 self.envelope(
                     WsServerMessageType.ERROR,
                     turn.turn_id,
@@ -1206,7 +1282,9 @@ class BrainGateway:
                 )
             except Exception as exc:  # 內容已送達使用者：只記 WARNING（BR64.10）
                 _log(logging.WARNING, "assistant_history_failed", turnId=turn.turn_id, exc=type(exc).__name__)
-        await conn.send(self.envelope(WsServerMessageType.DONE, turn.turn_id, DonePayload(turnId=turn.turn_id)))
+        await self._send_terminal(
+            conn, turn, self.envelope(WsServerMessageType.DONE, turn.turn_id, DonePayload(turnId=turn.turn_id))
+        )
         self._log_turn(turn, "done")
         if turn.dispatched:
             content = _truncate(f"使用者：{turn.utterance}\n大腦：" + "\n".join(turn.texts))
@@ -1228,6 +1306,7 @@ class BrainGateway:
 
     async def _on_user_message(self, conn: Connection, payload: Any, t_received: float) -> None:
         turn = Turn(turn_id=_mint_turn_id(), utterance=payload.text, t_received=t_received)
+        conn.open_turn = turn
         stale = conn.pending_clarify
         if stale is not None:  # 等待選擇時收到新訊息：舊輪安靜結束（BR64.8）
             stale.turn.ledger.end_silent()
@@ -1273,6 +1352,9 @@ class BrainGateway:
         finally:
             _PREFETCH.reset(context_token)
         turn.t_classify_end = self.timing.monotonic()
+        if isinstance(classify_exc, MemoryForbidden):
+            # 安全事件（合併前必修第 13 項）：只記 turnId 與拒絕理由代碼，不記輸入原文、不記記憶內容。
+            _log(logging.WARNING, "memory_forbidden", turnId=turn.turn_id, reason=classify_exc.reason)
 
         try:
             await asyncio.to_thread(self.store.append_message, conn.session_key, turn.segment, "user", utterance)
@@ -1292,7 +1374,9 @@ class BrainGateway:
         turn.write_history = False
         await self.send_turn_message(conn, turn, WsServerMessageType.TOKEN, TokenPayload(text=REFUSAL_MESSAGE))
         if turn.ledger.finish() == rules.FINISH_DONE:
-            await conn.send(self.envelope(WsServerMessageType.DONE, turn.turn_id, DonePayload(turnId=turn.turn_id)))
+            await self._send_terminal(
+                conn, turn, self.envelope(WsServerMessageType.DONE, turn.turn_id, DonePayload(turnId=turn.turn_id))
+            )
         self._log_turn(turn, "guard")
 
     async def _clarify_intent(self, conn: Connection, turn: Turn, decision: IntentDecision) -> None:
@@ -1313,6 +1397,7 @@ class BrainGateway:
             kind="intent",
             candidate_ids=tuple(c.id for c in candidates),
             candidates={c.id: c for c in candidates},
+            decision=decision,  # 合併前必修第 5 項：保留行程內的還原對照（`decision.resolution`）
         )
         self._log_turn(turn, "clarify")
 
@@ -1509,6 +1594,7 @@ class BrainGateway:
             return
         conn.pending_clarify = None
         turn = pending.turn
+        conn.open_turn = turn
         candidate_id = payload.candidateId
         if candidate_id is None:  # 「都不是」：安靜結束，不送任何狀態訊息與終止事件（AC1.2.3）
             turn.ledger.end_silent()
@@ -1523,8 +1609,15 @@ class BrainGateway:
                 await self._dispatch(conn, turn, pending.decision)
             return
         chosen = pending.candidates[candidate_id]
+        # 合併前必修第 5 項：以「被選候選的完整 Intent（含 referent）＋ 其他已確定槽位的 Intent」
+        # 依原句的槽位序重建；對照缺失或對不上即大聲失敗，不退回只帶 capability 的舊形狀。
+        resolution = getattr(pending.decision, "resolution", None)
+        intents = intents_after_choice(resolution, candidate_id) if resolution is not None else None
+        if not intents:
+            await self._fail_turn(conn, turn, rules.CODE_INTERNAL, rules.ERROR_MESSAGES["internal"])
+            return
         decision = IntentDecision(
-            intents=(Intent(chosen.capability, None),),
+            intents=intents,
             confidence=chosen.confidence if chosen.confidence is not None else 0.0,
             below_threshold=False,
         )
@@ -1612,12 +1705,24 @@ class BrainGateway:
             db = session_factory()
             try:
                 return tuple(factory(db).search(principal, query, kinds=PREFETCH_KINDS, limit=PREFETCH_LIMIT))
+            except MemoryForbidden as exc:
+                # 授權判定不是依賴故障：不計入熔斷、不降級，改以結果帶回（合併前必修第 13 項）。
+                return _PrefetchForbidden(exc.reason)
             finally:
                 db.close()
 
         _log(logging.DEBUG, "prefetch_start", turnId=turn.turn_id)
         started = self.timing.monotonic()
         result = await self.memory.run(_search, wait_sec=self.prefetch_wait_sec)
+        if result.outcome is Outcome.OK and isinstance(result.value, _PrefetchForbidden):
+            turn.prefetch = "forbidden"
+            return MemoryPrefetch(
+                user_id=principal.user_id,
+                query=query,
+                kinds=PREFETCH_KINDS,
+                hits=None,
+                forbidden_reason=result.value.reason,
+            )
         hits = result.value if result.outcome is Outcome.OK else None
         if result.outcome is Outcome.OK:
             turn.prefetch = "hit" if hits else "empty"

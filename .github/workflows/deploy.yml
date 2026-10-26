@@ -32,6 +32,15 @@ jobs:
       deployed: ${{ steps.sha.outputs.deployed }}
       subject: ${{ steps.sha.outputs.subject }}
       started: ${{ steps.sha.outputs.started }}
+      # 'true' only when step 6a itself failed (an environmental failure: the
+      # tunnel stripped the subprotocol, or tunnel/DNS flaked). The rollback job
+      # reads it to skip the revert PR: reverting the commit cannot fix
+      # Cloudflare. `outcome`, not a value the step writes, because 6a ends with
+      # `exit 1` and anything it would write must survive that; a 6a that never
+      # ran (an earlier step failed) is `skipped`, i.e. 'false'. Job outputs are
+      # evaluated in the runner's FinalizeJob regardless of the job result, so
+      # this is readable when the deploy job failed.
+      brain_ws_probe_failed: ${{ steps.brain_ws_probe.outcome == 'failure' }}
     # pull_request:closed fires on close-without-merge too; only a real merge
     # (or a manual dispatch) should deploy. Fork PRs must never reach this
     # self-hosted runner — see ADR-0007.
@@ -508,7 +517,7 @@ jobs:
           "${COMPOSE[@]}" restart redis
 
           # 4. Wait for an ACTUAL SUCCESSFUL READ-BACK through the app ACL user.
-          #    NOT the healthcheck: deploy/docker-compose.deploy.yml:258-261
+          #    NOT the healthcheck: deploy/docker-compose.deploy.yml:307-310
           #    says in its own comment that `redis-cli ping | grep -q PONG`
           #    "does NOT prove the ACL user works (ping passes as `default`),
           #    and it passes during AOF loading". Waiting on it would let this
@@ -584,6 +593,7 @@ jobs:
       # BRAIN_WS_URL is overridable only for the local check against the compose
       # test stack (http://localhost:8090/api/brain/ws); see DEPLOY.md.
       - name: Verify the brain WS subprotocol survives the tunnel
+        id: brain_ws_probe
         env:
           ATTEMPTS: "12"
           BRAIN_WS_URL: https://cloud360.danniel.cc/api/brain/ws
@@ -643,7 +653,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Self-healing: when the deploy job fails, restore the last-good version to
-  # keep the site up, open a revert PR for the bad change, and hand the failure
+  # keep the site up, open a revert PR for the bad change (not when step 6a
+  # was the failure -- see the revert step), and hand the failure
   # to the Deploy Doctor agent for root-cause analysis. Runs only for a real
   # merged PR (a manual dispatch has no PR to revert).
   rollback:
@@ -784,9 +795,14 @@ jobs:
           gh run view "${{ github.run_id }}" --log-failed 2>/dev/null | tail -c 8000 > /tmp/deploy-fail.log || true
           echo "captured $(wc -c < /tmp/deploy-fail.log) bytes of failure log"
 
+      # Skipped when the deploy failed at step 6a (brain WS subprotocol through
+      # the tunnel): that failure is environmental, so reverting the merge would
+      # not fix it and would take U13 down with it (merge-blockers #26, R-01).
+      # The restore above and the Deploy Doctor hand-off below still run for 6a.
+      # Every other failure source keeps opening the revert PR as before.
       - name: Open a revert PR for the bad merge
         id: revert
-        if: always()
+        if: always() && needs.deploy.outputs.brain_ws_probe_failed != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -870,6 +886,7 @@ jobs:
           ROLLBACK_RESULT: ${{ needs.rollback.result }}
           RESTORED: ${{ needs.rollback.outputs.restored }}
           REVERT_PR: ${{ needs.rollback.outputs.revert_pr }}
+          BRAIN_WS_PROBE_FAILED: ${{ needs.deploy.outputs.brain_ws_probe_failed }}
           DEPLOYED_SHA: ${{ needs.deploy.outputs.deployed }}
           COMMIT_SUBJECT: ${{ needs.deploy.outputs.subject }}
           STARTED: ${{ needs.deploy.outputs.started }}
@@ -924,6 +941,10 @@ jobs:
               esac
               if [ -n "${REVERT_PR}" ]; then
                 echo "Revert PR: <${REVERT_PR}|待合併>"
+              elif [ "${BRAIN_WS_PROBE_FAILED}" = "true" ]; then
+                # The rollback job skips the revert step for a 6a failure; an
+                # empty REVERT_PR here is by design, not a conflict.
+                echo "Revert PR: 刻意未開（步驟 6a 大腦 WS 子協定未通過 tunnel，屬環境性失敗；見 DEPLOY.md §5.13）"
               else
                 echo "Revert PR: 未建立（衝突或建立失敗），需人工處理"
               fi

@@ -24,6 +24,7 @@ from services import brain_gateway_rules as R
 from services.embedding_port import EmbeddingProviderUnavailable
 from services.hierarchy_facade import HierarchyForbidden, HierarchyNotFound
 from services.intent_routing_errors import EmptyCandidates, LlmBudgetExceeded, LlmUnavailable, MalformedRouting
+from services.memory_errors import MemoryForbidden
 from services.session_errors import SessionBackendUnavailable, SessionMessageTooLong
 from services.work_orchestrator import WorkItemNotFound
 
@@ -232,6 +233,7 @@ class ErrorForTest(unittest.TestCase):
             (SessionBackendUnavailable("redis_unreachable", method=marker), "INTERNAL_ERROR"),
             (SessionMessageTooLong(limit=1, actual=2), "INVALID_REQUEST"),
             (HierarchyForbidden(story_id=marker, action="view"), "UNAUTHORIZED"),
+            (MemoryForbidden(reason=marker), "UNAUTHORIZED"),  # 合併前必修第 13 項
             (HierarchyNotFound(marker), "INVALID_REQUEST"),
             (WorkItemNotFound(marker), "INVALID_REQUEST"),
             (validation_error, "INVALID_REQUEST"),
@@ -570,6 +572,36 @@ class HelloVersionTest(unittest.TestCase):
         reason = R.close_reason_for_version("invalid")
         self.assertTrue(reason.isascii())
         self.assertLessEqual(len(reason.encode()), 123)
+
+
+class WorkCapacityErrorTest(unittest.TestCase):
+    """合併前必修第 18 項（`U12` 進行中上限）的跨單元對應：沿用既有代碼，不改 WS 契約。"""
+
+    def test_work_capacity_exceeded_maps_to_invalid_request_with_fixed_message(self):
+        """
+        @purpose 進行中工作已達上限時，本輪以 INVALID_REQUEST 加固定句結束，而不是落到 INTERNAL_ERROR 的「處理時發生錯誤」
+        @given `WorkCapacityExceeded(active=4, requested=2)`
+        @step 呼叫 error_for | code＝INVALID_REQUEST、message 為固定句
+        @step 比對固定句與 U12 的上限常數 | 句中數字等於 MAX_ACTIVE_WORK_ITEMS
+        @pass code 與訊息逐字相符，且訊息不含例外原文
+        @story US1.1
+        """
+        from services import work_orchestrator_rules as WR
+        from services.brain_ws_contract import ErrorPayload
+        from services.work_orchestrator import WorkCapacityExceeded
+
+        exc = WorkCapacityExceeded(4, 2)
+        code, message = R.error_for(exc)
+        self.assertEqual(code, "INVALID_REQUEST")
+        self.assertEqual(
+            message, "同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。"
+        )
+        self.assertIn(f"最多 {WR.MAX_ACTIVE_WORK_ITEMS} 項", message)
+        # 4 筆進行中 ＋ 交辦 2 筆即觸發：句子不得宣稱「已達」上限（審查 R-03）。
+        self.assertNotIn("已達", message)
+        self.assertNotIn(str(exc), message)
+        # 代碼在既有的封閉列舉內：WS 契約的 ErrorPayload 收得下它。
+        ErrorPayload(code=code, message=message, turnId="t")
 
 
 if __name__ == "__main__":

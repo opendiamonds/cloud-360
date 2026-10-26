@@ -64,7 +64,10 @@ class TrimHistoryPropertyTest(unittest.TestCase):
     @given(items=ITEMS, cap=CAPS)
     @settings(max_examples=120, deadline=None)
     def test_input_within_cap_is_returned_unchanged(self, items, cap):
+        # `merge-blockers.md` 第 18 項之後，「不動」的條件是**兩個**上限都沒超；
+        # 本策略的整數清單遠小於預設 200 KB，故位元組條件在此恆成立，斷言照舊。
         if len(items) <= cap:
+            self.assertLessEqual(T.segment_size_bytes(items), T.DEFAULT_SEGMENT_MAX_BYTES)
             self.assertEqual(trim_history(items, cap), items)
 
     def test_cap_must_be_a_positive_integer(self):
@@ -74,6 +77,81 @@ class TrimHistoryPropertyTest(unittest.TestCase):
             with self.subTest(cap=bad):
                 with self.assertRaises(ValueError):
                     trim_history([1, 2, 3], bad)
+        for bad in (0, -1, None, 1.5, True):
+            with self.subTest(max_bytes=bad):
+                with self.assertRaises(ValueError):
+                    trim_history([1, 2, 3], 5, bad)
+
+
+#: 訊息形狀與生產相同（`role`／`text`／`createdAt`／`sequence`）。`text` 刻意包含
+#: cjson 與 Python json 長度不同的兩個字元（`/`、`0x7f`），以及中文、表情符號
+#: （UTF-8 4 位元組）與控制字元——位元組計算若只對 ASCII 正確，這裡會抓到。
+_TEXT = st.text(
+    alphabet=st.sampled_from(list("ab/\x7f\x01\n\"\\") + ["測", "試", "😀"]),
+    max_size=80,
+)
+MESSAGES = st.lists(_TEXT, max_size=30).map(
+    lambda texts: [
+        {"role": "user", "text": t, "createdAt": "t", "sequence": i + 1}
+        for i, t in enumerate(texts)
+    ]
+)
+BYTE_CAPS = st.integers(min_value=40, max_value=3000)
+
+
+class TrimHistoryByteCapPropertyTest(unittest.TestCase):
+    """`merge-blockers.md` 第 18 項：每段位元組上限與筆數上限**取較嚴者**。
+
+    四條合起來把「取較嚴者、自最舊端丟、不多丟」鎖住。位元組上限在策略內刻意
+    取很小（40–3000），讓兩個上限輪流成為較嚴的那一個。
+    """
+
+    @given(items=MESSAGES, cap=CAPS, max_bytes=BYTE_CAPS)
+    @settings(max_examples=200, deadline=None)
+    def test_output_fits_both_caps(self, items, cap, max_bytes):
+        """
+        @purpose 任何輸入修剪後，則數 ≤ 筆數上限，且整段位元組數 ≤ 位元組上限；唯一例外是只剩最新一則而那一則本身就超過上限（段不得被清空）。拿掉位元組條件的突變在這一條變紅。
+        @given 任意含中文、斜線、DEL、表情符號、控制字元的訊息清單；筆數上限 1–12；位元組上限 40–3000
+        @step 以參考實作修剪 | 則數不超過筆數上限
+        @step 量修剪結果的位元組數 | 不超過位元組上限，或結果只剩最新的一則
+        @pass 兩個上限同時成立
+        @story US6.1
+        """
+        out = trim_history(items, cap, max_bytes)
+        self.assertLessEqual(len(out), cap)
+        if len(out) > 1:
+            self.assertLessEqual(T.segment_size_bytes(out), max_bytes)
+        elif items:
+            self.assertEqual(out, items[-1:])
+
+    @given(items=MESSAGES, cap=CAPS, max_bytes=BYTE_CAPS)
+    @settings(max_examples=200, deadline=None)
+    def test_output_is_the_longest_qualifying_suffix(self, items, cap, max_bytes):
+        """
+        @purpose 保留的是最新的那幾則、順序不變，而且不多丟：再往前多留一則就會超過其中一個上限。
+        @given 同上的任意訊息清單與上限
+        @step 以參考實作修剪 | 結果是輸入的後綴（順序不變、丟的是最舊的）
+        @step 若有丟棄，把被丟的最新一則接回前面 | 會超過筆數上限或位元組上限
+        @pass 結果是兩個上限下最長的合格後綴
+        @story US6.1
+        """
+        out = trim_history(items, cap, max_bytes)
+        self.assertEqual(out, items[len(items) - len(out):] if out else [])
+        if items:
+            self.assertGreaterEqual(len(out), 1)
+        if 0 < len(out) < len(items):
+            longer = items[len(items) - len(out) - 1:]
+            self.assertTrue(
+                len(longer) > cap or T.segment_size_bytes(longer) > max_bytes
+            )
+
+    def test_cjson_size_counts_the_escapes_python_json_does_not_emit(self):
+        """cjson 把 `/` 編成 `\\/`、把 `0x7f` 編成 `\\u007f`，Python 都不跳脫。
+        以 Redis 8.8 實測的輸出為準（`cjson.encode({a='x/y\\127'})` →
+        `{"a":"x\\/y\\u007f"}`，`string.len` 為 18；`{b='中'}` 為 11——兩個數字
+        皆為 `redis-cli EVAL` 對 Redis 8.8.0 實際回傳的值）。"""
+        self.assertEqual(T.cjson_encoded_size({"a": "x/y\x7f"}), 18)
+        self.assertEqual(T.cjson_encoded_size({"b": "中"}), 11)
 
 
 class ClosedSetTest(unittest.TestCase):

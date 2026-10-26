@@ -89,13 +89,16 @@ ERROR_RESPONSES = {
     status.HTTP_403_FORBIDDEN: {
         "model": RequirementFieldErrorOut,
         "description": (
-            "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），"
-            "或不是該系統所屬專案的成員"
+            "授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。"
+            "不是該系統所屬專案的成員時回 404，不回 403"
         ),
     },
     status.HTTP_404_NOT_FOUND: {
         "model": RequirementFieldErrorOut,
-        "description": "查不到該系統（含非整數的 system_id）",
+        "description": (
+            "查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的"
+            "成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項）"
+        ),
     },
     status.HTTP_422_UNPROCESSABLE_ENTITY: {
         "model": RequirementFieldErrorOut,

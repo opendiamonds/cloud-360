@@ -1,6 +1,6 @@
 import React from 'react';
 import { useBrainSession } from '../../brain/brainSession';
-import { useBrainTranscript, type UserItem } from '../../brain/brainTranscript';
+import { useBrainTranscript, type NoticeItem, type UserItem } from '../../brain/brainTranscript';
 import { ClarifyCandidates } from './ClarifyCandidates';
 import { StreamingMessage } from './StreamingMessage';
 import { WorkItemList } from './WorkItemList';
@@ -8,16 +8,21 @@ import { WorkItemList } from './WorkItemList';
 const USER_INTERRUPT_TEXT = {
   disconnect: '回覆中斷',
   unmount: '你在回覆完成前離開了這一頁',
+  // 伺服器以非輪次錯誤拒絕了這句（例如頻率超限；code-generation review-02 R-08、`[EP-R2]`=A）。
+  rejected: '這句沒有送達',
 } as const;
 
 const UserMessage: React.FC<{ item: UserItem }> = ({ item }) => {
   const conn = useBrainSession();
   const { dispatch } = useBrainTranscript();
   return (
-    <div data-testid="brain-user-message" className="self-end max-w-[85%] rounded-xl bg-brand-600 px-3 py-2 text-sm text-white">
+    <div
+      data-testid="brain-user-message"
+      data-pending={item.pendingConnId !== null ? 'true' : 'false'}
+      className="self-end max-w-[85%] rounded-xl bg-brand-600 px-3 py-2 text-sm text-white">
       <span className="whitespace-pre-wrap break-words">{item.text}</span>
       {item.interrupted && (
-        <span className="mt-1 block text-xs text-brand-100">
+        <span className="mt-1 block text-xs text-brand-50">
           {USER_INTERRUPT_TEXT[item.interrupted]}
           {!item.retried && (
             <button
@@ -38,6 +43,20 @@ const UserMessage: React.FC<{ item: UserItem }> = ({ item }) => {
     </div>
   );
 };
+
+/**
+ * 系統提示列（非輪次錯誤，`[EP-MB2]`=A）：不屬任何輪次、沿用既有錯誤文字樣式；播報由連線寫入 LiveRegion，
+ * 本元件不另設 aria-live（避免重複播報）。
+ */
+const SystemNotice: React.FC<{ item: NoticeItem }> = ({ item }) => (
+  <p
+    data-testid="brain-system-notice"
+    data-code={item.code}
+    className="self-center max-w-[85%] rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+  >
+    <span className="whitespace-pre-wrap break-words">{item.message}</span>
+  </p>
+);
 
 /**
  * ConversationView — 本頁目前讀取段的對話紀錄（`BR93.4`、`BR94.5`、`BR97.8`）
@@ -79,6 +98,8 @@ export const ConversationView: React.FC<{ emptyState?: React.ReactNode }> = ({ e
       )}
       {seg.items.map((item) => {
         if (item.kind === 'user') return <UserMessage key={item.id} item={item} />;
+        // 系統提示不當工作項錨點（anchorWorkItems 會略過它，code-generation review-02 R-10），其下不列工作項。
+        if (item.kind === 'notice') return <SystemNotice key={item.id} item={item} />;
         if (item.kind === 'clarify') {
           return (
             <React.Fragment key={item.id}>

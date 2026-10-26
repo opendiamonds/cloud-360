@@ -47,7 +47,8 @@ export function doneFrame(turnId: string): WsEnvelope {
   return { v: V, type: 'done', turnId, payload };
 }
 
-export function errorFrame(turnId: string, code: ErrorCode, message: string): WsEnvelope {
+/** `turnId` 為 null 即非輪次錯誤（BR1.5／BR1.6：envelope 與 payload 兩份同為 null）。 */
+export function errorFrame(turnId: string | null, code: ErrorCode, message: string): WsEnvelope {
   const payload: S['ErrorPayload'] = { code, message, turnId };
   return { v: V, type: 'error', turnId, payload };
 }
@@ -170,6 +171,21 @@ export function turnFrames(turnId: string, ...texts: string[]): string[] {
 /** 協定版本不符的 ready（以寬鬆封包型別組出；`ReadyPayload.protocolVersion` 的字面型別容不下它）。 */
 export function readyWithVersionFrame(protocolVersion: number): string {
   const loose: S['WsUnvalidatedEnvelope'] = { v: 1, type: 'ready', payload: { protocolVersion } };
+  return JSON.stringify(loose);
+}
+
+/**
+ * envelope 與 payload 都缺 `turnId` 鍵的 error（契約違規；客戶端應視同 turnId=null 的非輪次錯誤，
+ * code-generation review-02 R-11）。以寬鬆封包型別組出：`WsEnvelope` 的 turnId 為必填鍵。
+ */
+export function errorFrameWithoutTurnId(code: ErrorCode, message: string): string {
+  const loose: S['WsUnvalidatedEnvelope'] = { v: 1, type: 'error', payload: { code, message } };
+  return JSON.stringify(loose);
+}
+
+/** 缺 `turnId` 鍵的 token（契約違規；客戶端應丟棄，不建空字串輪次，R-11）。 */
+export function tokenFrameWithoutTurnId(text: string): string {
+  const loose: S['WsUnvalidatedEnvelope'] = { v: 1, type: 'token', payload: { text } };
   return JSON.stringify(loose);
 }
 

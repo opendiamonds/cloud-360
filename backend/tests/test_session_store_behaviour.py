@@ -95,6 +95,10 @@ class FakeRedis:
         self.calls: list = []
         self.loaded: dict = {}
         self.fail_next: list = []
+        #: **持續**失敗的指令：`{指令名: 例外工廠}`。與 `fail_next`（只失敗一次）
+        #: 不同，它模擬「行程在送出該指令時死掉」——重試也救不回來，所以能區分
+        #: 「交易一次送出」與「逐條送出、中途斷掉」（`merge-blockers.md` 第 12 項）。
+        self.fail_commands: dict = {}
 
     # -- 指令分派 ---------------------------------------------------------
 
@@ -102,10 +106,20 @@ class FakeRedis:
         self.calls.append(command)
         if self.fail_next:
             raise self.fail_next.pop(0)
+        if command in self.fail_commands:
+            raise self.fail_commands[command]()
+        return self._dispatch(command, args)
+
+    def _dispatch(self, command, args):
         handler = getattr(self, f"_cmd_{command.lower().replace(' ', '_')}", None)
         if handler is None:
             raise FakeResponseError(f"ERR unknown command '{command}'")
         return handler(*args)
+
+    # -- MULTI／EXEC（`merge-blockers.md` 第 12 項）-------------------------
+
+    def pipeline(self, transaction=True):
+        return FakePipeline(self, transaction=transaction)
 
     def _cmd_hgetall(self, key):
         return dict(self.hashes.get(key, {}))
@@ -115,6 +129,13 @@ class FakeRedis:
 
     def _cmd_hset(self, key, field, value):
         self.hashes.setdefault(key, {})[field] = value
+        return 1
+
+    def _cmd_hsetnx(self, key, field, value):
+        fields = self.hashes.setdefault(key, {})
+        if field in fields:
+            return 0
+        fields[field] = value
         return 1
 
     def _cmd_hdel(self, key, field):
@@ -166,6 +187,7 @@ class FakeRedis:
         """以 `session_types.trim_history` 模擬腳本效果（§四 逐字授權）。"""
         key = keys[0]
         field, message_json, cap, ttl = argv[0], argv[1], int(argv[2]), int(argv[3])
+        max_bytes = int(argv[4])
         fields = self.hashes.setdefault(key, {})
         arr = json.loads(fields.get(field) or "[]")
         message = json.loads(message_json)
@@ -173,7 +195,7 @@ class FakeRedis:
         message["sequence"] = (arr[-1]["sequence"] + 1) if arr else 1
         arr.append(message)
         before = len(arr)
-        arr = T.trim_history(arr, cap)
+        arr = T.trim_history(arr, cap, max_bytes)
         fields[field] = json.dumps(arr, ensure_ascii=False, separators=(",", ":"))
         self.ttls[key] = ttl
         return [len(arr), before - len(arr)]
@@ -205,6 +227,46 @@ class FakeRedis:
         fields[meta_field] = json.dumps(meta, separators=(",", ":"))
         self.ttls[key] = int(ttl)
         return [created]
+
+
+class FakePipeline:
+    """`MULTI`／`EXEC` 的替身（redis-py `pipeline(transaction=True)` 的形狀）。
+
+    與真實 Redis 同形的兩個語意：
+
+    * **EXEC 之前不可見**：`execute_command` 只把指令排進佇列，不碰資料。
+    * **EXEC 時全部生效**：`execute()` 依序執行全部指令，回傳各自的結果。
+
+    中斷的模擬：`fail_next`（一次）或 `fail_commands` 命中佇列內任一指令時，
+    在**套用任何指令之前**拋出——對應「連線在 EXEC 完成之前中斷」，此時 Redis
+    丟棄整個交易。替身是單執行緒，所以它驗得到的是**呼叫形狀與語意模型**，
+    不是真實 Redis 的交易原子性（那一項見 `code-summary.md` 的本機實測）。
+    """
+
+    def __init__(self, client, *, transaction):
+        self._client = client
+        self.transaction = transaction
+        self.queued: list = []
+
+    def execute_command(self, command, *args):
+        self.queued.append((command, args))
+        return self
+
+    def execute(self):
+        client = self._client
+        queued, self.queued = self.queued, []
+        client.calls.append("MULTI")
+        if client.fail_next:
+            raise client.fail_next.pop(0)
+        for command, _ in queued:
+            if command in client.fail_commands:
+                raise client.fail_commands[command]()
+        results = []
+        for command, args in queued:
+            client.calls.append(command)
+            results.append(client._dispatch(command, args))
+        client.calls.append("EXEC")
+        return results
 
 
 class StubClock:
@@ -948,3 +1010,433 @@ class StartupConfigurationTest(unittest.TestCase):
         且**刻意不是**第二個環境變數（見 `session_store` 的註解）。"""
         self.assertIsInstance(DEFAULT_MESSAGE_MAX_CHARS, int)
         self.assertGreater(DEFAULT_MESSAGE_MAX_CHARS, 0)
+
+
+# ---------------------------------------------------------------------------
+# 合併前必修第 12 項：寫入與續期以 MULTI／EXEC 一次送出
+# ---------------------------------------------------------------------------
+
+
+def transactions(calls):
+    """把替身的指令紀錄切成交易區塊：每個 `MULTI` … `EXEC` 之間的指令名。"""
+    blocks, current = [], None
+    for name in calls:
+        if name == "MULTI":
+            current = []
+        elif name == "EXEC":
+            blocks.append(current)
+            current = None
+        elif current is not None:
+            current.append(name)
+    return blocks
+
+
+def outside_transactions(calls):
+    """不在任何 `MULTI` … `EXEC` 區塊內的指令名。"""
+    outside, inside = [], False
+    for name in calls:
+        if name == "MULTI":
+            inside = True
+        elif name == "EXEC":
+            inside = False
+        elif not inside:
+            outside.append(name)
+    return outside
+
+
+class TransactionalWriteTest(unittest.TestCase):
+    """`merge-blockers.md` 第 12 項（使用者裁決 MULTI／EXEC）。
+
+    缺陷：首次建立 session（`_ensure_meta` 兩次 `HSET`）與 `set_work_target`
+    （`HSET` ＋ `EXPIRE`）原本是多個獨立指令；中途中斷可能留下一個**沒有 TTL**
+    的 key，它永不過期。修法是讓「寫入」與「設定 TTL」在同一個交易裡同進同退。
+    """
+
+    #: 四個會建立 session 的寫入入口（與 `FirstWriteEstablishesTheSharedSegmentTest`
+    #: 同一份枚舉——缺陷的入口不只被點名的那兩個）。
+    FIRST_WRITES = FirstWriteEstablishesTheSharedSegmentTest.FIRST_WRITES
+
+    def test_fake_transaction_is_invisible_before_exec_and_applies_all_on_exec(self):
+        """
+        @purpose 替身的 MULTI／EXEC 與真實 Redis 同語意：EXEC 之前寫入不可見，EXEC 時全部生效。少了這一條，下面幾條對交易的斷言都建立在一個沒有語意的替身上。
+        @given 一個空的 in-memory Redis 替身
+        @step 開一個交易，排入 HSET 與 EXPIRE，但尚未 EXEC | 讀取該 key 得不到任何欄位，key 不存在
+        @step 執行 EXEC | 欄位已寫入，TTL 為 86400
+        @pass EXEC 前不可見、EXEC 後兩者皆生效
+        @story US2.1
+        """
+        client = FakeRedis()
+        pipe = client.pipeline(transaction=True)
+        pipe.execute_command("HSET", FIXTURE_KEY, "meta", "{}")
+        pipe.execute_command("EXPIRE", FIXTURE_KEY, 86400)
+        self.assertEqual(client.execute_command("HGETALL", FIXTURE_KEY), {})
+        self.assertEqual(client.execute_command("EXISTS", FIXTURE_KEY), 0)
+        pipe.execute()
+        self.assertEqual(client.hashes[FIXTURE_KEY], {"meta": "{}"})
+        self.assertEqual(client.execute_command("TTL", FIXTURE_KEY), 86400)
+
+    def test_session_creation_writes_and_ttl_in_one_transaction(self):
+        """
+        @purpose 首次建立 session 時，meta、共享段與 TTL 在同一個交易裡送出，建立完成的瞬間 key 就帶 TTL，不依賴下一個指令補設。
+        @given 一個不存在的 session key
+        @step 以 set_sharing_mode(workspace, shared) 作為第一次寫入 | 第一個交易區塊恰為 HSETNX、HSETNX、EXPIRE（建立用「不存在才寫」，見下一條測試）
+        @step 檢查交易區塊之外的指令 | 沒有任何 HSET／HSETNX 在交易之外送出
+        @step 讀該 key 的 TTL | 為 86400
+        @pass 建立與 TTL 同一個交易，且 key 帶 TTL
+        @story US2.1
+        """
+        store, client, _, _ = make_store()
+        store.set_sharing_mode(FIXTURE_KEY, "workspace", "shared")
+        blocks = transactions(client.calls)
+        self.assertEqual(blocks[0], ["HSETNX", "HSETNX", "EXPIRE"])
+        outside = outside_transactions(client.calls)
+        self.assertNotIn("HSET", outside)
+        self.assertNotIn("HSETNX", outside)
+        self.assertEqual(client.execute_command("TTL", FIXTURE_KEY), 86400)
+
+    def test_concurrent_first_write_does_not_wipe_the_shared_segment(self):
+        """
+        @purpose 兩個並行的第一次寫入都可能先看到「key 不存在」；後到者的建立不得把先到者剛追加的共享段蓋回空的。
+        @given 共享段已有一則訊息（先到者已建立並追加）；後到者的 EXISTS 判定被替換為「不存在」，模擬兩者之間的競態窗口
+        @step 後到者執行建立（_ensure_meta） | 交易送出 HSETNX，而非 HSET
+        @step 讀共享段 | 先到者的訊息仍在；meta 未被重設
+        @pass 並行建立不造成資料遺失
+        @story US2.1
+        @note session-store code-generation 本輪查出的既存並行窗口。突變 M12N（改回 HSET）使本案紅燈。
+        """
+        store, client, _, _ = make_store()
+        store.append_message(FIXTURE_KEY, "shared", "user", "fixture-first-writer")
+        before = dict(client.hashes[FIXTURE_KEY])
+        store._gateway.exists = lambda method, key: False  # 競態窗口：EXISTS 已判「不存在」
+        store._ensure_meta("append_message", FIXTURE_KEY)
+        self.assertEqual(client.hashes[FIXTURE_KEY], before)
+        self.assertIn("fixture-first-writer", client.hashes[FIXTURE_KEY]["seg:shared"])
+
+    def test_interruption_before_exec_never_leaves_a_key_without_ttl(self):
+        """
+        @purpose 第 12 項缺陷本身的回歸測試：行程在送出 EXPIRE 時中斷，不得留下一個沒有 TTL、永不過期的半成品 key。這是突變「交易拆回逐條指令」唯一會變紅的斷言。
+        @given 四個會建立 session 的寫入入口各自對一個不存在的 key 動作；替身被設定為 EXPIRE 持續失敗（模擬行程在那一刻死掉，重試也救不回）
+        @step 呼叫該寫入入口 | 拋出 SessionBackendUnavailable
+        @step 檢查該 key | 不存在；或存在且帶 TTL——絕不是「存在但無 TTL」
+        @pass 四個入口都沒有留下無 TTL 的 key
+        @story US2.1
+        """
+        for label, action in self.FIRST_WRITES:
+            with self.subTest(first_write=label):
+                store, client, _, _ = make_store()
+                client.fail_commands["EXPIRE"] = lambda: FakeConnectionError(
+                    "connection lost"
+                )
+                with self.assertRaises(SessionBackendUnavailable):
+                    action(store)
+                exists = FIXTURE_KEY in client.hashes
+                has_ttl = FIXTURE_KEY in client.ttls
+                self.assertFalse(
+                    exists and not has_ttl,
+                    f"{label}：中斷後留下一個沒有 TTL 的 key（永不過期）",
+                )
+                self.assertFalse(exists, f"{label}：EXEC 之前中斷，交易不得部分生效")
+
+    def test_set_work_target_write_and_renewal_are_one_transaction(self):
+        """
+        @purpose set_work_target 的作業對象寫入與 TTL 續期同一個交易送出，續期不再是一條可以單獨失敗的獨立指令。
+        @given 一個已存在的 session，TTL 紀錄已被清掉
+        @step 對共享段 set_work_target(project_id=7) | 交易區塊恰為 HSET、EXPIRE
+        @step 檢查交易區塊之外的指令 | 沒有 EXPIRE 也沒有 HSET 在交易之外送出
+        @step 讀 TTL 與共享段的作業對象 | TTL 為 86400、projectId 為 K-07 的解析結果
+        @pass 寫入與續期同進同退且 TTL 已續期
+        @story US2.1
+        """
+        store, client, _, _ = make_store()
+        store.append_message(FIXTURE_KEY, "shared", "user", "fixture-msg-1")
+        client.calls.clear()
+        client.ttls.pop(FIXTURE_KEY, None)
+        session = store.set_work_target(FIXTURE_KEY, "shared", FakePrincipal(), project_id=7)
+        self.assertEqual(transactions(client.calls), [["HSET", "EXPIRE"]])
+        outside = outside_transactions(client.calls)
+        self.assertNotIn("EXPIRE", outside)
+        self.assertNotIn("HSET", outside)
+        self.assertEqual(client.ttls[FIXTURE_KEY], 86400)
+        self.assertEqual(session.segment("shared").project_id, 7)
+
+    def test_switch_back_to_shared_writes_meta_and_renews_in_one_transaction(self):
+        """
+        @purpose set_sharing_mode 切回 shared 的 meta 寫入與續期同一個交易（與 set_work_target 同形狀的第三個入口）。
+        @given 一個已存在、workspace 為 isolated 的 session
+        @step 把 workspace 切回 shared | 交易區塊恰為 HSET、EXPIRE，交易外沒有 HSET／EXPIRE
+        @step 讀 pageModes 與 TTL | workspace 為 shared、TTL 為 86400
+        @pass 寫入與續期同一個交易
+        @story US3.1
+        """
+        store, client, _, _ = make_store()
+        store.set_sharing_mode(FIXTURE_KEY, "workspace", "isolated")
+        client.calls.clear()
+        client.ttls.pop(FIXTURE_KEY, None)
+        session = store.set_sharing_mode(FIXTURE_KEY, "workspace", "shared")
+        self.assertEqual(transactions(client.calls), [["HSET", "EXPIRE"]])
+        outside = outside_transactions(client.calls)
+        self.assertNotIn("EXPIRE", outside)
+        self.assertNotIn("HSET", outside)
+        self.assertEqual(session.page_modes["workspace"], "shared")
+        self.assertEqual(client.ttls[FIXTURE_KEY], 86400)
+
+    def test_pipeline_error_message_loses_the_written_values_but_keeps_the_reason(self):
+        """
+        @purpose redis-py 會把 pipeline 指令全文（含被寫入的值）加在例外訊息前面；gateway 必須拿掉它，否則作業對象與內容會隨例外鏈進公開日誌，且 OOM 的字串退路會失效。
+        @given 替身在交易中對 HSET 回覆一個帶 redis-py 前綴的 OOM 錯誤（指令層型別，非 OOM 專屬型別，故只能靠字串退路分類）
+        @step 以 hset_fields_and_expire 寫一個值為 fixture-secret-value 的欄位 | 拋出 SessionBackendUnavailable，原因碼為 redis_oom
+        @step 檢查被串接的原始例外訊息 | 以「OOM 」開頭，且不含 fixture-secret-value
+        @pass 原因碼正確且例外訊息不含被寫入的值
+        @story US2.1
+        """
+        annotated = (
+            "Command # 1 (HSET brain:session:fixture-user-1 tgt:shared "
+            "fixture-secret-value) of pipeline caused error: "
+            "OOM command not allowed when used memory > 'maxmemory'."
+        )
+        client = FakeRedis()
+        client.fail_commands["HSET"] = lambda: FakeResponseError(annotated)
+        gateway, _ = make_gateway(client, max_retries=0)
+        with self.assertRaises(SessionBackendUnavailable) as ctx:
+            gateway.hset_fields_and_expire(
+                "set_work_target",
+                FIXTURE_KEY,
+                {"tgt:shared": "fixture-secret-value"},
+                86400,
+                idempotent=True,
+            )
+        self.assertEqual(ctx.exception.reason, REDIS_OOM)
+        cause = ctx.exception.__cause__
+        self.assertTrue(str(cause).startswith("OOM "))
+        self.assertNotIn("fixture-secret-value", str(cause))
+        self.assertNotIn("fixture-secret-value", str(ctx.exception))
+
+    def test_transaction_requires_at_least_one_field(self):
+        """空的欄位集合是呼叫錯誤——一個只有 `EXPIRE` 的交易不是本方法的用途。"""
+        gateway, _ = make_gateway()
+        with self.assertRaises(ValueError):
+            gateway.hset_fields_and_expire("touch", FIXTURE_KEY, {}, 86400, idempotent=True)
+
+
+# ---------------------------------------------------------------------------
+# 合併前必修第 18 項：每段 200 KB 位元組上限（與筆數上限取較嚴者）
+# ---------------------------------------------------------------------------
+
+#: 一則 4000 個中文字的訊息（4000 = `DEFAULT_MESSAGE_MAX_CHARS`）。用單一重複字元，
+#: 刻意不是任何看起來像真實對話的內容（本 repo 為 public）。
+CJK_MAX_MESSAGE = "測" * DEFAULT_MESSAGE_MAX_CHARS
+
+
+class SegmentByteCapTest(unittest.TestCase):
+    """`merge-blockers.md` 第 18 項（使用者裁決：每段對話大小上限）。"""
+
+    def test_full_length_cjk_messages_hit_the_byte_cap_not_the_count_cap(self):
+        """
+        @purpose 以最壞情況的訊息（4000 個中文字，UTF-8 每字 3 位元組）灌滿一段，觸發的必須是 200 KB 位元組上限而不是 200 則筆數上限；否則容量算式回到每 session 約 7 MB 的最壞值。
+        @given 筆數上限 200、單則上限 4000 字元、每段位元組上限為預設 200 KB 的 session store
+        @step 對共享段追加 25 則 4000 個中文字的訊息 | 每次都成功
+        @step 讀回共享段 | 則數遠少於 200（被位元組上限截住），且少於 25
+        @step 量共享段儲存值的 UTF-8 位元組數 | 不超過 200 × 1024
+        @step 比對保留下來的序號 | 是最新的那幾則、連續遞增、最後一則是第 25 則
+        @pass 位元組上限生效、保留最新且順序不變
+        @story US6.1
+        """
+        store, client, _, _ = make_store(history_max=200, message_max_chars=DEFAULT_MESSAGE_MAX_CHARS)
+        for _ in range(25):
+            store.append_message(FIXTURE_KEY, "shared", "user", CJK_MAX_MESSAGE)
+        messages = store.load(FIXTURE_KEY).segment("shared").messages
+        self.assertLess(len(messages), 25)
+        self.assertLess(len(messages), 200)
+        stored = client.hashes[FIXTURE_KEY]["seg:shared"]
+        self.assertLessEqual(len(stored.encode("utf-8")), T.DEFAULT_SEGMENT_MAX_BYTES)
+        sequences = [m.sequence for m in messages]
+        self.assertEqual(sequences, list(range(25 - len(messages) + 1, 26)))
+
+    def test_short_messages_are_still_governed_by_the_count_cap(self):
+        """
+        @purpose 位元組條件是「取較嚴者」的另一半，不是取代：短訊息時仍由筆數上限截斷。
+        @given 筆數上限 3 的 session store
+        @step 對共享段追加 5 則短訊息 | 每次都成功
+        @step 讀回共享段 | 恰為最後 3 則
+        @pass 筆數上限照常生效
+        @story US6.1
+        """
+        store, _, _, _ = make_store(history_max=3)
+        for i in range(1, 6):
+            store.append_message(FIXTURE_KEY, "shared", "user", f"fixture-msg-{i}")
+        texts = [m.text for m in store.load(FIXTURE_KEY).segment("shared").messages]
+        self.assertEqual(texts, ["fixture-msg-3", "fixture-msg-4", "fixture-msg-5"])
+
+    def test_store_refuses_a_configuration_where_one_message_could_exceed_the_segment_cap(self):
+        """
+        @purpose 「單則訊息不可能超過每段上限」是修剪不需要單則超限分支的前提；它以算式在建構時確認，不成立時拒絕建構，而不是默默放行一個超限的段。
+        @given 單則上限 4000 字元
+        @step 以每段上限 1000 位元組建構 session store | 拋出 ValueError
+        @step 以預設每段上限建構 | 成功
+        @pass 前提不成立時拒絕、成立時放行
+        @story US6.1
+        """
+        gateway, _ = make_gateway()
+        with self.assertRaises(ValueError):
+            SessionStore(
+                gateway,
+                hierarchy_facade=Mock(),
+                history_max=200,
+                message_max_chars=DEFAULT_MESSAGE_MAX_CHARS,
+                segment_max_bytes=1000,
+            )
+        SessionStore(
+            gateway,
+            hierarchy_facade=Mock(),
+            history_max=200,
+            message_max_chars=DEFAULT_MESSAGE_MAX_CHARS,
+        )
+
+    def test_the_byte_cap_is_passed_to_the_production_script(self):
+        """
+        @purpose Lua 生產載體收到的位元組上限就是 DEFAULT_SEGMENT_MAX_BYTES；替身以參考實作模擬腳本，若參數沒有傳進腳本，CI 全綠而生產上仍無位元組上限。
+        @given 一個預設設定的 session store，替身記錄腳本收到的 ARGV
+        @step 追加一則訊息 | append_message 腳本的第 5 個 ARGV 為 204800
+        @pass 上限確實傳進生產腳本
+        @story US6.1
+        """
+        store, client, _, _ = make_store()
+        seen = []
+        original = client._script_append_message
+
+        def spy(keys, argv):
+            seen.append(list(argv))
+            return original(keys, argv)
+
+        client._script_append_message = spy
+        store.append_message(FIXTURE_KEY, "shared", "user", "fixture-msg-1")
+        self.assertEqual(int(seen[0][4]), T.DEFAULT_SEGMENT_MAX_BYTES)
+
+
+# ---------------------------------------------------------------------------
+# 真實 Redis（opt-in，**不在 CI**）：Lua 與參考實作一致、MULTI／EXEC 的實際行為
+# ---------------------------------------------------------------------------
+
+from tests_redis import redis_skip_reason  # noqa: E402  與 tests_redis 共用 skip 判定
+
+_REAL_REDIS_SKIP = redis_skip_reason()
+
+#: 刻意涵蓋 cjson 與 Python json 長度不同的兩個字元（`/` 與 `0x7f`），以及
+#: 中文、表情符號（4 位元組）、控制字元與引號。
+PARITY_TEXTS = (
+    "fixture-msg",
+    "測" * 3000,
+    "a/b/c/" * 400,
+    "\x7f" * 500,
+    "😀" * 1000,
+    "\x01\n\t\"\\" * 300,
+    "測/\x7f😀" * 700,
+)
+
+
+@unittest.skipIf(_REAL_REDIS_SKIP is not None, _REAL_REDIS_SKIP or "")
+class RealRedisParityTest(unittest.TestCase):
+    """`unit-test-instructions.md §2.1` 的「Lua 載體與純函式在同一輸入下結果相同」。
+
+    **它不是 CI 閘門**：`ci.yml` 的 backend job 沒有 Redis，`REDIS_URL` 未設定時
+    本類別 skip 並印出原因（與 `tests_redis/` 同一個判定）。替身以參考實作模擬
+    腳本，在替身上比對兩者是同義反覆——只有真實 Redis 跑得到 Lua。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import os
+        import uuid
+
+        import redis
+
+        from services.redis_gateway import redis_py_error_types
+
+        cls.client = redis.Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+        cls.gateway = RedisGateway(cls.client, error_types=redis_py_error_types())
+        cls.prefix = f"u10-parity:{uuid.uuid4().hex}"
+
+    def setUp(self):
+        self.key = f"{self.prefix}:{self._testMethodName}"
+        self.client.delete(self.key)
+
+    def tearDown(self):
+        self.client.delete(self.key)
+
+    def test_lua_trim_matches_the_reference_on_the_same_input(self):
+        """
+        @purpose 生產載體（append_message.lua，以 cjson 與 string.len 量位元組）與參考實作（session_types.trim_history）在同一串輸入下保留完全相同的訊息；兩者分歧時臨界值附近會丟不同筆數。
+        @given 真實 Redis；一串含中文、斜線、DEL、表情符號、控制字元的訊息，筆數上限 200、每段上限 204800 位元組
+        @step 每追加一則，同時以參考實作模擬一次 | 每一步兩邊保留的序號完全相同
+        @step 量 Redis 內該段的位元組數 | 等於參考實作算出的位元組數，且不超過 204800
+        @pass 全部步驟一致
+        @story US6.1
+        """
+        from services.session_store import SessionStore
+
+        store = SessionStore(
+            self.gateway, hierarchy_facade=Mock(), history_max=200,
+            now=lambda: "2026-10-23T00:00:00+00:00",
+        )
+        reference: list = []
+        # 每輪約 34 KB；8 輪約 270 KB，超過 200 KB——位元組上限必然被觸發，
+        # 且筆數（56）遠低於 200，故被比對的是位元組那一半（輪數由此算出）。
+        rounds = 8
+        for round_no in range(rounds):
+            for text in PARITY_TEXTS:
+                with self.subTest(round=round_no, text=text[:12]):
+                    store.append_message(self.key, "shared", "user", text)
+                    message = {
+                        "role": "user",
+                        "text": text,
+                        "createdAt": "2026-10-23T00:00:00+00:00",
+                        "sequence": (reference[-1]["sequence"] + 1) if reference else 1,
+                    }
+                    reference = T.trim_history(reference + [message], 200)
+                    stored = json.loads(self.client.hget(self.key, "seg:shared"))
+                    self.assertEqual(
+                        [m["sequence"] for m in stored],
+                        [m["sequence"] for m in reference],
+                    )
+                    raw = self.client.hget(self.key, "seg:shared")
+                    self.assertEqual(len(raw.encode("utf-8")), T.segment_size_bytes(reference))
+                    self.assertLessEqual(len(raw.encode("utf-8")), T.DEFAULT_SEGMENT_MAX_BYTES)
+        # 位元組上限確實被觸發過（否則本條只比對了「不修剪」的情況）。
+        self.assertLess(len(reference), rounds * len(PARITY_TEXTS))
+
+    def test_transaction_sets_fields_and_ttl_together(self):
+        """
+        @purpose 真實 redis-py 的 pipeline(transaction=True) 確實把 HSET 與 EXPIRE 一起送出，寫入後 key 帶 TTL。
+        @given 真實 Redis、不存在的 key
+        @step 以 hset_fields_and_expire 寫兩個欄位、TTL 4321 | 兩個欄位都在、TTL 介於 0 與 4321 之間
+        @pass 欄位與 TTL 同時存在
+        @story US2.1
+        """
+        self.gateway.hset_fields_and_expire(
+            "test", self.key, {"meta": "{}", "seg:shared": "[]"}, 4321, idempotent=True
+        )
+        self.assertEqual(self.client.hgetall(self.key), {"meta": "{}", "seg:shared": "[]"})
+        ttl = self.client.ttl(self.key)
+        self.assertGreater(ttl, 0)
+        self.assertLessEqual(ttl, 4321)
+
+    def test_real_pipeline_error_is_classified_and_stripped_of_written_values(self):
+        """
+        @purpose 真實 redis-py 在 EXEC 回覆錯誤時會把指令全文加進例外訊息；gateway 必須分類為 redis_command_error 並拿掉被寫入的值。
+        @given 真實 Redis；該 key 已是字串型別（使 HSET 在 EXEC 時回 WRONGTYPE）
+        @step 以 hset_fields_and_expire 寫值 fixture-secret-value | 拋出 SessionBackendUnavailable，原因碼 redis_command_error
+        @step 檢查串接的原始例外訊息 | 不含 fixture-secret-value，以 WRONGTYPE 開頭
+        @step 檢查 TTL | EXPIRE 照常生效（Redis 交易不回滾，但也不會留下無 TTL 的 key）
+        @pass 分類正確、訊息不含寫入值、TTL 存在
+        @story US2.1
+        """
+        self.client.set(self.key, "x")
+        with self.assertRaises(SessionBackendUnavailable) as ctx:
+            self.gateway.hset_fields_and_expire(
+                "test", self.key, {"tgt:shared": "fixture-secret-value"}, 4321, idempotent=False
+            )
+        self.assertEqual(ctx.exception.reason, REDIS_COMMAND_ERROR)
+        cause = str(ctx.exception.__cause__)
+        self.assertNotIn("fixture-secret-value", cause)
+        self.assertTrue(cause.startswith("WRONGTYPE"), cause)
+        self.assertGreater(self.client.ttl(self.key), 0)

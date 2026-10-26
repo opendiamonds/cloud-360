@@ -24,16 +24,67 @@
 --
 -- **不改 TTL**、key 不存在即回 0 且不建 key（`NFR12.18`）。
 --
+-- **已結束保留數**（合併前必修第 18 項、`OPEN-N10-3`；`code-generation-plan.md`
+-- §六 Step 13）：補丁使本項**由非終態轉為終態**時，若終態項（含本項）超過
+-- `ARGV[5]` 筆，依 `createdAt`（同值再以欄位名，決定性）由舊到新 `HDEL` 其他
+-- 終態項，直到不超過為止。
+--   * 只刪終態項，**永不刪**進行中（處理中、等待中）的項。
+--   * **不刪剛轉終態的這一項**：`createdAt` 是建立時間而非結束時間，一個執行很久的
+--     項可能比 20 筆已結束的項都舊；若把它列入候選，它會在自己完成的那一刻就被
+--     刪掉，使用者在清單上永遠看不到它的結果。排除它之後，候選至少有 `ARGV[5]`
+--     筆（總數已超過上限），故終態總數仍收斂到上限以內。
+--   * 只在「非終態 → 終態」那一次觸發；終態項的後續補丁（如在途存檔收尾改
+--     `sideEffect`）不觸發。
+--
 -- KEYS[1] session key
 -- ARGV[1] 欄位名（`wi:<workItemId>`）
 -- ARGV[2] 預期 status 的 JSON 陣列
 -- ARGV[3] 預期 dispatchStage
 -- ARGV[4] 補丁（JSON 物件）
+-- ARGV[5] 已結束保留數（整數字串）
+-- ARGV[6] 終態 status 的 JSON 陣列
 --
 -- 回傳 1＝已寫入；0＝key 或欄位不存在、或比對不符（皆未寫入）
 
 local key = KEYS[1]
 local field = ARGV[1]
+
+local function prune_terminal(terminal, keep)
+  local flat = redis.call('HGETALL', key)
+  local others = {}
+  local count = 0
+  for i = 1, #flat, 2 do
+    local name = flat[i]
+    if string.sub(name, 1, 3) == 'wi:' then
+      local other = cjson.decode(flat[i + 1])
+      if terminal[other.status] then
+        count = count + 1
+        if name ~= field then
+          local created = other.createdAt
+          if type(created) ~= 'string' then
+            created = ''
+          end
+          others[#others + 1] = { name = name, created = created }
+        end
+      end
+    end
+  end
+  if count <= keep then
+    return
+  end
+  table.sort(others, function(a, b)
+    if a.created ~= b.created then
+      return a.created < b.created
+    end
+    return a.name < b.name
+  end)
+  local index = 1
+  while count > keep and index <= #others do
+    redis.call('HDEL', key, others[index].name)
+    count = count - 1
+    index = index + 1
+  end
+end
 
 local function run()
   if redis.call('EXISTS', key) == 0 then
@@ -58,11 +109,19 @@ local function run()
   if item.dispatchStage ~= ARGV[3] then
     return 0
   end
+  local terminal = {}
+  for _, value in ipairs(cjson.decode(ARGV[6])) do
+    terminal[value] = true
+  end
+  local was_terminal = terminal[item.status] == true
   local patch = cjson.decode(ARGV[4])
   for name, value in pairs(patch) do
     item[name] = value
   end
   redis.call('HSET', key, field, cjson.encode(item))
+  if not was_terminal and terminal[item.status] then
+    prune_terminal(terminal, tonumber(ARGV[5]))
+  end
   return 1
 end
 

@@ -164,5 +164,81 @@ class RankCandidatesExampleTest(unittest.TestCase):
         self.assertEqual([c.identifier for c in ranked], ["a", "b"])
 
 
+# ---------------------------------------------------------------------------
+# 合併前必修第 22 項 (a)：以**真實距離**餵 `scored_candidates`
+# ---------------------------------------------------------------------------
+
+#: `<=>`（cosine 距離）對非零向量的值域是 `[0, 2]`。生成域照它取，且排除 NaN
+#: ——理由同本檔開頭的 `allow_nan=False`。
+distances = st.floats(min_value=0.0, max_value=2.0, allow_nan=False)
+
+
+def _pairs(distance_by_id):
+    """把 `{id: 距離}` 做成 `search_records` 回傳的 `(列, 距離)` 形狀。
+
+    列是**未持久化**的 `MemoryRecord`：`scored_candidates` 只讀 `record.id`，
+    不碰 session，所以這裡不需要資料庫。
+    """
+    from models import MemoryRecord
+
+    return [
+        (MemoryRecord(id=memory_id), distance)
+        for memory_id, distance in distance_by_id.items()
+    ]
+
+
+class ScoredCandidatesRealDistanceTest(unittest.TestCase):
+    """`scored_candidates` → `rank_candidates`：**距離較近者排在前面**。
+
+    ## 為什麼上面的 PBT 驗不到這件事
+
+    `RankCandidatesPropertyTest` 吃的是**手造分數**，從未經過
+    `memory_service.scored_candidates`。把該函式的 `score=-distance` 改成
+    `score=distance`，排序方向整個反過來（最不相似的排最前），而上面七條
+    全部仍是綠的——那正是 `merge-blockers.md` 第 22 項 (a) 指出的缺口。
+
+    本類別把兩個函式**照 `MemoryFacade.search` 的組合方式**串起來
+    （`rank_candidates(memory_service.scored_candidates(pairs))`，
+    `memory_facade.py` 的檢索路徑），餵入真實的距離值，斷言的是**距離**的順序
+    而不是分數的順序——分數是被測對象自己產出的東西，拿它當依據等於循環論證。
+    """
+
+    @staticmethod
+    def _rank(distance_by_id):
+        import services.memory_service as memory_service
+
+        return [
+            c.identifier
+            for c in rank_candidates(
+                memory_service.scored_candidates(_pairs(distance_by_id))
+            )
+        ]
+
+    def test_closer_candidate_ranks_first(self):
+        """三個具體距離：近（0.05）、中（0.6）、遠（1.7）。
+
+        輸入順序刻意打亂成「中、遠、近」，使「照輸入順序回傳」的實作也會紅。
+        """
+        ranked = self._rank({11: 0.6, 12: 1.7, 13: 0.05})
+        self.assertEqual(
+            ranked,
+            ["13", "11", "12"],
+            "距離越小越相似，必須排在越前面；順序反過來代表取負號不見了",
+        )
+
+    @given(st.dictionaries(st.integers(min_value=1, max_value=10_000), distances, min_size=2, max_size=30))
+    @settings(max_examples=200, deadline=None)
+    def test_ranking_is_non_decreasing_in_distance(self, distance_by_id):
+        """**性質**：經 `scored_candidates` 後的排序結果，距離序列非遞減。
+
+        以排序後的識別字**回查原始距離**再比較，依據的是輸入而非被測函式的
+        輸出。同距離者的相對順序由次級鍵決定，與本性質無關（`<=` 而非 `<`）。
+        """
+        ranked = self._rank(distance_by_id)
+        ordered = [distance_by_id[int(identifier)] for identifier in ranked]
+        for nearer, farther in zip(ordered, ordered[1:]):
+            self.assertLessEqual(nearer, farther)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

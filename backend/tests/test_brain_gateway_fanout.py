@@ -16,6 +16,7 @@ from services.brain_ws_contract import TokenPayload, WorkItemsPayload, WsServerM
 from tests.brain_gateway_fakes import (
     WS_PATH,
     Harness,
+    assert_non_turn_error,
     hello,
     nothing_more,
     protocols,
@@ -337,6 +338,66 @@ class SendFailureTest(_Base):
                 err = recv_json(a1)
         self.assertEqual((err["payload"]["code"], err["payload"]["message"]), ("INVALID_REQUEST", "找不到這個工作項"))
         self.assertEqual(self.h.orchestrator.correct_calls[0].sink._segment, "shared")
+
+
+class NonTurnRequestErrorTest(_Base):
+    """BR2.8 T7：三種非輪次請求（BR1.6）失敗時的 error 不屬於任何輪次，turnId 為 null（合併前必修第 2 項(a)）。"""
+
+    def test_set_work_target_failure_has_null_turn_id(self):
+        """
+        @purpose set_work_target 的 id 不是十進位字串 → INVALID_REQUEST，且不得捏造 turnId；不扇出 work_target。
+        @given 已連線
+        @step 送 set_work_target，projectId="abc" | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null
+        @step 等待片刻 | 沒有其他訊息（未扇出）
+        @pass 非輪次錯誤
+        @story US2.1
+        @api WS /api/brain/ws -> 101
+        """
+        with TestClient(self.h.app) as client:
+            with client.websocket_connect(WS_PATH, subprotocols=protocols(self.a)) as a1:
+                hello(a1)
+                a1.send_json(
+                    {"v": 1, "type": "set_work_target",
+                     "payload": {"projectId": "abc", "systemId": None, "diagramId": None, "segment": "shared"}}
+                )
+                assert_non_turn_error(self, recv_json(a1), "INVALID_REQUEST")
+                self.assertTrue(nothing_more(a1))
+
+    def test_set_sharing_mode_failure_has_null_turn_id(self):
+        """
+        @purpose set_sharing_mode 在 session 層拋非預期例外 → INTERNAL_ERROR，且不得捏造 turnId。
+        @given 已連線；store.set_sharing_mode 改為拋 RuntimeError
+        @step 送 set_sharing_mode | error(INTERNAL_ERROR)，envelope 與 payload 的 turnId 皆為 null
+        @pass 非輪次錯誤
+        @story US3.1
+        @api WS /api/brain/ws -> 101
+        """
+        def boom(*a, **k):
+            raise RuntimeError("store down")
+
+        self.h.store.set_sharing_mode = boom
+        with TestClient(self.h.app) as client:
+            with client.websocket_connect(WS_PATH, subprotocols=protocols(self.a)) as a1:
+                hello(a1)
+                a1.send_json({"v": 1, "type": "set_sharing_mode", "payload": {"mode": "isolated", "scope": "workspace"}})
+                assert_non_turn_error(self, recv_json(a1), "INTERNAL_ERROR")
+
+    def test_correct_work_item_not_found_has_null_turn_id(self):
+        """
+        @purpose correct_work_item 指向不存在的工作項 → INVALID_REQUEST「找不到這個工作項」，且不得捏造 turnId。
+        @given 已連線、尚無工作項
+        @step 送 correct_work_item，workItemId="nope" | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null
+        @pass 非輪次錯誤
+        @story US1.4
+        @api WS /api/brain/ws -> 101
+        """
+        with TestClient(self.h.app) as client:
+            with client.websocket_connect(WS_PATH, subprotocols=protocols(self.a)) as a1:
+                hello(a1)
+                a1.send_json({"v": 1, "type": "correct_work_item", "payload": {"workItemId": "nope"}})
+                err = recv_json(a1)
+        assert_non_turn_error(self, err, "INVALID_REQUEST")
+        self.assertEqual(err["payload"]["message"], "找不到這個工作項")
 
 
 if __name__ == "__main__":

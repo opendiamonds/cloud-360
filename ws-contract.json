@@ -202,9 +202,16 @@
             "type": "string"
           },
           "turnId": {
-            "description": "BR1.5：必須等於其 envelope 的 turnId（同 DonePayload）。",
-            "title": "Turnid",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BR1.5：**必填鍵、值可為 null**，且必須等於其 envelope 的 turnId（兩者同為 null 或同為同一值）。判準：屬於某一輪的錯誤（輪內處理失敗、EMPTY_RESPONSE）帶該輪 turnId；不屬於任何一輪的錯誤——回應狀態類客戶端訊息（set_sharing_mode／set_work_target）的失敗、協定違規（如 BR2.13 客戶端偷帶 turnId 的 INVALID_REQUEST）、連線建立後的 UNAUTHORIZED（BR2.8）——為 null。伺服器**不得**為非輪次錯誤捏造一個 turnId：捏造的編號會讓消費端把錯誤歸到一個從未存在的輪次（merge-blockers.md 第 2 項）。",
+            "title": "Turnid"
           }
         },
         "required": [
@@ -733,7 +740,7 @@
                 "type": "null"
               }
             ],
-            "description": "BR1.6：**欄位必存在，但值可為 null**。輪次訊息（token／clarify／cost_card／done／error）必為非 null，同一輪的所有訊息共用同一個值（BR1.3）；非輪次訊息（ready／sharing_mode／work_target／work_items）必為 null。**本契約不定義它的產生方式**，也**無法強制「同一輪相同」**（那是執行期性質）——兩者皆屬 U13。",
+            "description": "BR1.6：**欄位必存在，但值可為 null**。輪次訊息（token／clarify／cost_card／done）必為非 null，同一輪的所有訊息共用同一個值（BR1.3）；非輪次訊息（ready／sharing_mode／work_target／work_items）必為 null；error 可為 null——屬於某一輪時帶該輪的值，不屬於任何一輪（協定違規、狀態類請求失敗、連線層授權失敗）時為 null，且必須與 payload.turnId 相等（BR1.5）。**本契約不定義它的產生方式**，也**無法強制「同一輪相同」**（那是執行期性質）——兩者皆屬 U13。",
             "title": "Turnid"
           },
           "type": {

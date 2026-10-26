@@ -127,6 +127,27 @@ class LastAdminGuardReport(BaseModel):
     projects: List[GuardedProjectRef]
 
 
+class ReselectionFailureReport(BaseModel):
+    """停用端點在**自動改選部分失敗**時的回應本體（合併前必修第 10 項）。
+
+    出現在 `PUT /api/auth/{user_id}/active` 的 **500**（任一專案改選失敗）與
+    **503**（失敗全部是取鎖逾時，合併前必修第 16 項）。兩者的共同事實是：
+    **帳號已經停用了**（停用與改選是兩段交易，改選在停用成功之後才跑），而
+    `failed_project_ids` 列出的專案此刻可能沒有可運作的管理者。
+
+    `detail` 告訴呼叫端**重送同一個請求**即可補跑：對已停用的帳號再送
+    `is_active=false` 不會重跑守門，但會重跑改選，而改選是冪等的（`BR4.3`），
+    已改好的專案不會產生第二筆事件。
+
+    在此之前這條路徑回 200 且只記 log，沒有任何呼叫者負責重跑，失敗的專案會
+    永久沒有管理者（`nfr-design` review-02 `R-04`）。
+    """
+
+    detail: str
+    user_id: int
+    failed_project_ids: List[int]
+
+
 __all__ = [
     "ProjectRole",
     "PROJECT_ROLE_VALUES",
@@ -134,4 +155,5 @@ __all__ = [
     "MemberView",
     "GuardedProjectRef",
     "LastAdminGuardReport",
+    "ReselectionFailureReport",
 ]

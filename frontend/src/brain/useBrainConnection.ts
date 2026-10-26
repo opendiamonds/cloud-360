@@ -51,6 +51,43 @@ interface Options {
   enabled: boolean;
 }
 
+/**
+ * 本連線**最後一次成功送出**的客戶端請求（code-generation review-02 R-08／R-09、`[EP-R2]`=A）。
+ *
+ * 非輪次錯誤（turnId=null）沒有可歸屬的識別，前端以「最後送出的是什麼」判斷它拒絕了誰：
+ * - `user_message` 且之後本連線尚未收到任何輪次訊息（token／cost_card／clarify／done／帶 turnId 的 error）
+ *   → 被拒的是那句原句：解除等待、標為未送達。
+ * - `select_clarify_candidate` → 被拒的是反問選擇：本段 picking 的反問回 default。
+ * - 其他 → 只插入系統提示。
+ * 判定用過一次即歸為 `other`，後續無關的非輪次錯誤不再動到原句或反問。
+ *
+ * **非輪次請求不覆寫待決的標記**（object-picker-ui code-generation review-02 R-08，`[EP-R2]` 的細化）：
+ * `set_work_target`／`set_sharing_mode`／`correct_work_item` 送出時，若標記仍是**尚未收到任何輪次訊息**的
+ * `user_message` 或 `select_clarify_candidate`，標記保留；否則才歸為 `other`。依據：閘道對同一連線的訊框依序處理
+ * （`brain_gateway.py` `_receive_loop` 逐則 await），被拒的原句或反問選擇，其 turnId=null 的 error 必然先於
+ * 之後任何請求的回應到達；受理者則先送出該輪訊息（標記因此轉為已回應）。標記只在「該請求收到第一則輪次訊息」
+ * 或「被一次非輪次錯誤的判定用掉」時解除，連線重建時歸零。
+ */
+type SentKind = 'user_message' | 'select_clarify_candidate' | 'other';
+
+interface LastSent {
+  kind: SentKind;
+  /** kind 為 user_message 時，該則使用者原句的本地 id。 */
+  userItemId: string | null;
+  /** 送出後本連線是否已收到任何輪次訊息。 */
+  answered: boolean;
+}
+
+const NOTHING_SENT: LastSent = { kind: 'other', userItemId: null, answered: true };
+
+/** 非輪次請求送出後的標記：待決的 user_message／反問選擇保留，其餘歸為 `other`（R-08）。 */
+function afterNonTurnSend(last: LastSent): LastSent {
+  return !last.answered && last.kind !== 'other' ? last : NOTHING_SENT;
+}
+
+/** 零寬空白：螢幕閱讀器不念，但使相同文字的第二次播報仍是一次 DOM 內容變更（R-12）。 */
+const REANNOUNCE_MARK = String.fromCharCode(0x200b);
+
 export function useBrainConnection(page: BrainPage, { enabled }: Options): BrainConnection {
   const { token, refreshMe } = useAuth();
   const { dispatch } = useBrainTranscript();
@@ -72,6 +109,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   const turnTextRef = useRef<Map<string, string>>(new Map());
   const costTurnsRef = useRef<Set<string>>(new Set());
   const forbiddenRefreshedRef = useRef(false);
+  const lastSentRef = useRef<LastSent>(NOTHING_SENT);
   const listenersRef = useRef<ConnectionListeners>({});
   const latestRef = useRef({ refreshMe, dispatch });
 
@@ -91,10 +129,24 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
 
     const act = (action: TranscriptAction) => latestRef.current.dispatch(action);
 
+    // 錯誤播報：與目前播報文字相同時附一個不可見的零寬字元（再相同就拿掉），使連續兩則相同文字的錯誤
+    // （例如重複被頻率限制）也會改變 LiveRegion 的 DOM 內容而被重新朗讀（code-generation review-02 R-12）。
+    // 不用「先清空、下一個任務再寫入」：兩則錯誤若在計時器觸發前接連到達，清空會被合併掉，第二次仍無聲。
+    // LiveRegion 元件簽章不動（其檔頭契約）；更新式為純函式，不就地修改任何物件。
+    const announceFresh = (text: string) => {
+      setAnnouncement((prev) => (prev === text ? `${text}${REANNOUNCE_MARK}` : text));
+    };
+
+    // 本連線收到任何輪次訊息：最後送出的 user_message 已被受理（不再視為可被非輪次錯誤拒絕）。
+    const markAnswered = () => {
+      if (!lastSentRef.current.answered) lastSentRef.current = { ...lastSentRef.current, answered: true };
+    };
+
     const connect = () => {
       if (disposed) return;
       connId = nextLocalId('conn');
       readySentRef.current = false;
+      lastSentRef.current = NOTHING_SENT;
       const ws = new WebSocket(wsUrl(BRAIN_WS_PATH), subprotocols(accessToken));
       wsRef.current = ws;
       connIdRef.current = connId;
@@ -142,18 +194,31 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
           }
           case 'token': {
             const payload = env.payload as Schemas['TokenPayload'];
-            const turnId = env.turnId ?? '';
+            const turnId: unknown = env.turnId;
+            // 輪次訊息缺 turnId 是契約違規：丟棄並記 type，不建空字串輪次（code-generation review-02 R-11）。
+            if (typeof turnId !== 'string' || turnId === '') {
+              console.warn('[brain] dropped frame without turnId', env.type);
+              return;
+            }
+            markAnswered();
             turnTextRef.current.set(turnId, (turnTextRef.current.get(turnId) ?? '') + payload.text);
             act({ type: 'token', turnId, text: payload.text, segment, connId: myConnId, id: nextLocalId('brain') });
             return;
           }
           case 'cost_card': {
             const payload = env.payload as Schemas['CostCardPayload'];
-            costTurnsRef.current.add(env.turnId ?? '');
-            act({ type: 'costCard', turnId: env.turnId ?? '', card: payload, segment, connId: myConnId, id: nextLocalId('brain') });
+            const turnId: unknown = env.turnId;
+            if (typeof turnId !== 'string' || turnId === '') {
+              console.warn('[brain] dropped frame without turnId', env.type);
+              return;
+            }
+            markAnswered();
+            costTurnsRef.current.add(turnId);
+            act({ type: 'costCard', turnId, card: payload, segment, connId: myConnId, id: nextLocalId('brain') });
             return;
           }
           case 'done': {
+            markAnswered();
             const turnId = env.turnId ?? (env.payload as Schemas['DonePayload']).turnId;
             act({ type: 'done', turnId, segment, connId: myConnId, id: nextLocalId('brain') });
             setAwaitingReply(false);
@@ -168,7 +233,32 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
           }
           case 'error': {
             const payload = env.payload as Schemas['ErrorPayload'];
-            const turnId = env.turnId ?? payload.turnId;
+            // envelope 與 payload 都缺 turnId（undefined）一律視同 null（code-generation review-02 R-11）。
+            const turnId: string | null | undefined = env.turnId ?? payload.turnId;
+            if (turnId == null) {
+              // 非輪次錯誤（合併前必修第 2 項(b)、`[EP-MB2]`=A）：一律在對話插入一則系統提示並播報，
+              // 不清任何輪次的暫存文字。另依本連線「最後送出的請求」判斷它拒絕了誰（`[EP-R2]`=A）：
+              // 未獲任何輪次訊息的 user_message → 解除等待、原句標為未送達；反問選擇 → 反問回 default；
+              // 其他 → 只有提示，不動輪次、反問與等待狀態。
+              const last = lastSentRef.current;
+              const undeliveredUserId = last.kind === 'user_message' && !last.answered ? last.userItemId : null;
+              const reopenPicking = last.kind === 'select_clarify_candidate';
+              act({
+                type: 'systemNotice',
+                code: payload.code,
+                message: payload.message,
+                segment,
+                id: nextLocalId('notice'),
+                connId: myConnId,
+                undeliveredUserId,
+                reopenPicking,
+              });
+              if (undeliveredUserId !== null) setAwaitingReply(false);
+              if (undeliveredUserId !== null || reopenPicking) lastSentRef.current = NOTHING_SENT;
+              announceFresh(payload.message);
+              return;
+            }
+            markAnswered();
             act({
               type: 'error',
               turnId,
@@ -180,10 +270,11 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
             });
             setAwaitingReply(false);
             turnTextRef.current.delete(turnId);
-            setAnnouncement(payload.message);
+            announceFresh(payload.message);
             return;
           }
           case 'clarify': {
+            markAnswered();
             const payload = env.payload as Schemas['ClarifyPayload'];
             act({ type: 'clarify', turnId: env.turnId, payload, segment, connId: myConnId, id: nextLocalId('clarify') });
             // 反問後該輪等使用者選擇，伺服器此時不送 done：解除等待，讓使用者可回答或改說新句（BR95.5）。
@@ -297,8 +388,10 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
       if (!trimmed) return;
       const connId = connIdRef.current;
       if (!connId || !sendFrame(clientFrame('user_message', { text, page }))) return;
+      const id = nextLocalId('user');
+      lastSentRef.current = { kind: 'user_message', userItemId: id, answered: false };
       // 使用者輪次打上連線 id，供卸載或斷線時轉 interrupted（BR93.7、BR92.7）。
-      dispatch({ type: 'appendUser', segment: readSegmentRef.current, id: nextLocalId('user'), text, connId });
+      dispatch({ type: 'appendUser', segment: readSegmentRef.current, id, text, connId });
       setAwaitingReply(true);
     },
     [dispatch, page, sendFrame],
@@ -307,6 +400,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   const selectCandidate = useCallback(
     (groupId: string, candidateId: string | null) => {
       if (!sendFrame(clientFrame('select_clarify_candidate', { candidateId }))) return;
+      lastSentRef.current = { kind: 'select_clarify_candidate', userItemId: null, answered: false };
       dispatch({ type: 'clarifyState', id: groupId, state: candidateId === null ? 'dismissed' : 'picking', pickedId: candidateId });
     },
     [dispatch, sendFrame],
@@ -315,6 +409,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   const correctWorkItem = useCallback(
     (workItemId: string) => {
       if (!sendFrame(clientFrame('correct_work_item', { workItemId }))) return;
+      lastSentRef.current = afterNonTurnSend(lastSentRef.current);
       setPendingCorrections((prev) => (prev.includes(workItemId) ? prev : [...prev, workItemId]));
     },
     [sendFrame],
@@ -323,16 +418,18 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   const setSharingMode = useCallback(
     (mode: SharingMode) => {
       if (page === 'entry') return; // 入口頁不送 set_sharing_mode（BR92.3）
-      sendFrame(clientFrame('set_sharing_mode', { mode, scope: page }));
+      if (sendFrame(clientFrame('set_sharing_mode', { mode, scope: page }))) {
+        lastSentRef.current = afterNonTurnSend(lastSentRef.current);
+      }
     },
     [page, sendFrame],
   );
 
-  const setWorkTarget = useCallback(
-    (ids: WorkTargetIds): boolean =>
-      sendFrame(clientFrame('set_work_target', { ...ids, segment: readSegmentRef.current })),
-    [sendFrame],
-  );
+  const setWorkTarget = useCallback((ids: WorkTargetIds): boolean => {
+    const sent = sendFrame(clientFrame('set_work_target', { ...ids, segment: readSegmentRef.current }));
+    if (sent) lastSentRef.current = afterNonTurnSend(lastSentRef.current);
+    return sent;
+  }, [sendFrame]);
 
   const announce = useCallback((text: string) => setAnnouncement(text), []);
 

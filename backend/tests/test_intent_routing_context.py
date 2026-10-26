@@ -152,5 +152,99 @@ class TypeBoundaryTest(unittest.TestCase):
         self.assertNotIn("BrainSession", imported)
 
 
+# ---------------------------------------------------------------------------
+# 合併前必修第 13 項：L0 的記憶讀取（落點依 `unit-test-instructions.md` 的
+# 「合併前必修第 5、13 項」一節指定在本檔）。受測的是 `intent_routing` 的 L0，
+# 不是 L2；替身是手寫的最小類別，**仍不使用 `unittest.mock`**。
+# ---------------------------------------------------------------------------
+
+import asyncio  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from services.intent_routing import IntentRouter, fetch_routing_context  # noqa: E402
+from services.intent_routing_config import RoutingConfig  # noqa: E402
+from services.memory_errors import MemoryForbidden  # noqa: E402
+
+_SECRET_UTTERANCE = "把訂單系統的資料庫密碼改成 hunter2"
+
+
+class _Session:
+    """只提供 L0 會讀的 `segment()`；空的共享段。"""
+
+    def segment(self, segment_id):
+        return SimpleNamespace(project_id=None, system_id=None, diagram_id=None, messages=())
+
+
+class _Facade:
+    def __init__(self, error):
+        self.error = error
+        self.calls = 0
+
+    def search(self, principal, query, kinds=None, limit=None):
+        self.calls += 1
+        raise self.error
+
+
+def _never(*_args):
+    raise AssertionError("記憶被拒絕時不得建立模型 client 或呼叫模型")
+
+
+def _router(facade, observations):
+    return IntentRouter(
+        memory_facade=facade,
+        config=RoutingConfig(
+            model="stub", timeout_seconds=5.0, max_calls_per_turn=1, max_retries=0, confidence_threshold=0.7
+        ),
+        model_factory=_never,
+        graph_builder=_never,
+        observer=observations.append,
+    )
+
+
+class MemoryForbiddenIsNotDegradedTest(unittest.TestCase):
+    """`MemoryForbidden` 是**權限判定**，不是依賴不可用：不降級、原樣向上（使用者裁決：本輪以授權錯誤結束）。"""
+
+    def test_a_memory_authorization_denial_ends_the_turn_before_any_model_call(self):
+        """
+        @purpose 記憶授權被拒（例：待核准帳號）時，路由器不得把它當成「記憶不可用」降級後照常分類；必須原樣向上傳遞，且模型從未被呼叫。
+        @given MemoryFacade 替身的 search 拋 MemoryForbidden(reason="pending")；模型 factory 一被呼叫即失敗
+        @step 呼叫 fetch_routing_context | 拋 MemoryForbidden（不是回 memory_degraded=True）
+        @step 呼叫 IntentRouter.classify | 拋 MemoryForbidden；觀測事件 error_kind 為 MemoryForbidden；模型 factory 未被呼叫
+        @step 讀 cloud360.intent_routing 的 WARNING 日誌 | 有一筆，且不含使用者輸入原文
+        @pass 三步皆成立
+        @story US6.1
+        """
+        with self.assertRaises(MemoryForbidden):
+            fetch_routing_context(
+                principal=object(), session=_Session(), text=_SECRET_UTTERANCE,
+                memory_facade=_Facade(MemoryForbidden(reason="pending")),
+            )
+        observations = []
+        router = _router(_Facade(MemoryForbidden(reason="pending")), observations)
+        with self.assertLogs("cloud360.intent_routing", level="WARNING") as logs:
+            with self.assertRaises(MemoryForbidden):
+                asyncio.run(router.classify(object(), _Session(), _SECRET_UTTERANCE, turn_id="t-1"))
+        self.assertEqual([o.error_kind for o in observations], ["MemoryForbidden"])
+        self.assertTrue(logs.output)
+        for line in logs.output:
+            self.assertNotIn("hunter2", line)
+            self.assertNotIn(_SECRET_UTTERANCE, line)
+
+    def test_any_other_memory_failure_still_degrades(self):
+        """
+        @purpose D-1 不變：記憶依賴的一般故障仍降級為不帶記憶繼續，且降級可被觀測。
+        @given MemoryFacade 替身的 search 拋 RuntimeError
+        @step 呼叫 fetch_routing_context | 不拋例外；memory_degraded 為真、memory_notes 為空
+        @pass 兩項皆成立
+        @story US6.1
+        """
+        context = fetch_routing_context(
+            principal=object(), session=_Session(), text="改架構圖",
+            memory_facade=_Facade(RuntimeError("pgvector down")),
+        )
+        self.assertTrue(context.memory_degraded)
+        self.assertEqual(context.memory_notes, ())
+
+
 if __name__ == "__main__":
     unittest.main()

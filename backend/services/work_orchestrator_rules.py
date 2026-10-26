@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence
 
 from services.intent_routing_types import ROUTABLE_CAPABILITIES
+from services.session_types import DEFAULT_SEGMENT_MAX_BYTES, SEGMENT_IDS, cjson_encoded_size
 
 # ---------------------------------------------------------------------------
 # 封閉集合
@@ -44,6 +45,83 @@ STATUS_STOPPED = "已停掉"
 STATUSES = (STATUS_PROCESSING, STATUS_WAITING, STATUS_DONE, STATUS_FAILED, STATUS_STOPPED)
 TERMINAL_STATUSES = frozenset({STATUS_DONE, STATUS_FAILED, STATUS_STOPPED})
 ACTIVE_STATUSES = (STATUS_PROCESSING, STATUS_WAITING)
+
+# 合併前必修第 18 項（`OPEN-N10-3`；`code-generation-plan.md` §六）：同一工作階段的
+# 工作項容量。模組常數、**不是**環境變數。正本在此，`SessionStore` 經 `ARGV` 交給
+# 兩支 Lua。每筆的位元組上界與容量算式見下方「工作項的位元組上界」；數字不在此抄寫，
+# 以免與 `DEPLOY.md` 的容量表分歧（審查 R-02）。
+#: 同時進行中（處理中＋等待中）的工作項上限；`put_work_item.lua` 原子地擋下第 6 筆。
+MAX_ACTIVE_WORK_ITEMS = 5
+#: 已結束（完成、失敗、已停掉）只保留最近幾筆；`update_work_item.lua` 在轉終態時修剪。
+MAX_TERMINAL_WORK_ITEMS = 20
+
+# ---------------------------------------------------------------------------
+# 工作項的位元組上界（`U12` code-generation 審查 review-01 R-01）
+# ---------------------------------------------------------------------------
+#
+# 每筆工作項的大小以**序列化後的位元組**封住，不以字數封住：同一個字數，中文每字
+# 3 B、emoji 4 B、控制字元經 cjson 跳脫成 `\u00XX` 為 6 B，使用者原句又沒有任何
+# 控制字元過濾。只有使用者或資料庫來源的可變長字串需要截斷——`requestText`（原句）
+# 與 `targetDiagramTitle`（圖名，同時出現在 sideEffect 的〈名稱〉）；其餘欄位只由
+# 識別碼（PostgreSQL integer，≤ 2^31−1）與本模組的固定句型組成。量測方式與 Lua 端
+# 相同：`session_types.cjson_encoded_size`。截斷落在字元邊界，不切壞 UTF-8。
+
+#: 進行中工作項的 `requestText` 上限：6000 B ＝ 2000 個中文字，故中文原句仍保留
+#: `BR52.6` 的「前 2000 字」；emoji 為 1500 字、控制字元為 1000 字。
+REQUEST_TEXT_MAX_BYTES = 6000
+#: 轉為已結束時 `requestText` 的上限：300 B ＝ 100 個中文字。已結束項的原句不再被
+#: 讀取（變更摘要取自記憶體內快照，審查 review-01 的讀取點掃描），只留供除錯辨識。
+TERMINAL_REQUEST_TEXT_MAX_BYTES = 300
+#: 圖名（不含〈〉）的顯示上限：300 B ＝ 100 個中文字（標題本身最長 200 字，
+#: `collab_router.MAX_DIAGRAM_TITLE_CHARS`）。只截**存入工作項的 `targetDiagramTitle`
+#: 與 sideEffect 的〈名稱〉**；回存架構圖的 PUT 仍用原標題。取 300 而非 600 是為了
+#: 讓容量承諾留出餘裕：圖名在每筆工作項出現兩次，25 筆即 50 次。
+DIAGRAM_TITLE_MAX_BYTES = 300
+#: 一筆工作項在 Redis hash 中的欄位名 `wi:<uuid4>` 的位元組數。
+WORK_ITEM_FIELD_NAME_BYTES = len("wi:") + 36
+#: 一筆**進行中**工作項（欄位名＋值）的位元組上界。
+#: `test_work_orchestrator_capacity.py` 以對抗字元建出最壞項並斷言不超過它
+#: （該測試量得 7,765 B；failureReason 與 sideEffect 皆以最長句型保守代入）。
+WORK_ITEM_ACTIVE_MAX_BYTES = 7_800
+#: 一筆**已結束**工作項（欄位名＋值）的位元組上界（同一測試量得 2,063 B）。
+WORK_ITEM_TERMINAL_MAX_BYTES = 2_100
+#: 單一 session 的對話歷程上界（3 段 × 每段序列化後 200 KiB）。
+CONVERSATION_MAX_BYTES = len(SEGMENT_IDS) * DEFAULT_SEGMENT_MAX_BYTES
+#: `deploy/docker-compose.deploy.yml` 的 `--maxmemory 256mb`。
+REDIS_MAXMEMORY_BYTES = 256 * 1024 * 1024
+#: `NFR4.40`：80% 的 maxmemory 內至少容得下的同時存活 session 數。
+COMMITTED_SESSIONS = 300
+
+
+def session_worst_case_bytes() -> int:
+    """單一 session 的最壞位元組數：對話歷程 ＋ 5 筆進行中 ＋ 20 筆已結束。"""
+    return (
+        CONVERSATION_MAX_BYTES
+        + MAX_ACTIVE_WORK_ITEMS * WORK_ITEM_ACTIVE_MAX_BYTES
+        + MAX_TERMINAL_WORK_ITEMS * WORK_ITEM_TERMINAL_MAX_BYTES
+    )
+
+
+def truncate_to_encoded_bytes(text: Optional[str], max_bytes: int) -> str:
+    """把 `text` 截到「序列化後（不含兩側引號）≤ `max_bytes` 位元組」，只在字元邊界切。
+
+    每個字元的成本以 `cjson_encoded_size` 量（與 Lua 端 `cjson.encode` 同長度）：
+    一般 UTF-8 為 1–4 B，`"`／`\\`／`/` 為 2 B，控制字元與 `0x7f` 為 6 B。
+    JSON 字串的跳脫是逐字元的，故逐字元累加即等於整串的序列化長度。
+    """
+    if not text:
+        return ""
+    if max_bytes <= 0:
+        return ""
+    if cjson_encoded_size(text) - 2 <= max_bytes:
+        return text
+    used = 0
+    for index, char in enumerate(text):
+        cost = cjson_encoded_size(char) - 2
+        if used + cost > max_bytes:
+            return text[:index]
+        used += cost
+    return text
 
 STAGE_NOT_DISPATCHED = "not_dispatched"
 STAGE_REQUEST_SENT = "request_sent"
@@ -159,9 +237,13 @@ def plan_waits(capabilities: Sequence[str]) -> list:
 
 
 def diagram_display_name(title: Optional[str], diagram_id: Optional[int]) -> str:
-    """圖的顯示名稱：有標題用標題，否則用 `#id`。"""
+    """圖的顯示名稱：有標題用標題，否則用 `#id`。
+
+    標題截到 `DIAGRAM_TITLE_MAX_BYTES`（序列化後位元組），使 sideEffect 的
+    〈名稱〉有位元組上界（審查 review-01 R-01）。
+    """
     if isinstance(title, str) and title.strip():
-        return f"〈{title.strip()}〉"
+        return f"〈{truncate_to_encoded_bytes(title.strip(), DIAGRAM_TITLE_MAX_BYTES)}〉"
     if diagram_id is not None:
         return f"#{diagram_id}"
     return ""
@@ -295,6 +377,8 @@ PHRASES = {
     "cost_timeout": "成本分析逾時",
     "cost_not_found": "找不到這份估價表的建議",
     "connection_lost": "與成本服務的連線中斷",
+    # 合併前必修第 18 項：併發交辦越過進行中上限時，同批已寫入項的失敗原因
+    "capacity_exceeded": "同時進行中的工作已達上限，這一項沒有開始",
     # sideEffect 說明文字
     "side_effect_maybe_persisted": "可能已存回架構圖{name}",
     "side_effect_persisted": "已存回架構圖{name}",
@@ -357,11 +441,24 @@ __all__ = [
     "CAP_ARCHITECTURE",
     "CAP_COST",
     "CAP_REVIEW",
+    "COMMITTED_SESSIONS",
+    "CONVERSATION_MAX_BYTES",
     "COST_PAGE_PATH",
     "DEADLINE_SECONDS",
+    "DIAGRAM_TITLE_MAX_BYTES",
+    "REDIS_MAXMEMORY_BYTES",
+    "REQUEST_TEXT_MAX_BYTES",
+    "TERMINAL_REQUEST_TEXT_MAX_BYTES",
+    "WORK_ITEM_ACTIVE_MAX_BYTES",
+    "WORK_ITEM_FIELD_NAME_BYTES",
+    "WORK_ITEM_TERMINAL_MAX_BYTES",
+    "session_worst_case_bytes",
+    "truncate_to_encoded_bytes",
     "DISPATCH_STAGES",
     "EVENTS",
     "InvalidTransition",
+    "MAX_ACTIVE_WORK_ITEMS",
+    "MAX_TERMINAL_WORK_ITEMS",
     "PHRASES",
     "PROCEED",
     "SIDE_EFFECT_NONE",

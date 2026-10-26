@@ -35,11 +35,16 @@ _ENV = {
 
 
 def _quiet_startup():
-    """把與本單元無關的三個 startup 步驟換成替身；其餘（session、路由門檻、閘道建立）照真的跑。"""
+    """把與本單元無關的四個 startup 步驟換成替身；其餘（session、路由門檻、閘道建立）照真的跑。
+
+    第四個（`ensure_project_members_on_startup`）是 `U19` 合併前必修第 15 項加在 `init_db` 之後的成員補齊；
+    它要連資料庫，而本檔把 `init_db` 換成替身、不建任何表，故一併換掉。
+    """
     return (
         mock.patch.object(main, "configure_provider_env"),
         mock.patch.object(main, "configure_embedding_env"),
         mock.patch.object(main, "init_db"),
+        mock.patch.object(main, "ensure_project_members_on_startup"),
     )
 
 
@@ -48,9 +53,9 @@ class StartupOrderTest(unittest.TestCase):
         """
         @purpose 閘道元件在 configure_intent_routing_env 之後、init_db 之前建立（router 建構會讀門檻設定）；shutdown 只關自己的元件。
         @given 以記錄器取代三個步驟
-        @step 進入 with TestClient(main.app) | 呼叫順序為 configure_intent_routing_env → build_brain_gateway → init_db
+        @step 進入 with TestClient(main.app) | 呼叫順序為 configure_intent_routing_env → build_brain_gateway → init_db → ensure_project_members_on_startup
         @step 離開 | 閘道的 shutdown 被呼叫 1 次
-        @pass 順序與關閉皆正確
+        @pass 順序與關閉皆正確（成員補齊在 init_db 之後：表由 init_db 的 create_all 建立，U19 合併前必修第 15 項）
         @story US8.1
         """
         order = []
@@ -60,10 +65,11 @@ class StartupOrderTest(unittest.TestCase):
                 mock.patch.object(main, "configure_session_env"), \
                 mock.patch.object(main, "configure_intent_routing_env", side_effect=lambda: order.append("routing")), \
                 mock.patch.object(main, "build_brain_gateway", side_effect=lambda app, **kw: captured.update(kw) or order.append("gateway") or fake_gateway), \
-                mock.patch.object(main, "init_db", side_effect=lambda: order.append("init_db")):
+                mock.patch.object(main, "init_db", side_effect=lambda: order.append("init_db")), \
+                mock.patch.object(main, "ensure_project_members_on_startup", side_effect=lambda: order.append("backfill")):
             with TestClient(main.app):
                 pass
-        self.assertEqual(order, ["routing", "gateway", "init_db"])
+        self.assertEqual(order, ["routing", "gateway", "init_db", "backfill"])
         # ADR-0022 D-6：唯一組裝點傳入真實的 MembershipFacade（漏傳＝啟動失敗，G7 突變）。
         self.assertIs(captured["membership_facade_factory"], membership_facade.MembershipFacade)
         fake_gateway.shutdown.assert_called_once()
@@ -108,8 +114,8 @@ class StartupFailureTest(unittest.TestCase):
         """
         cases = [{k: v for k, v in _ENV.items() if k != drop} for drop in ("REDIS_URL", "REDIS_USER", "REDIS_PASSWORD")]
         cases.append({**_ENV, "REDIS_USER": "default"})
-        p1, p2, p3 = _quiet_startup()
-        with p1, p2, p3:
+        p1, p2, p3, p4 = _quiet_startup()
+        with p1, p2, p3, p4:
             for env in cases:
                 with self.subTest(env=sorted(env)), mock.patch.dict(os.environ, env, clear=False):
                     for key in ("REDIS_URL", "REDIS_USER", "REDIS_PASSWORD"):
@@ -135,8 +141,8 @@ class StartupFailureTest(unittest.TestCase):
             from services.auth import create_access_token
 
             make_user(db, username="alice", role="Project_Architect")
-            p1, p2, p3 = _quiet_startup()
-            with p1, p2, p3, mock.patch.dict(os.environ, _ENV, clear=False):
+            p1, p2, p3, p4 = _quiet_startup()
+            with p1, p2, p3, p4, mock.patch.dict(os.environ, _ENV, clear=False):
                 with TestClient(main.app) as client:
                     main.app.state.brain_gateway.session_factory = sessionmaker(bind=db._test_engine)
                     with client.websocket_connect(WS_PATH, subprotocols=protocols(create_access_token({"sub": "alice"}))) as ws:

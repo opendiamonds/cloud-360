@@ -81,6 +81,24 @@ export class MembershipForbiddenError extends Error {
 }
 
 /**
+ * 成員清單／成員詳情查不到專案（404）時顯示的**固定句**；邀請、移出、改角色三個寫入函式
+ * 遇到 404 也丟同一個 `ProjectNotFoundError`（審查 review-02 `R-07`）。
+ *
+ * 與 `ProjectDetailPage` 的 `ProjectNotFound` 同語意（「不存在，或你不是它的成員」）。
+ * **不顯示伺服器訊息**：合併前必修第 14 項起，後端對「不存在」與「存在但非成員」回同一個
+ * 不含 id 的 404；前端改用固定句，使畫面也不依伺服器文字而變、不出現專案編號。
+ */
+export const PROJECT_NOT_FOUND_MESSAGE = '查不到這個專案';
+
+/** 查不到專案（404）。呼叫端據此走**終態**處置，與 403 一樣不重試。 */
+export class ProjectNotFoundError extends Error {
+  constructor() {
+    super(PROJECT_NOT_FOUND_MESSAGE);
+    this.name = 'ProjectNotFoundError';
+  }
+}
+
+/**
  * 邀請被拒（422 且 `detail` 為**字串**）＝受邀者缺全域功能權限（`AC12.5.1`）。
  *
  * 與 pydantic 的驗證錯誤（`detail` 為**物件陣列**）分流的理由見 `invite_member`。
@@ -127,8 +145,12 @@ export async function fetchMembers(token: string, projectId: number): Promise<Me
   const body = await readJson(res);
   if (!res.ok) {
     emitFailureSignal({ kind: 'members-fetch-failed', endpoint: 'GET /projects/:id/members' });
-    // 403 於此端點代表「完全不是該專案的成員」（`membership_router.py:169` 的
-    // docstring），與寫入端點的 403 語意不同，故另立型別讓呼叫端走終態。
+    // 合併前必修第 14 項（`[PP-MB14]`=A）起：「專案不存在」與「存在但你不是成員」
+    // 後端一律回同一個 404 → 顯示固定句（不顯示伺服器訊息、不含專案編號）。
+    if (res.status === 404) {
+      throw new ProjectNotFoundError();
+    }
+    // 403 於此端點只剩「缺全域 `K3.view`」一種（非成員已改回 404）。
     if (res.status === 403) {
       throw new MembershipForbiddenError(detailMessage(body, '你沒有檢視這個專案成員的權限'));
     }
@@ -186,6 +208,10 @@ export async function inviteMember(
       throw new Error('邀請的內容不符合格式要求，請重新選擇');
     }
     emitFailureSignal({ kind: 'write-forbidden', endpoint: 'POST /projects/:id/members' });
+    // 寫入途中被移出或專案被刪 → 與清單同一個固定句（審查 review-02 `R-07`）。
+    if (res.status === 404) {
+      throw new ProjectNotFoundError();
+    }
     if (res.status === 403) {
       throw new MembershipForbiddenError(detailMessage(body, '你沒有管理這個專案的權限'));
     }
@@ -223,6 +249,10 @@ export async function removeMember(
     throw new LastAdminGuardError((body ?? { projects: [] }) as LastAdminGuardReport);
   }
   emitFailureSignal({ kind: 'write-forbidden', endpoint: 'DELETE /projects/:id/members/:uid' });
+  // 已非成員的目標回 204（冪等），故 404 只剩「專案不存在或呼叫者不是成員」→ 固定句。
+  if (res.status === 404) {
+    throw new ProjectNotFoundError();
+  }
   if (res.status === 403) {
     throw new MembershipForbiddenError(detailMessage(body, '你沒有管理這個專案的權限'));
   }
@@ -257,6 +287,9 @@ export async function changeMemberRole(
       throw new LastAdminGuardError((body ?? { projects: [] }) as LastAdminGuardReport);
     }
     emitFailureSignal({ kind: 'write-forbidden', endpoint: 'PATCH /projects/:id/members/:uid' });
+    if (res.status === 404) {
+      throw new ProjectNotFoundError();
+    }
     if (res.status === 403) {
       throw new MembershipForbiddenError(detailMessage(body, '你沒有管理這個專案的權限'));
     }

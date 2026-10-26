@@ -24,6 +24,7 @@ from typing import Any, Callable, Optional
 from services.redis_gateway import RedisGateway
 from services.session_store import SessionStore
 from services import session_types as T
+from services import work_orchestrator_rules as _R
 from services.brain_ws_contract import CostCardPayload, TokenPayload, WorkItemsPayload
 from tests.test_session_store_behaviour import FAKE_ERROR_TYPES, FakeRedis, StubClock
 
@@ -38,7 +39,7 @@ class WorkItemFakeRedis(FakeRedis):
 
     def _script_put_work_item(self, keys, argv):
         key = keys[0]
-        result, updated = T.ref_put_work_item(self.hashes.get(key), argv[0], argv[1])
+        result, updated = T.ref_put_work_item(self.hashes.get(key), *argv)
         if updated is not None:
             self.hashes[key] = updated
         return result
@@ -48,15 +49,20 @@ class WorkItemFakeRedis(FakeRedis):
             hook, self.before_update = self.before_update, None
             hook(keys, argv)
         key = keys[0]
-        result, updated = T.ref_update_work_item(
-            self.hashes.get(key), argv[0], argv[1], argv[2], argv[3]
-        )
+        result, updated = T.ref_update_work_item(self.hashes.get(key), *argv)
         if updated is not None:
             self.hashes[key] = updated
         return result
 
 
 SESSION_KEY = "brain:session:u-test"
+
+#: 測試直接呼叫 `ref_update_work_item` 時的最後兩個 ARGV（已結束保留數、終態集合），
+#: 與 `SessionStore.update_work_item` 送給 Lua 的值同源。
+UPDATE_CAPACITY_ARGS = (
+    str(_R.MAX_TERMINAL_WORK_ITEMS),
+    json.dumps(sorted(_R.TERMINAL_STATUSES), ensure_ascii=False, separators=(",", ":")),
+)
 
 
 def make_store(client: Optional[WorkItemFakeRedis] = None, *, create_key: bool = True):

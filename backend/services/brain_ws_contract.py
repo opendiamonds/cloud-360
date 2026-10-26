@@ -4,7 +4,8 @@ brain_ws_contract.py — `U2 brain-ws-contract`：大腦 WebSocket 訊息契約
 職責：
   - 宣告 `/api/brain/ws` 上**兩個方向**的全部訊息型別（envelope、payload、列舉）
   - 強制三條可機械斷言的封包層不變量：`BR1.2`（payload 形狀由 type 唯一決定）、
-    `BR1.5`（終止事件兩份 turnId 必須相等）、`BR1.6`（turnId 的輪次／非輪次二分）
+    `BR1.5`（終止事件兩份 turnId 必須相等，含同為 null）、`BR1.6`（turnId 的
+    輪次／非輪次／`error` 可為 null 三分；`error` 的放寬見合併前必修第 2 項）
   - 宣告握手 subprotocol 的格式（`WsSubprotocol`，`ADR-0019 §3`）
   - **不做任何 I/O**：無 router、無 FastAPI、無 DB session、無 `httpx`、
     無 `HTTPException`、無 logger。純 Pydantic。這是刻意的結構前提——
@@ -367,7 +368,18 @@ class ErrorPayload(BaseModel):
             "所以這條的落點是伺服器端的 error 構造（U13），本契約只寫下要求。"
         )
     )
-    turnId: str = Field(description="BR1.5：必須等於其 envelope 的 turnId（同 DonePayload）。")
+    turnId: Optional[str] = Field(
+        description=(
+            "BR1.5：**必填鍵、值可為 null**，且必須等於其 envelope 的 turnId"
+            "（兩者同為 null 或同為同一值）。判準：屬於某一輪的錯誤"
+            "（輪內處理失敗、EMPTY_RESPONSE）帶該輪 turnId；不屬於任何一輪的錯誤"
+            "——回應狀態類客戶端訊息（set_sharing_mode／set_work_target）的失敗、"
+            "協定違規（如 BR2.13 客戶端偷帶 turnId 的 INVALID_REQUEST）、"
+            "連線建立後的 UNAUTHORIZED（BR2.8）——為 null。"
+            "伺服器**不得**為非輪次錯誤捏造一個 turnId：捏造的編號會讓消費端把"
+            "錯誤歸到一個從未存在的輪次（merge-blockers.md 第 2 項）。"
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -573,18 +585,29 @@ if set(_CLIENT_PAYLOAD_BY_TYPE) != set(WsClientMessageType):
         f"{sorted(t.value for t in set(WsClientMessageType) - set(_CLIENT_PAYLOAD_BY_TYPE))}"
     )
 
-# `BR1.6`：伺服器訊息分兩類，**互斥且窮盡**九個 type。
+# `BR1.6`：伺服器訊息分三類，**互斥且窮盡**九個 type。
 #   輪次訊息 → turnId 必為非 null（同一輪共用同一個值）
 #   非輪次訊息 → turnId 必為 null
+#   `error` → turnId 可為 null（屬於某一輪時帶該輪的值，否則為 null）
 # 非輪次的四個各有明文依據：`ready` 在任何一輪之前送出（ReadyPayload 的
 # entity_constraints 逐字）；`sharing_mode`／`work_target`／`work_items` 是狀態
 # 訊息（`functional-spec.md §二` 逐字「它們不屬於任何一輪」）。
+#
+# `error` 自輪次集合移出（合併前必修第 2 項，`review-05` R-01）：四種情境必須回
+# `error` 卻不屬任何一輪——`BR2.13` 的 INVALID_REQUEST、`set_sharing_mode` 失敗、
+# `set_work_target` 授權或解析失敗、`BR2.8` 連線建立後的 UNAUTHORIZED。舊的二分
+# 強制它非 null，使伺服器只能捏造編號。上游 `entities.md`／`rules.md` 不回改，
+# 現行規則以本模組為準。
 _TURN_SCOPED_TYPES: frozenset[WsServerMessageType] = frozenset(
     {
         WsServerMessageType.TOKEN,
         WsServerMessageType.CLARIFY,
         WsServerMessageType.COST_CARD,
         WsServerMessageType.DONE,
+    }
+)
+_EITHER_SCOPED_TYPES: frozenset[WsServerMessageType] = frozenset(
+    {
         WsServerMessageType.ERROR,
     }
 )
@@ -600,20 +623,30 @@ _SESSION_SCOPED_TYPES: frozenset[WsServerMessageType] = frozenset(
 # 互斥且窮盡的機械斷言。刻意在 **import 時** fail-fast 而非等到某一則訊息剛好
 # 落在缺口上：一個分類不全的 BR1.6 會讓某些 type 完全不受 turnId 檢查，
 # 而那件事在執行期不會有任何訊號。
-if _TURN_SCOPED_TYPES & _SESSION_SCOPED_TYPES:
+_TURN_ID_PARTITION: tuple[frozenset[WsServerMessageType], ...] = (
+    _TURN_SCOPED_TYPES,
+    _SESSION_SCOPED_TYPES,
+    _EITHER_SCOPED_TYPES,
+)
+for _i, _a in enumerate(_TURN_ID_PARTITION):
+    for _b in _TURN_ID_PARTITION[_i + 1 :]:
+        if _a & _b:
+            raise RuntimeError(
+                "BR1.6 違反：輪次／非輪次／可為 null 三集合不互斥，重疊於 "
+                f"{sorted(t.value for t in _a & _b)}"
+            )
+del _i, _a, _b
+if frozenset().union(*_TURN_ID_PARTITION) != set(WsServerMessageType):
+    _uncovered = set(WsServerMessageType) - frozenset().union(*_TURN_ID_PARTITION)
     raise RuntimeError(
-        "BR1.6 違反：輪次與非輪次兩集合不互斥，重疊於 "
-        f"{sorted(t.value for t in _TURN_SCOPED_TYPES & _SESSION_SCOPED_TYPES)}"
-    )
-if _TURN_SCOPED_TYPES | _SESSION_SCOPED_TYPES != set(WsServerMessageType):
-    _uncovered = set(WsServerMessageType) - (_TURN_SCOPED_TYPES | _SESSION_SCOPED_TYPES)
-    raise RuntimeError(
-        "BR1.6 違反：輪次與非輪次兩集合未窮盡九個伺服器 type，未分類的有 "
+        "BR1.6 違反：輪次／非輪次／可為 null 三集合未窮盡九個伺服器 type，未分類的有 "
         f"{sorted(t.value for t in _uncovered)}"
     )
 
 # `done` 與 `error` 是終止事件（`K-12` x-termination-semantics），也是唯二
-# 在 payload 內帶第二份 turnId 的型別——`BR1.5` 只對它們成立。
+# 在 payload 內帶第二份 turnId 的型別——`BR1.5` 只對它們成立。比對用 `!=`，
+# 所以 `error` 的兩份同為 null 時通過、一 null 一非 null 時被拒；這是 `error`
+# 放寬為可為 null 之後唯一剩下的一致性保證，不得把 ERROR 從本集合拿掉。
 _TERMINAL_TYPE_VALUES: frozenset[str] = frozenset(
     {WsServerMessageType.DONE.value, WsServerMessageType.ERROR.value}
 )
@@ -678,9 +711,12 @@ class WsEnvelope(BaseModel):
     turnId: Optional[str] = Field(
         description=(
             "BR1.6：**欄位必存在，但值可為 null**。"
-            "輪次訊息（token／clarify／cost_card／done／error）必為非 null，"
+            "輪次訊息（token／clarify／cost_card／done）必為非 null，"
             "同一輪的所有訊息共用同一個值（BR1.3）；"
-            "非輪次訊息（ready／sharing_mode／work_target／work_items）必為 null。"
+            "非輪次訊息（ready／sharing_mode／work_target／work_items）必為 null；"
+            "error 可為 null——屬於某一輪時帶該輪的值，不屬於任何一輪"
+            "（協定違規、狀態類請求失敗、連線層授權失敗）時為 null，"
+            "且必須與 payload.turnId 相等（BR1.5）。"
             "**本契約不定義它的產生方式**，也**無法強制「同一輪相同」**"
             "（那是執行期性質）——兩者皆屬 U13。"
         )
@@ -736,6 +772,9 @@ class WsEnvelope(BaseModel):
 
     @model_validator(mode="after")
     def _br1_6_turn_id_partition(self) -> WsEnvelope:
+        if self.type in _EITHER_SCOPED_TYPES:
+            # null 與否皆可；兩份的一致性由 `_validate_raw` 的 BR1.5 鎖住。
+            return self
         if self.type in _TURN_SCOPED_TYPES:
             if self.turnId is None:
                 raise ValueError(

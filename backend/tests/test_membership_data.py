@@ -33,9 +33,11 @@ import re
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from models import ProjectMember, ReselectionEvent
+from models import Project, ProjectMember, ReselectionEvent, User
 import services.hierarchy_service as hierarchy_service
+import services.membership_backfill as membership_backfill
 import services.membership_service as membership_service
 from services.membership_types import ProjectRole
 from tests.helpers import close_session, make_session, make_user
@@ -366,19 +368,33 @@ class MembershipDataAccessTest(unittest.TestCase):
             }
 
         def per_project() -> set[int]:
+            """參照實作：**逐專案、逐成員**以 ORM 讀取，再套用單一謂詞
+            `is_qualified_successor`。與集合版共用的只有那個謂詞——查詢形狀、
+            批次、快取都不共用，故兩者相等才證明集合版沒有在批次化時走樣。
+            （合併前必修第 1 ＋ 4 項起停用守門的判準是「無合格接手人」。）"""
             blocked = set()
             for project_id in membership_service.project_ids_where_admin(
                 self.db, user_id=self.alice.id
             ):
-                if (
-                    membership_service.admin_count_after(
-                        self.db,
-                        project_id=project_id,
-                        changing_user_id=self.alice.id,
-                        new_role=None,
+                others = (
+                    self.db.query(ProjectMember)
+                    .filter(
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.user_id != self.alice.id,
                     )
-                    < 1
-                ):
+                    .all()
+                )
+                has_successor = False
+                for row in others:
+                    user = self.db.get(User, row.user_id)
+                    if membership_service.is_qualified_successor(
+                        self.db,
+                        is_active=user.is_active,
+                        authorization_status=user.authorization_status,
+                        global_role=user.role,
+                    ):
+                        has_successor = True
+                if not has_successor:
                     blocked.add(project_id)
             return blocked
 
@@ -386,18 +402,26 @@ class MembershipDataAccessTest(unittest.TestCase):
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), set())
 
-        # (2) alice 是 P 的唯一管理者，另有一位一般成員——**這是 `[FD1]`=A 比
-        #     `FR12.5` 字面更嚴的那一格**：有兩位成員但只有一位管理者，仍須擋下。
+        # (2) alice 是 P 的唯一管理者，另有一位一般成員 bob（`Developer`，只有
+        #     `K3.view`，不是合格接手人）——仍須擋下。
         self._member(self.alice, ProjectRole.PROJECT_ADMIN)
         self._member(self.bob, ProjectRole.MEMBER)
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), {self.project.id})
 
-        # (3) 把 bob 升為第二位管理者 → P 不再受阻。
+        # (3) 把 bob 升為第二位管理者——但他**不合格**（只有 `K3.view`），升了也
+        #     執行不了任何管理動作，故 P **仍受阻**。這一格是「其他管理者只算
+        #     合格者」與改選冪等判定對齊的地方。
         self.db.query(ProjectMember).filter(
             ProjectMember.project_id == self.project.id,
             ProjectMember.user_id == self.bob.id,
         ).update({"role": ProjectRole.PROJECT_ADMIN.value})
+        self.db.commit()
+        self.assertEqual(aggregate(), per_project())
+        self.assertEqual(aggregate(), {self.project.id})
+
+        # (3b) bob 的全域角色改為 `K3.edit` 持有者 → 他成為合格接手人，P 不再受阻。
+        self.bob.role = "Project_Architect"
         self.db.commit()
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), set())
@@ -414,6 +438,104 @@ class MembershipDataAccessTest(unittest.TestCase):
         self.db.commit()
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), {other.id})
+
+
+class MembershipBackfillTest(unittest.TestCase):
+    """`M9`–`M11`：合併前必修第 15 項——後端啟動時自動補齊零成員專案的擁有者列。
+
+    啟動路徑與手動指令共用 `services/membership_backfill.run_backfill`，故這裡驗的
+    就是啟動時跑的那一份。in-memory SQLite 即足夠：補齊不取鎖，SQL 只用
+    `CURRENT_TIMESTAMP` 與 `NOT EXISTS`，兩種方言都支援。
+    """
+
+    def setUp(self) -> None:
+        self.db = make_session()
+        self.engine = self.db._test_engine
+        self.alice = make_user(self.db, username="alice", role="Project_Architect")
+        self.bob = make_user(self.db, username="bob", role="Project_Architect")
+        # P：零成員（回填前的既有專案）。
+        self.p = hierarchy_service.create_project(
+            self.db, owner_user_id=self.alice.id, name="P"
+        )
+        # Q：擁有者 bob **不在**成員裡，alice 是管理者——「擁有者被移出過」，
+        # 是人為決定的結果，補齊不得把 bob 加回去。
+        self.q = hierarchy_service.create_project(
+            self.db, owner_user_id=self.bob.id, name="Q"
+        )
+        self.db.add(
+            ProjectMember(
+                project_id=self.q.id,
+                user_id=self.alice.id,
+                role=ProjectRole.PROJECT_ADMIN.value,
+                joined_at=NOW,
+            )
+        )
+        self.db.commit()
+
+    def tearDown(self) -> None:
+        close_session(self.db)
+
+    def _rows(self, project):
+        self.db.expire_all()
+        return [
+            (row.user_id, row.role)
+            for row in self.db.query(ProjectMember)
+            .filter(ProjectMember.project_id == project.id)
+            .order_by(ProjectMember.user_id)
+        ]
+
+    def test_M9_member_less_project_gets_its_owner_as_project_admin(self):
+        """
+        @purpose 零成員的既有專案在啟動時補上擁有者的 project_admin 列，否則擁有者被判為非成員、無聲地擋在自己的專案外
+        @given 專案 P（擁有者 alice、零成員列）；專案 Q（擁有者 bob 不在成員內、alice 是管理者）
+        @step 以 dry_run=True 呼叫 run_backfill | 回報 before=1、inserted=0，P 仍無成員列
+        @step 呼叫 ensure_project_members_on_startup(engine) | inserted=1
+        @step 讀 P 與 Q 的成員列 | P 只有 (alice, project_admin)；Q 仍只有 (alice, project_admin)，bob 沒有被加回
+        @pass 只補零成員專案、且只補擁有者
+        @story US12.1
+        """
+        dry = membership_backfill.run_backfill(self.engine, dry_run=True)
+        self.assertEqual((dry.before, dry.inserted, dry.dry_run), (1, 0, True))
+        self.assertEqual(self._rows(self.p), [])
+
+        result = membership_backfill.ensure_project_members_on_startup(self.engine)
+        self.assertEqual((result.before, result.inserted), (1, 1))
+        self.assertEqual(
+            self._rows(self.p), [(self.alice.id, ProjectRole.PROJECT_ADMIN.value)]
+        )
+        self.assertEqual(
+            self._rows(self.q), [(self.alice.id, ProjectRole.PROJECT_ADMIN.value)]
+        )
+
+    def test_M10_rerunning_the_backfill_inserts_nothing(self):
+        """
+        @purpose 補齊每次啟動都會跑，必須冪等：重跑不得產生重複列或失敗（否則第二次重啟就起不來）
+        @given 已補齊過一次
+        @step 再呼叫一次 ensure_project_members_on_startup(engine) | inserted=0、before=0，不拋例外
+        @step 讀 P 的成員列 | 仍只有一列
+        @pass 重跑無副作用
+        @story US12.1
+        """
+        membership_backfill.ensure_project_members_on_startup(self.engine)
+        again = membership_backfill.ensure_project_members_on_startup(self.engine)
+        self.assertEqual((again.before, again.inserted), (0, 0))
+        self.assertEqual(len(self._rows(self.p)), 1)
+
+    def test_M11_failed_self_check_raises_and_writes_nothing(self):
+        """
+        @purpose 自我終檢未通過時必須拋出並回滾、記 ERROR，使啟動失敗而不是「服務照常啟動但沒補到」
+        @given 插入步驟被替換成不寫任何列（模擬 INSERT 漏掉專案）
+        @step 呼叫 ensure_project_members_on_startup(engine) | 拋 BackfillVerificationError，並記一筆 ERROR
+        @step 讀 P 的成員列 | 仍為空（交易已回滾）
+        @pass 終檢失敗即大聲失敗且不留半套
+        @story US12.1
+        """
+        with patch.object(membership_backfill, "backfill", return_value=0):
+            with self.assertLogs("cloud360.membership_backfill", level="ERROR"):
+                with self.assertRaises(membership_backfill.BackfillVerificationError):
+                    membership_backfill.ensure_project_members_on_startup(self.engine)
+        self.assertEqual(self._rows(self.p), [])
+        self.assertEqual(self.db.query(Project).count(), 2)
 
 
 if __name__ == "__main__":

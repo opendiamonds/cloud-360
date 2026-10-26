@@ -38,6 +38,7 @@ from services.brain_ws_contract import (
     WsSubprotocol,
 )
 from services.brain_ws_contract import (
+    _EITHER_SCOPED_TYPES,
     _SESSION_SCOPED_TYPES,
     _TERMINAL_TYPE_VALUES,
     _TURN_SCOPED_TYPES,
@@ -176,18 +177,19 @@ class WsEnvelopeTurnIdPartitionTest(unittest.TestCase):
         """
         @purpose 輪次訊息缺 turnId 必須被拒——消費端無法把它歸到任何一輪，
                  而訊息仍會被渲染，所以失敗是靜默的。
-        @given 契約模組已載入；_TURN_SCOPED_TYPES 為 token/clarify/cost_card/done/error
+        @given 契約模組已載入；_TURN_SCOPED_TYPES 為 token/clarify/cost_card/done
         @step 對每個非終止的輪次型別（token、clarify、cost_card）以 turnId=None 構造 | 拋 ValidationError 且訊息含 BR1.6
-        @step 對兩個終止型別（done、error）以 turnId=None 構造 | 拋 ValidationError（見 note）
-        @step 確認輪次型別集合恰為五個 | 集合大小為 5
-        @pass 五個輪次型別在 turnId=None 時全部被拒；三個非終止型別的訊息含 BR1.6
+        @step 對終止型別 done 以 turnId=None 構造 | 拋 ValidationError（見 note）
+        @step 確認輪次型別集合恰為四個 | 集合大小為 4
+        @pass 四個輪次型別在 turnId=None 時全部被拒；三個非終止型別的訊息含 BR1.6
         @story US8.1
-        @note 終止型別的訊息**不**斷言含 BR1.6，理由是實作順序：done／error 的
-              payload 也帶一份 turnId，envelope 的 null 會先在 BR1.5 的相等比對
-              或 DonePayload.turnId 的 str 型別上被擋下，比 BR1.6 早。三條路徑
-              拒絕的是同一個不變量，所以這裡只斷言「被拒」，不假裝知道是誰拒的。
+        @note 終止型別的訊息**不**斷言含 BR1.6，理由是實作順序：done 的
+              payload 也帶一份 turnId，envelope 的 null 會先在 DonePayload.turnId
+              的 str 型別上被擋下，比 BR1.6 早。只斷言「被拒」，不假裝知道是誰拒的。
+              合併前必修第 2 項把 error 移出本集合（可為 null），集合由 5 變 4；
+              error 的行為由 WsEnvelopeErrorTurnIdNullableTest 覆蓋。
         """
-        self.assertEqual(len(_TURN_SCOPED_TYPES), 5)
+        self.assertEqual(len(_TURN_SCOPED_TYPES), 4)
         for message_type in sorted(_TURN_SCOPED_TYPES, key=lambda t: t.value):
             with self.subTest(type=message_type.value):
                 with self.assertRaises(ValidationError) as ctx:
@@ -232,6 +234,129 @@ class WsEnvelopeTurnIdPartitionTest(unittest.TestCase):
                     payload=payload_for(message_type, None),
                 )
                 self.assertIsNone(envelope.turnId)
+
+
+class WsEnvelopeErrorTurnIdNullableTest(unittest.TestCase):
+    """合併前必修第 2 項 — `error` 的 turnId 可為 null，但兩份仍須相等（`BR1.5`）。"""
+
+    def _error(self, envelope_turn_id, payload_turn_id) -> WsEnvelope:
+        return WsEnvelope(
+            v=1,
+            type=WsServerMessageType.ERROR.value,
+            turnId=envelope_turn_id,
+            payload={
+                "code": "INVALID_REQUEST",
+                "message": "請求不合法",
+                "turnId": payload_turn_id,
+            },
+        )
+
+    def test_non_turn_error_with_both_turn_ids_null_is_accepted(self):
+        """
+        @purpose 不屬於任何一輪的錯誤（協定違規、狀態類請求失敗、連線層授權失敗）
+                 必須能以 turnId=null 送出；否則伺服器只能捏造一個從未存在的輪次編號，
+                 消費端會把錯誤歸到那個假的輪次。
+        @given 契約模組已載入；ErrorPayload.turnId 為必填鍵、值可為 null
+        @step 以 envelope.turnId=None、payload.turnId=None 構造 error envelope | 構造成功
+        @step 讀回 envelope.turnId 與 payload.turnId | 兩者皆為 None
+        @pass error envelope 構造成功且兩份 turnId 讀回 None
+        @story US8.1
+        @note 合併前必修第 2 項（review-05 R-01）的回歸測試；突變 M6（把 ERROR 放回
+              輪次集合）時本案例必須轉紅。
+        """
+        envelope = self._error(None, None)
+        self.assertIsNone(envelope.turnId)
+        self.assertIsNone(envelope.payload.turnId)
+
+    def test_error_with_null_envelope_and_non_null_payload_is_rejected(self):
+        """
+        @purpose envelope 為 null 而 payload 帶編號時必須被拒——兩份不一致時消費端
+                 不知道該信哪一份，可能把非輪次錯誤歸到某一輪。
+        @given 契約模組已載入
+        @step 以 envelope.turnId=None、payload.turnId=turn-0001 構造 error envelope | 拋 ValidationError
+        @step 讀錯誤訊息 | 訊息含 BR1.5
+        @pass 拋 ValidationError 且訊息含字串 BR1.5
+        @story US8.1
+        """
+        with self.assertRaises(ValidationError) as ctx:
+            self._error(None, TURN_ID)
+        self.assertIn("BR1.5", str(ctx.exception))
+
+    def test_error_with_non_null_envelope_and_null_payload_is_rejected(self):
+        """
+        @purpose envelope 帶編號而 payload 為 null 時必須被拒——放寬為可為 null
+                 不等於兩份可以各自為政。
+        @given 契約模組已載入
+        @step 以 envelope.turnId=turn-0001、payload.turnId=None 構造 error envelope | 拋 ValidationError
+        @step 讀錯誤訊息 | 訊息含 BR1.5
+        @pass 拋 ValidationError 且訊息含字串 BR1.5
+        @story US8.1
+        """
+        with self.assertRaises(ValidationError) as ctx:
+            self._error(TURN_ID, None)
+        self.assertIn("BR1.5", str(ctx.exception))
+
+    def test_turn_scoped_error_still_carries_matching_turn_id(self):
+        """
+        @purpose 屬於某一輪的錯誤（輪內處理失敗、EMPTY_RESPONSE）仍必須能帶該輪的
+                 編號——放寬不得把輪內錯誤也逼成 null。
+        @given 契約模組已載入
+        @step 以 envelope.turnId=payload.turnId=turn-0001 構造 error envelope | 構造成功
+        @step 讀回兩份 turnId | 皆為 turn-0001
+        @pass 構造成功且兩份 turnId 皆讀回 turn-0001
+        @story US8.1
+        """
+        envelope = self._error(TURN_ID, TURN_ID)
+        self.assertEqual(envelope.turnId, TURN_ID)
+        self.assertEqual(envelope.payload.turnId, TURN_ID)
+
+    def test_relaxation_is_limited_to_error(self):
+        """
+        @purpose 只有 error 被放寬：done 與 token 的 turnId=None 必須仍被拒，
+                 否則一次放寬會悄悄讓輪次訊息也失去歸屬。
+        @given 契約模組已載入
+        @step 以 turnId=None 構造 token envelope | 拋 ValidationError 且訊息含 BR1.6
+        @step 以 envelope.turnId=None、payload.turnId=None 構造 done envelope | 拋 ValidationError
+        @pass token 與 done 在 turnId=None 時皆被拒
+        @story US8.1
+        @note done 不斷言訊息含 BR1.6：DonePayload.turnId 為 str，null 先在那裡被擋下。
+        """
+        with self.subTest(type="token"):
+            with self.assertRaises(ValidationError) as ctx:
+                WsEnvelope(
+                    v=1,
+                    type=WsServerMessageType.TOKEN.value,
+                    turnId=None,
+                    payload=payload_for(WsServerMessageType.TOKEN, None),
+                )
+            self.assertIn("BR1.6", str(ctx.exception))
+        with self.subTest(type="done"):
+            with self.assertRaises(ValidationError):
+                WsEnvelope(
+                    v=1,
+                    type=WsServerMessageType.DONE.value,
+                    turnId=None,
+                    payload=payload_for(WsServerMessageType.DONE, None),
+                )
+
+    def test_three_partitions_are_disjoint_and_exhaustive(self):
+        """
+        @purpose BR1.6 的三集合（輪次／非輪次／error 可為 null）必須互斥且窮盡九個
+                 伺服器 type；漏分類的 type 會完全不受 turnId 檢查。
+        @given 契約模組已載入
+        @step 兩兩取三集合的交集 | 皆為空集合
+        @step 取三集合的聯集 | 等於 WsServerMessageType 的九個值
+        @step 檢查 _EITHER_SCOPED_TYPES | 恰為 {error}
+        @pass 三組交集皆空、聯集為九個 type、可為 null 集合恰為 {error}
+        @story US8.1
+        """
+        partitions = (_TURN_SCOPED_TYPES, _SESSION_SCOPED_TYPES, _EITHER_SCOPED_TYPES)
+        for i, a in enumerate(partitions):
+            for b in partitions[i + 1 :]:
+                self.assertEqual(a & b, frozenset())
+        self.assertEqual(frozenset().union(*partitions), frozenset(WsServerMessageType))
+        self.assertEqual(len(WsServerMessageType), 9)
+        self.assertEqual(_EITHER_SCOPED_TYPES, frozenset({WsServerMessageType.ERROR}))
 
 
 class WsClientEnvelopeTest(unittest.TestCase):

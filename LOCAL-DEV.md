@@ -7,7 +7,7 @@
 
 ## 0. 先理解一件事：哪些功能需要什麼
 
-**這是本檔最重要的一節。** 只裝 `requirements.txt` 是跑不起全部功能的 —— 有兩個依賴不在任何依賴宣告檔裡。
+**這是本檔最重要的一節。** 只裝 `requirements.txt` 是跑不起全部功能的 —— 有三個依賴不在任何依賴宣告檔裡（LLM 供應商、n8n 圖示目錄、本機向量檢索的 `fastembed`，見下方「三個『不在 requirements.txt 裡』的硬依賴」；pgvector、Redis 等系統服務另列於下表）。
 
 | 功能面 | 需要 | 缺了會怎樣 |
 |---|---|---|
@@ -27,7 +27,7 @@
 | **後端啟動本身（U11 起）** | `backend/.env` 的 **`BRAIN_ROUTER_CONFIDENCE_THRESHOLD`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。同樣是大聲失敗——門檻缺值時「信心不足就先問、不要亂做」這條路徑的判定基準不存在，而把缺值讀成某個預設門檻，等於讓它由一個沒有人選過的數字決定（`BR3.4`）。另四個 `BRAIN_ROUTER_*` 缺值只會記 WARN／INFO 並取預設 |
 | 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務。選 `fulltext` 時入口頁**每個有交辦的輪次**都會記一筆 `episodic_write_failed` WARNING（`fulltext` 下寫不了記憶），屬預期（`OPEN-GW13-18`） |
 
-### 兩個「不在 requirements.txt 裡」的硬依賴
+### 三個「不在 requirements.txt 裡」的硬依賴
 
 **H1 — LLM 供應商（OpenRouter）**：A3 Review／Lens 與多數 LLM 路徑經 **LangGraph + OpenRouter HTTP**（`OPENROUTER_API_KEY`）。映像與本機 **不再**需要為 A3 安裝 `@anthropic-ai/claude-code`。
 
@@ -63,6 +63,21 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 - **目錄用服務全名，架構圖用縮寫**。`SNS` 在目錄裡叫 `Simple Notification Service`，兩者沒有共同子字串。後端有一份對照表處理常見縮寫（S3、SNS、SQS、SES、KMS、ELB、MSK、IAM、ECS、EKS、ECR、VPC、CDN、ASG）；表以外的縮寫比對不到就落到灰底，並寫一行 WARNING。
 
 比對不到時**一律**回灰底佔位圖，不會退而求其次給一個相近的圖示 —— 錯的圖示比灰底更難發現。
+
+### 第三個：本機向量檢索的 `fastembed`（只在 `EMBEDDING_PROVIDER=fastembed` 時）
+
+`fastembed` **不在 `backend/requirements.txt`**（`U6`／`BR6.1`：無條件安裝會把 ONNX runtime 與模型載入器放進每個 image，而三個環境中只有「本機且無 ollama」會用到）。要在本機真的驗向量檢索時自行安裝，**版本照這個範圍**：
+
+```bash
+pip install 'fastembed>=0.7,<0.8'
+```
+
+- **模型名稱有兩個**：`FASTEMBED_MODEL` 填的是記憶列上的向量空間身分 `multilingual-e5-large`；後端載入時會換成 fastembed 的登錄名 **`intfloat/multilingual-e5-large`**（`backend/services/embedding_port.py` 的 `FASTEMBED_REGISTRY_NAMES`）。fastembed 不認裸名，直接拿身分去載入會拋 `ValueError: Model multilingual-e5-large is not supported`。
+- **下載來源**：首次使用時下載 ONNX 權重，**約 2.24 GB**（1024 維）。來源是 HuggingFace 的 `qdrant/multilingual-e5-large-onnx`，取不到時改從 Google Cloud Storage 的 qdrant 備援位置下載（fastembed 0.7 的模型清單所載）。
+- **快取位置**：預設為系統暫存目錄下的 `fastembed_cache`；可用環境變數 `FASTEMBED_CACHE_PATH` 改到固定位置，避免重開機後被清掉又重新下載。
+- **前置檢查**（確認你裝的版本認得這個登錄名）：`python3 -c "from fastembed import TextEmbedding; print(any(m['model']=='intfloat/multilingual-e5-large' for m in TextEmbedding.list_supported_models()))"` 應印出 `True`。
+- **此路徑不經 CI，供應鏈風險由使用它的開發者承擔**（`SEC-3`／具名風險 `RR-2`）：CI 與部署 stack 都不安裝 `fastembed`、不下載這份權重，所以沒有任何自動化檢查看過它。
+- 不想下載就用 `EMBEDDING_PROVIDER=fulltext`（零下載、零額外服務）。
 
 ---
 
@@ -220,15 +235,22 @@ cd backend
 python scripts/run_hierarchy_migration.py && echo "exit=$?"
 # 2) U5 ＋ U18：memory schema ＋ 三張 project-meta 表
 python scripts/run_meta_schema_migration.py && echo "exit=$?"
-# 3) U19：既有專案的成員回填（**沒跑的話你會被鎖在自己的專案外面**）
+# 3) U19：既有專案的成員回填——**2026-10-20 起後端啟動時會自動做**，
+#    手動跑只用來事前檢查（--dry-run）或補跑
 python scripts/backfill_project_members.py --dry-run && echo "exit=$?"
-python scripts/backfill_project_members.py && echo "exit=$?"
 ```
 
-第 3 步的後果值得寫清楚：`project_members` 是全新表，既有專案全部**零成員**，
+第 3 步的背景值得寫清楚：`project_members` 是全新表，既有專案全部**零成員**，
 而 `resolve_project_role` 對零成員專案回 `None`、`BR1.6` 要求當成拒絕
-——所以**連你自己建的專案都會被判為非成員**。症狀是 `/api/membership/*` 一律
-403 而不是任何錯誤訊息。細節與驗證指令見 `DEPLOY.md` 第 2.2.10 節。
+——所以**連你自己建的專案都會被判為非成員**，症狀是 `/api/membership/*` 一律
+403 而不是任何錯誤訊息。**2026-10-20 起（合併前必修第 15 項）**，後端啟動時
+（`init_db()` 之後）會自動補上擁有者的 `project_admin` 列，邏輯與上面的腳本是同一份
+（`backend/services/membership_backfill.py`）。
+
+**新的本機前置條件**：補齊失敗時**後端起不來**——uvicorn 印出
+`membership.backfill_failed` 與 traceback 後退出，而不是照常啟動。最常見的原因是
+某個專案的 `owner_user_id` 指向一個已不存在的使用者（自我終檢不通過）；處置是修那
+筆資料後重啟，補齊是冪等的。細節與驗證指令見 `DEPLOY.md` 第 2.2.10 節。
 
 #### ⚠️ 一個本機專屬的陷阱：**後端先啟動過，你就會拿到沒有 COMMENT 的表**
 
@@ -260,7 +282,12 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360 \
 ```
 
 前置條件：目標資料庫已套用 `schema_rbac.sql`（含 `U19` 回補的
-`reselection_events.cause`）。**`DATABASE_URL` 必須顯式帶 `+psycopg` 後綴**，
+`reselection_events.cause`）。`users.authorization_status` 不在 `schema_rbac.sql`
+裡，`test_membership_concurrency` 會在 `setUpClass` 呼叫 `database._ensure_j5_schema()`
+補上它（合併前必修第 1 ＋ 4 項起停用守門會讀這一欄）。其中 `C4` 會真的等滿取鎖逾時
+（約 5 秒）。沒有 Docker 時，可用 Homebrew 的 `postgresql@17`（含 `pgvector`）在暫存
+目錄 `initdb` 一個丟棄用的實例，以 TCP 埠啟動（`-c unix_socket_directories=`，避免
+macOS 路徑長度上限）再套用 `schema_rbac.sql`。**`DATABASE_URL` 必須顯式帶 `+psycopg` 後綴**，
 而**讀不到它時這些測試會大聲失敗、不會退回 SQLite**——退回 SQLite 會讓整個
 測試綠燈而鎖從未存在。
 
@@ -328,7 +355,13 @@ REDIS_PASSWORD=
 # U10 session-store：每段對話歷程的筆數上限。required、**無預設**——缺值時
 # 後端在 startup 大聲失敗，**不會**以「無上限」啟動（BR3.5）。
 # 上限**每段獨立計算**（至多三段：shared／workspace／assessment），故總量上界
-# 是 3 倍而非 200 則總和。值 200：3 × 200 × 約 500 B ≈ 300 KB／session。
+# 是 3 倍而非 200 則總和。修剪另有每段序列化後 200 KB 的位元組上限（程式常數
+# DEFAULT_SEGMENT_MAX_BYTES，不是環境變數），兩者取較嚴者：對話最壞 ≈ 600 KiB／session。
+# 同一 key 下另有 U12 工作項：進行中最多 5 筆、已結束只留最近 20 筆（程式常數，
+# 不是環境變數；每筆以序列化後位元組封頂），最壞 ≈ 79.1 KiB／session。
+# 合計 ≈ 679.1 KiB；300 個 ≈ 199.0 MiB ≈ maxmemory 256mb 的 77.7%（算式見 DEPLOY.md）。
+# 本機交辦使同時進行的工作超過 5 個時，大腦會回「同時進行中的工作最多 5 項，
+# 這次交辦會超過上限……」——那是上限，不是故障。
 BRAIN_SESSION_HISTORY_MAX=200
 # U11 intent-router：意圖路由層的五個設定。**只有門檻 required、無預設**——
 # 缺它後端在 startup 大聲失敗；其餘四個缺值取預設並記 WARN／INFO。
@@ -616,6 +649,7 @@ docker compose -f deploy/docker-compose.test.yml down -v
 | 後端啟動就掛，訊息提到門檻必須落在 `0 < t <= 1` | 設了 `0`（或大於 1）。擋在啟動是刻意的：門檻 0 會讓反問路徑**永不觸發**，而文件上看起來已解決 | 設一個 0 與 1 之間的值；初版是 `0.7` |
 | 啟動 log 出現 `BRAIN_ROUTER_TIMEOUT_SEC 未設定，取預設` 之類的 WARN | 這四個變數**有**預設，缺值只是沒照設定跑，所以是 WARN 不是失敗 | 想消掉 WARN 就在 `backend/.env` 補上；不補也能跑 |
 | 對話超過 200 則之後，最舊的訊息不見了 | 這是刻意行為（`BR3.4`）：超限時自該段**最舊**端丟棄。上限**每段獨立**，所以 `/workspace` 的活躍對話不會擠掉 `/assessment` 的歷程 | 不是 bug。要改上限就改 `BRAIN_SESSION_HISTORY_MAX`，並記得部署端要同步 `deploy/render-env.sh` 與 `deploy/.env.example` |
+| 長訊息時，**不到 200 則**最舊的訊息就不見了（例如每則數千個中文字時只留十幾則） | 這也是刻意行為：每段另有**序列化後 200 KB** 的位元組上限，與 200 則取較嚴者（`merge-blockers.md` 第 18 項）。一則 4000 個中文字約 12 KB，200 KB 只放得下約 16 則 | 不是 bug。位元組上限是程式常數 `DEFAULT_SEGMENT_MAX_BYTES`（`backend/services/session_types.py`），**不是**環境變數；改 `BRAIN_SESSION_HISTORY_MAX` 不會影響它 |
 
 ---
 

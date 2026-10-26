@@ -9,10 +9,10 @@ requirement_field_errors.py — `U20 requirement-field-service` 的領域例外
 
 | 例外 | HTTP | 規則 |
 |---|---|---|
-| `RequirementFieldForbidden` | 403 | `BR41.1`／`BR41.2`／`BR41.4` |
-| `RequirementFieldNotFound` | 404 | `BR41.3` |
+| `RequirementFieldForbidden` | 403 | `BR41.1`／`BR41.2` |
+| `RequirementFieldNotFound` | 404 | `BR41.3`、`BR41.4`（非成員；合併前必修第 14 項） |
 | `UnknownFieldKey` | 422 | `BR42.1`／`BR42.2` |
-| `RequirementFieldValidationError` | 422 | `BR42.3`–`BR42.5`、請求本體形狀（`BR46.4`） |
+| `RequirementFieldValidationError` | 422 | `BR42.3`–`BR42.5`、值含 NUL（合併前必修第 24 項）、請求本體形狀（`BR46.4`） |
 
 **每個例外的訊息都是固定文字**（`BR46.3`／`NFR20.14`）：只帶錯誤類別與定址欄位
 （`system_id`、`agent_group`、`field_key`），**永不**帶欄位值、代寫標示的值或任何
@@ -24,9 +24,17 @@ from __future__ import annotations
 
 from typing import Optional
 
+from services.hierarchy_facade import SYSTEM_NOT_FOUND_DETAIL
 from services.requirement_field_definitions import KEY_PATTERN
 
 STORY_ID = "K4"
+
+NOT_FOUND_DETAIL = SYSTEM_NOT_FOUND_DETAIL
+"""404 的唯一訊息（不存在、非整數 id、缺 `K2.view`、非成員皆同；合併前必修第 14 項）。
+
+**不另抄字串**：沿用 `hierarchy_facade.SYSTEM_NOT_FOUND_DETAIL`（單一真實來源），
+與階層端點的「查不到系統」同一句。
+"""
 
 
 class RequirementFieldError(Exception):
@@ -36,10 +44,13 @@ class RequirementFieldError(Exception):
 class RequirementFieldForbidden(RequirementFieldError):
     """授權未通過。router 轉 403。
 
-    `reason` 為 `pending`（`BR41.1`）／`global`（`BR41.2`）／`not_member`
-    （`BR41.4`），與拒絕 log 的 `reason` 欄位一對一對應（`NFR20.27`）。
-    **對外訊息不區分三者**：讓呼叫端從錯誤訊息分辨「你不是成員」與「你的角色不夠」
-    沒有使用者價值，只會多洩漏一點專案成員關係。
+    `reason` 只有 `pending`（`BR41.1`）／`global`（`BR41.2`）兩種，與拒絕 log 的
+    `reason` 欄位一對一對應（`NFR20.27`）。**對外訊息不區分兩者。**
+
+    **非成員不走本例外**（合併前必修第 14 項，`[PP-MB14]`=A）：`not_member`（`BR41.4`）
+    只是拒絕 log 的 `reason` 值——`requirement_field_facade._authorize` 照記
+    `requirement_field.denied ... reason=not_member` 的 WARNING 後丟的是
+    `RequirementFieldNotFound`，對外為 404，與「系統不存在」逐位元相同。
     """
 
     def __init__(
@@ -62,12 +73,15 @@ class RequirementFieldNotFound(RequirementFieldError):
 
     也用於非整數的 `system_id`（它不可能是任何一個系統）與「呼叫端缺 `K2.view`」
     ——後者與 `U19` 對同一情形的處置一致（`membership_facade._assert_project_exists`）。
+
+    **也用於「系統存在但呼叫者不是所屬專案的成員」**（合併前必修第 14 項，
+    `[PP-MB14]`=A）。故訊息**固定為 `NOT_FOUND_DETAIL`、不含 id**：兩種情形的回應
+    必須逐位元相同，帶 id 只會讓訊息成為另一個可比對的訊號。`system_id` 仍留在屬性上
+    供同進程呼叫端與 log 使用，不進對外訊息。
     """
 
     def __init__(self, system_id: Optional[int] = None) -> None:
-        super().__init__(
-            f"查不到系統 {system_id}" if system_id is not None else "查不到系統"
-        )
+        super().__init__(NOT_FOUND_DETAIL)
         self.system_id = system_id
 
 
@@ -113,6 +127,9 @@ _ACTION_LABELS = {"view": "讀取", "edit": "修改"}
 _VALIDATION_MESSAGES = {
     ("value", "type"): "value 必須是字串",
     ("value", "too_long"): "value 去除首尾空白後不得超過 2000 字",
+    # 合併前必修第 24 項：PostgreSQL 的 text／varchar 不能存 NUL（0x00），psycopg 在
+    # dump 階段拋 `DataError`，未擋下時會成為 500。固定文字、不回顯值。
+    ("value", "nul_char"): "value 不得含 NUL 字元（U+0000）",
     ("value", "blank_on_behalf"): (
         "代寫路徑不得以空值清空欄位；要清空請呼叫清空操作（DELETE）"
     ),
@@ -125,6 +142,7 @@ _VALIDATION_MESSAGES = {
 
 
 __all__ = [
+    "NOT_FOUND_DETAIL",
     "RequirementFieldError",
     "RequirementFieldForbidden",
     "RequirementFieldNotFound",

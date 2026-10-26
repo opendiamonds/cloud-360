@@ -43,10 +43,11 @@ from services.intent_routing_errors import (
     LlmUnavailable,
     MalformedRouting,
 )
+from services.memory_errors import MemoryForbidden
 from services.session_errors import SessionBackendUnavailable, SessionMessageTooLong
 from services.session_store import DEFAULT_MESSAGE_MAX_CHARS
 from services.session_types import PAGE_SCOPES, SEGMENT_SHARED, SHARING_ISOLATED
-from services.work_orchestrator import WorkItemNotFound
+from services.work_orchestrator import WorkCapacityExceeded, WorkItemNotFound
 
 # ---------------------------------------------------------------------------
 # 協定常數（由契約取值）
@@ -271,8 +272,14 @@ ERROR_MESSAGES: Mapping[str, str] = {
     "session": "工作階段暫時無法存取，請稍後再試",
     "too_long": "訊息太長，請縮短後再送出",
     "forbidden_target": "你沒有權限選擇這個作業對象",
+    "forbidden_memory": "你目前沒有權限使用大腦的記憶，這一輪已停止",
     "target_not_found": "找不到這個作業對象",
     "work_item_not_found": "找不到這個工作項",
+    # 合併前必修第 18 項（`U12` 的進行中上限）：固定字串，數字與
+    # `work_orchestrator_rules.MAX_ACTIVE_WORK_ITEMS` 一致（測試鎖住兩者）。
+    # 句子只陳述上限與「這次會超過」：預檢在「現有＋本批 > 上限」時觸發，現有
+    # 進行中可能少於 5（例如 4 ＋ 2），不得說成「已達 5 項」（U12 審查 review-01 R-03）。
+    "work_capacity": "同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。",
     "format": "訊息格式不正確",
     "rate": "訊息太頻繁，請稍候再送出",
     "internal": "處理時發生錯誤，請再說一次",
@@ -295,10 +302,16 @@ def error_for(exc: BaseException) -> Tuple[str, str]:
         return CODE_INVALID, ERROR_MESSAGES["too_long"]
     if isinstance(exc, HierarchyForbidden):
         return CODE_UNAUTHORIZED, ERROR_MESSAGES["forbidden_target"]
+    # 合併前必修第 13 項：記憶授權拒絕以既有的授權類代碼結束本輪（不新增代碼）。
+    if isinstance(exc, MemoryForbidden):
+        return CODE_UNAUTHORIZED, ERROR_MESSAGES["forbidden_memory"]
     if isinstance(exc, HierarchyNotFound):
         return CODE_INVALID, ERROR_MESSAGES["target_not_found"]
     if isinstance(exc, WorkItemNotFound):
         return CODE_INVALID, ERROR_MESSAGES["work_item_not_found"]
+    # 合併前必修第 18 項：沿用既有代碼 INVALID_REQUEST，**不改 WS 契約**的 code 列舉。
+    if isinstance(exc, WorkCapacityExceeded):
+        return CODE_INVALID, ERROR_MESSAGES["work_capacity"]
     if isinstance(exc, RateLimited):
         return CODE_INVALID, ERROR_MESSAGES["rate"]
     # JSONDecodeError 是 ValueError 的子類，必須排在「其餘 ValueError → INTERNAL」之前。

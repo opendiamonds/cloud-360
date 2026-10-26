@@ -296,6 +296,8 @@ class RequirementFieldFacadeTest(RequirementFieldFixture, unittest.TestCase):
 
         待核准、無 `K4.view`、只有 view 卻寫入（含帶代寫標示）、非成員——四者都必須在
         facade 內被拒，且拒絕時對本表 0 條敘述（`NFR20.7`）。不存在的系統、非整數 id 為 404。
+        合併前必修第 14 項（`[PP-MB14]`=A）起，**非成員**的拒絕是 `RequirementFieldNotFound`
+        （訊息與「系統不存在」相同、不含 id），其餘三種仍是 `RequirementFieldForbidden`。
         """
         denied = [
             ("pending", self.pending, "read"),
@@ -307,15 +309,20 @@ class RequirementFieldFacadeTest(RequirementFieldFixture, unittest.TestCase):
             ("not_member", self.root, "write"),
         ]
         for reason, user, operation in denied:
+            expected = (RequirementFieldNotFound if reason == "not_member"
+                        else RequirementFieldForbidden)
             with self.subTest(user=user.username, operation=operation):
                 with QueryCounter(self.db) as counter:
-                    with self.assertRaises(RequirementFieldForbidden) as caught:
+                    with self.assertRaises(expected) as caught:
                         if operation == "read":
                             self.read(user)
                         else:
                             self.write("sla", "v", user=user, on_behalf_of=(
                                 "cost" if operation == "write_on_behalf" else None))
-                self.assertEqual(caught.exception.reason, reason)
+                if reason == "not_member":
+                    self.assertEqual(str(caught.exception), str(RequirementFieldNotFound()))
+                else:
+                    self.assertEqual(caught.exception.reason, reason)
                 self.assertEqual(counter.table_statements, 0, counter.statements)
 
         for missing in (999_999, "abc", "99999999999", -1):
@@ -337,7 +344,7 @@ class RequirementFieldFacadeTest(RequirementFieldFixture, unittest.TestCase):
         """
         marker = f"marker-{uuid.uuid4()}"
         with self.assertLogs(LOGGER, level="INFO") as logs:
-            with self.assertRaises(RequirementFieldForbidden):
+            with self.assertRaises(RequirementFieldNotFound):
                 self.write("sla", marker, user=self.outsider)
             self.write("sla", marker, on_behalf_of="cost")
             self.facade().clear_field(mint_principal(self.editor),
@@ -386,6 +393,100 @@ class RequirementFieldFacadeTest(RequirementFieldFixture, unittest.TestCase):
         rollback.assert_called_once()
         sla = field_of(self.read(), "cost", "sla")
         self.assertEqual((sla.filled_state, sla.value), (FilledState.FILLED, "before"))
+
+    # -- R1–R3：成功讀取的稽核 log（merge-blockers 第 8 項） -----------------
+
+    @staticmethod
+    def read_records(logs):
+        return [r for r in logs.records
+                if r.getMessage().split()[0] == "requirement_field.read"]
+
+    def test_R1_successful_read_logs_reader_identity_once(self):
+        """成功讀取恰記一行 `requirement_field.read`，帶讀取者本人與授權後的 id。
+
+        @purpose 稽核主體必須是使用者本人在讀取面也成立（`requirements.md:620` ③）；
+                 拿掉這行 log 時本案紅燈（突變 M-A）。
+        @given   editor 是目標系統所屬專案的成員且有 `K4.view`；`system_id` 以字串傳入。
+        @step    以 editor 呼叫 `read_fields`。
+        @pass    恰一筆 `requirement_field.read`（INFO），`user_id`＝editor、`system_id`＝整數
+                 系統 id（授權後的 `known_id`，不是輸入原值）、`action`＝`view`、`on_behalf` 為 False。
+        @story   US11.4
+        """
+        with self.assertLogs(LOGGER, level="INFO") as logs:
+            self.facade().read_fields(mint_principal(self.editor),
+                                      system_id=str(self.system.id))
+        records = self.read_records(logs)
+        self.assertEqual(len(records), 1, [r.getMessage() for r in logs.records])
+        record = records[0]
+        self.assertEqual(record.levelno, logging.INFO)
+        self.assertEqual(
+            (record.story_id, record.action, record.system_id, record.user_id,
+             record.on_behalf),
+            ("K4", "view", self.system.id, self.editor.id, False),
+        )
+        self.assertIsInstance(record.system_id, int)
+        self.assertIn(f"user_id={self.editor.id}", record.getMessage())
+
+    def test_R2_read_log_never_carries_field_values(self):
+        """讀取 log 不含欄位值（突變 M-B：log 改記欄位值時紅燈）。
+
+        @purpose 讀取稽核行只記身分與系統，不把被讀到的需求欄位值寫進 log。
+        @given   editor 先寫入一個以 `uuid4()` 產生的唯一標記值。
+        @step    以 editor 呼叫 `read_fields`，只擷取讀取期間的 log。
+        @pass    回傳值含該標記（證明讀得到）；該次 `requirement_field.read` 的訊息與
+                 `__dict__`（含全部 `extra`）都不含該標記。
+        @story   US11.4
+        """
+        marker = f"marker-{uuid.uuid4()}"
+        self.write("sla", marker)
+        with self.assertLogs(LOGGER, level="INFO") as logs:
+            field_set = self.read()
+        self.assertEqual(field_of(field_set, "cost", "sla").value, marker)
+        records = self.read_records(logs)
+        self.assertEqual(len(records), 1)
+        for record in logs.records:
+            self.assertNotIn(marker, record.getMessage())
+            self.assertNotIn(marker, repr(record.__dict__))
+
+    def test_R3_denied_read_logs_only_the_denial(self):
+        """被拒讀取只有 `requirement_field.denied`，沒有 `requirement_field.read`（突變 M-C）。
+
+        @purpose 讀取稽核行必須在授權通過之後才記；記在授權之前會讓被拒的讀取也留下
+                 「已讀」紀錄。
+        @given   outsider 不是目標系統所屬專案的成員。
+        @step    以 outsider 呼叫 `read_fields`。
+        @pass    拋 `RequirementFieldNotFound`（合併前必修第 14 項：非成員對外為 404）；log 恰一行
+                 `requirement_field.denied`（reason=not_member），`requirement_field.read` 為 0 筆。
+        @story   US11.4
+        """
+        with self.assertLogs(LOGGER, level="INFO") as logs:
+            with self.assertRaises(RequirementFieldNotFound):
+                self.read(self.outsider)
+        self.assertEqual(
+            [r.getMessage().split()[0] for r in logs.records],
+            ["requirement_field.denied"],
+        )
+        self.assertEqual(logs.records[0].reason, "not_member")
+        self.assertEqual(self.read_records(logs), [])
+
+    def test_R5_not_found_read_logs_nothing(self):
+        """讀取不存在的系統拋 not-found，且不留 `requirement_field.read`（審查 review-02 R-13）。
+
+        @purpose 讀取稽核行只在授權通過後才記；不存在或不可見的系統不得留下「已讀」紀錄。
+                 把 log 移到 `_authorize` 之前時本案紅燈。
+        @given   editor 是目標專案成員且有 `K4.view`；目標 id 為不存在的整數、非整數字串、
+                 超出範圍的數字字串與負數。
+        @step    以 editor 對每個 id 呼叫 `read_fields`。
+        @pass    每次都拋 `RequirementFieldNotFound`；`cloud360.requirement_fields` 在 INFO 以上
+                 沒有任何一筆紀錄（因此 `requirement_field.read` 為 0 筆）。
+        @story   US11.4
+        """
+        for missing in (999_999, "abc", "99999999999", -1):
+            with self.subTest(system_id=missing):
+                with self.assertNoLogs(LOGGER, level="INFO"):
+                    with self.assertRaises(RequirementFieldNotFound):
+                        self.facade().read_fields(mint_principal(self.editor),
+                                                  system_id=missing)
 
 
 if __name__ == "__main__":

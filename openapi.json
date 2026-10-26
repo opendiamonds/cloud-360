@@ -331,6 +331,51 @@
         "title": "CreateSystemIn",
         "type": "object"
       },
+      "DeleteUserBlockingReference": {
+        "description": "刪除使用者被擋下時，仍指向該使用者的一類資料。",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "label",
+          "count"
+        ],
+        "title": "DeleteUserBlockingReference",
+        "type": "object"
+      },
+      "DeleteUserConflict": {
+        "description": "刪除使用者的 409 回應本體（合併前必修第 3 項／OQ-H1）。\n\n`detail` 維持**字串**：既有前端一律以 `data.detail` 當錯誤訊息顯示\n（`AdminPage.tsx`、`AuthorizationRequestsPage.tsx`），改成物件會顯示成\n`[object Object]`。結構化清單另放 `blocking_references`。\n\n`blocking_references` 有預設值、在 spec 中**非必填**：拒絕授權申請端點\n既有的另一種 409（「此申請已處理」）只有 `detail`；保底路徑（預檢未涵蓋的\n外鍵，規則 3）回空清單。",
+        "properties": {
+          "blocking_references": {
+            "items": {
+              "$ref": "#/components/schemas/DeleteUserBlockingReference"
+            },
+            "title": "Blocking References",
+            "type": "array"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "DeleteUserConflict",
+        "type": "object"
+      },
       "DetectProviderBody": {
         "properties": {
           "xml_data": {
@@ -1380,6 +1425,33 @@
         "title": "RequirementFieldErrorOut",
         "type": "object"
       },
+      "ReselectionFailureReport": {
+        "description": "停用端點在**自動改選部分失敗**時的回應本體（合併前必修第 10 項）。\n\n出現在 `PUT /api/auth/{user_id}/active` 的 **500**（任一專案改選失敗）與\n**503**（失敗全部是取鎖逾時，合併前必修第 16 項）。兩者的共同事實是：\n**帳號已經停用了**（停用與改選是兩段交易，改選在停用成功之後才跑），而\n`failed_project_ids` 列出的專案此刻可能沒有可運作的管理者。\n\n`detail` 告訴呼叫端**重送同一個請求**即可補跑：對已停用的帳號再送\n`is_active=false` 不會重跑守門，但會重跑改選，而改選是冪等的（`BR4.3`），\n已改好的專案不會產生第二筆事件。\n\n在此之前這條路徑回 200 且只記 log，沒有任何呼叫者負責重跑，失敗的專案會\n永久沒有管理者（`nfr-design` review-02 `R-04`）。",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "failed_project_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Failed Project Ids",
+            "type": "array"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "detail",
+          "user_id",
+          "failed_project_ids"
+        ],
+        "title": "ReselectionFailureReport",
+        "type": "object"
+      },
       "ReselectionOut": {
         "description": "一筆未確認的自動改選事件。\n\n**刻意只含事件本身的欄位，不含專案名稱**：橫幅的**顯示**形狀屬 `U23`／`U24`\n（本單元無前端面——實測 `frontend/src` 對 `projects` 的命中數為 0）。\n這一點與 `LastAdminGuardReport` 刻意帶名稱不同，而差別有依據：後者的名稱\n需求來自 `entities.md` 的逐字約束（「只給 id 的話畫面無法告知使用者是哪個\n專案」），而橫幅的對應需求沒有任何已核可 AC 指定它的欄位集合。消費端若\n需要名稱，那是一次有明確來源的擴充，不是本單元自行放大回傳形狀。",
         "properties": {
@@ -1458,6 +1530,20 @@
           "new_role"
         ],
         "title": "ReselectionOut",
+        "type": "object"
+      },
+      "ReservedAccountConflict": {
+        "description": "合併前必修第 11 項：對系統保留帳號的改動被拒時的 409 回應本體。\n\n`detail` 為字串，沿用既有前端以 `data.detail` 顯示錯誤的形狀。",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ReservedAccountConflict",
         "type": "object"
       },
       "ResetDefaultsResponse": {
@@ -2843,6 +2929,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservedAccountConflict"
+                }
+              }
+            },
+            "description": "合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。另：申請已處理時亦回 409（同一形狀）。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2884,6 +2980,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteUserConflict"
+                }
+              }
+            },
+            "description": "合併前必修第 3 項（OQ-H1）：刪除被拒——仍有資料指向該使用者（非空或非預設專案、其他專案的成員資格、記憶、稽核操作者紀錄等）。`blocking_references` 逐類列出筆數；預檢未涵蓋的外鍵於 commit 時被資料庫擋下時，回通用訊息與空清單。**稽核類紀錄不會被刪除**。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者）時同樣回 409，`blocking_references` 為空清單。"
           },
           "422": {
             "content": {
@@ -3263,6 +3369,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteUserConflict"
+                }
+              }
+            },
+            "description": "合併前必修第 3 項（OQ-H1）：刪除被拒——仍有資料指向該使用者（非空或非預設專案、其他專案的成員資格、記憶、稽核操作者紀錄等）。`blocking_references` 逐類列出筆數；預檢未涵蓋的外鍵於 commit 時被資料庫擋下時，回通用訊息與空清單。**稽核類紀錄不會被刪除**。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者）時同樣回 409，`blocking_references` 為空清單。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3321,11 +3437,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LastAdminGuardReport"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LastAdminGuardReport"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ReservedAccountConflict"
+                    }
+                  ],
+                  "title": "Response 409 Update User Active Api Auth  User Id  Active Put"
                 }
               }
             },
-            "description": "U19/BR6.1：停用被拒——該使用者是列出的每一個專案的**最後一位專案管理者**。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`"
+            "description": "U19/BR6.1：停用被拒——該使用者是列出的每一個專案的**最後一位專案管理者**。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。此情形的本體為 `ReservedAccountConflict`"
           },
           "422": {
             "content": {
@@ -3336,6 +3460,26 @@
               }
             },
             "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReselectionFailureReport"
+                }
+              }
+            },
+            "description": "帳號**已停用**，但列出的專案自動改選失敗（交易已回滾，該專案此刻可能沒有可運作的管理者）。重送同一請求（`is_active=false`）即可補跑；改選冪等，已完成的專案不會重複"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReselectionFailureReport"
+                }
+              }
+            },
+            "description": "帳號**已停用**，但列出的專案在取鎖時逾時（另一筆成員變更進行中）。稍後重送同一請求即可補跑"
           }
         },
         "security": [
@@ -3380,6 +3524,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservedAccountConflict"
+                }
+              }
+            },
+            "description": "合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。"
           },
           "422": {
             "content": {
@@ -4697,10 +4851,10 @@
             "description": "Successful Response"
           },
           "403": {
-            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+            "description": "缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403）"
           },
           "404": {
-            "description": "查不到該專案或該成員"
+            "description": "查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員"
           },
           "422": {
             "content": {
@@ -4756,13 +4910,16 @@
             "description": "Successful Response"
           },
           "403": {
-            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+            "description": "缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403）"
           },
           "404": {
-            "description": "查不到該專案或該成員"
+            "description": "查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員"
           },
           "422": {
             "description": "受邀者缺少對應的全域功能權限（`BR3.2`／`AC12.5.1`），或角色不在封閉列舉內"
+          },
+          "503": {
+            "description": "取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試"
           }
         },
         "security": [
@@ -4802,10 +4959,10 @@
             "description": "Successful Response"
           },
           "403": {
-            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+            "description": "缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403）"
           },
           "404": {
-            "description": "查不到該專案或該成員"
+            "description": "查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員"
           },
           "409": {
             "content": {
@@ -4826,6 +4983,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試"
           }
         },
         "security": [
@@ -4880,10 +5040,10 @@
             "description": "Successful Response"
           },
           "403": {
-            "description": "兩層串聯任一層不過（`BR1.2`）：缺 `K3` 的全域功能權限，或不是該專案的成員／管理者"
+            "description": "缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403）"
           },
           "404": {
-            "description": "查不到該專案或該成員"
+            "description": "查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員"
           },
           "409": {
             "content": {
@@ -4904,6 +5064,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試"
           }
         },
         "security": [
@@ -5360,7 +5523,7 @@
                 }
               }
             },
-            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+            "description": "授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403"
           },
           "404": {
             "content": {
@@ -5370,7 +5533,7 @@
                 }
               }
             },
-            "description": "查不到該系統（含非整數的 system_id）"
+            "description": "查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項）"
           },
           "422": {
             "content": {
@@ -5446,7 +5609,7 @@
                 }
               }
             },
-            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+            "description": "授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403"
           },
           "404": {
             "content": {
@@ -5456,7 +5619,7 @@
                 }
               }
             },
-            "description": "查不到該系統（含非整數的 system_id）"
+            "description": "查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項）"
           },
           "422": {
             "content": {
@@ -5565,7 +5728,7 @@
                 }
               }
             },
-            "description": "授權未通過：帳號待核准、缺全域功能權限 K4（讀需 view、寫與清空需 edit），或不是該系統所屬專案的成員"
+            "description": "授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403"
           },
           "404": {
             "content": {
@@ -5575,7 +5738,7 @@
                 }
               }
             },
-            "description": "查不到該系統（含非整數的 system_id）"
+            "description": "查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項）"
           },
           "422": {
             "content": {

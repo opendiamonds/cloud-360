@@ -82,15 +82,18 @@ test.describe('身分驗證', () => {
    * @ui / | 登入頁：帳號／密碼輸入框、「登入系統」按鈕
    * @ui /workspace | 工作區：側邊導覽、「架構」按鈕、「登出系統」控制項
    * @given 已以 admin 登入並離開登入頁（落點為入口頁或既有瀑布的第一個可用頁）
-   * @step 確認已離開 `/login` 且「登出系統」控制項可見 | 已登入
+   * @step 確認已離開 `/login`、落在入口頁 `/`（brain-entry-page 可見）且「登出系統」控制項可見 | 已登入
    * @step 點擊標題為「登出系統」的控制項 | 觸發登出
    * @step 檢視頁面 | 回到登入頁，出現「登入系統」按鈕
-   * @pass 「登入系統」按鈕可見
+   * @pass 登入後落點為入口頁，登出後「登入系統」按鈕可見
    * @story J1
    */
   test('登出後返回登入頁', async ({ page }) => {
     await login(page, ADMIN.username, ADMIN.password);
     await expect(page).not.toHaveURL(/\/login$/);
+    // 正向落點（合併前必修第 26 項 (e)）：不登入頁不等於登入成功，/waiting-approval、/403 也成立。
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId('brain-entry-page')).toBeVisible();
     await expect(page.getByTitle('登出系統')).toBeVisible();
     await page.getByTitle('登出系統').click();
     await expect(page.getByRole('button', { name: '登入系統' })).toBeVisible();
@@ -104,10 +107,10 @@ test.describe('角色權限存取控制 (RBAC)', () => {
    * @api GET /api/auth/me -> 200 | 取得目前登入者與其權限
    * @ui /workspace | 工作區：側邊導覽、「架構」按鈕、「登出系統」控制項
    * @given seed 帳號 admin，角色 Platform_Admin（具 J3a:view）
-   * @step 以 admin 登入 | 離開 `/login`
+   * @step 以 admin 登入 | 離開 `/login`，落在入口頁 `/`（brain-entry-page 可見）
    * @step 檢視側邊導覽 | 出現「系統管理」區塊
    * @step 檢視該區塊項目 | 出現「使用者角色」連結
-   * @pass 兩者皆可見
+   * @pass 落點為入口頁，且「系統管理」與「使用者角色」皆可見
    * @story J3a
    * @note 與「Developer 看不到系統管理區」成對，構成同一權限的雙向驗證。
    *       只驗 allow 方向無法證明權限有真的在把關。
@@ -115,6 +118,8 @@ test.describe('角色權限存取控制 (RBAC)', () => {
   test('Platform_Admin 看得到系統管理區', async ({ page }) => {
     await login(page, ADMIN.username, ADMIN.password);
     await expect(page).not.toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId('brain-entry-page')).toBeVisible();
     await expect(page.getByText('系統管理')).toBeVisible();
     await expect(page.getByRole('link', { name: '使用者角色' })).toBeVisible();
   });
@@ -132,12 +137,12 @@ test.describe('角色權限存取控制 (RBAC)', () => {
    * @given test seed 只有 admin；新註冊帳號申請 Developer，且需管理員核准
    * @step 以公開註冊建立一個唯一帳號（密碼 devpass123） | 註冊成功
    * @step 檢視當前路徑 | 導向 `/waiting-approval` 等待審核頁
-   * @step 登出，改以 admin / admin123 登入 | 離開 `/login`
+   * @step 登出，改以 admin / admin123 登入 | 離開 `/login`，落在入口頁 `/`（brain-entry-page 可見）
    * @step 前往 `/admin/authorization-requests` | 顯示待審清單
    * @step 在該帳號所在列點擊「核准」並接受確認對話框 | 出現「已核准」提示
-   * @step 登出管理員，改以剛核准的 Developer 帳號登入 | 離開 `/login`
+   * @step 登出管理員，改以剛核准的 Developer 帳號登入 | 離開 `/login`，落在入口頁 `/`（Developer 具 K1 view，brain-entry-page 可見）
    * @step 檢視側邊導覽 | 先確認 Sidebar 已渲染（「入口」可見），再確認「系統管理」出現次數為 0
-   * @pass Developer 登入後畫面上不存在「系統管理」
+   * @pass 兩次登入皆落在入口頁，且 Developer 登入後畫面上不存在「系統管理」
    * @story J3a
    * @note 這個案例刻意走完整的註冊→核准→登入流程，而不是直接改資料庫角色：
    *       授權流程本身也在被驗證的範圍內。
@@ -160,6 +165,8 @@ test.describe('角色權限存取控制 (RBAC)', () => {
     await page.getByRole('button', { name: '登出' }).click();
     await login(page, ADMIN.username, ADMIN.password);
     await expect(page).not.toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId('brain-entry-page')).toBeVisible();
 
     // 4. 前往審核頁面進行核准
     await page.goto('/admin/authorization-requests');
@@ -175,6 +182,9 @@ test.describe('角色權限存取控制 (RBAC)', () => {
     await page.getByTitle('登出系統').click();
     await login(page, uniq, 'devpass123');
     await expect(page).not.toHaveURL(/\/login$/);
+    // Developer 具 K1 view（rbac_seed_data.py），落點為入口頁；/waiting-approval 在此即紅。
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId('brain-entry-page')).toBeVisible();
 
     // 6. 驗證 Developer 權限：看不到系統管理區。先以正向錨點確認 Sidebar 已渲染——
     //    否則 toHaveCount(0) 在畫面尚未渲染時即成立（infrastructure-design R-02）。
@@ -192,8 +202,10 @@ test.describe('角色權限存取控制 (RBAC)', () => {
 test.describe('使用者管理頁 — 最後活動時間與分頁', () => {
   async function gotoAdmin(page: Page) {
     await login(page, ADMIN.username, ADMIN.password);
-    // U14：落點可能是入口頁 /；以「離開 /login」判定登入完成，正向錨點為隨後的「使用者角色」heading。
+    // U14：admin 具 K1，落點為入口頁 /（正向落點，合併前必修第 26 項 (e)）；其後再以「使用者角色」heading 為頁面錨點。
     await expect(page).not.toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId('brain-entry-page')).toBeVisible();
     await page.getByRole('link', { name: '使用者角色' }).click();
     await expect(page.getByRole('heading', { name: '使用者角色指派' })).toBeVisible();
   }

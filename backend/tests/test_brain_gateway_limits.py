@@ -25,6 +25,7 @@ from services import brain_gateway_rules as R
 from tests.brain_gateway_fakes import (
     WS_PATH,
     Harness,
+    assert_non_turn_error,
     decision,
     hello,
     nothing_more,
@@ -244,6 +245,69 @@ class RevalidationTest(_Base):
             self.assertEqual(types_of(read_turn(ws))[-1], "done")
 
 
+class NonTurnErrorTurnIdTest(unittest.TestCase):
+    """BR2.8 T1／T2：被拒訊框與重驗例外的 `error` 不屬於任何輪次，`turnId` 為 null（合併前必修第 2 項(a)）。"""
+
+    def setUp(self):
+        self.h = Harness(rate=R.RateLimiter(per_key=1))
+        self.h.user("alice")
+        self.token = self.h.token("alice")
+
+    def tearDown(self):
+        self.h.close()
+
+    def test_rejected_frames_carry_null_turn_id(self):
+        """
+        @purpose T1：二進位訊框、過大訊框、頻率超限三種被拒訊框的 error 都不得帶捏造的 turnId；連線保留。
+        @given 每使用者 60 秒 1 則 user_message 的限流器；已連線
+        @step 送一個二進位訊框 | error(INVALID_REQUEST)，envelope 與 payload 的 turnId 皆為 null
+        @step 送 65537 位元組的文字訊框 | error(INVALID_REQUEST)「訊息太長」，turnId 皆為 null
+        @step 送一句（done）後再送一句 | 第二句收到 error(INVALID_REQUEST)「訊息太頻繁」，turnId 皆為 null
+        @pass 三種被拒訊框皆為非輪次錯誤
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        with TestClient(self.h.app) as client, client.websocket_connect(WS_PATH, subprotocols=protocols(self.token)) as ws:
+            hello(ws)
+            ws.send_bytes(b"\x00\x01")
+            assert_non_turn_error(self, recv_json(ws), "INVALID_REQUEST")
+            ws.send_text("x" * 65537)
+            too_large = recv_json(ws)
+            assert_non_turn_error(self, too_large, "INVALID_REQUEST")
+            self.assertEqual(too_large["payload"]["message"], "訊息太長，請縮短後再送出")
+            user_message(ws, "第一句")
+            self.assertEqual(types_of(read_turn(ws))[-1], "done")
+            user_message(ws, "第二句")
+            limited = recv_json(ws)
+            assert_non_turn_error(self, limited, "INVALID_REQUEST")
+            self.assertEqual(limited["payload"]["message"], "訊息太頻繁，請稍候再送出")
+
+    def test_revalidation_exception_carries_null_turn_id(self):
+        """
+        @purpose T2：每則重驗拋非認證類例外時，回的 error 不屬於任何輪次（該則訊息根本未被處理），turnId 為 null。
+        @given 已連線；認證暫時拋 RuntimeError
+        @step 送一句 | error(INTERNAL_ERROR)，envelope 與 payload 的 turnId 皆為 null；classify 0 次
+        @pass 非輪次錯誤
+        @story US8.1
+        @api WS /api/brain/ws -> 101
+        """
+        original = self.h.gw._auth_once
+        broken = {"on": False}
+
+        def auth(token, record):
+            if broken["on"]:
+                raise RuntimeError("db down")
+            return original(token, record)
+
+        self.h.gw._auth_once = auth
+        with TestClient(self.h.app) as client, client.websocket_connect(WS_PATH, subprotocols=protocols(self.token)) as ws:
+            hello(ws)
+            broken["on"] = True
+            user_message(ws, "第一句")
+            assert_non_turn_error(self, recv_json(ws), "INTERNAL_ERROR")
+        self.assertEqual(self.h.router_script.calls, [])
+
+
 class ThreadAndOutboundTest(_Base):
     def test_blocking_calls_leave_the_event_loop_and_no_outbound_connection(self):
         """
@@ -429,6 +493,34 @@ class StructuralTest(unittest.TestCase):
         self.assertEqual(env_keys, {"REDIS_URL", "REDIS_USER", "REDIS_PASSWORD"})
         self.assertEqual(logger_names, {"cloud360.brain_gateway"})
         self.assertEqual(direct_logger_calls, 1)
+
+    def test_mint_turn_id_only_where_a_turn_really_opens(self):
+        """
+        @purpose BR2.8（合併前必修第 2 項(a)）：只有真正開啟一輪的兩處可以產生新 turnId——`BrainGateway._on_user_message`
+                 建立 `Turn`、`GatewaySink.emit_turn` 推播；其他任何位置（非輪次錯誤、作業對象等）新增一處即紅燈。
+        @given `brain_gateway.py` 的 AST
+        @step 收集名稱 `_mint_turn_id` 的全部出現位置（定義除外） | 恰 2 處，且皆為直接呼叫
+        @step 對照所在的類別與方法 | 恰為 {BrainGateway._on_user_message, GatewaySink.emit_turn}
+        @pass 沒有任何捏造 turnId 的呼叫點
+        @story US8.1
+        """
+        tree = _tree(SERVICES / "brain_gateway.py")
+        calls, names = [], []
+
+        def visit(node, scope):
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    visit(child, scope + (child.name,))
+                    continue
+                if isinstance(child, ast.Call) and isinstance(child.func, ast.Name) and child.func.id == "_mint_turn_id":
+                    calls.append(".".join(scope))
+                if isinstance(child, ast.Name) and child.id == "_mint_turn_id":
+                    names.append(".".join(scope))
+                visit(child, scope)
+
+        visit(tree, ())
+        self.assertEqual(len(names), 2, names)
+        self.assertEqual(sorted(calls), ["BrainGateway._on_user_message", "GatewaySink.emit_turn"])
 
     def test_close_reasons_are_ascii_short_and_token_free(self):
         """

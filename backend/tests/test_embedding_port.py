@@ -32,6 +32,7 @@ from services.embedding_port import (
     EMBEDDING_TIMEOUT_SEC,
     EmbeddingPort,
     EmbeddingProviderUnavailable,
+    FASTEMBED_REGISTRY_NAMES,
     FastembedAdapter,
     MEMORY_RECORD_EMBEDDING_MODELS,
     OllamaAdapter,
@@ -438,6 +439,54 @@ class FailureAndObservabilityTests(unittest.TestCase):
         message = str(caught.exception)
         self.assertIn("pip install", message)
         self.assertIn("fastembed", message)
+
+    def test_fastembed_is_loaded_by_its_registry_name_not_the_identity(self):
+        """
+        @purpose 驗證 fastembed 以套件登錄名載入模型，而不是記憶列上的身分字串
+        @given 以假的 fastembed 模組取代真套件，記錄 TextEmbedding 收到的 model_name；
+               設定為預設身分 multilingual-e5-large
+        @step 呼叫 embed(['x'])
+        @pass TextEmbedding 收到 'intfloat/multilingual-e5-large'
+        @story BR6.1
+        @note 回歸：fastembed 0.7 不認裸名 multilingual-e5-large，會拋 ValueError，
+              使本機 fastembed 路徑從未能用。CI 不裝 fastembed，故以假模組驗證傳入的名稱；
+              「真套件認得這個登錄名」只能靠 LOCAL-DEV.md 的手動前置檢查。
+        """
+        received = []
+
+        class FakeTextEmbedding:
+            def __init__(self, model_name):
+                received.append(model_name)
+
+            def embed(self, texts):
+                return [[0.0] * EMBEDDING_DIMENSIONS for _ in texts]
+
+        fake_module = mock.MagicMock(TextEmbedding=FakeTextEmbedding)
+        port = FastembedAdapter(
+            ProviderSelection(
+                provider_name=PROVIDER_FASTEMBED,
+                port_present=True,
+                model_id=DEFAULT_FASTEMBED_MODEL,
+                endpoint=None,
+            )
+        )
+        with mock.patch.dict(sys.modules, {"fastembed": fake_module}):
+            port.embed(["x"])
+        self.assertEqual(received, ["intfloat/multilingual-e5-large"])
+
+    def test_fastembed_registry_names_cover_every_legal_identity(self):
+        """
+        @purpose 驗證每個 fastembed 合法身分都有對應的套件登錄名
+        @given PROVIDER_LEGAL_MODEL_IDS 與 FASTEMBED_REGISTRY_NAMES
+        @step 比對 fastembed 合法身分集合與對照表的鍵集合
+        @pass 兩集合相等
+        @story BR6.1
+        @note 新增合法身分卻漏了對照，載入時會 KeyError 並被包成「模型載入失敗」。
+        """
+        self.assertEqual(
+            set(FASTEMBED_REGISTRY_NAMES),
+            set(PROVIDER_LEGAL_MODEL_IDS[PROVIDER_FASTEMBED]),
+        )
 
     def test_each_embed_logs_provider_model_and_duration(self):
         """

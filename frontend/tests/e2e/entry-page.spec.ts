@@ -1786,4 +1786,363 @@ test.describe('U14 entry page', () => {
     codes.forEach((code, i) => h.server.send(F.encodeFrame(F.errorFrame(`t-49-${i}`, code, `${M}-錯誤-${code}`))));
     for (const code of codes) await expect(conv(page).getByText(`${M}-錯誤-${code}`)).toBeVisible();
   });
+
+  // 合併前必修第 2 項(b)（計畫 §九 Step 17；`[EP-MB2]`=A）：非輪次錯誤（turnId=null）以系統提示列呈現。
+
+  /**
+   * @purpose 等待回覆中、該輪已開始回覆之後收到不屬任何輪次的錯誤（turnId=null）時，只多一則系統提示，不得解除該輪的等待、也不得把錯誤歸到某一輪；該輪之後的回覆照常呈現在原輪（merge-blockers 第 2 項(b)；code-generation review-02 `[EP-R2]`=A：最後送出的 user_message 已收到輪次訊息，故不是它被拒）。
+   * @ui / | 入口頁 brain-system-notice、brain-user-message、brain-send、brain-stream-message
+   * @given /api/brain/ws；使用者已送出一句，伺服器已送該輪 t-mb1 的第一個 token、尚未送 done
+   * @step 伺服器送一則 turnId=null 的 INVALID_REQUEST error | 對話區出現 1 則 brain-system-notice，內容為該 message；使用者原句 data-pending=true；輸入列填字後送出鈕仍停用；brain-stream-message 恰 1 則且 data-status=streaming
+   * @step 伺服器送該輪 t-mb1 的 done | data-turn-id=t-mb1 的訊息狀態為 done、內容為該 token；系統提示仍為 1 則；送出鈕恢復可用
+   * @pass 非輪次錯誤不影響已在進行中的輪次，且以獨立的系統提示呈現
+   * @story US8.1
+   */
+  test('等待中收到非輪次錯誤只多一則系統提示', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb1-原句`);
+    h.server.send(F.encodeFrame(F.tokenFrame('t-mb1', `${M}-mb1-回覆`)));
+    const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-mb1"]');
+    await expect(msg).toContainText(`${M}-mb1-回覆`);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-mb1-非輪次錯誤`)));
+    const notices = conv(page).getByTestId('brain-system-notice');
+    await expect(notices).toHaveCount(1);
+    await expect(notices.first()).toHaveText(`${M}-mb1-非輪次錯誤`);
+    await expect(page.getByTestId('brain-user-message').filter({ hasText: `${M}-mb1-原句` })).toHaveAttribute('data-pending', 'true');
+    await page.getByTestId('brain-input').fill(`${M}-mb1-再一句`);
+    await expect(page.getByTestId('brain-send')).toBeDisabled();
+    await expect(page.getByTestId('brain-stream-message')).toHaveCount(1);
+    await expect(msg).toHaveAttribute('data-status', 'streaming');
+    h.server.send(F.encodeFrame(F.doneFrame('t-mb1')));
+    await expect(msg).toHaveAttribute('data-status', 'done');
+    await expect(msg).toContainText(`${M}-mb1-回覆`);
+    await expect(page.getByTestId('brain-stream-message')).toHaveCount(1);
+    await expect(notices).toHaveCount(1);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+  });
+
+  /**
+   * @purpose 連續兩則非輪次錯誤各自保留，不互相覆寫（舊實作把兩則都映成同一個空字串輪次，第二則蓋掉第一則）。
+   * @ui / | 入口頁 brain-system-notice
+   * @given /api/brain/ws；連線就緒
+   * @step 伺服器連續送兩則 turnId=null 的 error（UNAUTHORIZED、INVALID_REQUEST，message 不同） | 對話區有 2 則 brain-system-notice，依序為第一則與第二則的 message，data-code 分別為 UNAUTHORIZED、INVALID_REQUEST
+   * @step 檢視大腦訊息 | brain-stream-message 為 0 則
+   * @pass 兩則系統提示都在且內容各自正確
+   * @story US8.1
+   */
+  test('連續兩則非輪次錯誤各自保留', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'UNAUTHORIZED', `${M}-mb2-第一則`)));
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-mb2-第二則`)));
+    const notices = conv(page).getByTestId('brain-system-notice');
+    await expect(notices).toHaveCount(2);
+    await expect(notices.nth(0)).toHaveText(`${M}-mb2-第一則`);
+    await expect(notices.nth(1)).toHaveText(`${M}-mb2-第二則`);
+    await expect(notices.nth(0)).toHaveAttribute('data-code', 'UNAUTHORIZED');
+    await expect(notices.nth(1)).toHaveAttribute('data-code', 'INVALID_REQUEST');
+    await expect(page.getByTestId('brain-stream-message')).toHaveCount(0);
+  });
+
+  /**
+   * @purpose 反問選擇送出後伺服器以非輪次錯誤拒絕（[GW-MB2]=A 的 T3）時，反問回到可點選而不是被標為已解決，使用者可以再選一次。
+   * @ui / | 入口頁 brain-clarify、brain-clarify-candidate-{id}、brain-system-notice
+   * @given /api/brain/ws；伺服器對使用者的句子送 kind=target 的反問（兩個候選）
+   * @step 按候選 target-1 | 送出 1 則 select_clarify_candidate；該組 data-state=picking、候選停用
+   * @step 伺服器送 turnId=null 的 INVALID_REQUEST error | 出現 1 則 brain-system-notice；該組 data-state=default、候選可點
+   * @step 按候選 target-2 | select_clarify_candidate 變為 2 則，第二則 candidateId=target-2
+   * @pass 被拒的選擇可重選
+   * @story US1.2
+   */
+  test('反問選擇被非輪次錯誤拒絕後可重選', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb3-改那個`);
+    h.server.send(
+      F.encodeFrame(F.clarifyFrame('t-mb3', 'target', [['target-1', `${M}-mb3-甲`, 'A1'], ['target-2', `${M}-mb3-乙`, 'A1']])),
+    );
+    const group = page.locator('[data-testid="brain-clarify"][data-kind="target"]');
+    await group.getByTestId('brain-clarify-candidate-target-1').click();
+    await expect(group).toHaveAttribute('data-state', 'picking');
+    await expect(group.getByTestId('brain-clarify-candidate-target-2')).toBeDisabled();
+    expect(h.server.framesOf('select_clarify_candidate')).toHaveLength(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-mb3-選擇被拒`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    await expect(group).toHaveAttribute('data-state', 'default');
+    const second = group.getByTestId('brain-clarify-candidate-target-2');
+    await expect(second).toBeEnabled();
+    await second.click();
+    await expect.poll(() => h.server.framesOf('select_clarify_candidate').length).toBe(2);
+    expect(h.server.framesOf('select_clarify_candidate')[1].payload).toMatchObject({ candidateId: 'target-2' });
+  });
+
+  /**
+   * @purpose 屬於某一輪的錯誤（帶 turnId）維持原呈現：該輪標為錯誤、不出現系統提示（避免修正把輪內錯誤也改走系統提示）。
+   * @ui / | 入口頁 brain-stream-message、brain-system-notice
+   * @given /api/brain/ws；使用者已送出一句
+   * @step 伺服器送 turnId=t-mb4 的 INTERNAL_ERROR error | data-turn-id=t-mb4 的訊息 data-status=error 且含該 message；brain-system-notice 為 0 則；送出鈕恢復可用
+   * @pass 輪內錯誤歸屬正確且不產生系統提示
+   * @story US8.1
+   */
+  test('帶輪次的錯誤標在該輪且不出現系統提示', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb4-原句`);
+    h.server.send(F.encodeFrame(F.errorFrame('t-mb4', 'INTERNAL_ERROR', `${M}-mb4-輪內錯誤`)));
+    const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-mb4"]');
+    await expect(msg).toHaveAttribute('data-status', 'error');
+    await expect(msg).toContainText(`${M}-mb4-輪內錯誤`);
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(0);
+    await page.getByTestId('brain-input').fill(`${M}-mb4-再一句`);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+  });
+
+  // code-generation review-02（`[EP-R2]`=A，2026-10-24）：非輪次錯誤依本連線「最後送出的請求」判斷它拒絕了誰。
+
+  /**
+   * @purpose 伺服器在開輪次之前就以非輪次錯誤拒絕使用者剛送出的那句（例如頻率超限）時，輸入列不得永久停用：等待解除、原句標為未送達並提供重試，重送後照常收到回覆（review-02 R-08；舊實作把這種情況的送出鈕與重試鈕都鎖死，只有斷線重連才恢復）。
+   * @ui / | 入口頁 brain-system-notice、brain-user-message、brain-stream-retry、brain-input、brain-send
+   * @given /api/brain/ws；使用者送出一句，伺服器尚未送任何該輪訊息
+   * @step 伺服器送一則 turnId=null 的 INVALID_REQUEST error | 出現 1 則 brain-system-notice；該原句 data-pending=false，含「這句沒有送達」，其重試鈕可按
+   * @step 在輸入列填字 | 送出鈕可按
+   * @step 清空輸入列後按原句的重試 | user_message 變為 2 則，第二則 text 等於原句；重試鈕消失
+   * @step 伺服器送 t-mb5 的 token 與 done | data-turn-id=t-mb5 的訊息 data-status=done 且含該 token；送出鈕恢復可用
+   * @pass 被拒的原句不會卡住輸入列，重送可得到正常回覆
+   * @story US8.1
+   */
+  test('送出的句子被非輪次錯誤拒絕時輸入列恢復可用', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb5-原句`);
+    await expect.poll(() => h.server.framesOf('user_message').length).toBe(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-mb5-太頻繁`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    const user = page.getByTestId('brain-user-message').filter({ hasText: `${M}-mb5-原句` });
+    await expect(user).toHaveAttribute('data-pending', 'false');
+    await expect(user).toContainText('這句沒有送達');
+    const retry = user.getByTestId('brain-stream-retry');
+    await expect(retry).toBeEnabled();
+    await page.getByTestId('brain-input').fill(`${M}-mb5-別句`);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+    await page.getByTestId('brain-input').fill('');
+    await retry.click();
+    await expect.poll(() => h.server.framesOf('user_message').length).toBe(2);
+    expect(h.server.framesOf('user_message')[1].payload).toMatchObject({ text: `${M}-mb5-原句` });
+    await expect(user.getByTestId('brain-stream-retry')).toHaveCount(0);
+    h.server.send(F.turnFrames('t-mb5', `${M}-mb5-回覆`));
+    const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-mb5"]');
+    await expect(msg).toHaveAttribute('data-status', 'done');
+    await expect(msg).toContainText(`${M}-mb5-回覆`);
+    await page.getByTestId('brain-input').fill(`${M}-mb5-下一句`);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+  });
+
+  /**
+   * @purpose 反問選擇已被受理（收到該輪訊息）之後才送出的 set_work_target 失敗時，其非輪次錯誤不得把反問改回可點選——它拒絕的不是那次選擇（review-02 R-09；舊實作只看本段有無 picking 就重開）。
+   * @ui / | 入口頁 brain-clarify、brain-context-switch-object、brain-object-project-7、brain-system-notice
+   * @given /api/brain/ws（不回推作業對象）；自有專案 7；伺服器對使用者的句子送 kind=target 的反問（兩個候選）
+   * @step 按候選 target-1 | 該組 data-state=picking
+   * @step 伺服器送 t-mb6 的 token 與 done（受理該選擇） | 該組 data-state=resolved
+   * @step 開啟作業對象選單並點專案 7 | 送出 1 則 set_work_target
+   * @step 伺服器送 turnId=null 的 UNAUTHORIZED error | 出現 1 則 brain-system-notice；該組 data-state 仍為 resolved（不是 default）、候選 target-2 仍停用；原句不標未送達
+   * @pass 與反問無關的非輪次錯誤不動反問狀態
+   * @story US1.2
+   * @note object-picker-ui review-02 R-08 起（`[EP-R2]` 的細化），反問選擇尚未得到任何輪次訊息就送出 set_work_target 時標記保留給反問選擇：閘道依序處理同一連線的訊框，那時到達的非輪次錯誤是反問選擇被拒、應重開（見「反問選擇送出後切換對象再被非輪次錯誤拒絕時反問可重選」）。原本案的前置（選擇未獲回應即送 set_work_target，之後的錯誤不重開）在依序處理下不可能是 set_work_target 的錯誤，故改為選擇先被受理；重連路徑亦不可行（快照的 work_items 會把 picking 收成 resolved）。
+   */
+  test('反問等待中作業對象切換失敗不重開反問', async ({ page }) => {
+    const h = await setup(page);
+    h.server.echo = false;
+    await page.route(/\/api\/hierarchy\/projects(\?.*)?$/, async (route) => {
+      const body = [{ id: 7, name: `${M}-mb6-專案七`, owner_user_id: 7, is_default: false, created_at: '2026-10-01T00:00:00Z' }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb6-改那個`);
+    h.server.send(
+      F.encodeFrame(F.clarifyFrame('t-mb6', 'target', [['target-1', `${M}-mb6-甲`, 'A1'], ['target-2', `${M}-mb6-乙`, 'A1']])),
+    );
+    const group = page.locator('[data-testid="brain-clarify"][data-kind="target"]');
+    await group.getByTestId('brain-clarify-candidate-target-1').click();
+    await expect(group).toHaveAttribute('data-state', 'picking');
+    h.server.send(F.turnFrames('t-mb6', `${M}-mb6-好的`));
+    await expect(group).toHaveAttribute('data-state', 'resolved');
+    await page.getByTestId('brain-context-switch-object').click();
+    await page.getByTestId('brain-object-project-7').click();
+    await expect.poll(() => h.server.framesOf('set_work_target').length).toBe(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'UNAUTHORIZED', `${M}-mb6-不能選這個`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    await expect(group).toHaveAttribute('data-state', 'resolved');
+    await expect(group.getByTestId('brain-clarify-candidate-target-2')).toBeDisabled();
+    const user = page.getByTestId('brain-user-message').filter({ hasText: `${M}-mb6-改那個` });
+    await expect(user).not.toContainText('這句沒有送達');
+  });
+
+  /**
+   * @purpose 系統提示不當工作項的錨點：使用者原句之後先到一則系統提示、再到該輪的 work_items 時，工作項掛在該輪的大腦回覆之下，而不是系統提示之下（review-02 R-10）。
+   * @ui / | 入口頁 brain-system-notice、brain-stream-message、brain-workitem-list
+   * @given /api/brain/ws；使用者送出一句
+   * @step 伺服器依序送 turnId=null 的 error、含 w-mb7 的 work_items、t-mb7 的 token 與 done | 1 則 brain-system-notice
+   * @step 檢視工作項位置 | data-turn-id=t-mb7 的大腦訊息內含 brain-workitem-w-mb7；系統提示之後緊接的兄弟元素不是工作項清單
+   * @pass 工作項跟著所屬輪次的回覆，不掛在系統提示下
+   * @story US1.1
+   */
+  test('系統提示之後到達的工作項掛在該輪回覆之下', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-mb7-畫架構圖`);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-mb7-提示`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    h.server.send(F.encodeFrame(F.workItemsFrame(F.workItem('w-mb7', `${M}-mb7-架構設計`, '處理中'))));
+    h.server.send(F.turnFrames('t-mb7', `${M}-mb7-已交辦`));
+    const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-mb7"]');
+    await expect(msg).toHaveAttribute('data-status', 'done');
+    await expect(msg.getByTestId('brain-workitem-w-mb7')).toBeVisible();
+    const afterNotice = await conv(page)
+      .getByTestId('brain-system-notice')
+      .evaluate((el) => el.nextElementSibling?.getAttribute('data-testid') ?? null);
+    expect(afterNotice).not.toBe('brain-workitem-list');
+  });
+
+  /**
+   * @purpose 缺 turnId 欄位的訊框不得建出空字串輪次：error 缺 turnId 視同非輪次錯誤（系統提示），token 缺 turnId 丟棄（review-02 R-11；舊實作的 `?? ''` 會建出 turnId 為空字串的大腦訊息，正是 merge-blockers 第 2 項的覆寫形狀）。
+   * @ui / | 入口頁 brain-system-notice、brain-stream-message
+   * @given /api/brain/ws；連線就緒，主控台訊息被收集
+   * @step 伺服器送一則 envelope 與 payload 都沒有 turnId 鍵的 token | 主控台出現「dropped frame without turnId」
+   * @step 伺服器送一則同樣沒有 turnId 鍵的 error | 出現 1 則 brain-system-notice，內容為該 message
+   * @step 檢視大腦訊息 | brain-stream-message 為 0 則；data-turn-id 為空字串者 0 則
+   * @pass 缺 turnId 的錯誤以提示呈現、缺 turnId 的 token 不產生空白訊息
+   * @story US8.1
+   */
+  test('缺 turnId 的錯誤顯示提示且缺 turnId 的 token 不產生空白訊息', async ({ page }) => {
+    const lines: string[] = [];
+    page.on('console', (m) => lines.push(m.text()));
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    h.server.send(F.tokenFrameWithoutTurnId(`${M}-mb8-無主的字`));
+    await expect.poll(() => lines.some((l) => l.includes('dropped frame without turnId'))).toBe(true);
+    h.server.send(F.errorFrameWithoutTurnId('INVALID_REQUEST', `${M}-mb8-無主的錯誤`));
+    const notices = conv(page).getByTestId('brain-system-notice');
+    await expect(notices).toHaveCount(1);
+    await expect(notices.first()).toHaveText(`${M}-mb8-無主的錯誤`);
+    await expect(page.getByTestId('brain-stream-message')).toHaveCount(0);
+    await expect(page.locator('[data-testid="brain-stream-message"][data-turn-id=""]')).toHaveCount(0);
+    await expect(conv(page)).not.toContainText(`${M}-mb8-無主的字`);
+  });
+
+  /**
+   * @purpose 連續兩則文字相同的非輪次錯誤（例如重複被頻率限制）都要讓 LiveRegion 重新播報，不能第二則無聲（review-02 R-12）。
+   * @ui / | 入口頁 brain-system-notice、LiveRegion
+   * @given /api/brain/ws；連線就緒；LiveRegion 掛 MutationObserver，記下每次變更後的文字
+   * @step 伺服器送一則 turnId=null 的 INVALID_REQUEST error | 出現 1 則 brain-system-notice；LiveRegion 變更紀錄中（去掉零寬字元後）等於該 message 者 1 次
+   * @step 伺服器再送一則 message 完全相同的 error | 出現 2 則 brain-system-notice；等於該 message 的寫入變為恰 2 次
+   * @pass 相同文字的第二則錯誤仍造成一次 LiveRegion 內容變更
+   * @story US8.1
+   */
+  test('連續兩則相同的非輪次錯誤各播報一次', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="brain-live"] [data-testid="live-region"]');
+      const w = window as unknown as { __liveTexts: string[] };
+      w.__liveTexts = [];
+      if (el) {
+        new MutationObserver(() => {
+          w.__liveTexts.push(el.textContent ?? '');
+        }).observe(el, { childList: true, characterData: true, subtree: true });
+      }
+    });
+    const text = `${M}-mb9-太頻繁`;
+    const writes = async () =>
+      (await page.evaluate(() => (window as unknown as { __liveTexts: string[] }).__liveTexts)).filter(
+        (t) => t.split(String.fromCharCode(0x200b)).join('') === text,
+      ).length;
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', text)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    await expect.poll(writes).toBe(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', text)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(2);
+    await expect.poll(writes).toBe(2);
+  });
+
+  // object-picker-ui code-generation review-02 R-08（2026-10-24，`[EP-R2]` 的細化）：非輪次請求不覆寫待決的
+  // user_message／反問選擇標記。閘道依序處理同一連線的訊框，被拒請求的 null 錯誤先於後送請求的任何回應。
+
+  /**
+   * @purpose 使用者送出一句、尚未收到任何該輪訊息就在選單切換作業對象，之後到達的非輪次錯誤是拒絕那句原句（閘道依序處理訊框）：原句須標為未送達、輸入列恢復可用，不得因切換動作蓋掉判定而永久卡住（object-picker-ui review-02 R-08；舊實作 setWorkTarget 把「最後送出的請求」重設為其他，原句停在等待中、送出鈕停用）。
+   * @ui / | 入口頁 brain-context-switch-object、brain-object-project-7、brain-system-notice、brain-user-message、brain-stream-retry、brain-input、brain-send
+   * @given /api/brain/ws（不回推作業對象）；自有專案 7；使用者送出一句，伺服器尚未送任何該輪訊息
+   * @step 開啟作業對象選單並點專案 7 | 送出 1 則 set_work_target
+   * @step 伺服器送一則 turnId=null 的 INVALID_REQUEST error | 出現 1 則 brain-system-notice；該原句 data-pending=false，含「這句沒有送達」，其重試鈕可按
+   * @step 在輸入列填字 | 送出鈕可按
+   * @pass 切換對象不會讓被拒的原句卡住輸入列
+   * @story US8.1
+   */
+  test('送出原句後切換對象再被非輪次錯誤拒絕時原句標為未送達', async ({ page }) => {
+    const h = await setup(page);
+    h.server.echo = false;
+    await page.route(/\/api\/hierarchy\/projects(\?.*)?$/, async (route) => {
+      const body = [{ id: 7, name: `${M}-r8-專案七`, owner_user_id: 7, is_default: false, created_at: '2026-10-01T00:00:00Z' }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-r8-原句`);
+    await expect.poll(() => h.server.framesOf('user_message').length).toBe(1);
+    await page.getByTestId('brain-context-switch-object').click();
+    await page.getByTestId('brain-object-project-7').click();
+    await expect.poll(() => h.server.framesOf('set_work_target').length).toBe(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-r8-太頻繁`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    const user = page.getByTestId('brain-user-message').filter({ hasText: `${M}-r8-原句` });
+    await expect(user).toHaveAttribute('data-pending', 'false');
+    await expect(user).toContainText('這句沒有送達');
+    await expect(user.getByTestId('brain-stream-retry')).toBeEnabled();
+    await page.getByTestId('brain-input').fill(`${M}-r8-下一句`);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+  });
+
+  /**
+   * @purpose 反問選擇送出後、尚未收到任何輪次訊息就在選單切換作業對象，之後到達的非輪次錯誤是拒絕那次選擇（閘道依序處理訊框）：反問須回到可重選，不得因切換動作蓋掉判定而停在選擇中（object-picker-ui review-02 R-08 的反問選擇一側）。
+   * @ui / | 入口頁 brain-clarify、brain-context-switch-object、brain-object-project-7、brain-system-notice
+   * @given /api/brain/ws（不回推作業對象）；自有專案 7；伺服器對使用者的句子送 kind=target 的反問（兩個候選）
+   * @step 按候選 target-1 | 該組 data-state=picking
+   * @step 開啟作業對象選單並點專案 7 | 送出 1 則 set_work_target
+   * @step 伺服器送 turnId=null 的 INVALID_REQUEST error | 出現 1 則 brain-system-notice；該組 data-state=default、候選 target-2 可按
+   * @pass 被拒的反問選擇可重選
+   * @story US1.2
+   */
+  test('反問選擇送出後切換對象再被非輪次錯誤拒絕時反問可重選', async ({ page }) => {
+    const h = await setup(page);
+    h.server.echo = false;
+    await page.route(/\/api\/hierarchy\/projects(\?.*)?$/, async (route) => {
+      const body = [{ id: 7, name: `${M}-r8b-專案七`, owner_user_id: 7, is_default: false, created_at: '2026-10-01T00:00:00Z' }];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `${M}-r8b-改那個`);
+    h.server.send(
+      F.encodeFrame(F.clarifyFrame('t-r8b', 'target', [['target-1', `${M}-r8b-甲`, 'A1'], ['target-2', `${M}-r8b-乙`, 'A1']])),
+    );
+    const group = page.locator('[data-testid="brain-clarify"][data-kind="target"]');
+    await group.getByTestId('brain-clarify-candidate-target-1').click();
+    await expect(group).toHaveAttribute('data-state', 'picking');
+    await page.getByTestId('brain-context-switch-object').click();
+    await page.getByTestId('brain-object-project-7').click();
+    await expect.poll(() => h.server.framesOf('set_work_target').length).toBe(1);
+    h.server.send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', `${M}-r8b-選擇無效`)));
+    await expect(conv(page).getByTestId('brain-system-notice')).toHaveCount(1);
+    await expect(group).toHaveAttribute('data-state', 'default');
+    await expect(group.getByTestId('brain-clarify-candidate-target-2')).toBeEnabled();
+  });
 });

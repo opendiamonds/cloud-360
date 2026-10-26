@@ -107,6 +107,21 @@ PROVIDER_LEGAL_MODEL_IDS = {
     PROVIDER_STUB: ("stub-v1",),
 }
 
+# **記憶列上的向量空間身分 ≠ fastembed 套件登錄的模型名。**
+#
+# 身分（`multilingual-e5-large`）是寫進記憶列 `embeddingModel` 的值，也是
+# `FASTEMBED_MODEL` 的設定值；fastembed 0.7 的 `TextEmbedding` 只認它自己的登錄名
+# `intfloat/multilingual-e5-large`，傳身分進去會直接 `ValueError: Model
+# multilingual-e5-large is not supported`——本模組落地後這條路徑因此從未能用過
+# （2026-10-20 以 `fastembed>=0.7,<0.8` 實測；CI 與部署都不裝它，所以沒被抓到）。
+# 改在這裡對照，而不是把身分改成登錄名：身分是資料層的宣告，改它要動
+# `MEMORY_RECORD_EMBEDDING_MODELS`、四份設定範本與既有列的遷移（ADR-008），
+# 而套件換登錄名只需要改這一行。鍵集合必須等於 fastembed 的合法身分，
+# 由 `test_fastembed_registry_names_cover_every_legal_identity` 鎖住。
+FASTEMBED_REGISTRY_NAMES = {
+    "multilingual-e5-large": "intfloat/multilingual-e5-large",
+}
+
 # 各提供者的輸入上限，單位是**字元**。
 #
 # 本模組不引入 tokenizer（零新依賴），所以這裡量的是字元數而非 token 數，
@@ -681,7 +696,9 @@ class FastembedAdapter(EmbeddingPort):
                 ),
             ) from exc
         try:
-            self._model = TextEmbedding(model_name=self._selection.model_id)
+            self._model = TextEmbedding(
+                model_name=FASTEMBED_REGISTRY_NAMES[self._selection.model_id]
+            )
         except Exception as exc:
             raise EmbeddingProviderUnavailable(
                 self._selection.provider_name,
@@ -769,6 +786,7 @@ __all__ = [
     "ALLOWED_PROVIDERS",
     "DEFAULT_EMBEDDING_TIMEOUT_SEC",
     "DEFAULT_FASTEMBED_MODEL",
+    "FASTEMBED_REGISTRY_NAMES",
     "DEFAULT_OLLAMA_EMBED_MODEL",
     "EMBEDDING_DIMENSIONS",
     "EMBEDDING_TIMEOUT_SEC",

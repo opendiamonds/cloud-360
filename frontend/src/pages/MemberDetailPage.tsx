@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
 import { LiveRegion } from '../components/LiveRegion';
+import { useDialogKeyboard } from '../hooks/useDialogKeyboard';
+import { emitFailureSignal } from '../membership/failureSignal';
 import {
   LastAdminGuardError,
   MembershipForbiddenError,
+  PROJECT_NOT_FOUND_MESSAGE,
   PROJECT_ROLE_OPTIONS,
   changeMemberRole,
   fetchMembers,
@@ -38,6 +41,19 @@ export const MemberDetailPage: React.FC = () => {
   }>();
   const projectId = Number(projectIdParam);
   const userId = Number(userIdParam);
+  /**
+   * 網址的 `projectId` 不是有限數字（如 `/projects/abc/members/1`）——合併前必修
+   * 第 23 項補修（審查 `R-11`）。與 `MembersListPage` 同形：這種網址不可能對應任何
+   * 專案，故與 404 同一個結論，顯示固定句「查不到這個專案」、不發請求、不停在
+   * 「載入中…」，並經 `emitFailureSignal()` 發一筆訊號（`SEC-U24-6`）。
+   *
+   * 只看 `projectId`：`userId` 非數字時抓取照常進行，`find` 找不到該列，畫面顯示
+   * 「找不到這位成員」——那條路徑本來就不會卡住。
+   *
+   * **以導出值呈現而非 effect 內 setState**（`react-hooks/set-state-in-effect` 為
+   * error 級）：畫面狀態在渲染時由 `invalidProjectId` 直接決定。
+   */
+  const invalidProjectId = !Number.isFinite(projectId);
   const { token, user, can } = useAuth();
   const navigate = useNavigate();
 
@@ -60,12 +76,33 @@ export const MemberDetailPage: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<ProjectRole | ''>('');
 
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  /** 移出確認框本身與它的觸發按鈕（合併前必修第 23 項 (c)）。 */
+  const confirmDialogRef = useRef<HTMLDivElement>(null);
+  const removeButtonRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * 關閉移出確認框，並把焦點**還給「移出專案」鈕**。取消、Escape、409 守門、
+   * 403、其他錯誤五條「留在本頁」的關閉路徑都經這裡；204 成功會導回清單頁，
+   * 觸發按鈕隨頁面卸載，故不經這裡。
+   */
+  const closeConfirm = useCallback(() => {
+    setConfirmOpen(false);
+    removeButtonRef.current?.focus();
+  }, []);
+
+  // 鍵盤上真的是 modal：Escape 關閉、Tab／Shift+Tab 不離開對話框。
+  // 移出中 Escape 不關閉，與停用的「取消」鈕一致。
+  useDialogKeyboard(confirmDialogRef, {
+    open: confirmOpen,
+    onEscape: closeConfirm,
+    escapeDisabled: removing,
+  });
 
   // 兩層抓取形狀（`TS-U24-4`）。本頁沿用 `list_members`——**沒有單一成員的
   // 端點**（實測六個路由，見 `functional-spec.md` §四），故以清單回應取該列。
   // 這同時讓 `canManage` 的第一段（`BR22.3`）有資料可依。
   useEffect(() => {
-    if (!token || !Number.isFinite(projectId)) return;
+    if (!token || invalidProjectId) return;
     let cancelled = false;
     fetchMembers(token, projectId)
       .then((data) => {
@@ -88,7 +125,19 @@ export const MemberDetailPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, projectId, userId]);
+  }, [token, projectId, userId, invalidProjectId]);
+
+  // 非數字 `projectId` 的失敗訊號（`SEC-U24-6`）。種類與端點沿用 404 走的同一組
+  // （`membershipApi.ts` 的 `fetchMembers`）；訊號只含兩個封閉欄位，網址裡的原字串
+  // **不會**進 console（`SEC-U24-1`）。effect 內只做這個副作用，不 setState。
+  useEffect(() => {
+    if (!invalidProjectId) return;
+    emitFailureSignal({ kind: 'members-fetch-failed', endpoint: 'GET /projects/:id/members' });
+  }, [invalidProjectId]);
+
+  const showLoading = isLoading && !invalidProjectId;
+  const shownError = invalidProjectId ? PROJECT_NOT_FOUND_MESSAGE : error;
+  const shownLiveMsg = invalidProjectId ? PROJECT_NOT_FOUND_MESSAGE : liveMsg;
 
   const member = members.find((m) => m.user_id === userId);
 
@@ -170,17 +219,18 @@ export const MemberDetailPage: React.FC = () => {
       .catch((err: unknown) => {
         if (err instanceof LastAdminGuardError) {
           // 留在詳情頁，顯示守門理由與專案清單（`functional-spec.md` §五 W5 第 5 步）。
-          setConfirmOpen(false);
+          closeConfirm();
           setGuardReport(err.report);
           setLiveMsg(err.message);
           return;
         }
         if (err instanceof MembershipForbiddenError) {
+          closeConfirm();
           handleForbidden(err.message);
           return;
         }
         const msg = err instanceof Error ? err.message : '移出成員失敗';
-        setConfirmOpen(false);
+        closeConfirm();
         setActionError(msg);
         setLiveMsg(msg);
       })
@@ -194,7 +244,7 @@ export const MemberDetailPage: React.FC = () => {
 
   return (
     <div className="p-6" data-testid="member-detail-page">
-      <LiveRegion message={liveMsg} />
+      <LiveRegion message={shownLiveMsg} />
 
       <button
         type="button"
@@ -204,11 +254,11 @@ export const MemberDetailPage: React.FC = () => {
         ← 回成員清單
       </button>
 
-      {isLoading && <p className="text-sm text-gray-500">載入中…</p>}
+      {showLoading && <p className="text-sm text-gray-500">載入中…</p>}
 
-      {!isLoading && error && (
+      {!showLoading && shownError && (
         <p data-testid="member-detail-error" className="text-sm font-bold text-red-700">
-          {error}
+          {shownError}
         </p>
       )}
 
@@ -324,6 +374,7 @@ export const MemberDetailPage: React.FC = () => {
             <section className="mt-6 border-t border-gray-200 pt-4">
               <button
                 type="button"
+                ref={removeButtonRef}
                 data-testid="member-detail-remove"
                 onClick={() => setConfirmOpen(true)}
                 className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50"
@@ -337,6 +388,7 @@ export const MemberDetailPage: React.FC = () => {
           {confirmOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
               <div
+                ref={confirmDialogRef}
                 data-testid="remove-confirm-dialog"
                 role="dialog"
                 aria-modal="true"
@@ -351,7 +403,7 @@ export const MemberDetailPage: React.FC = () => {
                     type="button"
                     ref={cancelButtonRef}
                     data-testid="remove-confirm-cancel"
-                    onClick={() => setConfirmOpen(false)}
+                    onClick={closeConfirm}
                     disabled={removing}
                     className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   >

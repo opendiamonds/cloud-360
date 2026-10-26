@@ -1,4 +1,7 @@
-"""`U20 requirement-field-service` 的 HTTP 層測試（`H1`–`H7`，`TestClient`）。
+"""`U20 requirement-field-service` 的 HTTP 層測試（`H1`–`H10`，`TestClient`）。
+
+`H8`／`H9` 由 `U23` 的合併前必修第 14 項加入（非成員改 404、不洩漏系統存在）。
+`H10` 由合併前必修第 24 項加入（值含 NUL → 固定 422，不是 500）。
 
 對應 `unit-test-instructions.md §三` 的第五列（API）。`team.md` 規則 A＋B：新端點須有
 `TestClient` 測試，授權須 allow／deny 雙向，並斷言 `response_model` 的欄位集合。
@@ -28,6 +31,7 @@ from models import SystemRequirementField
 from services.auth import get_current_user
 from services.hierarchy_facade import mint_principal
 from services.membership_facade import MembershipFacade
+from services.requirement_field_errors import RequirementFieldValidationError
 from tests.helpers import close_session, make_user
 from tests.test_requirement_field_facade import RequirementFieldFixture
 from tests.test_requirement_field_service import QueryCounter
@@ -89,8 +93,9 @@ class AuthorizationMatrixTest(RequirementFieldHttpTestBase):
             # (編號, 使用者, system_id, {方法: 期望}, PUT 本體)
             ("①成員 Project_Editor", self.editor, None,
              {"GET": 200, "PUT": 200, "DELETE": 200}, None),
+            # ②⑩⑫ 非成員：合併前必修第 14 項起回 404（與「系統不存在」逐位元相同，見 H8）。
             ("②非成員 Project_Editor", self.stranger, None,
-             {"GET": 403, "PUT": 403, "DELETE": 403}, None),
+             {"GET": 404, "PUT": 404, "DELETE": 404}, None),
             ("③成員 Developer（只有 view）", self.viewer, None,
              {"GET": 200, "PUT": 403, "DELETE": 403}, None),
             ("④成員 SRE（無 K4）", self.no_k4, None,
@@ -106,11 +111,11 @@ class AuthorizationMatrixTest(RequirementFieldHttpTestBase):
             ("⑨成員 Developer 帶代寫標示", self.viewer, None,
              {"PUT": 403}, {"value": "v", "on_behalf_of": "cost"}),
             ("⑩另一個專案的成員（Project_Editor）", self.outsider, None,
-             {"GET": 403, "PUT": 403, "DELETE": 403}, None),
+             {"GET": 404, "PUT": 404, "DELETE": 404}, None),
             ("⑪project_admin＋Project_Architect", self.owner, None,
              {"GET": 200, "PUT": 200, "DELETE": 200}, None),
             ("⑫Platform_Admin 非成員", self.root, None,
-             {"GET": 403, "PUT": 403, "DELETE": 403}, None),
+             {"GET": 404, "PUT": 404, "DELETE": 404}, None),
         ]
         self.assertEqual(len(rows), 12)
         for label, user, system_id, expected, body in rows:
@@ -249,6 +254,53 @@ class ValidationAndFailureTest(RequirementFieldHttpTestBase):
                 self.assertEqual(response.status_code, 422, response.text)
                 self.assertIsInstance(response.json()["detail"], str)
 
+    def test_H10_value_containing_nul_is_a_fixed_422_not_a_500(self):
+        """`H10`：合併前必修第 24 項（review-03 R-01）。
+
+        @purpose 值含 NUL（U+0000）時回固定文字的 422，而不是讓 PostgreSQL 的
+                 `DataError` 穿出成 500；HTTP 與同進程（`U13` 代寫）兩個入口都擋下。
+        @given   `Project_Editor` 成員對已存在的系統有 `K4.edit`；每個值都帶一個
+                 `uuid4()` 唯一標記與一個 NUL 字元（含夾在空白之間、單獨一個 NUL、
+                 帶代寫標示三種形狀）。
+        @step    以 PUT 送出各形狀的本體；再以同進程 `write_field` 送出同樣的值。
+        @pass    PUT 皆為 422、本體恰為 `{"detail": <NUL 的固定訊息>}`、不含唯一標記；
+                 同進程呼叫皆拋 `RequirementFieldValidationError(value, nul_char)`；
+                 需求欄位表列數仍為 0。突變（拿掉 NUL 檢查）時 SQLite 會接受 NUL 而回
+                 200 並寫入一列，本案紅。
+        @story   US11.2
+        @api     PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        """
+        marker = f"marker-{uuid.uuid4()}"
+        expected_detail = str(RequirementFieldValidationError("value", "nul_char"))
+        bodies = {
+            "值中夾 NUL": {"value": f"{marker}\u0000tail"},
+            "空白包住的 NUL": {"value": f"  \u0000{marker}  "},
+            "單獨一個 NUL": {"value": "\u0000"},
+            "代寫路徑帶 NUL": {"value": f"{marker}\u0000", "on_behalf_of": "cost"},
+        }
+        for label, body in bodies.items():
+            with self.subTest(case=label):
+                response = self.call(self.editor, "PUT", body=body)
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertEqual(response.json(), {"detail": expected_detail})
+                self.assertNotIn(marker, response.text)
+
+        principal = mint_principal(self.editor)
+        for label, body in bodies.items():
+            with self.subTest(case=f"同進程：{label}"):
+                with self.assertRaises(RequirementFieldValidationError) as caught:
+                    self.facade().write_field(
+                        principal, system_id=self.system.id, agent_group="cost",
+                        field_key="sla", value=body["value"],
+                        on_behalf_of=body.get("on_behalf_of"),
+                    )
+                self.assertEqual(
+                    (caught.exception.field, caught.exception.problem),
+                    ("value", "nul_char"),
+                )
+                self.assertNotIn(marker, str(caught.exception))
+        self.assertEqual(self.row_count(), 0)
+
     def test_H6_dependency_failures_return_500_without_writes(self):
         """`H6`／`NFR20.11`／`NFR20.26`：依賴拋非預期例外 → 500，無寫入、無計數。
 
@@ -287,6 +339,62 @@ class ValidationAndFailureTest(RequirementFieldHttpTestBase):
                       body={"value": json.dumps({"tps": 1200})}).status_code,
             200,
         )
+
+
+class SystemExistenceNotLeakedTest(RequirementFieldHttpTestBase):
+    """合併前必修第 14 項（`[PP-MB14]`=A，2026-10-24）：需求欄位端點不以 403／404 洩漏系統存在。"""
+
+    def test_H8_missing_and_non_member_system_are_byte_identical(self):
+        """N3：讀、寫、清三端點 ×「不存在的系統 vs 存在但非成員」→ 404 且本體逐位元相同。
+
+        @purpose 具 `K4` 的非成員無法以需求欄位端點分辨某個系統編號是否存在（M14-3）。
+        @given   stranger（`Project_Editor`，具 `K4.edit`）不是目標系統所屬專案的成員；
+                 另取一個從未存在的系統 id。
+        @step    以 stranger 對兩個 id 分別打 GET／PUT／DELETE。
+        @pass    每個端點兩側皆 404、`response.content` 相等、本體為 `{"detail": "查不到系統"}`，
+                 且不含任一 system_id 的字串；需求欄位表列數不變。
+        @story   US11.4
+        @api     GET /api/requirements/systems/{system_id}/fields
+        @api     PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        @api     DELETE /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        """
+        self.assertIsNone(self.db.get(type(self.system), MISSING_SYSTEM_ID))
+        rows_before = self.row_count()
+        for method in ("GET", "PUT", "DELETE"):
+            with self.subTest(method=method):
+                missing = self.call(self.stranger, method, system_id=MISSING_SYSTEM_ID)
+                invisible = self.call(self.stranger, method)
+                self.assertEqual(missing.status_code, 404, missing.text)
+                self.assertEqual(invisible.status_code, missing.status_code, invisible.text)
+                self.assertEqual(invisible.content, missing.content)
+                self.assertEqual(invisible.json(), {"detail": "查不到系統"})
+                for sid in (MISSING_SYSTEM_ID, self.system.id):
+                    self.assertNotIn(str(sid).encode(), invisible.content)
+        self.assertEqual(self.row_count(), rows_before)
+
+    def test_H9_non_member_denial_still_logs_a_warning(self):
+        """N4：非成員對外改 404 之後，`requirement_field.denied ... reason=not_member` 照記（M14-4）。
+
+        @purpose 稽核不因對外回應改成 404 而消失。
+        @given   stranger 不是目標系統所屬專案的成員。
+        @step    以 stranger 對 GET／PUT／DELETE 各打一次。
+        @pass    三次皆 404；`cloud360.requirement_fields` 恰三行 WARNING，皆為
+                 `requirement_field.denied`、`reason=not_member`、`user_id`＝stranger。
+        @story   US11.4
+        @api     GET /api/requirements/systems/{system_id}/fields
+        @api     PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        @api     DELETE /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        """
+        with self.assertLogs("cloud360.requirement_fields", level="WARNING") as logs:
+            for method in ("GET", "PUT", "DELETE"):
+                self.assertEqual(self.call(self.stranger, method).status_code, 404)
+        denied = [r for r in logs.records if r.levelname == "WARNING"]
+        self.assertEqual(len(denied), 3)
+        for record in denied:
+            self.assertEqual(record.getMessage().split()[0], "requirement_field.denied")
+            self.assertEqual(record.reason, "not_member")
+            self.assertEqual(record.user_id, self.stranger.id)
+            self.assertEqual(record.system_id, self.system.id)
 
 
 if __name__ == "__main__":

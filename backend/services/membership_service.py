@@ -31,17 +31,21 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
-from sqlalchemy import exists, func, select, union
+from sqlalchemy import exists, select, text, union
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from models import Project, ProjectMember, ReselectionEvent, User
 from services.membership_errors import (
     LastAdminGuard,
+    MembershipLockTimeout,
     MembershipNotFound,
     MissingGlobalPermission,
+    NoQualifiedSuccessor,
 )
 from services.membership_selection import select_successor
 from services.membership_types import (
@@ -108,6 +112,32 @@ LOCK_WAIT_WARN_MS = 250.0
 只是慢，所以沒有這個 log 就沒有任何痕跡。選一個明顯高於正常單列鎖取得時間、
 又低於人會察覺的延遲的量級。"""
 
+LOCK_TIMEOUT_MS = 5000
+"""取專案列鎖的**等待上限**（合併前必修第 16 項，使用者 2026-10-20 裁決 5 秒）。
+
+在 PostgreSQL 上以 `SET LOCAL lock_timeout` 套用於**當前交易**（交易結束即失效，
+不影響同一連線之後的其他工作）；逾時時資料庫回 SQLSTATE `55P03`，本模組轉成
+`MembershipLockTimeout`，router 轉 503。
+
+與 `LOCK_WAIT_WARN_MS` 同樣**刻意不做環境變數**（理由同 `OPEN-ND19-6`：一個
+逾時值不值得 `render-env.sh`／`deploy/.env.example`／compose 三處的同步成本）。
+
+**SQLite 無此語意**：它沒有列鎖，也沒有 `lock_timeout` 這個設定，故
+`lock_project` 以 dialect 判斷、在 SQLite 上略過。真實逾時行為只在
+`backend/tests_pg/` 驗得到。"""
+
+LOCK_TIMEOUT_SQLSTATE = "55P03"
+"""PostgreSQL 的 `lock_not_available`。`lock_timeout` 到期時回的就是它。"""
+
+SUCCESSOR_STORY_ID = "K3"
+SUCCESSOR_ACTION = "edit"
+"""合格接手人須持有的**全域**權限：`K3.edit`（`BR7.3`）。
+
+與 `REQUIRED_INVITEE_ACTION`（`view`）刻意不同：被邀請成為一般成員只需看得到，
+而被升為 `project_admin` 的人必須真的能**執行**成員管理動作——否則他成為管理者後
+每個管理動作都被全域層擋成 403，而 `AC12.4.3` 的文案「系統自動把管理權交給你」
+對他為假，且這條路徑沒有任何人按下按鈕可以被告知失敗。"""
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -148,6 +178,22 @@ def log_denied(
 # ---------------------------------------------------------------------------
 
 
+def _dialect_name(db: Session) -> str:
+    """該 session 綁定的資料庫方言名（`postgresql`／`sqlite`）。"""
+    return db.get_bind().dialect.name
+
+
+def _is_lock_timeout(exc: DBAPIError) -> bool:
+    """該 DBAPI 例外是否為 PostgreSQL 的 `lock_not_available`（SQLSTATE `55P03`）。
+
+    psycopg v3 以 `.sqlstate` 帶它、psycopg2 以 `.pgcode`——本 repo 用 v3，
+    但兩者都讀，使驅動切換不會讓逾時悄悄變成一般 500。
+    """
+    orig = getattr(exc, "orig", None)
+    code = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    return code == LOCK_TIMEOUT_SQLSTATE
+
+
 def lock_project(db: Session, *, project_id: int) -> None:
     """鎖住該 `projects` 列，使同一專案的成員變更**序列化**（`NFR12.1`）。
 
@@ -173,11 +219,30 @@ def lock_project(db: Session, *, project_id: int) -> None:
     故**鎖的持有時間 = 交易的長度**，交易內不得有外部呼叫。本單元的五條路徑
     都沒有外部呼叫，所以這個約束自然成立——**但若日後有人在 `change_role` 裡
     加一個通知呼叫，鎖的持有時間就會變成那個呼叫的延遲**（設計約束，非待辦）。
+
+    **等待有上限**（合併前必修第 16 項）：PostgreSQL 上於取鎖前
+    `SET LOCAL lock_timeout`（`LOCK_TIMEOUT_MS`），逾時轉 `MembershipLockTimeout`。
+    沒有上限時，一筆卡住的交易會讓排隊者各佔一條連線無限期等待。`SET LOCAL`
+    只作用於當前交易，故不會漏到連線池中這條連線的下一個使用者。
     """
+    if _dialect_name(db) == "postgresql":
+        db.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT_MS}ms'"))
     started = time.monotonic()
-    row = db.execute(
-        select(Project.id).where(Project.id == project_id).with_for_update()
-    ).first()
+    try:
+        row = db.execute(
+            select(Project.id).where(Project.id == project_id).with_for_update()
+        ).first()
+    except DBAPIError as exc:
+        if not _is_lock_timeout(exc):
+            raise
+        logger.warning(
+            "%s project_id=%s waited_ms=%.1f timeout_ms=%d outcome=timed_out",
+            EVENT_LOCK_WAIT,
+            project_id,
+            (time.monotonic() - started) * 1000.0,
+            LOCK_TIMEOUT_MS,
+        )
+        raise MembershipLockTimeout(project_id=project_id) from exc
     waited_ms = (time.monotonic() - started) * 1000.0
     if waited_ms >= LOCK_WAIT_WARN_MS:
         # `NFR12.27`：鎖等待的失敗模式是延遲而非錯誤，這是唯一的痕跡。
@@ -279,23 +344,6 @@ def list_members(db: Session, *, project_id: int) -> List[MemberView]:
     ]
 
 
-def member_snapshots(db: Session, *, project_id: int) -> List[MemberSnapshot]:
-    """把成員列轉成純函式 `select_successor` 的輸入（`BR4.1`）。
-
-    **轉換發生在這裡，不在純函式裡**——那正是「純」的意思：`select_successor`
-    收到的是三個欄位的 dataclass，不是 session，也不是 ORM 物件。
-    """
-    rows = db.execute(
-        select(ProjectMember.user_id, ProjectMember.joined_at, ProjectMember.role)
-        .where(ProjectMember.project_id == project_id)
-        .order_by(ProjectMember.user_id)
-    ).all()
-    return [
-        MemberSnapshot(user_id=user_id, joined_at=joined_at, role=role)
-        for user_id, joined_at, role in rows
-    ]
-
-
 def project_ids_where_admin(db: Session, *, user_id: int) -> List[int]:
     """該使用者具 `project_admin` 的全部專案 id（遞增）。
 
@@ -391,10 +439,14 @@ def admin_count_after(
     回傳「假設把 `changing_user_id` 的角色改成 `new_role` 之後」該專案的
     `project_admin` 數。`new_role=None` 表示把他**移出**專案。
 
-    `remove_member` 與 `change_role` 都呼叫**這一個**函式；
-    `projects_losing_last_admin` 是它的**集合版**（`HAVING count(*) = 1` 的語意
-    就是這個謂詞的量化形式）。不變量只有一個、判定邏輯只有一處，而這句話的
-    可驗證性由 `NFR12.12` 的等價測試承載而非散文（直接回應審查 `R-03`）。
+    `remove_member` 與 `change_role` 都呼叫**這一個**函式。
+
+    **停用路徑不再用它的集合版**（合併前必修第 1 ＋ 4 項，2026-10-20）：停用守門
+    改以「無合格接手人」為判準（`projects_losing_last_admin` ＋
+    `is_qualified_successor`），因為停用之後還有自動改選可以補位，而自我降級／
+    自我移出沒有——這兩條路徑沒有任何後續會補上管理者，故仍以本函式擋下
+    「管理者數歸零」。`NFR12.12` 的等價測試（`M7`）改為驗證停用守門的集合版與
+    逐專案、逐成員套用 `is_qualified_successor` 的參照實作等價。
 
     **不另立「至少一位成員」的謂詞**（`BR2.2`）：`BR2.1` 成立 ⇒ 每個專案至少有
     一位管理者 ⇒ 至少有一位成員。成員那一面是**推論**，不是獨立規則；加上第二個
@@ -413,13 +465,137 @@ def admin_count_after(
     return count
 
 
+def is_qualified_successor(
+    db: Session,
+    *,
+    is_active: bool,
+    authorization_status: Optional[str],
+    global_role: Optional[str],
+    _cache: Optional[Dict[tuple, bool]] = None,
+) -> bool:
+    """**合格接手人**的唯一謂詞（合併前必修第 1 ＋ 4 項；`BR7.3` 的落地）。
+
+    一位成員要能接手成為 `project_admin`，必須同時滿足三件事：
+
+    1. 帳號**啟用中**（`users.is_active`）——停用帳號登入不了，升他等於沒升；
+    2. J5 授權狀態為 `approved`——由 `user_can` 的 `authorization_status`
+       參數承載（`rbac.py` 的 `user_can` 第一行即「未核准一律無權限」），
+       **不在這裡另寫一份**；
+    3. 全域角色持有 `K3.edit`——否則升為管理者後每個管理動作都被全域層擋成 403。
+
+    「其他成員」（排除被停用者）這個條件**不在謂詞裡**，在集合版
+    `qualified_successors` 的查詢條件裡——謂詞只判斷**一個人**。
+
+    **守門與改選共用這一個謂詞**（`functional-design:c34`：修在單一入口會把違規
+    挪位置而不是消除它）：`projects_losing_last_admin`（停用守門）與
+    `reselect_for_project`（改選候選、冪等判定）都經 `qualified_successors`
+    呼叫它。兩邊若各寫一份，就會出現「守門放行、改選卻挑不到人」的專案
+    ——那正是本項要消除的狀態。
+
+    `_cache` 以 `(global_role, authorization_status)` 為鍵，使同一次判定中
+    `user_can` 的權限列查詢次數以**不同角色數**為上界（canonical role 共 11 個），
+    而不隨成員數成長。
+    """
+    if not is_active:
+        return False
+    key = (global_role, authorization_status)
+    if _cache is not None and key in _cache:
+        return _cache[key]
+    result = user_can(
+        db,
+        global_role,
+        SUCCESSOR_STORY_ID,
+        SUCCESSOR_ACTION,
+        authorization_status=authorization_status,
+    )
+    if _cache is not None:
+        _cache[key] = result
+    return result
+
+
+def qualified_successors(
+    db: Session, *, project_ids: Sequence[int], excluding_user_id: int
+) -> Dict[int, List[MemberSnapshot]]:
+    """`is_qualified_successor` 的**集合版**：每個專案的合格接手人（排除指定者）。
+
+    回傳 `{project_id: [MemberSnapshot, ...]}`，每個傳入的 `project_id` 都有一個
+    鍵（沒有合格者時為空串列）；串列依 `user_id` 遞增，元素保留 per-project
+    `role`，故呼叫端可再分辨「其中已有管理者」。
+
+    **查詢次數有上界**：成員 ＋ 帳號狀態一次 join 查完（與專案數無關），
+    之後的 `user_can` 以 `_cache` 收斂為「不同角色數」次——不是逐專案或逐成員的
+    N+1（`NFR12.10` 的取捨見 `projects_losing_last_admin`）。
+    """
+    ids = sorted(set(project_ids))
+    result: Dict[int, List[MemberSnapshot]] = {pid: [] for pid in ids}
+    if not ids:
+        return result
+    rows = db.execute(
+        select(
+            ProjectMember.project_id,
+            ProjectMember.user_id,
+            ProjectMember.joined_at,
+            ProjectMember.role,
+            User.is_active,
+            User.authorization_status,
+            User.role,
+        )
+        .join(User, User.id == ProjectMember.user_id)
+        .where(
+            ProjectMember.project_id.in_(ids),
+            ProjectMember.user_id != excluding_user_id,
+        )
+        .order_by(ProjectMember.project_id, ProjectMember.user_id)
+    ).all()
+    cache: Dict[tuple, bool] = {}
+    for (
+        project_id,
+        user_id,
+        joined_at,
+        project_role,
+        is_active,
+        authorization_status,
+        global_role,
+    ) in rows:
+        if is_qualified_successor(
+            db,
+            is_active=bool(is_active),
+            authorization_status=authorization_status,
+            global_role=global_role,
+            _cache=cache,
+        ):
+            result[project_id].append(
+                MemberSnapshot(user_id=user_id, joined_at=joined_at, role=project_role)
+            )
+    return result
+
+
 def projects_losing_last_admin(
     db: Session, *, target_user_id: int
 ) -> List[GuardedProjectRef]:
-    """`assert_can_deactivate` 的查詢核心：**一次**聚合查詢（`[N3]`=C／`NFR12.10`）。
+    """`assert_can_deactivate` 的查詢核心（`[N3]`=C／`NFR12.10`；合併前必修第 1 ＋ 4 項）。
 
-    找出「該使用者是最後一位 `project_admin`」的**全部**專案，
-    一次 `GROUP BY project_id HAVING count(*) = 1`，**與該使用者的專案數無關**。
+    **只回報沒有合格接手人的專案**（使用者 2026-10-20 裁決：有合格接手人就改選，
+    沒有才擋；`BR7.3` 的第三種結果）。判準是：
+
+        該使用者是此專案的 `project_admin`，且此專案除他以外**沒有任何合格成員**
+
+    「沒有任何合格成員」同時涵蓋兩件事：沒有其他**合格的**管理者（否則改選冪等
+    略過、專案仍有人管），也沒有可被升任的合格接手人。其他管理者若**不合格**
+    （停用、待核准、只有 `K3.view`）不算數——他們無法執行任何管理動作，把他們
+    算進去會讓守門放行一個停用後實際上無人能管的專案，而改選的冪等判定也只算
+    合格者，兩邊才對得上。
+
+    在此之前本函式擋下「最後一位管理者」的**全部**情況，而自動改選只在「沒有
+    其他管理者」時執行——兩者互斥，`AC12.4.1` 的自動改選因此不可達
+    （merge-blockers 第 1 項）。
+
+    **查詢次數**：一次取得該使用者為管理者的專案（含名稱），一次 join 取得這些
+    專案的其他成員與帳號狀態，再加上至多「不同全域角色數」次的權限列讀取
+    （`user_can`，見 `is_qualified_successor` 的 `_cache`）。**與該使用者的專案數
+    及成員數無關**——原本的單次 `GROUP BY ... HAVING count(*) = 1` 擴成這個形狀，
+    是因為合格判定需要 `user_can`，而權限矩陣只有一份（在 `role_permissions`，
+    由 `user_can` 讀），不在 SQL 裡另寫一份。
     不逐專案迴圈的理由：一位使用者的專案數目前**無上界**
     （`hierarchy_migration.py` 為每位持圖使用者建一個預設專案，之後可自由建立），
     逐專案會讓停用一個帳號的延遲隨其專案數線性成長。
@@ -435,33 +611,28 @@ def projects_losing_last_admin(
     `user_router` 的邊界。
 
     `LastAdminGuardReport` 需要專案**名稱**（只給 id 的話畫面無法告知使用者是
-    哪個專案），故 join `projects`——仍是同一次 SQL 執行。
+    哪個專案），故 join `projects`。
     """
-    admin_projects = (
-        select(ProjectMember.project_id)
+    admin_rows = db.execute(
+        select(Project.id, Project.name)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
         .where(
             ProjectMember.user_id == target_user_id,
             ProjectMember.role == ROLE_PROJECT_ADMIN,
         )
-        .scalar_subquery()
-    )
-    rows = db.execute(
-        select(Project.id, Project.name)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .where(
-            ProjectMember.project_id.in_(admin_projects),
-            # **這個 role 過濾不可省**：少了它，`count(*)` 數的是全部成員，
-            # 於是「一位管理者 ＋ 一位一般成員」的專案 count 為 2、不被擋下
-            # ——正是 `[FD1]`=A 要擋的那一格。
-            ProjectMember.role == ROLE_PROJECT_ADMIN,
-        )
-        .group_by(Project.id, Project.name)
-        .having(func.count() == 1)
         .order_by(Project.id)
     ).all()
+    if not admin_rows:
+        return []
+    qualified = qualified_successors(
+        db,
+        project_ids=[project_id for project_id, _ in admin_rows],
+        excluding_user_id=target_user_id,
+    )
     return [
         GuardedProjectRef(project_id=project_id, name=name)
-        for project_id, name in rows
+        for project_id, name in admin_rows
+        if not qualified[project_id]
     ]
 
 
@@ -474,8 +645,9 @@ def assert_still_has_admin(
 ) -> None:
     """三條路徑的**共同上游守門**（`BR2.1`）：自我降級與自我移出都走這裡。
 
-    第三條路徑（停用帳號）走的是同一個謂詞的集合版
-    （`projects_losing_last_admin`，由 `assert_can_deactivate` 呼叫）。
+    第三條路徑（停用帳號）由 `projects_losing_last_admin` 承載（經
+    `assert_can_deactivate` 呼叫），判準是「無合格接手人」而非「管理者數歸零」
+    ——停用之後還有自動改選可補位，這兩條路徑沒有（合併前必修第 1 ＋ 4 項）。
 
     `functional-design:c34` 記過：修在單一入口會把違規從一個位置挪到另一個位置
     而不是消除它。故本函式位於**兩條寫入路徑的共同上游**，而第三條用的是同一個
@@ -664,21 +836,42 @@ def assert_invitee_has_global_permission(
     ——由呼叫端的單一交易保證（本函式在寫入之前）。
 
     半套狀態尤其危險：清單多一列而那個人實際上用不了專案。
+
+    **帳號狀態也是前置條件**（合併前必修第 4 項）：待核准（J5
+    `authorization_status != 'approved'`）由下面 `user_can` 的
+    `authorization_status` 參數擋下；**已停用**帳號 `user_can` 不看，故在此
+    另擋——停用帳號登入不了，加他為成員只會產生一列用不到的成員資格，而若之後
+    他被自動改選選中（改選另有 `is_qualified_successor` 擋），風險更大。
+    兩者都回 `MissingGlobalPermission`（422），訊息說明是帳號狀態而非角色。
     """
     user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
         raise MembershipNotFound(f"查不到使用者 {user_id}")
+    if not user.is_active:
+        raise MissingGlobalPermission(
+            user_id=user_id,
+            story_id=REQUIRED_INVITEE_STORY_ID,
+            action=REQUIRED_INVITEE_ACTION,
+            reason="帳號已停用",
+        )
+    status_value = getattr(user, "authorization_status", "approved")
     if not user_can(
         db,
         user.role,
         REQUIRED_INVITEE_STORY_ID,
         REQUIRED_INVITEE_ACTION,
-        authorization_status=getattr(user, "authorization_status", "approved"),
+        authorization_status=status_value,
     ):
+        # 判定只有上面那一處（`user_can`）；這裡只決定訊息怎麼說。
         raise MissingGlobalPermission(
             user_id=user_id,
             story_id=REQUIRED_INVITEE_STORY_ID,
             action=REQUIRED_INVITEE_ACTION,
+            reason=(
+                "帳號尚未通過授權核准"
+                if status_value not in (None, "approved")
+                else None
+            ),
         )
 
 
@@ -750,18 +943,25 @@ def project_ids_owned_by(db: Session, *, owner_user_id: int) -> List[int]:
 
 
 def reselect_for_project(
-    db: Session, *, project_id: int, deactivated_owner_user_id: int
+    db: Session, *, project_id: int, deactivated_user_id: int
 ) -> Optional[ReselectionEvent]:
     """對**單一**專案執行一次自動改選。呼叫端已取鎖並擁有交易邊界。
 
-    回傳寫入的稽核列，或 `None`（冪等命中／無成員可選）。
+    回傳寫入的稽核列，或 `None`（冪等命中）。無合格管理者也無合格接手人時
+    拋 `NoQualifiedSuccessor`（不得無聲，合併前必修第 10 項）。
 
-    **冪等（`BR4.3`）**：該專案已有其他 `project_admin`（排除被停用的 owner）則
-    **不執行、不寫事件**。部分失敗後的重跑若不冪等，會產生**第二次改選事件**，
-    使橫幅重複出現且稽核多一筆不曾發生的變更。
+    **候選只含合格接手人**（合併前必修第 1 ＋ 4 項；`BR7.3`）：經
+    `qualified_successors`，與停用守門共用 `is_qualified_successor` 這一個謂詞
+    ——停用中、待核准、只有 `K3.view` 的成員一律不會被升為管理者。
+
+    **冪等（`BR4.3`）**：該專案已有其他**合格的** `project_admin`（排除被停用者）
+    則**不執行、不寫事件**。不合格的管理者不算：他無法執行任何管理動作，把他
+    算進去會讓一個實際上無人能管的專案被判成「已有管理者」。部分失敗後的重跑若
+    不冪等，會產生**第二次改選事件**，使橫幅重複出現且稽核多一筆不曾發生的變更。
     """
-    snapshots = member_snapshots(db, project_id=project_id)
-    candidates = [s for s in snapshots if s.user_id != deactivated_owner_user_id]
+    candidates = qualified_successors(
+        db, project_ids=[project_id], excluding_user_id=deactivated_user_id
+    )[project_id]
     existing_admin = next(
         (s for s in candidates if s.role == ROLE_PROJECT_ADMIN), None
     )
@@ -776,12 +976,11 @@ def reselect_for_project(
         )
         return None
     if not candidates:
-        logger.info(
-            "%s project_id=%s reason=no_other_member",
-            EVENT_RESELECT_SKIPPED,
-            project_id,
-        )
-        return None
+        # 守門已擋下「該使用者是管理者卻無合格接手人」的停用，故能走到這裡的是
+        # 他**擁有但不管理**的專案，或停用之後才變得無人合格的專案。兩者的結果
+        # 都是沒有人能管的專案，**不得無聲**（合併前必修第 10 項）：拋出，由
+        # `run_auto_reselection` 計入 `failed_project_ids`、端點回 500。
+        raise NoQualifiedSuccessor(project_id)
 
     successor = select_successor(candidates)
     previous_role = successor.role
@@ -796,8 +995,10 @@ def reselect_for_project(
         project_id=project_id,
         cause=CAUSE_AUTO_RESELECTION,
         promoted_user_id=successor.user_id,
-        # `BR5.4`：`auto_reselection` 下這一欄是**被停用的 owner**。
-        previous_owner_user_id=deactivated_owner_user_id,
+        # `BR5.4`：`auto_reselection` 下這一欄是**被停用的人**——擁有者，或
+        # （合併前必修第 1 項起）被停用的最後一位管理者。兩者都回答「這次變更
+        # 是誰造成的」。
+        previous_owner_user_id=deactivated_user_id,
         previous_role=previous_role,
         new_role=ROLE_PROJECT_ADMIN,
     )
@@ -807,19 +1008,58 @@ def reselect_for_project(
         EVENT_RESELECTED,
         project_id,
         successor.user_id,
-        deactivated_owner_user_id,
+        deactivated_user_id,
     )
     return event
 
 
+@dataclass
+class ReselectionOutcome:
+    """`run_auto_reselection` 的結果（合併前必修第 10 項）。
+
+    在此之前它只回成功事件，失敗只記 log——呼叫端無從得知、也沒有人負責重跑，
+    失敗的專案會永久沒有管理者。
+
+    - `events`：本次真的寫入的改選稽核列；
+    - `failed_project_ids`：改選失敗（已 rollback）的專案，遞增；
+    - `lock_timeout_project_ids`：其中**因取鎖逾時**失敗者（`failed_project_ids`
+      的子集）。全部失敗都是逾時時，停用端點回 503 而非 500。
+    """
+
+    events: List[ReselectionEvent] = field(default_factory=list)
+    failed_project_ids: List[int] = field(default_factory=list)
+    lock_timeout_project_ids: List[int] = field(default_factory=list)
+
+
+def reselection_scope(db: Session, *, deactivated_user_id: int) -> List[int]:
+    """改選要走訪的專案：**該使用者擁有的 ∪ 他是管理者的**，依 id 遞增。
+
+    為什麼不只是擁有的（合併前必修第 1 項）：停用守門現在會放行「該使用者是
+    最後一位管理者、但有合格接手人」的專案，而那個專案未必是他擁有的——只走訪
+    擁有的專案，放行之後該專案就沒有管理者了。
+
+    走訪他是管理者、但另有合格管理者的專案是安全的：`reselect_for_project` 的
+    冪等判定會略過它（記一筆 `reselect_skipped`），不寫任何事件。
+    """
+    return sorted(
+        set(project_ids_owned_by(db, owner_user_id=deactivated_user_id))
+        | set(project_ids_where_admin(db, user_id=deactivated_user_id))
+    )
+
+
 def run_auto_reselection(
     db: Session, *, deactivated_user_id: int
-) -> List[ReselectionEvent]:
-    """`BR4.4`：停用帳號**成功之後**，對該使用者擁有的每個專案各跑一次改選。
+) -> ReselectionOutcome:
+    """`BR4.4`：停用帳號**成功之後**，對 `reselection_scope` 的每個專案各跑一次改選。
 
-    **觸發條件是 `project_owner` 的帳號被停用**，不是專案被刪除或成員離開。
+    **觸發條件是帳號被停用**，不是專案被刪除或成員離開。範圍是他擁有的專案
+    與他是管理者的專案（見 `reselection_scope`）。
     次序與守門的關係：守門先判（可能擋下整個停用），改選在停用**成功之後**才跑
     ——次序反了會對一個其實沒被停用的帳號產生改選事件。
+
+    **失敗會回報**（合併前必修第 10 項）：回傳 `ReselectionOutcome`，失敗的專案
+    列在 `failed_project_ids`，由停用端點轉成 500／503。重送同一個停用請求會再跑
+    一次本函式，冪等性（`BR4.3`）使已改好的專案不重複寫事件。
 
     **逐專案獨立交易，而非一個大交易**（`scalability-design.md §二`）：
     一個橫跨 N 個專案的交易會同時持有 N 個鎖，把一位 owner 的停用變成一次對
@@ -830,26 +1070,36 @@ def run_auto_reselection(
     取鎖順序一律按 `projects.id` 遞增（`security-design.md §一之二`）；
     這裡以排序後的 id 清單逐一處理，故順序本身就是遞增的。
     """
-    events: List[ReselectionEvent] = []
-    for project_id in project_ids_owned_by(db, owner_user_id=deactivated_user_id):
+    outcome = ReselectionOutcome()
+    for project_id in reselection_scope(db, deactivated_user_id=deactivated_user_id):
         try:
             lock_project(db, project_id=project_id)
             event = reselect_for_project(
                 db,
                 project_id=project_id,
-                deactivated_owner_user_id=deactivated_user_id,
+                deactivated_user_id=deactivated_user_id,
             )
             db.commit()
             if event is not None:
-                events.append(event)
+                outcome.events.append(event)
+        except MembershipLockTimeout:
+            # 取鎖逾時：另一筆交易正在改這個專案的成員。不是程式錯誤，重送即可。
+            db.rollback()
+            outcome.failed_project_ids.append(project_id)
+            outcome.lock_timeout_project_ids.append(project_id)
+            logger.error(
+                "%s project_id=%s reason=lock_timeout", EVENT_RESELECT_SKIPPED, project_id
+            )
         except Exception:
             # 這一個專案失敗不得讓其餘專案一起失敗（逐專案獨立交易）。
-            # **不靜默**：記 ERROR 並帶 exc_info，而冪等性使重跑可收斂。
+            # **不靜默**：記 ERROR 並帶 exc_info，**並回報給呼叫端**（第 10 項），
+            # 而冪等性使重送可收斂。
             db.rollback()
+            outcome.failed_project_ids.append(project_id)
             logger.exception(
                 "%s project_id=%s reason=failed", EVENT_RESELECT_SKIPPED, project_id
             )
-    return events
+    return outcome
 
 
 __all__ = [
@@ -859,26 +1109,30 @@ __all__ = [
     "EVENT_LOCK_WAIT",
     "EVENT_RESELECTED",
     "EVENT_RESELECT_SKIPPED",
+    "LOCK_TIMEOUT_MS",
     "LOCK_WAIT_WARN_MS",
     "MEMBERSHIP_STORY_ID",
     "ROLE_MEMBER",
     "ROLE_PROJECT_ADMIN",
+    "ReselectionOutcome",
     "acknowledge_reselection",
     "add_member",
     "admin_count_after",
     "assert_invitee_has_global_permission",
     "assert_still_has_admin",
     "delete_member",
+    "is_qualified_successor",
     "list_members",
     "list_unacknowledged_reselections",
     "lock_project",
     "lock_projects_in_id_order",
     "log_denied",
-    "member_snapshots",
     "project_ids_owned_by",
     "project_ids_where_admin",
     "projects_losing_last_admin",
+    "qualified_successors",
     "reselect_for_project",
+    "reselection_scope",
     "resolve_project_role",
     "run_auto_reselection",
     "select_successor",

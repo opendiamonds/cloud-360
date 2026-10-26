@@ -34,6 +34,7 @@ routing；`contract-summary.md:797-799` 的 `pbt_note` 逐字指定受測對象�
 | 整句 | `can_dispatch(result, threshold)` | `BR4.2` 的 AND 聚合 |
 | 基數 | `intents_for(result)` | `BR4.4`／`EC7` 的**等式** |
 | 攤平 | `clarify_candidates_for(result, threshold)` | `BR4.5`／`EC8` |
+| 選定後還原（行程內） | `clarify_resolution_for`／`intents_after_choice` | 合併前必修第 5 項 |
 
 `BR3.3`（無分數分支）是整組裡最容易被略過、而後果最嚴重的一條
 ---------------------------------------------------------
@@ -48,12 +49,15 @@ routing；`contract-summary.md:797-799` 的 `pbt_note` 逐字指定受測對象�
 
 from __future__ import annotations
 
-from typing import Final, Tuple
+from typing import Final, Optional, Tuple
 
 from services.intent_routing_types import (
     REFERENT_UNRESOLVED,
+    CandidateIntent,
     CandidateRanking,
     ClarifyCandidate,
+    ClarifyOption,
+    ClarifyResolution,
     ClassificationResult,
     Intent,
     IntentDecision,
@@ -236,13 +240,71 @@ def clarify_candidates_for(
         for candidate in slot.candidates:
             out.append(
                 ClarifyCandidate(
-                    id=f"s{index}r{candidate.rank}:{candidate.capability}",
+                    id=_clarify_id(index, candidate),
                     label=_clarify_label(result, index, candidate.label),
                     capability=candidate.capability,
                     confidence=candidate.score,
                 )
             )
     return tuple(out)
+
+
+def _clarify_id(slot_index: int, candidate: CandidateIntent) -> str:
+    """澄清候選 id 的**唯一**產生點：`clarify_candidates_for` 與
+    `clarify_resolution_for` 必須給出同一個 id，否則選定後對不上。"""
+    return f"s{slot_index}r{candidate.rank}:{candidate.capability}"
+
+
+def clarify_resolution_for(
+    result: ClassificationResult,
+    threshold: float,
+) -> ClarifyResolution:
+    """合併前必修第 5 項：澄清判定附帶的**行程內**還原對照。
+
+    - 每個不可單選槽位的每個候選 → 該候選代表的完整 `Intent`（`capability`
+      與 `referent` 逐欄複製）＋ 所屬槽位序。順序與 `clarify_candidates_for`
+      逐一對應（同一個迴圈形狀、同一個 `_clarify_id`）。
+    - 每個**可單選**槽位 → 它的 rank 1 `Intent`（與 `intents_for` 同一取法）。
+
+    純函式、決定性（`BR3.6`）：同一輸入兩次呼叫結果相等，不用隨機值或時間。
+    """
+    options = []
+    settled = []
+    for index, slot in enumerate(result.slots):
+        if can_single_out(slot, threshold):
+            top = slot.candidates[0]
+            settled.append((index, Intent(capability=top.capability, referent=top.referent)))
+            continue
+        for candidate in slot.candidates:
+            options.append(
+                ClarifyOption(
+                    candidate_id=_clarify_id(index, candidate),
+                    slot_index=index,
+                    intent=Intent(capability=candidate.capability, referent=candidate.referent),
+                )
+            )
+    return ClarifyResolution(options=tuple(options), settled=tuple(settled))
+
+
+def intents_after_choice(
+    resolution: ClarifyResolution,
+    candidate_id: str,
+) -> Optional[Tuple[Intent, ...]]:
+    """使用者選定 `candidate_id` 後應交辦的意圖：**被選候選的完整 `Intent` ＋
+    其他已確定槽位的 `Intent`，依原句的槽位序排列**。
+
+    `candidate_id` 不在對照內回 `None`（呼叫端據以回 `INVALID_REQUEST`）。
+
+    **其他同樣不可單選的槽位不會被交辦**：`select_clarify_candidate` 一次只帶
+    一個 `candidateId`（`K-02`），選定其一並不構成對另一件事的選擇；替它挑一個
+    讀法正是 `FR1.3` 要防的「擅自做出我沒要的東西」。
+    """
+    chosen = next((o for o in resolution.options if o.candidate_id == candidate_id), None)
+    if chosen is None:
+        return None
+    by_slot = dict(resolution.settled)
+    by_slot[chosen.slot_index] = chosen.intent
+    return tuple(by_slot[index] for index in sorted(by_slot))
 
 
 def decide(result: ClassificationResult, threshold: float) -> IntentDecision:
@@ -272,11 +334,14 @@ def decide(result: ClassificationResult, threshold: float) -> IntentDecision:
         confidence=confidence,
         below_threshold=True,
         candidates=clarify_candidates_for(result, threshold),
+        resolution=clarify_resolution_for(result, threshold),
     )
 
 
 __all__ = [
     "can_dispatch",
+    "clarify_resolution_for",
+    "intents_after_choice",
     "has_unresolved_referent",
     "can_single_out",
     "clarify_candidates_for",

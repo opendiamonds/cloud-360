@@ -256,6 +256,19 @@ services:
       - --appendonly
       - "yes"
       - --maxmemory
+      # Capacity is sized on the WORST case, not the average (merge-blockers
+      # item 18): each conversation segment is trimmed to the stricter of 200
+      # messages (BRAIN_SESSION_HISTORY_MAX) and 200 KB serialised
+      # (DEFAULT_SEGMENT_MAX_BYTES, a code constant, deliberately not an env
+      # var). 3 segments x 200 KiB = 600 KiB per session. U12's work items
+      # share the session key and are capped by count (code constants, not env
+      # vars): <= 5 active and <= 20 finished, each capped in serialised
+      # bytes, worst 81,000 B ~= 79.1 KiB. Total worst 695,400 B ~= 679.1 KiB
+      # per session; 80% of 256mb / 695,400 B ~= 308.8 live sessions
+      # (commitment: >= 300); 300 sessions ~= 199.0 MiB ~= 77.7% of maxmemory
+      # (arithmetic in DEPLOY.md). Without the byte cap the worst case was
+      # 3 x 200 x 4000 CJK chars ~= 7 MB per session -- about 35 sessions to
+      # fill 256mb, after which noeviction refuses EVERY write.
       - 256mb
       - --maxmemory-policy
       # NFR4.50 / [N3]=A: `noeviction`, NOT `allkeys-lru`.

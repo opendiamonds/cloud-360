@@ -409,9 +409,15 @@ class MemoryFacade:
             # 不得改回 `MemoryForbidden`——那會重開整張表的枚舉 oracle。
             raise MemoryNotFound(memory_id)
 
-        memory_service.delete_with_audit(
-            self._db, record=record, actor_user_id=principal.user_id
-        )
+        try:
+            memory_service.delete_with_audit(
+                self._db, record=record, actor_user_id=principal.user_id
+            )
+        except MemoryNotFound:
+            # 取列之後、刪除之前被另一個 session 刪掉（合併前必修第 22 項 (c)）。
+            # 以呼叫端送來的原值重拋，使 `detail` 與上面「不存在」那一行逐字相同
+            # （`[D1]`=A）；與「不存在」一樣**不**寫 `reason="owner"` 日誌、不寫稽核。
+            raise MemoryNotFound(memory_id) from None
 
     # -- 5：放寬可見範圍（`functional-spec.md §1.5`）------------------------
 

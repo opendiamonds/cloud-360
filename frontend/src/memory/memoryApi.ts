@@ -83,18 +83,29 @@ export async function fetchMemoryRecords(
 }
 
 /**
+ * `deleteMemoryRecord` 的結果。
+ *
+ * - `'deleted'`：204，伺服器確認刪除。
+ * - `'not-found-unconfirmed'`：404，**尚未確認**該則是否真的不在了。
+ */
+export type DeleteMemoryOutcome = 'deleted' | 'not-found-unconfirmed';
+
+/**
  * 刪除一則記憶（`DELETE /records/{memory_id}`）。
  *
- * 404 映射為**具名結果** `'already-gone'` 而非例外（`BR34.5`）：該則已被 90 天清除
- * 或他處刪除，對使用者而言與刪除成功相同。把它放在型別上，而不是藏在 `catch`
- * 裡的狀態碼比較。
+ * **404 不等於已刪除**（合併前必修第 6 項，使用者裁決「收到 404 就重新讀清單
+ * 確認」）：後端對「不存在」與「不是你的」刻意回同一個 404（`[D1]`=A，防枚舉），
+ * 而路徑錯誤、反向代理或部署未含該路由時回的 404 也長得一樣。前端無法以狀態碼
+ * 分辨，故本函式只回具名的「待確認」結果，由呼叫端重讀清單判定（`MemoryZone`
+ * 的 `deleteRecord`）。`BR34.5`（已被 90 天清除者視同刪除成功）的語意由那次重讀
+ * 保留：重讀不再列出它，才視同已刪除。**不依賴錯誤訊息字串**。
  *
  * `memory_id` 是伺服器給的不透明字串，原樣放進路徑（不轉數字）。
  */
 export async function deleteMemoryRecord(
   token: string,
   memoryId: string
-): Promise<'deleted' | 'already-gone'> {
+): Promise<DeleteMemoryOutcome> {
   let res: Response;
   try {
     res = await fetch(apiUrl(`${BASE}/records/${encodeURIComponent(memoryId)}`), {
@@ -106,7 +117,7 @@ export async function deleteMemoryRecord(
     throw new Error('連線失敗');
   }
   if (res.status === 204) return 'deleted';
-  if (res.status === 404) return 'already-gone';
+  if (res.status === 404) return 'not-found-unconfirmed';
   const body = await readJson(res);
   console.warn(`memory.delete failed: ${res.status}`);
   throw new Error(detailMessage(body, '刪除失敗'));

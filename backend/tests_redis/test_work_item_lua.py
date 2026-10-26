@@ -50,6 +50,16 @@ def _dumps(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+#: 兩支腳本新增的容量 ARGV（合併前必修第 18 項），與 `SessionStore` 送出的值同源。
+_TERMINAL_JSON = _dumps(sorted(["完成", "失敗", "已停掉"]))
+_PUT_TAIL = ["5", _TERMINAL_JSON]
+_UPDATE_TAIL = ["20", _TERMINAL_JSON]
+
+
+def _created(minute: int) -> str:
+    return f"2026-10-12T{8 + minute // 60:02d}:{minute % 60:02d}:00+00:00"
+
+
 def _semantic(fields):
     """把 Hash 快照轉成可比對的形狀：`wi:*` 欄位以 JSON 語意比對。"""
     if not fields:
@@ -116,7 +126,7 @@ class WorkItemLuaParityTest(unittest.TestCase):
                 self.client.delete(self.key)
                 fields = {"meta": "{}", "wi:w1": _dumps(item)}
                 self._seed(fields)
-                args = ["wi:w1", _dumps(statuses), stage, _dumps(patch)]
+                args = ["wi:w1", _dumps(statuses), stage, _dumps(patch), *_UPDATE_TAIL]
                 expected_result, expected_fields = T.ref_update_work_item(fields, *args)
                 actual = self._run(SCRIPT_UPDATE_WORK_ITEM, args)
                 self.assertEqual(actual, expected_result)
@@ -124,7 +134,9 @@ class WorkItemLuaParityTest(unittest.TestCase):
                 self.assertEqual(self.client.ttl(self.key), 4321)
 
     def test_update_on_missing_key_or_field(self):
-        args = ["wi:w1", _dumps(["處理中"]), "not_dispatched", _dumps({"status": "失敗"})]
+        args = [
+            "wi:w1", _dumps(["處理中"]), "not_dispatched", _dumps({"status": "失敗"}), *_UPDATE_TAIL
+        ]
         self.assertEqual(self._run(SCRIPT_UPDATE_WORK_ITEM, args), 0)
         self.assertEqual(self.client.exists(self.key), 0)
         self._seed({"meta": "{}"})
@@ -134,14 +146,16 @@ class WorkItemLuaParityTest(unittest.TestCase):
     def test_put_cases_match_the_reference(self):
         payload = _dumps(_item())
         # key 不存在：不建 key。
-        self.assertEqual(self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", payload]), 0)
+        self.assertEqual(self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", payload, *_PUT_TAIL]), 0)
         self.assertEqual(self.client.exists(self.key), 0)
-        self.assertEqual(T.ref_put_work_item(None, "wi:w1", payload), (0, None))
+        self.assertEqual(T.ref_put_work_item(None, "wi:w1", payload, *_PUT_TAIL), (0, None))
         # key 存在：寫入；第二次被拒且不覆寫。
         self._seed({"meta": "{}"})
-        self.assertEqual(self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", payload]), 1)
-        self.assertEqual(self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", _dumps({"x": 1})]), 0)
-        expected = T.ref_put_work_item({"meta": "{}"}, "wi:w1", payload)[1]
+        self.assertEqual(self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", payload, *_PUT_TAIL]), 1)
+        self.assertEqual(
+            self._run(SCRIPT_PUT_WORK_ITEM, ["wi:w1", _dumps({"x": 1}), *_PUT_TAIL]), 0
+        )
+        expected = T.ref_put_work_item({"meta": "{}"}, "wi:w1", payload, *_PUT_TAIL)[1]
         self.assertEqual(_semantic(self._snapshot()), _semantic(expected))
         self.assertEqual(self.client.ttl(self.key), 4321)
 
@@ -154,10 +168,86 @@ class WorkItemLuaParityTest(unittest.TestCase):
         self._seed({"meta": "{}", "wi:w1": _dumps(_item())})
         self._run(
             SCRIPT_UPDATE_WORK_ITEM,
-            ["wi:w1", _dumps(["處理中"]), "not_dispatched", _dumps({"sideEffect": "x"})],
+            ["wi:w1", _dumps(["處理中"]), "not_dispatched", _dumps({"sideEffect": "x"}),
+             *_UPDATE_TAIL],
         )
         observed = self.client.eval("return cjson.encode(cjson.decode('[]'))", 0)
         self.assertEqual(observed, "{}")
+
+    # -- 合併前必修第 18 項：容量（與 `tests/test_work_orchestrator_store.py` 同一組案例）--
+
+    def _parity_put(self, fields, field, payload):
+        self.client.delete(self.key)
+        self._seed(fields)
+        args = [field, payload, *_PUT_TAIL]
+        expected_result, expected_fields = T.ref_put_work_item(fields, *args)
+        actual = self._run(SCRIPT_PUT_WORK_ITEM, args)
+        self.assertEqual(actual, expected_result)
+        self.assertEqual(_semantic(self._snapshot()), _semantic(expected_fields))
+        self.assertEqual(self.client.ttl(self.key), 4321)
+        return actual
+
+    def _parity_update(self, fields, field, statuses, stage, patch):
+        self.client.delete(self.key)
+        self._seed(fields)
+        args = [field, _dumps(statuses), stage, _dumps(patch), *_UPDATE_TAIL]
+        expected_result, expected_fields = T.ref_update_work_item(fields, *args)
+        actual = self._run(SCRIPT_UPDATE_WORK_ITEM, args)
+        self.assertEqual(actual, expected_result)
+        self.assertEqual(_semantic(self._snapshot()), _semantic(expected_fields))
+        self.assertEqual(self.client.ttl(self.key), 4321)
+        return actual, expected_fields
+
+    def test_put_capacity_cases_match_the_reference(self):
+        active = {f"wi:p{i}": _dumps(_item(workItemId=f"p{i}", status=s))
+                  for i, s in enumerate(["處理中", "處理中", "處理中", "等待中", "等待中"])}
+        terminal = {f"wi:t{i}": _dumps(_item(workItemId=f"t{i}", status=s))
+                    for i, s in enumerate(["完成", "失敗", "已停掉"] * 4)}
+        cases = [
+            ("sixth_active_rejected", {"meta": "{}", **active}, "wi:new", -1),
+            ("terminal_not_counted",
+             {"meta": "{}", **dict(list(active.items())[:4]), **terminal}, "wi:new", 1),
+            ("duplicate_wins_over_capacity", {"meta": "{}", **active}, "wi:p0", 0),
+        ]
+        for name, fields, field, expected in cases:
+            with self.subTest(case=name):
+                self.assertEqual(self._parity_put(fields, field, _dumps(_item(workItemId="new"))), expected)
+
+    def test_update_prune_cases_match_the_reference(self):
+        finished = {f"wi:t{i:02d}": _dumps(_item(workItemId=f"t{i:02d}", status="完成",
+                                                createdAt=_created(10 + i)))
+                    for i in range(20)}
+        ending = {"wi:ending": _dumps(_item(workItemId="ending", createdAt=_created(100)))}
+        ancient = {"wi:ancient": _dumps(_item(workItemId="ancient", createdAt=_created(0)))}
+        old_active = {"wi:old": _dumps(_item(workItemId="old", createdAt=_created(1)))}
+        ties = {f"wi:{n}": _dumps(_item(workItemId=n, status="已停掉", createdAt=_created(5)))
+                for n in ("c", "a", "b")}
+        some = dict(list(finished.items())[3:])  # 17 筆
+        cases = [
+            ("prune_oldest", {"meta": "{}", **finished, **ending, **old_active}, "wi:ending",
+             ["處理中"], {"status": "完成"}, "wi:t00"),
+            ("self_not_victim", {"meta": "{}", **finished, **ancient}, "wi:ancient",
+             ["處理中"], {"status": "失敗"}, "wi:t00"),
+            ("tie_by_field_name", {"meta": "{}", **ties, **some, **ending}, "wi:ending",
+             ["處理中"], {"status": "已停掉"}, "wi:a"),
+        ]
+        for name, fields, field, statuses, patch, victim in cases:
+            with self.subTest(case=name):
+                result, expected_fields = self._parity_update(
+                    fields, field, statuses, "not_dispatched", patch
+                )
+                self.assertEqual(result, 1)
+                snapshot = self._snapshot()
+                self.assertNotIn(victim, snapshot)
+                self.assertIn(field, snapshot)
+                self.assertEqual(sum(1 for f in snapshot if f.startswith("wi:")),
+                                 sum(1 for f in expected_fields if f.startswith("wi:")))
+        # 終態 → 終態的補丁不修剪。
+        over = {"meta": "{}", **finished,
+                "wi:t20": _dumps(_item(workItemId="t20", status="完成", createdAt=_created(50)))}
+        result, _ = self._parity_update(over, "wi:t20", ["完成"], "not_dispatched", {"sideEffect": "x"})
+        self.assertEqual(result, 1)
+        self.assertEqual(sum(1 for f in self._snapshot() if f.startswith("wi:")), 21)
 
 
 
@@ -182,7 +272,7 @@ class GatewayColdStartTest(unittest.TestCase):
         try:
             client.hset(key, mapping={"meta": "{}"})
             result = gateway.eval_script(
-                "test", SCRIPT_PUT_WORK_ITEM, [key], ["wi:w1", "{}"], idempotent=False
+                "test", SCRIPT_PUT_WORK_ITEM, [key], ["wi:w1", "{}", *_PUT_TAIL], idempotent=False
             )
             self.assertEqual(int(result), 1)
         finally:

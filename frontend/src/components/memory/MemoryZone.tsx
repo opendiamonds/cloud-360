@@ -74,6 +74,10 @@ export interface MemoryZoneProps {
 type ZoneStatus = 'loading' | 'default' | 'empty' | 'error';
 
 const SYNC_FAILED_TEXT = '清單同步失敗，畫面可能不是最新的';
+/** 404 之後重讀清單仍列出該則：伺服器沒有刪掉它（合併前必修第 6 項）。 */
+const STILL_LISTED_TEXT = '伺服器回報找不到，但清單仍列出這則記憶，未刪除';
+/** 404 之後的確認重讀本身失敗：無法判定，寧可保守視為未刪除。 */
+const UNCONFIRMED_TEXT = '無法確認是否已刪除，請稍後重試';
 
 export const MemoryZone: React.FC<MemoryZoneProps> = ({
   kind,
@@ -206,7 +210,38 @@ export const MemoryZone: React.FC<MemoryZoneProps> = ({
       });
   };
 
-  const deleteRecord = (memoryId: string) => deleteMemoryRecord(token, memoryId);
+  /**
+   * 發出 `DELETE`；404 時重讀**該列所在的那一頁**確認（合併前必修第 6 項）。
+   *
+   * `rowPage` 是該列被渲染時畫面上的頁（按下確認那一刻的頁），參數與那一頁的抓取
+   * 完全相同（`offsetFor(rowPage)`、同一個 `limit`）。這次重讀是**純確認**：不遞增
+   * `requestSeq`、不寫入任何 state——列表的落地仍只經 `applyLoaded`，故不會與翻頁、
+   * 背景重抓互相覆蓋。
+   *
+   *   - 重讀結果已不含該則 → 視同已刪除（`BR34.5`），回 `'already-gone'`，呼叫端走
+   *     與 204 相同的移除與播報。
+   *   - 仍含該則 → 拋例外：刪除失敗、保留該列。
+   *   - 重讀本身失敗 → 拋例外：寧可保守，不移除。
+   *
+   * 已接受風險：只重讀這一頁；兩次請求之間若有更早的記憶被刪除使清單位移，該則
+   * 可能滑到前一頁而被誤判為已刪除——後果與裁決前相同（情節區的探測列 `limit=21`
+   * 只涵蓋「往後」位移一筆，不涵蓋這個情境）。
+   */
+  const deleteRecord = (memoryId: string, rowPage: number): Promise<'deleted' | 'already-gone'> =>
+    deleteMemoryRecord(token, memoryId).then((outcome) => {
+      if (outcome === 'deleted') return 'deleted' as const;
+      return fetchMemoryRecords(token, kind, offsetFor(rowPage), limit).then(
+        (data) => {
+          if (data.some((r) => r.memory_id === memoryId)) {
+            throw new Error(STILL_LISTED_TEXT);
+          }
+          return 'already-gone' as const;
+        },
+        () => {
+          throw new Error(UNCONFIRMED_TEXT);
+        }
+      );
+    });
 
   /**
    * `rowPage`：被刪的列所在的頁（按下確認那一刻畫面上的頁）。只用來判定要不要
@@ -326,7 +361,7 @@ export const MemoryZone: React.FC<MemoryZoneProps> = ({
                 isOwn={isOwn}
                 // UI 判定，非授權（`SEC-U15-2`）：伺服器以 404 拒絕非擁有者。
                 canDelete={isOwn}
-                deleteRecord={deleteRecord}
+                deleteRecord={(memoryId) => deleteRecord(memoryId, page)}
                 onRemoved={(memoryId, summary) => handleRemoved(memoryId, summary, page)}
                 announce={announce}
               />

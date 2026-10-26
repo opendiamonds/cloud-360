@@ -248,7 +248,7 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
 | H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
 | I | **U5 記憶層** `memory` schema ＋ `memory.memory_records`／`memory.memory_audit_events`；**U8 新增** `ix_memory_records_embedding_hnsw` | **本 repo 的第一個獨立 schema**（在此之前全樹無 `CREATE SCHEMA`）。含 `vector(1024)` 欄位、`embedding_model`、grant 邊界。見 2.2.8；向量索引（opclass `vector_cosine_ops`）見 **2.2.12** |
-| J | **U18 專案中繼資料** `project_members`／`reselection_events`／`system_requirement_fields` | **per-project 成員與角色、改選稽核、系統層需求欄位值**。三張表皆為全新，**無資料遷移**。見 2.2.9 |
+| J | **U18 專案中繼資料** `project_members`／`reselection_events`／`system_requirement_fields` | **per-project 成員與角色、改選稽核、系統層需求欄位值**。三張表皆為全新，**無資料遷移**；唯一例外是 U20 起的條件式欄位轉型（`system_requirement_fields.updated_on_behalf_of` 由 integer 轉為 varchar(64)，只在既有表仍為舊型別時執行，見 2.2.9 之後的 U20 說明）。見 2.2.9 |
 | K | **U9 保留系統 actor** `users` 的一列（`SYSTEM.retention-purge`） | **90 天記憶清除的稽核 actor**。不是人、無法登入、零權限。**刪掉它會讓每一次清除的整個交易中止**。見 2.2.11 |
 | D | 預設使用者 `admin` | 見下方 |
 
@@ -495,6 +495,39 @@ SQL
 2. **只碰遷移的產物**。初版的第 1 步寫成 `WHERE system_id IS NOT NULL`——那會連同使用者自己搬過的歸屬一起清掉，與本節第 2 點的宣稱直接矛盾；而初版第 4 步的檢查跑在那個清空之後，恆為 0，**是一個不可能失敗的檢查**（iteration 1 審查 R-02，Major）。現行版本改以「掛在預設系統上」為範圍，並把檢查拆成回復前後兩次比對。
 3. `diagram_change_records` **不在回復範圍內**：本輪它沒有任何寫入端上線（寫入端是後續單元），回復時表應為空。若不為空，那是稽核資料，刪除前須人工確認。另注意 `diagram_id` 是 `ON DELETE CASCADE`——刪除架構圖會連帶銷毀它的變更紀錄，這是已揭露並由人工裁決保留的取捨。
 
+##### 刪除使用者的行為（合併前必修第 3 項／`OQ-H1` 裁決，2026-10-20）
+
+**DDL 不變、不需重跑 `schema_rbac.sql`**——本項只改了 `projects.owner_user_id` 與 `project_members.user_id` 兩處 `COMMENT` 文字（重跑時以 `COMMENT ON` 覆寫，無資料影響）。行為落在應用層 `backend/services/user_router.py` 的 `_hard_delete_user`，`DELETE /api/auth/{user_id}` 與「拒絕授權申請並刪除帳號」（`POST /api/auth/authorization-requests/{request_id}/reject`）兩個入口共用。
+
+背景：上表多欄指向 `users.id` 卻**沒有** `ON DELETE`，而預設專案由遷移（本節）自動建立，所以在本變更之前，刪除任何跑過遷移的使用者都會在 commit 時被資料庫拒絕、端點回 **500**。
+
+現在的規則：
+
+| 情境 | 結果 |
+|---|---|
+| 仍擁有架構圖（`user_diagrams.user_id`） | **403**（既有行為，不變） |
+| 只擁有**空的預設專案**（`is_default`、其下所有系統皆無架構圖、除本人外無其他成員） | **200**。該專案、其系統（連同 `system_requirement_fields`）、其成員列在**同一交易**內與帳號一起刪除 |
+| 其他任何仍指向該使用者的資料 | **409**，**不刪任何東西**（稽核類紀錄一律保留）。回應本體 `detail` 為可讀字串、`blocking_references` 逐類列出筆數 |
+| 資料庫在 commit 時仍拒絕（預檢沒涵蓋的新外鍵） | **409**（通用訊息、空清單），交易回滾，後端記一行 `ERROR` log——**不會是 500** |
+
+409 會列出的類別（`category`）：`owned_projects`（非空或非預設專案）、`project_memberships`（其他專案的成員資格）、`project_member_invitations`、`reselection_events`（專案角色變更稽核）、`system_requirement_fields`（最後修改者）、`memory_records`、`memory_audit_events`、`diagram_change_records`、`estimate_audit_events`、`architecture_reviews`、`wa_lenses`。
+
+**維運意涵**：
+
+- 曾經操作過稽核類資料（架構圖變更、記憶、估價稽核、角色變更事件、架構審查）的帳號**無法被硬刪除**——這是刻意的，稽核紀錄不得因刪帳號而消失。這類帳號請改用**停用**（`PUT /api/auth/{user_id}/active`）。
+- 日後新增任何指向 `users.id` 且**無** `ON DELETE` 的欄位時，須同步把它加進 `_blocking_user_references`；漏了不會 500，但使用者只會看到通用 409 而不知道卡在哪，後端 log 會出現「預檢未涵蓋的外鍵」。
+
+查某帳號會被哪些資料擋下（只讀）：
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT 'owned_projects' AS k, count(*) FROM projects WHERE owner_user_id = <uid>
+  UNION ALL SELECT 'project_memberships', count(*) FROM project_members WHERE user_id = <uid>
+  UNION ALL SELECT 'diagram_change_records', count(*) FROM diagram_change_records WHERE actor_user_id = <uid>
+  UNION ALL SELECT 'memory_records', count(*) FROM memory.memory_records WHERE owner_user_id = <uid>;"
+# owned_projects / project_memberships 含其空預設專案那一列；其餘類別不為 0 即會 409
+```
+
 #### 2.2.8 U5 記憶層 schema（`memory-data`）
 
 **本 repo 的第一個 `CREATE SCHEMA`。** 在此之前全樹無 `CREATE SCHEMA`、無
@@ -563,10 +596,11 @@ CI 的 `memory-schema` job（交付物 `N-2`）會對真實 PostgreSQL 執行
 > `U8` 加了 `S14`／`S15`（見 2.2.12）。改為不寫死數字，使它不再隨每次擴充
 > 而過期。（`S2` 在該檔不存在，是既有的編號空缺，非遺漏。）
 
-**既有非空 volume 的建立路徑尚未定案。** `schema_rbac.sql` 只在空 volume 執行
-（掛載為 `/docker-entrypoint-initdb.d/`），而既有環境的演進路徑是
-`backend/database.py` 的啟動補丁。記憶 schema 走哪一條**本輪未決**，
-部署到既有的 `192.168.10.10` 之前必須先決定。
+**既有非空 volume 的建立路徑：見 2.2.9。** `schema_rbac.sql` 只在空 volume 執行
+（掛載為 `/docker-entrypoint-initdb.d/`）；既有環境（例如 `192.168.10.10`）由
+`backend/scripts/run_meta_schema_migration.py` 一次建立，它的
+`BLOCKS_TO_RUN = ("X", "I", "J")` 已含本節的記憶區塊 `I`。（本段原寫「本輪未決、
+部署前須先決定」，該決定已由 U18 的遷移腳本作成，2026-10-20 更正。）
 
 **`NFR6.1`——episodic memory 的靜態加密由主機層承載（磁碟／LUKS），
 不在應用層或資料庫欄位層。** 不選欄位層加密的理由是它會**取消一個已核可的能力**
@@ -693,9 +727,15 @@ echo "exit=$?"    # 必須為 0
 `restart: unless-stopped` 之下任何建表失敗會變成**重啟迴圈**，而那比「少幾張表」
 更難診斷。
 
-**誠實的代價**：這仍是**手動步驟，忘了跑就沒有表**，而 `deploy.yml` 不呼叫任何
-遷移腳本（2.2.7 的那支也沒被呼叫）。失敗至少很明顯：`U19`／`U20` 的任何查詢會立即
-報 `relation "project_members" does not exist`，不是靜默降級。
+**誠實的代價**：這仍是**手動步驟**，而 `deploy.yml` 不呼叫任何遷移腳本（2.2.7 的
+那支也沒被呼叫）。忘了跑**不會**沒有表：後端啟動時 `database.py` 的
+`Base.metadata.create_all()` 會依 ORM（`ProjectMember`、`ReselectionEvent`、
+`SystemRequirementField`）**建出這三張表**，欄位、唯一鍵、CHECK 與外鍵都與 DDL 等價，
+**只缺 COMMENT**（`OPEN-ID19-1`），端點照常運作、不是 500；而表若早已以舊定義存在
+（`U18` 跑過遷移、`U20` 後上線），`create_all` 不會改它，**缺的是 `U20` 的欄位收斂**
+（見 2.2.9 的部署順序表）。缺 COMMENT 不會報任何錯；缺收斂只在**帶代寫標示的寫入**
+時以 500 出現。兩者都不會在一般使用中立即被發現，只有本節的驗證查得到，所以合併後
+仍須執行一次本腳本。
 
 驗證：
 
@@ -910,7 +950,18 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
 
 #### 2.2.10 U19 既有專案的成員回填（`membership-service`）
 
-**第三支一次性腳本，而它與前兩支的順序是嚴格的。** `project_members` 是全新表
+> **2026-10-20 起改為後端啟動時自動執行，腳本保留供手動補跑**（合併前必修第 15 項，
+> 使用者裁決）。`backend/main.py` 的 startup 在 `init_db()` 之後呼叫
+> `services/membership_backfill.ensure_project_members_on_startup()`——與
+> `scripts/backfill_project_members.py` 是**同一份**程式（冪等、單一交易、自我終檢）。
+> **補齊失敗時後端啟動失敗**（記一筆 ERROR `membership.backfill_failed` 後拋出），
+> 不會「服務照常啟動但沒補到」；在 `restart: unless-stopped` 之下這會表現為 backend
+> **重啟迴圈**，處置是修資料（通常是某專案的 `owner_user_id` 指向不存在的使用者）
+> 而不是略過。`backend/database.py` 沒有改動（`NFR12.5`）。
+> 下面的手動步驟因此不再是部署的必經步驟；它仍可用於事前檢查（`--dry-run`）與手動補跑。
+> 下文保留原設計的脈絡，凡與本框衝突處以本框為準。
+
+**原設計：第三支一次性腳本，而它與前兩支的順序是嚴格的。** `project_members` 是全新表
 （契約 `K-15` 的 `observable_side_effects` 逐字「不含任何資料寫入」），而既有專案
 全部由 `services/hierarchy_migration.py` 建立且**從未寫過任何成員列**
 ——所以**每一個既有專案今天都是零成員**。
@@ -919,7 +970,7 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
 |---|---|---|---|
 | 1 | `python scripts/run_hierarchy_migration.py`（見 2.2.7） | — | `J)` 的外鍵指向 `projects`／`systems`，表不存在則第 2 步以可讀訊息擋下 |
 | 2 | `python scripts/run_meta_schema_migration.py`（見 2.2.9） | 第 1 步 | 兩張表不存在 → `U19` 的任何寫入拋 `UndefinedTable` |
-| 3 | **`python scripts/backfill_project_members.py`（本節）** | 第 2 步 | 既有專案的擁有者被 `BR1.6` 判為**非成員**而被拒絕存取自己的專案 |
+| 3 | **後端啟動時自動執行**（2026-10-20 起）；手動補跑為 `python scripts/backfill_project_members.py`（本節） | 第 2 步 | 既有專案的擁有者被 `BR1.6` 判為**非成員**而被拒絕存取自己的專案。自動執行之下，表不存在時後端**啟動失敗** |
 
 ##### 為什麼必須在**任何消費端上線之前**跑（`NFR12.25`）
 
@@ -932,12 +983,14 @@ owner**）查無列 → 回 `None` → `BR1.6` 要求當成拒絕 → 消費端
 | 問題 | 答案（實查） |
 |---|---|
 | 這個窗口裡既有專案的擁有者會被鎖在外面嗎？ | **清單不會，但需求籤與成員頁會。** `U23` 落地後專案清單改讀成員列；擁有者只在該專案**零成員列**時可見，故回填未跑時擁有者仍看得到自己的專案（清單與系統清單照常），但需求籤與成員頁以 per-project 角色判定，會拒絕他。（`U23` 之前的敘述是「`hierarchy_facade.list_projects` 目前是 owner-scoped、既有列表路徑不經本單元」——那是歷史狀態，`U23` 起不再成立。） |
-| 既有停用端點的新前置檢查會誤判嗎？ | **不會，但方向是「過寬」而非「過嚴」**：零成員列時 `assert_can_deactivate` 的 `HAVING count(*) = 1` 找不到任何專案，故它**放行**。保護在回填之後才生效 |
+| 既有停用端點的新前置檢查會誤判嗎？ | **不會，但方向是「過寬」而非「過嚴」**：零成員列時該使用者不是任何專案的 `project_admin`，`assert_can_deactivate` 找不到任何專案，故它**放行**。保護在回填之後才生效（2026-10-20 起守門判準為「是管理者且無合格接手人」，見合併前必修第 1 ＋ 4 項；零成員列時結論不變） |
 | 那什麼時候真的會鎖人在外面？ | **第一個消費端上線時。** 這就是 `NFR12.25` 的理由 |
 
-**對部署批次的交接（`OPEN-ID19-2`）**：本單元與第一個消費端之間是一條
-**手動步驟邊**——它不在依賴圖上，是一個部署程序前置條件。
-「回填已在 staging 執行過」必須是第一個消費端所在批次的前置條件。
+**對部署批次的交接（`OPEN-ID19-2`）**：原設計中本單元與第一個消費端之間是一條
+**手動步驟邊**。2026-10-20 起回填改由後端啟動時自動執行，這條手動邊因此消失：
+後端起得來即蘊含已補齊（補齊失敗則後端起不來）。仍須確認的只有一件事：
+第 1、2 步的兩支結構腳本已在目標環境跑過（否則 `projects`／`project_members` 由
+`create_all` 建立而缺 COMMENT，見 2.2.9；補齊本身仍會成功）。
 
 ##### 前進步驟
 
@@ -955,13 +1008,14 @@ echo "exit=$?"    # 必須為 0
 ```
 
 對每個**沒有任何成員列**的專案插入一列
-`(project_id, owner_user_id, 'project_admin', now())`。
+`(project_id, owner_user_id, 'project_admin', CURRENT_TIMESTAMP)`（PostgreSQL 上與
+`now()` 等價；改用它是為了讓同一份 SQL 也能在測試的 SQLite 上跑）。
 
 - **冪等**：條件是「該專案無任何成員列」，故重跑安全。
 - **刻意不處理「已有成員但 owner 不在其中」的專案**——那是人為決定的結果
   （例如 owner 被移出過），回填不得把他加回去。唯一約束
   `uq_project_members_project_user` 也因此不會被違反。
-- `joined_at` 用 `now()` 而非專案的 `created_at`：這一列記的是「他**何時成為
+- `joined_at` 用補齊當下而非專案的 `created_at`：這一列記的是「他**何時成為
   成員**」。用 `created_at` 會讓 `BR4.2` 的「最早加入者」挑選把一位回填出來的
   成員排在所有真實邀請之前，而那不是事實。
 - **單一交易 ＋ 自我終檢**（COMMIT 之前斷言「零成員專案數為 0」），故：
@@ -975,8 +1029,12 @@ echo "exit=$?"    # 必須為 0
 的 `U20` 小節），而那正是它能單一交易並自我終檢的前提；把資料動作混進去會讓
 「結束碼 0 代表什麼」同時涵蓋兩種不同的保證。
 
-**誠實的代價**：這仍是**手動步驟，忘了跑就沒有列**，而 `deploy.yml` 不呼叫任何
-遷移腳本（2.2.7／2.2.9 的那兩支也沒被呼叫）。
+**誠實的代價（2026-10-20 更新）**：原設計下這是**手動步驟，忘了跑就沒有列**，而
+`deploy.yml` 不呼叫任何遷移腳本（2.2.7／2.2.9 的那兩支也沒被呼叫）。改為啟動時自動
+執行之後，「忘了跑」這個失敗模式消失，換來的代價是：一個**持續性**的補齊失敗會讓
+backend 起不來（重啟迴圈），而不是帶著權限錯誤照常運行——這是刻意的選擇。
+若同時起多個 backend 行程（目前 compose 只有一個 `uvicorn` 行程），兩者可能同時
+插入同一列而其中一個撞唯一約束而啟動失敗；重啟後即冪等收斂。
 
 驗證：
 
@@ -1030,10 +1088,13 @@ job，見該檔內的註解）。
 （`FR4.5a`）——沒有自然的使用者可填。填記憶擁有者會讓稽核「對誰刪的」說謊
 （`I)` 區塊該欄的 `COMMENT` 逐字），留 NULL 則 `NOT NULL` 不允許。
 
-##### 它會出現在 Admin 使用者清單上，而且**不要刪掉它**
+##### 應用程式已擋下對它的刪改，但**不要從資料庫直接刪掉它**
 
-`/api/auth/list` 不知道要排除它，所以管理者會在清單上看到一個無法登入、
-沒有任何權限的帳號（`total` 會 +1）。那不是髒資料。
+合併前必修第 11 項之後，應用程式以 `backend/services/system_accounts.py` 辨識它：
+`GET /api/auth/list` 在查詢層排除它（`total` 不計入）；`DELETE /api/auth/{id}`、
+`PUT /api/auth/{id}/role`、`PUT /api/auth/{id}/active` 與授權申請的核准／拒絕
+對它一律回 **409**。這道保護只在應用程式層——以 `psql` 直接 `DELETE` 仍做得到。
+（`GET /api/collab/users` 的分享對象清單**仍會**列出它，未在本次範圍內處理。）
 
 **刪掉它的後果**：自那一刻起，清除的稽核 `INSERT` 全部因外鍵違反而失敗，
 而稽核與刪除**在同一個交易內**，所以**整個清除交易中止**、workflow 以非零碼結束。
@@ -1083,7 +1144,24 @@ psql "$DATABASE_URL" -c "SELECT password_hash ~ '^\$2[aby]\$' FROM users WHERE u
 | `.github/workflows/memory-retention-watchdog.yml` | **GitHub 託管**（`ubuntu-latest`） | `schedule` 每日 06:23 UTC ＋ `workflow_dispatch` | 查清除最後一次**成功的排程** run，逾 3 天開 issue 並以非零碼結束 |
 
 - **排程要到檔案進入預設分支後才會排入**，這是 GitHub 的既有行為；merge 進 `ut`
-  之後不會立刻開始跑。
+  之後不會立刻開始跑。**手動觸發也一樣**：`workflow_dispatch` 同樣要求 workflow
+  檔已在預設分支 `main` 上（GitHub 文件逐字「This event will only trigger a workflow
+  run if the workflow file exists on the default branch」），所以在 `ut` 併入 `main`
+  之前，清除與監看**兩者都無法執行**，這段期間也**沒有任何自動提醒**。
+- **期限（合併前必修第 17 項，2026-10-23 使用者裁決）：本分支第一次部署到 staging
+  之後，`ut` 必須在 90 天內併入 `main`。** 這個期限足以保證不會有資料超過保存期：
+  記憶是本分支新增的功能，部署前資料庫沒有任何記憶列，第一筆記憶最早要在部署後
+  90 天才到期。逾期未併入 `main` 時，最舊的記憶會開始超過保存期而無人清除。
+  部署當天請把「部署日＋90 天」記在可見的位置（例如 issue 或團隊行事曆）。
+  **負責人：Danniel**；記錄的唯一位置是部署當天開立的 GitHub issue（標題含「記憶清除
+  期限」與截止日），完成 `ut`→`main` 後關閉。
+- **首次真實清除前的 dry-run 仍然成立，順序如下**：`ut` 併入 `main` 的當天起排程就會
+  執行**真實**清除（排程不帶 `dry_run`），但在第一筆記憶滿 90 天之前，每次排程的
+  選取結果都是**零列**，實際上什麼都不會刪。所以 dry-run 的窗口是「併入 `main` 之後、
+  部署日＋90 天之前」：併入 `main` 後**立即**在 `main` 上以 `workflow_dispatch`
+  ＋ `dry_run=true` 跑一次，核對計數為 0、選取邊界合理；若之前已有測試資料使計數
+  不為 0，先停用排程（Actions 介面 Disable workflow）再核對。這取代下一點對
+  「首次啟用前」的時序假設，`OPEN-ID9-4` 的要求不變。
 - **首次啟用前必須先驗證選取條件**：以 `workflow_dispatch` ＋ `dry_run=true`
   手動觸發一次，核對它印出的計數與**選取範圍的邊界**（最舊／最新時間戳 ＋ 最多
   10 筆 id）。理由是**已執行的清除不可回滾**（`OPEN-ID9-4`）——workflow 檔可
@@ -1721,19 +1799,82 @@ icons 靜默退回灰底佔位圖）。代價也是它的優點——改容量�
 **`maxmemory 256mb` 的暫定依據**（與七個上限同一形狀：公開基準 ＋ 限期複量）：單一 session
 的 key 大小上界（`BrainSession` 除 `messageHistory` 外全是識別碼與短字串，量級由
 `messageHistory` 決定）× 24 小時內活躍 session 數上界（TTL 24 小時、每次互動續期）×
-安全係數。**該項待確認已由 `U10` 關掉**：`messageHistory` 有截斷策略了——每段上限
-`BRAIN_SESSION_HISTORY_MAX`（值 200，required、**無預設**），上限**每段獨立計算**而
-段數上界為 3（`shared`／`workspace`／`assessment`），故單一 session 的歷程上界為
-`3 × 200 × 每則約 500 B ≈ 300 KB`，而 `300 個同時存活 × 300 KB = 90 MB`，為
-`maxmemory 256mb` 的 **35%**。推導因此成立，不需要反過來以 `maxmemory` 約束歷程。
+安全係數。**該項待確認已由 `U10` 關掉**，且上界以**最壞值**而不是平均值計算：
+每段的修剪取兩個上限的**較嚴者**——筆數上限 `BRAIN_SESSION_HISTORY_MAX`（值 200，
+required、**無預設**）與**序列化後 200 KB** 的位元組上限（程式常數
+`DEFAULT_SEGMENT_MAX_BYTES`，`backend/services/session_types.py`；刻意不是環境變數）。
+上限**每段獨立計算**而段數上界為 3（`shared`／`workspace`／`assessment`），故：
 
-> **這個上界有一項仍然是假設**：每則 500 B 是 *假設值*、不是量測值。單則訊息另有
-> 一道 4000 字元的硬上限（程式常數），故最壞情況遠大於以平均值算出的 300 KB——
-> 「300 個同時存活」在**平均**假設下成立，在最壞情況下不成立。偵測面是
-> `noeviction` 的寫入拒絕與以 app 身分執行的 `MEMORY STATS`，而非事前保證。
+同一個 session key 之下另有 `U12` 的工作項集合（`wi:*` 欄位）。它的上界由 `U12` 以
+**筆數**封住（合併前必修第 18 項、`OPEN-N10-3`；程式常數，不是環境變數）：同時進行中
+（處理中＋等待中）最多 **5** 筆（`MAX_ACTIVE_WORK_ITEMS`，第 6 筆在 Lua 內原子地被擋下），
+已結束（完成、失敗、已停掉）只保留最近 **20** 筆（`MAX_TERMINAL_WORK_ITEMS`，轉為已結束時
+刪最舊的其他已結束項）。每筆的大小以**序列化後的位元組**封頂（程式常數，全在
+`backend/services/work_orchestrator_rules.py`）：原句 `requestText` 進行中 ≤ 6000 B（中文即
+`BR52.6` 的前 2000 字）、轉為已結束時 ≤ 300 B；圖名的顯示名稱 ≤ 300 B（它同時出現在
+`targetDiagramTitle` 與 sideEffect 的〈名稱〉；回存架構圖仍用原標題）。截斷落在字元邊界。
+
+| 算式 | 值 |
+|---|---|
+| 單一 session 的歷程最壞上界 | `3 段 × 200 KiB = 614,400 B = 600 KiB` |
+| 一筆進行中工作項的位元組上界（`WORK_ITEM_ACTIVE_MAX_BYTES`，含欄位名 39 B） | **7,800 B**（對抗字元實測 7,765 B） |
+| 一筆已結束工作項的位元組上界（`WORK_ITEM_TERMINAL_MAX_BYTES`，含欄位名 39 B） | **2,100 B**（對抗字元實測 2,063 B） |
+| 單一 session 的工作項最壞上界 | `5 × 7,800 B ＋ 20 × 2,100 B = 81,000 B ≈ 79.1 KiB` |
+| 單一 session 合計最壞上界 | `614,400 B ＋ 81,000 B = 695,400 B ≈ 679.1 KiB` |
+| `maxmemory 256mb` 的 80%（214,748,364 B）÷ 695,400 B | **≈ 308.8** 個同時存活的 session（承諾 ≥ 300，餘裕約 2.9%） |
+| 300 個已填滿上界的 session | `300 × 695,400 B = 208,620,000 B ≈ 199.0 MiB`，為 `maxmemory` 的 **≈ 77.7%**（不觸及 `maxmemory`） |
+| 一則 4000 個中文字的訊息（序列化後） | ≈ 12 KB，故這類訊息一段約留 16 則（位元組上限先到） |
+
+> 工作項的兩個上界是**位元組上界**，對任何輸入字元都成立：
+> `backend/tests/test_work_orchestrator_capacity.py` 以 6 B 的控制字元（cjson 跳脫成
+> `\u00XX`）、4 B 的 emoji 與 2 B 的 `/` 填滿原句與圖名，經生產的建項與轉終態路徑建出最壞的
+> 進行中項與已結束項（識別碼取 int32 上限，failureReason 與 sideEffect 一律以最長句型保守代入），
+> 斷言兩者不超過上表，並斷言 `614,400 ＋ 5 × 7,800 ＋ 20 × 2,100 ≤ 214,748,364 ÷ 300`。
+> 量測函式與 Lua 端同長度（`session_types.cjson_encoded_size`）。
+> **調高任何一個上限（段位元組、5、20、原句或圖名的位元組上限）之前，都要先重算本表**——
+> 那支測試會先紅燈。本表不含 Redis 每個 hash 欄位自身的配置開銷（歷程那一列同樣不含）。
 >
-> **另一項不在本上界之內**：同一個 session key 之下的工作項集合由 `U12` 擁有，
-> 它的大小上界不由 `U10` 的歷程上限約束。
+> ⚠ **本表的上一版（已被取代）**寫的是「一筆進行中 ≈ 7.9 KiB（8023 B ＋ 39 B）、已結束
+> ≈ 2.6 KiB（2623 B ＋ 39 B）、工作項 `5 × 8062 ＋ 20 × 2662 = 93,550 B ≈ 91.4 KiB`、合計
+> ≈ 691.4 KiB、≈ 303 個、300 個 ≈ 202.5 MiB ≈ 79%」，更早的計畫估計是「80 KiB、300 個
+> ≈ 199 MiB ≈ 78%」。兩者都以**每字 3 B（中文）**算，不是位元組上界：以 4 B 的 emoji 填滿
+> 原句與圖名只容得下約 294 個 session，以 6 B 的控制字元約 275 個（`U12` code-generation
+> 審查 review-01 R-01）。現行數字改以位元組封頂後重算。
+
+> ⚠ **本段原本寫的是「`3 × 200 × 每則約 500 B ≈ 300 KB`、300 個 session ≈ 90 MB，
+> 為 `maxmemory` 的 35%」**。那是以**平均**每則 500 B（假設值、非量測）算的；單則
+> 訊息上限是 4000 字元，只有筆數上限時最壞是 `3 × 200 × 4000 個中文字 ≈ 7 MB／session`，
+> `256mb` 約 **35 個** session 就滿，而 `noeviction` 之下滿了就是**全部** session
+> 都不能寫。位元組上限（`merge-blockers.md` 第 18 項）把最壞值封在 600 KB。
+> 注意 300 個最壞 session 約佔 69%，**高於**原算式的 35%——`NFR4.40` 的要求
+> （不觸及 `maxmemory`）成立，但原算式留給 AOF 緩衝與 Redis 自身開銷的餘裕變小了。
+>
+> ⚠ **本段原本還寫著「另一項不在本上界之內：同一個 session key 之下的工作項集合由
+> `U12` 擁有，它的大小上界不由 `U10` 的歷程上限約束」**，上表也只有歷程一項（600 KB、
+> ≈ 349 個、≈ 69%）。那時工作項**沒有任何筆數上限**，活躍 session 的工作項會無上限累積。
+> `U12` 已補上筆數上限與位元組封頂（見上表），故改為「對話 600 KiB ＋ 工作項 ≈ 79.1 KiB」，
+> 300 個 session ≈ 77.7%——比只算歷程時的 69% 高約 9 個百分點。（本句的上一版寫「工作項
+> ≈ 91.4 KiB、≈ 79%」，已被上表取代。）
+
+**`noeviction` 滿載時會發生什麼、怎麼觀察**：
+
+- **後果**：Redis 對**所有**寫入回 `OOM command not allowed when used memory > 'maxmemory'`
+  ——不是只有新 session，既有 session 的追加訊息、切換模式、選作業對象也全部失敗；
+  讀取照常。後端日誌出現 `session_backend_unavailable` 且 `reason=redis_oom`。
+- **觀察方式**：以 app 身分（`REDIS_USER`，**不是** `default`）執行
+  `MEMORY STATS`，看 `dataset.bytes`／`peak.allocated` 對照 `maxmemory`；`INFO` 是
+  `@dangerous`，兩個身分都不能執行。主機上另可 `docker stats` 看容器層用量。
+
+  ```bash
+  docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec redis \
+    redis-cli --user "$REDIS_USER" --pass "$REDIS_PASSWORD" --no-auth-warning MEMORY STATS
+  ```
+
+  `deploy.yml` 在部署結束時會刪掉 `deploy/.env`，故在主機上手動執行時
+  `REDIS_USER`（`render-env.sh` 寫出的字面值）與 `REDIS_PASSWORD`（GitHub secret）
+  要自行提供（例如以 `read -rs REDIS_PASSWORD` 讀入），密碼不得寫進任何檔案。
+- **處置**：調高 `maxmemory`（連同上方容器上限關係式一起調）或縮小
+  `BRAIN_SESSION_HISTORY_MAX`；**不是**改回 `allkeys-lru`（見下一節）。
 
 **`maxmemory`／`maxmemory-policy`／`appendonly` 三項一律住在 compose 的 `command:`，
 不得移入掛載的 `redis.conf`**：`redis-server` 的 CLI 旗標會**靜默覆寫**檔內同名指令，
@@ -2085,7 +2226,7 @@ host 可連 mcp-bridge:8080/healthz：是／否
 
 **自動：`deploy.yml` 的步驟 6a「Verify the brain WS subprotocol survives the tunnel」**（`[EPI1]`=A）
 
-- 位置在「Verify sessions survive a Redis restart」之後、「Record this commit as the last-good deployment」之前；**擋部署**（失敗 → deploy job 失敗 → `rollback` 還原 last-good、開 revert PR、交 Deploy Doctor）。刻意**不**放進 `rollback` job：last-good 可能早於 `U13`，該版本沒有 `/api/brain/ws`。
+- 位置在「Verify sessions survive a Redis restart」之後、「Record this commit as the last-good deployment」之前；**擋部署**（失敗 → deploy job 失敗 → `rollback` 還原 last-good、交 Deploy Doctor，**但不開 revert PR**）。6a 的失敗成因（Cloudflare 剝除子協定、tunnel／DNS 暫時性問題）都是環境性的，revert 修不了，只會把同批進 `ut` 的 `U13` 一起還原（合併前必修第 26 項、review-03 R-01；2026-10-17 使用者裁決「6a 失敗只回滾、不開 revert PR」）。機制：6a 帶 `id: brain_ws_probe`，deploy job 以 output `brain_ws_probe_failed`（＝該步驟 `outcome == 'failure'`）傳出，`rollback` 的「Open a revert PR for the bad merge」只在它不是 `'true'` 時執行；**其他步驟的失敗照舊開 revert PR**。Slack 通知在此情況寫「Revert PR: 刻意未開」，不會誤報為衝突。刻意**不**放進 `rollback` job：last-good 可能早於 `U13`，該版本沒有 `/api/brain/ws`。
 - 原理：對公開網址送一個**只帶協定名** `cloud360.brain.v1`、不帶任何身分項的升級請求；閘道會接受並回送協定名，再以 4401 關閉。步驟不讀任何 secret，輸出只有狀態列、協定標頭有無與 curl 結束碼。最多 12 輪、每輪間隔 5 秒。
 - 失敗時的判讀（步驟最後印出的三行）：
 
@@ -2095,7 +2236,7 @@ host 可連 mcp-bridge:8080/healthz：是／否
 | `HTTP/1.1 101 …` | 無 | 協定名在**回應方向**被剝（瀏覽器會因此拒絕連線） | 同上 |
 | `(no status line)` | 無 | tunnel 或 DNS 問題（curl 結束碼非 0，例如 7、28） | 先看同次部署「Wait for the public hostname to answer through the tunnel」與 `cloudflared` 日誌 |
 
-  Cloudflare 剝除**沒有不改契約的修法**：以 revert PR 回滾並交使用者裁決（`U13` code-summary 第 4.5 節）。
+  Cloudflare 剝除**沒有不改契約的修法**：自動流程只還原 last-good（不開 revert PR），由維運者依上表定位後交使用者裁決（`U13` code-summary 第 4.5 節）；是否需要人工 revert 屬該裁決的一部分，不由流程自動決定。
 - 本機驗證：對 `docker compose -f deploy/docker-compose.test.yml up -d` 起的 stack，以該步驟 `run` 的內容、環境變數 `BRAIN_WS_URL=http://localhost:8090/api/brain/ws` 執行一次，應以 0 結束；拿掉 `Sec-WebSocket-Protocol` 標頭後應以非 0 結束並印出上述三行。Cloudflare 那一跳只在真正部署時才被驗證。
 
 **人工（維運者，在部署主機與一台能開公開網址的瀏覽器）**——第一次部署成功後、宣告入口頁可用之前；之後每次改 `frontend/nginx.conf`、`cloudflared` 映像或 ingress 時重跑。結果記入 `build-and-test` 的產出（每步一列：操作、`date -u` 時間、觀察值、通過與否）。

@@ -62,6 +62,8 @@ interface StubConfig {
   members?: MemberStub[];
   /** `list_members` 改回這個狀態碼（測失敗路徑）。 */
   membersStatus?: number;
+  /** `membersStatus` 非 200 時的回應本體（預設 `{ detail: '讀取失敗' }`）。 */
+  membersErrorBody?: unknown;
   /** `GET /reselections/pending` 的回應。 */
   reselections?: unknown[];
   /** `GET /reselections/pending` 改回這個狀態碼。 */
@@ -164,7 +166,7 @@ async function setupApp(page: Page, cfg: StubConfig): Promise<Recorder> {
         await route.fulfill({
           status: cfg.membersStatus,
           contentType: 'application/json',
-          body: JSON.stringify({ detail: '讀取失敗' }),
+          body: JSON.stringify(cfg.membersErrorBody ?? { detail: '讀取失敗' }),
         });
         return;
       }
@@ -207,39 +209,84 @@ const memberDetailUrl = (userId: number, projectId = PROJECT_ID) =>
 
 test.describe('U24 member pages', () => {
   /**
-   * @purpose 成員清單在超過 100 列時不渲染清單、改顯示提示；恰 100 列時照常渲染清單。
-   * @api GET /api/membership/projects/{project_id}/members -> 200 | 回傳成員清單
-   * @ui /projects/:projectId/members | 成員清單頁：表格與「成員過多」提示
-   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin
-   * @step 攔截 list_members 回 101 位成員並開啟成員頁 | 表格不存在，且出現「成員過多」提示
-   * @step 改為回 100 位成員並重新開啟成員頁 | 表格存在，提示不存在
-   * @pass 101 位時清單不存在且提示存在；100 位時清單存在且提示不存在
+   * @purpose 成員超過 100 位時清單仍渲染並以每頁 50 位分頁，最後一位成員可翻頁到達且可管理（合併前必修第 9 項）。
+   * @api GET /api/membership/projects/{project_id}/members -> 200 | 回傳全部 101 位成員
+   * @ui /projects/:projectId/members | 成員清單頁：表格、分頁列（上一頁／下一頁、第 N／M 頁、共 K 位）
+   * @ui /projects/:projectId/members/:userId | 由第 3 頁的詳情連結進入的成員詳情頁
+   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin，list_members 回 101 位
+   * @step 開啟成員頁 | 表格存在，本頁 50 列，分頁列顯示「第 1／3 頁、共 101 位」，上一頁停用
+   * @step 按兩次下一頁 | 分頁列顯示「第 3／3 頁、共 101 位」，本頁 1 列且為第 101 位，下一頁停用
+   * @step 點第 101 位那一列的詳情連結 | 進入該成員的詳情頁，角色下拉可見
+   * @pass 101 位時清單存在且第 101 位可經翻頁到達並進入其管理頁；整個過程 list_members 只被請求一次
    * @story US12.1
    */
-  test('renders the member list up to 100 rows and replaces it with a notice beyond that', async ({
+  test('paginates more than 100 members 50 per page so every member stays reachable', async ({
     page,
   }) => {
-    // 101 位：上限之上。渲染閘在「資料→視圖」的轉換點，故**整個清單**不渲染，
-    // 不是渲染前 100 列（`UIP-1`：不渲染半套清單）。
+    // 先前的 100 列整表隱藏閘讓 101 人的專案**整張表**不渲染——本頁是管理成員
+    // 的唯一入口，於是連「移除成員回到 100 以下」都做不到（merge-blockers #9）。
+    // 還原該閘時，本案例的第一個斷言（表格存在）即紅燈。
     const over = [
       member(SELF_ID, SELF_NAME, 'project_admin'),
       ...Array.from({ length: 100 }, (_, i) => member(3000 + i, `e2e-user-${i}`, 'member')),
     ];
     expect(over).toHaveLength(101);
-    await setupApp(page, { k3: K3_FULL, members: over });
+    const lastId = over[100].user_id;
+    const rec = await setupApp(page, { k3: K3_FULL, members: over });
     await page.goto(membersUrl());
-    await expect(page.getByTestId('member-list-too-many')).toBeVisible();
-    await expect(page.getByTestId('member-list-table')).toHaveCount(0);
 
-    // 恰 100 位：上限之內，清單照常渲染。這一半讓閘門的**邊界**可失敗——
-    // 若把判斷寫成 `>= 100` 則此處紅燈。
-    const exact = over.slice(0, 100);
+    const table = page.getByTestId('member-list-table');
+    const rows = table.locator('tbody tr');
+    await expect(table).toBeVisible();
+    await expect(rows).toHaveCount(50);
+    await expect(page.getByTestId('member-list-page-info')).toHaveText('第 1／3 頁、共 101 位');
+    await expect(page.getByTestId('member-list-prev-page')).toBeDisabled();
+    await expect(page.getByTestId(`member-list-row-${lastId}`)).toHaveCount(0);
+
+    await page.getByTestId('member-list-next-page').click();
+    await expect(page.getByTestId('member-list-page-info')).toHaveText('第 2／3 頁、共 101 位');
+    await expect(rows).toHaveCount(50);
+    await page.getByTestId('member-list-next-page').click();
+    await expect(page.getByTestId('member-list-page-info')).toHaveText('第 3／3 頁、共 101 位');
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByTestId('member-list-next-page')).toBeDisabled();
+
+    // 第 101 位在畫面上，且其管理控件（具 canManage 時的詳情連結）可用。
+    const lastRow = page.getByTestId(`member-list-row-${lastId}`);
+    await expect(lastRow).toBeVisible();
+    // 切頁不發請求：整個翻頁過程對 members 端點只有掛載時那一次（`UIP-4`）。
+    expect(rec.membersGets()).toBe(1);
+    await lastRow.getByTestId('member-list-row-detail-link').click();
+    await expect(page).toHaveURL(new RegExp(`${memberDetailUrl(lastId)}$`));
+    await expect(page.getByTestId('member-detail-role-select')).toBeVisible();
+  });
+
+  /**
+   * @purpose 恰 100 位成員時分頁為 2 頁——頁數計算的邊界不得 off-by-one。
+   * @api GET /api/membership/projects/{project_id}/members -> 200 | 回傳 100 位成員
+   * @ui /projects/:projectId/members | 成員清單頁的分頁列
+   * @given 以具 K3 view+edit 的帳號登入，自身 role 為 project_admin，list_members 回 100 位
+   * @step 開啟成員頁 | 表格存在，本頁 50 列，分頁列顯示「第 1／2 頁、共 100 位」
+   * @step 按下一頁 | 分頁列顯示「第 2／2 頁、共 100 位」，本頁 50 列，下一頁停用
+   * @pass 100 位恰為 2 頁、每頁 50 列；不出現第 3 頁
+   * @story US12.1
+   */
+  test('splits exactly 100 members into two pages of 50', async ({ page }) => {
+    const exact = [
+      member(SELF_ID, SELF_NAME, 'project_admin'),
+      ...Array.from({ length: 99 }, (_, i) => member(3000 + i, `e2e-user-${i}`, 'member')),
+    ];
     expect(exact).toHaveLength(100);
-    await page.unrouteAll();
     await setupApp(page, { k3: K3_FULL, members: exact });
     await page.goto(membersUrl());
-    await expect(page.getByTestId('member-list-table')).toBeVisible();
-    await expect(page.getByTestId('member-list-too-many')).toHaveCount(0);
+
+    const rows = page.getByTestId('member-list-table').locator('tbody tr');
+    await expect(rows).toHaveCount(50);
+    await expect(page.getByTestId('member-list-page-info')).toHaveText('第 1／2 頁、共 100 位');
+    await page.getByTestId('member-list-next-page').click();
+    await expect(page.getByTestId('member-list-page-info')).toHaveText('第 2／2 頁、共 100 位');
+    await expect(rows).toHaveCount(50);
+    await expect(page.getByTestId('member-list-next-page')).toBeDisabled();
   });
 
   /**
@@ -738,5 +785,368 @@ test.describe('U24 member pages', () => {
     for (const id of MANAGER_CONTROLS_ON_DETAIL) {
       await expect(page.getByTestId(id)).toBeVisible();
     }
+  });
+
+  /**
+   * @purpose 成員清單 404（專案不存在，或存在但你不是成員——後端兩者回同一個回應）顯示固定句，不顯示伺服器訊息、不出現專案編號（合併前必修第 14 項）。
+   * @api GET /api/membership/projects/{project_id}/members -> 404 | 本體刻意構造成舊形狀「查不到專案 <id>」以抓回歸
+   * @ui /projects/:projectId/members | 成員清單頁的抓取錯誤區塊
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁的抓取錯誤區塊
+   * @given 以具 K3 view+edit 的帳號登入；list_members 回 404，本體 detail 含專案編號
+   * @step 開啟成員清單頁 | 抓取錯誤區塊顯示「查不到這個專案」；成員表格不存在
+   * @step 開啟同一專案的成員詳情頁 | 抓取錯誤區塊同樣顯示「查不到這個專案」
+   * @pass 兩頁的錯誤文字皆恰為「查不到這個專案」，且頁面可見文字不含專案編號與伺服器 detail
+   * @story US12.5
+   */
+  test('shows a fixed not-found sentence without the project id when the member list is 404', async ({
+    page,
+  }) => {
+    // 刻意用一個在頁面其他地方不會出現的專案編號，讓「不含編號」的斷言有意義。
+    const hiddenProjectId = 48213;
+    const legacyDetail = `查不到專案 ${hiddenProjectId}`;
+    await setupApp(page, {
+      k3: K3_FULL,
+      membersStatus: 404,
+      membersErrorBody: { detail: legacyDetail },
+    });
+
+    await page.goto(membersUrl(hiddenProjectId));
+    const listError = page.getByTestId('member-list-error');
+    await expect(listError).toHaveText('查不到這個專案');
+    await expect(page.getByTestId('member-list-table')).toHaveCount(0);
+    const listText = await page.locator('body').innerText();
+    expect(listText).not.toContain(String(hiddenProjectId));
+    expect(listText).not.toContain(legacyDetail);
+
+    await page.goto(memberDetailUrl(OTHER_ID, hiddenProjectId));
+    const detailError = page.getByTestId('member-detail-error');
+    await expect(detailError).toHaveText('查不到這個專案');
+    const detailText = await page.locator('body').innerText();
+    expect(detailText).not.toContain(String(hiddenProjectId));
+    expect(detailText).not.toContain(legacyDetail);
+  });
+
+  /**
+   * @purpose 成員清單 403（只剩缺全域 K3 view 一種）仍顯示權限句，不被誤當成「查不到」。
+   * @api GET /api/membership/projects/{project_id}/members -> 403 | 本體不帶 detail
+   * @ui /projects/:projectId/members | 成員清單頁的抓取錯誤區塊
+   * @given 以具 K3 view+edit 的帳號登入；list_members 回 403 且本體無 detail
+   * @step 開啟成員清單頁 | 抓取錯誤區塊顯示「你沒有檢視這個專案成員的權限」
+   * @pass 錯誤文字恰為權限句，且不是「查不到這個專案」
+   * @story US12.5
+   */
+  test('keeps the permission sentence when the member list is 403', async ({ page }) => {
+    await setupApp(page, { k3: K3_FULL, membersStatus: 403, membersErrorBody: {} });
+    await page.goto(membersUrl());
+    const listError = page.getByTestId('member-list-error');
+    await expect(listError).toHaveText('你沒有檢視這個專案成員的權限');
+    await expect(listError).not.toHaveText('查不到這個專案');
+  });
+
+  /**
+   * @purpose 寫入途中專案變成查不到（被移出或專案被刪，後端回 404）時，寫入錯誤顯示與清單相同的固定句，不顯示伺服器訊息、不出現專案編號（審查 review-02 R-07）。
+   * @api PATCH /api/membership/projects/{project_id}/members/{user_id} -> 404 | 本體刻意構造成舊形狀「查不到專案 <id>」以抓回歸
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁：角色下拉、儲存鈕、寫入錯誤訊息
+   * @given 以具 K3 view+edit 的帳號登入、自身為 project_admin；PATCH 回 404，本體 detail 含專案編號
+   * @step 開啟成員詳情頁、改選角色並按儲存 | 寫入錯誤區塊顯示「查不到這個專案」
+   * @pass 寫入錯誤文字恰為「查不到這個專案」，且頁面可見文字不含專案編號與伺服器 detail
+   * @story US12.5
+   */
+  test('shows the fixed not-found sentence without the project id when a role change is 404', async ({
+    page,
+  }) => {
+    const hiddenProjectId = 59317;
+    const legacyDetail = `查不到專案 ${hiddenProjectId}`;
+    await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin'), member(OTHER_ID, OTHER_NAME, 'member')],
+    });
+    // 在 dispatcher 之後註冊 → 優先比對；只覆寫 PATCH。
+    await page.route('**/api/membership/projects/*/members/*', async (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: legacyDetail }),
+      });
+    });
+
+    await page.goto(memberDetailUrl(OTHER_ID, hiddenProjectId));
+    const roleSelect = page.getByTestId('member-detail-role-select');
+    await expect(roleSelect).toBeVisible();
+    await roleSelect.selectOption('project_admin');
+    await page.getByTestId('member-detail-save').click();
+
+    const actionError = page.getByTestId('member-detail-action-error');
+    await expect(actionError).toHaveText('查不到這個專案');
+    const text = await page.locator('body').innerText();
+    expect(text).not.toContain(String(hiddenProjectId));
+    expect(text).not.toContain(legacyDetail);
+  });
+
+  /**
+   * @purpose 網址的專案編號不是數字時，成員清單頁顯示與 404 相同的固定句並發出一筆失敗訊號，而不是永遠停在「載入中…」（合併前必修第 23 項 (a)(b)、SEC-U24-6）。
+   * @ui /projects/:projectId/members | 成員清單頁的抓取錯誤區塊與載入提示（:projectId 為非數字字串）
+   * @given 以具 K3 view+edit 的帳號登入；開啟 /projects/abc/members（abc 不是數字）
+   * @step 開啟該網址 | 抓取錯誤區塊顯示「查不到這個專案」；「載入中…」不存在；成員表格不存在
+   * @step 檢視 console 與網路請求 | 恰有一筆「[membership] members-fetch-failed GET /projects/:id/members」，且不含網址中的 abc；對 members 端點的請求數為 0
+   * @pass 固定句可見、載入提示不存在、失敗訊號恰一筆且不含網址原字串、未發出任何成員清單請求
+   * @story US12.1
+   */
+  test('shows the fixed not-found sentence instead of loading forever when the project id is not a number', async ({
+    page,
+  }) => {
+    const consoleLines = collectConsole(page);
+    const rec = await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin')],
+    });
+
+    await page.goto('/projects/abc/members');
+    await expect(page.getByTestId('members-list-page')).toBeVisible();
+    await expect(page.getByTestId('member-list-error')).toHaveText('查不到這個專案');
+    await expect(page.getByText('載入中…')).toHaveCount(0);
+    await expect(page.getByTestId('member-list-table')).toHaveCount(0);
+
+    // 等到網路靜止再取終值：訊號由 effect 發出，須在渲染之後才落地。
+    await page.waitForLoadState('networkidle');
+    const signals = consoleLines.filter((l) => l.startsWith('[membership] '));
+    expect(signals).toEqual(['[membership] members-fetch-failed GET /projects/:id/members']);
+    for (const line of signals) expect(line).not.toContain('abc');
+    expect(rec.membersGets()).toBe(0);
+  });
+
+  /**
+   * @purpose 邀請對話框在鍵盤上真的是 modal：Tab／Shift+Tab 不離開對話框、Escape 關閉、關閉後焦點回到「邀請成員」鈕（合併前必修第 23 項 (c)、AC-A11Y.1）。
+   * @api GET /api/membership/projects/{project_id}/members -> 200 | 自身為 project_admin 的兩位成員
+   * @ui /projects/:projectId/members | 成員清單頁的「邀請成員」鈕與邀請對話框
+   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin
+   * @step 按「邀請成員」 | 對話框出現，焦點在使用者 ID 欄位
+   * @step 連按 Tab 六次，每次檢查焦點 | 焦點每次都在對話框內
+   * @step 在第一個欄位按 Shift+Tab | 焦點仍在對話框內（移到最後一個可聚焦元素「取消」）
+   * @step 按 Escape | 對話框消失，焦點在「邀請成員」鈕
+   * @step 再開一次並按「取消」 | 對話框消失，焦點在「邀請成員」鈕
+   * @pass 六次 Tab 與一次 Shift+Tab 後焦點皆在對話框內；Escape 與取消兩條關閉路徑後焦點都在「邀請成員」鈕
+   * @story US12.6
+   */
+  test('keeps keyboard focus inside the invite dialog, closes it on Escape and returns focus to the invite button', async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin'), member(OTHER_ID, OTHER_NAME, 'member')],
+    });
+    await page.goto(membersUrl());
+    const inviteButton = page.getByTestId('member-list-invite-button');
+    await expect(inviteButton).toBeVisible();
+
+    const focusInsideDialog = () =>
+      page.evaluate(() => {
+        const dialog = document.querySelector('[data-testid="invite-dialog"]');
+        return !!dialog && dialog.contains(document.activeElement);
+      });
+
+    await inviteButton.click();
+    const dialog = page.getByTestId('invite-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId('invite-dialog-user-id')).toBeFocused();
+
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Tab');
+      expect(await focusInsideDialog(), `第 ${i + 1} 次 Tab 後焦點離開了對話框`).toBe(true);
+    }
+
+    await page.getByTestId('invite-dialog-user-id').focus();
+    await page.keyboard.press('Shift+Tab');
+    expect(await focusInsideDialog(), 'Shift+Tab 後焦點離開了對話框').toBe(true);
+    await expect(page.getByTestId('invite-dialog-cancel')).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(inviteButton).toBeFocused();
+
+    await inviteButton.click();
+    await expect(dialog).toBeVisible();
+    await page.getByTestId('invite-dialog-cancel').click();
+    await expect(dialog).toHaveCount(0);
+    await expect(inviteButton).toBeFocused();
+  });
+
+  /**
+   * @purpose 移出確認框在鍵盤上真的是 modal：Tab／Shift+Tab 不離開確認框、Escape 關閉且不移出、關閉後焦點回到「移出專案」鈕（合併前必修第 23 項 (c)、AC-A11Y.1）。
+   * @api GET /api/membership/projects/{project_id}/members -> 200 | 自身為 project_admin、目標為一般成員
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁的「移出專案」鈕與移出確認框
+   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin，開啟另一位成員的詳情頁
+   * @step 按「移出專案」 | 確認框出現，焦點在「取消」
+   * @step 連按 Tab 四次，每次檢查焦點 | 焦點每次都在確認框內
+   * @step 在「取消」上按 Shift+Tab | 焦點移到「確認移出」，仍在確認框內
+   * @step 按 Escape | 確認框消失，焦點在「移出專案」鈕，且沒有發出任何 DELETE 請求
+   * @pass 四次 Tab 與一次 Shift+Tab 後焦點皆在確認框內；Escape 後確認框消失、焦點在「移出專案」鈕、DELETE 請求數為 0
+   * @story US12.6
+   */
+  test('keeps keyboard focus inside the remove confirmation, closes it on Escape and returns focus to the remove button', async ({
+    page,
+  }) => {
+    const rec = await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin'), member(OTHER_ID, OTHER_NAME, 'member')],
+    });
+    await page.goto(memberDetailUrl(OTHER_ID));
+    const removeButton = page.getByTestId('member-detail-remove');
+    await expect(removeButton).toBeVisible();
+
+    const focusInsideDialog = () =>
+      page.evaluate(() => {
+        const dialog = document.querySelector('[data-testid="remove-confirm-dialog"]');
+        return !!dialog && dialog.contains(document.activeElement);
+      });
+
+    await removeButton.click();
+    const dialog = page.getByTestId('remove-confirm-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId('remove-confirm-cancel')).toBeFocused();
+
+    for (let i = 0; i < 4; i += 1) {
+      await page.keyboard.press('Tab');
+      expect(await focusInsideDialog(), `第 ${i + 1} 次 Tab 後焦點離開了確認框`).toBe(true);
+    }
+
+    await page.getByTestId('remove-confirm-cancel').focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByTestId('remove-confirm-accept')).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(removeButton).toBeFocused();
+    expect(rec.all.filter((r) => r.method === 'DELETE')).toHaveLength(0);
+  });
+
+  /**
+   * @purpose 網址的專案編號不是數字時，成員詳情頁顯示與 404 相同的固定句並發出一筆失敗訊號，而不是永遠停在「載入中…」（合併前必修第 23 項補修、審查 R-11、SEC-U24-6）。
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁的抓取錯誤區塊與載入提示（:projectId 為非數字字串）
+   * @given 以具 K3 view+edit 的帳號登入；開啟 /projects/abc/members/1（abc 不是數字）
+   * @step 開啟該網址 | 抓取錯誤區塊顯示「查不到這個專案」；「載入中…」不存在；「找不到這位成員」不存在
+   * @step 檢視 console 與網路請求 | 恰有一筆「[membership] members-fetch-failed GET /projects/:id/members」，且不含網址中的 abc；對 members 端點的請求數為 0
+   * @pass 固定句可見、載入提示不存在、失敗訊號恰一筆且不含網址原字串、未發出任何成員清單請求
+   * @story US12.2
+   */
+  test('shows the fixed not-found sentence instead of loading forever when the detail page project id is not a number', async ({
+    page,
+  }) => {
+    const consoleLines = collectConsole(page);
+    const rec = await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin')],
+    });
+
+    await page.goto('/projects/abc/members/1');
+    await expect(page.getByTestId('member-detail-page')).toBeVisible();
+    await expect(page.getByTestId('member-detail-error')).toHaveText('查不到這個專案');
+    await expect(page.getByText('載入中…')).toHaveCount(0);
+    await expect(page.getByText('找不到這位成員。')).toHaveCount(0);
+
+    // 等到網路靜止再取終值：訊號由 effect 發出，須在渲染之後才落地。
+    await page.waitForLoadState('networkidle');
+    const signals = consoleLines.filter((l) => l.startsWith('[membership] '));
+    expect(signals).toEqual(['[membership] members-fetch-failed GET /projects/:id/members']);
+    for (const line of signals) expect(line).not.toContain('abc');
+    expect(rec.membersGets()).toBe(0);
+  });
+
+  /**
+   * @purpose 邀請送出中按 Escape 不會關閉對話框（與停用的「取消」一致）；請求完成後對話框才關閉，並把焦點還給「邀請成員」鈕（合併前必修第 23 項補修、審查 R-15）。
+   * @api POST /api/membership/projects/{project_id}/members -> 201 | 以 route 延遲回應，直到測試放行
+   * @ui /projects/:projectId/members | 成員清單頁的「邀請成員」鈕與邀請對話框
+   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin；邀請請求被延遲
+   * @step 開啟邀請對話框、填入使用者 ID 並按「送出邀請」 | 送出鈕顯示「送出中…」
+   * @step 送出中按 Escape | 對話框仍在
+   * @step 放行邀請請求（回 201） | 對話框消失，新成員出現在清單上，焦點在「邀請成員」鈕
+   * @pass 送出中 Escape 後對話框數為 1；請求完成後對話框數為 0 且「邀請成員」鈕取得焦點
+   * @story US12.6
+   */
+  test('ignores Escape while an invite is in flight and returns focus to the invite button once it completes', async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin'), member(OTHER_ID, OTHER_NAME, 'member')],
+    });
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let postSeen = false;
+    // 在 dispatcher 之後註冊 → 優先比對；只延遲 POST。
+    await page.route('**/api/membership/projects/*/members', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      postSeen = true;
+      await released;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(member(3333, INVITEE_NAME, 'member')),
+      });
+    });
+
+    await page.goto(membersUrl());
+    const inviteButton = page.getByTestId('member-list-invite-button');
+    await expect(inviteButton).toBeVisible();
+    await inviteButton.click();
+    const dialog = page.getByTestId('invite-dialog');
+    await expect(dialog).toBeVisible();
+    await page.getByTestId('invite-dialog-user-id').fill('3333');
+    await page.getByTestId('invite-dialog-submit').click();
+
+    // 確認請求已送出且仍懸著，才按 Escape——否則測到的是「尚未送出」的 Escape。
+    await expect(page.getByTestId('invite-dialog-submit')).toHaveText('送出中…');
+    await expect.poll(() => postSeen).toBe(true);
+    await page.keyboard.press('Escape');
+    // 給 Escape 的處理一次渲染機會再斷言，避免在關閉發生前就取樣而誤判綠燈。
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await expect(dialog).toHaveCount(1);
+
+    release();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId('member-list-table')).toContainText(INVITEE_NAME);
+    await expect(inviteButton).toBeFocused();
+  });
+
+  /**
+   * @purpose 移出被最後管理者守門擋下（409）時，確認框關閉後焦點回到「移出專案」鈕，鍵盤使用者不必從頁首重新 Tab（合併前必修第 23 項補修、審查 R-15）。
+   * @api DELETE /api/membership/projects/{project_id}/members/{user_id} -> 409 | 本體為 LastAdminGuardReport（一個專案）
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁的「移出專案」鈕、移出確認框與守門回報
+   * @given 以具 K3 view+edit 的帳號登入，自身在該專案的 role 為 project_admin，開啟另一位成員的詳情頁；DELETE 回 409
+   * @step 按「移出專案」再按「確認移出」 | 確認框消失，守門回報列出一個專案
+   * @step 檢查焦點 | 焦點在「移出專案」鈕
+   * @pass 409 之後確認框數為 0、守門回報可見、「移出專案」鈕取得焦點
+   * @story US12.6
+   */
+  test('returns focus to the remove button after the remove confirmation is closed by a last-admin 409', async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      k3: K3_FULL,
+      members: [member(SELF_ID, SELF_NAME, 'project_admin'), member(OTHER_ID, OTHER_NAME, 'member')],
+    });
+    await page.route('**/api/membership/projects/*/members/*', async (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ projects: [{ project_id: PROJECT_ID, name: 'e2e-project' }] }),
+      });
+    });
+
+    await page.goto(memberDetailUrl(OTHER_ID));
+    const removeButton = page.getByTestId('member-detail-remove');
+    await expect(removeButton).toBeVisible();
+    await removeButton.click();
+    const dialog = page.getByTestId('remove-confirm-dialog');
+    await expect(dialog).toBeVisible();
+    await page.getByTestId('remove-confirm-accept').click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId('guard-report')).toBeVisible();
+    await expect(removeButton).toBeFocused();
   });
 });

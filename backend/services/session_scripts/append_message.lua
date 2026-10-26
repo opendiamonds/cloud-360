@@ -25,6 +25,8 @@
 -- ARGV[2] 本則訊息（JSON 物件）
 -- ARGV[3] 該段的筆數上限（`BRAIN_SESSION_HISTORY_MAX`）
 -- ARGV[4] TTL 秒數（`BR1.3`：每次互動續期）
+-- ARGV[5] 該段序列化後的位元組上限（`DEFAULT_SEGMENT_MAX_BYTES`，200 KB；
+--         `merge-blockers.md` 第 18 項）
 --
 -- 回傳 {修剪後的筆數, 本次丟棄的筆數}
 --   第二個值餵 `session_history_trimmed` 的 DEBUG 日誌（`droppedCount`）。
@@ -34,6 +36,7 @@ local key = KEYS[1]
 local field = ARGV[1]
 local cap = tonumber(ARGV[3])
 local ttl = tonumber(ARGV[4])
+local max_bytes = tonumber(ARGV[5])
 
 local raw = redis.call('HGET', key, field)
 if not raw then raw = '[]' end
@@ -52,9 +55,28 @@ message.sequence = next_seq
 arr[#arr + 1] = message
 local before = #arr
 
--- `BR3.4`：自**最舊**端丟棄到等於上限為止。丟最新會讓 `U11` 的「第 N−1 輪
--- 產出」永遠查不到，而長度看起來完全正常。
-while #arr > cap do
+-- `BR3.4`：自**最舊**端丟棄，直到「筆數 ≤ cap **且** 整段位元組 ≤ max_bytes」
+-- 兩者都成立（取較嚴者，`merge-blockers.md` 第 18 項）。丟最新會讓 `U11` 的
+-- 「第 N−1 輪產出」永遠查不到，而長度看起來完全正常。
+--
+-- 位元組以 `string.len`（位元組，不是字元）量 `cjson.encode` 的輸出：整段
+-- `[a,b,…]` 的長度 = 2（括號）＋ 各則長度 ＋ (n−1)（逗號），故每則只編碼一次，
+-- 不在迴圈內反覆編碼整段（成本與段大小成正比，而段大小已被本上限封住）。
+-- `session_types.trim_history` 以同一個算式量同一個東西（`cjson_encoded_size`）。
+--
+-- 剩一則時停止：最新的一則永遠保留。單則訊息不可能超過上限（後端建構時以算式
+-- 確認），這條界線只保證段不會被清空——cjson 會把空表編成 `{}` 而非 `[]`。
+local sizes = {}
+local total = 2
+for i = 1, #arr do
+  sizes[i] = string.len(cjson.encode(arr[i]))
+  total = total + sizes[i]
+end
+total = total + (#arr - 1)
+
+while #arr > 1 and (#arr > cap or total > max_bytes) do
+  total = total - sizes[1] - 1
+  table.remove(sizes, 1)
   table.remove(arr, 1)
 end
 

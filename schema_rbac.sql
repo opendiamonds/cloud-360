@@ -362,7 +362,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_projects_default_per_owner
 COMMENT ON COLUMN projects.is_default IS
   'U4/BR1.3: migration-idempotency carrier. At most one TRUE row per owner (uq_projects_default_per_owner). Written ONLY by services/hierarchy_migration.py; not a user-editable attribute.';
 COMMENT ON COLUMN projects.owner_user_id IS
-  'U4: who owns this project. Deletion behaviour of the referenced user is deliberately NOT decided (OQ-H1, landing U7) — no ON DELETE clause, same as user_diagrams.user_id.';
+  'U4: who owns this project. Still no ON DELETE clause (= NO ACTION), same as user_diagrams.user_id. OQ-H1 DECIDED 2026-10-20 (merge blocker #3), enforced in the APPLICATION, not here: user_router._hard_delete_user deletes, in the same transaction, the user''s EMPTY default project (is_default, no diagram under any of its systems, no member other than the owner) together with its systems and member rows; any other project owned by the user makes the delete answer 409 listing what still points at the user. A commit-time IntegrityError from a reference the pre-check does not know about is also turned into 409, never 500.';
 
 CREATE TABLE IF NOT EXISTS systems (
   id SERIAL PRIMARY KEY,
@@ -595,8 +595,9 @@ END $$;
 CREATE TABLE IF NOT EXISTS project_members (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-  -- [ND1]=A：使用者硬刪除的行為**上游刻意未決**（OQ-H1），故**無 ON DELETE 子句**
-  -- ——沿用 projects.owner_user_id 的同一個慣例（本檔 H) 區塊），不自行決定。
+  -- [ND1]=A：**無 ON DELETE 子句**——沿用 projects.owner_user_id 的同一個慣例
+  -- （本檔 H) 區塊）。OQ-H1 已於 2026-10-20 裁決並落在應用層
+  -- （user_router._hard_delete_user，見本欄 COMMENT），不改 DDL。
   user_id INTEGER NOT NULL REFERENCES users (id),
   role VARCHAR(32) NOT NULL,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -625,7 +626,7 @@ COMMENT ON TABLE project_members IS
 COMMENT ON COLUMN project_members.project_id IS
   'U18/[ND1]=A: ON DELETE CASCADE. A membership row is meaningless once its project is gone, and CASCADE additionally keeps already-shipped code working: hierarchy_service.delete_project() guards ONLY on is_default (:153) and on remaining systems (:156) — there is NO member guard — while every project gets at least one member row once U19 lands. RESTRICT would turn db.delete(project) (:161) into an uncaught IntegrityError at commit, i.e. a 500 instead of the message-carrying HierarchyConflictError that BR4.4 produces.';
 COMMENT ON COLUMN project_members.user_id IS
-  'U18/[ND1]=A: deletion behaviour of the referenced user is deliberately NOT decided (OQ-H1, landing U19) — no ON DELETE clause, same as projects.owner_user_id and user_diagrams.user_id.';
+  'U18/[ND1]=A: no ON DELETE clause (= NO ACTION), same as projects.owner_user_id and user_diagrams.user_id. OQ-H1 DECIDED 2026-10-20 (merge blocker #3), enforced in the APPLICATION (user_router._hard_delete_user): the user''s own row in an EMPTY default project he owns is removed together with that project; a membership (user_id) or invitation (invited_by) row in ANY other project makes the user delete answer 409 with the count, and the row is left untouched. Never 500.';
 COMMENT ON COLUMN project_members.role IS
   'U18/OPEN-P2: per-project role, closed enum (project_admin | member) per the K-16 ProjectRole type. SAME NAME, DIFFERENT MEANING from the global role in users.role / role_permissions — see services/rbac.py CANONICAL_ROLES, which contains a global Project_Admin that is NOT this. The database cannot enforce that distinction, so this comment is the only place it is written down; FR12.6 requires BOTH layers to pass and neither substitutes for the other.';
 COMMENT ON COLUMN project_members.joined_at IS

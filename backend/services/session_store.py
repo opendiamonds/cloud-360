@@ -63,6 +63,7 @@ from services.redis_gateway import (
 )
 from services.session_errors import SessionMessageTooLong
 from services.session_types import (
+    DEFAULT_SEGMENT_MAX_BYTES,
     META_FIELD,
     SEGMENT_SHARED,
     SHARING_ISOLATED,
@@ -81,7 +82,12 @@ from services.session_types import (
     target_field,
     work_item_field,
 )
+import enum
 import json as _json
+
+# 工作項容量的**正本**在 `U12` 的純函式層（零 I/O、只依賴 `intent_routing_types`），
+# 本模組只把它們經 `ARGV` 交給 Lua，不抄第二份（`team.md`「單一真實來源」）。
+from services import work_orchestrator_rules as _work_rules
 
 logger = logging.getLogger("cloud360.session_store")
 
@@ -90,6 +96,31 @@ logger = logging.getLogger("cloud360.session_store")
 #: `scripts_dir` 讀檔，不需要先登錄。
 SCRIPT_PUT_WORK_ITEM = "put_work_item"
 SCRIPT_UPDATE_WORK_ITEM = "update_work_item"
+
+
+class WorkItemPutResult(enum.Enum):
+    """`put_work_item` 的三種結果（合併前必修第 18 項）。
+
+    `bool(result)` 只在 `WRITTEN` 時為真，故既有的「`if not put_work_item(...)`」
+    寫法語意不變；需要區分「已到期或重複」與「已達上限」的呼叫端（`U12` 的
+    `dispatch`）直接比對成員。
+    """
+
+    WRITTEN = "written"
+    #: key 不存在（工作階段已到期）或同一個 workItemId 已存在。
+    REJECTED = "rejected"
+    #: 同一工作階段的進行中（處理中＋等待中）工作項已達上限。
+    CAPACITY_EXCEEDED = "capacity_exceeded"
+
+    def __bool__(self) -> bool:
+        return self is WorkItemPutResult.WRITTEN
+
+
+def _terminal_statuses_json() -> str:
+    # 排序後編碼：ARGV 內容決定性，便於與參考實作逐位元比對。
+    return _json.dumps(
+        sorted(_work_rules.TERMINAL_STATUSES), ensure_ascii=False, separators=(",", ":")
+    )
 
 #: `NFR8.40`：每段訊息筆數上限的**具名環境變數**，**無預設值**。
 HISTORY_MAX_ENV = "BRAIN_SESSION_HISTORY_MAX"
@@ -102,15 +133,26 @@ HISTORY_MAX_ENV = "BRAIN_SESSION_HISTORY_MAX"
 #:
 #:   * 選 4000 的理由：`scalability-requirements.md` 的每則平均 **500 B** 是
 #:     *假設值*，4000 字元給它 8 倍餘裕，不會拒絕現實中的訊息。
-#:   * **它不滿足的那一項**：最壞情況 3 段 × 200 則 × 4000 字元遠大於該檔用
-#:     平均值算出的 300 KB／session，故 `NFR4.40` 的「300 個同時存活」只在
-#:     *平均* 假設下成立，在最壞情況下不成立。`NFR4.41` 要的「**可計算的**硬
-#:     上界」本條已滿足（上界存在且可算），偵測面是 `NFR4.60` 的使用率訊號 ＋
-#:     `[N3]`=A 的 `noeviction`。
+#:   * **它單獨封不住容量**：3 段 × 200 則 × 4000 字元遠大於以平均值算出的
+#:     300 KB／session。這一項由**每段 200 KB 的位元組上限**
+#:     （`session_types.DEFAULT_SEGMENT_MAX_BYTES`，`merge-blockers.md` 第 18 項）
+#:     關掉：修剪取「筆數上限」與「位元組上限」較嚴者，最壞情況因此是
+#:     對話 3 × 200 KiB ≈ 600 KiB／session；加上同 key 的 `U12` 工作項（進行中
+#:     ≤ 5、已結束 ≤ 20，每筆以序列化後位元組封頂，最壞 81,000 B ≈ 79.1 KiB）
+#:     合計 695,400 B ≈ 679.1 KiB，對 `maxmemory 256mb` 的 80% 約 308.8 個 session
+#:     （`NFR4.40` 要求 ≥ 300；常數在 `work_orchestrator_rules.py`，算式見 `DEPLOY.md`）。
 #:
 #: 刻意**不**為它新增第二個環境變數：`NFR8.41`／本計畫只授權一個新依賴與一個
 #: 新環境變數，而把產品面的輸入長度限制偷偷變成運維設定會讓它更難被看見。
 DEFAULT_MESSAGE_MAX_CHARS = 4000
+
+#: 單則訊息序列化後每個字元**最多**佔的位元組數。UTF-8 一個碼點最多 4 位元組，
+#: 但 cjson 對控制字元與 `0x7f` 輸出 `\u00XX`（6 位元組），故取 6。
+MAX_ENCODED_BYTES_PER_CHAR = 6
+
+#: 單則訊息除 `text` 以外的封套（`role`、`createdAt`、`sequence` 與鍵名、引號）
+#: 的保留量。`role` 由 `U13` 依對話協定給值（不是使用者輸入），1 KB 綽綽有餘。
+MESSAGE_ENVELOPE_RESERVE_BYTES = 1024
 
 
 def resolve_history_max(env: Optional[Any] = None) -> int:
@@ -152,9 +194,10 @@ def configure_session_env(env: Optional[Any] = None) -> int:
     """
     history_max = resolve_history_max(env)
     logger.info(
-        "session store 設定已解析：每段歷程上限 %s 則、TTL %s 秒、"
+        "session store 設定已解析：每段歷程上限 %s 則且 %s 位元組、TTL %s 秒、"
         "單則訊息上限 %s 字元",
         history_max,
+        DEFAULT_SEGMENT_MAX_BYTES,
         SESSION_TTL_SECONDS,
         DEFAULT_MESSAGE_MAX_CHARS,
     )
@@ -180,9 +223,24 @@ class SessionStore:
         hierarchy_facade: Any,
         history_max: Optional[int] = None,
         message_max_chars: int = DEFAULT_MESSAGE_MAX_CHARS,
+        segment_max_bytes: int = DEFAULT_SEGMENT_MAX_BYTES,
         ttl_seconds: int = SESSION_TTL_SECONDS,
         now: Callable[[], str] = _utc_now_iso,
     ) -> None:
+        # 前提（`merge-blockers.md` 第 18 項）：**單則訊息不可能超過每段位元組上限**，
+        # 故修剪不需要「單則超限」分支。以算式確認而不是假設——不成立時拒絕建構，
+        # 而不是讓修剪在剩一則時停下、默默放行一個超限的段。用 `raise` 而非
+        # `assert`：`python -O` 會拿掉 `assert`。
+        worst_single = (
+            message_max_chars * MAX_ENCODED_BYTES_PER_CHAR
+            + MESSAGE_ENVELOPE_RESERVE_BYTES
+            + 2  # 整段只有這一則時的 `[` `]`
+        )
+        if worst_single > segment_max_bytes:
+            raise ValueError(
+                f"單則訊息最壞 {worst_single} 位元組超過每段上限 "
+                f"{segment_max_bytes} 位元組：修剪無法保證段在上限內"
+            )
         self._gateway = gateway
         # `K-07` 的 facade。鴨子型別，見模組 docstring：本模組不 import
         # `hierarchy_facade`，故 import 集合裡沒有 DB 型別。
@@ -191,6 +249,7 @@ class SessionStore:
             history_max if history_max is not None else resolve_history_max()
         )
         self._message_max_chars = message_max_chars
+        self._segment_max_bytes = segment_max_bytes
         self._ttl_seconds = ttl_seconds
         self._now = now
 
@@ -271,7 +330,13 @@ class SessionStore:
             method,
             SCRIPT_APPEND_MESSAGE,
             [session_key],
-            [segment_field(segment_id), payload, self._history_max, self._ttl_seconds],
+            [
+                segment_field(segment_id),
+                payload,
+                self._history_max,
+                self._ttl_seconds,
+                self._segment_max_bytes,
+            ],
             idempotent=False,
             segment_id=segment_id,
         )
@@ -346,10 +411,12 @@ class SessionStore:
                     session_log_fields(sessionKey=session_key, segmentId=scope),
                 )
         else:
+            # 寫 `meta` 與續期同一個交易（`merge-blockers.md` 第 12 項，與
+            # `set_work_target` 同形）。讀→改→寫本身仍是兩次 round-trip，見
+            # `code-summary.md` 對並行寫入的記載。
             meta = self._load_meta(method, session_key)
             meta["pageModes"][scope] = mode
-            self._write_meta(method, session_key, meta, idempotent=True)
-            self._gateway.expire(method, session_key, self._ttl_seconds)
+            self._write_meta_and_expire(method, session_key, meta)
 
         return self._reload(method, session_key)
 
@@ -392,19 +459,23 @@ class SessionStore:
         )
 
         self._ensure_meta(method, session_key)
-        self._gateway.hset(
+        # 寫入與續期以**同一個交易**送出（`merge-blockers.md` 第 12 項）：分開送時
+        # 兩者之間中斷，或 key 恰好在兩者之間到期而被 `HSET` 重建，都會留下一個
+        # 沒有 TTL 的 key。
+        self._gateway.hset_fields_and_expire(
             method,
             session_key,
-            target_field(segment_id),
-            encode_target(
-                resolved.get("projectId"),
-                resolved.get("systemId"),
-                resolved.get("diagramId"),
-            ),
+            {
+                target_field(segment_id): encode_target(
+                    resolved.get("projectId"),
+                    resolved.get("systemId"),
+                    resolved.get("diagramId"),
+                )
+            },
+            self._ttl_seconds,
             idempotent=True,
             segment_id=segment_id,
         )
-        self._gateway.expire(method, session_key, self._ttl_seconds)
         return self._reload(method, session_key)
 
     # -- 工作項（`U12 work-orchestrator` 的跨單元新增；`BR52.4`／`BR52.7`）----
@@ -423,8 +494,12 @@ class SessionStore:
         self._require_session_key(session_key)
         return decode_work_items(self._gateway.hgetall("load_work_items", session_key))
 
-    def put_work_item(self, session_key: str, item: dict) -> bool:
-        """新建一個工作項欄位。key 不存在或欄位已存在 → 回 False 且不寫入。
+    def put_work_item(self, session_key: str, item: dict) -> WorkItemPutResult:
+        """新建一個工作項欄位，回 `WorkItemPutResult`（`bool` 只在已寫入時為真）。
+
+        - key 不存在或欄位已存在 → `REJECTED`，不寫入；
+        - 進行中（非終態）已達 `MAX_ACTIVE_WORK_ITEMS` → `CAPACITY_EXCEEDED`，不寫入
+          （合併前必修第 18 項；計數與寫入在同一支 Lua 內，併發交辦不會一起越線）。
 
         **不得以 `HSET`／`HSETNX` 直接寫**：key 已到期時那會重建一個沒有到期
         時間、沒有 `meta` 的 key（`U12` 的 `NFR12.18`）。
@@ -433,14 +508,26 @@ class SessionStore:
         self._require_session_key(session_key)
         field = work_item_field(item.get("workItemId"))
         payload = _json.dumps(item, ensure_ascii=False, separators=(",", ":"))
-        result = self._gateway.eval_script(
-            method,
-            SCRIPT_PUT_WORK_ITEM,
-            [session_key],
-            [field, payload],
-            idempotent=False,
+        result = int(
+            self._gateway.eval_script(
+                method,
+                SCRIPT_PUT_WORK_ITEM,
+                [session_key],
+                [
+                    field,
+                    payload,
+                    str(_work_rules.MAX_ACTIVE_WORK_ITEMS),
+                    _terminal_statuses_json(),
+                ],
+                idempotent=False,
+            )
+            or 0
         )
-        return int(result or 0) == 1
+        if result == 1:
+            return WorkItemPutResult.WRITTEN
+        if result == -1:
+            return WorkItemPutResult.CAPACITY_EXCEEDED
+        return WorkItemPutResult.REJECTED
 
     def update_work_item(
         self,
@@ -455,6 +542,10 @@ class SessionStore:
 
         `patch` 只含要改的欄位；值為 `None` 即設為 null，未出現的欄位不動——
         故呼叫端不可能以過期副本覆寫別人剛寫入的欄位（例如 `estimateSetId`）。
+
+        補丁使該項由非終態轉為終態時，腳本在同一次原子執行內把終態項修剪到
+        `MAX_TERMINAL_WORK_ITEMS` 筆（刪最舊的**其他**終態項；進行中項永不刪；
+        合併前必修第 18 項）。
         """
         method = "update_work_item"
         self._require_session_key(session_key)
@@ -472,6 +563,8 @@ class SessionStore:
                 _json.dumps(statuses, ensure_ascii=False, separators=(",", ":")),
                 expected_dispatch_stage,
                 _json.dumps(patch, ensure_ascii=False, separators=(",", ":")),
+                str(_work_rules.MAX_TERMINAL_WORK_ITEMS),
+                _terminal_statuses_json(),
             ],
             idempotent=False,
         )
@@ -498,17 +591,19 @@ class SessionStore:
     def _load_meta(self, method: str, session_key: str) -> dict:
         return decode_meta(self._gateway.hget(method, session_key, META_FIELD))
 
-    def _write_meta(self, method: str, session_key: str, meta: dict, *, idempotent: bool) -> None:
-        self._gateway.hset(
+    def _write_meta_and_expire(self, method: str, session_key: str, meta: dict) -> None:
+        self._gateway.hset_fields_and_expire(
             method,
             session_key,
-            META_FIELD,
-            encode_meta(
-                user_id=meta.get("userId"),
-                page_modes=meta.get("pageModes") or default_page_modes(),
-                created_at=meta.get("createdAt") or {},
-            ),
-            idempotent=idempotent,
+            {
+                META_FIELD: encode_meta(
+                    user_id=meta.get("userId"),
+                    page_modes=meta.get("pageModes") or default_page_modes(),
+                    created_at=meta.get("createdAt") or {},
+                )
+            },
+            self._ttl_seconds,
+            idempotent=True,
         )
 
     def _ensure_meta(self, method: str, session_key: str) -> None:
@@ -524,22 +619,29 @@ class SessionStore:
         `code-summary.md`，處置是：`set_work_target` 會把它補上，而
         `sessionKey` 本身就是由使用者 id 推導的（`x-session-key-derivation`），
         故讀取端在它為 `null` 時仍可自行解析。**不自行從任何地方猜它。**
+
+        **建立與 TTL 同一個交易**（`merge-blockers.md` 第 12 項，裁決 MULTI／EXEC）：
+        原本是兩次獨立 `HSET`、TTL 要等呼叫端下一個指令才設；兩者之間行程中止就
+        留下一個**永不過期**的 key。現在 `meta`、`seg:shared` 與 `EXPIRE` 一起
+        EXEC——EXEC 之前中斷則 key 根本不存在，下一次寫入會重新建立它。
+
+        **並行的第一次寫入以 `HSETNX` 收斂**：`EXISTS` 與交易之間不是原子的，
+        兩個並行的第一次寫入都可能看到「不存在」。預設值因此以 `only_if_absent`
+        （`HSETNX`）寫入——後到者不會把先到者剛追加的 `seg:shared` 蓋回 `[]`，
+        只會續期 TTL。`EXISTS` 保留為快速路徑（常態下省一次交易）。
         """
         if self._gateway.exists(method, session_key):
             return
-        self._gateway.hset(
+        self._gateway.hset_fields_and_expire(
             method,
             session_key,
-            META_FIELD,
-            self._default_meta(),
+            {
+                META_FIELD: self._default_meta(),
+                segment_field(SEGMENT_SHARED): encode_messages(()),
+            },
+            self._ttl_seconds,
             idempotent=True,
-        )
-        self._gateway.hset(
-            method,
-            session_key,
-            segment_field(SEGMENT_SHARED),
-            encode_messages(()),
-            idempotent=True,
+            only_if_absent=True,
         )
 
     def _reload(self, method: str, session_key: str) -> BrainSession:
@@ -556,10 +658,13 @@ class SessionStore:
 
 __all__ = [
     "DEFAULT_MESSAGE_MAX_CHARS",
+    "MAX_ENCODED_BYTES_PER_CHAR",
+    "MESSAGE_ENVELOPE_RESERVE_BYTES",
     "SCRIPT_PUT_WORK_ITEM",
     "SCRIPT_UPDATE_WORK_ITEM",
     "HISTORY_MAX_ENV",
     "SessionStore",
+    "WorkItemPutResult",
     "configure_session_env",
     "resolve_history_max",
 ]

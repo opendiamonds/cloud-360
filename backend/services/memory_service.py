@@ -46,6 +46,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models import MemoryAuditEvent, MemoryRecord
+from services.memory_errors import MemoryNotFound
 from services.memory_types import (
     AUDIT_ACTION_DELETED_BY_USER,
     AUDIT_ACTION_SCOPE_CHANGED,
@@ -391,9 +392,12 @@ def scored_candidates(
     **距離取負號成為分數**：`<=>` 是距離（越小越相似），而
     `rank_candidates` 以分數**遞減**為主鍵。少了這個取負號，排序方向會整個反過來
     ——最不相似的列會排在最前面，而結果**仍然是決定性的**，所以
-    `NFR3.24` 的字面仍然滿足。這是本轉換唯一的風險點，由
-    `test_memory_authz` 之外的 `C6` 無法覆蓋，故 `rank_candidates` 的
-    PBT 第 2 條性質（分數序列非遞增）是它唯一的機械防線。
+    `NFR3.24` 的字面仍然滿足。這是本轉換唯一的風險點。
+
+    `rank_candidates` 的 PBT 吃的是手造分數，**驗不到這個取負號**（合併前必修
+    第 22 項 (a)）。它的機械防線是 `tests/test_memory_ranking.py` 的
+    `ScoredCandidatesRealDistanceTest`（以真實距離值餵本函式，斷言較近者在前），
+    以及 `tests_pg/test_memory_service_pg.py` 的 `V1`（真實 `<=>` 距離）。
     """
     return [
         ScoredCandidate(identifier=str(record.id), score=-distance)
@@ -478,20 +482,48 @@ def delete_with_audit(
     **一次 `commit()`。** 兩次 commit 會產生「記憶沒了但沒稽核」的半套狀態，
     直接違反 `FR4.7`，且事後無法補救。
 
-    稽核列**刻意先 `add` 再刪記憶**：順序對結果沒有影響（同一交易），
-    但它讓「稽核是這個操作的一部分」在程式碼上一眼看得出來。
-    `memory_id` 在記憶被刪後仍然有效，因為該欄**沒有外鍵**（`DG-1`）
-    ——這正是 `S11` 在真實 PostgreSQL 上斷言的那件事。
+    ## 先刪、看實際影響列數，**為 0 才不寫稽核**（`BR4.3`，合併前必修第 22 項 (c)）
+
+    呼叫端（facade）在**取列之後**才呼叫本函式，而兩者之間該列可能已被另一個
+    session 刪掉。舊實作以 `db.delete(record)` 刪除：影響 0 列時 SQLAlchemy
+    只發 `SAWarning` 而不報錯，於是第二筆 `deleted_by_user` 稽核照樣寫入
+    （審查 review-03 實測稽核列數為 2）。
+
+    故改為**以 `DELETE ... WHERE id = :id` 直接下刪除並讀回影響列數**：
+    在 PostgreSQL 上，後到的 `DELETE` 會被先到者的列鎖擋住，鎖釋放後重新評估
+    `WHERE` 得 0 列——判定是資料庫給的，不是應用層的「先查再刪」（那會有同一個
+    競態窗口）。為 0 時回滾並拋 `MemoryNotFound`、**不寫稽核**，與「刪除不存在
+    的記憶」同一個結果（`AC4.2.*`）。SQLite 的 `rowcount` 語意相同，故測試路徑
+    不需分支。
+
+    **不用 `SELECT ... FOR UPDATE`**：`with_for_update()` 在 SQLite dialect 下被
+    **靜默丟棄**（`tests_pg/__init__.py` 實測記錄），而影響列數在兩個方言上都
+    是真的。
+
+    稽核在刪除**之後**才 `add`：兩者仍在同一個交易、同一次 `commit()`，任一失敗
+    則兩者皆不生效（`A15`）。`memory_id` 在記憶被刪後仍然有效，因為該欄
+    **沒有外鍵**（`DG-1`）——這正是 `S11` 在真實 PostgreSQL 上斷言的那件事。
+
+    例外內的 id 是本函式手上的整數鍵；對外的 `detail` 由 facade 以呼叫端送來的
+    原值重拋，使競態下的 404 與一般「不存在」逐字相同（`[D1]`=A）。
     """
+    memory_id = record.id
+    deleted = (
+        db.query(MemoryRecord)
+        .filter(MemoryRecord.id == memory_id)
+        .delete(synchronize_session="evaluate")
+    )
+    if deleted != 1:
+        db.rollback()
+        raise MemoryNotFound(str(memory_id))
     db.add(
         MemoryAuditEvent(
-            memory_id=record.id,
+            memory_id=memory_id,
             actor_user_id=actor_user_id,
             action=AUDIT_ACTION_DELETED_BY_USER,
             occurred_at=datetime.now(timezone.utc),
         )
     )
-    db.delete(record)
     db.commit()
 
 

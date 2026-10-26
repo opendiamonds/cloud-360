@@ -14,8 +14,11 @@ async function login(page: Page, username: string, password: string) {
   await page.getByPlaceholder('請輸入您的帳號').fill(username);
   await page.getByPlaceholder('請輸入密碼').fill(password);
   await page.getByRole('button', { name: '登入系統' }).click();
-  // U14：具 K1 者的落點為入口頁 /；以「離開 /login」判定登入完成，正向錨點為呼叫端隨後的 /cost 斷言。
+  // U14：具 K1 者的落點為入口頁 /。「離開 /login」在 /waiting-approval、/403 也成立，
+  // 故再加正向落點（合併前必修第 26 項 (e)）；呼叫端隨後的 /cost 斷言是頁面錨點。
   await expect(page).not.toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('brain-entry-page')).toBeVisible();
 }
 
 test.describe('估價工作區（U8）', () => {
@@ -25,7 +28,7 @@ test.describe('估價工作區（U8）', () => {
    * @api GET /api/cost/v1/sets/{set_id} -> 200 | 讀取估價表明細
    * @ui /cost | 估價工作區：上傳區、雲別明細卡、機械檢查、隱私徽章
    * @given seed 帳號 admin / admin123，角色 Platform_Admin（具 C1 view/edit）
-   * @step 以 admin 登入並前往 /cost | 顯示 data-testid=cost-page、工作負載表單與上傳區
+   * @step 以 admin 登入（落在入口頁 /，brain-entry-page 可見）並前往 /cost | 顯示 data-testid=cost-page、工作負載表單與上傳區
    * @step 可選填寫系統說明後選擇 fixtures/aws-estimate.csv 並按「開始上傳」 | 後端接受並回傳明細
    * @step 檢視明細區 | 出現 estimate-cloud-card 與 estimate-checks-panel
    * @pass 雲別卡與檢查面板皆可見，且頁面仍在 /cost
@@ -63,7 +66,7 @@ test.describe('估價工作區（U8）', () => {
    * @purpose 三雲教學按鈕開啟多頁彈窗（官網截圖＋匯出說明），官方連結另開，按鈕本身不是裸外連。
    * @given seed 帳號 admin / admin123，角色 Platform_Admin（具 C1 view）
    * @ui /cost | 官方估價教學：estimate-official-calculators、教學 dialog
-   * @step 登入後開啟 /cost | 看到 estimate-official-calculators 與 official-calc-aws
+   * @step 登入（落在入口頁 /，brain-entry-page 可見）後開啟 /cost | 看到 estimate-official-calculators 與 official-calc-aws
    * @step 點擊 AWS 教學按鈕 | 出現 role=dialog 且 data-testid=estimate-calc-guide-aws，畫面含截圖
    * @step 按「下一頁」直到最後一頁 | official-calc-link-aws 的 href 包含 calculator.aws
    * @step 按「完成」 | dialog 關閉，網址仍為 /cost

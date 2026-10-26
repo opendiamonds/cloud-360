@@ -21,6 +21,7 @@ from services.embedding_port import configure_embedding_env
 from services.session_store import configure_session_env
 from services.intent_routing_config import configure_intent_routing_env
 from database import init_db
+from services.membership_backfill import ensure_project_members_on_startup
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -89,6 +90,12 @@ def on_startup():
         app, membership_facade_factory=membership_facade.MembershipFacade
     )
     init_db()
+    # U19 合併前必修第 15 項（2026-10-20 使用者裁決：啟動時自動補齊）：為零成員列的
+    # 既有專案補上擁有者的 project_admin 列。必須在 init_db() 之後（表由它的
+    # create_all 建立）；**失敗即拋**，讓啟動失敗——擁有者被擋在自己專案外是無聲的
+    # 權限錯誤，不得「服務照常啟動但沒補到」。刻意放在這裡而非 database.py
+    # （NFR12.5：該檔不動；那裡的 _ensure_* 家族會吞掉失敗）。
+    ensure_project_members_on_startup()
 
 
 @app.on_event("shutdown")

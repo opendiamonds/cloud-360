@@ -34,7 +34,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Optional, Tuple
 
 # ---------------------------------------------------------------------------
@@ -192,6 +192,44 @@ class ClarifyCandidate:
     confidence: Optional[float] = None
 
 
+# ---------------------------------------------------------------------------
+# 澄清選定後的還原對照（**行程內、不序列化**；合併前必修第 5 項）
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ClarifyOption:
+    """一個澄清候選**代表的完整意圖**與它所屬的槽位。
+
+    `ClarifyCandidate`（`K-10` 的線上形狀）只有 `id`／`label`／`capability`／
+    `confidence`，**沒有 `referent`、沒有槽位**——欄位集合由契約固定，本單元不改
+    （`ws-contract.json` 也一字不動）。於是閘道在使用者選定之後只能以
+    `Intent(capability, None)` 重建判定，被選槽位的 `referent` 與同一句話裡其他
+    **已確定**槽位的意圖全部遺失（`merge-blockers.md` 第 5 項）。本型別把還原
+    所需的資訊留在**行程內**，不上線。
+    """
+
+    candidate_id: str
+    slot_index: int
+    intent: Intent
+
+
+@dataclass(frozen=True)
+class ClarifyResolution:
+    """澄清判定附帶的行程內對照，供閘道在選定後還原整句的意圖。
+
+    - `options`：每個澄清候選（依 `IntentDecision.candidates` 的順序）→ 完整
+      `Intent`（含原 `referent`）與所屬槽位序。
+    - `settled`：**可單選**的槽位 → 它的 rank 1 `Intent`，依槽位序。
+
+    以 tuple 而不是 dict 承載：frozen dataclass 內放可變映射會讓「不可變」只是
+    外殼，而 `NFR3.67` 禁止行程內共享可變狀態。
+    """
+
+    options: Tuple[ClarifyOption, ...]
+    settled: Tuple[Tuple[int, Intent], ...]
+
+
 @dataclass(frozen=True)
 class IntentDecision:
     """本單元對外的判定結果。**欄位集合由 `K-10` 固定。**
@@ -205,12 +243,21 @@ class IntentDecision:
     授權——故本站的處置是讓無分數時的取值成為一個**具名、可觀測、單一落點**的
     推導（見 `intent_routing_predicate.derive_contract_confidence`），而不是
     悄悄把型別改成 `Optional[float]`。
+
+    `resolution` **不是 `K-10` 的欄位**：它是**行程內、不序列化**的附帶資料
+    （合併前必修第 5 項，對 `K-10` 欄位集合的對齊紀錄見 `code-summary.md`），
+    只在 `below_threshold` 為真時由 `decide` 填入，閘道據以在使用者選定候選後
+    還原 `referent` 與其他已確定槽位的意圖。`compare=False`：它由同一份分類結果
+    決定性地推導，不構成判定本身的差異；`repr=False`：其中的 `referent` 是解析
+    使用者句子得到的內容，不得因有人把判定物件交給 logger 而被記出去
+    （`SEC-3`／`SEC-5`）。
     """
 
     intents: Tuple[Intent, ...]
     confidence: float
     below_threshold: bool
     candidates: Optional[Tuple[ClarifyCandidate, ...]] = None
+    resolution: Optional[ClarifyResolution] = field(default=None, compare=False, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +313,8 @@ __all__ = [
     "CandidateIntent",
     "CandidateRanking",
     "ClarifyCandidate",
+    "ClarifyOption",
+    "ClarifyResolution",
     "ClassificationResult",
     "Intent",
     "IntentDecision",

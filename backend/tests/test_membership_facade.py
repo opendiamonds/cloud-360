@@ -19,26 +19,33 @@ import tests.helpers  # noqa: F401  必須最先匯入：處理 sys.path 與 psy
 
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from sqlalchemy import event as _sa_event
+from sqlalchemy.exc import OperationalError
 
 from models import ProjectMember, ReselectionEvent
 import services.hierarchy_service as hierarchy_service
 import services.membership_service as membership_service
-from services.hierarchy_facade import mint_principal
+from services.hierarchy_facade import PROJECT_NOT_FOUND_DETAIL, mint_principal
 from services.membership_errors import (
     LastAdminGuard,
     MembershipForbidden,
+    MembershipLockTimeout,
     MembershipNotFound,
     MissingGlobalPermission,
 )
+
+listen = _sa_event.listen
 from services.membership_facade import MembershipFacade
 from services.membership_selection import select_successor
 from services.membership_types import MemberSnapshot, ProjectRole
 from tests.helpers import close_session, make_session, make_user
 
 ROLE_ADMIN = "Project_Architect"   # K3 view+edit
+ROLE_EDITOR = "Project_Editor"     # K3 view+edit（合格接手人的第二種角色）
 ROLE_VIEW_ONLY = "Developer"       # K3 view=True、edit=False
 ROLE_NO_K3 = "SRE"                 # K3 view=False、edit=False
 
@@ -342,10 +349,17 @@ class MembershipLifecycleTest(MembershipFacadeTestBase):
         這是 `AC12.5.2` 的 deny 側：bob 具 `K3.edit`（全域層過）但**不是**
         該專案的成員 → 仍須被拒。只檢查一層會讓「具全域權限但非本專案成員」
         的人讀到專案資料。
+
+        合併前必修第 14 項（`[PP-MB14]`=A）起，非成員的拒絕是 `MembershipNotFound`
+        （訊息與「專案不存在」相同、不含 id），不再是 `MembershipForbidden`。
         """
-        # 全域層過、per-project 層不過。
-        with self.assertRaises(MembershipForbidden):
+        # 全域層過、per-project 層不過 → 與「不存在」同一個 404 例外與訊息。
+        with self.assertRaises(MembershipNotFound) as not_member:
             self.facade.list_members(self.p_bob, project_id=self.project.id)
+        with self.assertRaises(MembershipNotFound) as missing:
+            self.facade.list_members(self.p_bob, project_id=self.project.id + 1000)
+        self.assertEqual(str(not_member.exception), PROJECT_NOT_FOUND_DETAIL)
+        self.assertEqual(str(missing.exception), str(not_member.exception))
         # per-project 層過（carol 是成員）、全域層不過（`K3.edit` 為 False）。
         self._add(self.carol, ProjectRole.PROJECT_ADMIN)
         self.assertTrue(self.facade.list_members(self.p_carol, project_id=self.project.id))
@@ -433,12 +447,19 @@ class MembershipAuditTest(MembershipFacadeTestBase):
         # 事件。那不是缺陷——在真實流程裡 `assert_can_deactivate` 會先擋下
         # 停用 alice 這件事，所以 `run_auto_reselection(alice)` 根本不會被呼叫。
         # 直接呼叫它等於構造一個守門本來就會攔住的狀態。
+        #
+        # 合併前必修第 1 ＋ 4 項起候選只含**合格接手人**（`K3.edit`、啟用、已核准），
+        # 故兩位候選用 `K3.edit` 的 erin／frank；carol（只有 `K3.view`）最早加入卻
+        # **不得**被選中——她在這裡同時是「挑選只看合格者」的反例。
+        erin = make_user(self.db, username="erin", role=ROLE_EDITOR)
+        frank = make_user(self.db, username="frank", role=ROLE_EDITOR)
         orphan = hierarchy_service.create_project(
             self.db, owner_user_id=self.bob.id, name="Orphan"
         )
         for user, when in (
-            (self.dave, datetime(2026, 3, 1, tzinfo=timezone.utc)),
-            (self.carol, datetime(2026, 2, 1, tzinfo=timezone.utc)),
+            (self.carol, datetime(2026, 1, 1, tzinfo=timezone.utc)),
+            (frank, datetime(2026, 3, 1, tzinfo=timezone.utc)),
+            (erin, datetime(2026, 2, 1, tzinfo=timezone.utc)),
         ):
             self.db.add(
                 ProjectMember(
@@ -449,13 +470,15 @@ class MembershipAuditTest(MembershipFacadeTestBase):
                 )
             )
         self.db.commit()
-        events = self.facade.run_auto_reselection(deactivated_user_id=self.bob.id)
-        self.assertEqual(len(events), 1)
-        auto = events[0]
+        outcome = self.facade.run_auto_reselection(deactivated_user_id=self.bob.id)
+        self.assertEqual(outcome.failed_project_ids, [])
+        self.assertEqual(len(outcome.events), 1)
+        auto = outcome.events[0]
         self.assertEqual(auto.project_id, orphan.id)
         self.assertEqual(auto.cause, membership_service.CAUSE_AUTO_RESELECTION)
-        # `BR4.2`：最早加入者（carol，2 月）而不是 dave（3 月）。
-        self.assertEqual(auto.promoted_user_id, self.carol.id)
+        # `BR4.2`：合格者中最早加入者（erin，2 月）——不是 frank（3 月），也不是
+        # 更早但不合格的 carol（1 月，只有 `K3.view`）。
+        self.assertEqual(auto.promoted_user_id, erin.id)
         # **同一欄，不同的人**：人工那一列是 alice（執行變更的管理者），
         # 這一列是 bob（被停用的 owner）。兩者都回答「這次變更是誰造成的」。
         self.assertEqual(auto.previous_owner_user_id, self.bob.id)
@@ -489,46 +512,266 @@ class MembershipAuditTest(MembershipFacadeTestBase):
             self.facade.list_my_pending_reselections(self.p_carol), []
         )  # 但橫幅沒有
 
-        # (b) 自動改選**要**產生橫幅。
+        # (b) 自動改選**要**產生橫幅。被改選的是 alice（`K3.edit`，合格接手人）
+        #     ——合併前必修第 1 ＋ 4 項起只有 `K3.edit` 的成員會被選中，故不再用
+        #     只有 `K3.view` 的 carol。
         orphan = hierarchy_service.create_project(
             self.db, owner_user_id=self.bob.id, name="Orphan"
         )
         self.db.add(
             ProjectMember(
                 project_id=orphan.id,
-                user_id=self.carol.id,
+                user_id=self.alice.id,
                 role=ProjectRole.MEMBER.value,
                 joined_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
             )
         )
         self.db.commit()
         self.assertEqual(
-            len(self.facade.run_auto_reselection(deactivated_user_id=self.bob.id)), 1
+            len(self.facade.run_auto_reselection(deactivated_user_id=self.bob.id).events),
+            1,
         )
-        pending = self.facade.list_my_pending_reselections(self.p_carol)
+        pending = self.facade.list_my_pending_reselections(self.p_alice)
         self.assertEqual(len(pending), 1)
         self.assertEqual(pending[0].cause, membership_service.CAUSE_AUTO_RESELECTION)
 
-        # (c) `BR4.3` 冪等：重跑**不執行、不寫事件**（carol 現在已是管理者）。
+        # (c) `BR4.3` 冪等：重跑**不執行、不寫事件**（alice 現在已是管理者）。
         total_before = len(self._events())
-        self.assertEqual(
-            self.facade.run_auto_reselection(deactivated_user_id=self.bob.id), []
-        )
+        again = self.facade.run_auto_reselection(deactivated_user_id=self.bob.id)
+        self.assertEqual((again.events, again.failed_project_ids), ([], []))
         self.assertEqual(len(self._events()), total_before)
 
         # (d) `BR5.6`：已讀以**事件**為鍵；確認之後該事件不再出現，
         #     但同一人第二次被改選時仍看得到（事件不同列）。
         self.assertTrue(
             self.facade.acknowledge_reselection(
-                self.p_carol, event_id=pending[0].id
+                self.p_alice, event_id=pending[0].id
             )
         )
-        self.assertEqual(self.facade.list_my_pending_reselections(self.p_carol), [])
+        self.assertEqual(self.facade.list_my_pending_reselections(self.p_alice), [])
         self.assertFalse(
             self.facade.acknowledge_reselection(
-                self.p_carol, event_id=pending[0].id
+                self.p_alice, event_id=pending[0].id
             )
         )
+
+
+class QualifiedSuccessorTest(MembershipFacadeTestBase):
+    """`F9`–`F11`：合併前必修第 1 ＋ 4 項——守門只在「無合格接手人」時擋下，
+    改選候選只含合格接手人（啟用、已核准、全域 `K3.edit`；`BR7.3`）。"""
+
+    def _project_with(self, *members, owner=None, name="Q"):
+        """建一個 alice 為唯一 `project_admin` 的專案，並加入指定的一般成員。"""
+        project = hierarchy_service.create_project(
+            self.db, owner_user_id=(owner or self.alice).id, name=name
+        )
+        rows = [(self.alice, ProjectRole.PROJECT_ADMIN, datetime(2025, 1, 1, tzinfo=timezone.utc))]
+        for index, user in enumerate(members):
+            rows.append(
+                (user, ProjectRole.MEMBER, datetime(2026, 1, 1 + index, tzinfo=timezone.utc))
+            )
+        for user, role, when in rows:
+            self.db.add(
+                ProjectMember(
+                    project_id=project.id, user_id=user.id, role=role.value, joined_at=when
+                )
+            )
+        self.db.commit()
+        return project
+
+    def test_F9_qualified_successor_lets_deactivation_through_and_is_promoted(self):
+        """
+        @purpose 最後一位管理者被停用時，有合格接手人就放行並自動改選（AC12.4.1 可達），而不是一律擋下
+        @given alice 是專案 P 的唯一 project_admin；erin（Project_Editor，K3.edit、啟用、已核准）是一般成員
+        @step 呼叫 assert_can_deactivate(alice) | 不拋例外（守門放行）
+        @step 呼叫 run_auto_reselection(alice) | 回一筆 auto_reselection 事件、無失敗專案
+        @step 讀 erin 在 P 的角色 | project_admin；事件的 previous_owner_user_id 為 alice
+        @pass 守門放行且 erin 被升任
+        @story US12.4
+        """
+        erin = make_user(self.db, username="erin", role=ROLE_EDITOR)
+        self._add(erin, ProjectRole.MEMBER)
+        self.assertIsNone(
+            self.facade.assert_can_deactivate(self.p_bob, target_user_id=self.alice.id)
+        )
+        outcome = self.facade.run_auto_reselection(deactivated_user_id=self.alice.id)
+        self.assertEqual(outcome.failed_project_ids, [])
+        self.assertEqual(len(outcome.events), 1)
+        event = outcome.events[0]
+        self.assertEqual(event.project_id, self.project.id)
+        self.assertEqual(event.cause, membership_service.CAUSE_AUTO_RESELECTION)
+        self.assertEqual(event.promoted_user_id, erin.id)
+        self.assertEqual(event.previous_owner_user_id, self.alice.id)
+        self.assertEqual(
+            membership_service.resolve_project_role(
+                self.db, project_id=self.project.id, user_id=erin.id
+            ),
+            ProjectRole.PROJECT_ADMIN.value,
+        )
+
+    def test_F10_unqualified_members_neither_unblock_the_guard_nor_get_promoted(self):
+        """
+        @purpose 停用中、待核准、只有 K3.view 的成員都不是合格接手人：守門照擋、改選不會升他們（BR7.3 第三種結果）
+        @given 三個獨立專案，各自只有 alice（唯一 project_admin）與一位不合格成員：停用的 Project_Editor、待核准的 Project_Editor、Developer（只有 K3.view）
+        @step 對每個專案呼叫 assert_can_deactivate(alice) | 拋 LastAdminGuard，且回報的專案含該專案
+        @step 呼叫 run_auto_reselection(alice) | 該專案不產生事件，該成員角色仍是 member
+        @pass 三種不合格成員各自都不能讓守門放行、也不被升任
+        @story US12.4
+        """
+        cases = {
+            "inactive": make_user(
+                self.db, username="ivy", role=ROLE_EDITOR, is_active=False
+            ),
+            "pending": make_user(
+                self.db, username="pat", role=ROLE_EDITOR, authorization_status="pending"
+            ),
+            "view_only": make_user(self.db, username="vic", role=ROLE_VIEW_ONLY),
+        }
+        # 先把 setUp 的 P 讓出去：補一位合格管理者，使 P 不干擾本測試的守門結果。
+        erin = make_user(self.db, username="erin", role=ROLE_EDITOR)
+        self._add(erin, ProjectRole.PROJECT_ADMIN)
+        projects = {
+            label: self._project_with(user, name=f"Q-{label}")
+            for label, user in cases.items()
+        }
+        with self.assertRaises(LastAdminGuard) as ctx:
+            self.facade.assert_can_deactivate(self.p_bob, target_user_id=self.alice.id)
+        blocked = {p.project_id for p in ctx.exception.projects}
+        for label, project in projects.items():
+            with self.subTest(candidate=label):
+                self.assertIn(
+                    project.id,
+                    blocked,
+                    f"{label} 成員讓守門放行了——它被當成合格接手人",
+                )
+
+        outcome = self.facade.run_auto_reselection(deactivated_user_id=self.alice.id)
+        promoted = {e.promoted_user_id for e in outcome.events}
+        for label, user in cases.items():
+            with self.subTest(candidate=label):
+                self.assertNotIn(user.id, promoted, f"{label} 成員被自動升為管理者")
+                # 無人能管的專案不得無聲（合併前必修第 10 項；review-03 Minor 2）：
+                # 它必須出現在失敗清單，端點才會回 500 讓管理員看見。
+                self.assertIn(
+                    projects[label].id,
+                    outcome.failed_project_ids,
+                    f"{label}：無合格接手人的專案沒有被回報為失敗",
+                )
+                self.assertEqual(
+                    membership_service.resolve_project_role(
+                        self.db, project_id=projects[label].id, user_id=user.id
+                    ),
+                    ProjectRole.MEMBER.value,
+                )
+
+    def test_F11_a_project_the_user_admins_but_does_not_own_is_also_reselected(self):
+        """
+        @purpose 改選範圍是「擁有的 ∪ 是最後管理者的」專案：守門放行了非擁有的專案，改選必須補上管理者，否則它停用後就沒有管理者
+        @given 專案 R 的擁有者是 bob（不是 R 的成員），alice 是 R 的唯一 project_admin，erin（K3.edit）是一般成員
+        @step 呼叫 assert_can_deactivate(alice) | 不拋例外
+        @step 呼叫 run_auto_reselection(alice) | R 產生一筆事件、erin 成為 R 的 project_admin
+        @pass 非擁有但為最後管理者的專案也被改選
+        @story US12.4
+        """
+        erin = make_user(self.db, username="erin", role=ROLE_EDITOR)
+        # setUp 的 P 由 alice 擁有且只有她一位管理者：補一位合格管理者使 P 不受阻。
+        self._add(erin, ProjectRole.PROJECT_ADMIN)
+        frank = make_user(self.db, username="frank", role=ROLE_EDITOR)
+        r = self._project_with(frank, owner=self.bob, name="R")
+        self.assertIsNone(
+            self.facade.assert_can_deactivate(self.p_bob, target_user_id=self.alice.id)
+        )
+        outcome = self.facade.run_auto_reselection(deactivated_user_id=self.alice.id)
+        self.assertEqual(outcome.failed_project_ids, [])
+        self.assertEqual([e.project_id for e in outcome.events], [r.id])
+        self.assertEqual(
+            membership_service.resolve_project_role(
+                self.db, project_id=r.id, user_id=frank.id
+            ),
+            ProjectRole.PROJECT_ADMIN.value,
+        )
+
+
+class LockTimeoutTest(unittest.TestCase):
+    """`F12`：合併前必修第 16 項——取鎖等待上限 5 秒，逾時轉 `MembershipLockTimeout`。
+
+    真實的逾時行為只在 PostgreSQL 上存在（`tests_pg` 的 `C4`）；這裡驗的是**本機
+    驗得到**的兩件事：送出的 SQL 與例外轉譯。
+    """
+
+    @staticmethod
+    def _pg_session():
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = "postgresql"
+        return db
+
+    def test_F12_postgres_sets_lock_timeout_before_locking_and_translates_55P03(self):
+        """
+        @purpose PostgreSQL 上取鎖前必須先 SET LOCAL lock_timeout，否則一筆卡住的交易會讓排隊者無限期佔用連線
+        @given 一個 dialect 為 postgresql 的 session 替身（記錄每次 execute 的 SQL）
+        @step 呼叫 lock_project(project_id=7) | 第一句 SQL 是 SET LOCAL lock_timeout = '5000ms'，第二句才是 FOR UPDATE
+        @step 讓取鎖那一句拋 SQLSTATE 55P03 | 轉成 MembershipLockTimeout(project_id=7)
+        @step 讓取鎖那一句拋其他 SQLSTATE | 原例外照拋，不被誤轉
+        @pass SQL 順序正確且只有 55P03 被轉成逾時
+        @story US12.3
+        """
+        db = self._pg_session()
+        membership_service.lock_project(db, project_id=7)
+        statements = [str(call.args[0]) for call in db.execute.call_args_list]
+        self.assertEqual(
+            statements[0],
+            f"SET LOCAL lock_timeout = '{membership_service.LOCK_TIMEOUT_MS}ms'",
+        )
+        self.assertEqual(membership_service.LOCK_TIMEOUT_MS, 5000)
+        self.assertIn("FOR UPDATE", statements[1])
+
+        class _PgError(Exception):
+            def __init__(self, sqlstate):
+                super().__init__(sqlstate)
+                self.sqlstate = sqlstate
+
+        timed_out = self._pg_session()
+        timed_out.execute.side_effect = [
+            MagicMock(),
+            OperationalError("SELECT ...", {}, _PgError("55P03")),
+        ]
+        with self.assertRaises(MembershipLockTimeout) as ctx:
+            membership_service.lock_project(timed_out, project_id=7)
+        self.assertEqual(ctx.exception.project_id, 7)
+
+        other = self._pg_session()
+        other.execute.side_effect = [
+            MagicMock(),
+            OperationalError("SELECT ...", {}, _PgError("40P01")),
+        ]
+        with self.assertRaises(OperationalError):
+            membership_service.lock_project(other, project_id=7)
+
+    def test_F12b_sqlite_sends_no_lock_timeout(self):
+        """
+        @purpose SQLite 沒有 lock_timeout 設定，送了會語法錯誤；必須以 dialect 判斷略過
+        @given in-memory SQLite session 與一個真實專案
+        @step 監聽引擎送出的每一句 SQL，呼叫 lock_project | 沒有任何一句含 lock_timeout，且呼叫成功
+        @pass SQLite 路徑不送 SET LOCAL
+        @story US12.3
+        """
+        db = make_session()
+        try:
+            owner = make_user(db, username="owner", role=ROLE_ADMIN)
+            project = hierarchy_service.create_project(
+                db, owner_user_id=owner.id, name="L"
+            )
+            sent = []
+            listen(
+                db._test_engine,
+                "before_cursor_execute",
+                lambda conn, cursor, statement, *rest: sent.append(statement),
+            )
+            membership_service.lock_project(db, project_id=project.id)
+            self.assertTrue(sent)
+            self.assertFalse([s for s in sent if "lock_timeout" in s])
+        finally:
+            close_session(db)
 
 
 if __name__ == "__main__":

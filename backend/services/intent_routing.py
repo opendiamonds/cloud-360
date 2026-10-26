@@ -90,6 +90,7 @@ from services.intent_routing_types import (
     IntentDecision,
     RoutingObservation,
 )
+from services.memory_errors import MemoryForbidden
 from services.prompt_guard import is_platform_self_modification
 from services.session_types import SEGMENT_SHARED
 
@@ -210,6 +211,14 @@ def _memory_notes(
     ——模型在實際生成 `capability`／`referent` 時無法把「理解術語」與「決定
     指涉」切開。本站不發明一個功能性保險（`OQ-10` 未定案前，任何依賴分數的
     保險都可能是走不到的分支），而是讓 `memory_degraded` 使它**事後可歸因**。
+
+    **授權拒絕不是「不可用」**（合併前必修第 13 項，使用者裁決：本輪以授權錯誤
+    結束）：`MemoryForbidden` 代表 `MemoryFacade` 判定**這個 principal 不得讀記憶**
+    （`_authorize_approved` 在取列之前擋下待核准帳號）。把它併進降級，等於讓一個
+    被拒絕的身分照常完成分類與交辦——`D-1` 的降級理由（記憶是加分項）只適用於
+    依賴不可用，不適用於權限判定。故它**原樣向上傳遞**，由閘道以授權類錯誤碼
+    結束本輪；其餘例外照舊降級。`search` 不會拋 `MemoryNotFound`（只有
+    `delete` 與 `widen_scope` 會），若未來出現也走降級分支並記 WARN。
     """
     if memory_facade is None:
         return (), True
@@ -220,6 +229,9 @@ def _memory_notes(
             kinds=_REFERENT_MEMORY_KINDS,
             limit=limit,
         )
+    except MemoryForbidden:
+        logger.warning("記憶存取被拒絕，本輪不降級、以授權錯誤結束（合併前必修第 13 項）")
+        raise
     except Exception as exc:  # 外部依賴邊界：降級並記 log，不靜默
         logger.warning(
             "記憶檢索失敗，本輪降級為不帶記憶繼續分類（D-1）：%s",

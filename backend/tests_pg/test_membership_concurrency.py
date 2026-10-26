@@ -1,4 +1,6 @@
-"""`U19 membership-service` 的併發測試（`C1`–`C3`）——**只在真實 PostgreSQL**。
+"""`U19 membership-service` 的併發測試（`C1`–`C4`）——**只在真實 PostgreSQL**。
+
+`C4`（取鎖等待上限）是合併前必修第 16 項加的；`C1`–`C3` 的說明見下。
 
 對應 `unit-test-instructions.md §三` 的第四列（併發，**3** 個）。
 三個而不是五到八個，因為它只有三個斷言面，而硬湊到 5 個會製造恆真測試。
@@ -45,6 +47,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import unittest
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -122,6 +125,26 @@ class MembershipConcurrencyTest(unittest.TestCase):
                 raise RuntimeError(
                     "reselection_events 缺少 cause 欄（U19/[FD3]=A 回補的第 9 欄）。"
                     "目標資料庫套用的是舊版 schema_rbac.sql"
+                )
+        # 合併前必修第 1 ＋ 4 項起，停用守門的合格接手人判定會讀
+        # `users.authorization_status`，而 `schema_rbac.sql` 的 `users` 沒有這一欄
+        # ——它由後端啟動時的 `_ensure_j5_schema()` 補上（見 `_user()` 的 docstring）。
+        # CI 的 concurrency job 只套用 DDL、不啟動後端，故這裡呼叫**同一支**補丁，
+        # 而不是在測試裡另寫一份 DDL。`database.engine` 讀的是同一個 DATABASE_URL。
+        import database
+
+        database._ensure_j5_schema()
+        with cls.engine.connect() as conn:
+            if not conn.execute(
+                text(
+                    "SELECT count(*) FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='users' "
+                    "AND column_name='authorization_status'"
+                )
+            ).scalar():
+                raise RuntimeError(
+                    "users 缺少 authorization_status 欄，且 _ensure_j5_schema() 沒有補上"
+                    "（它會吞掉失敗，請看上面的 WARNING）"
                 )
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -418,11 +441,13 @@ class MembershipConcurrencyTest(unittest.TestCase):
         本測試的第一半）：該專案只有 alice 一位管理者時守門必須 raise。
         """
         project = self._project_with_two_admins("c3")
-        # 讓 alice 成為唯一的管理者，使守門有東西可報。
+        # 讓 alice 成為唯一的成員，使守門有東西可報。合併前必修第 1 ＋ 4 項起守門
+        # 只擋「無合格接手人」：bob 是 `Project_Architect`（`K3.edit`、啟用），
+        # 把他降為一般成員仍是合格接手人、守門會放行，故這裡把他整列移出。
         self.db.query(ProjectMember).filter(
             ProjectMember.project_id == project.id,
             ProjectMember.user_id == self.bob.id,
-        ).update({"role": ProjectRole.MEMBER.value})
+        ).delete(synchronize_session=False)
         self.db.commit()
 
         barrier = threading.Barrier(2)
@@ -500,6 +525,94 @@ class MembershipConcurrencyTest(unittest.TestCase):
             results.get("T2"), "guard", self._diag("守門沒有判定出唯一管理者")
         )
         self.assertEqual(results.get("T2_projects"), [project.id], self._diag("守門回報的專案不對"))
+
+    # -- C4：取鎖等待有上限（合併前必修第 16 項）---------------------------
+
+    def test_C4_lock_wait_times_out_after_the_configured_limit(self):
+        """
+        @purpose 一筆交易卡住專案鎖時，其他人等待取鎖的時間必須有上限（約 5 秒），逾時拋 MembershipLockTimeout（端點轉 503），而不是無限期佔用連線
+        @given 真實 PostgreSQL；T1 對專案 c4 取鎖後不放
+        @step T1 取鎖後設定 held 事件 | T1 停在 holding_lock
+        @step T2 等到 held 後對同一專案呼叫 lock_project | 約 LOCK_TIMEOUT_MS 後拋 MembershipLockTimeout，project_id 為該專案
+        @step T2 rollback 後在同一個 session 執行 SELECT 1 | 成功（連線未被卡住）
+        @pass 逾時例外、等待時間落在 [0.8×上限, 上限＋10 秒]、連線可再用
+        @story US12.3
+        """
+        from services.membership_errors import MembershipLockTimeout
+
+        project = self._project_with_two_admins("c4")
+        held = threading.Event()
+        done = threading.Event()
+        results: dict[str, object] = {}
+
+        def holder() -> None:
+            session = self.Session()
+            self.steps["T1"] = "before_lock"
+            try:
+                membership_service.lock_project(session, project_id=project.id)
+                self.steps["T1"] = "holding_lock"
+                held.set()
+                # 有界的條件等待（不是 sleep）：T2 結束就放鎖。
+                done.wait(timeout=JOIN_TIMEOUT_S)
+                session.rollback()
+                self.steps["T1"] = "committed"
+            except Exception as exc:  # noqa: BLE001
+                self.steps["T1"] = f"error:{type(exc).__name__}: {exc}"
+                held.set()
+            finally:
+                session.close()
+
+        def waiter() -> None:
+            session = self.Session()
+            self.steps["T2"] = "before_lock"
+            try:
+                if not held.wait(timeout=BARRIER_SATISFY_TIMEOUT_S):
+                    results["T2"] = "holder_never_locked"
+                    return
+                self.steps["T2"] = "waiting_for_lock"
+                started = time.monotonic()
+                try:
+                    membership_service.lock_project(session, project_id=project.id)
+                    results["T2"] = "acquired"
+                except MembershipLockTimeout as exc:
+                    results["T2"] = "timed_out"
+                    results["T2_project"] = exc.project_id
+                results["T2_elapsed"] = time.monotonic() - started
+                session.rollback()
+                results["T2_reusable"] = session.execute(text("SELECT 1")).scalar()
+                session.rollback()
+                self.steps["T2"] = "committed"
+            except Exception as exc:  # noqa: BLE001
+                self.steps["T2"] = f"error:{type(exc).__name__}: {exc}"
+                results["T2"] = "error"
+            finally:
+                done.set()
+                session.close()
+
+        t1 = threading.Thread(target=holder, name="T1")
+        t2 = threading.Thread(target=waiter, name="T2")
+        t1.start()
+        t2.start()
+        for thread in (t2, t1):
+            thread.join(timeout=JOIN_TIMEOUT_S)
+            self.assertFalse(
+                thread.is_alive(), self._diag(f"{thread.name} 在 join 逾時後仍在跑")
+            )
+
+        limit_s = membership_service.LOCK_TIMEOUT_MS / 1000.0
+        self.assertEqual(
+            results.get("T2"),
+            "timed_out",
+            self._diag(
+                "第二個交易沒有在取鎖逾時——lock_timeout 沒有生效（SET LOCAL 沒送出，"
+                "或 55P03 沒被轉成 MembershipLockTimeout）"
+            ),
+        )
+        self.assertEqual(results.get("T2_project"), project.id, self._diag("逾時例外的專案不對"))
+        elapsed = results.get("T2_elapsed")
+        self.assertGreaterEqual(elapsed, limit_s * 0.8, self._diag(f"等待 {elapsed:.2f}s 遠短於上限"))
+        self.assertLessEqual(elapsed, limit_s + 10.0, self._diag(f"等待 {elapsed:.2f}s 遠超過上限"))
+        self.assertEqual(results.get("T2_reusable"), 1, self._diag("逾時之後連線不可再用"))
 
 
 if __name__ == "__main__":

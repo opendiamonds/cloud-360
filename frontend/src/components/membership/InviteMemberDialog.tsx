@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/auth-context';
 import { LiveRegion } from '../LiveRegion';
+import { useDialogKeyboard } from '../../hooks/useDialogKeyboard';
 import {
   InviteRejectedError,
   MembershipForbiddenError,
@@ -54,11 +55,17 @@ export const InviteMemberDialog: React.FC<InviteMemberDialogProps> = ({
   const [liveMsg, setLiveMsg] = useState('');
 
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // 開啟時焦點移入第一個欄位（`interaction-design-patterns.md` 的既有規定）。
   useEffect(() => {
     firstFieldRef.current?.focus();
   }, []);
+
+  // 鍵盤上真的是 modal（合併前必修第 23 項）：Escape 關閉、Tab／Shift+Tab 不離開
+  // 對話框。送出中 Escape 不關閉，與「取消」鈕送出中停用一致（W3 第 3 步）。
+  // 關閉後焦點回到「邀請成員」鈕由呼叫端（`MembersListPage`）負責。
+  useDialogKeyboard(dialogRef, { open: true, onEscape: onClose, escapeDisabled: submitting });
 
   const parsedUserId = Number(userIdText);
   const userIdValid = userIdText.trim() !== '' && Number.isInteger(parsedUserId) && parsedUserId > 0;
@@ -101,6 +108,7 @@ export const InviteMemberDialog: React.FC<InviteMemberDialogProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div
+        ref={dialogRef}
         data-testid="invite-dialog"
         role="dialog"
         aria-modal="true"

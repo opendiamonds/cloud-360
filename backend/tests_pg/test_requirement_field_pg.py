@@ -1,6 +1,7 @@
-"""`U20 requirement-field-service` 的資料存取層——**只在真實 PostgreSQL**（`G1`–`G3`）。
+"""`U20 requirement-field-service` 的資料存取層——**只在真實 PostgreSQL**（`G1`–`G4`）。
 
-對應 `unit-test-instructions.md §三` 的第三列（3 個）。
+對應 `unit-test-instructions.md §三` 的第三列（3 個）；`G4` 由合併前必修第 24 項加入
+（值含 NUL：SQLite 接受、PostgreSQL 拒絕，故只有這裡測得到「不是 500」）。
 
 為什麼需要這一檔（infrastructure-design `review-01` R-07）
 =========================================================
@@ -28,6 +29,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import unittest
 from datetime import datetime, timezone
@@ -38,6 +40,7 @@ from sqlalchemy.orm import Session
 from tests_pg import require_pg_url
 
 import services.requirement_field_service as service
+from services.hierarchy_facade import mint_principal
 
 UNIQUE_TAG = "u20pg"
 BARRIER_TIMEOUT_S = 15.0
@@ -237,6 +240,87 @@ class RequirementFieldPostgresTest(unittest.TestCase):
         current = self._current()
         self.assertIsNone(current.value)
         self.assertEqual((current.updated_by, current.cleared_at), (winner_user, winner_now))
+
+    # -- G4：值含 NUL 在真實 PostgreSQL 上是 422，不是 DataError／500 ---------
+
+    def test_G4_nul_value_is_a_422_on_postgresql_not_a_data_error(self):
+        """`G4`：合併前必修第 24 項（review-03 R-01）。
+
+        @purpose 證明在**真實 PostgreSQL** 上（SQLite 接受 NUL，測不到這個失敗面），
+                 值含 NUL 的寫入停在驗證層回固定 422，不會走到 psycopg 的 `DataError`
+                 而成為 500；HTTP 與同進程兩個入口都一樣。
+        @given   alice（`Project_Editor`，`schema_rbac.sql` 播種的 `K4.edit`）是目標系統
+                 所屬專案的 `member`；資料庫為套用過 `schema_rbac.sql` 的 PostgreSQL。
+        @step    ① 直接呼叫 PUT 路由函式，本體 `{"value": "<標記>\\u0000tail"}`；
+                 ② 以同進程 `write_field` 送同一個值；③ 以同一路由寫入一個正常值。
+        @pass    ① 拋 `HTTPException`、狀態碼 422、`detail` 為 NUL 的固定訊息且不含標記；
+                 ② 拋 `RequirementFieldValidationError(value, nul_char)`；兩者之後本表
+                 該系統 0 列、連線未處於失敗交易；③ 成功且本表恰 1 列為該正常值
+                 （證明 ① 的 422 不是授權或定址失敗造成的）。突變（拿掉 NUL 檢查）時
+                 ① 拋的是 `sqlalchemy.exc.DataError`，本案紅。
+        @story   US11.2
+        @api     PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        """
+        # 延遲匯入：本檔其餘案例只測資料存取層，不需要載入 router 與 FastAPI。
+        from fastapi import HTTPException
+
+        from services.requirement_field_errors import RequirementFieldValidationError
+        from services.requirement_field_facade import RequirementFieldFacade
+        from services.requirement_field_router import write_requirement_field
+
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO project_members (project_id, user_id, role) "
+                    "VALUES (:p, :u, 'member')"
+                ),
+                {"p": self.project_id, "u": self.user_ids[0]},
+            )
+        alice = _LightUser(id=self.user_ids[0], role="Project_Editor")
+        marker = f"{UNIQUE_TAG}-marker-{id(self)}"
+        expected_detail = str(RequirementFieldValidationError("value", "nul_char"))
+        nul_body = json.dumps({"value": f"{marker}\u0000tail"}).encode()
+
+        with Session(self.engine) as db:
+            with self.assertRaises(HTTPException) as caught:
+                write_requirement_field(
+                    system_id=str(self.system_id), agent_group="cost",
+                    field_key="sla", body=nul_body, current_user=alice, db=db,
+                )
+            self.assertEqual(caught.exception.status_code, 422)
+            self.assertEqual(caught.exception.detail, expected_detail)
+            self.assertNotIn(marker, caught.exception.detail)
+
+            with self.assertRaises(RequirementFieldValidationError) as in_process:
+                RequirementFieldFacade(db).write_field(
+                    mint_principal(alice), system_id=self.system_id,
+                    agent_group="cost", field_key="sla",
+                    value=f"{marker}\u0000tail", on_behalf_of="cost",
+                )
+            self.assertEqual(
+                (in_process.exception.field, in_process.exception.problem),
+                ("value", "nul_char"),
+            )
+            # 交易仍可用：若 NUL 曾送到 PostgreSQL，這個 session 會卡在失敗交易。
+            self.assertEqual(db.execute(text("SELECT 1")).scalar_one(), 1)
+        self.assertEqual(self._row_count(), 0)
+
+        with Session(self.engine) as db:
+            view = write_requirement_field(
+                system_id=str(self.system_id), agent_group="cost", field_key="sla",
+                body=json.dumps({"value": "99.9%"}).encode(), current_user=alice, db=db,
+            )
+        self.assertEqual(view.value, "99.9%")
+        self.assertEqual(self._row_count(), 1)
+        self.assertEqual(self._current().value, "99.9%")
+
+
+class _LightUser:
+    """`mint_principal` 的最小輸入：只讀 `.id` 與 `.role`（同 `test_membership_concurrency`）。"""
+
+    def __init__(self, *, id: int, role: str) -> None:  # noqa: A002 - 對齊 User 的屬性名
+        self.id = id
+        self.role = role
 
 
 if __name__ == "__main__":

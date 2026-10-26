@@ -157,6 +157,64 @@ class TestAuthorization(HierarchyTestBase):
         self.assertEqual(exc.story_id, "K2")
         self.assertEqual(exc.action, "edit")
 
+    def test_T2c_pending_account_is_denied_even_with_an_edit_role(self):
+        """
+        @purpose 待核准帳號即使角色具 K2 view＋edit，五個 path 也一律 403，且不留下任何寫入
+        @given pending 帳號（authorization_status=pending、is_active=True），角色同 alice；
+               另有一個屬於它的既有專案
+        @step 以該帳號呼叫列舉、建立專案、建立系統、刪除專案、列舉變更紀錄 | 皆 403
+        @step 查 projects | 不多出新專案，既有專案仍在
+        @pass 五個呼叫皆 403，資料未變
+        @api POST /api/hierarchy/projects -> 403 | 待核准帳號不得建立專案
+        @story US9.1
+        @note hierarchy-service code-generation review-01 的 Major（ADR-0006 IAM）。
+              突變 M-H1（拿掉 _authorize 的 is_approved 檢查）使本案紅燈。
+        """
+        pending = make_user(
+            self.db,
+            username="pending",
+            role=ROLE_EDIT,
+            authorization_status="pending",
+        )
+        project = self.a_project(pending, name="pending 的專案")
+        before = self.db.query(Project).count()
+        c = self.client_as(pending)
+        self.assertEqual(c.get("/api/hierarchy/projects").status_code, 403)
+        self.assertEqual(
+            c.post("/api/hierarchy/projects", json={"name": "X"}).status_code, 403
+        )
+        self.assertEqual(
+            c.post(
+                f"/api/hierarchy/projects/{project.id}/systems", json={"name": "X"}
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            c.delete(f"/api/hierarchy/projects/{project.id}").status_code, 403
+        )
+        self.assertEqual(c.get("/api/hierarchy/diagram-changes").status_code, 403)
+        self.db.expire_all()
+        self.assertEqual(self.db.query(Project).count(), before)
+        self.assertIsNotNone(self.db.get(Project, project.id))
+
+    def test_T2d_approved_account_with_same_role_is_allowed(self):
+        """
+        @purpose 對照組：與 T2c 同角色、但已核准的帳號照常可建立專案
+        @given approved 帳號（authorization_status=approved），角色同 alice
+        @step POST /api/hierarchy/projects | 201
+        @pass 回 201，證明 T2c 的 403 來自核准狀態而非角色
+        @api POST /api/hierarchy/projects -> 201 | 已核准帳號可建立專案
+        @story US9.1
+        """
+        approved = make_user(
+            self.db,
+            username="approved",
+            role=ROLE_EDIT,
+            authorization_status="approved",
+        )
+        r = self.client_as(approved).post("/api/hierarchy/projects", json={"name": "Y"})
+        self.assertEqual(r.status_code, 201, r.text)
+
     def test_T4_principal_cannot_be_constructed_outside_the_facade_module(self):
         """`T4`／`BR1.4`：`Principal` 只能由 facade 鑄造。"""
         with self.assertRaises(TypeError):

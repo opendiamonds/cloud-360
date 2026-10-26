@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
-"""`U19 membership-service` 的一次性成員回填（既有專案的擁有者列）。
+"""`U19 membership-service` 的成員回填（既有專案的擁有者列）——**手動補跑用**。
 
-**部署期執行，不在啟動路徑上**（`NFR12.5`：`backend/database.py` 的 diff 為空）。
+**2026-10-20 起（合併前必修第 15 項，使用者裁決）後端啟動時會自動執行同一份
+補齊**：`backend/main.py` 的 startup 在 `init_db()` 之後呼叫
+`services/membership_backfill.ensure_project_members_on_startup()`，失敗即讓啟動
+失敗。本指令保留為**手動補跑／事前檢查**用途（`--dry-run` 可在不寫入的情況下
+報告零成員專案數），邏輯與啟動路徑是**同一份**（`services/membership_backfill.py`），
+不各寫一份 SQL。仍**不動 `backend/database.py`**（`NFR12.5`）。
+
+下面「為什麼是獨立腳本」一節是原設計的理由，保留作為歷史脈絡；它描述的
+「不動啟動路徑」已被上述裁決取代。
 
 為什麼非做不可（`NFR12.24`／`NFR12.25`）
 ----------------------------------------
@@ -76,86 +84,12 @@ for _path in (BACKEND_DIR, BACKEND_DIR / "services"):
         sys.path.insert(0, str(_path))
 
 from database import engine  # noqa: E402
+from services.membership_backfill import (  # noqa: E402
+    ROLE_PROJECT_ADMIN,
+    run_backfill,
+)
 
 logger = logging.getLogger("cloud360.membership_backfill")
-
-REQUIRED_TABLES = ("projects", "project_members")
-
-ROLE_PROJECT_ADMIN = "project_admin"
-"""刻意以字面值而非 import `membership_types`：本腳本只需要一個字串，而
-`project_members.role` 的 DDL CHECK 是它的權威來源。值若與那條 CHECK 不符，
-INSERT 會**當場失敗**（而非靜默寫入壞資料），所以這不是一份會無聲漂移的副本。"""
-
-
-def _scalar(conn, sql: str, params: dict | None = None):
-    from sqlalchemy import text
-
-    return conn.execute(text(sql), params or {}).scalar()
-
-
-def assert_prerequisites(conn) -> None:
-    missing = [
-        name
-        for name in REQUIRED_TABLES
-        if not _scalar(
-            conn,
-            "SELECT count(*) FROM information_schema.tables "
-            "WHERE table_schema = 'public' AND table_name = :t",
-            {"t": name},
-        )
-    ]
-    if missing:
-        raise RuntimeError(
-            "前置條件不足：public schema 缺少 " + "、".join(missing) + "。"
-            "project_members 由 U18 的腳本建立，故它必須先跑過："
-            "cd backend && python scripts/run_meta_schema_migration.py"
-            "（見 DEPLOY.md 第 2.2.9 節）"
-        )
-
-
-def count_member_less_projects(conn) -> int:
-    """零成員專案數。終檢與事前報告共用同一個查詢，故兩者不可能對不起來。"""
-    return int(
-        _scalar(
-            conn,
-            "SELECT count(*) FROM projects p "
-            "WHERE NOT EXISTS ("
-            "  SELECT 1 FROM project_members m WHERE m.project_id = p.id"
-            ")",
-        )
-        or 0
-    )
-
-
-def backfill(conn) -> int:
-    """為每個零成員專案插入一列 `(project_id, owner_user_id, project_admin, now())`。
-
-    回傳插入的列數。
-
-    **以「該專案無任何成員列」為條件**，不是以 `(project_id, owner_user_id)` 是否
-    存在為條件。差別在一個真實情境：若某專案已有成員但 owner 不在其中
-    （例如 owner 被移出過），那是一個**人為決定**的結果，回填不該把他加回去。
-    唯一約束 `uq_project_members_project_user` 也因此不會被違反。
-
-    `joined_at` 用 `now()` 而非專案的 `created_at`：這一列記的是「他**何時成為
-    成員**」，而他是在回填的這一刻成為成員的。用 `created_at` 會讓
-    `BR4.2` 的「最早加入者」挑選把一位回填出來的成員排在所有真實邀請之前，
-    而那不是事實。
-    """
-    from sqlalchemy import text
-
-    result = conn.execute(
-        text(
-            "INSERT INTO project_members (project_id, user_id, role, joined_at) "
-            "SELECT p.id, p.owner_user_id, :role, now() "
-            "FROM projects p "
-            "WHERE NOT EXISTS ("
-            "  SELECT 1 FROM project_members m WHERE m.project_id = p.id"
-            ")"
-        ),
-        {"role": ROLE_PROJECT_ADMIN},
-    )
-    return int(result.rowcount or 0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -175,34 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"目標資料庫：host={url.host} database={url.database}", flush=True)
 
     try:
-        with engine.begin() as conn:
-            assert_prerequisites(conn)
-            before = count_member_less_projects(conn)
-            print(f"回填前的零成員專案數：{before}", flush=True)
-
-            if args.dry_run:
-                print(
-                    f"--dry-run：將插入 {before} 列 "
-                    f"(project_id, owner_user_id, {ROLE_PROJECT_ADMIN}, now())，"
-                    "本次不寫入。"
-                )
-                raise _DryRun()
-
-            inserted = backfill(conn)
-            print(f"已插入 {inserted} 列成員", flush=True)
-
-            # **自我終檢**（COMMIT 之前）：這一條就是「結束碼 0 代表什麼」。
-            remaining = count_member_less_projects(conn)
-            if remaining != 0:
-                raise RuntimeError(
-                    f"終檢未通過，已回滾（NFR12.24）：仍有 {remaining} 個零成員"
-                    "專案。可能原因是某些專案的 owner_user_id 指向一個不存在的"
-                    "使用者，使 INSERT 的外鍵失敗——那是資料問題，須先處置而不是"
-                    "讓回填回報成功"
-                )
-    except _DryRun:
-        print("--dry-run 完成，交易已回滾。")
-        return 0
+        # 前置檢查、計數、插入、**COMMIT 之前的自我終檢**全在 `run_backfill` 的
+        # 單一交易內——與後端啟動時執行的是同一份程式。
+        result = run_backfill(engine, dry_run=args.dry_run)
     except Exception as exc:
         # **不吞**：訊息與完整 traceback 都寫到 stderr，並以非零結束碼收場。
         # 這與 `backend/database.py` 的 `_ensure_*` 家族刻意相反。
@@ -215,18 +124,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    print(f"回填前的零成員專案數：{result.before}", flush=True)
+    if result.dry_run:
+        print(
+            f"--dry-run：將插入 {result.before} 列 "
+            f"(project_id, owner_user_id, {ROLE_PROJECT_ADMIN}, CURRENT_TIMESTAMP)，"
+            "本次不寫入。"
+        )
+        print("--dry-run 完成，交易已回滾。")
+        return 0
+
     print("成員回填完成（U19）：")
-    print(f"  插入列數            {inserted}")
+    print(f"  插入列數            {result.inserted}")
     print("  終檢通過：projects 中零成員的專案數為 0（NFR12.24）。")
     print(
         "注意：本指令**不**處理「已有成員但 owner 不在其中」的專案"
         "——那是人為決定的結果，回填不得把他加回去。"
     )
     return 0
-
-
-class _DryRun(Exception):
-    """以例外跳出 `engine.begin()` 使其回滾——`--dry-run` 不留痕跡。"""
 
 
 if __name__ == "__main__":

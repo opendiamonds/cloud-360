@@ -22,10 +22,10 @@ export interface ObjectPickerCreateFormProps {
   onCreated: (created: ProjectOut | SystemOut) => void;
   onCancel: () => void;
   /**
-   * 建立失敗的文案，交給選單內播報區（`F-04`）。每輪送出開始時先以 `null` 清空（`review-01` `R-06`）：
-   * 同一種錯誤連續發生兩次時，播報區的文字才會先變再回來，螢幕報讀器才會再唸一次。
+   * 建立失敗的文案，交給選單內播報區（`F-04`）。送出時**不**先清空（`review-02` `R-09`：清空會讓播報區退回
+   * 清單狀態文字，每次重試都多唸一句「已載入 N 個專案」）；相同錯誤的重唸由父層以零寬字元處理（`review-01` `R-06`）。
    */
-  onFailure: (message: string | null) => void;
+  onFailure: (message: string) => void;
 }
 
 export const ObjectPickerCreateForm: React.FC<ObjectPickerCreateFormProps> = ({
@@ -58,7 +58,6 @@ export const ObjectPickerCreateForm: React.FC<ObjectPickerCreateFormProps> = ({
     submittingRef.current = true;
     setPending(true);
     setError(null);
-    onFailure(null);
     const request: Promise<ProjectOut | SystemOut> =
       kind === 'project'
         ? objectCreateAction(token, 'project', name)

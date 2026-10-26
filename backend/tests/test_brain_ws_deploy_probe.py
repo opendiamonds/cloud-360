@@ -98,5 +98,113 @@ class BrainWsDeployProbeTest(unittest.TestCase):
         self.assertIn("|| RC=$?", run)
 
 
+REVERT_STEP = "Open a revert PR for the bad merge"
+RESTORE_STEP = "Restore the last-good deployment"
+DOCTOR_STEP = "Hand the failure to the Deploy Doctor agent"
+
+
+class BrainWsProbeRollbackRoutingTest(unittest.TestCase):
+    """合併前必修第 26 項（review-03 R-01）：6a 失敗只回滾、不開 revert PR，其他失敗來源照舊。
+
+    三件事必須同時成立，缺一即裁決失效：6a 的結果要能離開 deploy job（job outputs）；revert 步驟要讀它並在
+    6a 失敗時略過；還原 last-good 與 Deploy Doctor **不得**讀它（否則 6a 失敗時站台會停在壞版本）。
+    """
+
+    def setUp(self):
+        workflow = yaml.safe_load(DEPLOY_WF.read_text(encoding="utf-8"))
+        self.jobs = workflow["jobs"]
+        deploy_steps = self.jobs["deploy"]["steps"]
+        names = [s.get("name") for s in deploy_steps]
+        self.assertIn(PROBE_STEP, names)
+        self.probe = deploy_steps[names.index(PROBE_STEP)]
+        self.rollback_steps = {s.get("name"): s for s in self.jobs["rollback"]["steps"]}
+        for name in (REVERT_STEP, RESTORE_STEP, DOCTOR_STEP):
+            self.assertIn(name, self.rollback_steps)
+
+    def _probe_output_key(self):
+        """回傳 deploy job 中以 6a 的 outcome／conclusion 為值的 output 名稱；找不到回 None。"""
+        probe_id = self.probe.get("id")
+        if not probe_id:
+            return None
+        pattern = re.compile(
+            r"steps\." + re.escape(probe_id) + r"\.(outcome|conclusion)\s*==\s*'failure'"
+        )
+        for key, value in (self.jobs["deploy"].get("outputs") or {}).items():
+            if pattern.search(str(value)):
+                return key
+        return None
+
+    def test_probe_result_leaves_the_deploy_job_via_outputs(self):
+        """
+        @purpose 6a 必須有 id，且 deploy job 的 outputs 以該步驟的 outcome（或 conclusion）== 'failure' 傳出——
+                 6a 以 exit 1 結束，步驟自己寫的值不可靠；沒有這個 output，rollback job 無從分辨失敗來源（R3 突變）。
+        @given .github/workflows/deploy.yml 的 deploy job
+        @step 檢視 6a 的 id | 存在
+        @step 檢視 deploy job 的 outputs | 恰有一個 output 的值為 steps.<6a id>.outcome == 'failure'
+        @pass 6a 的結果可被下游 job 以 needs.deploy.outputs 讀取
+        @story US8.1
+        """
+        self.assertTrue(self.probe.get("id"), "6a 必須有 id")
+        self.assertIsNotNone(self._probe_output_key(), "deploy job outputs 未傳出 6a 的結果")
+
+    def test_revert_pr_step_is_skipped_when_probe_failed(self):
+        """
+        @purpose rollback 的「Open a revert PR」必須在 6a 失敗時略過（環境性失敗 revert 修不了，且會連同 U13 一起還原），
+                 其他失敗來源照舊開——條件仍以 always() 起頭，且排除的是 6a 的 output 為 'true'（R1 突變）。
+        @given deploy.yml 的 rollback job 與 deploy job outputs
+        @step 檢視 revert 步驟的 if | 含 always()
+        @step 檢視 revert 步驟的 if | 含 needs.deploy.outputs.<6a output> != 'true'
+        @pass 6a 失敗不開 revert PR；其他失敗照舊
+        @story US8.1
+        """
+        key = self._probe_output_key()
+        self.assertIsNotNone(key, "deploy job outputs 未傳出 6a 的結果")
+        cond = str(self.rollback_steps[REVERT_STEP].get("if") or "")
+        self.assertIn("always()", cond)
+        self.assertRegex(
+            cond,
+            r"needs\.deploy\.outputs\." + re.escape(key) + r"\s*!=\s*'true'",
+            "revert 步驟的 if 未排除 6a 失敗",
+        )
+
+    def test_restore_and_doctor_still_run_when_probe_failed(self):
+        """
+        @purpose 雙向：6a 失敗時仍須還原 last-good 並交 Deploy Doctor——還原步驟、Doctor 步驟與 rollback job 本身的
+                 if 都不得引用 6a 的 output，否則 6a 失敗時站台停在未通過探測的版本（R2 突變）。
+        @given deploy.yml 的 rollback job 與 deploy job outputs
+        @step 檢視 rollback job 的 if | 不含 6a 的 output 名稱
+        @step 檢視還原步驟與 Doctor 步驟的 if | 不含 6a 的 output 名稱
+        @pass 6a 失敗仍回滾、仍交 Deploy Doctor
+        @story US8.1
+        """
+        key = self._probe_output_key()
+        self.assertIsNotNone(key, "deploy job outputs 未傳出 6a 的結果")
+        self.assertNotIn(key, str(self.jobs["rollback"].get("if") or ""))
+        for name in (RESTORE_STEP, DOCTOR_STEP):
+            self.assertNotIn(key, str(self.rollback_steps[name].get("if") or ""), name)
+
+    def test_slack_message_does_not_report_skipped_revert_as_conflict(self):
+        """
+        @purpose 6a 失敗時 revert_pr 為空是刻意的；notify 必須讀 6a 的 output 並另給說明，
+                 不得沿用「未建立（衝突或建立失敗）」誤導維運者去手動 revert。
+        @given deploy.yml 的 notify job
+        @step 檢視組訊息步驟的 env | 有一個值為 needs.deploy.outputs.<6a output>
+        @step 檢視其 run | 含「刻意未開」分支
+        @pass Slack 訊息區分 6a 略過與衝突
+        @story US8.1
+        """
+        key = self._probe_output_key()
+        self.assertIsNotNone(key, "deploy job outputs 未傳出 6a 的結果")
+        compose = next(
+            s for s in self.jobs["notify"]["steps"] if s.get("name") == "Compose the Slack payload"
+        )
+        env_values = [str(v) for v in (compose.get("env") or {}).values()]
+        self.assertTrue(
+            any(f"needs.deploy.outputs.{key}" in v for v in env_values),
+            "notify 未讀 6a 的 output",
+        )
+        self.assertIn("刻意未開", compose["run"])
+
+
 if __name__ == "__main__":
     unittest.main()

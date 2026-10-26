@@ -51,8 +51,10 @@ from services.intent_routing_predicate import (
     can_single_out,
     has_unresolved_referent,
     clarify_candidates_for,
+    clarify_resolution_for,
     decide,
     derive_contract_confidence,
+    intents_after_choice,
     intents_for,
 )
 from services.intent_routing_types import (
@@ -64,6 +66,7 @@ from services.intent_routing_types import (
     CandidateIntent,
     CandidateRanking,
     ClassificationResult,
+    Intent,
 )
 
 #: 門檻的生成域與 `intent_routing_config.resolve_confidence_threshold` 的
@@ -641,6 +644,141 @@ class StrategyReachesEveryBranchTest(unittest.TestCase):
 
                 found = find(scenarios(with_scores=scores_available), matches)
                 self.assertTrue(matches(found))
+
+
+def _full(capability, rank, referent, *, tied=False):
+    """帶**指定** referent 的候選（`_candidate` 的 referent 是固定字串，分不出是哪一個）。"""
+    return CandidateIntent(
+        capability=capability,
+        rank=rank,
+        label=f"讀法{rank}",
+        tied_with_next=tied,
+        referent_state=REFERENT_RESOLVED if referent is not None else REFERENT_ABSENT,
+        referent=referent,
+        score=None,
+    )
+
+
+class ClarifyResolutionTest(unittest.TestCase):
+    """合併前必修第 5 項的**產生端**：澄清判定附帶的行程內還原對照。
+
+    缺陷（`merge-blockers.md` #5）：閘道選定後只以 `Intent(capability, None)`
+    重建判定，被選槽位的 `referent` 與同一句話裡其他已確定槽位的意圖全部遺失。
+    `ClarifyCandidate` 的線上欄位不得改（`K-10`），故還原所需的資訊由 L5 在
+    行程內附帶。
+    """
+
+    def _single_slot(self):
+        ranking = CandidateRanking(
+            candidates=(
+                _full("architecture-design", 1, "訂單系統", tied=True),
+                _full("well-architected-review", 2, "會員系統"),
+            )
+        )
+        return ClassificationResult(slots=(ranking,), slot_labels=("改這張圖",))
+
+    def test_each_candidate_maps_to_its_full_intent_including_the_referent(self):
+        """
+        @purpose 單槽位澄清：每個候選 id 都對應到它自己的完整 Intent，referent 逐欄保留，不被收斂成 None。
+        @given 單槽位、兩個並列候選，referent 分別為「訂單系統」「會員系統」
+        @step 對分類結果呼叫 decide | below_threshold 為真，resolution 的候選 id 與 candidates 的 id 逐一相同
+        @step 以第 2 個候選 id 呼叫 intents_after_choice | 恰 1 個 Intent：well-architected-review／會員系統
+        @pass 兩個候選各自還原出正確的 capability 與 referent
+        @story US1.2
+        """
+        decision = decide(self._single_slot(), 0.7)
+        self.assertTrue(decision.below_threshold)
+        ids = [c.id for c in decision.candidates]
+        self.assertEqual([o.candidate_id for o in decision.resolution.options], ids)
+        self.assertEqual(
+            intents_after_choice(decision.resolution, ids[0]),
+            (Intent("architecture-design", "訂單系統"),),
+        )
+        self.assertEqual(
+            intents_after_choice(decision.resolution, ids[1]),
+            (Intent("well-architected-review", "會員系統"),),
+        )
+
+    def test_a_settled_slot_rides_along_in_sentence_order(self):
+        """
+        @purpose 多槽位、一個確定一個不確定：選定後兩件事都要交辦，且順序與原句一致（「改這張圖，順便估成本」澄清其一，另一件不得被丟棄）。
+        @given 兩槽位；確定的槽位與不確定的槽位位置對調各一次
+        @step 選定不確定槽位的第 2 個候選 | 回 2 個 Intent，依槽位序排列，確定槽位的 referent 保留
+        @pass 兩種排列下的順序都與槽位序一致
+        @story US5.1
+        """
+        settled = CandidateRanking(candidates=(_full("architecture-design", 1, "訂單系統"),))
+        uncertain = CandidateRanking(
+            candidates=(
+                _full("cost-finops", 1, None, tied=True),
+                _full("well-architected-review", 2, "訂單系統"),
+            )
+        )
+        for slots, expected in (
+            (
+                (settled, uncertain),
+                (Intent("architecture-design", "訂單系統"), Intent("well-architected-review", "訂單系統")),
+            ),
+            (
+                (uncertain, settled),
+                (Intent("well-architected-review", "訂單系統"), Intent("architecture-design", "訂單系統")),
+            ),
+        ):
+            with self.subTest(order=[s.candidates[0].capability for s in slots]):
+                result = ClassificationResult(slots=slots, slot_labels=("甲", "乙"))
+                decision = decide(result, 0.7)
+                self.assertTrue(decision.below_threshold)
+                chosen = next(c.id for c in decision.candidates if c.capability == "well-architected-review")
+                self.assertEqual(intents_after_choice(decision.resolution, chosen), expected)
+
+    def test_the_resolution_is_deterministic_and_unknown_ids_yield_none(self):
+        """
+        @purpose 對照以決定性方式產生（L5 純函式層不得用隨機值，BR3.6），且不在對照內的 id 不會被當成某個意圖。
+        @given 同一份分類結果
+        @step 呼叫 decide 兩次 | 兩次的 resolution 相等
+        @step 以不存在的 id 呼叫 intents_after_choice | 回 None
+        @pass 兩項皆成立
+        @story US1.2
+        """
+        result = self._single_slot()
+        self.assertEqual(decide(result, 0.7).resolution, decide(result, 0.7).resolution)
+        self.assertEqual(clarify_resolution_for(result, 0.7), decide(result, 0.7).resolution)
+        self.assertIsNone(intents_after_choice(decide(result, 0.7).resolution, "s9r1:cost-finops"))
+
+    @given(scenarios())
+    @settings(max_examples=300, deadline=None)
+    def test_every_candidate_restores_its_intent_plus_every_settled_slot(self, scenario):
+        """
+        @purpose 任何合法分類結果下：可交辦時不附對照；需澄清時每一個候選都能還原成「它自己的完整 Intent ＋ 每個可單選槽位的 rank 1 Intent」，依槽位序排列。
+        @given Hypothesis 產生的分類結果（有無分數、單／多槽位、各槽位可否單選皆顯式抽樣）
+        @step 呼叫 decide，對每個澄清候選呼叫 intents_after_choice | 長度＝可單選槽位數＋1；被選槽位位置是該候選的 capability 與 referent；其餘是各可單選槽位的 rank 1
+        @pass 對全部抽樣成立
+        @story US5.1
+        """
+        threshold, result, _flags = scenario
+        decision = decide(result, threshold)
+        if not decision.below_threshold:
+            self.assertIsNone(decision.resolution)
+            return
+        settled_slots = [i for i, s in enumerate(result.slots) if can_single_out(s, threshold)]
+        self.assertEqual(
+            [o.candidate_id for o in decision.resolution.options],
+            [c.id for c in decision.candidates],
+        )
+        for option in decision.resolution.options:
+            source = result.slots[option.slot_index]
+            candidate = next(
+                c for c in source.candidates if option.candidate_id.startswith(f"s{option.slot_index}r{c.rank}:")
+            )
+            restored = intents_after_choice(decision.resolution, option.candidate_id)
+            order = sorted(settled_slots + [option.slot_index])
+            self.assertEqual(len(restored), len(order))
+            for intent, slot_index in zip(restored, order):
+                if slot_index == option.slot_index:
+                    self.assertEqual(intent, Intent(candidate.capability, candidate.referent))
+                else:
+                    top = result.slots[slot_index].candidates[0]
+                    self.assertEqual(intent, Intent(top.capability, top.referent))
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,15 +78,16 @@ logger = logging.getLogger("cloud360.session_store")
 #
 #   Pool size = RPS × 平均請求時間(s) × 1.5 = 300 × 0.02 × 1.5 = 9
 #
-# `min 5` 讓閒置期維持暖連線（避免首次互動吃到建立連線的成本）；`max 20` 是
-# 算式結果的兩倍餘裕。算式的輸入有一項是**假設**（每個 session 每秒一次互動），
-# 如實標明；未來有實測 RPS 須重算。
-POOL_MIN_SIZE = 5
+# `max 20` 是算式結果的兩倍餘裕。算式的輸入有一項是**假設**（每個 session
+# 每秒一次互動），如實標明；未來有實測 RPS 須重算。
+#
+# 設計原本另有 min 5／idle 600 s／lifetime 1800 s 三個值，但 redis-py 的
+# `ConnectionPool` 沒有對應參數（連線是按需建立、用完歸還），三個常數宣告了卻
+# 從未生效，故於 2026-10-23 移除，不留死碼（session-store code-generation 重新
+# 查驗時查出；計畫 Step 5.1 據此維持未勾）。
 POOL_MAX_SIZE = 20
-POOL_IDLE_TIMEOUT_SECONDS = 600
-POOL_MAX_LIFETIME_SECONDS = 1800
 
-#: 只在建立連線時發生；`POOL_MIN_SIZE` 的暖連線使它不在穩態路徑上。
+#: 只在建立連線時發生（連線按需建立，閒置期間的首次互動會吃到這個成本）。
 CONNECT_TIMEOUT_SECONDS = 2.0
 
 #: **它是 P99 的上界，不是 P95 的**：`NFR3.40`／`NFR3.41` 的 20ms 是 P95，
@@ -282,6 +284,31 @@ def redis_py_error_types() -> RedisErrorTypes:
 # ---------------------------------------------------------------------------
 
 
+_PIPELINE_ANNOTATION = re.compile(
+    r"^Command # \d+ \(.*\) of pipeline caused error: (.*)$", re.DOTALL
+)
+
+
+def _strip_pipeline_annotation(exc: BaseException) -> None:
+    """就地拿掉 redis-py 在 pipeline 例外訊息前加的指令全文。
+
+    redis-py 的 `Pipeline.annotate_exception` 會把訊息改寫成
+    `Command # N (HSET <key> <field> <value>…) of pipeline caused error: <原訊息>`
+    ——**被寫入的值**（session 內容、作業對象識別碼的組合）因此進了例外訊息，
+    而 `SessionBackendUnavailable` 以 `raise … from exc` 帶著它，任何上層的
+    `logger.exception` 都會把它印進公開可讀的日誌（`BR3.6`／`NFR4.63`）。
+
+    附帶的第二個後果：前綴使訊息不再以 `OOM ` 開頭，`classify_client_error` 的
+    字串退路因此失效（型別判定不受影響）。拿掉前綴同時修好這兩件事；例外的
+    **型別不變**，分類照常以型別優先。
+    """
+    if not exc.args or not isinstance(exc.args[0], str):
+        return
+    match = _PIPELINE_ANNOTATION.match(exc.args[0])
+    if match:
+        exc.args = (match.group(1),) + tuple(exc.args[1:])
+
+
 def _as_text(value: Any) -> Optional[str]:
     if value is None:
         return None
@@ -468,6 +495,65 @@ class RedisGateway:
     def delete(self, method: str, key: str) -> None:
         self._command(method, "DEL", key, idempotent=True, session_key=key)
 
+    # -- 交易：多個 `HSET` ＋ 一個 `EXPIRE`（`merge-blockers.md` 第 12 項）-----
+
+    def hset_fields_and_expire(
+        self,
+        method: str,
+        key: str,
+        fields: Mapping[str, str],
+        ttl_seconds: int,
+        *,
+        idempotent: bool,
+        segment_id=None,
+        only_if_absent: bool = False,
+    ) -> None:
+        """把同一個 key 的多個 `HSET` 與一個 `EXPIRE` 以 **MULTI／EXEC** 一次送出。
+
+        `only_if_absent=True` 時改送 `HSETNX`：欄位已存在就不覆寫。供「首次建立」
+        使用——兩個並行的第一次寫入都可能先看到「key 不存在」，若用 `HSET`，後到者
+        的預設值會把先到者剛追加的內容蓋回空的；`HSETNX` 讓後到者成為 no-op，只剩
+        `EXPIRE` 續期（session-store code-generation 的 `_ensure_meta` 並行窗口）。
+
+        **為什麼**（`merge-blockers.md` 第 12 項，使用者裁決 MULTI／EXEC）：分開送的
+        `HSET` 與 `EXPIRE` 之間若行程中止、連線中斷，或 key 恰好在兩者之間到期而被
+        `HSET` 重建，就會留下一個**沒有 TTL** 的 key——它永不過期，`ADR-005` 的
+        24 小時保留就不成立，且在 `noeviction` 之下它會一直佔著容量。交易使「寫入」
+        與「設定 TTL」**同進同退**：EXEC 之前中斷 → 兩者都沒發生；EXEC 之後 → 兩者
+        都已發生。
+
+        **Redis 交易不是回滾**：EXEC 執行中若某一條指令在執行期出錯（例如
+        `WRONGTYPE`），其餘指令照樣生效。對本方法而言這仍然安全——`EXPIRE` 不會因
+        `HSET` 失敗而不執行，故不會產生無 TTL 的 key。
+
+        錯誤分類、原因碼、重試與日誌全部沿用 `_call`（`NFR4.61`／`NFR4.62`），
+        **不新增任何可記錄內容的參數**：`fields` 的值是 session 內容，它只進
+        Redis，不進日誌、也不進例外訊息（見 `_strip_pipeline_annotation`）。
+        """
+        if not fields:
+            raise ValueError("hset_fields_and_expire 至少需要一個欄位")
+        items = [(str(name), value) for name, value in fields.items()]
+
+        def run():
+            pipe = self._client.pipeline(transaction=True)
+            set_command = "HSETNX" if only_if_absent else "HSET"
+            for name, value in items:
+                pipe.execute_command(set_command, key, name, value)
+            pipe.execute_command("EXPIRE", key, ttl_seconds)
+            try:
+                return pipe.execute()
+            except BaseException as exc:  # noqa: BLE001 - 去除指令內容後原樣重拋
+                _strip_pipeline_annotation(exc)
+                raise
+
+        self._call(
+            method,
+            run,
+            idempotent=idempotent,
+            session_key=key,
+            segment_id=segment_id,
+        )
+
     # -- Lua（`EVALSHA` ＋ `NOSCRIPT` 退回 `EVAL`）--------------------------
 
     def eval_script(
@@ -542,10 +628,7 @@ __all__ = [
     "LOG_FIELD_NAMES",
     "LOG_FIELDS_EXPLICITLY_EXCLUDED",
     "MAX_RETRIES",
-    "POOL_IDLE_TIMEOUT_SECONDS",
-    "POOL_MAX_LIFETIME_SECONDS",
     "POOL_MAX_SIZE",
-    "POOL_MIN_SIZE",
     "RedisErrorTypes",
     "RedisGateway",
     "SCRIPT_APPEND_MESSAGE",

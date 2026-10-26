@@ -146,6 +146,7 @@ class PhraseTest(unittest.TestCase):
         "cost_timeout": ({}, "成本分析逾時"),
         "cost_not_found": ({}, "找不到這份估價表的建議"),
         "connection_lost": ({}, "與成本服務的連線中斷"),
+        "capacity_exceeded": ({}, "同時進行中的工作已達上限，這一項沒有開始"),
         "side_effect_maybe_persisted": ({"name": "〈A〉"}, "可能已存回架構圖〈A〉"),
         "side_effect_persisted": ({"name": "〈A〉"}, "已存回架構圖〈A〉"),
         "side_effect_review_created": ({}, "已建立一份檢視紀錄"),

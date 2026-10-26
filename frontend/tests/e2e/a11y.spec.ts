@@ -125,8 +125,12 @@ type Perm = { view: boolean; edit: boolean; review: boolean };
 const FULL: Perm = { view: true, edit: true, review: false };
 const VIEW_ONLY: Perm = { view: true, edit: false, review: false };
 
-/** 就緒／排除項：test-id、精確文字定位器（D-02），或精確可及標籤（例如只有 aria-label 的連線中骨架）。 */
-type Probe = string | { text: string } | { label: string };
+/**
+ * 就緒／排除項：test-id、精確文字定位器（D-02）、精確可及標籤（例如只有 aria-label 的連線中骨架），
+ * 或「某 test-id 且其文字含某字串」（review-02 R-08：「這句沒有送達」與重試鈕同在一個 span 內，
+ * 精確文字比對不到；「查不到這個專案」同時出現在 LiveRegion，頁面層級的文字定位器會撞到兩個節點）。
+ */
+type Probe = string | { text: string } | { label: string } | { testid: string; hasText: string };
 
 interface ScanDef {
   id: string;
@@ -424,6 +428,27 @@ async function openPicker(page: Page): Promise<void> {
   await page.getByTestId('brain-context-switch-object').click();
 }
 
+/**
+ * 對話中的狀態（審查 review-02 R-08）：已連線入口頁，大腦 WebSocket 收到 hello 送握手快照，收到 user_message 時
+ * 交給 `reply` 決定回什麼。訊框一律由 wsFrames 建構器產生（EPN-19）；情境沿用 entry-page.spec.ts 的
+ * 「等待中收到非輪次錯誤只多一則系統提示」（mb1）與「送出的句子被非輪次錯誤拒絕時輸入列恢復可用」（mb5）。
+ */
+async function stageConversation(page: Page, reply: (send: (frame: string) => void) => void): Promise<void> {
+  await page.routeWebSocket(/\/api\/brain\/ws(\?.*)?$/, (ws) => {
+    ws.onMessage((raw) => {
+      const frame = JSON.parse(String(raw)) as { type?: string };
+      if (frame.type === 'hello') for (const f of connectedSnapshot()) ws.send(f);
+      if (frame.type === 'user_message') reply((f) => ws.send(f));
+    });
+  });
+  await stageEntry(page);
+}
+
+async function sayToBrain(page: Page, text: string): Promise<void> {
+  await page.getByTestId('brain-input').fill(text);
+  await page.getByTestId('brain-send').click();
+}
+
 const PROJECT_DETAIL_LOADING: Probe[] = [
   'project-detail-error',
   'project-not-found',
@@ -432,8 +457,9 @@ const PROJECT_DETAIL_LOADING: Probe[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 21 個掃描點（C-02 表第 1–17 列 ＋ C-07 第 18 點；互動與定位器依 D-02；第 20 點為 review-01 R-01 增列的已連線入口頁；
-// 第 21、22 點為 U16 增列的切換對象選單兩態，logical-components §二）
+// 24 個掃描點（C-02 表第 1–17 列 ＋ C-07 第 18 點；互動與定位器依 D-02；第 20 點為 review-01 R-01 增列的已連線入口頁；
+// 第 21、22 點為 U16 增列的切換對象選單兩態，logical-components §二；第 23–25 點為 code-generation review-02 R-08
+// 增列的系統提示列、未送達原句與成員頁「查不到這個專案」）
 // ---------------------------------------------------------------------------
 
 const SCANS = {
@@ -660,6 +686,48 @@ const SCANS = {
     absent: ['brain-object-loading'],
     pathname: '/',
   },
+  systemNotice: {
+    id: '23-entry-system-notice',
+    // mb1 的形狀：該輪已開始回覆（先送 token）之後才收到 turnId=null 的錯誤 → 只多一則系統提示，原句不判為被拒。
+    stage: (page) =>
+      stageConversation(page, (send) => {
+        send(F.encodeFrame(F.tokenFrame('t-a11y-23', 'a11y 回覆片段')));
+        send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', 'a11y-系統提示')));
+      }),
+    interact: (page) => sayToBrain(page, 'a11y-23-原句'),
+    ready: ['brain-entry-page', 'brain-system-notice', 'brain-stream-message'],
+    absent: [{ testid: 'brain-user-message', hasText: '這句沒有送達' }, 'brain-stream-retry'],
+    attrs: [{ testid: 'brain-user-message', name: 'data-pending', value: 'true' }],
+    pathname: '/',
+  },
+  utteranceRejected: {
+    id: '24-entry-utterance-rejected',
+    // mb5 的形狀：送出後伺服器尚未開輪次就以 turnId=null 的錯誤拒絕 → 原句標為「這句沒有送達」並提供重試。
+    stage: (page) =>
+      stageConversation(page, (send) => {
+        send(F.encodeFrame(F.errorFrame(null, 'INVALID_REQUEST', 'a11y-太頻繁')));
+      }),
+    interact: (page) => sayToBrain(page, 'a11y-24-原句'),
+    ready: [{ testid: 'brain-user-message', hasText: '這句沒有送達' }, 'brain-stream-retry', 'brain-system-notice'],
+    absent: ['brain-stream-message'],
+    attrs: [{ testid: 'brain-user-message', name: 'data-pending', value: 'false' }],
+    pathname: '/',
+  },
+  membersNotFound: {
+    id: '25-members-not-found',
+    // member-pages.spec.ts 的 404 案例形狀：list_members 回 404，畫面顯示固定句（PROJECT_NOT_FOUND_MESSAGE）。
+    stage: async (page) => {
+      await login(page, { K3: FULL });
+      await reselections(page);
+      await page.route(/\/api\/membership\/projects\/\d+\/members(\?.*)?$/, (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        return json(route, 404, { detail: 'a11y-not-found' });
+      });
+      await page.goto(`/projects/${PROJECT_ID}/members`);
+    },
+    ready: ['members-list-page', { testid: 'member-list-error', hasText: '查不到這個專案' }],
+    absent: ['member-list-table', { text: '載入中…' }],
+  },
 } satisfies Record<string, ScanDef>;
 
 const ALL_SCANS: ScanDef[] = Object.values(SCANS);
@@ -670,12 +738,14 @@ const ALL_SCANS: ScanDef[] = Object.values(SCANS);
 
 function locate(scope: Page | Locator, probe: Probe): Locator {
   if (typeof probe === 'string') return scope.getByTestId(probe);
+  if ('testid' in probe) return scope.getByTestId(probe.testid).filter({ hasText: probe.hasText });
   if ('text' in probe) return scope.getByText(probe.text, { exact: true });
   return scope.getByLabel(probe.label, { exact: true });
 }
 
 function describeProbe(probe: Probe): string {
   if (typeof probe === 'string') return probe;
+  if ('testid' in probe) return `${probe.testid} 含「${probe.hasText}」`;
   return 'text' in probe ? `text「${probe.text}」` : `label「${probe.label}」`;
 }
 
@@ -1143,6 +1213,48 @@ test.describe('U17 a11y gate', () => {
   });
 
   /**
+   * @purpose 對話中出現系統提示列（不屬任何輪次的錯誤）時，入口頁通過 WCAG 2.1 AA 自動掃描（code-generation review-02 R-08）。
+   * @ui / | 入口頁對話區的系統提示列 brain-system-notice、進行中的大腦訊息 brain-stream-message、使用者原句 brain-user-message
+   * @given 攔截層同第 20 點；大腦 WebSocket 收到 user_message 時先送該輪的 token，再送一則 turnId=null 的 INVALID_REQUEST error
+   * @step 在 brain-input 輸入一句並按 brain-send | brain-system-notice 與 brain-stream-message 可見；原句 data-pending 為 true，不含「這句沒有送達」，無重試鈕
+   * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
+   * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
+   * @story N-9
+   * @note 情境沿用 entry-page.spec.ts 的 mb1；與第 24 點的差別是該輪已開始回覆，故原句不判為被拒。
+   */
+  test('23 入口頁對話系統提示列', async ({ page }, testInfo) => {
+    await runScan(page, testInfo, SCANS.systemNotice);
+  });
+
+  /**
+   * @purpose 使用者原句被伺服器以非輪次錯誤拒絕、顯示「這句沒有送達」與重試鈕時，入口頁通過 WCAG 2.1 AA 自動掃描（code-generation review-02 R-08）。
+   * @ui / | 入口頁對話區的未送達原句 brain-user-message、重試鈕 brain-stream-retry、系統提示列 brain-system-notice
+   * @given 攔截層同第 20 點；大腦 WebSocket 收到 user_message 時不開輪次，直接送一則 turnId=null 的 INVALID_REQUEST error
+   * @step 在 brain-input 輸入一句並按 brain-send | 原句含「這句沒有送達」且 data-pending 為 false，brain-stream-retry 與 brain-system-notice 可見，brain-stream-message 不存在
+   * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
+   * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
+   * @story N-9
+   * @note 情境沿用 entry-page.spec.ts 的 mb5。此狀態的淡色小字疊在品牌色底上，是 review-02 指出的對比疑慮所在。
+   */
+  test('24 入口頁原句未送達', async ({ page }, testInfo) => {
+    await runScan(page, testInfo, SCANS.utteranceRejected);
+  });
+
+  /**
+   * @purpose 成員清單在專案查不到（404）時顯示的固定句畫面通過 WCAG 2.1 AA 自動掃描（code-generation review-02 R-08）。
+   * @ui /projects/:projectId/members | 成員清單頁 members-list-page 與抓取錯誤區塊 member-list-error
+   * @given 攔截層：/api/auth/me 帶 K3 view+edit；成員清單 GET 回 404
+   * @step 開啟成員清單 | member-list-error 可見且含「查不到這個專案」，member-list-table 與「載入中…」不存在
+   * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
+   * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
+   * @story N-9
+   * @note 404 本體形狀沿用 member-pages.spec.ts 的 404 案例。
+   */
+  test('25 成員清單查不到專案', async ({ page }, testInfo) => {
+    await runScan(page, testInfo, SCANS.membersNotFound);
+  });
+
+  /**
    * @purpose 基準清單只收頁殼既有違規：不得收新元件節點、不得收交界類規則、每筆須有說明；且每個掃描點都有就緒斷言。
    * @ui / | 不開瀏覽器頁面；檢查 tests/e2e/a11y-baseline.json 與本檔的掃描點定義
    * @given a11y-baseline.json 存在
@@ -1173,11 +1285,11 @@ test.describe('U17 a11y gate', () => {
 
   /**
    * @purpose 基準清單只准縮小：任何一筆在全部掃描點都沒有出現時判為過期並讓測試失敗。
-   * @ui / | 不開瀏覽器頁面；讀回 21 個掃描點寫出的結果檔
-   * @given 本檔前 21 個掃描 test 已執行完畢（fullyParallel: false 的檔內順序；本檔必須整檔執行，不得 -g 或 shard）
-   * @step 讀回結果目錄中的掃描結果檔 | 恰為 21 檔
+   * @ui / | 不開瀏覽器頁面；讀回 24 個掃描點寫出的結果檔
+   * @given 本檔前 24 個掃描 test 已執行完畢（fullyParallel: false 的檔內順序；本檔必須整檔執行，不得 -g 或 shard）
+   * @step 讀回結果目錄中的掃描結果檔 | 恰為 24 檔
    * @step 對照 a11y-baseline.json | 每筆至少在一個掃描點出現
-   * @pass 檔數為 21，且沒有過期條目
+   * @pass 檔數為 24，且沒有過期條目
    * @story N-9
    * @note 寫檔而非記憶體集合：test 失敗後 worker 會被丟棄重啟，記憶體集合只剩後半段（security-design.md 第五節，突變 M7／M10）。
    */
