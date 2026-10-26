@@ -1,0 +1,100 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-gateway",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/services/brain_gateway.py"
+    },
+    {
+      "path": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "path": "backend/scripts/dump_ws_contract.py"
+    },
+    {
+      "path": "ws-contract.json"
+    },
+    {
+      "path": "frontend/src/types/ws-contract.d.ts"
+    },
+    {
+      "path": "backend/main.py"
+    },
+    {
+      "path": "backend/services/brain_router.py"
+    },
+    {
+      "path": "backend/services/intent_routing_types.py"
+    },
+    {
+      "path": "backend/requirements.txt"
+    },
+    {
+      "path": "frontend/src/App.tsx"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx"
+    },
+    {
+      "path": "frontend/src/pages/BrainPage.tsx"
+    },
+    {
+      "path": "frontend/eslint.config.js"
+    },
+    {
+      "path": "frontend/tests/e2e/member-pages.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/memory-page.spec.ts"
+    },
+    {
+      "path": ".github/workflows/deploy.yml"
+    },
+    {
+      "path": "deploy/.env.example"
+    },
+    {
+      "path": "deploy/render-env.sh"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "LOCAL-DEV.md"
+    },
+    {
+      "path": "backend/tests/brain_gateway_fakes.py"
+    },
+    {
+      "path": "backend/tests/test_ws_contract.py"
+    },
+    {
+      "path": "backend/tests/test_intent_routing_structure.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_handshake.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_turn.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_fanout.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_memory.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_limits.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_startup.py"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 from collections.abc import AsyncIterator
 from typing import Any, Optional
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from models import ArchitectureReview, User, UserDiagram
 from services.collab_suggestions import build_optimize_suggestions_summary
 from services.design_agent import run_design_agent
+from services.progress_channel import DuplicateChannelKey, ProgressChannel
 from services.review_agent import (
     fallback_suggestions_from_findings,
     run_review_agent,
@@ -76,29 +78,48 @@ async def _remap_design_events(
 ) -> AsyncIterator[dict[str, Any]]:
     """執行 Design Agent，將 xml → xml_preview，message 加上 speaker=design。"""
     last_xml: Optional[str] = None
-    async for event in run_design_agent(messages, current_xml):
-        et = event.get("type")
-        if et == "message":
-            yield {
-                "type": "message",
-                "speaker": "design",
-                "content": event.get("content") or "",
-                "round": round_no,
-            }
-        elif et == "progress":
-            yield {"type": "progress", "content": event.get("content") or "", "round": round_no}
-        elif et == "xml":
-            last_xml = event.get("content") or ""
-            yield {
-                "type": "xml_preview",
-                "content": last_xml,
-                "round": round_no,
-            }
-        elif et == "error":
-            yield {"type": "error", "content": event.get("content") or "Design Agent 錯誤"}
-            return
-        else:
-            yield event
+    # U22：這個呼叫點原本完全不傳進度鍵，所以 A1↔A3 共編的兩輪產圖與其他併發
+    # 請求共用同一個模組層佇列。鍵必須 per-request 且來自密碼學安全隨機源
+    # （SEC-1）；本函式每輪各自鑄造一個，兩輪的事件因此也互不混淆。
+    # 注意：這裡**只**補進度鍵。這個呼叫點同時還有一個不傳 thread_id 的缺陷
+    # （使所有共編使用者共用 "default-thread" 的對話記憶），那是 FR13.4、是
+    # 對話記憶的共用而非事件錯送，**刻意不在本單元夾帶**那個分區語意決定。
+    request_key = secrets.token_urlsafe(32)
+    try:
+        ProgressChannel.open(request_key)
+    except DuplicateChannelKey:
+        # 固定訊息，不含例外原文也不含鍵（BR3.1／SEC-2）。
+        logger.exception("進度通道的鍵重複，無法開始第 %s 輪 Design", round_no)
+        yield {"type": "error", "content": "系統忙碌中，請稍後再試。"}
+        return
+    try:
+        async for event in run_design_agent(messages, current_xml, request_key=request_key):
+            et = event.get("type")
+            if et == "message":
+                yield {
+                    "type": "message",
+                    "speaker": "design",
+                    "content": event.get("content") or "",
+                    "round": round_no,
+                }
+            elif et == "progress":
+                yield {"type": "progress", "content": event.get("content") or "", "round": round_no}
+            elif et == "xml":
+                last_xml = event.get("content") or ""
+                yield {
+                    "type": "xml_preview",
+                    "content": last_xml,
+                    "round": round_no,
+                }
+            elif et == "error":
+                yield {"type": "error", "content": event.get("content") or "Design Agent 錯誤"}
+                return
+            else:
+                yield event
+    finally:
+        # BR2.1／BR2.3：含上方 `et == "error"` 的提早 return 與呼叫端放棄本
+        # generator 的情形，鍵都必須被清掉。
+        ProgressChannel.close(request_key)
     if last_xml is not None:
         yield {"type": "_internal_xml", "content": last_xml}
 

@@ -1,0 +1,79 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "embedding-port",
+  "upstream_ids": [
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR8.1",
+    "NFR8.2",
+    "NFR9.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "embed 延遲落在首字路徑上。本站無基礎設施可承載它——零容器、零服務；延遲的自動化斷言已由 nfr-design 具名交接 H-N1 給 build-and-test（3.6）。§三 另記：ollama 路徑在 CI 零執行，故連延遲樣本都不會出現在 CI"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "§二：timeout 變數只進 backend/.env.example、不進部署 compose（[Q2]=A），故觸發 validate_local_dev_template_is_complete() 而不觸發另外三條環境檢查；確切名稱交接 H-N4"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "N/A",
+      "target": "ProviderSelection 為啟動期不可變設定，不是需要外部化的狀態，故無任何基礎設施資源對應（無 Redis key、無 volume、無 config map）"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "§四（修訂 1）：主機名驗證在部署時執行，其失敗路徑（部署紅燈 → 自動 rollback ＋ revert PR）已記錄。**原本被「接受」的具名缺口已於修訂 1 關閉**（審查 R-04）：repo-contract 加一個 step，import 並呼叫 D-1 的驗證函式驗 render-env.sh 寫出的值——零第二份清單。具體 YAML 交接 H-I3"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "§一（修訂 1）的 docker-build 列：本單元不碰任何 compose 的服務定義，deploy/docker-compose.deploy.yml 的 ollama 服務仍無 ports:（實測：整個 deploy stack 只有 frontend 有 ports:），零新增暴露面；requirements.txt 淨變更為零故 image 內容不變。**「ollama 不得 publish port」這條約束本身由 nfr-design 的 NFR7.2 持有並未在本站重新論證——本站只確認它未被本單元改動**（審查 R-05 的更正：原文宣稱 §四＋§一 有該陳述，實際 grep 為 0）"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "§五：本單元引入零個 secret；四個既有變數為非機敏字面值，render-env.sh 註解逐字說明它們不經 GitHub secrets。明文傳輸的殘餘風險 RR-1 不因本站而改變"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "§二（修訂 1）：[Q2] 已**反轉為遵守 NFR8.1 逐字**（審查 R-01，Critical）——timeout 變數進部署 compose（無 fallback，比照既有四個）、render-env.sh 寫它、deploy/.env.example 列它、backend/.env.example 列它、LOCAL-DEV.md 同步（兩項）。七道環境檢查中觸發三道（#2 deploy_stack_is_fully_supplied、#3 deploy_template_is_complete、#6 local_dev_template_is_complete），逐條判定表在 §二"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "§二（修訂 1）：七道環境檢查逐條判定（原文誤把四道框成完整集合——審查 R-03）。#6 validate_local_dev_template_is_complete 的失敗訊息逐字引用，說明這是機械強制而非建議；§四 說明該驗證在部署時第一次真正執行，且修訂 1 後 CI 已在部署之前先擋一次"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "§一：docker-build job 不受影響（零新依賴，image 不變）；§三：不加 fastembed CI job 的理由之一即是不為一條本機限定路徑付 CI 時間與頻寬（[Q1]=A）"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "H-I1",
+      "status": "N/A",
+      "target": "交出：LOCAL-DEV.md 的兩項更新——timeout 變數，以及 fastembed 的帶版本安裝指令與 HuggingFace 下載說明。落點 code-generation（3.5，ALWAYS）；project.md 的 blocking 規則"
+    },
+    {
+      "id": "H-I2",
+      "status": "N/A",
+      "target": "交出：ollama 容器的 CPU/RAM 配額與 staging 主機餘裕的實測（K-01 標明那兩個數字未實測）。不屬本單元；U1 brain-infra 與 operation 階段"
+    },
+    {
+      "id": "H-I3",
+      "status": "N/A",
+      "target": "交出：repo-contract 的新 step 的具體 YAML 與 step 名稱——import 並呼叫 D-1 的驗證函式，驗 render-env.sh 寫出的 EMBEDDING_PROVIDER 值在允許集合內。設計決定已在本站定案（審查 R-04 後反轉）。**禁止在該 step 內自行列舉允許值**，那會重新製造被否決的第二份清單。落點 code-generation（3.5，ALWAYS）"
+    }
+  ]
+}

@@ -1,0 +1,406 @@
+{
+  "stage": "code-generation",
+  "unit": "project-pages-ui",
+  "upstream_ids": [
+    "AC11.1.1",
+    "AC11.1.2",
+    "AC11.1.3",
+    "AC11.2.1",
+    "AC11.2.2",
+    "AC11.2.3",
+    "AC11.3.1",
+    "AC11.3.2",
+    "AC11.3.3",
+    "AC12.1.3",
+    "AC12.6.3",
+    "BR81.1",
+    "BR81.2",
+    "BR81.3",
+    "BR81.4",
+    "BR82.1",
+    "BR82.2",
+    "BR82.3",
+    "BR82.4",
+    "BR82.5",
+    "BR83.1",
+    "BR83.2",
+    "BR83.3",
+    "BR83.4",
+    "BR84.1",
+    "BR84.2",
+    "BR84.3",
+    "BR84.4",
+    "BR84.5",
+    "BR84.6",
+    "BR84.7",
+    "BR85.1",
+    "BR85.2",
+    "BR85.3",
+    "BR85.4",
+    "BR85.5",
+    "BR85.6",
+    "BR86.1",
+    "BR86.2",
+    "BR86.3",
+    "BR87.1",
+    "BR87.2",
+    "BR87.3",
+    "BR87.4",
+    "BR87.5",
+    "BR87.6",
+    "BR87.7",
+    "BR88.1",
+    "BR88.2",
+    "BR88.3",
+    "NFR8.100",
+    "NFR11.100",
+    "NFR11.101",
+    "NFR11.102",
+    "AC12.5.2",
+    "AC11.4.1"
+  ],
+  "coverage": [
+    {
+      "id": "AC11.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'shows the create-system action only to the owner…'：擁有者且 K2 edit → system-create-action 存在；他人擁有 → 不存在（渲染條件在 SystemCreateAction.tsx）。後端擁有者檢查不變：test_project_write_guard.py (d)。"
+    },
+    {
+      "id": "AC11.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders the requirements empty state instead of an empty selector'：requirements-empty 存在、requirements-system-select 不在 DOM。"
+    },
+    {
+      "id": "AC11.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'shows the create-system action only to the owner…'：建立後重讀系統清單，系統 0 → 1，pathname 不變（NFR11.100）；伺服器面 test_project_write_guard.py (a)(c) 201。"
+    },
+    {
+      "id": "AC11.2.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders groups, labels and the unfilled text from the response'：未填欄位有「未填」文字且其 id 在輸入框的 aria-describedby 內。"
+    },
+    {
+      "id": "AC11.2.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：legend、x/y、標籤、input_hint 逐字等於 stub 回應。"
+    },
+    {
+      "id": "AC11.2.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'keeps the failed field input…'（PUT 部分失敗）＋ 'keeps saved drafts when the reload fails…'（BR85.6）；突變 F7、F8 各使一案紅。；審查 R-02：'keeps unsaved input and failure marks after switching tabs'——輸入狀態由詳情頁持有，切籤回來輸入與標記仍在（突變 F11）。"
+    },
+    {
+      "id": "AC11.3.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'keeps the overview unfilled count equal to the requirements tab'：單一系統專案，總覽 5 ＝ 需求籤「未填」節點 5（BR85.2 的單一系統預言機）。"
+    },
+    {
+      "id": "AC11.3.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：儲存一欄後切到總覽為 4，且切籤零請求（PPN-05）。"
+    },
+    {
+      "id": "AC11.3.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：全部已填時總覽 0、「未填」節點 0。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_endpoints.py",
+      "note": "③ 另一專案的成員：專案清單不含（E3）、系統清單 404（E8）、不存在 vs 不可見逐位元相同（E15）；畫面面為 project-pages.spec.ts 'renders not-found when the project is invisible…'。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_endpoints.py",
+      "note": "② 被邀請的成員：專案清單含（E2）、系統清單 200（E7）；service 層 test_project_visibility_queries.py V2。"
+    },
+    {
+      "id": "BR81.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'gates the sidebar entry and the list route on K2 view'；實作 Sidebar.tsx、App.tsx。"
+    },
+    {
+      "id": "BR81.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'distinguishes the empty list, the failed list and the per-row failure'；實作 ProjectsListPage.tsx。"
+    },
+    {
+      "id": "BR81.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：error 文字含「這不是「你沒有專案」」與 [重試]；empty 有說明與建立第一個專案。"
+    },
+    {
+      "id": "BR81.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：「尚無系統」與「系統清單讀取失敗」；失敗列不顯示 0 個系統。"
+    },
+    {
+      "id": "BR82.1",
+      "status": "OK",
+      "target": "frontend/src/projects/objectCreateAction.ts",
+      "note": "唯一建立寫入點；grep：createProject(／createSystem( 的呼叫只在本檔（另兩處為 projectsApi.ts 的定義）。"
+    },
+    {
+      "id": "BR82.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'validates, classifies failures and navigates once after creating a project'：409／403／500 三類文案互不相同、名稱保留。"
+    },
+    {
+      "id": "BR82.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "建立系統 pending 期間連點只發 1 次 POST；建立專案 4 次送出恰 4 次 POST。"
+    },
+    {
+      "id": "BR82.4",
+      "status": "OK",
+      "target": "frontend/src/components/projects/SystemCreateAction.tsx",
+      "note": "渲染條件 owner_user_id === user.id && can('K2','edit')；e2e 'shows the create-system action only to the owner…'。"
+    },
+    {
+      "id": "BR82.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "建立成功導向 /projects/<回應 id>?tab=overview，pathname 變更恰 1 次（NFR11.101）。"
+    },
+    {
+      "id": "BR83.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'switches tabs by keyboard without history entries or requests'：方向鍵、Home／End、aria-selected、roving tabindex；實作 ProjectTabs.tsx。"
+    },
+    {
+      "id": "BR83.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'hides the requirements tab and unfilled areas without K4 view'：無需求籤、tab=requirements 退回總覽。"
+    },
+    {
+      "id": "BR83.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders honest placeholders…'：頁首有 [成員]（href /projects/10/members）、無 [設定]。"
+    },
+    {
+      "id": "BR83.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders not-found when the project is invisible instead of an empty project'：系統清單 404 與不在清單內兩種皆為 project-not-found。；非數字網址直接 not-found、不發請求（審查 R-04，'renders not-found for a non-numeric project address'，突變 F12）。"
+    },
+    {
+      "id": "BR84.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders the requirements empty state instead of an empty selector'。"
+    },
+    {
+      "id": "BR84.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders groups, labels and the unfilled text from the response'：文字「未填」經 aria-describedby 關聯。"
+    },
+    {
+      "id": "BR84.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "同上：組與標籤取自回應，前端無欄位對照表（RequirementsTab.tsx 只迭代回應的 groups／fields）。"
+    },
+    {
+      "id": "BR84.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'shows the updater from the requesting group and degrades for unknown groups'：五種值；突變 F10 使本案紅。"
+    },
+    {
+      "id": "BR84.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'keeps the failed field input and applies the reloaded value to the saved one'：2 次 PUT、其後 1 次 GET。；切籤後失敗欄位的輸入仍保留（審查 R-02，'keeps unsaved input and failure marks after switching tabs'）。"
+    },
+    {
+      "id": "BR84.6",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'clears a field with an empty PUT and never sends DELETE'：本體 {\"value\":\"\"}、無 on_behalf_of、無 DELETE。"
+    },
+    {
+      "id": "BR84.7",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'allows editing with K4 edit and renders read-only without it'：allow／deny 兩側；突變 F9 使本案紅。"
+    },
+    {
+      "id": "BR85.1",
+      "status": "OK",
+      "target": "frontend/src/pages/ProjectDetailPage.tsx",
+      "note": "唯一一份 fieldsBySystem；e2e 'keeps the overview unfilled count equal…' 斷言切籤零請求。"
+    },
+    {
+      "id": "BR85.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "總覽 Σ unfilled_count；任一失敗顯示「無法取得」（'keeps saved drafts when the reload fails…'）。"
+    },
+    {
+      "id": "BR85.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "儲存後重讀（'keeps the failed field input…' 的 GET 計數 2）；計數不在本地加減。"
+    },
+    {
+      "id": "BR85.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'keeps the overview unfilled count equal…' 全填段：0 且「未填」節點 0。"
+    },
+    {
+      "id": "BR85.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'hides the requirements tab and unfilled areas without K4 view'：兩區不在 DOM、/api/requirements 請求 0。"
+    },
+    {
+      "id": "BR85.6",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'keeps saved drafts when the reload fails and recovers on refresh'；突變 F8 使本案紅。；切籤後「已儲存、重新整理失敗」仍保留（審查 R-02）。"
+    },
+    {
+      "id": "BR86.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders honest placeholders…'：架構圖「尚無法取得」。"
+    },
+    {
+      "id": "BR86.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'lists at most five recent changes with honest scope, ordering and partial failure'：標示與空態逐字採 functional-design R-02 修正文字；未歸屬系統的圖（OPEN-H11）查不到。"
+    },
+    {
+      "id": "BR86.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'renders honest placeholders…'：記憶摘要固定說明、/api/memory 請求 0。"
+    },
+    {
+      "id": "BR87.1",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_endpoints.py",
+      "note": "專案清單五身分 E1–E5 ＋ 缺 K2（E11、E12）；謂詞唯一定義 membership_service._visible_project_ids_select；突變 M1–M3、M5a。"
+    },
+    {
+      "id": "BR87.2",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_endpoints.py",
+      "note": "系統清單 E6–E10、E13、E14、E15；三步順序在 MembershipFacade.list_visible_systems；突變 M4、M6、N2、N3。"
+    },
+    {
+      "id": "BR87.3",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "呼叫方向 router → MembershipFacade → HierarchyFacade；六個方法依簽章新增；hierarchy_facade／hierarchy_service 對 membership 的 import grep 為 0。"
+    },
+    {
+      "id": "BR87.4",
+      "status": "OK",
+      "target": "openapi.json",
+      "note": "只有兩支列舉 operation 的 description 漂移（git diff 2 行 +2/−2）；dump_openapi.py --check 與 check:types 綠。"
+    },
+    {
+      "id": "BR87.5",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_endpoints.py",
+      "note": "五身分 × 兩端點 ＋ 缺 K2；M1–M4 突變紀錄見 code-summary。"
+    },
+    {
+      "id": "BR87.6",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "list_projects／list_systems／resolve_work_target 等擁有者範圍方法不變（brain_gateway 仍呼叫它們，OPEN-PP23-6 ③）。寫入路徑的放寬範圍由 functional-design R-01 使用者裁決改為加守門（見 code-summary 設計文字回補表）。"
+    },
+    {
+      "id": "BR87.7",
+      "status": "OK",
+      "target": "backend/tests/test_project_visibility_static.py",
+      "note": "test_S1；突變 BR87.7-M 使其紅。"
+    },
+    {
+      "id": "BR88.1",
+      "status": "OK",
+      "target": "frontend/src/projects/projectsApi.ts",
+      "note": "純抓取函式層；呼叫端 .then/.catch 更新 state、cancelled 旗標；npm run lint 0 errors（react-hooks/set-state-in-effect）。"
+    },
+    {
+      "id": "BR88.2",
+      "status": "OK",
+      "target": "frontend/src/pages/ProjectsListPage.tsx",
+      "note": "三頁皆掛既有 LiveRegion；初始播報以 useState 初始值帶入。"
+    },
+    {
+      "id": "BR88.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'fans out the list page with at most four…'（在途最大值恰 4、不截斷）、'fans out the detail page fields first…'、'stops sending queued fan-out requests…'；突變 F1–F4。"
+    },
+    {
+      "id": "NFR8.100",
+      "status": "OK",
+      "target": "frontend/package.json",
+      "note": "零新環境變數、零 compose 變更、零新依賴：git diff 對 deploy/、*.env.example、.github/workflows/、backend/requirements.txt、backend/database.py、frontend/package.json 為零；validate_env_contract.py 綠。target 指向未改動的 package.json 作為零新依賴的證據檔。"
+    },
+    {
+      "id": "NFR11.100",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'shows the create-system action only to the owner…'：建立系統前後 pathname 變更 0 次；突變 F6 使本案紅。"
+    },
+    {
+      "id": "NFR11.101",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'validates, classifies failures and navigates once…'：pathname 變更恰 1 次、落在回應 id。"
+    },
+    {
+      "id": "NFR11.102",
+      "status": "OK",
+      "target": "frontend/tests/e2e/project-pages.spec.ts",
+      "note": "'switches tabs by keyboard without history entries or requests'：pathname 與 history.length 不變；突變 F5 使本案紅。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "合併前必修第 14 項（[PP-MB14]=A）：非成員仍被拒，但成員四端點對「不存在」與「存在但非成員」回同一個不含 id 的 404。test_E1（非成員改 404）、test_E11（逐位元相同）、test_E12（成員之內角色不足與缺 K3 仍 403）、test_E13（拒絕 log 照記）；實作在 backend/services/membership_facade.py 的 _require_project_role／_assert_project_exists。突變 M14-1、M14-2 使 test_E11 紅。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/member-pages.spec.ts",
+      "note": "畫面面：'shows a fixed not-found sentence without the project id when the member list is 404' 與 'keeps the permission sentence when the member list is 403'；實作在 frontend/src/membership/membershipApi.ts 的 ProjectNotFoundError。突變 F14 使前者紅。"
+    },
+    {
+      "id": "AC11.4.1",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "合併前必修第 14 項：需求欄位讀寫清三端點對非成員回與「系統不存在」逐位元相同的 404（test_H8），requirement_field.denied reason=not_member 照記（test_H9）；MCP 路徑的結果仍等於直接存取（backend/tests/test_mcp_bridge_e2e.py 的 test_ac11_4_1，形狀由 forbidden 變為 not_found）。實作在 backend/services/requirement_field_facade.py 的 _authorize。突變 M14-3、M14-4 使 H8／H9 紅。"
+    }
+  ]
+}

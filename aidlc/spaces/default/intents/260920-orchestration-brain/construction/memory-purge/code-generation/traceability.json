@@ -1,0 +1,298 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-purge",
+  "upstream_ids": [
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "ADR-0006",
+    "DG-1",
+    "FR4.5",
+    "FR4.5a",
+    "FR4.7",
+    "K-05",
+    "K-15",
+    "NFR6.1",
+    "NFR6.10",
+    "NFR6.2",
+    "NFR7.1",
+    "NFR7.10",
+    "NFR7.11",
+    "NFR7.12",
+    "NFR7.13",
+    "NFR7.14",
+    "NFR7.15",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR7.4",
+    "NFR8.10",
+    "OPEN-CG5-1",
+    "OPEN-ID9-1",
+    "OPEN-ID9-2",
+    "OPEN-ID9-3",
+    "OPEN-ID9-4",
+    "OPEN-ND9-1",
+    "OPEN-ND9-2",
+    "OQ-13",
+    "R-01",
+    "R-02",
+    "MB-11",
+    "MB-17"
+  ],
+  "coverage": [
+    {
+      "id": "NFR7.10",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "兩個清除目標各一個顯式交易：memory.memory_records（episodic ＋ expires_at < now()）與 memory.memory_audit_events（occurred_at < now() - interval '90 days'）。驗於 verify_purge_sql.sql 的 R1／R8。**二元判準已收窄**：上游判準文字逐字為 `memory.memory_records WHERE expires_at < now()`，缺 kind 過濾，照字面實作會刪掉 FR4.5 明文不約束的非 episodic 列（永久資料損失）。實作一律帶 kind = 'episodic'，並以 R4 ＋ 契約測試第 2 條鎖住。上游文字仍需修訂——OPEN-CG9-1"
+    },
+    {
+      "id": "NFR7.11",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "稽核列的來源是 DELETE 自己的 RETURNING（單一 data-modifying CTE），故「刪 N 列 ⇒ N 筆稽核」是結構恆等而非兩條敘述碰巧選到同一批列。actor 為 K) 區塊 seed 的保留系統 actor，以 username 查 id。驗於 R5（數量）／R6（集合相等、無重複、無遺漏）／R7（actor 是哨符列且非記憶擁有者）／S13 ＋ tests_pg 的 A2｜另涉及：schema_rbac.sql"
+    },
+    {
+      "id": "NFR7.12",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-purge.yml",
+      "note": "runs-on 為 [self-hosted, linux, x64, cloud360]；刪除步驟以 docker compose exec -T db 執行；本單元 diff 不含對 db 服務新增 ports:（deploy/ 整個目錄未被改動）；零新 GitHub secret（清除本體不用任何 secret，監看者只用內建 GITHUB_TOKEN）"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-watchdog.yml",
+      "note": "GitHub 託管 runner，每日查清除 workflow 最後一次成功的**排程** run；逾 3 天（或查不到任何一次）即開 issue（以固定標題前綴去重）並以非零碼結束。四個分支（fresh／stale／never／unreachable）已以 stub 化的 gh 實測，逐一回傳預期判定。驗於契約測試第 8 條"
+    },
+    {
+      "id": "NFR7.14",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-purge.yml",
+      "note": "兩者都是純 .yml（非 gh-aw 的 .md），無 engine: copilot、無 agent 呼叫。清除的 SQL 以字面形式存在於版控的 .sql 檔並以 stdin 餵入 psql；監看的判定是一次 gh api ＋ 一次時間戳比較。契約測試第 8 條另斷言 watchdog 不含 engine: copilot｜另涉及：.github/workflows/memory-retention-watchdog.yml"
+    },
+    {
+      "id": "NFR7.15",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "交易二只有 DELETE，沒有任何 INSERT，故 memory_audit_events 的列數只減不增。驗於 R8／R9（兩側邊界）＋ R10（交易一剛寫的列未被交易二刪除）"
+    },
+    {
+      "id": "NFR6.10",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "保留的實質要求是「不得顯式以更高權限覆寫」。SQL 檔內零連線參數（無身分覆寫旗標、無連線字串、無密碼）；workflow 的 psql 呼叫同樣沒有。身分與資料庫名取自**容器自己的** POSTGRES_USER／POSTGRES_DB（compose 在建立容器時從真實 deploy/.env 寫入的值）。驗於契約測試第 3 條，該條同時掃 SQL 檔與 workflow 的非註解 psql 行。**此需求本身仍是恆真的**（POSTGRES_USER 即 superuser，[ND2]=A），本單元不改善 OPEN-CG5-1｜另涉及：.github/workflows/memory-retention-purge.yml"
+    },
+    {
+      "id": "NFR8.10",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py",
+      "note": "零新部署設定。二元判準由這支 validator 承載（CI 的 repo-contract job 亦執行，本輪實跑通過）＋ 本單元 diff 不含 deploy/、deploy/render-env.sh、任一 .env.example、deploy/docker-compose.*.yml。注意偏離 D-1：清除 workflow 的 --env-file 指向版控且無機敏值的 deploy/.env.example，而非 deploy/.env——後者被 deploy.yml:377-378（if: always() ＋ rm -f）每次部署後刪除，指向它會讓清除每天硬失敗。"
+    },
+    {
+      "id": "FR4.5",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "90 天保存期的執行端，**僅 episodic**。`requirements.md:157` 逐字「episodic memory 保存 90 天」，schema_rbac.sql 的 expires_at COMMENT 逐字「FR4.5 scopes the 90-day retention to episodic memory ONLY」。R4 的 fixture 刻意放一列 kind = 'semantic' ＋ 過去 expires_at 並斷言它被保留"
+    },
+    {
+      "id": "FR4.5a",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-purge.yml",
+      "note": "承載形式為 GitHub Actions workflow，不是 backend/ 內新增的排程程式。決定性的映射邏輯（算出哪些列逾期、發出刪除）在版控的 .sql 檔內，由 psql 執行——純 Actions 步驟，不經 LLM 路徑｜另涉及：.github/workflows/memory-retention-watchdog.yml"
+    },
+    {
+      "id": "FR4.7",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "刪除留稽核。由 CTE 的結構保證（稽核列來自 DELETE 的 RETURNING），而非順序保證。R6 比對的是**集合相等**——那是 FR4.7 在列層級的實際內容；R5 只比數量，數量相等但對應錯亂仍會通過 R5"
+    },
+    {
+      "id": "K-05",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "本單元只消費這個 schema 契約，不新增也不修改任何契約（contract-summary.md:27 把 U9 列為三個無消費端的葉節點之一）。用到的四件事：expires_at 與 occurred_at 兩個截止欄位、memory schema 的隔離、DG-1 的「稽核無外鍵」、以及 why_not_existing_tests（既有測試走 SQLite，故驗證落在 memory-schema job 與 tests_pg）"
+    },
+    {
+      "id": "K-15",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "該腳本的 observable_side_effects 逐字「不含任何資料寫入」。`K)` 區塊**刻意不在** BLOCKS_TO_RUN 內，改由新增的 seed_retention_system_actor.py 承載。本輪對該檔的可執行改動只有一處：BLOCK_SENTINELS 新增 K 的條目（見 code-summary.md 的偏離 D-2），而 BLOCKS_TO_RUN 未變，故該腳本的行為與輸出完全不變（已實跑複驗）"
+    },
+    {
+      "id": "DG-1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "已由 U5 在 DDL 層定案（memory_audit_events 刻意不對 memory_records 設外鍵），並由 nfr-requirements/security-requirements.md §三 關閉。本單元是它的清除端：verify_purge_sql.sql 的清理段必須自己刪稽核列（沒有 CASCADE 可用），tests_pg 的 tearDown 同理"
+    },
+    {
+      "id": "R-01",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-purge.yml",
+      "note": "第一半（固定 compose 呼叫）：帶 -f deploy/docker-compose.deploy.yml，不依賴預設工作目錄；**--env-file 指向 deploy/.env.example 而非 deploy/.env**，因為後者在每次部署結束時被刪除（deploy.yml:376-378 的 rm -f，if: always()；rollback job 的 :472 同），指向它會讓清除每天失敗。第二半（concurrency）：**刻意不與 deploy-10-10 共用**（共用會讓每日排程取消排隊中的部署），改以 test_terminated_before_commit_deletes_nothing 把「最壞情況是安全的」從宣稱變成可執行的證明｜另涉及：backend/tests_pg/test_purge_atomicity.py"
+    },
+    {
+      "id": "R-02",
+      "status": "OK",
+      "target": "backend/scripts/purge_dry_run.sql",
+      "note": "dry-run 除計數外印出選取範圍的邊界（兩個集合各自的 min／max 時間戳 ＋ 最多 10 筆 id ＋ 其時間戳），並多一個對照組查詢列出**不該**被刪的逾期非 episodic 列。只讀、零 DML（契約測試第 4 條以剝除註解後的可執行 SQL 比對），且不印 content／embedding／owner_user_id"
+    },
+    {
+      "id": "OPEN-ID9-4",
+      "status": "OK",
+      "target": "backend/scripts/purge_dry_run.sql",
+      "note": "不可逆操作的前置驗證。workflow 的 dry_run 輸入預設 true（只影響手動觸發；排程一律走實際清除），DEPLOY.md 第 2.2.11 節寫明首次啟用前的程序｜另涉及：DEPLOY.md｜2026-10-23 依第 17 項重新裁決更新時序：workflow_dispatch 在 ut 併入 main 前不可用，dry-run 改於併入 main 後立即在 main 上執行；因記憶為新功能，部署日＋90 天前排程選取皆為零列，故 dry-run 仍先於第一次實際刪除（code-generation review-03 Major）"
+    },
+    {
+      "id": "OPEN-ID9-3",
+      "status": "Deferred",
+      "target": "backend/scripts/verify_memory_schema.sql",
+      "note": "既有 SQLite 測試路徑看不到 seed（helpers.make_session() 走 Base.metadata.create_all()，不執行 schema_rbac.sql 的 seed）。本單元以 memory-schema job 的 S13（哨符列存在 ＋ 三道可在資料庫層查證的鎖）與 R1-R10 部分關閉它。**餘留**：backend job 的 SQLite 路徑仍然看不到那一列｜另涉及：backend/scripts/verify_purge_sql.sql"
+    },
+    {
+      "id": "ADR-0006",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-purge/code-generation/code-summary.md",
+      "note": "四面向逐格落實見 code-summary.md §七。IAM：哨符列的四道鎖（大寫 username／合法 bcrypt hash／非 canonical role／is_active FALSE）＋ watchdog 的 issues: write 為具名權限增量（OPEN-ID9-2）。Encryption：無增量，清除流量留在 compose 內部。Network exposure：零增量，db 無 host port、監看者只有出向呼叫。Audit logging：NFR7.11 由單一 CTE 結構性保證。PBT：N/A（非豁免）——本單元無自己擁有的純函式。"
+    },
+    {
+      "id": "OQ-13",
+      "status": "OK",
+      "target": ".github/workflows/memory-retention-purge.yml",
+      "note": "workflow 的落點與排程時間（檔名、每日 17:41 UTC）由 infrastructure-design 定案，本站只是實作它。cron 值為本輪選定：17:41 UTC = 自架主機當地 01:41，且與 repo 內既有六個排程（00:37／21:13／22:29／23:00／每 6 小時的 :00／05:47 週三）皆不相撞"
+    },
+    {
+      "id": "OPEN-ND9-1",
+      "status": "Deferred",
+      "target": "（未處置；DEPLOY.md 第 2.2.11 節已明載後果）",
+      "note": "系統 actor 列會出現在 Admin 使用者清單上，/api/auth/list 的 total 會 +1。排除它需要改既有端點的查詢，屬 U19／既有端點的範圍。本單元的處置是把「不要刪掉它、刪掉的後果是什麼」寫進 users 表的 COMMENT（資料庫內可見）與 DEPLOY.md"
+    },
+    {
+      "id": "OPEN-ND9-2",
+      "status": "Deferred",
+      "target": "（未處置）",
+      "note": "是否為清除新增真正受限的資料庫角色。代價含新憑證（打破 NFR8.10）與公開 Actions log 的風險；附帶好處是讓 OPEN-CG5-1 變得可驗證。與 OPEN-CG5-1 同一個決定"
+    },
+    {
+      "id": "OPEN-CG5-1",
+      "status": "Deferred",
+      "target": "（未處置）",
+      "note": "grant 邊界未被 CI 驗證。驗它需要第二個資料庫角色，而 service container 只有 superuser。本單元是一個**有刪除權**的新消費者，故這個缺口在本單元之後比之前更值得補"
+    },
+    {
+      "id": "OPEN-ID9-1",
+      "status": "Deferred",
+      "target": ".github/workflows/memory-retention-watchdog.yml",
+      "note": "沒有人監看監看者。依賴面已最小化（只依賴 GitHub 自身，嚴格小於被監看者的 GitHub ＋ 自架主機 ＋ runner 服務 ＋ 資料庫容器）。GitHub Actions 長期故障或 workflow 被誤停用時兩者同時靜默。該 workflow 的檔頭逐字寫下這個邊界"
+    },
+    {
+      "id": "OPEN-ID9-2",
+      "status": "Deferred",
+      "target": ".github/workflows/memory-retention-watchdog.yml",
+      "note": "issues: write 在本 repo 的排程 workflow 中無先例。範圍已是最小（不含 contents: write，不能改程式碼）。替代方案（改用 gh-aw 的 safe-outputs）已寫明且不需重新設計，但它會把一個二元的時間戳比較放進 LLM 路徑"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "本單元交付「逾 90 天的情節記憶被清除」這一半：列被實際刪除，故它不可能再出現在脈絡組裝中。驗於 verify_purge_sql.sql 的 R1（逾期列已不存在）。脈絡組裝的讀取路徑本身屬 U8 memory-service。"
+    },
+    {
+      "id": "AC4.2.1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/inception/user-stories/stories.md",
+      "note": "使用者主動刪除自己的記憶（FR4.6）。擁有者為 U8 memory-service；本單元只處理保存期到期的自動清除（FR4.5），兩者在稽核上刻意以 deleted_by_user／purged_by_retention 分開（schema_rbac.sql 的 action COMMENT 逐字）。"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/inception/user-stories/stories.md",
+      "note": "使用者刪除動作的稽核（FR4.7 的使用者路徑）。擁有者為 U8 memory-service。本單元承載的是清除路徑的稽核（NFR7.11），已於 R5／R6／R7 驗證。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-data/nfr-requirements/security-requirements.md",
+      "note": "靜態加密，擁有者 U5 memory-data（主機層 LUKS）。本單元無增量——不新增儲存體、不新增資料庫物件。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/memory-data/nfr-requirements/security-requirements.md",
+      "note": "傳輸加密，擁有者 U5 memory-data（compose 內部流量）。[N1]=A 使清除流量同樣留在 compose 內部，故該前提繼續成立；監看者只打 GitHub API（HTTPS）且不傳輸任何記憶內容。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/embedding-port/nfr-requirements/security-requirements.md",
+      "note": "擁有者為 embedding-port 單元。本單元不碰 embedding：清除只以 kind 與時間戳選列，且刻意不讀 content／embedding 兩欄。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "backend/scripts/purge_expired_memory.sql",
+      "note": "稽核保存 90 天、以自身 occurred_at 為鍵（擁有者 U5 memory-data，且是本 intent 唯一外溢到版控 SQL 的 NFRx.y——ix_memory_audit_events_occurred_at 的註解逐字引用它）。**本單元是該表唯一的 DELETE 端**，故 NFR7.2 的執行面實際落在這裡：交易二的 occurred_at < now() - interval '90 days'。驗於 R8（91 天前已刪）／R9（89 天前保留）。"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-infra/nfr-requirements/security-requirements.md",
+      "note": "擁有者為 brain-infra 單元。本單元零進程、零監聽埠、零端點，無對應落點。"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "N/A",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/hierarchy-data/nfr-requirements/security-requirements.md",
+      "note": "擁有者為 hierarchy-data／hierarchy-service 單元。本單元不碰專案階層。"
+    },
+    {
+      "id": "MB-11",
+      "status": "OK",
+      "target": "backend/tests/test_system_account_protection.py",
+      "note": "合併前必修第 11 項（裁決：程式擋下＋列表隱藏）。實作 backend/services/system_accounts.py ＋ backend/services/user_router.py（刪除、改角色、啟停用、授權申請核准／拒絕回 409；GET /list 查詢層排除）。測試 A1–A7；兩項突變皆致紅後還原。未涵蓋：GET /api/collab/users 仍列出保留帳號；資料庫層直接 DELETE 仍可行。"
+    },
+    {
+      "id": "MB-17",
+      "status": "Deferred",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/functional-design/merge-blockers.md",
+      "note": "合併前必修第 17 項。2026-10-20 的裁決（併入 main 前以 workflow_dispatch、ref=ut 手動觸發過渡，屬人工義務）經查無法執行：GitHub 文件 workflow_dispatch 一節逐字『This event will only trigger a workflow run if the workflow file exists on the default branch』，而 origin/main 沒有兩支 workflow。DEPLOY.md 過渡程序未寫入。2026-10-23 使用者重新裁決：接受延後並設期限——本分支第一次部署到 staging 後，ut 須在 90 天內併入 main（記憶為新功能，部署前無資料，期限內不會有資料超過保存期）；已寫入 DEPLOY.md §2.2.11。屬持續中的人工義務，故維持 Deferred。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-CG9-1",
+      "kind": "upstream-correction",
+      "summary": "NFR7.10 的二元判準文字逐字為 `memory.memory_records WHERE expires_at < now()`，漏了 kind = 'episodic'。照字面實作會刪掉 FR4.5 明文不約束的非 episodic 列——永久資料損失。本單元的實作已收窄並以 R4 ＋ 契約測試第 2 條鎖住，但上游文字仍是錯的",
+      "landing": "下一輪 nfr-requirements 修訂或 practices-discovery"
+    },
+    {
+      "id": "OPEN-CG9-2",
+      "kind": "pre-existing-defect",
+      "summary": "services/auth.py 的 verify_password() 沒有 try/except，而 bcrypt.checkpw 會拋 ValueError。**本輪以真實端點實測後，這一項比計畫原本的描述嚴重得多**：觸發條件不需要資料庫內有畸形 hash，攻擊者自己的輸入就夠——POST /api/auth/login 帶一個**已存在的 username** ＋ 73 位元組以上的密碼回 HTTP 500，而不存在的 username 回 401（實測三組：72 位元組→401、73 位元組→500、不存在的帳號＋73 位元組→401）。那是一個今天就可用、未經驗證即可遠端觸發的帳號存在性 oracle。auth.py 不屬本 packaging 單元，且 team.md 明文反對在功能變更的同一個 PR 夾帶既有共用程式的重構",
+      "landing": "擁有 auth.py 的後續單元或 intent（建議另開 issue，優先度高於原本的評估）"
+    },
+    {
+      "id": "OPEN-CG9-3",
+      "kind": "upstream-correction",
+      "summary": "infrastructure-specification.md §五 第 2 步逐字把「重跑 schema_rbac.sql」寫成既有環境取得 seed 的**唯一路徑**。該檔是單一交易且 C) RBAC 區塊開頭逐字為 `DELETE FROM role_permissions;`，故在既有環境重跑整支檔會清掉任何經 Admin UI 調整過的權限矩陣。本單元改以 seed_retention_system_actor.py 承載，並在 DEPLOY.md 第 2.2.11 節與 schema_rbac.sql 檔頭明文更正",
+      "landing": "下一輪 infrastructure-design 修訂"
+    },
+    {
+      "id": "OPEN-CG9-4",
+      "kind": "upstream-correction",
+      "summary": "security-requirements.md 的 NFR6.10 二元判準逐字寫「`docker compose exec -T db psql` 的預設身分即 POSTGRES_USER」。實際上 psql 的預設身分是容器內的 OS 使用者、預設資料庫是與該使用者同名的那一個——**不是 POSTGRES_DB**。該敘述在本部署只因為 POSTGRES_USER 的值字面上就是 `postgres` 而碰巧成立，而資料庫名那一半在任何情況下都是錯的。實作改為從容器自己的環境讀 PGUSER／PGDATABASE（無 -U、無連線字串，判準原文仍滿足）",
+      "landing": "下一輪 nfr-requirements 或 nfr-design 修訂"
+    },
+    {
+      "id": "OPEN-CG9-5",
+      "kind": "threshold-ambiguity",
+      "summary": "monitoring-design.md §二 的門檻表寫「逾 3 天即開 issue」（> 3），而同節 §二之二 的理由欄寫「容忍兩次連續失敗」（>= 3）。兩者差一天、差一次漏跑。實作取門檻值的字面意義（> 3，即容忍三次連續漏跑），並在 workflow 內註明這個落差而非靜默擇一",
+      "landing": "下一輪 infrastructure-design 修訂或 practices-discovery"
+    },
+    {
+      "id": "tcms-test-cases",
+      "kind": "blocking-stage",
+      "summary": "project.md ## Mandated 要求每個 intent 的 construction 必經 tcms-test-cases 並完成四項產出，未完成不得進入部署階段。**該 stage 至今未對本 intent 的任何單元執行過**。本單元的分桶預判見 cicd-pipeline.md §六：只能手動桶為「監看者的端到端行為」（需製造『清除連續 3 天未成功』的狀態，CI 無法合成）",
+      "landing": "construction 階段，部署之前"
+    }
+  ]
+}

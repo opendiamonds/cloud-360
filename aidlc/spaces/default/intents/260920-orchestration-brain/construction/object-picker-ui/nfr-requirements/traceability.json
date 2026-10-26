@@ -1,0 +1,39 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "object-picker-ui",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR5", "NFR6", "NFR7", "NFR8", "NFR9", "NFR10", "NFR11"],
+  "coverage": [
+    { "id": "NFR1", "status": "N/A", "target": "inception NFR1 — 意圖識別準確率（路由層，U11）。選單是直接選取，不經意圖識別" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.160" },
+    { "id": "NFR3", "status": "N/A", "target": "inception NFR3 — 首字回應時間，量測母體為入口頁的使用者送出（requirements.md:482）。set_work_target 不是對話回合，選單不在該計時區間內" },
+    { "id": "NFR4", "status": "N/A", "target": "inception NFR4 — 大腦狀態放 Redis 與重啟還原。選單不持有任何跨開啟的狀態（BR12.1 每次重抓、BR12.4 關閉即丟），作業對象的正本由 U13／U10 持有；NFR2.160 已約束選單不保留本地副本" },
+    { "id": "NFR5", "status": "OK", "target": "NFR5.160" },
+    { "id": "NFR6", "status": "N/A", "target": "inception NFR6 — 記憶層 schema 隔離。選單不讀寫記憶" },
+    { "id": "NFR7", "status": "N/A", "target": "inception NFR7 — episodic memory 的保存與刪除稽核。選單不觸及 episodic 寫入，且不寫任何瀏覽器儲存（OPN-15）" },
+    { "id": "NFR8", "status": "OK", "target": "NFR8.160" },
+    { "id": "NFR9", "status": "N/A", "target": "inception NFR9 — 成本原則（LLM 花費）。選單零 LLM 呼叫" },
+    { "id": "NFR10", "status": "N/A", "target": "inception NFR10 — 路由層模型可替換性。選單不選模型" },
+    { "id": "NFR11", "status": "OK", "target": "NFR11.160" }
+  ],
+  "reverse": [
+    { "id": "OPN-01", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "每次開啟的請求數有常數上界：專案清單 1 次、系統清單只在展開群組時各至多 1 次（F-05）。無 inception 父條：NFR1–NFR11 無一涵蓋前端請求數" },
+    { "id": "OPN-02", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "關閉後不發新請求、晚到回應永不上畫面（BR12.4）。無 inception 父條" },
+    { "id": "OPN-03", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "一次送出恰一個建立請求（BR14.4；objectCreateAction 非冪等）。無 inception 父條" },
+    { "id": "OPN-04", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "身分未決時 refreshMe 至多 1 次後轉 error，不無限載入（F-03）。無 inception 父條" },
+    { "id": "OPN-05", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "連線離開 ready 即關閉選單、焦點回 ContextBar 容器、播報恰一次（F-02）。無 inception 父條" },
+    { "id": "OPN-06", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "搜尋零請求（BR13.4）。無 inception 父條" },
+    { "id": "OPN-07", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/performance-requirements.md", "note": "無障礙可量測面與開啟中選單的 axe 掃描點（BR15.*、F-04）。無 inception 父條：requirements.md 無無障礙 NFR" },
+    { "id": "OPN-11", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "建立入口的前端判定是呈現；雙向 e2e；建立只經 objectCreateAction（BR14.1–BR14.3）。無 inception 父條；依據 ADR-0006 IAM" },
+    { "id": "OPN-12", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "擁有者判定只有一份（isOwnedByMe），可選性與可建系統同源。無 inception 父條" },
+    { "id": "OPN-13", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "名稱以文字節點呈現、零 innerHTML，含惡意名稱 e2e。無 inception 父條" },
+    { "id": "OPN-14", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "搜尋以子字串比對、不編譯正規表示式。無 inception 父條" },
+    { "id": "OPN-15", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "零瀏覽器儲存、零主控台輸出、token 不進網址。父條候選 NFR7 是伺服器端 episodic 保存，不涵蓋瀏覽器，故宣告孤兒" },
+    { "id": "OPN-16", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/security-requirements.md", "note": "在別人的專案下建系統於選單內不可達；404 顯示 other 文案（F-01 第二支）。無 inception 父條" },
+    { "id": "OPN-21", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "數字 id 與字串 id 在送出邊界轉換，「目前」標示同方向比較。父條候選 NFR5 管 WS 契約的單一來源，本條管 HTTP 與 WS 兩種型別之間的轉換，故不掛" },
+    { "id": "OPN-22", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "零新依賴。無 inception 父條" },
+    { "id": "OPN-23", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "e2e 新檔與 U17 掃描清單擴充（重開 U17 檔案，須揭露）。無 inception 父條" },
+    { "id": "OPN-24", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "不用 fanoutQueue、以 cancelled 旗標丟棄而非中止（F-05）。無 inception 父條" },
+    { "id": "OPN-25", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "突變結果記入 automation-test-plan.md（tcms-test-cases 必做 3）。無 inception 父條" },
+    { "id": "OPN-26", "status": "N/A", "target": "construction/object-picker-ui/nfr-requirements/tech-stack-decisions.md", "note": "team.md 測試底線 A／B 不適用、C 適用的逐條判定。無 inception 父條" }
+  ]
+}

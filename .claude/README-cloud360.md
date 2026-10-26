@@ -2,7 +2,7 @@
 
 本目錄由 upstream [`awslabs/aidlc-workflows`](https://github.com/awslabs/aidlc-workflows) 的 `v2` 分支產出複製而來。除下列**三處**外，內容與 upstream 一致。
 
-版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.9.0**（ADR-0014）。升級歷程：2.5.11 並行安裝（upstream commit `257b43a`，見 commit `4f2b626`）→ 2.5.33（commit `f17c40f`，ADR-0011）→ 2.7.0（ADR-0013）→ 2.9.0。
+版本的單一事實來源是 `.claude/tools/aidlc-version.ts` 的 `AIDLC_VERSION`（跑 `/aidlc --version` 可查），目前為 **2.11.0**（ADR-0023）。升級歷程：2.5.11 並行安裝（upstream commit `257b43a`，見 commit `4f2b626`）→ 2.5.33（commit `f17c40f`，ADR-0011）→ 2.7.0（ADR-0013）→ 2.9.0（ADR-0014）→ 2.11.0（ADR-0023，改為 native 執行檔）。
 
 ## 調整 1：`settings.json` 移除環境相依設定
 
@@ -47,6 +47,8 @@ cp .claude/settings.local.json.example .claude/settings.local.json
 > ⚠️ upstream README 指出 v2 在 **Claude Opus 4.8** 上表現最佳；較弱的模型可能讓 conductor 跳過 reviewer pass 或 learnings ritual、草率通過 approval gate。若要固定模型，請寫在自己的 `settings.local.json`。
 
 ## 重新安裝或升級時
+
+> **2.11.0 起改走 native 執行檔**：升級指令為 `aidlc update`，再執行 `aidlc config --yes`。`config` 會因 `ai-dlc-principles.md` 是本地客製而停下，這是預期行為：**不要加 `--force`**，先把該檔移開、跑完 `config`、再放回。`settings.json` 由 `config` 管理，agent 在工作流程中無法修改，調整 1 要在外部終端機做。`doctor` 的「Plugins: 1 need attention」是 tcms 尚未整理成正式 plugin 的既知狀態，**不要**跑 `aidlc engine plugin sync --prune-missing`。
 
 從 upstream 重新複製 `dist/claude/` 會**覆蓋**上述兩處調整。覆蓋後請：
 

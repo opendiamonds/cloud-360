@@ -1,0 +1,211 @@
+{
+  "stage": "code-generation",
+  "unit": "a11y-gate",
+  "upstream_ids": [
+    "A11Y-S1",
+    "A11Y-S2",
+    "A11Y-S3",
+    "A11Y-S4",
+    "A11Y-S5",
+    "A11Y-S6",
+    "A11Y-S7",
+    "A11Y-S8",
+    "A11Y-S9",
+    "A11Y-S10",
+    "C-01",
+    "C-02",
+    "C-03",
+    "C-04",
+    "C-05",
+    "C-06",
+    "C-07",
+    "C-08",
+    "D-01",
+    "D-02",
+    "D-03",
+    "D-04",
+    "D-05",
+    "D-06",
+    "D-07",
+    "D-08",
+    "AC-A11Y.1",
+    "AC-A11Y.2",
+    "N-9"
+  ],
+  "coverage": [
+    {
+      "id": "A11Y-S1",
+      "status": "OK",
+      "target": "frontend/package.json",
+      "note": "只在 devDependencies；grep -rn \"axe-core\" frontend/src 為 0；dist 以整字 axe／AxeBuilder／axe-core 搜尋為 0（字面子字串僅 Tailwind 的 leading-relaxed）"
+    },
+    {
+      "id": "A11Y-S2",
+      "status": "OK",
+      "target": "frontend/package-lock.json",
+      "note": "node_modules/@axe-core/playwright 與 node_modules/axe-core 皆有 integrity；package.json 與 lockfile 同時變更"
+    },
+    {
+      "id": "A11Y-S3",
+      "status": "OK",
+      "target": "frontend/package.json",
+      "note": "@axe-core/playwright 4.13.0，發布 2026-08-11（滿 67 天）；peer playwright-core >= 1.0.0 涵蓋 1.61.1"
+    },
+    {
+      "id": "A11Y-S4",
+      "status": "OK",
+      "target": "frontend/package-lock.json",
+      "note": "npm audit 全量 5 筆皆為既存，新套件樹（2 個套件、無相依）0 筆"
+    },
+    {
+      "id": "A11Y-S5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "可驗證條件依 C-01 取代；isolate() 兜底記錄並 abort，M1／M2 實證"
+    },
+    {
+      "id": "A11Y-S6",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "token 為固定假值 a11y-fake-token；附件只含 violations 與 incomplete"
+    },
+    {
+      "id": "A11Y-S7",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "可驗證條件依 C-02 取代（刪除 passes 非空）；ready() 就緒與排除斷言，M3／M4 實證"
+    },
+    {
+      "id": "A11Y-S8",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "withTags 逐字為 wcag2a、wcag2aa、wcag21a、wcag21aa；只有 violations 擋"
+    },
+    {
+      "id": "A11Y-S9",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y-baseline.json",
+      "note": "基準 1 筆附 reason；規則 1／2／4／5 由 spec 的兩個基準 test 機械檢查（M6／M7／M8），規則 3 為審查把關，第一次實跑清單記於 code-summary.md 第五節"
+    },
+    {
+      "id": "A11Y-S10",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "掃描面依 C-04／C-07 擴為 18 點"
+    },
+    {
+      "id": "C-01",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "HTTP 兜底 abort＋記錄；WebSocket 兩條具體樣式；M1、M2"
+    },
+    {
+      "id": "C-02",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "17 列就緒／排除規格逐列實作；記憶摘要籤內容節點指定為 memory-summary-unavailable"
+    },
+    {
+      "id": "C-03",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "規則 5 清單、根節點清單（另加橫幅外層與 test-id 前綴，較 C-03 更嚴）、鍵為規則＋穩定選擇器、不得 nth-child、過期以全部掃描點最後一次嘗試為準"
+    },
+    {
+      "id": "C-04",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "增列掃描點 15、16、17"
+    },
+    {
+      "id": "C-05",
+      "status": "N/A",
+      "target": "上游文件陳述的更正（requirements.md 的命中數與 [R7] 標籤的歧義），無程式落點",
+      "note": "上游文件陳述更正，無程式落點"
+    },
+    {
+      "id": "C-06",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "第 19 個 test：375×812 下 scrollWidth <= clientWidth，M9 實證"
+    },
+    {
+      "id": "C-07",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "掃描點 13、14 與第 18 點；入口頁閘以程式的 K1 view 為準（非 C-07 字面的 C1），第 18 點落在 /cost"
+    },
+    {
+      "id": "C-08",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "每個掃描點一個 test()；tech-stack 計數更正無程式落點"
+    },
+    {
+      "id": "D-01",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "第 18 點 include 橫幅外層，就緒 test-id 以 include 根節點為範圍，M11 實證"
+    },
+    {
+      "id": "D-02",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "逐列互動與文字定位器；入口頁以 pathname 判定"
+    },
+    {
+      "id": "D-03",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "先寫檔再斷言；M10 實證重試排在過期檢查之前，備案未啟用，playwright.config.ts 未改"
+    },
+    {
+      "id": "D-04",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "stabilize() 依序取 id、data-testid、aria-label、role＋名稱；唯一頁殼條目以 role=paragraph 取得，未觸發停損（請審查者確認，見 code-summary.md 第十一節第 5 點）"
+    },
+    {
+      "id": "D-05",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "萬用 routeWebSocket 兜底最先註冊、連線前關閉並記錄；不依賴 page.on(websocket)"
+    },
+    {
+      "id": "D-06",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "axe.getRules 實查：69 條；landmark／region／heading 類不執行，duplicate-id-aria／list／listitem 執行；與 C-03 一致，結果記於 code-summary.md 第七節"
+    },
+    {
+      "id": "D-07",
+      "status": "Deferred",
+      "target": "交 build-and-test（ALWAYS）列為跨單元一致性發現：K-13／K-19／K-20 的 brain-* 前綴宣稱與實際 test-id 不符，由使用者裁決改契約或改程式 id",
+      "note": "契約 brain-* 前綴與實際 test-id 的落差交 build-and-test 列為跨單元一致性發現；本單元不改契約或程式 id"
+    },
+    {
+      "id": "D-08",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "M11、M12 皆紅在指定層"
+    },
+    {
+      "id": "AC-A11Y.1",
+      "status": "Deferred",
+      "target": "交 build-and-test 與 tcms-test-cases 人工驗證（純鍵盤完成流程，axe 判不到）",
+      "note": "純鍵盤完成流程，axe 判不到，交 build-and-test 與 tcms-test-cases 人工"
+    },
+    {
+      "id": "AC-A11Y.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "第 19 個 test（手機寬度無橫向捲動），M9 實證"
+    },
+    {
+      "id": "N-9",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "無障礙自動掃描機制：21 個 test，違規即讓 ui-regression 變紅"
+    }
+  ]
+}

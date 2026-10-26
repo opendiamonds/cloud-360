@@ -1,0 +1,785 @@
+{
+  "stage": "code-generation",
+  "unit": "membership-service",
+  "upstream_ids": [
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR1.6",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR3.6",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR5.4",
+    "BR5.5",
+    "BR5.6",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR6.4",
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "NFR12.5",
+    "NFR12.6",
+    "NFR12.7",
+    "NFR12.8",
+    "NFR12.9",
+    "NFR12.10",
+    "NFR12.11",
+    "NFR12.12",
+    "NFR12.13",
+    "NFR12.14",
+    "NFR12.15",
+    "NFR12.16",
+    "NFR12.17",
+    "NFR12.18",
+    "NFR12.19",
+    "NFR12.20",
+    "NFR12.21",
+    "NFR12.22",
+    "NFR12.23",
+    "NFR12.24",
+    "NFR12.25",
+    "NFR12.26",
+    "NFR12.27",
+    "NFR12.28",
+    "NFR12.29",
+    "AC12.1.1",
+    "AC12.1.2",
+    "AC12.1.3",
+    "AC12.2.1",
+    "AC12.2.2",
+    "AC12.2.3",
+    "AC12.2.4",
+    "AC12.3.1",
+    "AC12.3.2",
+    "AC12.3.3",
+    "AC12.4.1",
+    "AC12.4.2",
+    "AC12.4.3",
+    "AC12.4.4",
+    "AC12.5.1",
+    "AC12.5.2",
+    "AC12.5.3",
+    "AC12.6.1",
+    "AC12.6.2",
+    "AC12.6.3",
+    "MB-1",
+    "MB-4",
+    "MB-10",
+    "MB-15",
+    "MB-16"
+  ],
+  "coverage": [
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`MembershipFacade` 是 per-project 判定與成員關係受保護操作的唯一入口；`membership_router` 不 import `membership_service`（實測 0 命中），既有 `user_router` 的擴充也只經 facade。**無機械強制**（承接 `OPEN-FD19-3`／`K-07` 的 `OQ-N2`）：任何人直接 `SELECT project_members` 就繞過全部授權，而繞過是靜默的。本站不宣稱已守住，見 `open_items` 的 `OPEN-CG19-1`。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/membership_router.py",
+      "note": "兩層串聯**兩層都看得見**：全域層由 `require_story_action(\"K3\", view|edit)` 這個既有 dependency 承載（**本單元不重新實作它**），per-project 層在 `membership_facade._require_project_role`。facade 另以 `user_can(..., \"K3\", ...)` 自行驗一次全域層，因為同進程呼叫端（`U20`／`U13`）**沒有 dependency 鏈**——HTTP 路徑因此驗兩次同一個謂詞，刻意。`F5b` 以三個案例分別打中各一層（全域過／per-project 不過、per-project 過／全域不過、兩層都不過）。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "消歧義宣告。`sync` 同進程呼叫經 facade 是允許的——`user_router` 與 `hierarchy_router` 都是同進程呼叫端，兩者都走 facade。本站**沒有**任何「禁止同進程呼叫」的敘述（`project.md` 記過 `ProjectHierarchy` 把兩件事寫成同一句而自相矛盾的形狀）。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "每個公開方法的**第一個位置參數**是 `principal`，`project_id`／`user_id` 一律具名（實測：八個方法簽章皆為 `(self, principal, *, ...)`）。facade 不自行從 request 取身分——`mint_principal(current_user)` 在 router 層呼叫。`Principal` 沿用 `hierarchy_facade` 的那一個（`team.md` 的單一真實來源：欄位相同、`U19 → U7` 依賴邊本已存在），附帶好處是 `_MINT` 令牌讓「拿不到 principal 就呼叫不了 facade」是型別層事實。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/services/membership_errors.py",
+      "note": "四個領域例外**都不繼承 `HTTPException`**（`MembershipError(Exception)` 為基底）。轉譯的唯一落點是 `membership_router._translate`／`_guard_response`。授權判定在任何**寫入**之前：`_authorize_global` → `_assert_project_exists` → `_require_project_role` → 取鎖 → 守門 → 寫入。"
+    },
+    {
+      "id": "BR1.6",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`resolve_project_role` 查無列回 `None`（`scalar_one_or_none`），**不是**例外、不是預設角色。`M5` 驗兩側。`_require_project_role` 把 `None` 當拒絕，`F5b`／`E1`(b) 是 `AC12.5.2` 的 deny 側。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "單一謂詞 `admin_count_after(project_id, changing_user_id, new_role)`。兩條寫入路徑經共同上游 `assert_still_has_admin`（`remove_member`／`change_role`，含自我移出與自我降級），第三條（停用）走同一謂詞的**集合版** `projects_losing_last_admin`。`F2` 驗三條路徑各自命中與各自放行；`NFR12.12` 的等價測試（`M7`）把「集合版是單專案判定的量化形式」變成可驗證而非宣稱。**2026-10-21 修訂（合併前必修第 1 ＋ 4 項）**：停用路徑改以「無合格接手人」為判準（`projects_losing_last_admin` ＋ 單一謂詞 `is_qualified_successor`），不再是 `admin_count_after` 的集合版；自我降級／自我移出仍走 `admin_count_after`（這兩條沒有後續改選可補位）。`F9`／`F10` 驗新判準。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "**沒有**第二個謂詞。全檔對「至少一位成員」零實作（唯一的成員計數是 `list_members` 的回傳長度，供測試觀察，不是守門）。`admin_count_after` 的 docstring 寫明成員那一面是推論而非獨立規則。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`assert_can_deactivate` 只呼叫 `projects_losing_last_admin`（純 `SELECT`），無寫入、無取鎖。`F2` 在三條路徑被拒之後斷言 alice 的角色完好；`E4`／`E5`／`E6` 斷言被拒後 `is_active` 仍為 True。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`create_project_with_owner`：`HierarchyFacade.create_project_nocommit`（新變體，`flush` 不 `commit`）＋ `add_member(role=project_admin, invited_by=None)` ＋ **一次 commit**。`E7`(a) 驗成功後必有該列且 `invited_by` 為 `NULL`；`E7`(b) 以 patch 讓成員寫入失敗，斷言**連專案列都沒有**。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`assert_invitee_has_global_permission` 在 `add_member` **之前**、同一交易內；缺權限 raise `MissingGlobalPermission` 並附受邀者 id 與缺的 `K3.view`（`AC12.5.1` 的「說明他缺什麼」）。門檻取 `K3.view` 而非 `edit`，理由寫在該常數的 docstring（取 `edit` 會讓四個唯讀角色全部無法被邀請，而沒有任何需求要求那樣）。`F3` 第三段驗被拒後 `project_members` 列數不變。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`add_member` 先 `resolve_project_role`，已是成員即 raise（**先查再拒**，故錯誤訊息是業務語意而非資料庫唯一約束違反）。`F3` 第二段驗重複邀請被拒且該 `(project, user)` 仍只有一列。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`remove_member` 在鎖內重讀目標角色，`None` 即 commit 後回 `None`（成功）。`F4` 驗三種情形：曾是成員已被移除、從未是成員。`E2` 驗 HTTP 側連續兩次 DELETE 都是 204。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`set_member_role` 只 `UPDATE` 指名的那一列——**沒有任何「把其他 admin 降級」的動作**。`F5` 的第二半斷言「兩位**都能執行**管理動作」而非只斷言「兩位都是管理者」，而那個區別是它能抓到覆寫突變的全部（覆寫之下第二位仍是管理者，被降級的是第一位）。"
+    },
+    {
+      "id": "BR3.6",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "成功是一級行為：`F3` 驗成功邀請後清單必然多一列；`F4`／`E2` 驗成功移出後少一列；`F2` 的 allow 側在移出 alice 後斷言 `resolve_project_role` 回 `None`（「其後讀取本專案資料被拒」的伺服器側事實，由 `BR1.6` 的路徑自動成立）。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/membership_selection.py",
+      "note": "`select_successor` 在**自己的模組**裡。以 `ast` 解析該檔，import 集合**恰為三項**：`__future__`、`typing`、`services.membership_types`；`sqlalchemy`／`Session`／`httpx`／`HTTPException` 在**程式行**（docstring 與註解除外）的命中數皆為 **0**。**量測方式要寫明**：對該檔跑裸 `grep` 會各命中一次，命中的是它 docstring 裡那段「沒有這四者」的散文自己——純度要看 import 集合與程式行。facade 的對應方法是 `staticmethod`，故它拿不到 `self._db`（型別層事實）。這是 ADR-0006 PBT 能作用的結構前提。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/membership_selection.py",
+      "note": "`min(members, key=lambda s: (s.joined_at, s.user_id))`，形狀沿用 `backend/cost/estimate_readers.py:247-251` 的 `best_clouds`。`F1` 的 PBT 驗**排列不變性**；突變（tie-break 只按 `joined_at`）實測 **RED**。生成策略刻意把 `joined_at` 抽自只有三個值的池——沒有這個收斂，平手幾乎不會出現而該突變抓不到。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`reselect_for_project` 的冪等檢查：排除被停用的 owner 之後若已有 `project_admin` 則**不執行、不寫事件**，並記 `membership.reselect_skipped`（INFO）。`F8`(c) 驗重跑不產生第二筆事件。**2026-10-21 修訂**：「已有管理者」只算**合格**的管理者（與守門共用 `is_qualified_successor`）；`E9` 驗重送停用時已改好的專案不產生第二筆事件。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "`run_auto_reselection` 在 `target_user.is_active = request.is_active` 與 `db.commit()` **之後**才呼叫，且只在 `deactivating` 為真時。守門先判（可能擋下整個停用），改選在停用成功之後——次序由程式的實際順序承載，`E6` 的 allow 側間接覆蓋（守門放行後停用成功）。可達性分析見 `code-summary.md`：改選唯一真正會執行的狀態是「owner 不是該專案的成員」，而那是回填之前的既有專案狀態。**2026-10-21 修訂（合併前必修第 1、10 項）**：上述可達性分析已不成立——守門放行「有合格接手人」的最後管理者，改選因此在正常流程中可達；範圍擴為擁有的 ∪ 是管理者的專案；呼叫條件由 `deactivating` 改為 `not request.is_active`（已停用帳號重送即重跑改選），失敗回 500／503（`E9`／`E10`）。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`write_role_change_audit` 寫 `ReselectionEvent`，五個事實齊備（誰＝`previous_owner_user_id`、何時＝`occurred_at`、對誰＝`promoted_user_id`、舊角色、新角色）。`F6` 逐欄斷言。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "稽核寫**資料列**，不是 `logger.info`——`membership_service` 對 `_audit_append` 零引用。`F6` 查的是 `db.query(ReselectionEvent)` 的結果，正是在鎖住「UI 讀得到的持久層」這一點。結構化 log 是**另一個載體**（拒絕／鎖等待／改選執行與跳過），四個事件名為模組層常數。"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`cause VARCHAR(32) NOT NULL` ＋ `CONSTRAINT ck_reselection_events_cause CHECK (cause IN ('auto_reselection','manual_role_change'))` ＋ 欄位 COMMENT；ORM 同步（`models.py`）；`verify_meta_schema.sql` 新增 `P13`（存在且 NOT NULL）與 `P14`（CHECK 含那兩個值），`P5` 由 8 欄改 9 欄。`F6`／`F7` 驗兩種 `cause` 都寫得進去且值正確。**關閉 `OPEN-ND18-3`**。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`previous_owner_user_id` 在 `manual_role_change` 下寫 `principal.user_id`（執行變更的管理者）、在 `auto_reselection` 下寫被停用的 owner。`F7` 在同一個測試裡取得兩列並斷言兩者**不相等**——這是「同一欄指不同的人」唯一能真的失敗的斷言形式。DDL 的欄位 COMMENT 也已改述（原文只說「觸發改選的 owner」，在 `[FD3]`=A 之後為假）。"
+    },
+    {
+      "id": "BR5.5",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`list_unacknowledged_reselections` 同時過濾 `cause == CAUSE_AUTO_RESELECTION` 與 `acknowledged_at IS NULL`；`write_role_change_audit` 一律不設 `acknowledged_at`。`F8`(a) 驗人工變更**不**產生橫幅、(b) 驗自動改選**會**產生；突變（移除 `cause` 條件）實測 **RED**。"
+    },
+    {
+      "id": "BR5.6",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`acknowledge_reselection` 以 `ReselectionEvent.id` ＋ `promoted_user_id` 定位**該事件列**；沒有任何 per-(project,user) 旗標（全檔零命中）。`F8`(d) 驗確認後該事件離開清單、重複確認回 `False`；`E2` 驗 HTTP 側 204 → 404。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "第三道檢查插在 `target_user.is_active = request.is_active` **之前**（實測行號：`update_user_active` 於 `:645`、既有兩道於 `:654`／`:676`、寫入於 `:682`，全部於實作前以 `grep -n` 複驗）。命中回 **409** 並列出那些專案。`E6` 以「被拒後 `is_active` 仍為 True」鎖住位置；突變（把呼叫移到寫入之後）實測 **RED**。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "openapi.json",
+      "note": "`responses={409: {\"model\": LastAdminGuardReport}}` 顯式宣告於**三個** operation：`PUT /api/auth/{user_id}/active`、`DELETE`／`PATCH /api/membership/projects/{project_id}/members/{user_id}`。重 dump 後 `openapi.json` 的 409 宣告由 4 增為 7，且新增的三個都帶 `$ref: #/components/schemas/LastAdminGuardReport`（實算）。回應本體**就是**該 model 而非 `{\"detail\": ...}`——以 `JSONResponse` 回傳而非 `raise HTTPException`，否則 spec 會說一件回應沒有做的事。前端型別已重產（`GuardedProjectRef`／`LastAdminGuardReport` 皆在 `api.d.ts`），兩道漂移閘門綠燈。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "既有兩道保護的 diff 為**零改動**（只在其後插入第三道）。`E4` 鎖住自我停用守門的條件與訊息逐字 ＋ 位置；`E5` 鎖住最後一位可編輯全域管理員守門的條件與訊息逐字 ＋ 位置。**`E5` 的構造揭露了一項既存發現**：那道守門在正式認證路徑上**不可達**（推導見該測試的 docstring 與 `open_items` 的 `OPEN-CG19-2`）。"
+    },
+    {
+      "id": "BR6.4",
+      "status": "Deferred",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "本站只**陳述**約束，不決定批次：停用端點的回應契約變更與既有消費端 `AdminPage.tsx` 必須同批部署。本單元**未改任何前端原始碼**（只重產 `api.d.ts`），而 `AdminPage.tsx:172` 的錯誤解包是 `data.detail || '更新狀態失敗'`——409 的本體沒有 `detail`，故既有畫面會顯示通用訊息而非專案清單。這不是既有行為的迴歸（今天根本沒有 409），但它是 `BR6.4` 要防的那一類落差。見 `open_items` 的 `OPEN-CG19-3`。Bolt 切分仍是 2.9 的決定。"
+    },
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`lock_project` 以 `select(Project.id).where(Project.id == project_id).with_for_update()` 鎖父列；四條路徑都有它——`invite_member`／`remove_member`／`change_role`（facade 內）與自動改選（`run_auto_reselection` 逐專案呼叫）。`C1` 在真實 PostgreSQL 驗序列化；突變（移除 `.with_for_update()`）實測 **RED**。"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "鎖語句的標的是 `projects`，不是 `project_members` 的任何一列。`lock_project` 是全檔唯一的 `with_for_update` 呼叫點（實測 1 命中）。"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`assert_can_deactivate` → `projects_losing_last_admin`，兩者皆無鎖語句。`C3` 在另一個執行緒持有該專案鎖的期間跑守門並以 barrier 證明它沒有被阻塞，同時斷言它**真的在判定**（回報唯一管理者的專案）而非直接 return。"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "backend/tests_pg/test_membership_concurrency.py",
+      "note": "`tests_pg` 全檔對 `sleep`／`time.sleep` 零命中；交錯以 `threading.Barrier` 釘住。機制是「一個 barrier、兩種相反的預期結果」：`C1` 要求它**破損**（鎖擋住第二個執行緒）、`C2`／`C3` 要求它**成立**。失敗時印出兩個執行緒各自走到的步驟。"
+    },
+    {
+      "id": "NFR12.5",
+      "status": "OK",
+      "target": "backend/models.py",
+      "note": "`git diff --stat -- backend/database.py` 為**空**（實跑，無輸出）。未改 `create_engine`／`sessionmaker`、未新增 `_ensure_*` 補丁。代價如實記載：兩個新 model 進入 `Base` 使 `create_all` 成為第二條建表路徑（`OPEN-ID19-1`），該路徑建出的表無 COMMENT；影響限本機，已寫進 `LOCAL-DEV.md`。"
+    },
+    {
+      "id": "NFR12.6",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`log_denied` 記 WARN 級 `membership.denied`，四個欄位齊備（`story_id`／`action`／`project_id`／`principal`）。兩個拒絕點都呼叫它（`_authorize_global`／`_require_project_role`）。實跑可見（`F5b` 的輸出有三行 `membership.denied`，分別對應三種拒絕）。"
+    },
+    {
+      "id": "NFR12.7",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "拒絕**不寫**任何資料列：`log_denied` 只呼叫 `logger.warning`。`cause` 仍只有兩個值（`P14` 斷言），本單元未新增任何表。**關閉 `OPEN-P4`**；殘留限制如實記載：拒絕紀錄 UI 讀不到，而目前沒有任何 AC 要求它可見。"
+    },
+    {
+      "id": "NFR12.8",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`resolve_project_role` 是單一 `select(...).where(project_id, user_id)`，**一次** SQL 執行，無 N+1。覆蓋者是 `uq_project_members_project_user`（以 `project_id` 為前導欄）。**未加索引。**"
+    },
+    {
+      "id": "NFR12.9",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "全檔無 cache／memo 結構（零模組級可變 dict／list／set）。檔頭 docstring 寫明這是決定而非省略：快取授權結論會引入「權限已撤銷但快取未失效」的窗口，而撤銷正是本單元的核心功能。"
+    },
+    {
+      "id": "NFR12.10",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`projects_losing_last_admin` 是**一次** `select(...).join(...).group_by(...).having(func.count() == 1)`，與該使用者的專案數無關；專案名稱由同一次查詢的 join 取得（`LastAdminGuardReport` 需要它）。**2026-10-21 修訂（合併前必修第 1 ＋ 4 項）**：不再是單次 `HAVING count(*) = 1`；現為「一次取管理者專案（含名稱）＋ 一次 join 取其他成員與帳號狀態 ＋ 至多『不同全域角色數』次權限列讀取」，仍與專案數及成員數無關、非逐專案 N+1。取捨：合格判定需要 `user_can`，權限矩陣只有一份，不在 SQL 另寫。"
+    },
+    {
+      "id": "NFR12.11",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`remove_member` 與 `change_role` 都經 `assert_still_has_admin` → `admin_count_after`（同一個函式名出現在兩條路徑）。"
+    },
+    {
+      "id": "NFR12.12",
+      "status": "OK",
+      "target": "backend/tests/test_membership_data.py",
+      "note": "`M7` 對四種狀態比對聚合查詢與逐專案呼叫 `admin_count_after` 的結果：零成員、一位管理者＋一位成員（`[FD1]`=A 比 `FR12.5` 更嚴的那一格）、兩位管理者、跨兩個專案。它需要資料庫，**故不是 PBT 的作用對象**。**2026-10-21 修訂**：參照實作改為逐專案、逐成員以 ORM 讀取後套用 `is_qualified_successor`；新增「第二位管理者不合格仍受阻」與「改為合格後解除」兩格。"
+    },
+    {
+      "id": "NFR12.13",
+      "status": "OK",
+      "target": "backend/tests_pg/test_membership_concurrency.py",
+      "note": "鎖語句以單一 `projects.id` 為條件（非表級、非無 `WHERE` 的 `FOR UPDATE`）。`C2` 讓兩個執行緒同時持有**不同專案**的鎖並在 barrier 會合——barrier 成立即證明不互相阻塞。"
+    },
+    {
+      "id": "NFR12.14",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "本單元未新增任何排程或清除程式（全檔零 purge／retention 實作）。`acknowledge_reselection` 設 `acknowledged_at`，**不刪列**。"
+    },
+    {
+      "id": "NFR12.15",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`invite_member` 的授權檢查、全域權限前置檢查與寫入在**一個** `try` 內、**一次** `commit`，`except` 一律 `rollback`。`F3` 第三段驗被拒後列數不變。"
+    },
+    {
+      "id": "NFR12.16",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`change_role` 的 `set_member_role` 與 `write_role_change_audit` 之間沒有 commit，兩者由同一次 `self._db.commit()` 結束。`F6` 驗一次變更對應一列稽核。"
+    },
+    {
+      "id": "NFR12.17",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`reselect_for_project` 的角色升級與稽核寫入都只 `flush`；commit 由 `run_auto_reselection` 在**該專案**處理完後執行一次。"
+    },
+    {
+      "id": "NFR12.18",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "`create_project_with_owner`：`create_project_nocommit`（`flush`）＋ `add_member`（`flush`）＋ 一次 `commit`，`except` 一律 `rollback`。二元判準由 `E7`(b) 承載：成員寫入失敗後**連專案列都不存在**，且零成員專案數為 0。"
+    },
+    {
+      "id": "NFR12.19",
+      "status": "OK",
+      "target": "backend/tests/test_membership_data.py",
+      "note": "`resolve_project_role`／`list_members`／`assert_can_deactivate` 皆為純 `SELECT`。`M5`／`M6` 驗唯讀查詢的結果；`F2` 在守門被拒後驗狀態完好（連續呼叫結果相同、無資料變化）。"
+    },
+    {
+      "id": "NFR12.20",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "`F3` 第二段：對已是成員者呼叫被拒，且該 `(project, user)` 的列數仍為 1。"
+    },
+    {
+      "id": "NFR12.21",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "`F4`：對已非成員者呼叫**回成功**（`assertIsNone`，且不 raise）。"
+    },
+    {
+      "id": "NFR12.22",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "`change_role` 每次成功都寫一筆稽核——**這是正確行為**（它記錄的是「有人執行了一次變更動作」）。`F6`／`F7` 的事件計數即以此為前提（`F7` 連續兩次變更後取 `_events()[-1]`）。"
+    },
+    {
+      "id": "NFR12.23",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "`F8`(c)：該專案已有其他 `project_admin` 時重跑 `run_auto_reselection` 回空清單，且事件總數不變。"
+    },
+    {
+      "id": "NFR12.24",
+      "status": "OK",
+      "target": "backend/scripts/backfill_project_members.py",
+      "note": "`backfill_project_members.py`：對每個**無任何成員列**的專案插入 `(project_id, owner_user_id, 'project_admin', now())`；單一交易、COMMIT 前自我終檢（零成員專案數為 0），不為 0 即 rollback ＋ 非零碼。冪等（條件是「無任何成員列」）。另有 `--dry-run`。**2026-10-21 修訂（合併前必修第 15 項）**：邏輯抽到 `backend/services/membership_backfill.py`，由 `backend/main.py` 的 startup 在 `init_db()` 之後自動執行、失敗即啟動失敗；腳本改呼叫同一函式。`M9`–`M11` 驗補齊、冪等、終檢失敗。"
+    },
+    {
+      "id": "NFR12.25",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "`DEPLOY.md` 新增 §2.2.10，載明三支一次性腳本的嚴格順序與各自跳過的後果，並逐項回答「這個窗口裡會不會鎖人在外面」（第一次部署不會，理由是 `list_projects` 仍 owner-scoped 且零成員列時守門**放行**；真正的風險時點是第一個消費端上線時）。`LOCAL-DEV.md` 的 `H6` 給本機的同一條順序。**手動步驟邊**承接 `OPEN-ID19-2`。**2026-10-21 修訂（合併前必修第 15 項）**：回填改為後端啟動時自動執行，手動步驟邊消失；§2.2.10 已改寫為「啟動時自動執行，腳本供手動補跑」。"
+    },
+    {
+      "id": "NFR12.26",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`log_denied` 的欄位集合即那四項，無其他；`lock_project` 的 WARN 只含 `project_id`／`waited_ms`／門檻。全檔 log 呼叫對 token／password／authorization header 零命中。`principal` 寫的是 user id（身分識別），不是憑證。回填腳本亦不輸出 `DATABASE_URL` 或其片段（只印 host／database）。"
+    },
+    {
+      "id": "NFR12.27",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`lock_project` 取鎖前後各取一次 `time.monotonic()`，差值 ≥ `LOCK_WAIT_WARN_MS`（模組層常數 250.0）即記 WARN `membership.lock_wait`。**實跑驗證**：`C1` 的輸出含 `membership.lock_wait project_id=6 waited_ms=3028.4 threshold_ms=250.0`——這個 log 點不只存在，而且在真實鎖競爭下真的會觸發。門檻為常數而非環境變數（`OPEN-ND19-6` 的定案）。"
+    },
+    {
+      "id": "NFR12.28",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "`reselect_for_project` 成功路徑記 INFO `membership.reselected`，含 `project_id`／被選中者／被停用的 owner。"
+    },
+    {
+      "id": "NFR12.29",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "冪等命中與「無其他成員」兩條靜默分支各記一筆 INFO `membership.reselect_skipped`（含 `reason`）；逐專案失敗另記 `logger.exception`。沒有這些 log，「改選沒跑」與「改選跑了但選錯人」在維運上無法區分。"
+    },
+    {
+      "id": "AC12.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "建立專案後成員清單**恰有一列**（建立者、`project_admin`）。`E7`(a) ＋ `E2` 的 `len(listed.json()) == 1`。"
+    },
+    {
+      "id": "AC12.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "建立者立刻可邀請，不需任何額外授權步驟：`E2` 的 `POST .../members` 回 201（建立者由 `create_project_with_owner` 直接成為 `project_admin`）。畫面側屬 `U24`。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "Deferred",
+      "target": "backend/services/membership_facade.py",
+      "note": "[status 由 Partial 改為 Deferred——conductor 修正] 本列的伺服器側已在本單元落地，其餘部分由下游單元承接；Partial 不在 traceability sensor 的字彙內（合法值為 OK／GAP／ORPHAN／Deferred／N/A），而 Deferred 正是「本站部分覆蓋、餘下指派下游」的意思。原註記如下：**伺服器側已成立**：非成員的 `resolve_project_role` 回 `None`，`list_members` 對非成員回 403（`E1`(b)）。**「專案清單看不到」那一面不在本單元**：`hierarchy_facade.list_projects` 目前是 owner-scoped（讀 `projects.owner_user_id`，不讀 `project_members`），那是 `[F8/R-02]` 的已核可結果，而以成員身分列出專案屬後續單元。"
+    },
+    {
+      "id": "AC12.2.1",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "`E2` 的 `PATCH` 回 200 且 `role` 為新值；`M6` 驗清單的 `role` 欄位。畫面側屬 `U24`。"
+    },
+    {
+      "id": "AC12.2.2",
+      "status": "Deferred",
+      "target": "backend/services/membership_service.py",
+      "note": "[status 由 Partial 改為 Deferred——conductor 修正] 本列的伺服器側已在本單元落地，其餘部分由下游單元承接；Partial 不在 traceability sensor 的字彙內（合法值為 OK／GAP／ORPHAN／Deferred／N/A），而 Deferred 正是「本站部分覆蓋、餘下指派下游」的意思。原註記如下：**持久層已成立**：每次角色變更寫一列 `ReselectionEvent`（誰／何時／對誰／舊／新），`F6` 逐欄斷言，`BR5.2` 的「UI 讀得到的持久層」由資料列承載而非 log。**查詢端點與畫面不在本單元**：成員詳情頁的變更紀錄讀取端屬 `U24`；本單元只暴露橫幅用的 `GET /reselections/pending`（刻意只回自動改選的未確認事件）。"
+    },
+    {
+      "id": "AC12.2.3",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "伺服器側對應：`list_members` **只回傳**成員檢視，不提供任何變更入口；角色變更的唯一入口是 `change_role`（獨立的 `PATCH` 端點）。畫面側屬 `U24`。"
+    },
+    {
+      "id": "AC12.2.4",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "`F5`：指定第二位 `project_admin` 後**兩位都能執行**管理動作（以 alice 與 bob 各實際執行一次 `invite_member`／`change_role`）。斷言「都能執行」而非「都是管理者」是它能抓到覆寫突變的全部。"
+    },
+    {
+      "id": "AC12.3.1",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "自我降級最後一位管理者被拒：`F2` 的 `change_role(alice → member)` raise `LastAdminGuard`；`E3`(c) 驗 HTTP 側 409 ＋ 回報形狀。"
+    },
+    {
+      "id": "AC12.3.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "自我移出最後一位管理者被拒並說明原因：`F2` ＋ `E3`(b) 的 409 ＋ `LastAdminGuardReport`（含專案名稱，即「原因」的可呈現內容）。**成員頁的按鈕**屬 `U24`。"
+    },
+    {
+      "id": "AC12.3.3",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "停用被拒並**列出**那些專案：`E3`(a) 驗 409、欄位集合、`project_id` 與 `name`。**本 AC 的 Given 措辭（「唯一**成員**」）與 `[FD1]`=A 不一致**，`functional-spec.md §四` 已標出並指派回補；測試依 `[FD1]`=A 的條件撰寫，`F2b` 專門覆蓋分歧的那一格（兩位成員但只有一位管理者 → 仍須擋下）。上游不回改。"
+    },
+    {
+      "id": "AC12.4.1",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "owner 帳號已被停用後自動改選：`F7` 的 `run_auto_reselection` 產生一筆 `cause=auto_reselection` 的事件。觸發點在 `user_router` 的停用成功之後（`BR4.4`）。**2026-10-21 修訂（合併前必修第 1 項）**：在此之前 `F7` 構造的是守門本會攔下的狀態，正常流程不可達；現在守門放行有合格接手人的最後管理者，`F9` 以正常流程（先 `assert_can_deactivate` 放行、再改選）驗它可達，`E9` 經 HTTP 驗。候選只含合格接手人（`BR7.3`），與 AC 字面的「其他成員」有落差，以 `BR7.3` 收斂。"
+    },
+    {
+      "id": "AC12.4.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "挑選最早加入者且平手時決定性：`F1` 的 PBT（排列不變性，突變實測 RED）＋ `F7` 的具體案例（2 月的 carol 而非 3 月的 dave）。"
+    },
+    {
+      "id": "AC12.4.3",
+      "status": "Deferred",
+      "target": "backend/services/membership_router.py",
+      "note": "[status 由 Partial 改為 Deferred——conductor 修正] 本列的伺服器側已在本單元落地，其餘部分由下游單元承接；Partial 不在 traceability sensor 的字彙內（合法值為 OK／GAP／ORPHAN／Deferred／N/A），而 Deferred 正是「本站部分覆蓋、餘下指派下游」的意思。原註記如下：**伺服器側已成立**：`GET /api/membership/reselections/pending` 回我自己未確認的自動改選事件（`E2` 驗 200 ＋ 欄位集合 ＋ `cause`）。**橫幅本身與「落地頁」的釘點屬 `U23`**（`D-17` 把落點由入口頁改為落地頁，那是畫面決定）。`ReselectionOut` 刻意只含事件欄位、不含專案名稱——理由見該 model 的 docstring。"
+    },
+    {
+      "id": "AC12.4.4",
+      "status": "Deferred",
+      "target": "backend/services/membership_service.py",
+      "note": "[status 由 Partial 改為 Deferred——conductor 修正] 本列的伺服器側已在本單元落地，其餘部分由下游單元承接；Partial 不在 traceability sensor 的字彙內（合法值為 OK／GAP／ORPHAN／Deferred／N/A），而 Deferred 正是「本站部分覆蓋、餘下指派下游」的意思。原註記如下：**跨裝置一致的伺服器側狀態已成立**：`acknowledged_at` 以**事件**為鍵存在資料庫，不是瀏覽器暫存（`F8`(d) ＋ `E2` 的 204 → 404）。**「換一台裝置重新登入後橫幅不再出現」的端到端驗證需要畫面**，屬 `U23`／`U24` 的 e2e。"
+    },
+    {
+      "id": "AC12.5.1",
+      "status": "OK",
+      "target": "backend/services/membership_errors.py",
+      "note": "`MissingGlobalPermission(user_id, story_id, action)` 的訊息逐字說明**他**缺哪一個全域功能權限；router 轉 422 並在 `responses` 宣告該語意。`F3` 第三段斷言例外的 `user_id` 與 `story_id`。畫面文案屬 `U24`。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "兩層串聯的 deny 側：具全域權限但非本專案成員仍被拒。`F5b` 的第一個案例 ＋ `E1`(b) 的 GET／POST 皆 403。"
+    },
+    {
+      "id": "AC12.5.3",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "拒絕不留半套狀態：`F3` 第三段在 `MissingGlobalPermission` 之後斷言 `project_members` 總列數不變（單一交易 ＋ `rollback`）。"
+    },
+    {
+      "id": "AC12.6.1",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "成功邀請 ⇒ 清單必然多一列：`F3` 第一段（`before + 1`）＋ `E2` 的 201 ＋ 回傳 `MemberView`。"
+    },
+    {
+      "id": "AC12.6.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_facade.py",
+      "note": "成功移出 ⇒ 清單必然少一列，且該成員其後讀取被拒：`F4` ＋ `F2` 的 allow 側（移出後 `resolve_project_role` 回 `None`）。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "Deferred",
+      "target": "backend/services/membership_facade.py",
+      "note": "[status 由 Partial 改為 Deferred——conductor 修正] 本列的伺服器側已在本單元落地，其餘部分由下游單元承接；Partial 不在 traceability sensor 的字彙內（合法值為 OK／GAP／ORPHAN／Deferred／N/A），而 Deferred 正是「本站部分覆蓋、餘下指派下游」的意思。原註記如下：**伺服器側的 allow 側已成立**：成員的 `resolve_project_role` 回其角色、`list_members` 回 200（`F5b` 的 carol 案例、`E1`(c)）。**「他看得到這個專案」那一面與 `AC12.1.3` 同一個限制**：`list_projects` 仍 owner-scoped，以成員身分列出專案屬後續單元。"
+    },
+    {
+      "id": "MB-1",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "合併前必修第 1 項（`functional-design/merge-blockers.md`）：守門只在「是管理者且無合格接手人」時擋下（`projects_losing_last_admin`），改選候選只含合格接手人（`reselect_for_project`），兩者共用單一謂詞 `is_qualified_successor`；改選範圍為擁有的 ∪ 是管理者的專案（`reselection_scope`）。測試 `backend/tests/test_membership_facade.py` 的 `F9`／`F11`、`test_membership_data.py` 的 `M7`；`tests_pg` 的 `C3` 已改寫並於本機 PostgreSQL 17.7 跑綠。"
+    },
+    {
+      "id": "MB-4",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "合併前必修第 4 項（自 `rbac-story-ids` 移交）：邀請端補 `is_active` 檢查（`assert_invitee_has_global_permission`）、待核准由 `user_can` 的 `authorization_status` 擋；改選端以 `is_qualified_successor` 排除停用、待核准、只有 `K3.view` 者，無人符合即擋下停用（`BR7.3`）。測試 `E8`（HTTP 邀請兩種帳號狀態皆 422 且無成員列）、`test_membership_facade.py` 的 `F10`；三個合格條件各自的突變皆致紅。"
+    },
+    {
+      "id": "MB-10",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "合併前必修第 10 項：`run_auto_reselection` 回傳 `ReselectionOutcome`；停用端點在任一專案改選失敗時回 500（全部為取鎖逾時回 503），本體 `ReselectionFailureReport`；已停用帳號重送 `is_active=false` 重跑改選而不重跑守門。`responses=` 宣告 500／503。測試 `backend/tests/test_membership_endpoints.py` 的 `E9`。"
+    },
+    {
+      "id": "MB-15",
+      "status": "OK",
+      "target": "backend/services/membership_backfill.py",
+      "note": "合併前必修第 15 項：補齊邏輯單一份，`backend/main.py` 的 startup 在 `init_db()` 之後呼叫 `ensure_project_members_on_startup()`，失敗即啟動失敗；`backend/scripts/backfill_project_members.py` 改呼叫同一函式；`backend/database.py` 未改。測試 `backend/tests/test_membership_data.py` 的 `M9`–`M11`、`test_brain_gateway_startup.py` 的順序測試。staging 首次啟動未驗。"
+    },
+    {
+      "id": "MB-16",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "合併前必修第 16 項：`lock_project` 在 PostgreSQL 上取鎖前 `SET LOCAL lock_timeout`（`LOCK_TIMEOUT_MS = 5000`），SQLSTATE `55P03` 轉 `MembershipLockTimeout`，`membership_router` 轉 503 並於三個取鎖端點宣告。測試 `backend/tests/test_membership_facade.py` 的 `F12`／`F12b`、`test_membership_endpoints.py` 的 `E10`、`backend/tests_pg/test_membership_concurrency.py` 的 `C4`（本機 PostgreSQL 17.7 實測逾時 5.0 秒；CI 未於本輪觸發）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-TYPES",
+      "status": "OK",
+      "target": "backend/services/membership_types.py",
+      "note": "四個值物件：`ProjectRole`（封閉列舉，**不含 `project_owner`**）、`MemberSnapshot`（frozen dataclass，純函式輸入，刻意只三欄）、`MemberView`（pydantic，facade 回傳 ＋ router response model，**不含 `invited_by`**）、`GuardedProjectRef`／`LastAdminGuardReport`（409 的 response model）。兩種形狀並存的理由寫在檔頭。"
+    },
+    {
+      "id": "CG-ERRORS",
+      "status": "OK",
+      "target": "backend/services/membership_errors.py",
+      "note": "四個領域例外，**皆不繼承 `HTTPException`**。`MembershipForbidden` 的三個屬性與 `NFR12.6` 的拒絕 log 欄位一對一對應。"
+    },
+    {
+      "id": "CG-SELECTION",
+      "status": "OK",
+      "target": "backend/services/membership_selection.py",
+      "note": "`select_successor` 獨立成檔，使「純」可機械檢查：import 集合以 `ast` 實測恰為 `__future__`／`typing`／`services.membership_types` 三項，四個禁止符號在程式行零命中。空輸入 `ValueError`（大聲失敗而非回 `None`）。"
+    },
+    {
+      "id": "CG-SERVICE",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "資料存取 ＋ 業務邏輯 ＋ 稽核 ＋ 四個 log 事件名常數 ＋ 鎖輔助。**無授權檢查**（誠實宣告：同進程直呼本模組會繞過 per-project 授權，且繞過是靜默的）。全部寫入函式只 `flush` 不 `commit`——交易邊界歸 facade。"
+    },
+    {
+      "id": "CG-FACADE",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "七個 `K-16` 公開方法 ＋ `create_project_with_owner`（`[ND1]`=A）＋ 兩個橫幅方法 ＋ `run_auto_reselection`（**無 principal**，因為沒有人按按鈕）。`select_successor` 為 `staticmethod`，故它拿不到 session。"
+    },
+    {
+      "id": "CG-ROUTER",
+      "status": "OK",
+      "target": "backend/services/membership_router.py",
+      "note": "六個端點掛在 `/api/membership`（既有 `/api/` 之下，**不新增監聽埠**）。全域層由 `require_story_action` dependency 承載。**不 import `membership_service`**。409 以 `JSONResponse` 回傳 `LastAdminGuardReport` 本體。"
+    },
+    {
+      "id": "CG-U7-NOCOMMIT",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py",
+      "note": "`create_project_nocommit`（`flush` 不 `commit`）＋ `HierarchyFacade.create_project_nocommit`（共用同一個 `_authorize`，**沒有開出繞過授權的路徑**）。`create_project` 退化為「本函式 ＋ commit」，故既有呼叫端與既有 26 條 `T*` 測試完全不受影響（實跑全綠）。這是 `OPEN-ND19-5` 的解。"
+    },
+    {
+      "id": "CG-U7-DELEGATE",
+      "status": "OK",
+      "target": "backend/services/hierarchy_router.py",
+      "note": "`POST /api/hierarchy/projects` 退化為對 `MembershipFacade.create_project_with_owner` 的薄委派。**路徑、回應模型與狀態碼都不變**，故 `openapi.json` 不因它漂移；`_translate` 另認 `MembershipNotFound` → 404。"
+    },
+    {
+      "id": "CG-MODELS",
+      "status": "OK",
+      "target": "backend/models.py",
+      "note": "兩個 ORM model 逐條對齊 `infrastructure-specification.md §四之二` 的十一列表（含三項最易寫錯的：`reselection_events.project_id` 無 `ForeignKey`、unack 索引帶兩個 dialect 的 `where`、`previous_role`／`new_role` 無 CHECK）。`M1`–`M4`／`M8` 鎖住欄位名、外鍵目標、具名約束與索引名稱集合、partial 條件、`ON DELETE` 行為；突變（加 `ForeignKey`）實測 **RED**。"
+    },
+    {
+      "id": "CG-DDL",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`J)` 區塊：`reselection_events` 加 `cause` ＋ `ck_reselection_events_cause` ＋ 欄位 COMMENT；另**改述三段既有 COMMENT**（表 COMMENT 的 `OPEN-ND18-3` 已關閉、`previous_owner_user_id` 的雙語意、`previous_role` 無 CHECK 的理由已換、`acknowledged_at` 的 `cause` 範圍）。既有環境尚未跑過 `U18` 的腳本，故直接寫進 `CREATE TABLE`，不需 `ALTER TABLE`。"
+    },
+    {
+      "id": "CG-VERIFY",
+      "status": "OK",
+      "target": "backend/scripts/verify_meta_schema.sql",
+      "note": "`P5` 由 8 欄改 9 欄；新增 `P13`（`cause` 存在且 NOT NULL）與 `P14`（CHECK 恰含那兩個值）。**另修一處既有斷言**：`P7` 的 `INSERT INTO reselection_events` 原本省略 `cause`，在 NOT NULL 之後會以 `NotNullViolation` 失敗——這是**實跑 `psql -f` 才抓到的**，若只改結構類斷言，CI 的 `memory-schema` job 會紅燈而原因指向 `P7` 而非 `cause`。全 14 條在真實 PostgreSQL 17.7 上實跑通過。"
+    },
+    {
+      "id": "CG-MIGRATION-POSTCOND",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "`EXPECTED_TABLES` 的 `reselection_events` 由 8 欄改 9 欄、`EXPECTED_CONSTRAINTS` 加 `ck_reselection_events_cause`。**計畫未點名這個檔**，但不改它的後果是部署腳本在一個其實正確的資料庫上終檢失敗並 rollback——它是 `cause` 這個加欄的必然後果，不是範圍擴張。"
+    },
+    {
+      "id": "CG-BACKFILL",
+      "status": "OK",
+      "target": "backend/scripts/backfill_project_members.py",
+      "note": "獨立腳本、單一交易、自我終檢、非零碼、冪等、`--dry-run`、不印連線字串。**刻意不與 `U18` 的腳本合併**（`OPEN-N19-4` 的定案）。"
+    },
+    {
+      "id": "CG-CI",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "新增 `concurrency` job：`needs: gate`、同一條 `is_sync` 條件、`pgvector/pgvector:pg18` service container、`setup-python@v5`（3.12 ＋ pip cache，與 `backend` job 同一個 `cache-dependency-path`）、`psql -f schema_rbac.sql` 一次、`timeout-minutes: 15`、job 層 `DATABASE_URL`（顯式 `+psycopg`）。**未改任何既有 job 的 `name`**（`repo-contract` 的 name 是 `main` 唯一的必要檢查）。7 個 job，除 `gate` 外全部且僅 `needs: gate`（以 yaml 解析實算），故仍全並行。"
+    },
+    {
+      "id": "CG-TESTS-PG",
+      "status": "OK",
+      "target": "backend/tests_pg/test_membership_concurrency.py",
+      "note": "新測試根 `backend/tests_pg/`，含 `__init__.py` 的 docstring（兩個測試根的分工與**為何**真實 PG 測試不能放回 `backend/tests/`）與 `require_pg_url()`（缺值或非 PostgreSQL 即大聲失敗，**不退回任何預設**）。三條斷言在真實 PostgreSQL 17.7 上實跑通過。"
+    },
+    {
+      "id": "CG-DOCS",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "`DEPLOY.md`：§2.2.9 的欄位數 8→9、新增第 5 件「最容易被誤讀的事」（`cause` 的雙語意與橫幅過濾）、`CHECK／UNIQUE` 8→9 條、斷言數 12→14、新增兩條 `psql` 驗證指令；新增 §2.2.10（回填腳本、三步順序、窗口風險、回滾不對稱）。`LOCAL-DEV.md`：新增 `H6`（三支腳本的本機順序 ＋ 第 3 步沒跑的症狀）、`create_all` 先跑會得到無 COMMENT 的表這個本機陷阱、`backend/tests_pg/` 的本機執行指令與它不是唯讀的警告。"
+    },
+    {
+      "id": "CG-BACKFILL-STARTUP",
+      "status": "OK",
+      "target": "backend/services/membership_backfill.py",
+      "note": "2026-10-21（合併前必修第 15 項）：成員補齊的單一實作；`backend/main.py` 的 startup 與 `backend/scripts/backfill_project_members.py` 共用。追溯至 `MB-15`、`NFR12.24`、`NFR12.25`。`backend/tests/test_brain_gateway_startup.py` 隨之把新步驟納入啟動順序斷言與替身。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-CG19-1",
+      "severity": "named-gap",
+      "text": "**`BR1.1`（facade 是唯一入口）仍無機械強制**（承接 `OPEN-FD19-3`／`K-07` 的 `OQ-N2`）。任何人直接 `SELECT`／`INSERT` `project_members` 就繞過了全部 per-project 授權，而繞過是**靜默的**。`[ND1]`=A 讓建立路徑合規、`membership_router` 不 import service 層，但沒有任何機制擋住下一個人直接寫表。**可執行的補強存在而本站未做**：repo 已有同形的 import-boundary 檢查器（`scripts/validate_cost_calculator_boundary.py`、`scripts/validate_pricing_lookup_boundary.py`，兩者都掛在 `repo-contract` job），形狀可照抄為「除 `membership_service.py` 以外的模組不得 import `ProjectMember`／`ReselectionEvent`」。本站不自行新增，因為新增一支 repo 層 validator 會改 `repo-contract` 的作用域，屬計畫之外的決定。"
+    },
+    {
+      "id": "OPEN-CG19-2",
+      "severity": "named-gap",
+      "text": "**`BR6.3` 要保護的「既有兩道」裡，第二道在正式認證路徑上不可達——而這是既存狀態，不是本變更造成的。** 推導：`user_router.py:676` 的 `admin_edit_count <= 1` 只在「全部 active 且具 `J3a.edit` 的使用者只有一位」時成立，而**執行者**必須具 `J3a.edit`（`require_story_action`）且必須 active（`services/auth.py:75` 的 `get_user_from_token` 對停用帳號回 403），故執行者一定被數進去；目標也必須具 `J3a.edit` 且 active（外層 `if`）。執行者 ≠ 目標 ⇒ 計數 ≥ 2；執行者 ＝ 目標 ⇒ **第一道**（`:654` 自我停用）先擋下。兩種情況都到不了第二道。`E5` 以 `dependency_overrides` 覆寫一個 inactive 的執行者來鎖住它的條件與位置——那是目前唯一能證明「它還在、而且仍在寫入之前」的方法，但它**不能**證明它在正式路徑上會跑。本站原樣保留該守門（`BR6.3` 的字面要求），不修它：修它會改變一條既有端點的行為而沒有任何已核可需求要求那樣。"
+    },
+    {
+      "id": "OPEN-CG19-3",
+      "severity": "named-gap",
+      "text": "**停用端點 409 的本體沒有 `detail`，而既有消費端 `AdminPage.tsx:172` 的錯誤解包是 `data.detail || '更新狀態失敗'`。** 後果：既有畫面會顯示通用訊息「更新狀態失敗」，看不到被擋下的專案清單。這**不是既有行為的迴歸**（今天這個端點根本不會回 409），但它正是 `BR6.4` 所說的那類落差。本站刻意不在 `LastAdminGuardReport` 加一個 `detail` 欄位——`entities.md` 的 `value_objects` 只宣告 `projects`，而加一欄等於擴大一個已核可的形狀；也刻意不改前端（本單元無前端面，`frontend/src` 對 `projects` 的命中數為 0，成員頁與相關文案屬 `U24`／`U23`）。處置：前端對 409 的呈現須在**與本變更同批**的部署中落地（`BR6.4`），落點是消費端單元。"
+    },
+    {
+      "id": "OPEN-CG19-4",
+      "severity": "named-gap",
+      "text": "**計畫 Step 4 的第一條斷言照字面實作會與 DDL 衝突，故本站以更窄的形式實作並在此記載。** 計畫逐字寫「`ReselectionEvent.__table__.foreign_keys` 為**空集合**」，但 `schema_rbac.sql` 的 `J)` 區塊對 `promoted_user_id`（NOT NULL）與 `previous_owner_user_id` 都宣告了 `REFERENCES users (id)`——照字面斷言空集合就得把那兩條外鍵從 ORM 拿掉，而那會讓 ORM 與 DDL 不一致，正是整組一致性測試要防的事。`[ND1]`=A 的實際內容、`infrastructure-specification.md §四之二` 的那一列、以及 `verify_meta_schema.sql` 的 `P6`（`rt.relname = 'projects'`）說的都是「不對 **`projects`** 設外鍵」。`M2` 因此斷言兩個方向：目標表集合**不含** `projects`，且**恰為** `{users}`——比計畫的字面更強（它同時擋下「加 projects 外鍵」與「拿掉 users 外鍵」）。"
+    },
+    {
+      "id": "OPEN-CG19-5",
+      "severity": "named-gap",
+      "text": "**`schema_rbac.sql` 的 `users` 表比 ORM 的 `User` model 窄一欄，而這是本站實跑 `tests_pg` 才發現的。** `authorization_status` 不在 `A)` 區塊裡，它由 `backend/database.py` 的 `_ensure_j5_schema()` 在**後端啟動時**補上。後果：在一個只套用過 `schema_rbac.sql` 的資料庫（正是新 `concurrency` job 所建的那種）上，任何 `db.add(User(...))` 會以 `UndefinedColumn: column \"authorization_status\" ... does not exist` 失敗。本站**不修它**（`users` 不是本單元的表，`A)` 區塊屬 baseline，而修它會改變一條既有的建表路徑），只繞開：`tests_pg` 以 raw SQL 建使用者列並用一個只帶 `id`／`role` 的輕量物件餵 `mint_principal`。**為什麼它到今天才被發現**：`memory-schema` job 只跑 raw SQL 斷言，從不碰 ORM；而 `backend/tests` 的 in-memory SQLite 是用 `create_all()` 建表的，所以那裡的 `users` 一定有全部 ORM 欄位。承接站：`U18`／baseline 的擁有者。"
+    },
+    {
+      "id": "OPEN-ID19-6",
+      "severity": "named-gap",
+      "text": "**承接自 `cicd-pipeline.md §一之二`，本站不改其結論、只重述其後果**：`ut`（整合主幹、deploy-on-merge 的目標）**完全沒有必要狀態檢查**，`main` 只有一個（`Repository contract`）。故新 `concurrency` job 紅燈**不會擋住合併**——它是**訊號**而不是**閘門**。要讓本單元的併發覆蓋面真的不可繞過，必須把它（以及其餘六個）加進 `ut` 的必要檢查清單，而那是 repo 層設定決定，不是本 stage 能做的。"
+    },
+    {
+      "id": "OPEN-ID19-1",
+      "severity": "named-gap",
+      "text": "**承接：兩條建表路徑不等價，而只有一條被驗。** 兩個新 model 進入 `Base` 之後，`database.py:90` 的 `Base.metadata.create_all()` 成為第二條建表路徑，而它建出的表**沒有 COMMENT**；`verify_meta_schema.sql` 的 14 條斷言裡只有 `P12` 碰 COMMENT 且只驗 `system_requirement_fields`，故 `project_members`／`reselection_events` 的 COMMENT **在任何路徑上都沒有斷言**。影響限本機且嚴重度低（COMMENT 是給人讀的防呆機制，不影響行為），已寫進 `LOCAL-DEV.md` 的本機陷阱一節與 `test_membership_data.py` 的檔頭。"
+    },
+    {
+      "id": "OPEN-N19-2",
+      "severity": "named-gap",
+      "text": "**承接：`assert_can_deactivate` 的 TOCTOU 窗口。** 它回「通過」之後、`user_router.py:682` 寫入 `is_active` 之前，另一個交易可能改變該使用者的管理者身分；後果是**停用一個本應被擋下的帳號**。它無法以本機制關閉——關閉它要把停用端點整支納入同一個鎖範圍，而那會跨越 `U19` 與既有 `user_router` 的邊界。`NFR12.3` 明文守門不取鎖的理由（取鎖會把一個管理者動作變成對該使用者全部專案的廣域鎖）使這個窗口是刻意接受的。"
+    },
+    {
+      "id": "OPEN-ND19-2",
+      "severity": "named-gap",
+      "text": "**承接：鎖的取得順序無機械強制。** `lock_projects_in_id_order` 提供了按 `projects.id` 遞增取鎖的函式，而 `run_auto_reselection` 以排序後的 id 清單逐一處理（順序本身即遞增），但**沒有任何工具會檢查**下一個多專案操作是否照做。違反它的後果是間歇性死鎖，而間歇失敗在容忍 flaky 的 CI 中會被當成雜訊。"
+    },
+    {
+      "id": "OPEN-ND19-3",
+      "severity": "named-gap",
+      "text": "**承接：聚合守門查詢的索引覆蓋不完整。** 它以 `role = 'project_admin'` 過濾，而沒有任何索引含 `role`。本站**不加索引**（沿用 `U18` 的判準：不需要的索引有寫入成本，而「以後可能要」不是現在建的依據；每專案成員數受人工邀請速度限制）。下一個看到這個查詢想加 `(project_id, role)` 的人需要競爭資料支撐。"
+    },
+    {
+      "id": "OPEN-ND19-4",
+      "severity": "named-gap",
+      "text": "**承接：變更紀錄查詢無可用索引**（`[FD3]`=A 的衍生後果）。`WHERE promoted_user_id = ? ORDER BY occurred_at DESC` 落在 `ix_reselection_events_unack`（partial，只含未確認列）之外。本單元未暴露該查詢端點（成員詳情頁屬 `U24`），故本輪無實際讀取壓力；本站不加索引，同上判準。"
+    },
+    {
+      "id": "OPEN-ND19-7",
+      "severity": "named-gap",
+      "text": "**承接：四項觀測面（分散式追蹤／metrics／告警門檻／SLI-SLO）無承載機制。** repo 無 OpenTelemetry、無 metrics 管線，故沒有可設門檻的對象。指名的承接站 `observability-setup`（4.4）是 **`CONDITIONAL`**——若被 skip，判定 skip 的執行者須把這四項重新提交使用者。本 intent 已有三次指派落空的實例。"
+    },
+    {
+      "id": "OPEN-ND19-8",
+      "severity": "named-gap",
+      "text": "**承接：拒絕 log 含 `project_id`，對非成員而言它證實了「存在一個 id 為 N 的專案」。** 目前不是洩漏（使用者讀不到 log，而 `MembershipForbidden` 的訊息本身也只有 story id／action／project id，不含專案名稱或任何內容），**但這條界線只由「沒有人把 log 接到使用者可見面」維持**。界線是「log 不得進入使用者可見面」。"
+    },
+    {
+      "id": "OPEN-ND19-9",
+      "severity": "named-gap",
+      "text": "**承接：`U7` 不知道有人在鎖它的表。** 本單元對 `projects` 列取 `FOR UPDATE`，而 `hierarchy_service.delete_project` 的 `db.delete(project)` 需要該列的鎖——它**會阻塞**（這是正確行為：不該在成員變更進行中刪掉專案），但 `U7` 沒有任何文件提到它可能等鎖。`list_projects`（唯讀）與 `create_project`（新列不存在）不受影響。"
+    },
+    {
+      "id": "OPEN-ID19-2",
+      "severity": "blocking-downstream",
+      "text": "**承接並已寫進文件，但它仍是一條手動步驟邊。** 「回填已在 staging 執行過」必須是**第一個消費端所在批次**的前置條件——它不在依賴圖上，所以 Bolt 計畫不會自動帶上它。`DEPLOY.md §2.2.10` 與 `LOCAL-DEV.md` 的 `H6` 已載明三步順序與各自跳過的後果；`deploy.yml` **不呼叫任何遷移腳本**（2.2.7／2.2.9 的那兩支也沒被呼叫），故這是真的手動。"
+    },
+    {
+      "id": "OPEN-ID19-5",
+      "severity": "named-gap",
+      "text": "**承接：回滾的不對稱。** `deploy.yml` 的回滾還原的是**映像**，而回填是**資料動作**——映像回滾不會撤銷它。第一次部署無害（last-good 的程式不讀這兩張表，多出的列對它不可見），故不需要反向腳本。**但這個結論只在第一次部署成立**——一旦有消費端上線，回滾的語意要重新評估。已寫進 `DEPLOY.md §2.2.10`。"
+    },
+    {
+      "id": "OPEN-FD19-6",
+      "severity": "named-gap",
+      "text": "**承接：`invited_by` 有寫入端而無讀取端。** `invite_member` 寫它（`add_member` 的 `invited_by=principal.user_id`），而 `MemberView` 的四個欄位不含它、`AC12.2.2` 的變更紀錄只涵蓋**角色**變更。本站**不自行把它加進 `MemberView`**（`entities.md` 明文禁止：那會擴大一個已核可的回傳形狀而沒有 AC 要求它）。`E2` 的欄位集合相等斷言會讓「順手加進來」紅燈。誰讀它仍未定。"
+    },
+    {
+      "id": "OPEN-CG19-6",
+      "severity": "named-gap",
+      "text": "**`infrastructure-design` 以 READY 收尾時留下的兩項 Minor 仍然開放**（該 stage 只有一輪審查額度，引擎逐字回覆「Do not ask the reviewer again; include the findings in the approval summary for the human」），且本計畫**刻意不就地編輯那兩份已凍結的檔案**（編輯會使該 stage 的 READY 收據失效而無額度可補）：(1) `R-01`——`cicd-pipeline.md §五之三` 與 `infrastructure-specification.md §五之一` 用「本站實查」描述 `assert_can_deactivate` 在零成員列時的行為，而該函式**當時尚未落地**，結論是由已發布的 `HAVING count(*) = 1` 查詢形狀推導而得。**本站可以補上一句**：該函式現已落地，而推導**正確**——零成員列時 `HAVING count(*) = 1` 找不到任何列，故它放行（方向過寬而非過嚴），`M7` 的第 (1) 個案例即為此實測。(2) `R-02`——「覆蓋面不可能靜默消失」一句缺限定詞；`ut` 無任何必要狀態檢查，故紅燈不擋合併（同 `OPEN-ID19-6`）。"
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "rbac-story-ids",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "意圖識別準確率。本單元不做任何意圖識別，也不在任何路由判定路徑上；承載為 U11 intent-router，其量測機制落點 build-and-test（3.6）"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "跨頁面上下文保留率。本單元交付零畫面、零 session；承載為 U10 session-store 與 U14 entry-page-ui"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "首字回應時間。**本站實測後判定不適用，理由是索引形狀而非印象**：授權讀取端 get_permission_row（backend/services/rbac.py:114）是單筆 filter(role==, story_id==).first()，而 schema_rbac.sql:434 的 PRIMARY KEY (role, story_id) 正是該查詢的鍵。矩陣 308 → 352 是 +14% 的列數，對 PK 查詢無實質差異。本單元亦不在任何 LLM 或串流回應路徑上"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "狀態外部化與重啟還原。本單元既不讀也不寫 Redis，不持有任何 session 或工作狀態；它寫入的是 PostgreSQL 的既有授權表，而那本來就是外部化的。承載為 U10"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "WebSocket 契約閘門。本單元交付零 WebSocket、零端點；承載為 U2 brain-ws-contract（該閘門經 [US:Q-02] 查證**已交付**，見 unit-of-work.md 修訂的 U2 列）"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "記憶層的 schema 隔離與其真實 PostgreSQL CI job。本單元的驗證需求（SEC-5 的兩份副本逐列等值、U3-V1–U3-V5 的 seed 不變量）**全部是純文字解析**，在既有 python -m unittest discover 之下即可執行，不需要真實 PostgreSQL、不需要 schema 概念。NFR6 的主體逐字限於「schema 建立、grant 邊界、跨 schema 查詢」，講的是 U5 的記憶層獨立 schema。本單元不擴充那個 job，與 U4 的處置不同（U4 的 Q1=A 讓遷移驗證共用它）"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "episodic memory 的保存與刪除稽核。本單元寫入的是角色與能力的對應，不是 by-user 的對話歷程，也不含任何個人可識別資訊（seed 列的 updated_by 為固定字串 \"system_seed\"）。90 天保存與刪除稽核都是對 episodic memory 那份資料的規則。承載為 U5／U9"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "新增元件的部署設定完整性。它的前提子句逐字是「Redis 作為第 5 個容器引入時，其新增的環境變數必須在同一個 PR 內讓 deploy/render-env.sh 寫它、deploy/.env.example 列它」——本單元**不引入容器也不引入任何環境變數**（SEC-2 與 tech-stack-decisions.md §一 皆明文），前提為假。本單元確實觸發 schema_rbac.sql ＋ DEPLOY.md 的 blocking 同步，但那是 project.md ## Mandated 的另一條規則，連 render-env.sh 與 .env.example 都沒提到；已另編號為 U3-D1 並列於 reverse。此判定形狀與 U4 的 NFR8 判定相同"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "成本原則。本單元沒有任何 LLM 呼叫、沒有任何外部計費依賴。NFR9 是編排層的成本設計原則，承載為 U11／U12"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型的可替換性。本單元不選任何模型。**必須明講**：OQ-4（路由層模型定案）的落點逐字是 nfr-requirements（3.2）也就是本 stage——但它會在 U11 的本站回合定案，不在 U3 這一回合。本單元不得被讀成已經處理了 OQ-4；requirements.md 另記載 OQ-4「CONDITIONAL，無自然承接站，skip 時須重新提交使用者」"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "跨功能任務的頁面切換次數。本單元交付零畫面"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "SEC-1",
+      "status": "N/A",
+      "target": "本單元**不得新增**任何 router 檔、service 層讀寫函式或可從 HTTP 觸達的入口（**措辭依審查 R-05 收窄**：初版的「不得交付任何 service 層讀寫函式」字面比它自己的可驗證條件寬，而 SEC-4 的 2 行 log 擴充確實動了既有 service 層函式 rbac.py；本條禁止的是新增入口）——以交付面上不可構造的方式滿足 [RA:FR9.5] 的「不得有任何繞過 require_story_action 的路徑，含同進程直呼 service 層」。無對應 inception NFR：它源自 ADR-0006 的 IAM 面向（project.md 的 hard constraint），不是 NFR{n}。落點：本單元自身（交付檔案清單不得出現 router／service 新檔）"
+    },
+    {
+      "id": "SEC-2",
+      "status": "N/A",
+      "target": "seed 寫入為啟動期的特權操作（跨角色的授權資料寫入），必須沿用啟動路徑既有的資料庫連線，不得引入第二個憑證或任何新環境變數。無對應 inception NFR（ADR-0006 IAM 面向）。可驗證方式：validate_env_contract.py 通過 ＋ render-env.sh／.env.example 零新增 key"
+    },
+    {
+      "id": "SEC-3",
+      "status": "N/A",
+      "target": "零新增網路暴露面，但本單元**改變了一個既有公開端點的回應內容**（/roles/catalog 多 4 列標籤），故判定為「適用且已具名殘餘風險」而非「不適用」。這承接 functional-design §六′ 的更正——該站原判「不適用」，其自檢 2 推翻之。無對應 inception NFR（ADR-0006 network exposure 面向）。見 RR-1"
+    },
+    {
+      "id": "SEC-4",
+      "status": "N/A",
+      "target": "ensure_missing_role_permissions 插入列時必須記錄是哪些 (role, story_id)，不得只記列數。實測現況：rbac.py:110 與 database.py:186 都是 inserted %d rows，只有一個數字；既有環境補進 44 列後無從確認補對了什麼。**本條由 [Q2]=A 把 functional-design 的 H-3（記為「無自然承接站」的已知缺口）收為本單元的需求**，因為本站是 NFR 的落點而 ADR-0006 的 audit logging 面是 hard constraint。後果：本單元的改動面擴及 rbac.py，已寫進 tech-stack-decisions.md §二 第 5 列。無對應 inception NFR（ADR-0006 audit logging 面向）"
+    },
+    {
+      "id": "SEC-5",
+      "status": "N/A",
+      "target": "兩份 seed 副本（schema_rbac.sql 的 INSERT 區塊與 rbac_seed_data.py 的 DEFAULT_ROLE_PERMISSIONS）必須逐列等值，由測試鎖住。這是 team.md ## Code Style 的「單一真實來源」逐字要求（跨語言邊界的副本必須附一致性測試）。失敗模式是環境相依且無聲：新環境拿 SQL 那份、既有環境拿 Python 那份，不同時沒有任何閘門會紅燈。本站複驗 backend/tests/ 仍然零測試做這件事。無對應 inception NFR（ADR-0006 IAM 完整性面）"
+    },
+    {
+      "id": "SEC-6",
+      "status": "N/A",
+      "target": "本單元對授權**判定**無可自驗的機械檢查，只驗授權**資料**的結構前提。BR7.1–BR7.3 是本單元定義、U19 執行的規則（BR5.5），而本單元交付零端點。此條存在的目的是防止下游把本單元讀成「授權行為已驗證」。無對應 inception NFR"
+    },
+    {
+      "id": "RR-1",
+      "status": "N/A",
+      "target": "**具名既存殘餘風險（[Q1]=A）**：/roles/catalog 是未驗證身分的端點（user_router.py:310 無任何 Depends(get_current_user)，docstring 逐字「公開：註冊頁角色功能目錄」），每次呼叫發 11 次資料庫查詢（_build_role_catalog 於 :249 對 CANONICAL_ROLES 逐角色一次 query），而 repo 內零 rate limiting——backend/requirements.txt 無 slowapi／任何 limiter，真正生效的 nginx 設定是 frontend/nginx.conf（由 frontend/Dockerfile:25 COPY 成 default.conf），其 limit_req／limit_conn 命中數為 0。接受理由：這是該既有端點的既有性質，本單元只讓每次回應多 4 列、不改變可觸發性；repo 內無基礎設施可沿用。指派 operation 階段。**本站因此不宣稱 ADR-0006 的 network exposure 面已完全處置**"
+    },
+    {
+      "id": "RR-2",
+      "status": "N/A",
+      "target": "**資訊性，非 U3 接受的風險（依審查 R-03 標註）**——這張表的用途是追蹤本單元交付物的風險，而掃它找 U3 曝險的人會把本列誤算進去。**本站查證時撞到的規則層既存失效引用**：project.md ## Mandated 與 CLAUDE.md 都要求「異動 deploy/nginx.conf 時同步更新 LOCAL-DEV.md」，而該檔**不存在**——deploy/ 下只有 cloudflared/、docker-compose.deploy.yml、docker-compose.test.yml、render-env.sh；真正生效的是 frontend/nginx.conf。與本單元無關（本單元不碰任一者），記在此處是因為規則層沒有任何機制會告訴下一個人。承接站：下一次 practices-discovery，或任何要動 nginx 設定的 intent"
+    },
+    {
+      "id": "RR-3",
+      "status": "N/A",
+      "target": "SEC-5 的測試是兩份副本一致性的唯一防線，而副本本身不消除。rbac_seed_data.py 的檔頭逐字說它由 schema_rbac.sql 產生、勿手改、改 SQL 後重跑產生腳本——而**那支產生腳本不存在**（本站與 functional-design 各自查證：backend/scripts/ 下只有 dump_openapi.py、dump_ws_contract.py、run_hierarchy_migration.py）。消除副本要先寫產生器，是獨立任務、不在本 intent 範圍。未指派"
+    },
+    {
+      "id": "RR-4",
+      "status": "N/A",
+      "target": "**schema_rbac.sql:761 的驗證註解是既存漂移，本單元會讓它碰巧變成正確。** 實測：該行現在寫 `-- SELECT count(*) FROM role_permissions;  -- 352`，而同檔 INSERT 區塊逐列實算為 308；git blame 指向 6f9227d（2026-08-23，C1 FinOps 的 commit），與本單元無關。本單元加完 44 列後該行變成正確——**那是副作用，不是有人修過它**；若日後總數再變，仍需手動改。**由審查 R-01（Major）逼出**：本單元的 functional-design BR4.1′ 已把它記為陷阱，而 tech-stack-decisions.md 的改動面清單初版把它誤述成「第二處要改的數字」——那會讓 code-generation 去找一個不存在的 308，或因為「看起來沒壞」而認為那一行本來就對。已更正。無對應 inception NFR"
+    },
+    {
+      "id": "U3-V1",
+      "status": "N/A",
+      "target": "自驗 seed 不變量：存在至少一個角色持有 A1 view 但不持有 K3 的任何旗標（BR5.3）。保護 AC12.5.1／AC12.5.3 的 Given 可構造性。違反時測試綠燈但測不到東西。落點 backend/tests/，與 SEC-5 同一支檔（兩者都只需解析 DEFAULT_ROLE_PERMISSIONS）。無對應 inception NFR"
+    },
+    {
+      "id": "U3-V2",
+      "status": "N/A",
+      "target": "自驗 seed 不變量：存在至少一個角色不持有 K4 的任何旗標（BR6.5）。保護 BR6.4（本修訂新增的「無 K4 者隱藏未填計數」規則）不成為不可觸發的死碼。無對應 inception NFR"
+    },
+    {
+      "id": "U3-V3",
+      "status": "N/A",
+      "target": "自驗 seed 不變量：對每一個持有 K2.edit 的角色，K3.edit 亦為 true（BR5.4）。保護 AC12.1.2（建立者邀請成員「不需任何額外授權步驟」）。違反時的現象是「我建的專案，我管不動」，而權限頁看不出是哪一層擋的。無對應 inception NFR"
+    },
+    {
+      "id": "U3-V4",
+      "status": "N/A",
+      "target": "自驗 seed 不變量：len(DEFAULT_ROLE_PERMISSIONS) == 352 且組合完整（每個 (role, story_id) 恰一列、無缺漏）（BR3.4′）。只驗總數會漏掉「列數對但組合有缺漏」——缺的那格在權限頁是破洞而總數看起來正常。無對應 inception NFR"
+    },
+    {
+      "id": "U3-V5",
+      "status": "N/A",
+      "target": "自驗 seed 不變量：四個新 id 的 can_review 在全部 44 列皆為 false（EC-4）。防的是挪用既有審核語意——矩陣中既有的 can_review=true 列集中在審核面（A3／F3／G*／H*／J*），而 K-16 的 public_interface 沒有任何審核動作。無對應 inception NFR"
+    },
+    {
+      "id": "U3-A1",
+      "status": "N/A",
+      "target": "**對 U19 的具名交付條件**：邀請一般成員時，被邀請者持有 K3.view → 成功；不持有 → 拒絕且不寫入任何列。形式為 allow/deny 雙向 TestClient（team.md 的 A 規則與 B 規則交叉要求）。來源 BR7.1／AC12.5.1／AC12.5.3。本單元交付零端點故無法自驗（SEC-6）"
+    },
+    {
+      "id": "U3-A2",
+      "status": "N/A",
+      "target": "**對 U19 的具名交付條件**：邀請或改為專案管理者時，目標持有 K3.edit → 成功；只持有 K3.view → 拒絕。來源 BR7.2／AC12.2.1。本站實算「有 K3.view 無 K3.edit」的角色為 4 個（Developer／FinOps_Analyst／Security_Reviewer／Platform_Owner），故該 deny 側可構造"
+    },
+    {
+      "id": "U3-A3",
+      "status": "N/A",
+      "target": "**對 U19 的具名交付條件**：自動改選的候選集合只含持有 K3.edit 的成員；無人符合時擋下停用並列出受影響專案（沿用 [M3]=A 的形狀）。來源 BR7.3／AC12.4.x。**另有一項不在 allow/deny 範圍內的約束**：BR7.4 要求挑選純函式不讀 DB，故 K3.edit 旗標必須由呼叫端查好後傳入——這改變了該函式的簽章，且是 ADR-0006 的 PBT hard constraint 能在它身上作用的結構前提（真正可失敗的性質是排列不變性）。**本站以本條把該 PBT 義務具名指派給 U19，不讓它在兩個單元之間掉落**"
+    },
+    {
+      "id": "U3-D1",
+      "status": "N/A",
+      "target": "部署資產同步（**blocking**，project.md ## Mandated）：schema_rbac.sql 的 44 列 ＋ 兩處數字（檔頭第 12 行、第 761 行的驗證註解）、DEPLOY.md 的五處「308」（:577／:591／:596／:1259／:1270，最後兩處在英文段落內）。**這不是 NFR8**——NFR8 的主體是新容器的環境變數與 render-env.sh／.env.example，本單元零容器零環境變數。行號為本站實測值，施工前須重新核對。無對應 inception NFR"
+    },
+    {
+      "id": "H-8-forward",
+      "status": "N/A",
+      "target": "**前向義務，不在本單元**：BR7.1–BR7.3 的**拒絕**事件是否留稽核紀錄未定。AC12.2.2 只要求角色變更有使用者可見的紀錄，被拒事件不在其中，而 ReselectionEvent 是改選事件不是拒絕事件。functional-design 的 H-8 已指派 U19。列在此處是為了讓 ADR-0006 的 audit logging 面的殘餘可被追蹤——本站的 SEC-4 只處置了 seed 寫入那一面，不是全部"
+    },
+    {
+      "id": "OQ-4-not-here",
+      "status": "N/A",
+      "target": "**明確不宣稱**：OQ-4（路由層模型定案）的落點逐字是 nfr-requirements（3.2），也就是本 stage。它會在 U11 intent-router 的本站回合定案，不在 U3 這一回合。requirements.md 記載它「CONDITIONAL，無自然承接站，skip 時須重新提交使用者」。列在此處是為了防止「U3 跑過 nfr-requirements 了」被讀成「OQ-4 已處理」"
+    }
+  ],
+  "reverse_count": 21
+}

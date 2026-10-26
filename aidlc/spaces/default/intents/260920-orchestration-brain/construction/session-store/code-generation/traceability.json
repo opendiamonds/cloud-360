@@ -1,0 +1,939 @@
+{
+  "stage": "code-generation",
+  "unit": "session-store",
+  "upstream_ids": [
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "AC2.2.1",
+    "AC2.2.2",
+    "AC2.2.3",
+    "AC3.1.1",
+    "AC3.1.2",
+    "AC3.1.3",
+    "AC3.1.4",
+    "AC6.1.1",
+    "AC6.1.2",
+    "AC6.1.3",
+    "AC9.1.1",
+    "AC9.1.2",
+    "AC9.1.3",
+    "AC9.1.4",
+    "BR1",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR1.6",
+    "BR2",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR2.5",
+    "BR2.6",
+    "BR2.7",
+    "BR2.8",
+    "BR3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "BR3.4",
+    "BR3.5",
+    "BR3.6",
+    "BR4",
+    "BR4.1",
+    "BR4.2",
+    "BR4.3",
+    "BR4.4",
+    "BR4.5",
+    "BR4.6",
+    "BR4.7",
+    "BR5",
+    "BR5.1",
+    "BR5.2",
+    "BR5.3",
+    "BR6",
+    "BR6.1",
+    "BR6.2",
+    "BR6.3",
+    "BR7",
+    "BR7.1",
+    "BR7.2",
+    "BR7.3",
+    "EC1",
+    "EC2",
+    "EC3",
+    "EC4",
+    "EC5",
+    "EC6",
+    "EC7",
+    "EC8",
+    "EC9",
+    "EC10",
+    "FR1.1",
+    "FR2.1",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR4",
+    "FR6.1",
+    "MB-12",
+    "MB-18",
+    "NFR1",
+    "NFR2",
+    "NFR2.40",
+    "NFR2.41",
+    "NFR2.42",
+    "NFR3",
+    "NFR3.20",
+    "NFR3.40",
+    "NFR3.41",
+    "NFR3.42",
+    "NFR3.43",
+    "NFR4",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.40",
+    "NFR4.41",
+    "NFR4.44",
+    "NFR4.45",
+    "NFR4.46",
+    "NFR4.47",
+    "NFR4.48",
+    "NFR4.50",
+    "NFR4.51",
+    "NFR4.52",
+    "NFR4.53",
+    "NFR4.54",
+    "NFR4.55",
+    "NFR4.56",
+    "NFR4.57",
+    "NFR4.60",
+    "NFR4.61",
+    "NFR4.62",
+    "NFR4.63",
+    "NFR4.64",
+    "NFR5",
+    "NFR5.40",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR8.40",
+    "NFR8.41",
+    "NFR8.42",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR12",
+    "US2.1",
+    "US2.2",
+    "US3.1",
+    "US6.1",
+    "US9.1"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.2.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.8／BR7.3；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.8／BR7.3**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "N/A",
+      "target": "本單元的承載：BR7.1；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR7.1**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC2.2.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC2.2.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC2.2.3",
+      "status": "N/A",
+      "target": "本單元的承載：BR7.2；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR7.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC3.1.1",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.2／BR2.3；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.2／BR2.3**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC3.1.2",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.6／BR3.2；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.6／BR3.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC3.1.3",
+      "status": "N/A",
+      "target": "本單元的承載：BR4.2；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR4.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "N/A",
+      "target": "本單元的承載：BR4.1／BR4.3／BR4.4；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR4.1／BR4.3／BR4.4**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC6.1.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC6.1.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC6.1.3",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.6／BR3.2；驗收面在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準的驗收面在U13／U14／U16 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.6／BR3.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "AC9.1.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC9.1.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC9.1.3",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "AC9.1.4",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14／U16 的使用者可見層",
+      "note": "驗收標準。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14／U16 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "BR1",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR1.1、BR1.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "SessionStore._require_session_key 拒絕未提供的 key；不自行推導、不自行產生。測試 backend/tests/test_session_store_behaviour.py::HappyPathTest.test_session_key_must_be_supplied_by_the_caller"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "全部狀態經 backend/services/redis_gateway.py 進 Redis，模組層零狀態容器。測試 backend/tests/test_session_contract.py::PureFunctionLayerTest ＋ backend/tests/test_session_store_behaviour.py::test_expires_at_comes_from_the_backend_not_from_process_memory"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "五個方法皆 EXPIRE；兩支 Lua 內也各有一次。測試 backend/tests/test_session_store_behaviour.py::HappyPathTest.test_all_five_methods_renew_the_ttl"
+    },
+    {
+      "id": "BR1.4",
+      "status": "N/A",
+      "target": "TTL 到期後「全部一起消失」由單一 key 的構造成立，Redis 自己執行，本單元無對應程式行可指",
+      "note": "TTL 到期後「全部一起消失」由**單一 key** 的構造成立，Redis 自己執行，本單元無對應程式行可指。它的反面（key 不存在時 load 回 None）由 BR1.6 承載"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "K-09 的五個方法之外無任何公開 API，故不存在第二條清除路徑。測試 backend/tests/test_session_contract.py::NoExposedEndpointTest"
+    },
+    {
+      "id": "BR1.6",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "SessionStore.load 回 None 而非 raise。測試 backend/tests/test_session_store_behaviour.py::HappyPathTest.test_load_returns_none_for_a_missing_key_and_still_renews_ttl"
+    },
+    {
+      "id": "BR2",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR2.1、BR2.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "require_segment_id 的封閉集合。測試 backend/tests/test_session_types.py::ClosedSetTest.test_unknown_segment_id_is_rejected_and_not_auto_created"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "require_page_scope 排除入口頁。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_entry_page_cannot_switch_mode"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_sharing_mode 只寫 pageModes[scope]。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_switching_one_page_leaves_the_other_untouched"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/session_scripts/switch_to_isolated.lua",
+      "note": "HEXISTS 判定建段或重入。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_switching_back_keeps_the_segment_and_re_entering_returns_to_it"
+    },
+    {
+      "id": "BR2.5",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_sharing_mode 的 shared 分支只改 pageModes，不碰 segments。測試同 BR2.4"
+    },
+    {
+      "id": "BR2.6",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "無任何合併 API。測試 backend/tests/test_session_contract.py 的公開介面斷言"
+    },
+    {
+      "id": "BR2.7",
+      "status": "N/A",
+      "target": "狀態訊息的扇出由 U13 送出，不在本單元",
+      "note": "狀態訊息的扇出由 U13 送出，不在本單元。本單元只保證 pageModes 可逐鍵讀回供其帶識別"
+    },
+    {
+      "id": "BR2.8",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "PAGE_SCOPES 封閉集合排除 /cost 與 /admin/*。測試 backend/tests/test_session_types.py::ClosedSetTest.test_page_scopes_exclude_the_entry_page"
+    },
+    {
+      "id": "BR3",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR3.1、BR3.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "append_message 的 segment_id 為必填位置參數。測試 backend/tests/test_session_store_behaviour.py::AppendMessageTest.test_segment_id_is_required_and_never_defaults_to_shared（突變 M2 驗證）"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "BrainSession.segment 的形狀隔離，不靠執行期過濾。測試 backend/tests/test_session_store_behaviour.py::AppendMessageTest.test_segments_are_isolated"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "段內 sequence 在腳本內以最後一筆 +1 計算。測試 backend/tests/test_session_store_behaviour.py::AppendMessageTest.test_sequence_is_monotonic_within_a_segment"
+    },
+    {
+      "id": "BR3.4",
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "**唯一生產載體**；參考實作在 backend/services/session_types.py::trim_history（僅供 PBT 與替身）。測試 backend/tests/test_session_types.py::TrimHistoryPropertyTest 三條 PBT（突變 M1）＋ backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest。2026-10-23 起修剪條件加上每段 200 KB 位元組上限（取較嚴者），見 MB-18 列"
+    },
+    {
+      "id": "BR3.5",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "resolve_history_max 缺值即 raise；由 backend/main.py 的 startup hook 呼叫。測試 backend/tests/test_session_store_behaviour.py::StartupConfigurationTest ＋ backend/tests/test_session_contract.py::StartupFailureIsLoudTest"
+    },
+    {
+      "id": "BR3.6",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "session_log_fields 的白名單簽章 ＋ log_session_event 的執行期守衛。測試 backend/tests/test_session_contract.py::LogWhitelistIsASignatureTest（突變 M6 驗證）"
+    },
+    {
+      "id": "BR4",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR4.1、BR4.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "ConversationSegment 持有三個作業對象欄位；Hash 以 tgt:<segmentId> 逐段存放"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/session_scripts/switch_to_isolated.lua",
+      "note": "逐欄複製 tgt:shared → tgt:<scope>，含 null。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_new_segment_inherits_the_shared_work_target"
+    },
+    {
+      "id": "BR4.3",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_work_target 的 segment_id 必填且只寫該段。測試 backend/tests/test_session_store_behaviour.py::WorkTargetAuthorizationTest.test_segment_id_is_required_for_set_work_target"
+    },
+    {
+      "id": "BR4.4",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "由**資料形狀**滿足，不是由任何路由邏輯滿足：切回共享時 `segments['shared']` 與 `tgt:shared` 原封不動（`BR2.5` 不刪段、`BR2.6` 無合併路徑），故該頁讀到的歷程與作業對象**必然**與離開時相同。`decode_session` 只是把存在的段欄位逐一解碼——它**沒有** page-scope 參數、不做 page→segment 的選取；**選取在呼叫端**（讀 `pageModes[P]` 決定該頁要讀哪一段，依 `functional-spec.md` 的 `W2` 第 2 步屬 `U13`）。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_switching_back_keeps_the_segment_and_re_entering_returns_to_it。**本列原本宣稱 `decode_session` 執行該路由，那是錯的**（審查 R-02）"
+    },
+    {
+      "id": "BR4.5",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "decode_target／encode_target 原樣保留 null，不推導上層。測試 backend/tests/test_session_store_behaviour.py::WorkTargetAuthorizationTest.test_partial_work_target_is_stored_verbatim_without_inference"
+    },
+    {
+      "id": "BR4.6",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_work_target 先呼叫 K-07，且**不** catch 其例外。測試 backend/tests/test_session_store_behaviour.py::WorkTargetAuthorizationTest.test_hierarchy_exceptions_propagate_unchanged_and_nothing_lands（突變 M3 驗證）"
+    },
+    {
+      "id": "BR4.7",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "每一次寫入各自解析一次。測試 backend/tests/test_session_store_behaviour.py::WorkTargetAuthorizationTest.test_second_segment_is_validated_on_its_own（allow/deny 皆對第二段跑）"
+    },
+    {
+      "id": "BR5",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR5.1、BR5.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/tests/test_session_contract.py",
+      "note": "NoAuthorizationOfItsOwnTest：require_story_action 等四個識別字在四個模組的程式行零命中，並反向斷言必須委派 resolve_work_target"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/tests/test_session_contract.py",
+      "note": "NoIdentityFromRequestTest：不 import fastapi／starlette／websockets，且 principal 必為 set_work_target 的參數"
+    },
+    {
+      "id": "BR5.3",
+      "status": "OK",
+      "target": "backend/tests/test_session_contract.py",
+      "note": "NoExposedEndpointTest：無 APIRouter／include_router／add_api_route，且 backend/main.py 不掛本單元 router"
+    },
+    {
+      "id": "BR6",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR6.1、BR6.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR6.1",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "RedisGateway._call 一律包成 SessionBackendUnavailable 向上傳遞，不回空 session。測試 backend/tests/test_session_store_behaviour.py::ReasonCodeClassificationTest 三個案例"
+    },
+    {
+      "id": "BR6.2",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "_call 的 idempotent 旗標：冪等方法重試至多 2 次，append_message 不重試。測試 backend/tests/test_session_store_behaviour.py::RetryBehaviourTest 三條"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "訊息重播是 U13 的邊界（x-retry-and-idempotency 逐字「伺服器不重送已送出的訊息」）",
+      "note": "訊息重播是 U13 的邊界（x-retry-and-idempotency 逐字「伺服器不重送已送出的訊息」）。本單元不緩衝、不重播，無對應程式行"
+    },
+    {
+      "id": "BR7",
+      "status": "N/A",
+      "target": "群組標籤，不是 rules.md 的規則 id",
+      "note": "**群組標籤，不是 rules.md 的規則 id**——該檔的規則一律帶子編號（BR7.1、BR7.2…）。它出現在本單元的 markdown 是因為群組標題引用了它。其成員逐條列於本表"
+    },
+    {
+      "id": "BR7.1",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "「Verify sessions survive a Redis restart」步驟。設計面在 backend/services/session_types.py::decode_session（一次 HGETALL 還原全部欄位）。**CI 測不到**——測試 stack 無 AOF、無 named volume，故這是唯一真的會執行的驗證"
+    },
+    {
+      "id": "BR7.2",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "decode_target 對缺欄位回三層皆 null，使「尚未選定」真正可達。測試 backend/tests/test_session_types.py::test_absent_target_field_decodes_to_the_not_yet_selected_state"
+    },
+    {
+      "id": "BR7.3",
+      "status": "N/A",
+      "target": "on_connect 的推送由 U13 執行",
+      "note": "on_connect 的推送由 U13 執行。本單元只保證 pageModes 與逐段作業對象可一次讀回，無對應程式行"
+    },
+    {
+      "id": "EC1",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "_ensure_meta 在首次寫入時即建立 seg:shared，故 segments 必含 shared"
+    },
+    {
+      "id": "EC2",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "PAGE_SCOPES ＋ default_page_modes 恰兩鍵、不含入口頁。測試 backend/tests/test_session_types.py::ClosedSetTest.test_page_scopes_exclude_the_entry_page"
+    },
+    {
+      "id": "EC3",
+      "status": "OK",
+      "target": "backend/services/session_scripts/switch_to_isolated.lua",
+      "note": "建段＋複製＋改模式在**同一支腳本**內。測試 backend/tests/test_session_store_behaviour.py::SharingModeTest.test_switch_to_isolated_is_a_single_script_call_not_three_writes——⚠ 該測試驗的是**呼叫形狀**，不是原子性（替身證明不了原子性，見 code-summary.md §七）"
+    },
+    {
+      "id": "EC4",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "SEGMENT_IDS 封閉集合。測試 backend/tests/test_session_types.py::ClosedSetTest.test_segment_ids_are_exactly_the_three_allowed_values"
+    },
+    {
+      "id": "EC5",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "BrainSession 為 frozen dataclass，expires_at_seconds 由 TTL 回覆填入；backend/services/session_store.py 沒有任何接受到期時刻的參數"
+    },
+    {
+      "id": "EC6",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "以 BR3.6 的操作性規則落地（識別碼不是內容，見 security-design.md §一 的對齊修正）：session_log_fields 白名單。測試 backend/tests/test_session_contract.py::LogWhitelistIsASignatureTest"
+    },
+    {
+      "id": "EC7",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "decode_target 允許部分三元組。測試 backend/tests/test_session_types.py::test_partial_work_target_round_trips_with_nulls_intact"
+    },
+    {
+      "id": "EC8",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_work_target 不做階層一致性驗證（無相關程式碼）；界線逐字記於 backend/services/session_types.py::ConversationSegment 的 docstring"
+    },
+    {
+      "id": "EC9",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "上限為具名參數 HISTORY_MAX_ENV，非本單元常數；由 resolve_history_max 解析"
+    },
+    {
+      "id": "EC10",
+      "status": "OK",
+      "target": "backend/services/session_types.py",
+      "note": "SessionMessage 為 frozen dataclass，不可就地修改。測試 backend/tests/test_session_types.py::test_messages_are_frozen_value_objects"
+    },
+    {
+      "id": "FR1.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14 的使用者可見層",
+      "note": "功能需求。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "FR2.1",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.8／BR7.3；驗收面在 U13／U14 的使用者可見層",
+      "note": "功能需求的驗收面在U13／U14 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.8／BR7.3**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "FR3.1",
+      "status": "N/A",
+      "target": "本單元的承載：BR2.1／BR2.2；驗收面在 U13／U14 的使用者可見層",
+      "note": "功能需求的驗收面在U13／U14 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR2.1／BR2.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "FR3.2",
+      "status": "N/A",
+      "target": "本單元的承載：BR3.1／BR3.2／BR4.2；驗收面在 U13／U14 的使用者可見層",
+      "note": "功能需求的驗收面在U13／U14 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR3.1／BR3.2／BR4.2**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "FR3.3",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14 的使用者可見層",
+      "note": "功能需求。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "FR4",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 U13／U14 的使用者可見層",
+      "note": "功能需求。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在U13／U14 的使用者可見層。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "FR6.1",
+      "status": "N/A",
+      "target": "本單元的承載：BR3.3；驗收面在 U13／U14 的使用者可見層",
+      "note": "功能需求的驗收面在U13／U14 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR3.3**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
+    },
+    {
+      "id": "MB-12",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "merge-blockers.md 第 12 項（裁決 MULTI／EXEC）。RedisGateway.hset_fields_and_expire 以 pipeline(transaction=True) 送同一 key 的多個 HSET ＋ 一個 EXPIRE；session_store.py 的 _ensure_meta、set_work_target、set_sharing_mode 切回 shared 三處改走它（append_message 與切 isolated 已由 Lua 原子承載）。另以 _strip_pipeline_annotation 拿掉 redis-py 在 pipeline 例外訊息前附的指令全文（含被寫入的值）。測試 backend/tests/test_session_store_behaviour.py::TransactionalWriteTest（7 案；突變「交易拆回逐條」→ 無 TTL 半成品案例 4 子案例紅）＋ RealRedisParityTest 的兩條交易案例（opt-in，需 REDIS_URL，不在 CI）"
+    },
+    {
+      "id": "MB-18",
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "merge-blockers.md 第 18 項（裁決每段對話大小上限）。修剪取「BRAIN_SESSION_HISTORY_MAX 則」與「整段序列化後 ≤ DEFAULT_SEGMENT_MAX_BYTES（200 KB，backend/services/session_types.py）」較嚴者；Lua 以 string.len(cjson.encode(...)) 量位元組，參考實作 trim_history 以 cjson_encoded_size 量同一個東西。最壞 3 × 200 KB ≈ 600 KB／session；256 MB 的 80% ≈ 349 個。測試 backend/tests/test_session_types.py::TrimHistoryByteCapPropertyTest（2 條 @given ＋ 1 條 cjson 長度實測值）、backend/tests/test_session_store_behaviour.py::SegmentByteCapTest（4 案）、backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest（迴圈條件靜態斷言）、RealRedisParityTest（opt-in，真實 Redis 8.8.0 逐步一致）"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "上層 NFR 標題（非本單元可驗證的條款）",
+      "note": "上層 NFR 標題（非本單元可驗證的條款）。本單元落點的是 NFR4.4x–4.6x 與 NFR8.4x 兩組帶子編號的條款"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "上層標題",
+      "note": "上層標題；其子條款 NFR2.40–2.42 逐條列於本表"
+    },
+    {
+      "id": "NFR2.40",
+      "status": "N/A",
+      "target": "扇出延遲預算：扇出由 U13 執行，本單元不送任何訊息，無程式落點",
+      "note": "扇出延遲預算：扇出由 U13 執行，本單元不送任何訊息，無程式落點"
+    },
+    {
+      "id": "NFR2.41",
+      "status": "N/A",
+      "target": "無狀態設計的性質：它是 BR1.2（狀態一律進 Redis）的後果而非獨立條款，承載在 BR1.2 那一列",
+      "note": "無狀態設計的性質：它是 BR1.2（狀態一律進 Redis）的後果而非獨立條款，承載在 BR1.2 那一列"
+    },
+    {
+      "id": "NFR2.42",
+      "status": "N/A",
+      "target": "扇出成本線性：屬 U13 的扇出演算法，本單元不扇出",
+      "note": "扇出成本線性：屬 U13 的扇出演算法，本單元不扇出"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "上層標題",
+      "note": "上層標題；其子條款 NFR3.20／3.40–3.43 逐條列於本表"
+    },
+    {
+      "id": "NFR3.20",
+      "status": "N/A",
+      "target": "首字回應預算（P50）：屬 U11／U13 的 LLM 路徑，本單元只是其中一次 Redis 往返",
+      "note": "首字回應預算（P50）：屬 U11／U13 的 LLM 路徑，本單元只是其中一次 Redis 往返"
+    },
+    {
+      "id": "NFR3.40",
+      "status": "N/A",
+      "target": "load 的 P95 20ms：本 repo 無 APM，無法在本單元量測",
+      "note": "load 的 P95 20ms：本 repo 無 APM，無法在本單元量測。設計上以單次 HGETALL 達成（見 backend/services/redis_gateway.py::hgetall），量測落在 build-and-test"
+    },
+    {
+      "id": "NFR3.41",
+      "status": "N/A",
+      "target": "append 的 P95 20ms：同上",
+      "note": "append 的 P95 20ms：同上。設計上以單支 Lua 一次 round-trip 達成（見 backend/services/session_scripts/append_message.lua）"
+    },
+    {
+      "id": "NFR3.42",
+      "status": "N/A",
+      "target": "set_work_target 的 150ms（含 K-07 往返）：跨越 U7 的 DB 查詢，本單元量不到它的整體",
+      "note": "set_work_target 的 150ms（含 K-07 往返）：跨越 U7 的 DB 查詢，本單元量不到它的整體"
+    },
+    {
+      "id": "NFR3.43",
+      "status": "N/A",
+      "target": "延遲預算的量測方式本身：本 repo 無 APM，承接 build-and-test",
+      "note": "延遲預算的量測方式本身：本 repo 無 APM，承接 build-and-test"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "上層標題（session 狀態一律放 Redis）",
+      "note": "上層標題（session 狀態一律放 Redis）；其操作性形式是 BR1.2 與 BR7.1，兩者皆已列"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "N/A",
+      "target": "Redis ACL 的建立（含 default 收窄）由 U1 brain-infra 在 compose 的 command: 完成",
+      "note": "Redis ACL 的建立（含 default 收窄）由 **U1 brain-infra** 在 compose 的 command: 完成。本單元只**不繞過**它，該要求列在 NFR4.44"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "N/A",
+      "target": "AOF 開啟由 U1 完成",
+      "note": "AOF 開啟由 **U1** 完成。本單元只要求它不得被改掉，該要求列在 NFR4.52"
+    },
+    {
+      "id": "NFR4.40",
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "**2026-10-23 由 GAP 改為 OK：merge-blockers.md 第 18 項的每段 200 KB 位元組上限關掉了本列原本記載的缺口。** 修剪取筆數上限與位元組上限較嚴者（Lua 生產載體強制），最壞情況 = 3 段 × 200 KB = 600 KB／session；300 個已填滿上界的 session ≈ 176 MiB，為 maxmemory 256 MB 的 ≈69%，不觸及 maxmemory（本條的要求）；以 80% 計 ≈349 個。**仍須如實記載的兩件事**：(1) 原推導寫 300 個 ≈ 90 MB、為 maxmemory 的 35%，留給 AOF 緩衝與 Redis 開銷的餘裕是 2.8 倍；以最壞值計只剩約 1.45 倍——要求成立，餘裕變小。(2) 同 key 的 U12 工作項集合不在本上界內（OPEN-N10-3、scalability-requirements.md 該條的前提）。以下為改狀態前的原記載，保留不改寫：**在本單元實際強制的上界下，本條不成立。** 逐項算式：單一 session 的最壞情況 = 3 段（`SEGMENT_IDS`）× 200 則（`BRAIN_SESSION_HISTORY_MAX`）× 4000 字元（`DEFAULT_MESSAGE_MAX_CHARS`）= **2,400,000 字元**，即 **≈2.4 MB**（每字元 1 位元組）；而本產品的對話是中文，UTF-8 下 CJK 每字元 3 位元組，故真實最壞情況達 **≈7.2 MB**。對 `maxmemory 256mb` 為 **≈106 個**（ASCII）／**≈35 個**（CJK）session；對本條自己承諾的 **90 MB**（256 MB 的 35%，該檔為 AOF 緩衝與 Redis 自身開銷保留的餘裕）則僅 **≈37 個**／**≈12 個**。**要求是 ≥300。**原推導的每則 **500 B** 被該檔自己標為「假設，非量測」，而它現在與一個**大三個數量級**的強制上界直接矛盾——500 B 的平均假設無法同時與 4000 字元（CJK 下 12000 B）的硬上限並存。**本單元使這個缺口變得可見，而不是造成它**：在本單元引入單則長度上限之前，`messageHistory` 的位元組量**根本沒有上界**（`nfr-requirements` `R-02` 查出的正是這點），所以「已填滿上界的 session」在此之前甚至不是一個有限的量；把最壞情況變成可計算的，正是讓這個容量下限的不成立浮現出來的那個動作。**不以調整上界來讓本條通過**：要讓 300 個成立需要每則 ≤500 B，而那會拒絕一段正常長度的中文訊息（≈166 字），與 `FR1.1` 逐字接受的自由文字輸入牴觸。待辦的具體形狀：以**實測**的每則位元組數重算本節兩條算式，並連同單則上限的數值一起裁決；見 code-summary.md 第九節開放項 2"
+    },
+    {
+      "id": "NFR4.41",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "可計算的硬上界**已存在**：段數上界 3（backend/services/session_types.py::SEGMENT_IDS）× 每段筆數上限 BRAIN_SESSION_HISTORY_MAX（Lua 強制）× 每則 DEFAULT_MESSAGE_MAX_CHARS（append_message 入口強制），pageModes 固定 2 鍵，其餘皆為純量。**該上界的數值大小是另一回事**，見 NFR4.40。2026-10-23 起另有每段 200 KB 的位元組上限（Lua 強制，MB-18），上界因此是 3 × 200 KB，不再依賴每則平均位元組數的假設。**一項明確在上界之外**：同 key 的工作項集合由 U12 擁有（OPEN-N10-3）"
+    },
+    {
+      "id": "NFR4.44",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "build_redis_client 對 user == 'default' 直接拒絕並說明理由；身分取自 REDIS_USER／REDIS_PASSWORD"
+    },
+    {
+      "id": "NFR4.45",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "session_log_fields 為白名單（非黑名單）。測試 backend/tests/test_session_contract.py::LogWhitelistIsASignatureTest.test_no_module_formats_a_session_object_into_a_log_call ＋ backend/tests/test_session_store_behaviour.py::LogWhitelistRuntimeTest.test_backend_unavailable_log_carries_no_session_content"
+    },
+    {
+      "id": "NFR4.46",
+      "status": "OK",
+      "target": "backend/tests/test_session_contract.py",
+      "note": "三組靜態斷言：NoAuthorizationOfItsOwnTest／NoIdentityFromRequestTest／NoExposedEndpointTest"
+    },
+    {
+      "id": "NFR4.47",
+      "status": "OK",
+      "target": "backend/tests/test_session_store_behaviour.py",
+      "note": "WorkTargetAuthorizationTest.test_second_segment_is_validated_on_its_own：allow/deny 雙向，且**對第二段**（非 shared）各跑一次"
+    },
+    {
+      "id": "NFR4.48",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "set_work_target 的 docstring 明記為寫入時點驗證、不做讀取時重驗（該條逐字「文件化即滿足」）"
+    },
+    {
+      "id": "NFR4.50",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "redis 的 command: 由 allkeys-lru 改為 noeviction；DEPLOY.md 記載理由、降級形狀與運維動作"
+    },
+    {
+      "id": "NFR4.51",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "classify_client_error 把 OOM 對應到 REDIS_OOM 而非吞掉；讀取仍可用是 noeviction 的原生行為。測試 backend/tests/test_session_store_behaviour.py::ReasonCodeClassificationTest.test_oom_reply_is_redis_oom_by_type_and_by_prefix"
+    },
+    {
+      "id": "NFR4.52",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "`--appendonly yes` **未被改動**——本單元只改 maxmemory-policy 一項，該條逐字只要求「不得被改掉」"
+    },
+    {
+      "id": "NFR4.53",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "還原驗證步驟第 5 段逐欄比對 seg:* 欄位。設計面：欄位不存在即段不存在，語意一致。**CI 測不到**（無 AOF／volume）"
+    },
+    {
+      "id": "NFR4.54",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "同一步驟比對 seg:<id> 的 JSON 陣列（有序）。**CI 測不到**"
+    },
+    {
+      "id": "NFR4.55",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "同一步驟比對三個 tgt:* 欄位，fixture 刻意給三組**不同**的作業對象、含一組部分三元組。**CI 測不到**"
+    },
+    {
+      "id": "NFR4.56",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "同一步驟比對 meta 內的 pageModes 兩鍵——**最容易漏的一項**（它是指標不是資料）。**CI 測不到**"
+    },
+    {
+      "id": "NFR4.57",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "同一步驟的 TTL **區間**斷言；fixture TTL 刻意用 3600（非生產的 86400），使「被重設為滿額」也會被抓到。**CI 測不到**"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "GAP",
+      "target": "無承接站——OPEN-N10-4 記明無告警管道消費、無自然承接站；處置為閘門上重新提交使用者",
+      "note": "**本單元未實作** `MEMORY STATS` 的低頻採集點（它不在 `K-09` 的五個方法內，是一個獨立的採集迴圈）。形狀確實已由 `observability-design.md §四` 指定，但**那不足以構成 `Deferred`**：`Deferred` 的語意是「稍後由某人覆蓋」，而 `OPEN-N10-4` 逐字記明它**沒有任何告警管道消費**且**無自然承接站**——沒有 owner，「稍後」就沒有錨點。本單元 `nfr-design/traceability.json` 的既有先例正好相反：它把 `NFR4.41` 標為 `Deferred` **是因為該列指名了承接站**。**缺 owner 就是 gap 的定義**，故如實記為 `GAP`。處置：依 `project.md` 由屆時的 conductor 在閘門上**重新提交使用者**，不指派一個看起來合理的站。見 code-summary.md 第九節開放項 1"
+    },
+    {
+      "id": "NFR4.61",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "_call 的 ERROR 級 session_backend_unavailable，每次拋出一筆，含 sessionKey／method／reason／elapsedMs。測試 backend/tests/test_session_store_behaviour.py::LogWhitelistRuntimeTest.test_error_log_carries_the_session_key 與 test_every_public_gateway_method_threads_the_session_key_into_its_log（八個公開方法逐一驗）。**本列原本宣稱 OK 而 sessionKey 實際未傳入**，已修正並補上回歸斷言（突變 M7 驗證）"
+    },
+    {
+      "id": "NFR4.62",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "classify_client_error 的三個原因碼，型別優先、字串前綴為退路。測試 backend/tests/test_session_store_behaviour.py::ReasonCodeClassificationTest 三條"
+    },
+    {
+      "id": "NFR4.63",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "LOG_FIELD_NAMES ＋ session_log_fields 的 keyword-only 簽章（無 *args／**kwargs）。測試 backend/tests/test_session_contract.py::LogWhitelistIsASignatureTest（突變 M6 驗證）"
+    },
+    {
+      "id": "NFR4.64",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "「Verify sessions survive a Redis restart (NFR4.53-57)」是可重複執行的步驟，每次部署都跑，不是一次性人工確認"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "上層標題（前後端共用的訊息型別契約與其 CI 閘門），由 U2 擁有",
+      "note": "上層標題（前後端共用的訊息型別契約與其 CI 閘門），由 U2 擁有；其對本單元的要求列在 NFR5.40"
+    },
+    {
+      "id": "NFR5.40",
+      "status": "N/A",
+      "target": "該契約閘門由 U2 brain-ws-contract 擁有，本單元不擁有它",
+      "note": "該契約閘門由 **U2 brain-ws-contract** 擁有，本單元不擁有它。本條要求的是「本單元造成的 K-02 契約變更不得繞過它」——而**本單元未改動 K-02 的任何 payload**（ws-contract.json 與 brain_ws_contract.py 皆不在本單元的 source-manifest 內），故不觸發它。D-S10-1 的四個 payload 欄位新增屬 ADR-0020／U2"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "上層標題，與本單元的交付面無交集（本單元零使用者可見面、零對外端點）",
+      "note": "上層標題，與本單元的交付面無交集（本單元零使用者可見面、零對外端點）"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "上層標題（embedding Port 的網段約束），屬 U6",
+      "note": "上層標題（embedding Port 的網段約束），屬 U6；本單元不碰 embedding"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "上層標題（技術選型紀律）",
+      "note": "上層標題（技術選型紀律）；其子條款 NFR8.40–8.42 逐條列於本表"
+    },
+    {
+      "id": "NFR8.40",
+      "status": "OK",
+      "target": "deploy/render-env.sh",
+      "note": "render-env.sh 寫 BRAIN_SESSION_HISTORY_MAX=200；deploy/.env.example 與 backend/.env.example 皆列它；兩份 compose 皆傳入。程式端無預設（backend/services/session_store.py::resolve_history_max）。scripts/validate_env_contract.py 通過"
+    },
+    {
+      "id": "NFR8.41",
+      "status": "OK",
+      "target": "backend/requirements.txt",
+      "note": "新增 `redis`（**唯一**新依賴），檔內逐字記明選型如何滿足兩項硬條件（例外型別可區分 OOM／連線失敗；內建連線池與 EVALSHA 退回）與為何不用 `==`"
+    },
+    {
+      "id": "NFR8.42",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml",
+      "note": "maxmemory-policy 的改動 ＋ DEPLOY.md 同步。**已實地確認**（非假設）deploy/docker-compose.test.yml 的 redis command: 不設 --maxmemory 與 --maxmemory-policy，而 policy 只在 maxmemory 設定後才生效，故該 stack 無需同步"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "上層標題，非本單元落點",
+      "note": "上層標題，非本單元落點。它由 infrastructure-design 的 traceability.json 帶入本表的 id 聯集（**只掃 markdown 會丟掉它**，那正是 infrastructure-design 審查 R-03 指出的形狀）"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "路由層模型可替換性，屬 U11 intent-router",
+      "note": "路由層模型可替換性，屬 U11 intent-router；其逐字落點已被上游記為「沒有自然承接站」，本單元不改變該狀態"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "上層標題，非本單元落點",
+      "note": "上層標題，非本單元落點"
+    },
+    {
+      "id": "NFR12",
+      "status": "N/A",
+      "target": "上層標題，非本單元落點",
+      "note": "上層標題，非本單元落點。本單元的新編號一律自 .40 起，與它既有的編號不重疊"
+    },
+    {
+      "id": "US2.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 消費端 U13／U14／U16",
+      "note": "使用者故事。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在消費端 U13／U14／U16。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "US2.2",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 消費端 U13／U14／U16",
+      "note": "使用者故事。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在消費端 U13／U14／U16。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "US3.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 消費端 U13／U14／U16",
+      "note": "使用者故事。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在消費端 U13／U14／U16。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "US6.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 消費端 U13／U14／U16",
+      "note": "使用者故事。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在消費端 U13／U14／U16。如實記為無落點，不硬指一條 BR 充數。"
+    },
+    {
+      "id": "US9.1",
+      "status": "N/A",
+      "target": "rules.md 無任何 BR 引用它；承載完全在 消費端 U13／U14／U16",
+      "note": "使用者故事。**本單元的 `rules.md` 沒有任何一條 BR 的條文引用它**（機械掃描全部 BR 區塊的結果為空），故本單元沒有對應的程式落點，承載完全在消費端 U13／U14／U16。如實記為無落點，不硬指一條 BR 充數。"
+    }
+  ]
+}

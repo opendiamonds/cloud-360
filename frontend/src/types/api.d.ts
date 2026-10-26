@@ -780,6 +780,421 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hierarchy/diagram-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Diagram Changes
+         * @description `W5`／`W8`：查詢變更紀錄。
+         *
+         *     **回應不是完整變更歷史**（`NFR7.1`）：涵蓋範圍由每一列的 `source` 宣告，
+         *     而非由資料表名稱宣告。經既有 A1 頁面的異動**不會出現在這裡**
+         *     （`BR5.3`：`source` 的允許值只有 `brain_orchestration`）。
+         *     紀錄壽命另有兩個界限：隨架構圖級聯刪除、保存期 90 天（`BR5.5`）。
+         */
+        get: operations["list_diagram_changes_api_hierarchy_diagram_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hierarchy/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects
+         * @description `W7`：列出**使用者可見的**專案，依 id 遞增。
+         *
+         *     「可見」＝請求者有成員列的專案 ∪ 請求者是擁有者、且該專案尚無任何成員列的專案
+         *     （`U23`，`BR87.1`）。被邀請的成員看得到專案；被另一位管理者移出的建立者看不到。
+         *     缺 `K2 view` 時回 403——即使可見集合為空。
+         */
+        get: operations["list_projects_api_hierarchy_projects_get"];
+        put?: never;
+        /**
+         * Create Project
+         * @description `W1`：建立專案。**非冪等，不得自動重試**（`BR2.4`）。
+         *
+         *     **本 handler 自 `U19` 起退化為薄委派**（`[ND1]`=A／`NFR12.18`／`BR3.1`）：
+         *     它呼叫 `MembershipFacade.create_project_with_owner`，後者在**同一個交易**內
+         *     建立專案並寫入建立者的 `project_admin` 成員列。
+         *
+         *     為什麼不能留在這裡直呼 `HierarchyFacade.create_project`：那一支自己
+         *     `db.commit()`，於是「建專案」與「寫成員列」會是**兩個交易**，中間失敗就
+         *     留下一個**零成員專案**——正是 `[ND1]`=A 要消除的狀態，而 `BR2.1` 的守門只
+         *     在「減少管理者」時觸發，擋不住「一開始就沒有」。
+         *
+         *     **`K2` 的授權判定沒有改變**：`create_project_with_owner` 內部仍走
+         *     `HierarchyFacade.create_project_nocommit`，而它與 `create_project` 共用
+         *     同一個 `_authorize(principal, "edit")`。**路徑、回應模型與狀態碼都不變**，
+         *     故 `openapi.json` 不因本變更漂移。
+         *
+         *     `U19` 的例外在這裡也要轉譯：`MembershipNotFound` → 404。其餘
+         *     （`HierarchyConflictError` → 409 等）沿用既有的 `_translate`。
+         */
+        post: operations["create_project_api_hierarchy_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hierarchy/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project
+         * @description `W6`（專案）。底下仍有系統時回 **409** 並說明剩餘數量（`BR4.4`）。
+         */
+        delete: operations["delete_project_api_hierarchy_projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hierarchy/projects/{project_id}/systems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Systems
+         * @description `W7`：列出該專案的系統，依 id 遞增。
+         *
+         *     只對該專案的可見者回 200（`U23`，`BR87.2`：成員；或擁有者且專案尚無任何成員列）。
+         *     缺 `K2 view` 一律 403（不論專案是否存在）；專案不存在與存在但不可見一律 **404**，
+         *     且兩者的回應本體相同。
+         */
+        get: operations["list_systems_api_hierarchy_projects__project_id__systems_get"];
+        put?: never;
+        /**
+         * Create System
+         * @description `W2`：在指定專案下建立系統。`BR6.5` 的擁有者檢查在 facade 內。
+         */
+        post: operations["create_system_api_hierarchy_projects__project_id__systems_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hierarchy/systems/{system_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete System
+         * @description `W6`（系統）。仍有架構圖歸屬時回 **409** 並說明張數（`BR4.3`）。
+         */
+        delete: operations["delete_system_api_hierarchy_systems__system_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/membership/projects/{project_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Members
+         * @description `U24` 成員頁的唯一資料來源。**非成員即拒**（`BR1.6`）。
+         *
+         *     `AC12.2.3`（清單上沒有改角色的控件）的伺服器側對應：本端點**只回傳**
+         *     成員檢視，不提供任何變更入口。
+         */
+        get: operations["list_members_api_membership_projects__project_id__members_get"];
+        put?: never;
+        /**
+         * Invite Member
+         * @description 邀請一位成員。**非冪等，呼叫端不得自動重試**（`BR3.3`）。
+         *
+         *     成功是一級行為（`BR3.6`）：成功 ⇒ 成員清單必然多一列。
+         *     被拒時成員清單**不新增任何列**（`AC12.5.3`，由 facade 的單一交易保證）。
+         */
+        post: operations["invite_member_api_membership_projects__project_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/membership/projects/{project_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description 移出一位成員。**對已非成員回 204**（冪等，`[FD2]`=A）。
+         *
+         *     守門命中（含**自我移出**最後一位管理者）時回 **409** ＋
+         *     `LastAdminGuardReport`。
+         */
+        delete: operations["remove_member_api_membership_projects__project_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Member Role
+         * @description 變更一位成員的 per-project 角色，並寫一列稽核（`BR5.1`）。
+         *
+         *     一個專案可同時有**多位** `project_admin`；指定第二位**不覆寫**第一位
+         *     （`BR3.5`）。把最後一位管理者改為 `member`（含**自我降級**）時回 **409**。
+         */
+        patch: operations["change_member_role_api_membership_projects__project_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/membership/reselections/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Reselections
+         * @description 我自己未確認的**自動改選**事件。
+         *
+         *     `BR5.5`：查詢同時過濾 `cause = 'auto_reselection'` 與
+         *     `acknowledged_at IS NULL`。漏掉 `cause` 過濾會讓**每一次人工角色變更**都
+         *     彈出一則橫幅，而文案是「系統自動把管理權交給你」——對人工變更是錯的訊息。
+         *
+         *     只問自己的（以 `principal.user_id` 為條件），故不需要 per-project 判定。
+         */
+        get: operations["list_pending_reselections_api_membership_reselections_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/membership/reselections/{event_id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge Reselection
+         * @description 把該**事件列**標為已讀（`BR5.6`）。
+         *
+         *     以**事件**為鍵而不是 per-user 布林值：後者會讓同一人第二次被改選時看不到
+         *     橫幅，而那正是 `FR12.4c` 要防的情境。狀態在伺服器端，故跨裝置一致
+         *     （`AC12.4.4`）。
+         *
+         *     已確認或不屬於你的事件回 **404**——重按一次「知道了」不是伺服器錯誤，
+         *     但也不該回 204 說「改到了」。
+         */
+        post: operations["acknowledge_reselection_api_membership_reselections__event_id__acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Memory Audit Events
+         * @description 稽核事件查詢（`AC4.3.2`／`AC4.3.3`）。
+         *
+         *     回傳元素帶 `memory_exists`：`memoryId` 指不到記憶的事件**仍然回傳**
+         *     （`BR6.3`）。過濾掉它會讓 `FR4.7` 在 90 天後變成空話——稽核存在的全部
+         *     理由就是記憶消失之後還答得出「誰刪的」。
+         */
+        get: operations["list_memory_audit_events_api_memory_audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Memories
+         * @description 列出當前使用者可見的記憶（`BR2.2` 過濾）。
+         *
+         *     **`limit` 的伺服器端上限在 service 層**（`memory_service.clamp_page_size`），
+         *     不在這裡：`NFR7.29` 的判準是「以超大 `limit` 呼叫，回傳筆數不超過上限」，
+         *     而把收斂寫成 `Query(le=...)` 會讓超大值得到 **422**——那是「照辦或拒絕」，
+         *     不是「收斂」。`ge=1` 仍然宣告，因為負數與 0 是語意錯誤而非過大。
+         *
+         *     **本路徑不回 404**：看不到別人的記憶不是錯誤狀態，只是較小的集合
+         *     （`BR2.2` 的 `violation_behaviour` 逐字）。
+         */
+        get: operations["list_memories_api_memory_records_get"];
+        put?: never;
+        /**
+         * Create Memory
+         * @description 手動建立一則記憶（`semantic` 的唯一來源，`BR7.3`）。
+         *
+         *     **這個端點是 `AC4.1.3` 得以成立的原因**：少了它，`semantic` 永遠沒有資料，
+         *     該 AC 的 Given「三種記憶各有資料」對 `semantic` 那一份不可構造
+         *     （`rules.md` 的 `BR7.3` note）。
+         *
+         *     `episodic` 與 `procedure` 的正常寫入端是 `U13`／`U12` 的**同進程**呼叫
+         *     （`BR7.1`／`BR7.2`），不經本端點；本端點不限制 `kind`，因為
+         *     `[FD4]`=A 逐字「`kind` 由使用者指定且限於封閉集合」。
+         */
+        post: operations["create_memory_api_memory_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/records/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Memory
+         * @description 刪除自己的記憶（留稽核，`BR4.2`）。
+         *
+         *     **`memory_id` 宣告為 `str` 而非 `int`**，而這是 `[D1]`=A 的一部分：
+         *     宣告 `int` 會讓 `DELETE /api/memory/records/abc` 回 **422**，而那等於告訴
+         *     呼叫端「id 必須是整數」——`[D1]`=A 的整個目的就是不讓刪除路徑回答任何
+         *     關於 id 空間的問題。`K-08` 的簽章逐字也是 `memory_id: str`
+         *     （`entities.md`：「對外為不透明識別字」）。
+         *
+         *     非擁有者收斂為 404（見檔頭）。`responses` 的 403 **只**來自帳號未核准
+         *     ——該判定先於取列、對任何 id 都相同，不是非擁有者的 403。
+         */
+        delete: operations["delete_memory_api_memory_records__memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/records/{memory_id}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Widen Memory Scope
+         * @description 放寬一則記憶的可見範圍（留稽核並帶前後值，`BR5.3`）。
+         *
+         *     **本路徑保留 403**，與刪除路徑相反。差別不是不一致：facade 在此
+         *     **先判角色、後取記憶**，故無權者在任何 id（含不存在的）上都得到同一個 403
+         *     ——oracle 本來就不存在，不需要收斂（`security-design.md §三`）。
+         */
+        put: operations["widen_memory_scope_api_memory_records__memory_id__scope_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requirements/systems/{system_id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Requirement Fields
+         * @description 某系統的全部需求欄位：分組明細與未填數，同一次查詢（`US11.2`／`US11.3`）。
+         */
+        get: operations["read_requirement_fields_api_requirements_systems__system_id__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Write Requirement Field
+         * @description 寫入一個欄位。**冪等**：重送相同本體覆寫同一列（`NFR20.21`）。
+         *
+         *     本體 `{ "value": str, "on_behalf_of": str | null }`。不帶 `on_behalf_of` 而值只有
+         *     空白時視為清空（`BR43.2`）；帶 `on_behalf_of` 時空值被拒（`BR42.5`）。
+         */
+        put: operations["write_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__put"];
+        post?: never;
+        /**
+         * Clear Requirement Field
+         * @description 清空一個欄位（保留列、記清空時間與清空者，`ADR-015`）。**冪等**（`NFR20.22`）。
+         */
+        delete: operations["clear_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -801,6 +1216,10 @@ export interface components {
         BulkRolePermissionUpdate: {
             /** Rows */
             rows: components["schemas"]["RolePermissionUpdate"][];
+        };
+        /** ChangeRoleIn */
+        ChangeRoleIn: {
+            role: components["schemas"]["ProjectRole"];
         };
         /** ChatRequest */
         ChatRequest: {
@@ -877,10 +1296,67 @@ export interface components {
             /** Xml Data */
             xml_data: string;
         };
+        /** CreateProjectIn */
+        CreateProjectIn: {
+            /** Name */
+            name: string;
+        };
+        /** CreateSystemIn */
+        CreateSystemIn: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * DeleteUserBlockingReference
+         * @description 刪除使用者被擋下時，仍指向該使用者的一類資料。
+         */
+        DeleteUserBlockingReference: {
+            /** Category */
+            category: string;
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+        };
+        /**
+         * DeleteUserConflict
+         * @description 刪除使用者的 409 回應本體（合併前必修第 3 項／OQ-H1）。
+         *
+         *     `detail` 維持**字串**：既有前端一律以 `data.detail` 當錯誤訊息顯示
+         *     （`AdminPage.tsx`、`AuthorizationRequestsPage.tsx`），改成物件會顯示成
+         *     `[object Object]`。結構化清單另放 `blocking_references`。
+         *
+         *     `blocking_references` 有預設值、在 spec 中**非必填**：拒絕授權申請端點
+         *     既有的另一種 409（「此申請已處理」）只有 `detail`；保底路徑（預檢未涵蓋的
+         *     外鍵，規則 3）回空清單。
+         */
+        DeleteUserConflict: {
+            /** Blocking References */
+            blocking_references?: components["schemas"]["DeleteUserBlockingReference"][];
+            /** Detail */
+            detail: string;
+        };
         /** DetectProviderBody */
         DetectProviderBody: {
             /** Xml Data */
             xml_data: string;
+        };
+        /** DiagramChangeOut */
+        DiagramChangeOut: {
+            /** Actor User Id */
+            actor_user_id: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Diagram Id */
+            diagram_id: number;
+            /** Id */
+            id: number;
+            /** Requirement Label */
+            requirement_label: string;
+            /** Requirement Summary */
+            requirement_summary: string;
+            /** Source */
+            source: string;
         };
         /** EstimateSetDetailView */
         EstimateSetDetailView: {
@@ -909,10 +1385,113 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * FieldGroupView
+         * @description 一個 agent 組的明細。`fields` 恆等於該組宣告的欄位集合（`BR44.5`）。
+         */
+        FieldGroupView: {
+            /** Fields */
+            fields: components["schemas"]["FieldView"][];
+            /** Filled Count */
+            filled_count: number;
+            /** Group Key */
+            group_key: string;
+            /** Title */
+            title: string;
+            /** Total Count */
+            total_count: number;
+        };
+        /**
+         * FieldSetView
+         * @description `read_fields` 的回傳。
+         *
+         *     **`unfilled_count` 與 `groups` 由同一次資料庫查詢推導、在同一個回應內回傳**
+         *     （不變量 `I-4`／`BR44.4`）：總覽籤與需求籤讀的是同一個 `GET` 的同一個回應，
+         *     本 router 刻意沒有「只回計數」的端點（`NFR20.3`）。
+         */
+        FieldSetView: {
+            /** Groups */
+            groups: components["schemas"]["FieldGroupView"][];
+            /** Input Hint */
+            input_hint: string;
+            /** System Id */
+            system_id: number;
+            /** Unfilled Count */
+            unfilled_count: number;
+        };
+        /**
+         * FieldView
+         * @description 單一欄位的檢視（`write_field`／`clear_field` 的回傳、`FieldGroupView` 的元素）。
+         *
+         *     `never_filled`（含第四種列）一律回 null 的 `cleared_at`／`updated_at`／
+         *     `updated_by`／`updated_on_behalf_of`（functional-design `review-02` R-06）：
+         *     回列上的值會讓一個「從未填過」的欄位帶著「最後更新者」，畫面無從判斷該不該顯示。
+         */
+        FieldView: {
+            /** Cleared At */
+            cleared_at?: string | null;
+            /** Field Key */
+            field_key: string;
+            filled_state: components["schemas"]["FilledState"];
+            /** Group Key */
+            group_key: string;
+            /** Label */
+            label: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By */
+            updated_by?: number | null;
+            /** Updated On Behalf Of */
+            updated_on_behalf_of?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * FilledState
+         * @description 三態（`ADR-015`；推導規則見 `BR44.1`）。
+         * @enum {string}
+         */
+        FilledState: "never_filled" | "filled" | "cleared";
+        /**
+         * GuardedProjectRef
+         * @description `LastAdminGuardReport` 的一項。
+         *
+         *     **必須同時含 id 與名稱**：`entities.md` 逐字「只給 id 的話畫面無法告知
+         *     使用者是哪個專案」。
+         */
+        GuardedProjectRef: {
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InviteMemberIn */
+        InviteMemberIn: {
+            role: components["schemas"]["ProjectRole"];
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * LastAdminGuardReport
+         * @description 守門命中時的回報酬載，**同時是既有停用端點 409 的 response model**。
+         *
+         *     `AC12.3.3` 的 Then 要求停用被拒時**列出那些專案**，故這個形狀就是 409 的
+         *     回應本體（不是 `{"detail": ...}` 的包裝）。
+         *
+         *     `BR6.2`：它**必須**被 `responses={409: {"model": LastAdminGuardReport}}`
+         *     顯式宣告。FastAPI 不從 `raise HTTPException` 推導狀態碼，故不宣告則該契約
+         *     不進 `openapi.json`、前端產不出型別，而 `dump_openapi.py --check` 與
+         *     `npm run check:types` **兩道漂移閘門都保持綠燈**——這是本單元唯一
+         *     「違反後沒有任何東西變紅」的規則。
+         */
+        LastAdminGuardReport: {
+            /** Projects */
+            projects: components["schemas"]["GuardedProjectRef"][];
         };
         /** LastOpenedRequest */
         LastOpenedRequest: {
@@ -1002,6 +1581,132 @@ export interface components {
             quantity_positive: boolean;
             total_reconciled: components["schemas"]["TotalReconciledView"];
         };
+        /**
+         * MemberView
+         * @description facade 對外回傳的成員檢視（`list_members`／`invite_member`／`change_role`）。
+         *
+         *     **不含 per-project 判定以外的授權結論，也不含全域角色**——前端不得自行
+         *     推導 per-project 權限（不變量 `I-5`），它只讀本元件給的結論。
+         *
+         *     **不含 `invited_by`**：`entities.md` 逐字把它列為「本輪有寫入端而無讀取端」
+         *     的懸空契約端（`OPEN-FD19-6`），並明文要求**不自行把它加進 `MemberView`**
+         *     ——那會擴大一個已核可的回傳形狀而沒有任何 AC 要求它。
+         */
+        MemberView: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Role */
+            role: string;
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * MemoryAuditEventView
+         * @description `K-08` 的 `MemoryAuditEventView`：`list_audit_events` 的回傳元素。
+         *
+         *     **刻意不含記憶內容**（`EC6`）：稽核比它描述的記憶活得久（`BR2.1`／`DG-1`），
+         *     若它含內容，「保留稽核」就等於「保留被刪除的使用者資料」——使用者以為刪了
+         *     而它還在，`FR4.5` 的 90 天刪除形同虛設。
+         *
+         *     `memory_exists` 是 `BR6.3` 要的那一位：`memory_id` 指不到記憶時**仍須回傳
+         *     該事件**，並讓呼叫端**可分辨**這個狀態。少了這個欄位，呼叫端只能自己再查
+         *     一次記憶（而它沒有權限）或把懸空事件誤讀成資料錯誤。
+         */
+        MemoryAuditEventView: {
+            /** Action */
+            action: string;
+            /** Actor User Id */
+            actor_user_id: number;
+            /** Audit Event Id */
+            audit_event_id: string;
+            /** Memory Exists */
+            memory_exists: boolean;
+            /** Memory Id */
+            memory_id: string;
+            /** New Scope */
+            new_scope?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Previous Scope */
+            previous_scope?: string | null;
+        };
+        /**
+         * MemoryCreateRequest
+         * @description `POST /api/memory/records` 的酬載（`BR7.3`／`[FD4]`=A）。
+         *
+         *     ## `model_config` 刻意**不**設 `extra="forbid"`
+         *
+         *     `BR1.2`／`NFR7.20` 要求酬載中任何意圖指定擁有者的欄位**被忽略且不回報
+         *     錯誤**。`extra="forbid"` 會讓它回 422，直接違反該規則；而回 422 會讓呼叫端
+         *     以為「換個欄位名就能指定」，**忽略使該能力不存在**。
+         *
+         *     同理 `visibilityScope` 也不是本模型的欄位（`NFR7.21`）：新記憶的可見範圍
+         *     一律為最窄，放寬是獨立的、需授權的操作（`BR5.1`）。
+         *
+         *     故本模型**只有兩個欄位**，而這個「少」是規則本身，不是未完成。
+         *     `test_memory_authz` 第 11 條驗的正是帶了那兩欄仍**回成功而非 422**。
+         */
+        MemoryCreateRequest: {
+            /**
+             * Content
+             * @description 記憶的文字內容；去除前後空白後須非空
+             */
+            content: string;
+            /**
+             * Kind
+             * @description 三種記憶之一：semantic｜procedure｜episodic
+             * @example semantic
+             */
+            kind: string;
+        };
+        /**
+         * MemoryScopeRequest
+         * @description `PUT /api/memory/records/{memoryId}/scope` 的酬載（`BR5.2`）。
+         */
+        MemoryScopeRequest: {
+            /**
+             * Visibility Scope
+             * @description 目標可見範圍。只接受比現行**更寬**的值（放寬只有一個方向）
+             */
+            visibility_scope: string;
+        };
+        /**
+         * MemoryView
+         * @description `K-08` 的 `MemoryView`：`write`／`search`／`widen_scope` 的回傳元素。
+         *
+         *     **不含 `embedding`**：1024 個浮點數對 `U11`／`U15` 都無用，而回傳它等於
+         *     把向量搬進消費端的進程。**不含任何他人的資料**——能拿到這個物件就表示
+         *     `BR2.2` 已經放行過。
+         */
+        MemoryView: {
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Embedding Model */
+            embedding_model: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Kind */
+            kind: string;
+            /** Memory Id */
+            memory_id: string;
+            /** Owner User Id */
+            owner_user_id: number;
+            /** Visibility Scope */
+            visibility_scope: string;
+        };
         /** Message */
         Message: {
             /** Content */
@@ -1028,6 +1733,38 @@ export interface components {
             /** Xml Data */
             xml_data?: string | null;
         };
+        /** ProjectOut */
+        ProjectOut: {
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: number;
+            /** Is Default */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /** Owner User Id */
+            owner_user_id: number;
+        };
+        /**
+         * ProjectRole
+         * @description per-project 角色的封閉列舉（`entities.md` 的 `ProjectRole`）。
+         *
+         *     **刻意不含 `project_owner`**：`owner` 是 `projects.owner_user_id` 承載的
+         *     **專案屬性**，不是成員角色。建立者同時是 owner 且是 `project_admin`
+         *     （`FR12.1`），兩者是不同的事實——混為一談會讓「改某人的角色」意外改到
+         *     專案的擁有權。
+         *
+         *     **與全域角色同名不同義**：本列舉的 `project_admin` 是**專案內**的身分，
+         *     與 `services/rbac.py` 的 `CANONICAL_ROLES` 裡的全域 `Project_Admin` 是兩回事
+         *     （`schema_rbac.sql` 的 `project_members.role` COMMENT 逐字記載這一點）。
+         *     `FR12.6` 要求兩層串聯、任一層不過即拒，兩者不互相取代。
+         *
+         *     封閉性由**應用層**承載（`BR5.4`）：`reselection_events` 的
+         *     `previous_role`／`new_role` 在 DDL 刻意沒有 CHECK。
+         * @enum {string}
+         */
+        ProjectRole: "project_admin" | "member";
         /** PutLensBody */
         PutLensBody: {
             /** Lens */
@@ -1053,6 +1790,79 @@ export interface components {
         RenderDiagramBody: {
             /** Xml Data */
             xml_data: string;
+        };
+        /**
+         * RequirementFieldErrorOut
+         * @description 403／404／422 的回應本體。`detail` 為固定文字，不含任何輸入值。
+         */
+        RequirementFieldErrorOut: {
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * ReselectionFailureReport
+         * @description 停用端點在**自動改選部分失敗**時的回應本體（合併前必修第 10 項）。
+         *
+         *     出現在 `PUT /api/auth/{user_id}/active` 的 **500**（任一專案改選失敗）與
+         *     **503**（失敗全部是取鎖逾時，合併前必修第 16 項）。兩者的共同事實是：
+         *     **帳號已經停用了**（停用與改選是兩段交易，改選在停用成功之後才跑），而
+         *     `failed_project_ids` 列出的專案此刻可能沒有可運作的管理者。
+         *
+         *     `detail` 告訴呼叫端**重送同一個請求**即可補跑：對已停用的帳號再送
+         *     `is_active=false` 不會重跑守門，但會重跑改選，而改選是冪等的（`BR4.3`），
+         *     已改好的專案不會產生第二筆事件。
+         *
+         *     在此之前這條路徑回 200 且只記 log，沒有任何呼叫者負責重跑，失敗的專案會
+         *     永久沒有管理者（`nfr-design` review-02 `R-04`）。
+         */
+        ReselectionFailureReport: {
+            /** Detail */
+            detail: string;
+            /** Failed Project Ids */
+            failed_project_ids: number[];
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * ReselectionOut
+         * @description 一筆未確認的自動改選事件。
+         *
+         *     **刻意只含事件本身的欄位，不含專案名稱**：橫幅的**顯示**形狀屬 `U23`／`U24`
+         *     （本單元無前端面——實測 `frontend/src` 對 `projects` 的命中數為 0）。
+         *     這一點與 `LastAdminGuardReport` 刻意帶名稱不同，而差別有依據：後者的名稱
+         *     需求來自 `entities.md` 的逐字約束（「只給 id 的話畫面無法告知使用者是哪個
+         *     專案」），而橫幅的對應需求沒有任何已核可 AC 指定它的欄位集合。消費端若
+         *     需要名稱，那是一次有明確來源的擴充，不是本單元自行放大回傳形狀。
+         */
+        ReselectionOut: {
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
+            /** Cause */
+            cause: string;
+            /** Id */
+            id: number;
+            /** New Role */
+            new_role: string;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Previous Owner User Id */
+            previous_owner_user_id?: number | null;
+            /** Previous Role */
+            previous_role?: string | null;
+            /** Project Id */
+            project_id: number;
+            /** Promoted User Id */
+            promoted_user_id: number;
+        };
+        /**
+         * ReservedAccountConflict
+         * @description 合併前必修第 11 項：對系統保留帳號的改動被拒時的 409 回應本體。
+         *
+         *     `detail` 為字串，沿用既有前端以 `data.detail` 顯示錯誤的形狀。
+         */
+        ReservedAccountConflict: {
+            /** Detail */
+            detail: string;
         };
         /** ResetDefaultsResponse */
         ResetDefaultsResponse: {
@@ -1154,6 +1964,19 @@ export interface components {
         SuggestImprovementBody: {
             /** Title */
             title: string;
+        };
+        /** SystemOut */
+        SystemOut: {
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: number;
+            /** Is Default */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /** Project Id */
+            project_id: number;
         };
         /** TotalReconciledView */
         TotalReconciledView: {
@@ -1845,6 +2668,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。另：申請已處理時亦回 409（同一形狀）。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedAccountConflict"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1874,6 +2706,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description 合併前必修第 3 項（OQ-H1）：刪除被拒——仍有資料指向該使用者（非空或非預設專案、其他專案的成員資格、記憶、稽核操作者紀錄等）。`blocking_references` 逐類列出筆數；預檢未涵蓋的外鍵於 commit 時被資料庫擋下時，回通用訊息與空清單。**稽核類紀錄不會被刪除**。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者）時同樣回 409，`blocking_references` 為空清單。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteUserConflict"];
                 };
             };
             /** @description Validation Error */
@@ -2173,6 +3014,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 合併前必修第 3 項（OQ-H1）：刪除被拒——仍有資料指向該使用者（非空或非預設專案、其他專案的成員資格、記憶、稽核操作者紀錄等）。`blocking_references` 逐類列出筆數；預檢未涵蓋的外鍵於 commit 時被資料庫擋下時，回通用訊息與空清單。**稽核類紀錄不會被刪除**。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者）時同樣回 409，`blocking_references` 為空清單。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteUserConflict"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2208,6 +3058,15 @@ export interface operations {
                     "application/json": components["schemas"]["UserSchema"];
                 };
             };
+            /** @description U19/BR6.1：停用被拒——該使用者是列出的每一個專案的**最後一位專案管理者**。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name`。合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。此情形的本體為 `ReservedAccountConflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LastAdminGuardReport"] | components["schemas"]["ReservedAccountConflict"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2215,6 +3074,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 帳號**已停用**，但列出的專案自動改選失敗（交易已回滾，該專案此刻可能沒有可運作的管理者）。重送同一請求（`is_active=false`）即可補跑；改選冪等，已完成的專案不會重複 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReselectionFailureReport"];
+                };
+            };
+            /** @description 帳號**已停用**，但列出的專案在取鎖時逾時（另一筆成員變更進行中）。稍後重送同一請求即可補跑 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReselectionFailureReport"];
                 };
             };
         };
@@ -2241,6 +3118,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description 合併前必修第 11 項：對象是系統保留帳號（90 天記憶清除的稽核操作者），不得刪除、改角色或啟停用——刪改它會讓 90 天記憶清除整個停擺。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedAccountConflict"];
                 };
             };
             /** @description Validation Error */
@@ -2914,6 +3800,920 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_diagram_changes_api_hierarchy_diagram_changes_get: {
+        parameters: {
+            query?: {
+                /** @description 以輕量標籤比對 */
+                label?: string | null;
+                /** @description 以系統上溯比對。注意：`system_id` 為空的架構圖查不到——新建的圖從未被指派系統歸屬（OPEN-H11） */
+                system_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_projects_api_hierarchy_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"][];
+                };
+            };
+        };
+    };
+    create_project_api_hierarchy_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description 衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_api_hierarchy_projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_systems_api_hierarchy_projects__project_id__systems_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemOut"][];
+                };
+            };
+            /** @description 查不到該專案（含「不屬於你」——刻意同一種結果） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_system_api_hierarchy_projects__project_id__systems_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemOut"];
+                };
+            };
+            /** @description 衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_system_api_hierarchy_systems__system_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 衝突：名稱重複、預設組不可刪除，或底下仍有系統／架構圖（訊息含剩餘數量） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_membership_projects__project_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberView"][];
+                };
+            };
+            /** @description 缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403） */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_member_api_membership_projects__project_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteMemberIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberView"];
+                };
+            };
+            /** @description 缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403） */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 受邀者缺少對應的全域功能權限（`BR3.2`／`AC12.5.1`），或角色不在封閉列舉內 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_member_api_membership_projects__project_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403） */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 守門命中：此操作會讓列出的專案失去最後一位專案管理者（`BR2.1`）。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LastAdminGuardReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    change_member_role_api_membership_projects__project_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRoleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberView"];
+                };
+            };
+            /** @description 缺 `K3` 的全域功能權限，或是該專案的成員但不是專案管理者（`BR1.2` 兩層串聯；非成員回 404，不回 403） */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 查不到該專案（不存在，或呼叫者不是該專案的成員——兩者回應逐位元相同、不含專案 id，合併前必修第 14 項），或查不到該成員 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 守門命中：此操作會讓列出的專案失去最後一位專案管理者（`BR2.1`）。回應本體即 `LastAdminGuardReport`，含每個專案的 `project_id` 與 `name` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LastAdminGuardReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description 取專案列鎖的等待超過上限（`LOCK_TIMEOUT_MS`，合併前必修第 16 項）：另一筆對同一專案的成員變更尚未結束。交易已回滾、未做任何變更，請稍後再試 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_pending_reselections_api_membership_reselections_pending_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReselectionOut"][];
+                };
+            };
+        };
+    };
+    acknowledge_reselection_api_membership_reselections__event_id__acknowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 查不到該事件、它不屬於你，或它已被確認 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memory_audit_events_api_memory_audit_events_get: {
+        parameters: {
+            query?: {
+                /** @description 以 memoryId 收斂；未指定則回全部 */
+                memory_id?: string | null;
+                /** @description 分頁位移 */
+                offset?: number;
+                /** @description 每頁筆數；超過伺服器上限時收斂 */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryAuditEventView"][];
+                };
+            };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memories_api_memory_records_get: {
+        parameters: {
+            query?: {
+                /** @description 以 kind 收斂；未指定則三種皆納入 */
+                kind?: string[] | null;
+                /** @description 分頁位移 */
+                offset?: number;
+                /** @description 每頁筆數。**超過伺服器上限時收斂到上限而非照辦** */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryView"][];
+                };
+            };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_memory_api_memory_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryView"];
+                };
+            };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 輸入不合封閉集合或欄位約束 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description embedding 提供者不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_memory_api_memory_records__memory_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 找不到該記憶 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    widen_memory_scope_api_memory_records__memory_id__scope_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryScopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryView"];
+                };
+            };
+            /** @description 授權未通過 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 找不到該記憶 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 輸入不合封閉集合或欄位約束 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_requirement_fields_api_requirements_systems__system_id__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldSetView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+        };
+    };
+    write_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+                agent_group: string;
+                field_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * On Behalf Of
+                     * @description 代寫標示：大腦代某個 agent 寫入時為該 agent 組（例如 cost）；使用者自填時省略或為 null。只是標示，不授予任何權限
+                     */
+                    on_behalf_of?: string | null;
+                    /**
+                     * Value
+                     * @description 欄位值。去除首尾空白後為空字串時，視為清空（僅限不帶 on_behalf_of 者）
+                     */
+                    value: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+        };
+    };
+    clear_requirement_field_api_requirements_systems__system_id__fields__agent_group___field_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+                agent_group: string;
+                field_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldView"];
+                };
+            };
+            /** @description 授權未通過：帳號待核准，或缺全域功能權限 K4（讀需 view、寫與清空需 edit）。不是該系統所屬專案的成員時回 404，不回 403 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 查不到該系統：不存在（含非整數的 system_id），或呼叫者不是該系統所屬專案的成員——兩者回應逐位元相同、不含 system_id（合併前必修第 14 項） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
+                };
+            };
+            /** @description 未宣告的 agent 組或欄位（含錯綁到別組）、代寫標示不是已宣告的組、值超過 2000 字、代寫路徑的空值，或請求本體形狀錯誤（含未宣告欄位如 updated_by）。只在授權通過之後才可能出現 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementFieldErrorOut"];
                 };
             };
         };

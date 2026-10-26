@@ -1,0 +1,130 @@
+{
+  "stage": "code-generation",
+  "unit": "mcp-bridge",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/mcp_bridge/__init__.py"
+    },
+    {
+      "path": "backend/mcp_bridge/__main__.py"
+    },
+    {
+      "path": "backend/mcp_bridge/agents.json"
+    },
+    {
+      "path": "backend/mcp_bridge/agents.py"
+    },
+    {
+      "path": "backend/mcp_bridge/allowlist.json"
+    },
+    {
+      "path": "backend/mcp_bridge/app.py"
+    },
+    {
+      "path": "backend/mcp_bridge/calls.py"
+    },
+    {
+      "path": "backend/mcp_bridge/cli.py"
+    },
+    {
+      "path": "backend/mcp_bridge/credentials.py"
+    },
+    {
+      "path": "backend/mcp_bridge/dispatch.py"
+    },
+    {
+      "path": "backend/mcp_bridge/executor.py"
+    },
+    {
+      "path": "backend/mcp_bridge/generated_tools.json"
+    },
+    {
+      "path": "backend/mcp_bridge/generator.py"
+    },
+    {
+      "path": "backend/mcp_bridge/guards.py"
+    },
+    {
+      "path": "backend/mcp_bridge/limits.py"
+    },
+    {
+      "path": "backend/mcp_bridge/observability.py"
+    },
+    {
+      "path": "backend/mcp_bridge/outcomes.py"
+    },
+    {
+      "path": "backend/mcp_bridge/server.py"
+    },
+    {
+      "path": "backend/mcp_bridge/startup.py"
+    },
+    {
+      "path": "backend/scripts/gen_mcp_tools.py"
+    },
+    {
+      "path": "backend/tests/mcp_topology.py"
+    },
+    {
+      "path": "backend/tests/mcp_test_client.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_app.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_artifacts.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_deploy.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_dispatch.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_e2e.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_generator.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_guards.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_pure.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_startup.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_static.py"
+    },
+    {
+      "path": "backend/tests/test_mcp_bridge_topology.py"
+    },
+    {
+      "path": "backend/requirements.txt"
+    },
+    {
+      "path": "deploy/docker-compose.deploy.yml"
+    },
+    {
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "path": ".github/workflows/deploy.yml"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "LOCAL-DEV.md"
+    },
+    {
+      "path": "backend/services/requirement_field_facade.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_facade.py"
+    }
+  ]
+}

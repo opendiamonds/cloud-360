@@ -1,0 +1,182 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "session-store",
+  "upstream_ids": [
+    "NFR2.40",
+    "NFR2.41",
+    "NFR2.42",
+    "NFR3.40",
+    "NFR3.41",
+    "NFR3.42",
+    "NFR3.43",
+    "NFR4.40",
+    "NFR4.41",
+    "NFR4.44",
+    "NFR4.45",
+    "NFR4.46",
+    "NFR4.47",
+    "NFR4.48",
+    "NFR4.50",
+    "NFR4.51",
+    "NFR4.52",
+    "NFR4.53",
+    "NFR4.54",
+    "NFR4.55",
+    "NFR4.56",
+    "NFR4.57",
+    "NFR4.60",
+    "NFR4.61",
+    "NFR4.62",
+    "NFR4.63",
+    "NFR4.64",
+    "NFR8.40",
+    "NFR8.41"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.40",
+      "status": "N/A",
+      "target": "扇出延遲預算——應用層與 U13 的事，無基礎設施落點"
+    },
+    {
+      "id": "NFR2.41",
+      "status": "N/A",
+      "target": "無狀態設計的性質，非基礎設施設定"
+    },
+    {
+      "id": "NFR2.42",
+      "status": "N/A",
+      "target": "扇出成本線性，屬應用層演算法"
+    },
+    {
+      "id": "NFR3.40",
+      "status": "N/A",
+      "target": "應用層延遲預算；本 repo 無 APM，量測落在 build-and-test"
+    },
+    {
+      "id": "NFR3.41",
+      "status": "N/A",
+      "target": "同上"
+    },
+    {
+      "id": "NFR3.42",
+      "status": "N/A",
+      "target": "同上（含 K-07 往返）"
+    },
+    {
+      "id": "NFR3.43",
+      "status": "N/A",
+      "target": "量測方法的定義，非基礎設施"
+    },
+    {
+      "id": "NFR4.40",
+      "status": "OK",
+      "target": "Redis maxmemory 256mb ＋ 容器上限 768m；三環境設定差異表（infrastructure-specification.md §二）"
+    },
+    {
+      "id": "NFR4.41",
+      "status": "Deferred",
+      "target": "OPEN-N10-6 → U10 的 code-generation。基礎設施面無法補上它——單則訊息長度的上限是應用層檢查，不是容器設定"
+    },
+    {
+      "id": "NFR4.44",
+      "status": "OK",
+      "target": "ACL app 使用者；兩個 stack 的規則逐字相同（infrastructure-specification.md §二的三環境表）"
+    },
+    {
+      "id": "NFR4.45",
+      "status": "N/A",
+      "target": "日誌白名單為應用層實作"
+    },
+    {
+      "id": "NFR4.46",
+      "status": "N/A",
+      "target": "不判權／不取身分／不對外，為應用層的模組形狀"
+    },
+    {
+      "id": "NFR4.47",
+      "status": "N/A",
+      "target": "逐段授權驗證，應用層"
+    },
+    {
+      "id": "NFR4.48",
+      "status": "N/A",
+      "target": "寫入時點驗證的語意宣告，應用層"
+    },
+    {
+      "id": "NFR4.50",
+      "status": "OK",
+      "target": "deploy/docker-compose.deploy.yml 的 redis command 改 noeviction；實讀確認 CI 測試 stack 不需同步（無 maxmemory）"
+    },
+    {
+      "id": "NFR4.51",
+      "status": "OK",
+      "target": "降級形狀寫入部署後驗證的失敗行為；回滾由既有 rollback job 承載（cicd-pipeline.md §三、§四）"
+    },
+    {
+      "id": "NFR4.52",
+      "status": "OK",
+      "target": "appendonly yes ＋ redis_aof named volume；並明記該 volume 不是備份（infrastructure-specification.md §二）"
+    },
+    {
+      "id": "NFR4.53",
+      "status": "OK",
+      "target": "部署後還原驗證第 4 步的斷言之一（cicd-pipeline.md §三）"
+    },
+    {
+      "id": "NFR4.54",
+      "status": "OK",
+      "target": "同上"
+    },
+    {
+      "id": "NFR4.55",
+      "status": "OK",
+      "target": "同上"
+    },
+    {
+      "id": "NFR4.56",
+      "status": "OK",
+      "target": "同上——並標為最容易漏的一項（指標而非資料）"
+    },
+    {
+      "id": "NFR4.57",
+      "status": "OK",
+      "target": "同上——並明訂須斷言區間而非等值，否則檢查本身不穩定"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "OK",
+      "target": "MEMORY STATS 採集點設計與其 project.md 禁令判定（monitoring-design.md §五）"
+    },
+    {
+      "id": "NFR4.61",
+      "status": "N/A",
+      "target": "日誌事件的產生，應用層"
+    },
+    {
+      "id": "NFR4.62",
+      "status": "N/A",
+      "target": "原因碼分類，應用層（客戶端選型條件見 NFR8.41）"
+    },
+    {
+      "id": "NFR4.63",
+      "status": "N/A",
+      "target": "日誌欄位白名單的強制方式，應用層"
+    },
+    {
+      "id": "NFR4.64",
+      "status": "OK",
+      "target": "[I1]=B：deploy.yml 的部署後驗證步驟，五步形狀與三項代價（cicd-pipeline.md §三）"
+    },
+    {
+      "id": "NFR8.40",
+      "status": "OK",
+      "target": "環境變數的五個落點逐一指名；由 repo-contract 的 validate_env_contract.py 擋（infrastructure-specification.md §一、cicd-pipeline.md §二）"
+    },
+    {
+      "id": "NFR8.41",
+      "status": "OK",
+      "target": "新依賴影響 backend import smoke 與 docker-build 兩道既有閘門（cicd-pipeline.md §一、§二）"
+    }
+  ]
+}

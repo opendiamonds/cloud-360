@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from hypothesis import given, settings, strategies as st
 
-from tests.helpers import backend_dir  # noqa: F401 — ensures path + psycopg2 mock
+from tests.helpers import backend_dir  # noqa: F401 — ensures path + psycopg stub
 
 from services.design_agent import build_system_prompt, format_user_prompt
 

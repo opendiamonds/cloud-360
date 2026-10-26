@@ -1,0 +1,47 @@
+{
+  "stage": "functional-design",
+  "unit": "object-picker-ui",
+  "upstream_ids": [
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC9.2.1",
+      "status": "OK",
+      "target": "BR14.2, BR14.5, BR13.1, BR12.1",
+      "note": "底部「+ 新增專案」（BR14.2）經 objectCreateAction 建立，成功即切到新專案（BR14.5）；下次開啟清單重抓（BR12.1），新專案列可選——零系統的專案亦可選（BR13.1，[OP2]=A 對 interaction-spec.md:281 的對齊修正）。"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "OK",
+      "target": "BR14.3, BR14.5, BR13.1",
+      "note": "群組旁「+ 新增系統」（BR14.3，[OP4]=A），父專案即該群組，故系統歸屬於該專案；成功即切到新系統（BR14.5）；系統列可選（BR13.1）。只在擁有者且 K2 edit 時出現，與伺服器的擁有者檢查一致。"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "OK",
+      "target": "BR14.2, BR14.3, BR14.4",
+      "note": "畫面面：無 K2 edit（或非擁有者）不渲染建立入口（BR14.2／BR14.3）；若仍收到 403，表單顯示 objectCreateAction 的「無權限」文案（BR14.4）。「拒絕經 require_story_action」由 U7 的端點與其 TestClient 測試承擔（已交付），不在本單元。"
+    }
+  ],
+  "reverse": [
+    { "id": "BR11.1", "status": "N/A", "target": "K-13 provides_to_U16（contract-summary.md:1023-1030）", "note": "掛載點是契約義務，不掛在單一 AC 上；含對 K-13 props 字面的對齊修正與重開 U14 檔案（OPEN-OP16-4）。" },
+    { "id": "BR11.2", "status": "N/A", "target": "K-13 observable_side_effects", "note": "選定即送 set_work_target、不本地改脈絡列，是契約語意；AC9.2.1/9.2.2 的「可被選」由 BR13.1 承載。" },
+    { "id": "BR11.3", "status": "N/A", "target": "K-13 retry_and_idempotency；interaction-spec.md:294", "note": "關閉與焦點返還、不去重不重送。" },
+    { "id": "BR11.4", "status": "N/A", "target": "functional-design-questions.md §六 第 4 項", "note": "子頁面沿用 U14 同步掛點的提示，揭露為 OPEN-OP16-6。" },
+    { "id": "BR12.2", "status": "N/A", "target": "interaction-spec.md:270、:272；accessibility-checklist.md:83", "note": "empty 與 error 可區分、不呈現部分清單。" },
+    { "id": "BR12.3", "status": "N/A", "target": "U15 的同型處置；auth-context.ts:29", "note": "user.id 未決視窗的防護。" },
+    { "id": "BR12.4", "status": "N/A", "target": "fanoutQueue.ts 契約段", "note": "關閉即取消扇出。" },
+    { "id": "BR13.2", "status": "N/A", "target": "[OP3]=A；OPEN-PP23-6 第 ③ 項", "note": "非擁有者專案停用呈現，是 UI 判定而非授權。" },
+    { "id": "BR13.3", "status": "N/A", "target": "interaction-spec.md:280；mockups.md M4", "note": "目前對象標示。" },
+    { "id": "BR13.4", "status": "N/A", "target": "interaction-spec.md:271、:296", "note": "前端搜尋與 no-match。" },
+    { "id": "BR14.1", "status": "N/A", "target": "INV-2（interaction-spec.md:32）；OPEN-PP23-8", "note": "單一寫入路徑是跨元件不變量。" },
+    { "id": "BR14.6", "status": "N/A", "target": "[OP4]=A 的後果段", "note": "無 K2 edit 的空清單只顯示說明（對 interaction-spec.md:270 的對齊修正）。" },
+    { "id": "BR15.1", "status": "N/A", "target": "interaction-spec.md:293、:295", "note": "無障礙規格。" },
+    { "id": "BR15.2", "status": "N/A", "target": "interaction-spec.md:294；accessibility-checklist.md:63", "note": "焦點陷阱與返還。" },
+    { "id": "BR15.3", "status": "N/A", "target": "interaction-spec.md:294；[OP3]=A", "note": "方向鍵與不可選列。" },
+    { "id": "BR15.4", "status": "N/A", "target": "BrainSession.tsx:19", "note": "播報寫入既有大腦 LiveRegion。" }
+  ]
+}

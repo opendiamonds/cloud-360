@@ -1,0 +1,407 @@
+{
+  "stage": "code-generation",
+  "unit": "work-orchestrator",
+  "upstream_ids": [
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "NFR12.5",
+    "NFR12.6",
+    "NFR12.7",
+    "NFR12.8",
+    "NFR12.9",
+    "NFR12.10",
+    "NFR12.11",
+    "NFR12.12",
+    "NFR12.13",
+    "NFR12.14",
+    "NFR12.15",
+    "NFR12.16",
+    "NFR12.17",
+    "NFR12.18",
+    "NFR12.19",
+    "NFR12.20",
+    "NFR12.21",
+    "NFR12.22",
+    "NFR12.23",
+    "NFR12.24",
+    "NFR12.25",
+    "NFR12.26",
+    "NFR12.27",
+    "NFR12.28",
+    "NFR12.29",
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.3.1",
+    "AC1.3.2",
+    "AC1.3.3",
+    "AC5.1.1",
+    "AC5.1.2",
+    "AC5.1.3",
+    "AC10.1.1",
+    "AC10.1.2",
+    "AC10.1.3",
+    "AC10.1.4",
+    "AC10.1.5",
+    "AC10.2.1",
+    "AC10.2.2",
+    "AC10.2.3",
+    "AC10.2.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ReplyFirstTest.test_dispatch_replies_before_any_capability_returns：能力永不返回，dispatch < 1 秒回傳且已送本輪建立訊息。"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "FacadeThreadTest.test_facade_calls_run_off_the_event_loop_thread：facade 呼叫的執行緒不是事件迴圈執行緒。"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_polling_is_bounded_and_ends_in_cost_timeout：快照讀取 ≤ 180 次後失敗「成本分析逾時」。"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_capabilities.py",
+      "note": "CostListPagingTest.test_search_stops_at_the_first_page_with_a_match：3 頁、符合者在第 1 頁只讀 1 頁。"
+    },
+    {
+      "id": "NFR12.5",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_boundaries.py",
+      "note": "ImportBoundaryTest.test_no_module_imports_existing_capability_internals_or_main／test_no_dynamic_import：AST 掃描，LLM 套件與 llm_provider 匯入數為 0。"
+    },
+    {
+      "id": "NFR12.6",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_token_and_request_text_never_reach_logs_and_token_never_reaches_redis；另 test_work_orchestrator_capabilities.NoLeakTest（token 出現在例外訊息）。"
+    },
+    {
+      "id": "NFR12.7",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_authz.py",
+      "note": "RealAppAuthorizationTest 五案：A1 allow／deny、token 過期、C1 allow／deny；突變 M6（固定管理者 token）紅。"
+    },
+    {
+      "id": "NFR12.8",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_boundaries.py",
+      "note": "ImportBoundaryTest：AST 禁止清單含 main、cost.estimate_intake_service、cost.advice_orchestrator、services.design_agent、services.review_orchestrator、services.collab_router；TransportBoundaryTest 斷言 transport 皆為 ASGITransport。"
+    },
+    {
+      "id": "NFR12.9",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_disabled_before_persist_fails_without_put／test_disabled_after_put_keeps_status_and_notes_missing_change_record；突變 M7 紅。"
+    },
+    {
+      "id": "NFR12.10",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_token_and_request_text_never_reach_logs_and_token_never_reaches_redis（sink 輸出不含標記）；test_work_orchestrator_capabilities.NoLeakTest。"
+    },
+    {
+      "id": "NFR12.11",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_token_and_request_text_never_reach_logs_and_token_never_reaches_redis（含失敗路徑）；突變 M9 紅。"
+    },
+    {
+      "id": "NFR12.12",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_model.py",
+      "note": "WorkItemModelTest（RuleBasedStateMachine，不變量 (a)–(e)，規則含寫 estimateSetId 與可插隊的 correct）；突變 M1、M2 紅。"
+    },
+    {
+      "id": "NFR12.13",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RecoveryTest.test_orphan_waiter_is_advanced_once_even_with_two_concurrent_scans；突變 M3 紅。"
+    },
+    {
+      "id": "NFR12.14",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_model.py",
+      "note": "不變量 (d) status=處理中 ⇔ deadlineAt 非 null；另 test_work_orchestrator_flow.ReplyFirstTest 斷言新建處理中項的 deadlineAt 非 null。"
+    },
+    {
+      "id": "NFR12.15",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ReplyFirstTest.test_one_work_item_per_intent_and_below_threshold_creates_none：3 個意圖恰 3 個工作項。"
+    },
+    {
+      "id": "NFR12.16",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RecoveryTest.test_state_survives_dropping_the_orchestrator：新實例 list_items 取回同一集合。"
+    },
+    {
+      "id": "NFR12.17",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RecoveryTest.test_expired_processing_item_is_failed_on_read／test_orphan_waiter_is_advanced_once_even_with_two_concurrent_scans。"
+    },
+    {
+      "id": "NFR12.18",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_store.py",
+      "note": "PutWorkItemTest.test_put_on_a_missing_key_is_rejected_and_does_not_create_the_key／test_update_on_a_missing_key_is_rejected_and_does_not_create_the_key；真實 Redis 見 backend/tests_redis/test_work_item_lua.py。"
+    },
+    {
+      "id": "NFR12.19",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "TimeoutTest.test_capability_that_never_returns_times_out_at_300_seconds：注入時鐘推進 ≥ 300 秒後失敗「架構設計逾時」（設計落點 reliability-design 第二節）；審查 R-01／R-03：CancellationTest 三案（逾時失敗後推送、訊息、等待者推進都送達；越過舊 deadline 不截斷完成收尾），突變 M10、M11 紅。"
+    },
+    {
+      "id": "NFR12.20",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "InFlightPersistTest 四案（停掉中、逾時後、PUT 拒絕×2）；突變 M4 紅。"
+    },
+    {
+      "id": "NFR12.21",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CorrectTest.test_write_failure_before_request_means_nothing_is_sent：A1 被呼叫 0 次；突變 M5 紅。"
+    },
+    {
+      "id": "NFR12.22",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_sink_failures_do_not_change_the_outcome；全部流程案例的 RecordingSink 每次 emit 讓出事件迴圈（審查 R-02）。"
+    },
+    {
+      "id": "NFR12.23",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_capability_failures_are_not_retried（500／401／403 各 1 次）；CostPollingTest.test_two_failed_reads_then_success_does_not_fail／test_cost_failures_are_distinguishable（連續 3 次、404）。"
+    },
+    {
+      "id": "NFR12.24",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_boundaries.py",
+      "note": "ImportBoundaryTest.test_logger_name。"
+    },
+    {
+      "id": "NFR12.25",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_token_and_request_text_never_reach_logs_and_token_never_reaches_redis：失敗路徑恰一筆 WARNING 且含 failure=capability_failed。"
+    },
+    {
+      "id": "NFR12.26",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_side_write_failures_warn_without_content_and_keep_the_outcome（變更紀錄、記憶）／test_sink_failures_do_not_change_the_outcome（sink）。"
+    },
+    {
+      "id": "NFR12.27",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "RobustnessTest.test_every_message_is_a_contract_model；RecordingSink 對所有流程案例拒絕非契約模型的輸入。"
+    },
+    {
+      "id": "NFR12.28",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_rules.py",
+      "note": "四個純函式各有 @given；另 test_work_orchestrator_model 的 RuleBasedStateMachine。"
+    },
+    {
+      "id": "NFR12.29",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_capabilities.py",
+      "note": "BufferedBodyTest.test_judgement_uses_the_complete_body_even_if_sent_in_chunks；A1JudgementTest／A3JudgementTest 以一次回傳完整本體的替身判定成功與失敗。"
+    },
+    {
+      "id": "AC1.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ReplyFirstTest：每個意圖一個工作項、建立訊息標示交給哪個能力（「已交給架構設計處理架構圖 #12」）。"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_rules.py",
+      "note": "TransitionPropertyTest：六種合法轉換、終態無向外轉換（BR54.1）。"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "N/A",
+      "target": "平台自改請求的攔截在 U11／U13 的 prompt_guard，本單元收不到這類請求"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ArchitectureHappyPathTest、FacadeThreadTest（系統下恰一張）、target_resolution 三種失敗句型；經真實 app 見 test_work_orchestrator_authz。前提同 functional-design：作業對象為圖或系統下恰一張圖（OPEN-H11）。"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "N/A",
+      "target": "從敘述認出作業對象屬 U11 的判讀與 U13 依 referent 更新作業對象（OPEN-WO12-3）；本單元只讀作業對象"
+    },
+    {
+      "id": "AC1.3.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CorrectTest.test_correct_interleaved_with_background_advance_reports_the_real_stage（sideEffect 依真實 dispatchStage）、InFlightPersistTest（在途存檔如實記錄）。"
+    },
+    {
+      "id": "AC1.3.2",
+      "status": "Deferred",
+      "target": "BR55.4／BR53.4：停掉前提項時成本項開始、檢視項轉已停掉（WaitingTest.test_stopping_the_dependency_starts_cost_but_skips_review 驗證此行為）；「不受影響」不字面成立，交使用者裁決（OPEN-WO12-7）"
+    },
+    {
+      "id": "AC1.3.3",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "WaitingTest.test_stopping_the_dependency_starts_cost_but_skips_review 斷言「已停掉…請再說一次你要做什麼。」；停掉的工作項保留在集合中、之後的交辦新增新工作項（RobustnessTest.test_unknown_write_result_is_confirmed_by_rereading）。"
+    },
+    {
+      "id": "AC5.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ReplyFirstTest.test_one_work_item_per_intent_and_below_threshold_creates_none。"
+    },
+    {
+      "id": "AC5.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "WaitingTest.test_waiters_follow_the_architecture_item：成本與檢視等待、送等待句型、前項完成後開始並完成。"
+    },
+    {
+      "id": "AC5.1.3",
+      "status": "Deferred",
+      "target": "同 AC1.3.2（OPEN-WO12-7）"
+    },
+    {
+      "id": "AC10.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_cost_completes_with_a_card_carrying_the_estimate_set_id；分頁取最新一份見 test_work_orchestrator_capabilities.CostListPagingTest。句中指名系統時須 U13 先依 referent 更新作業對象（OPEN-WO12-3）。"
+    },
+    {
+      "id": "AC10.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_polling_is_bounded_and_ends_in_cost_timeout 斷言生成中不新增任何訊息（處理中標示就地維持）；進度文字需契約增欄（OPEN-WO12-5）。"
+    },
+    {
+      "id": "AC10.1.3",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_cost_completes_with_a_card_carrying_the_estimate_set_id：卡片 estimateSetId 取自工作項、costPageUrl 為 /cost?estimate=7，以伺服器發起的新輪次送出。"
+    },
+    {
+      "id": "AC10.1.4",
+      "status": "N/A",
+      "target": "使用者不離開入口頁屬 U14 的畫面行為；本單元不導頁"
+    },
+    {
+      "id": "AC10.1.5",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_authz.py",
+      "note": "RealAppAuthorizationTest.test_c1_denied_role_fails_with_the_permission_phrase／test_a1_denied_role_fails_with_the_permission_phrase。"
+    },
+    {
+      "id": "AC10.2.1",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_cost_failures_are_distinguishable（failed＋timed_out）／test_polling_is_bounded_and_ends_in_cost_timeout（牆鐘上限）；生成中逾 5 分鐘見 test_work_orchestrator_capabilities.AdviceSnapshotJudgementTest。"
+    },
+    {
+      "id": "AC10.2.2",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "CostPollingTest.test_cost_failures_are_distinguishable：逾時、失敗、404、連線中斷四種句型互異。"
+    },
+    {
+      "id": "AC10.2.3",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "ReplyFirstTest.test_dispatch_replies_before_any_capability_returns。"
+    },
+    {
+      "id": "AC10.2.4",
+      "status": "Deferred",
+      "target": "本單元對 C1 只讀取，C1 讀取端點不寫 estimate_audit_events，AC 的可觀察結果不存在；授權主體為使用者本人由 BR51.1 保證（test_work_orchestrator_authz）。回報上游（OPEN-WO12-6）"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-LUA",
+      "status": "OK",
+      "target": "backend/services/session_scripts/update_work_item.lua",
+      "note": "put_work_item.lua／update_work_item.lua：key 不存在即拒絕、補丁合併、不改 TTL；與參考實作的一致性見 backend/tests_redis/test_work_item_lua.py（opt-in，不在 CI）。"
+    },
+    {
+      "id": "CG-RULES",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator_rules.py",
+      "note": "四個純函式、PHRASES（32 句）、目標圖判定；零 I/O（test_work_orchestrator_boundaries.test_rules_module_is_pure）。"
+    },
+    {
+      "id": "CG-CAPABILITIES",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator_capabilities.py",
+      "note": "CapabilityClient（ASGITransport＋使用者 token）與 SSE／建議快照判定；例外只帶類別名與狀態碼。"
+    },
+    {
+      "id": "CG-ORCHESTRATOR",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "WorkOrchestrator：dispatch／correct／list_items、看門迴圈、在途存檔收尾、復原掃描。"
+    },
+    {
+      "id": "CG-U10-EXT",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "跨單元新增 load_work_items／put_work_item／update_work_item 與 session_types 的參考實作；兄弟測試 110 案維持全綠。"
+    },
+    {
+      "id": "CG-U7-EXT",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "跨單元新增 list_diagrams_of_system（facade＋hierarchy_service）；ListDiagramsOfSystemTest 擁有者／非擁有者／零張。"
+    },
+    {
+      "id": "CG-F1-FIXED",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "U10 既存缺陷已於本批修正（使用者 2026-10-12 裁決）：is_noscript_error 另認 RedisErrorTypes.noscript（redis-py 8.x 的 NoScriptError），保留原 NOSCRIPT 前綴判定。回歸測試 backend/tests/test_redis_gateway_noscript.py（CI）與 tests_redis.test_work_item_lua.GatewayColdStartTest（真實 Redis）；突變驗證見 code-summary.md 第五節 F1。"
+    },
+    {
+      "id": "CG-MB18-CAPACITY",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_store.py",
+      "note": "合併前必修第 18 項（OPEN-N10-3；計畫 §六 Step 13–17；使用者裁決 [WO-MB18]=A）。實作：put_work_item.lua（進行中 ≥ MAX_ACTIVE_WORK_ITEMS=5 回 -1）、update_work_item.lua（非終態→終態時修剪到 MAX_TERMINAL_WORK_ITEMS=20，只刪其他終態項）、session_types.ref_put_work_item／ref_update_work_item、SessionStore.WorkItemPutResult。測試：WorkItemCapacityTest（10 案）、WorkItemCapacityPropertyTest（@given：進行中 ≤ 5、終態 ≤ 20、進行中從不被刪）；真實 Redis 一致性 backend/tests_redis/test_work_item_lua.py 的 test_put_capacity_cases_match_the_reference／test_update_prune_cases_match_the_reference（opt-in，不在 CI）。"
+    },
+    {
+      "id": "CG-MB18-DISPATCH",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "WorkCapacityFlowTest（6 案）：整批預檢（4＋2 整批拒絕且 Redis 無新欄位、3＋2 照常建立、終態不佔名額）、併發越線時同批已寫入項轉失敗（failureReason＝PHRASES[capacity_exceeded]）、轉終態 requestText 截成 200 字（停掉與逾時兩路）。實作在 work_orchestrator.dispatch／_abandon_batch／_cas。"
+    },
+    {
+      "id": "CG-MB18-GATEWAY",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "跨單元（U13）：brain_gateway_rules.error_for 把 WorkCapacityExceeded 對到既有 INVALID_REQUEST，訊息固定「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」（不改 WS 契約）。WorkCapacityErrorTest；端到端 backend/tests/test_brain_gateway_turn.py 的 WorkCapacityTurnTest。"
+    }
+  ]
+}

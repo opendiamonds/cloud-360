@@ -1,6 +1,6 @@
 {
-  "_comment": "U-10a 的 NFR-C1 快照：四個既有 job 的 name / runs-on / steps 在變更前的樣子。由 check-ci-yml.py --emit-golden 產生，不要手改。",
-  "_source_sha256": "6400c71b00008a12bb06c62daad829947a3046f6575149f57ec6acff5cbbd5ba",
+  "_comment": "NFR-C1 基準快照：四個既有 job 的 name / runs-on / steps。基準隨合法的 CI 演進重新產生，每次重產都要在 commit message 逐項說明差異。由 check-ci-yml.py --emit-golden 產生，不要手改。",
+  "_source_sha256": "b94cecc84ea6a65edf2742f378e71a5299fb843ff072d6b228f3f0680d13b20b",
   "jobs": {
     "backend": {
       "name": "Backend (import + unit tests)",
@@ -22,7 +22,7 @@
         },
         {
           "env": {
-            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/cloud360",
+            "DATABASE_URL": "postgresql+psycopg://postgres:postgres@localhost:5432/cloud360",
             "JWT_SECRET": "ci_only_not_a_real_secret"
           },
           "name": "Import FastAPI app",
@@ -30,11 +30,15 @@
         },
         {
           "env": {
-            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/cloud360",
+            "DATABASE_URL": "postgresql+psycopg://postgres:postgres@localhost:5432/cloud360",
             "JWT_SECRET": "ci_only_not_a_real_secret"
           },
           "name": "OpenAPI spec drift",
           "run": "python scripts/dump_openapi.py --check"
+        },
+        {
+          "name": "WS contract spec drift",
+          "run": "python scripts/dump_ws_contract.py --check"
         },
         {
           "env": {
@@ -103,6 +107,10 @@
         {
           "name": "API type contract drift",
           "run": "npm run check:types"
+        },
+        {
+          "name": "WS contract type drift",
+          "run": "npm run check:ws-types"
         },
         {
           "name": "Typecheck and build",

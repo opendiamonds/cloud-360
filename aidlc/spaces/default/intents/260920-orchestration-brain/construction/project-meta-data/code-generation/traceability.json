@@ -1,0 +1,361 @@
+{
+  "stage": "code-generation",
+  "unit": "project-meta-data",
+  "upstream_ids": [
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR1.4",
+    "BR1.5",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR3.1",
+    "BR3.2",
+    "BR3.3",
+    "NFR8.2",
+    "NFR8.3",
+    "NFR8.4",
+    "NFR8.5",
+    "K-15",
+    "K-16",
+    "K-17",
+    "FR12.2",
+    "FR12.3",
+    "FR12.4",
+    "FR12.4b",
+    "FR12.4c",
+    "FR12.6",
+    "AC11.2.2",
+    "AC12.2.2",
+    "OQ-H1",
+    "OPEN-P1",
+    "OPEN-P4",
+    "OPEN-ND18-1",
+    "OPEN-ND18-2",
+    "AC11.2.1",
+    "AC11.2.3",
+    "AC12.1.1",
+    "AC12.1.2",
+    "AC12.1.3"
+  ],
+  "coverage": [
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。`project_members.joined_at` 建為 `TIMESTAMPTZ NOT NULL DEFAULT now()`。斷言 `P2` 鎖住 nullability；突變 `N1`（改為 nullable）實測 RED（`is_nullable` 由 `NO` 變 `YES`，DDL 確實改變）。欄位 COMMENT 逐字寫明失敗模式是**靜默**的（挑選在空值上無序、每次選出不同人而無錯誤），這是本單元唯一完全靜默的失敗模式。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`reselection_events.acknowledged_at` 為可空 `TIMESTAMPTZ`，以**事件**為鍵（每次改選一列），**不是** per-user 布林值。`P5` 斷言該欄在 8 欄集合內。欄位 COMMENT 逐字寫明 per-user 旗標會讓同一人第二次被改選時看不到橫幅——`FR12.4c` 要防的正是它。無獨立斷言鎖「不是布林」：型別為 `timestamptz` 本身即排除布林，`P5` 的欄位集合檢查已涵蓋。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。`system_requirement_fields.value` 為 `TEXT`（可空）。斷言 `P9` 前半鎖住 `is_nullable = YES`；`P10` 以行為面證實「已填」與「清空」兩種列都插得進去。欄位 COMMENT 寫明收緊為 `NOT NULL` 會讓「從未填過」與「清空」在資料層不可區分。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。`cleared_at` 為獨立欄位，並以 `ck_system_requirement_fields_cleared_has_null_value`（`cleared_at IS NULL OR value IS NULL`）鎖住配對。斷言 `P10` 三案：已填成功、清空成功、兩者皆有值被 CHECK 拒絕（三案用**不同** `field_key`，否則第三案會踩到唯一約束而不是 CHECK）。突變 `N6`（移除 CHECK）實測 RED。**已揭露**：該運算式仍允許 `value` 與 `cleared_at` 皆 NULL 的第四種未命名狀態（`OPEN-CG18-7`），本站依計畫 §三之三 不收緊。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`updated_on_behalf_of` 為可空 `INTEGER REFERENCES users (id)`。欄位 COMMENT 逐字寫明「一律填值或一律留空都會讓使用者無法分辨哪些值是自己填的——而這是該欄位存在的唯一理由」。**無斷言**：「僅代寫時有值」是寫入端的語意，資料層無法表達（任何一列的 NULL／非 NULL 都合法），故它的落點是 `U20` 的 facade 測試。**已揭露張力**：`entities.md` 寫 `references: users.id 或 agent 識別`，而本站依計畫建了指向 `users` 的外鍵（`OPEN-CG18-6`）。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "同時落在 schema_rbac.sql（sensor 要求 target 為單一檔案，故併入本註記）。`J)` 區塊全部敘述為 `CREATE TABLE IF NOT EXISTS`／`CREATE INDEX IF NOT EXISTS`。既有 `memory-schema` job 的「套用兩次」步驟即其閘門；本機實測兩次皆 exit 0（第二次只有 `already exists, skipping` 的 NOTICE）。突變 `N10`（去掉 `IF NOT EXISTS`）實測第一次 exit 0、**第二次 exit 3**，錯誤逐字 `relation \"project_members\" already exists`。遷移腳本重跑亦實測 exit 0。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。`system_requirement_fields` 的**表** COMMENT（967 字元）逐字寫明 `[UG:G9]`=A 的三件事：值列 `RETAINED`、畫面 `does NOT render` 該組、未填計數只算 `CURRENTLY DECLARED` 的欄位。斷言 `P12` 四段檢查（COMMENT 非空 ＋ 三個關鍵詞，以 `lower()` 比對避免大小寫脆弱）。突變 `N8`（刪掉 COMMENT）實測 RED。COMMENT 內也逐字寫出 `BR2.2` 的 `violation_behaviour`——被當成髒資料清掉的是使用者曾經填過的值。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。**本規則與已核可的 `[ND1]`=A 不一致，本站依 `[ND1]`=A 建三條而非四條**，並揭露而不回改（`OPEN-CG18-2`）。`project_members.project_id → projects`（`CASCADE`，`P3` 驗 `confdeltype = c`）、`project_members.user_id → users`（無子句）、`system_requirement_fields.system_id → systems`（`CASCADE`）；`reselection_events.project_id` **不設外鍵**（`P6` 以兩種查法各驗一次為 0）。突變 `N2`（改 `RESTRICT`）使 `P3` ＋ `P4` 同時 RED；`N3`（加回第四條）使 `P6` ＋ `P7` 同時 RED。**第二項不一致已揭露**：回補九欄同時帶進五條 `BR2.3` 未列舉的外鍵，實際總數為 8（`OPEN-CG18-3`）。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "**本站的處置是讓該路徑不存在**：`[P1]`=A 定案三張表**不經** `database.py` 的 `_ensure_*` 補丁建立（`NFR8.4` 實測 `backend/database.py` 的 `git diff` 為空），故沒有 warning-and-continue 的形狀需要偏離。大聲失敗由獨立腳本承載：任一 DDL 或任一後條件不成立即 rollback ＋ 非零碼，腳本 docstring 逐字對照 `database.py:257`／`:304`／`:192` 的既有形狀說明為何刻意相反。突變 `N5` 實測腳本 exit 1 且回滾後三張表存在數為 0。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "DEPLOY.md",
+      "note": "誠實宣告，無可失敗的行為（`rules.md` 的 `violation_behaviour` 逐字「不適用」）。本站的落實是把它寫進可被讀到的地方：`schema_rbac.sql` 檔頭的 `J)` 注意事項與 `DEPLOY.md 2.2.9` 的「前進步驟」段都逐字寫明「只在空 volume 執行，既有環境一張都拿不到」。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 DEPLOY.md（sensor 要求 target 為單一檔案，故併入本註記）。本單元的那一次 blocking 同步已完成，**與 `K-03` 的 seed 語意變更各自一次、未互相替代**：`schema_rbac.sql` 新增 `J)` 區塊（+176 行，含檔頭涵蓋清單與檔尾驗證註解）；`DEPLOY.md` 2.2 表新增 `J` 列並新增 `2.2.9` 節（149 行，含 9 條 `psql` 驗證指令）。`repo-contract` 與 `env-contract` 兩支 validator 實測 passed。"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "一支腳本建 `U5` ＋ `U18` 的全部新物件：`memory` schema ＋ 5 張表 ＋ 7 個索引 ＋ 8 條 CHECK／UNIQUE ＋ grant ＋ 4 段表 COMMENT ＋ `vector` 擴充。可在 `backend/` 下以 `DATABASE_URL` 指向目標庫執行，實測對「剝掉 X)／I)／J) 的既有環境」exit 0。**不複製 DDL**：直接解析 `schema_rbac.sql` 的 `X)`／`I)`／`J)` 三個區塊，故 CI 的 `memory-schema` job 與本腳本不可能漂移（`team.md` 的單一真實來源規則）。"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "全部 DDL 包在 `engine.begin()` 的**一個**交易內（PostgreSQL 的 DDL 可交易），COMMIT 前對 `information_schema`／`pg_catalog` 逐項查證 `EXPECTED_*` 清單；任一項不成立即 `RuntimeError` → rollback → `return 1`。區塊解析失敗（標題改名、哨兵字串缺失）亦為非零。突變 `N5` 實測 exit 1 且三張表存在數為 0，證實「部分成功而回報成功」這個狀態不存在。"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "backend/database.py",
+      "note": "二元判準為「`database.py` 的 diff 為空」。實測 `git diff --numstat -- backend/database.py` 無輸出。`backend/models.py` 本站亦零改動，且三張表在該檔的命中數為 0（`tech-stack-decisions.md §二`：把它們放進 `Base.metadata` 會讓建表權威悄悄換成 ORM，正是 `U7` 讓 `U4` 的四條 CHECK 在測試環境消失的那個洞）。"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "`2.2.9` 節含執行步驟（含**順序前置條件**：`U4` 的 `run_hierarchy_migration.py` 必須先跑）、結束碼的意義、9 條 `psql` 驗證指令（表存在／欄位數 6-8-9／`joined_at` 非空／`confdeltype = c`／對 `projects` 的外鍵為 0／partial index 的 `indexdef`／CHECK 與三欄唯一鍵／`[UG:G9]` COMMENT）。"
+    },
+    {
+      "id": "K-15",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "三張表、`columns_that_carry_semantics` 五欄、`ddl_comment_requirement`、`blocking_sync`、`behaviour_semantics` 全部落地。`observable_side_effects` 逐字「不含任何資料寫入」——本站零資料寫入（斷言檔的寫入全部 `ROLLBACK`，實測後六張表列數皆為 0）。**`foreign_keys` 清單仍列第四條**，已揭露（`OPEN-CG18-2`，`nfr-design` 審查 `R-01` 指出而該站未處置）。"
+    },
+    {
+      "id": "K-16",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "本站交付其資料層：`uq_project_members_project_user` 覆蓋 `resolve_project_role`（`project_id` ＋ `user_id`，最熱路徑）與 `list_members`（`project_id` 為前導欄）；`joined_at` ＋ `user_id` 為 `select_successor` 的決定性 tie-break 鍵。授權判定本身不在本單元（`K-15` 的 `authorization_responsibility` 逐字「無」）。"
+    },
+    {
+      "id": "K-17",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`uq_system_requirement_fields_group_key` 為**三欄**，因為 `read_fields` 回傳「按 `agentGroup` 分組、每組含 `fieldKey`」——同一 `fieldKey` 在不同組下是不同的欄位。`clear_field` 逐字要求的「記 `clearedAt` 與 `updatedBy`」由 `cleared_at` ＋ `NOT NULL` 的 `updated_by` 承載（`P9` 後半）。`UnknownFieldKey` 的判定依據是程式內常數而非本表的列（已寫進 `field_key` 的 COMMENT）。"
+    },
+    {
+      "id": "FR12.2",
+      "status": "N/A",
+      "target": "U19（非本單元）",
+      "note": "人工角色指定的稽核**不屬本單元**：`K-16`（`U19`）擁有角色變更操作。本單元只交付資料層，而「`reselection_events` 是否同時承載人工角色變更」是尚未決定的實體邊界問題，記為 `OPEN-ND18-3`（named-gap，未關閉）。改記 N/A 而非 GAP 的理由：GAP 的語意是「本站應覆蓋而未覆蓋」，而本站從未被指派覆蓋它；真實缺口由 open_items 承載。證據：`AC12.2.2` 的 Given 逐字「我改了某人的角色」是人工變更。"
+    },
+    {
+      "id": "FR12.3",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "一個專案可同時有多位 `project_admin`：`uq_project_members_project_user` 的範圍是 `(project_id, user_id)`，**不是** `(project_id, role)`，故同一專案的多列 `role = 'project_admin'` 完全合法。指定第二位不會覆寫第一位。資料層不需額外約束；`AC12.2.4` 的驗證落在 `U19`。"
+    },
+    {
+      "id": "FR12.4",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。自動改選挑最早加入者的資料前提：`joined_at` 為 `NOT NULL`（`P2`／`N1`）＋ `uq_project_members_project_user` 覆蓋 `WHERE project_id = ?` 的過濾。排序的母體是單一專案的成員，量小，故不另建 `(project_id, joined_at)` 索引。"
+    },
+    {
+      "id": "FR12.4b",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。五個稽核事實逐一有欄位：誰＝`promoted_user_id`（`NOT NULL`）、何時＝`occurred_at`（`NOT NULL`）、對誰＝`previous_owner_user_id`、舊角色＝`previous_role`、新角色＝`new_role`。**這五個欄位全部不在本單元的 `entities.md` 裡**，依 `components.md:819` 回補（`OPEN-ND18-1`）。`P5` 兩半鎖住（欄位數恰為 8 ＋ 五個具名欄位都在）；突變 `N9` 移除 `promoted_user_id` 使兩半同時 RED。稽核存活由 `P6`（無外鍵）＋ `P7`（刪專案後稽核列仍在）鎖住。"
+    },
+    {
+      "id": "FR12.4c",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。橫幅每次進入產品都要看得到，故 `ix_reselection_events_unack` 為 partial index（`ON (promoted_user_id) WHERE acknowledged_at IS NULL`）——已確認的列離開索引，索引大小是「目前未確認數」而非「歷來總數」。`P8` 兩段（索引存在 ＋ `indexdef` 含 `WHERE` 且提及 `acknowledged_at`）；突變 `N4` 拿掉 `WHERE` 後 RED。只驗存在會漏掉它，而失敗模式是效能而非正確性，不會有人發現。"
+    },
+    {
+      "id": "FR12.6",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "兩層串聯的 per-project 那一層的資料基礎。`project_members.role` 的 COMMENT 逐字寫明它與 `services/rbac.py` 的全域 `Project_Admin` **同名不同義**、資料庫無法強制區分、且 `FR12.6` 要求兩層皆過（`OPEN-P2` 的唯一承載形式）。判定邏輯屬 `K-16` 的 facade。"
+    },
+    {
+      "id": "AC11.2.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`UnknownFieldKey` 的資料基礎是 `agent_group` ＋ `field_key` 兩欄的存在（它們也不在 `entities.md` 裡，同屬回補項）。`field_key` 的 COMMENT 寫明判定依據是**程式內常數**而非本表的列——列可能比它的定義活得久（`[UG:G9]`=A）。驗證本身落在 `U20`。"
+    },
+    {
+      "id": "AC12.2.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "同時落在 backend/scripts/verify_meta_schema.sql（sensor 要求 target 為單一檔案，故併入本註記）。其 Then 逐字要求「顯示誰在何時把角色由什麼改為什麼」，四件事對應 `promoted_user_id`／`occurred_at`／`previous_role`／`new_role`——**四個欄位全在本站回補的清單裡**。以 `entities.md` 原有的兩欄建表，成員詳情頁的變更紀錄沒有任何內容可顯示、該 AC 永遠紅燈，而**那不會被任何斷言抓到**（斷言若依 `entities.md` 寫就不會檢查它們）。`P5` 的第二半即為此而設。該 AC 的驗證面（UI）屬 `U24`。"
+    },
+    {
+      "id": "OQ-H1",
+      "status": "N/A",
+      "target": "schema_rbac.sql",
+      "note": "使用者硬刪除的行為上游**刻意未決**。`project_members.user_id` 因此**無 `ON DELETE` 子句**，並在 COMMENT 逐字承接該開放問題與落點 `U19`——沿用 `projects.owner_user_id` 的同一慣例（`schema_rbac.sql` 的 `H)` 區塊）。慣例是「要嘛決定，要嘛在 COMMENT 寫明沒決定與落點」，兩者皆無才是漏項。"
+    },
+    {
+      "id": "OPEN-P1",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "**本站關閉。** 既有非空 volume 的建立路徑已有唯一答案：`run_meta_schema_migration.py`（`[P1]`=A）。這個缺口在本 intent 已被記載兩次（`U5` 的 `OPEN-M5`、`U18` 的 `OPEN-P1`），累積八張表加一個 schema；本站的腳本一次涵蓋 `U5` ＋ `U18` 的五張表加一個 schema。`U4` 的三張表仍走它自己的 `run_hierarchy_migration.py`，且**必須先跑**（`OPEN-CG18-10`）。"
+    },
+    {
+      "id": "OPEN-P4",
+      "status": "N/A",
+      "target": "-",
+      "note": "拒絕事件不留稽核——屬 `U19` 的 `H-8`，不在本單元範圍（本單元零端點，沒有可被拒絕的請求）。"
+    },
+    {
+      "id": "OPEN-ND18-1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "本站的指派已執行：DDL 依 `components.md:819`／`:820` 建全欄（`ReselectionEvent` 8 欄、`SystemRequirementField` 9 欄，含 id），唯一約束加寬為三欄。**`entities.md` 的回補未做**（不回改已核可上游），仍為開放（`OPEN-CG18-1`）。"
+    },
+    {
+      "id": "OPEN-ND18-2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "本站的指派已執行：DDL 建三條被點名的外鍵。**`rules.md` 的 `BR2.3` 修訂未做**，且本站另查出該規則的數字在第二個意義上也錯（實際 8 條），故修訂時不能只把「四」改成「三」（`OPEN-CG18-2`／`OPEN-CG18-3`）。"
+    },
+    {
+      "id": "AC11.2.1",
+      "status": "N/A",
+      "target": "U23／U20（非本單元）",
+      "note": "需求籤的「未填」文字標示是**畫面行為**，屬 `U23`（線框層）＋ `K-17` 的 `read_fields` 回傳 `filledState: never_filled|filled|cleared`。本單元交付它的**資料前提**：`value` 可為 NULL ＋ `cleared_at` 獨立，使三態在資料層可區分（`P9`／`P10` 斷言，`N6` 突變證實）。本單元零畫面，故該 AC 的驗證面不在本站。"
+    },
+    {
+      "id": "AC11.2.3",
+      "status": "N/A",
+      "target": "U20／U23（非本單元）",
+      "note": "儲存失敗時值不消失是**前端狀態保存**行為，屬 `U23`；錯誤回應形狀屬 `K-17` 的 `write_field`。本單元零程式碼、零端點、零畫面，無任何可承載該 AC 的表面。"
+    },
+    {
+      "id": "AC12.1.1",
+      "status": "N/A",
+      "target": "U19／U24（非本單元）",
+      "note": "「剛建立的專案其成員頁恰有一列、即我自己且角色為專案管理者」需要**建立專案時自動寫入成員列**（`components.md:886` 逐字把它列為 `ProjectMember` 的寫入端之一），寫入端屬 `K-16`（`U19`），畫面屬 `U24`。本單元交付該列能存在的資料結構（含 `role` 的 CHECK 允許 `project_admin`）。"
+    },
+    {
+      "id": "AC12.1.2",
+      "status": "N/A",
+      "target": "U19（非本單元）",
+      "note": "「邀請動作可用、不需額外授權步驟」是 `MembershipFacade.invite_member` 的授權行為，屬 `K-16`。本單元交付 `project_members` 與其唯一約束 `(project_id, user_id)`（同一人不得重複加入）。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "N/A",
+      "target": "U19（非本單元）",
+      "note": "「未被邀請者看不到該專案」是 per-project 授權判定，屬 `K-16` 的 `resolve_project_role`。本單元交付其資料基礎；該唯一約束的 btree 索引即該查詢（`WHERE project_id=? AND user_id=?`）的覆蓋者（`security-design.md §四之一` 已逐項列出已覆蓋的查詢，刻意不報成缺口）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-SCHEMA-J",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`J)` 區塊 148 行：三張表（6／8／9 欄）、**8 條外鍵**（`project_members.project_id→projects` CASCADE、`project_members.user_id→users`、`project_members.invited_by→users`、`reselection_events.promoted_user_id→users`、`reselection_events.previous_owner_user_id→users`、`system_requirement_fields.system_id→systems` CASCADE、`system_requirement_fields.updated_by→users`、`system_requirement_fields.updated_on_behalf_of→users`；**`reselection_events.project_id` 刻意無外鍵**）、2 條 CHECK、2 個 UNIQUE、2 個索引（1 個 partial）、22 段 COMMENT。另改檔頭涵蓋清單（+2）、檔頭注意事項（+4）、檔尾驗證註解（+22）。COMMENT 刻意寫失敗模式而非只寫用途——四個最易誤讀的點（`CASCADE` 是在保護既有程式、改選稽核無外鍵是刻意的、本表無保存期限、per-project role 與全域同名不同義）都在那裡。"
+    },
+    {
+      "id": "CG-MIGRATION",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "446 行。**不複製 DDL**：解析 `schema_rbac.sql` 的 `X)`／`I)`／`J)` 三個區塊並執行同一份文字，每個區塊有哨兵字串（標題改名即大聲失敗而非靜默跳過）。單一交易 ＋ COMMIT 前的 `EXPECTED_*` 逐項終檢 ＋ 前置條件守門（缺 `projects`／`systems` 時回可讀訊息）。**兩個只有實際執行才會發現的缺陷已修並寫進註解**：`exec_driver_sql` 在 `%I` 上的 pyformat 衝突、`text()` 不認 `:q::regclass`。輸出只印 `host` 與 `database`，不印 URL（哨兵實測 0 命中）。"
+    },
+    {
+      "id": "CG-VERIFY",
+      "status": "OK",
+      "target": "backend/scripts/verify_meta_schema.sql",
+      "note": "415 行、12 條斷言、29 處 `RAISE EXCEPTION`。結構類 8 條一個 `DO $$`；行為類 4 條一個交易並 `ROLLBACK`（實測後六張表列數皆為 0）。`P6` 以 `information_schema`（設計指定）＋ `pg_catalog`（補強，前者的視圖會依權限過濾，單獨使用時「回 0」可能是看不到而不是不存在）兩種查法各驗一次。`P4`／`P7` 都先自我確認前置條件（構造的專案非預設、底下無系統），否則紅燈的原因會是 `U4` 的守門或 `systems` 的 `ON DELETE RESTRICT` 而不是本表的外鍵。"
+    },
+    {
+      "id": "CG-CI",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "既有 `memory-schema` job **新增一個步驟**（+12 行）執行 `P1`–`P12`，並在 job 內加 7 行註解說明「名稱現在比內容窄」與為何**不改 `id` 也不改 `name:`**（GitHub 的 check name 取自 `name:`，改它會讓 branch protection 的必要檢查變成「缺少必要檢查」）。`yaml.safe_load` 實測仍為 6 個 job、該 job 名稱未變、步驟由 4 個變 5 個。"
+    },
+    {
+      "id": "CG-DEPLOY",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "2.2 表新增 `J` 列；新增 `2.2.9` 節 149 行：三張表的說明、**四件最容易被誤讀的事**（無外鍵是刻意的、無保存期限是刻意的、`CASCADE` 在保護既有程式、role 同名不同義）、三態表、腳本執行步驟與順序前置條件、結束碼的意義、誠實的代價（`OPEN-P5`）、**9 條 `psql` 驗證指令**、以及 CI job 名稱較窄的說明。"
+    },
+    {
+      "id": "CG-NO-ORM",
+      "status": "OK",
+      "target": "backend/models.py",
+      "note": "**刻意零改動。** `tech-stack-decisions.md §二` 的兩項理由：① 本單元是 `spec` 不讀寫資料；② 放進 `Base.metadata` 會讓 `create_all()` 在每個既有測試中建表，於是建表權威悄悄換成 ORM——`U7` 正是這樣讓 `U4` 的四條 CHECK 在測試環境消失，而本單元的 DDL 有 CHECK（三態模型），同一個洞會重演。三張表在 `backend/**` 的 Python 命中數為 0（唯一例外是本站的遷移腳本）。"
+    },
+    {
+      "id": "CG-NO-SCHEMA-SQL",
+      "status": "OK",
+      "target": "schema.sql",
+      "note": "**刻意未更新**（`project.md` 列為非 blocking 的建議項）。沿用 `U5` 的先例（該站也未把 `I)` 加進去，故該檔現在有 `H)` 而無 `I)`），且再加一份 DDL 物化會與本站對遷移腳本採取的單一真實來源理由直接矛盾。記為 `OPEN-CG18-9`。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-CG18-1",
+      "severity": "named-gap",
+      "text": "**`entities.md` 仍宣告 `ReselectionEvent` 2 欄、`SystemRequirementField` 4 欄，以及兩欄的 `entity_constraints`，而 DDL 是 8 欄／9 欄與三欄唯一鍵。** 本站依 `nfr-design` 的 `OPEN-ND18-1` 指派建全欄並**不回改已核可上游**。危險形狀已不存在（`P5` 的第二半與 `P11` 的第二半分別把回補的欄位與加寬的唯一鍵鎖住，`N9`／`N7` 實測 RED），但**規格與實作仍不一致**，下一個只讀 `entities.md` 的人會以為表只有 2／4 欄。回補需修訂 `functional-design` 的已核可產出；該站為 `CONDITIONAL` 且已在游標之前，**無自然承接站**——處置應由發現此條的 conductor 重新提交給使用者裁決（照 `project.md` 的規則：填一個看起來合理的假目標比空著更糟）。"
+    },
+    {
+      "id": "OPEN-CG18-2",
+      "severity": "named-gap",
+      "text": "**`rules.md` 的 `BR2.3` 與契約 `K-15` 的 `foreign_keys` 兩處都還列著第四條外鍵**（`reselection_events.project_id → projects.id`），而 `[ND1]`=A 已把它移除。`K-15` 比 `rules.md` 更要緊——它是 `U19`／`U20` 讀的跨單元契約。這是 `nfr-design` 的審查發現 `R-01`（Major），該站只對 `rules.md` 開了修訂指派而漏了 `K-15`；本站一併揭露使兩處都在同一份摘要內可見。風險已被閘門化：照 `rules.md` 或 `K-15` 建出第四條外鍵會讓 `P6` 紅燈（`N3` 實測）。"
+    },
+    {
+      "id": "OPEN-CG18-3",
+      "severity": "named-gap",
+      "text": "**`BR2.3` 的「四條外鍵」在第二個意義上也不正確，而這是本站新查出的。** 回補九個欄位同時帶進五條 `BR2.3` 從未列舉的外鍵（`project_members.invited_by`、`reselection_events.promoted_user_id`、`reselection_events.previous_owner_user_id`、`system_requirement_fields.updated_by`、`system_requirement_fields.updated_on_behalf_of`），故三張表的外鍵總數實測為 **8**，其中 `BR2.3` 原列四條只有三條存活。修訂 `BR2.3` 時**不能只把「四」改成「三」**——那會留下一個仍然錯的數字。"
+    },
+    {
+      "id": "OPEN-CG18-4",
+      "severity": "named-gap",
+      "text": "**`run_meta_schema_migration.py` 沒有任何自動化覆蓋，而本站在手動執行它時抓到兩個真實缺陷。** ① `conn.exec_driver_sql()` 走 SQLAlchemy 的 pyformat 參數路徑，於是 `I)` 區塊的 `format('GRANT … TO %I', current_user)` 以 `only '%s', '%b', '%t' are allowed as placeholders, got '%I'` 失敗。② `text(\"… :q::regclass …\")` 的 `:q` 不被認成 bindparam，冒號原樣送到伺服器並以 `syntax error at or near \":\"` 失敗。**兩者 CI 都抓不到**：`ci.yml` 與 `deploy.yml` 都不執行這支腳本（`OPEN-P5` 的另一面）。`P1`–`P12` 驗的是 `schema_rbac.sql` 那條路徑；本站以「對腳本遷移過的庫跑 `P1`–`P12`」作為替代證據（通過），但那是一次人工執行而非閘門。可行的承載形式是在 `memory-schema` job 加一個步驟：以剝掉 `X)`／`I)`／`J)` 的 schema 建第二個資料庫，跑腳本，再跑 `P1`–`P12`——本站**未做**（會讓本單元的 CI 改動由一個步驟變成一整段，超出計畫核可的範圍）。承接站：`U19 membership-service` 的 code-generation（它是第一個真正讀這些表的消費端）。"
+    },
+    {
+      "id": "OPEN-CG18-5",
+      "severity": "named-gap",
+      "text": "**本機驗證用 PostgreSQL 17.7 ＋ pgvector 0.8.1，而 CI 與部署用 `pgvector/pgvector:pg18`。** 12 條斷言、兩次套用、腳本的三種路徑皆在 PG 17.7 上實測通過，且 DDL 未使用任何 18 專屬語法（`SERIAL`／`TIMESTAMPTZ`／partial index／`CHECK`／`COMMENT` 皆為長期穩定語法）；但**版本差異本身未被驗證**。`memory-schema` job 在真實 CI 上跑 pg18 時會第一次涵蓋它。此條與 `U5` 的 `OPEN-CG5-2` 同形（該站用 PG 14）。"
+    },
+    {
+      "id": "OPEN-CG18-6",
+      "severity": "named-gap",
+      "text": "**`system_requirement_fields.updated_on_behalf_of` 的外鍵指向 `users (id)`，而 `entities.md` 該屬性的 `references` 欄逐字是「`users.id` 或 agent 識別」，`K-17` 的 `write_field` 簽章是 `on_behalf_of: str|None`。** 若被代寫的 agent 的識別不是 `users` 的一列，這條外鍵會擋住 `BR1.5` 的寫入。本站依計畫 §三之三 明確指定的 `INTEGER REFERENCES users (id)` 建表並揭露張力。承接站：`U20 requirement-field-service`（`K-17` 的擁有者）——若 agent 識別不是使用者列，這條外鍵必須在 `U20` 落地前改掉，而那是一次 schema 變更（再觸發一次 `BR3.3` 的 blocking 同步）。"
+    },
+    {
+      "id": "OPEN-CG18-7",
+      "severity": "named-gap",
+      "text": "**三態模型的 CHECK（`cleared_at IS NULL OR value IS NULL`）允許一個第四種、未被命名的狀態**：`value` 與 `cleared_at` 皆為 NULL（列存在、從未填過、也沒清空過）。`entities.md` 與 `functional-spec.md` 的三態表都沒有這一列。本站**不收緊**：計畫 §三之三 逐字固定了該運算式，收緊即偏離已核可的 DDL 形狀；且該狀態經 `K-17` 的 `write_field`／`clear_field` **不可達**（兩者各自必定設定其中一個欄位）。揭露供 `U20` 判定是否需要在 facade 層加守門，或在下一次 schema 變更時收緊為 `(value IS NOT NULL AND cleared_at IS NULL) OR (value IS NULL AND cleared_at IS NOT NULL)`。"
+    },
+    {
+      "id": "OPEN-CG18-8",
+      "severity": "process",
+      "text": "**`tcms-test-cases` 未跑**（`project.md ## Mandated` 的 blocking stage，未完成不得標示該 stage 為完成，亦不得進入部署階段）。本單元的 12 條 SQL 斷言屬「已自動化」桶，但覆蓋盤點、手動測案（若有「只能手動」桶的項目，候選是**腳本的執行本身**——它沒有任何自動化層）、自動化腳本的規格註解與 TCMS 同步皆未做。此條與 `U5` 的 `OPEN-CG5-3` 同形，屬 intent 層的 stage 而非本單元可自行關閉。"
+    },
+    {
+      "id": "OPEN-CG18-9",
+      "severity": "named-gap",
+      "text": "**`schema.sql` 未更新**（`project.md` 列為「建議一併更新（非 blocking）」）。沿用 `U5` 的先例：該站也未把 `I)` 加進去，故該檔現在有 `H)` 而無 `I)`，再加 `J)` 會讓它變成「有 H、有 J、無 I」而更難讀。更實質的理由是再加一份 DDL 物化會與本站對遷移腳本採取的單一真實來源理由直接矛盾。若要補，正確做法是同一個 PR 內把 `I)` 與 `J)` 一起加上，並在該檔檔頭寫明它與 `schema_rbac.sql` 的關係。"
+    },
+    {
+      "id": "OPEN-CG18-10",
+      "severity": "named-gap",
+      "text": "**遷移腳本有一個上游從未寫下的順序前置條件：`U4` 的 `run_hierarchy_migration.py` 必須先跑過**（`J)` 的兩條外鍵指向 `projects`／`systems`）。本站已加入明確的前置條件檢查（缺表時回可讀訊息並指向 `DEPLOY.md 2.2.7`，實測 exit 1）並寫進 `DEPLOY.md 2.2.9` 的第一個程式碼區塊。**仍無機械強制**——`deploy.yml` 不呼叫任何遷移腳本，所以兩支腳本的執行順序完全依賴操作者讀文件。此條是 `OPEN-P5` 的衍生面，但它比 `OPEN-P5` 更具體：忘了跑 `U18` 的腳本會得到 `relation does not exist`；用錯順序會得到一個指向不存在表的外鍵錯誤，訊息不如前者直接。"
+    },
+    {
+      "id": "OPEN-CG18-11",
+      "severity": "named-gap",
+      "text": "**`schema_rbac.sql` 的檔頭涵蓋清單原本就缺 `F)`（C1 退場）、`G)`（U2 估價上傳）、`I)`（U5 記憶層）三個區塊**（實測：該清單只列 A／B／E／H／C／D／X）。本站**只加了 `J)`**——代為補齊其他單元的條目不在本單元範圍內，且會讓本站的 diff 看起來動了別人的交付。附帶發現：該檔實際只有 8 個帶字母的區塊標題（X／A／B／E／H／I／J／C），`F)`／`G)`／`D)` 的內容夾在別的區塊的範圍內而沒有自己的標題——本站的遷移腳本以字母定位區塊，故這一點對它無影響（`X`／`I`／`J` 三者的前後都是真實標題），但下一個想以同樣方式取出 `F)` 或 `G)` 的人會失敗。"
+    }
+  ]
+}

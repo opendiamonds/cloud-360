@@ -1,0 +1,73 @@
+{
+  "stage": "code-generation",
+  "unit": "requirement-field-service",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/requirement_field_definitions.py"
+    },
+    {
+      "path": "backend/services/requirement_field_errors.py"
+    },
+    {
+      "path": "backend/services/requirement_field_types.py"
+    },
+    {
+      "path": "backend/services/requirement_field_service.py"
+    },
+    {
+      "path": "backend/services/requirement_field_facade.py"
+    },
+    {
+      "path": "backend/services/requirement_field_router.py"
+    },
+    {
+      "path": "backend/main.py"
+    },
+    {
+      "path": "backend/models.py"
+    },
+    {
+      "path": "schema_rbac.sql"
+    },
+    {
+      "path": "backend/scripts/run_meta_schema_migration.py"
+    },
+    {
+      "path": "backend/scripts/verify_meta_schema.sql"
+    },
+    {
+      "path": "backend/scripts/ci/downgrade_requirement_fields.sql"
+    },
+    {
+      "path": "backend/scripts/ci/seed_requirement_field_fixture.sql"
+    },
+    {
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "openapi.json"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_data.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_service.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_facade.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_http.py"
+    },
+    {
+      "path": "backend/tests_pg/test_requirement_field_pg.py"
+    }
+  ]
+}

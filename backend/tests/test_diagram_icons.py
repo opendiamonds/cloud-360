@@ -17,7 +17,7 @@ import logging
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import tests.helpers  # noqa: F401  -- installs the psycopg2 stub before services import
+import tests.helpers  # noqa: F401  -- installs the psycopg stub before services import
 
 from hypothesis import given
 from hypothesis import strategies as st

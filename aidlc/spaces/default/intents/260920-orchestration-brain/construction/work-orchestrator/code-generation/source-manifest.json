@@ -1,0 +1,97 @@
+{
+  "stage": "code-generation",
+  "unit": "work-orchestrator",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/session_scripts/put_work_item.lua"
+    },
+    {
+      "path": "backend/services/session_scripts/update_work_item.lua"
+    },
+    {
+      "path": "backend/services/session_types.py"
+    },
+    {
+      "path": "backend/services/session_store.py"
+    },
+    {
+      "path": "backend/services/hierarchy_facade.py"
+    },
+    {
+      "path": "backend/services/hierarchy_service.py"
+    },
+    {
+      "path": "backend/services/redis_gateway.py"
+    },
+    {
+      "path": "backend/services/work_orchestrator_rules.py"
+    },
+    {
+      "path": "backend/services/work_orchestrator_capabilities.py"
+    },
+    {
+      "path": "backend/services/work_orchestrator.py"
+    },
+    {
+      "path": "backend/tests/work_orchestrator_fakes.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_store.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_capacity.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_capabilities.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_rules.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_model.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_flow.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_boundaries.py"
+    },
+    {
+      "path": "backend/tests/test_work_orchestrator_authz.py"
+    },
+    {
+      "path": "backend/tests/test_redis_gateway_noscript.py"
+    },
+    {
+      "path": "backend/tests_redis/__init__.py"
+    },
+    {
+      "path": "backend/tests_redis/test_work_item_lua.py"
+    },
+    {
+      "path": "backend/services/brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_turn.py"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "LOCAL-DEV.md"
+    },
+    {
+      "path": "deploy/.env.example"
+    },
+    {
+      "path": "backend/.env.example"
+    },
+    {
+      "path": "deploy/docker-compose.deploy.yml"
+    }
+  ]
+}

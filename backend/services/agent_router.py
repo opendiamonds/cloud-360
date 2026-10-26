@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -31,6 +32,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 from services.design_agent import run_design_agent
+from services.progress_channel import DuplicateChannelKey, ProgressChannel
 from services.llm_provider import (
     auth_error_message,
     configure_provider_env,
@@ -121,10 +123,43 @@ async def chat_and_generate(
     _ensure_llm_keys()
     logger.info("收到畫圖/對話請求（Agent SDK 路徑），user=%s", current_user.username)
 
+    # U22：進度通道的鍵。per-request、不透明、來自密碼學安全隨機源（SEC-1）。
+    # **不得**用 thread_id——它是 f"user-{id}-design"，per-user 而非 per-request，
+    # 兩個同一位使用者的重疊請求會撞同一個鍵。亦不得用遞增計數器或時間戳：
+    # 計數器在行程重啟後從頭開始，而若有任何紀錄仍帶著舊鍵，重用會讓兩個不同
+    # 請求在紀錄上無法區分。
+    request_key = secrets.token_urlsafe(32)
+
     async def event_generator():
-        async for event in run_design_agent(payload, request.current_xml, thread_id=f"user-{current_user.id}-design"):
-            chunk = json.dumps(event, ensure_ascii=False)
-            yield f"data: {chunk}\n\n"
+        # open 在 generator 內而非外：鍵的壽命必須與這個 generator 等長，
+        # 這樣 finally 才真的涵蓋它（在外面 open 則 StreamingResponse 還沒開始
+        # 迭代就已佔用一個鍵，而客戶端若從未連上就不會有人去 close）。
+        try:
+            ProgressChannel.open(request_key)
+        except DuplicateChannelKey:
+            # B-1：這個出口在三個設計站都沒有被設計。它必須在這裡被接住——
+            # 本 generator 外層沒有任何 try/except，而它包在 StreamingResponse
+            # 裡，所以未接住的例外不會變成 HTTP 錯誤，使用者得到的是一個
+            # **無聲中止的 SSE 串流**，連 error 事件都沒有。
+            # 固定訊息、不含例外原文也不含鍵（BR3.1／SEC-2／AC13.1.3）。
+            logger.exception("進度通道的鍵重複，無法開始本次產圖 user=%s", current_user.username)
+            fixed = {"type": "error", "content": "系統忙碌中，請稍後再試。"}
+            yield f"data: {json.dumps(fixed, ensure_ascii=False)}\n\n"
+            return
+        try:
+            async for event in run_design_agent(
+                payload,
+                request.current_xml,
+                thread_id=f"user-{current_user.id}-design",
+                request_key=request_key,
+            ):
+                chunk = json.dumps(event, ensure_ascii=False)
+                yield f"data: {chunk}\n\n"
+        finally:
+            # BR2.1／BR2.3：close 必須在 finally，否則被中途放棄的請求（客戶端
+            # 斷線時 Starlette 會 aclose 這個 generator）會留下一個永不消失的
+            # 鍵，把跨使用者錯送換成無上界的記憶體成長。
+            ProgressChannel.close(request_key)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
