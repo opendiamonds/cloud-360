@@ -236,8 +236,8 @@ ACL 資產**必須有，且不得與 deploy 共用同一份檔**。
 ### Step 14 — 新增 secret 後的複查（清單第 4d 項，非檔案改動）
 
 - [x] `gh api repos/<owner>/<repo>/actions/secrets` 與 `/variables` **各查一次**
-- [ ] 判準二元：`REDIS_PASSWORD` 須在 secrets、**不得**在 variables
-- [ ] 若曾誤存為 variable：**必須重新產生金鑰**，搬移不足以結案
+- [x] 判準二元：`REDIS_PASSWORD` 須在 secrets、**不得**在 variables
+- [x] 若曾誤存為 variable：**必須重新產生金鑰**，搬移不足以結案
 
 **這一步需要 repo 寫入權與 `gh` 認證**。若本次執行環境無法查，**記為未完成項並在完成摘要
 明說**，不得靜默跳過——本 repo 為 public、Actions log 公開可讀。

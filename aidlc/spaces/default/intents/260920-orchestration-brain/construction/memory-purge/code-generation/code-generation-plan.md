@@ -178,7 +178,7 @@ schema 補丁、`deploy/nginx.conf`、任一 `.env.example` 或 `render-env.sh`�
   - `cd backend && python3 -m unittest tests_pg.test_purge_atomicity -v`（需 `DATABASE_URL` 指向真實 PostgreSQL）
   - `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/verify_purge_sql.sql`（於 repo 根目錄執行，`\i` 的相對路徑依賴它）
 - [x] 1.3 `git diff --stat -- backend/database.py` 必須為空（開工前記錄基準）
-- [x] 1.4 確認 `schema_rbac.sql` 目前**沒有** `K)` 區塊標題（避免 `extract_blocks` 的重複字母 `RuntimeError`）
+- [ ] 1.4 確認 `schema_rbac.sql` 目前**沒有** `K)` 區塊標題（避免 `extract_blocks` 的重複字母 `RuntimeError`）
 
 ### Step 2 — 資料模型／資料庫行為：`K)` 區塊的系統 actor seed（implement）
 
@@ -202,7 +202,7 @@ schema 補丁、`deploy/nginx.conf`、任一 `.env.example` 或 `render-env.sh`�
 - [x] 2.3 `COMMENT` 不可省：寫明它是什麼、四道鎖各由哪一行承載、以及**刪掉它的後果**（清除的稽核 INSERT 自那一刻起全部因外鍵違反而失敗，整個交易中止）
 - [x] 2.4 更新 `schema_rbac.sql` 檔頭：TOC（`:5-16`）加 `K)` 一列；注意事項（`:21-40`）加一條說明既有環境的 seed 路徑是**新腳本**而**不是**重跑整支檔，並逐字指出 `:715` 的 `DELETE FROM role_permissions`（§1.2）
 - [x] 2.5 `backend/scripts/run_meta_schema_migration.py`：在 `BLOCKS_TO_RUN`（`:84`）旁加註解，寫明 `K)` **刻意不在**此清單內及其理由（`K-15` 的 `observable_side_effects` 逐字「不含任何資料寫入」），並指向新腳本。**不改任何可執行行為**
-- [x] 2.6 `backend/scripts/seed_retention_system_actor.py`：`from run_meta_schema_migration import extract_blocks` 取得解析器（**不複製**），執行 `K)` 區塊，在 COMMIT **之前**逐項查證後條件：該 username 恰有 1 列、`is_active` 為 false、`role` 不在 `CANONICAL_ROLES`、`password_hash` 符合 bcrypt 格式。任一不成立則 rollback ＋ 非零碼。**不得輸出 `DATABASE_URL` 或其片段**（沿用既有腳本 `:55-59` 的禁令），只印 host 與 database 名
+- [ ] 2.6 `backend/scripts/seed_retention_system_actor.py`：`from run_meta_schema_migration import extract_blocks` 取得解析器（**不複製**），執行 `K)` 區塊，在 COMMIT **之前**逐項查證後條件：該 username 恰有 1 列、`is_active` 為 false、`role` 不在 `CANONICAL_ROLES`、`password_hash` 符合 bcrypt 格式。任一不成立則 rollback ＋ 非零碼。**不得輸出 `DATABASE_URL` 或其片段**（沿用既有腳本 `:55-59` 的禁令），只印 host 與 database 名
 
 ### Step 3 — 資料庫行為的測試（test-after，本層）
 
@@ -303,7 +303,7 @@ COMMIT;
 
 ### Step 8 — 環境／建置設定：清除 workflow（implement）
 
-- [x] 8.1 `.github/workflows/memory-retention-purge.yml`：
+- [ ] 8.1 `.github/workflows/memory-retention-purge.yml`：
 
 | 項目 | 值 |
 |---|---|
@@ -514,3 +514,30 @@ SQL 與 YAML——Python 覆蓋率工具量不到它們。
 
 **這四條沒有一條會被現有 CI 抓到**（除了已轉成斷言的第 1、4 條）。
 把前兩條變成靜態斷言正是本計畫 Step 7 存在的理由。
+
+## 十、合併前必修第 11、17 項（code-generation Request Changes 修訂，2026-10-20）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 11、17 項（皆劃給本單元）。使用者於 2026-10-20 裁決，兩題皆選建議項。
+
+### Step 13 — 第 11 項：系統清除帳號由程式擋下並自列表隱藏（裁決：程式擋下＋列表隱藏）
+
+**缺陷**：保留系統 actor `SYSTEM.retention-purge`（`schema_rbac.sql` 的 `K)` 區塊 seed，`is_active=FALSE`）在應用程式中沒有任何辨識：`DELETE /api/auth/{user_id}` 只要求對象已停用，故可直接刪除；`GET /api/auth/list` 會列出它。刪除後 `memory.memory_audit_events.actor_user_id` 的外鍵使清除的稽核 INSERT 全部失敗，而稽核與刪除同一交易，90 天清除整個停擺。（`hierarchy-data` 本輪的必修第 3 項修正已使「被 `memory_audit_events` 參照的使用者」刪除時回 409，但只在**首次清除之後**成立。）
+
+- [x] 新增 `backend/services/system_accounts.py`：唯一常數 `RETENTION_SYSTEM_ACTOR_USERNAME = "SYSTEM.retention-purge"` 與判定函式 `is_reserved_system_account(user)`；`backend/scripts/seed_retention_system_actor.py` 的 `SENTINEL_USERNAME` 以測試鎖住與此常數相等（腳本不 import 應用模組的既有慣例保留）。
+- [x] `backend/services/user_router.py`：`DELETE /{user_id}`、`PUT /{user_id}/role`、`PUT /{user_id}/active` 對保留帳號一律回 **409**（訊息說明是系統保留帳號、刪改會讓 90 天清除停擺）；拒絕授權申請並刪除的路徑若能命中它，同樣擋下。`responses=` 宣告 409。依 `team.md` 就地沿用既有形狀。
+- [x] `GET /api/auth/list` 排除保留帳號（總數與分頁一致地排除，不只是過濾當頁）。
+- [ ] 測試（`backend/tests/`，TestClient）：seed 一列保留帳號 → 刪除 409 且列仍在；改角色 409；啟用 409；列表不含它且 `total` 不計入；常數與 seed 腳本 `SENTINEL_USERNAME` 相等。突變：拿掉刪除的保留判定 → 刪除案例紅；拿掉列表排除 → 列表案例紅。
+- [x] 重 dump `openapi.json`（`--check` 綠）、前端型別無漂移。
+
+### Step 14 — 第 17 項：併入 `main` 前以手動觸發過渡（裁決：手動觸發過渡，寫進部署文件）
+
+**缺陷**：GitHub 只執行預設分支 `main` 上的 `schedule`，故清除（`memory-retention-purge.yml`）與監看（`memory-retention-watchdog.yml`）在 `ut` 併入 `main` 之前都不會排程執行。兩支 workflow 皆已有 `workflow_dispatch`，清除的 `dry_run` 預設為 `true`。
+
+- [ ] 不改程式與 workflow。`DEPLOY.md` 的 90 天清除小節新增「合併進 `ut` 之後、併入 `main` 之前」的程序：① 以 `workflow_dispatch`、`ref=ut`、`dry_run=true` 跑一次並核對預覽（即 `OPEN-ID9-4` 要求的第一次真實執行前的 dry-run 驗證）；② 確認無誤後 `dry_run=false` 實際清除；③ 之後每週手動觸發一次清除與一次監看，直到 `ut` 併入 `main`、排程接手；④ 併入 `main` 後確認排程首次執行成功即停止手動。寫明這段期間**沒有自動提醒**。
+- [ ] `merge-blockers.md` 第 17 列處置改為「已處置為人工義務：合併 `main` 前每週手動觸發」，並標明這是**持續中的人工義務**而非已修正。
+
+### Step 15 — 驗證與紀錄
+
+- [x] 完整套件（`backend/.venv`）全綠；`validate_repo_contract.py`／`validate_env_contract.py` 綠。
+- [x] `merge-blockers.md` 第 11、17 列回填處置；`code-summary.md` append 本節紀錄（改動檔:行、測試、突變結果）；`source-manifest.json`、`traceability.json`（加 `MB-11`／`MB-17`）更新。
+- 追溯：`merge-blockers.md` #11／#17；`NFR7.11`、`FR4.5a`、`OPEN-ID9-4`。

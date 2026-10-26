@@ -41,6 +41,21 @@
     },
     {
       "path": "DEPLOY.md"
+    },
+    {
+      "path": "backend/services/system_accounts.py"
+    },
+    {
+      "path": "backend/services/user_router.py"
+    },
+    {
+      "path": "backend/tests/test_system_account_protection.py"
+    },
+    {
+      "path": "openapi.json"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
     }
   ]
 }

@@ -145,3 +145,34 @@ repo 沒有覆蓋率量測機制（`team.md`：`org.md` 的 80% line coverage「
 - **log 斷言**：`self.assertLogs("cloud360.hierarchy_facade", level="INFO")`，比對 `actor_user_id=<id>`。
 - **前端 stub**：專案名、系統名、欄位值各以獨特假字串（例如 `e2e-project-<字尾>`）產生，供 `PPN-18` 的 console 斷言；延遲以 `page.route` 內 `await new Promise(r => setTimeout(r, ms))` 構造。
 - **限制（如實記載）**：e2e 不碰真實後端，前後端形狀一致由 `openapi.json` 漂移閘門與 `check:types` 承擔；SQLite 不驗 PostgreSQL 的索引語法，由 CI 的 `memory-schema` job 承擔；staging 的索引存在與否只能部署後人工 `psql` 驗證。
+
+## 七、合併前必修第 14 項：不洩漏專案／系統是否存在（計畫 §九 Step 16–20）
+
+在 `backend/`（`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad、`PYTHONDONTWRITEBYTECODE=1 python3 -B`，避免在 repo 留快取）：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_membership_endpoints tests.test_membership_facade tests.test_project_visibility_endpoints tests.test_requirement_field_facade tests.test_requirement_field_http tests.test_mcp_bridge_e2e -v
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests
+python3 scripts/dump_openapi.py --check
+```
+
+在 `frontend/`：`npm run check:types`、`npm run lint`、`npx tsc -b`、`npx playwright test tests/e2e/member-pages.spec.ts`（對 `vite preview` 生產建置）。
+
+| 案例 | 斷言 |
+|---|---|
+| N1 成員四端點 | 「不存在的專案」與「存在但非成員」的 status（404）＋ body 逐位元相同，body 不含專案 id |
+| N2 成員之內 | 只有 view 的成員寫入仍 403；缺 `K3` 仍 403 |
+| N3 需求欄位三端點 | 「不存在的系統」與「存在但非成員」逐位元相同（404） |
+| N4 稽核不消失 | 非成員存取需求欄位仍記一筆 `requirement_field.denied ... reason=not_member` |
+| N5 MCP `AC11.4.1` | 經 MCP 的結果等於同一使用者直接存取的 404 結果 |
+| N6 前端 | 成員清單 404 → 「查不到這個專案」且畫面無專案編號；403 → 權限句 |
+
+突變（套用 → 紅 → 還原 → sha256 對照基線 → 綠；`HYPOTHESIS_NO_SHRINK=1`）：
+
+| 突變 | 預期紅燈 |
+|---|---|
+| M14-1 成員端點非成員改回 403 | N1 |
+| M14-2 404 訊息改回帶 id | N1 |
+| M14-3 需求欄位非成員改回 403 | N3 |
+| M14-4 拿掉非成員的 WARNING | N4 |
+| M14-5 前端 404 改回顯示伺服器訊息 | N6 |

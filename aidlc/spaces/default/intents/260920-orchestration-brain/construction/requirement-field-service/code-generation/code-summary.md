@@ -174,3 +174,96 @@ require_story_action 承擔」，須一併改寫**（FD `review-02` R-07）；�
 | Audit logging | 適用 | 列上的 `updated_by`／`cleared_at`／`updated_on_behalf_of`；拒絕與寫入 log 不含值（`F8`、M6） |
 
 **PBT**：不適用（與上游一致；本單元不屬 IaC generator、cost calculator、agent routing），未使用 `hypothesis`。
+
+## 九、code-generation Request Changes（2026-10-20）重新查驗（2026-10-23）
+
+19 項合併前必修中無一項劃給本單元（計畫 §六），**本輪未改任何程式或測試**。以 `backend/.venv`（釘選版依賴）、`PYTHONDONTWRITEBYTECODE=1` 實際重跑：
+
+| 指令 | 結果 |
+|---|---|
+| `python -m unittest tests.test_requirement_field_data tests.test_requirement_field_facade tests.test_requirement_field_http tests.test_requirement_field_service` | `Ran 28 tests` — `OK` |
+| `python -m unittest discover -s tests`（全套，涵蓋前序單元本輪的修正） | `Ran 1269 tests` — `OK (skipped=3)` |
+| `python scripts/dump_openapi.py --check` | 規格檔與後端程式碼一致 |
+
+前序單元本輪的改動（`hierarchy-service` 的待核准檢查、`membership-service` 的改選與鎖等待、`user_router.py` 的刪除前置檢查與系統帳號保護）均未讓本單元任何測試轉紅。Step 1–12 的勾選狀態維持不變，無需重新實作。突變驗證沿用 §四 的結果（程式未變，不重跑）。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T00:13:04Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。
+
+- **計畫勾選**：12／12。
+- **測試**（`backend/`，快取導向 scratchpad）：
+  - 全套 `unittest discover -s tests`：1319 OK（skipped=3）。
+  - 本單元 SQLite 測試 34 OK（data 5、service 8、facade 12、http 9；H1 十二列矩陣）。
+  - `tests_pg.test_requirement_field_pg`：3 OK（一次性本機 PostgreSQL 17＋pgvector，用完即刪；未連任何共享資料庫）。
+  - 於同一個一次性 PG 依序重現 `memory-schema` job 步驟 0／A–E：`schema_rbac.sql` 套兩次 0 ERROR、verify 通過、遷移首次「有執行」移除 `updated_on_behalf_of` 外鍵、重跑「未執行」、CASCADE 成立。D／E 以 scratchpad 的等價 SQL 斷言，非 `ci.yml` heredoc 本身。
+  - `dump_openapi.py --check`、`check:types`、`validate_env_contract.py`、`validate_repo_contract.py`：皆通過。
+- **PBT**：不適用（非 ADR-0006 點名模組），測試檔不 import `hypothesis`，與 §八 一致。
+- **ADR-0006 四面向**：與 §八 一致，無一格相反。
+- **NFR grep 判準**（§五）：6 支 src 全部 0 命中；service／facade 無 DELETE 敘述。
+- **與既有文字不符之處（如實記載）**：
+  1. 合併前必修清單現為 23 項，第 14 項（`project-pages-ui`，`[PP-MB14]`=A）把本單元三個端點的「非成員」回應由 403 改為與「系統不存在」相同的 404，測試已同步（H1 ②⑩⑫、H8、H9）。計畫 §六「19 項中沒有一項劃給本單元」已過時；不違反計畫 §二（未規定非成員狀態碼）。
+  2. `DEPLOY.md` 第 730–732 行稱 U19／U20 查詢會報 `relation "project_members" does not exist`，與 U20 小節（約第 842 行，`create_all` 建表、不是 500）矛盾，疑為 U18 時期舊文字，留 build-and-test 修正。
+
+## 第 24 項處置（合併前必修，計畫 §七 Step 13–17）
+
+<!-- 寫入時間：2026-10-26T22:44:42Z（date -u 取值） -->
+
+來源：`construction/functional-design/merge-blockers.md` 第 24 項；`reviews/review-03.md` R-01（Major）＋ `DEPLOY.md` 矛盾。上一段第 2 點的「留 build-and-test 修正」已由本段處置取代。
+
+### 程式（Step 13）
+
+| 檔案 | 改動 |
+|---|---|
+| `backend/services/requirement_field_facade.py:374-380` | `_write_authorized` 在型別檢查之後、`strip()` 之前，值含 `\x00` 即拋 `RequirementFieldValidationError("value", "nul_char")`。放在 `strip()` 之前是因為 NUL 不是空白、`strip()` 不會去掉它 |
+| `backend/services/requirement_field_errors.py:130-132` | 登錄固定訊息 `("value", "nul_char")`：「value 不得含 NUL 字元（U+0000）」，不回顯值；模組 docstring 的例外對照表（第 15 行）補上此原因 |
+
+router 未改：`RequirementFieldValidationError` 原本就由 `_translate()` 轉 422。
+
+**入口盤點（全部入口都在共同上游擋下）**：值寫進資料庫的路徑只有 `requirement_field_service.upsert_value`，其在 `backend/`（不含測試）唯一的呼叫者是 `_write_authorized`；而 `_write_authorized` 是 `write_field`（同進程，`U13` 代寫）與 `write_field_from_body`（HTTP PUT）的共同上游。本單元**沒有批次寫入**；agent 代填即 `write_field` 帶 `on_behalf_of`，同一條路徑。其他會落入資料表的字串：`on_behalf_of` 已以已宣告組的白名單擋下、`agent_group`／`field_key` 以程式內定義白名單比對、`system_id` 轉整數——三者都不可能帶 NUL 進資料庫。清空（`clear_if_filled`）不寫任何使用者字串。
+
+### 測試（Step 14）
+
+| 案例 | 位置 | 斷言 |
+|---|---|---|
+| `H10` | `backend/tests/test_requirement_field_http.py:257` | 四種形狀（值中夾 NUL、空白包住的 NUL、單獨一個 NUL、代寫路徑帶 NUL）以 PUT 送出皆 422，本體恰為 `{"detail": <固定訊息>}`、不含 `uuid4()` 唯一標記；同樣四個值以同進程 `write_field` 皆拋 `(value, nul_char)`；最後列數 0 |
+| `G4` | `backend/tests_pg/test_requirement_field_pg.py:246` | 真實 PostgreSQL：直接呼叫 PUT 路由函式得 `HTTPException` 422 與固定 `detail`；同進程帶代寫標示得 `(value, nul_char)`；session 未卡在失敗交易；該系統 0 列；再以同一路由寫正常值成功、恰 1 列（排除 422 來自授權或定址失敗） |
+
+兩案皆附規格註解（`@purpose`／`@given`／`@step`／`@pass`／`@story`／`@api`）。
+
+### 突變驗證（Step 15，只在 scratchpad 副本）
+
+以 `rsync` 把 `backend/`（排除 `.venv`、`.hypothesis`、`__pycache__`）複製到 scratchpad，只在副本把 `if "\x00" in value:` 改為 `if False:`，以工作樹的 `.venv` 直譯器在副本目錄執行兩案：
+
+| 突變 | 結果 |
+|---|---|
+| 拿掉 NUL 檢查 | **紅**：`H10` 9 個失敗（四個 PUT 子案 `200 != 422`——SQLite 接受 NUL 並寫入；四個同進程子案 `RequirementFieldValidationError not raised`；列數 `1 != 0`）；`G4` 為 ERROR：`sqlalchemy.exc.DataError: (psycopg.DataError) PostgreSQL text fields cannot contain NUL (0x00) bytes`——即 R-01 描述的 500 成因在真實 PostgreSQL 上重現 |
+| 還原 | 副本兩案 `Ran 2 tests — OK`；`diff -q` 確認副本 facade 與工作樹逐位元相同 |
+
+工作樹從未被改壞；副本與一次性資料庫用完即刪。
+
+### 文件（Step 16）
+
+`DEPLOY.md:730-738`（原第 730–732 行那一段）改為與 2.2.9 的 U20 部署順序表一致：忘了跑遷移**不會**沒有表——`create_all()` 依 ORM（`ProjectMember`、`ReselectionEvent`、`SystemRequirementField`）建出三張表，約束與 DDL 等價、只缺 COMMENT（`OPEN-ID19-1`），不是 500；表若以舊定義存在則缺的是 `U20` 的欄位收斂，只在帶代寫標示的寫入時以 500 出現。只改該段，其餘未動。
+
+### 回歸（Step 17，全部實際執行，`backend/.venv` Python 3.13.7）
+
+| 指令 | 結果 |
+|---|---|
+| 本單元 SQLite：`unittest tests.test_requirement_field_data tests.test_requirement_field_service tests.test_requirement_field_facade tests.test_requirement_field_http` | `Ran 35 tests` — `OK`（上輪 34 ＋ `H10`） |
+| 全套 `unittest discover -s tests`（`JWT_SECRET` 為測試用假值） | `Ran 1322 tests` — `OK (skipped=3)` |
+| `unittest discover -s tests_pg`（一次性 PostgreSQL 17＋pgvector，`initdb` 於 scratchpad、`listen_addresses=127.0.0.1`、`unix_socket_directories=''`、高埠，套 `schema_rbac.sql`；用完 `pg_ctl stop` 並刪資料夾） | `Ran 14 tests` — `OK`（其中本單元 `G1`–`G4` 4 個；修改前基準為 13） |
+| `python scripts/dump_openapi.py --check` | 規格檔與後端程式碼一致 |
+| `npm run check:types`（frontend） | API 型別檔與規格檔一致 |
+| `python3 scripts/validate_repo_contract.py` | passed |
+| `python3 scripts/validate_env_contract.py` | passed |
+
+未連 staging 或任何共用 DB／Redis；未觸發 CI／workflow；未 commit。
+
+### 追溯與其他
+
+- `traceability.json`：逐列檢查後**沒有**因本項變為不實的註記（各列描述的是既有 422／500 行為與 H5 的四類，修正後仍成立），依「只更正不實註記」不改動。
+- `source-manifest.json`：本項未新增檔案，改動的五支檔（facade、errors、兩支測試、`DEPLOY.md`）皆已在清單內，不改動。
+- **已知未處理（Minor，如實記載）**：router `ERROR_RESPONSES` 的 422 說明文字列舉了各種原因，未列「值含 NUL」。補上會改動 `openapi.json` 與 `frontend/src/types/api.d.ts`，超出 Step 13「router 照既有轉譯」的範圍，故未改。

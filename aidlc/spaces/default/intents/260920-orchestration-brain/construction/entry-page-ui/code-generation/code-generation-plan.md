@@ -466,6 +466,59 @@
 
 `test-after` 的五個可測層：**Data model**＝Step 3–4（`U2` 契約模型與兩份產生檔，零 DDL）；**Repository / data access**＝Step 5–6（服務層純查詢、可見性批次）；**Business logic**＝Step 7–8（`U7` facade 四個讀取方法的守門、靜態鎖）；**API / endpoint**＝Step 9–10（`U13` 大腦 WS 的組裝、名稱推送、目錄、直接設定）；**Frontend behavior**＝Step 11–12（入口頁、子頁面掛點、e2e 兩層、既有 15 案處置）。plan_profile 的 Project structure／runner 兩步為 Step 1–2；Environment/build configuration 為 Step 13（`deploy.yml` 6a；`eslint.config.js` 因 Step 12 的 spec 需受其檢查而提前於 Step 11 實作）；Documentation and traceability 為 Step 14–15。方法論未改。
 
+## 九、code-generation Request Changes（2026-10-20）：合併前必修第 2 項(b) 與 `OPEN-MB5-1`
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項。劃給本單元的是**第 2 項(b)**；另依該清單第 5 列，`OPEN-MB5-1` 的承接站候選之一是本單元，須在 build-and-test 前決定。
+
+**實測現況（唯讀查證）**：
+- `brain-gateway` 已於 2026-10-24 改為對非輪次錯誤送 `turnId=null`（規則表 T1–T9，見該單元 `code-summary.md` §十三與 `merge-blockers.md` 第 2 列）。
+- `frontend/src/brain/useBrainConnection.ts:169-187` 的 `error` 分支以 `env.turnId ?? payload.turnId ?? ''` 把 null 映成空字串輪次，然後 `setAwaitingReply(false)`、`turnTextRef.current.delete(turnId)`。
+- `frontend/src/brain/brainTranscript.ts:289-303` 的 `error` 動作對任何 turnId 都先 `clearPending(resolvePicking(state), connId)` 再 `updateTurn`——對 null 錯誤而言：第二則覆寫第一則（同一個 `''` 輪次）、解除其他進行中輪次的等待、把反問的 `picking` 誤標為 `resolved`。
+- 合併順序約束（`merge-blockers.md` 第 2 列 brain-gateway review-02 發現 5）：本項必須與 `brain-gateway` 同批合併。
+
+**使用者裁決**（2026-10-24）：
+- `[EP-MB2]`=A：非輪次錯誤以**對話中的系統提示列**呈現——在當前段落的對話序列末端插入一則獨立項目，不歸屬任何輪次、每則各自保留，沿用既有訊息樣式（不新增元件庫依賴），並經既有 LiveRegion 播報。不動任何進行中輪次；反問等待中送出的選擇若收到非輪次錯誤（`[GW-MB2]`=A 的 T3），該反問由 `picking` 回到 `default`、可重選。
+- `[EP-MB5]`=A：`OPEN-MB5-1` **交後續 intent**（逐槽位多輪澄清），本分支不改程式，記為已知限制。
+
+- [x] **Step 16 — Frontend behavior：實作**
+  - `useBrainConnection.ts` 的 `error` 分支：`turnId` 為 null 時派送新動作（例：`systemNotice`），**不**呼叫 `setAwaitingReply(false)`、**不**刪 `turnTextRef`；仍 `setAnnouncement(payload.message)`。帶 turnId 的錯誤維持原路徑。拿掉 `?? ''` 與 `:171-172` 的暫時註解。
+  - `brainTranscript.ts`：新增 `kind: 'notice'` 項目（`id`、`code`、`message`、`segment`）；`systemNotice` 動作只 append，不呼叫 `clearPending`／`updateTurn`；若該連線的反問處於 `picking`，改回 `default`（不是 `resolved`）。`ConversationView`（或實際渲染對話項目的元件）渲染 `notice` 項目，帶穩定的 `data-testid`（例：`brain-system-notice`）。
+  - 型別：`env.turnId` 的 null 在型別上明確處理，不以空字串頂替；`npx tsc -b` 必須通過。
+- [x] **Step 17 — Frontend behavior：測試**（`frontend/tests/e2e/entry-page.spec.ts`，以 `page.route`／WS 替身注入伺服器訊息，對 `vite preview` 生產建置實跑；規格註解比照該檔既有 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 形狀）
+  - E1：等待回覆中收到 null 錯誤 → 出現一則系統提示、等待狀態仍在；之後該輪的 `token`＋`done` 照常呈現在原輪。
+  - E2：連續兩則 null 錯誤 → 兩則系統提示都在（不互相覆寫）。
+  - E3：反問選擇送出後收到 null 錯誤 → 反問恢復可點選，再選一次可送出。
+  - E4：帶 turnId 的錯誤 → 維持原呈現（該輪標為錯誤），不出現系統提示。
+  - 突變（記入 code-summary）：M-N1 還原 `?? ''` 路徑 → E1、E2 紅；M-N2 `systemNotice` 改為呼叫 `clearPending` → E1 紅；M-N3 `picking` 改回 `resolved` → E3 紅。每項套用 → 紅 → 還原 → sha256 對照基線 → 綠。
+- [x] **Step 18 — 文件與追溯**
+  - `code-summary.md` 新增一節（兩項裁決、變更、e2e 與突變結果、`OPEN-MB5-1` 已知限制）。
+  - `merge-blockers.md` 第 2 列：以純 append 方式在處置欄末尾記 (b) 已修正與同批合併約束；第 5 列：以純 append 方式記 `OPEN-MB5-1` 的裁決（交後續 intent、已知限制）。
+  - `source-manifest.json`、`traceability.json` 更新；驗證 `npm run lint`、`npx tsc -b`、`npm run check:ws-types`、`python3 scripts/validate_repo_contract.py`。
+
+**不在本次範圍**：`deploy.yml` 步驟 6a 失敗只回滾、不開 revert PR 的分流（2026-10-17 使用者裁決，承接在 build-and-test）；工作清單「只保留最近 20 筆已結束項」的呈現與 `correct_work_item` 對已修剪項的競態（`work-orchestrator` 交接）——兩者不屬合併前必修清單，維持原承接站。
+
+## 十、合併前必修第 26 項（2026-10-26 使用者裁決：先修再重審；真實環境驗證走一次 CI）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 26 項（code-generation 重做時 review-03 R-01、R-02，皆 Major）。上方第九節「不在本次範圍」所列的 6a 分流**因第 26 項而改入本節**，原文保留作為歷史紀錄。
+
+**使用者裁決**：
+- 2026-10-26T05:47:43Z：R-01 登記為合併前必修，R-02 一併列入本項。
+- 2026-10-27：(d) 的真實環境驗證以**一次 CI 實跑**（`ui-regression`，對 `deploy/docker-compose.test.yml` 起的短生命週期 stack）承擔，不在本機起 Docker。
+
+- [x] **Step 19 — Environment / build configuration：6a 失敗只回滾、不開 revert PR**
+  - `deploy.yml`：deploy job 的步驟 6a 加 `id`，並把它的結果帶到 job 的 `outputs`（例：`probe_failed`）；`rollback` job 的「Open a revert PR for the bad merge」步驟的 `if` 由 `always()` 改為「失敗來源**不是** 6a」才開（6a 失敗時仍還原 last-good、仍 dispatch Deploy Doctor）。其他失敗來源維持現行行為。
+  - 不改 rollback job 的權限、不新增 secret、不碰 `deploy/.env` 產生路徑（`render-env.sh` 唯一產生點不變）。
+- [x] **Step 20 — 文件**：`DEPLOY.md` §5.13（及「入口頁部署後實測」一節若有相同敘述）改成：6a 失敗只回滾、不開 revert PR，其餘失敗來源照舊開；只改該段。
+- [x] **Step 21 — 測試與突變**：擴充 `backend/tests/test_brain_ws_deploy_probe.py`（或同目錄新檔），讀 `deploy.yml` 斷言：(i) 6a 有 `id` 且其結果經 job `outputs` 傳出；(ii) revert PR 步驟的 `if` 排除 6a 失敗；(iii) 還原 last-good 的步驟**不**排除 6a（雙向）。突變只在 scratchpad 副本做：R1 把 revert 步驟的 `if` 改回 `always()` → 紅；R2 還原步驟也排除 6a → 紅；R3 拿掉 job `outputs` → 紅。結果記入 code-summary。
+- [x] **Step 22 — 正向落點斷言**：`regression.spec.ts`（約 :93、:117、:162、:177、:196）與 `estimate-workspace.spec.ts`（約 :18、:36）的 `not.toHaveURL(/\/login$/)` 之後若沒有正向錨點，補上（例：`toHaveURL` 到預期頁或該頁的 `getByTestId` 可見）。`describe › test` 字串不得改（Kiwi 案例名）；`@step`／`@pass` 同步。`npm run lint`、`npm run build` 綠。
+- [ ] **Step 23 — 真實環境驗證（一次 CI 實跑）**
+  - 推送與開 PR 屬對外動作：執行前由 conductor 向使用者確認 commit 範圍、目標分支與 PR（未確認不得推送）。不碰 staging、不觸發部署 workflow、不觸發 purge。
+  - 以該次 `ui-regression` 結果記錄：`entry-page-live.spec.ts` 5 案、`regression.spec.ts` 13 案、`estimate-workspace.spec.ts` 2 案的結果與總執行時間（對照 15 分鐘預算）；`.stats.unexpected` 必須為 0。
+  - X1／X2：以該次 CI 的綠燈為「還原後綠」的證據；「突變後紅」若無法在 CI 上安全重現，在 code-summary 如實記為未在真實 stack 驗證，不得宣稱已驗。
+  - 6a 正反案（D1）在 CI 上**跑不到**（`ui-regression` 不執行 `deploy.yml`）：如實記為未驗證，交 build-and-test，第 291 行**不勾**。
+- [ ] **Step 24 — 收尾**：`unittest`（後端全套）、`validate_repo_contract.py`、`validate_env_contract.py` 綠；`code-summary.md` 追加「第 26 項處置」段（含 `date -u` 時間戳、CI run 連結與耗時、突變結果、未驗證項）；`traceability.json` 只更正不實註記；`source-manifest.json` 補新增檔。
+- 追溯：`merge-blockers.md` #26；review-03 R-01、R-02；`[EPI1]`=A；2026-10-17 的 6a 回滾裁決。
+
 ## Testing Contract
 
 ```json

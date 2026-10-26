@@ -126,53 +126,53 @@ runner 就緒排在第一個可執行測試步驟之前。
 
 ### Step 3 — Business logic 實作
 
-- [ ] `EmbeddingProviderUnavailable` 例外：三個欄位 `selected_provider`／`target`／`available_options`（`entities.md`、`D-7`）。組裝 `target` 時**剝除 URL 的 `userinfo` 區段**（`SEC-2`、`BR7.2`）
-- [ ] `EmbeddingPort` 介面：`embed(texts) -> list[list[float]]`、`model_id() -> str`，皆 sync（K-06）
-- [ ] `resolve_provider_selection()`：讀四個環境變數 → 驗值域（`BR1.1`）→ 驗 `ollama` 的必填與主機名（`BR1.3`、`NFR7.1`：不得為 `localhost`／`127.0.0.1`／公開 IP）→ 回傳不可變的 `ProviderSelection`。**冪等、無副作用、不建連線、不載模型**（`D-2`、`BR1.5`）
-- [ ] `resolve_embedding_port() -> Optional[EmbeddingPort]`：`fulltext` 回 `None`（`BR1.4`、`D-10`），其餘三者回對應實作
-- [ ] `StubAdapter`：`hashlib` 摘要**決定性展開**為 1024 個 float，**不同輸入得不同向量**（`D-3`）；`model_id()` 固定 `stub-v1`（`BR3.6`）
-- [ ] `OllamaAdapter`：既有 `httpx`，帶模組層**具名常數** timeout（`D-6`、`NFR3.2`），值取自 `EMBEDDING_TIMEOUT_SEC`、預設 `10`。**模組內不得出現裸數字 timeout**
-- [ ] `FastembedAdapter`：**lazy import**（`BR6.1`、`[Q4]`=A）；`ImportError` → 拋 `EmbeddingProviderUnavailable` 且訊息含安裝指令（`BR4.3`）
-- [ ] 三個實作共通：`embed([])` 回 `[]` 且不碰外部（`BR2.4`）；長度與順序一一對應（`BR2.1`）；每個向量恰 1024 維（`BR2.2`）；**全有或全無**，任一失敗整批拋（`BR2.5`）；**不重試**（`BR2.6`）
-- [ ] **超長輸入截斷**到提供者 context 上限 ＋ 記 WARN 含被截字元數，**不拋例外**（`D-4`）
-- [ ] 四條 log 規格（`D-5`、`security-design.md §二`）：啟動 INFO、**每次 `embed` 一條含耗時毫秒的 INFO**、截斷 WARN、**例外不由本 Port 記 ERROR**（`D-8`）
-- [ ] **不記**：請求內容、向量值、任何憑證（`security-design.md §二`）
-- [ ] `SEC-1` 的三條禁令：模組內**不得** import DB session 型別、RBAC 判定函式、FastAPI router 裝飾器
+- [x] `EmbeddingProviderUnavailable` 例外：三個欄位 `selected_provider`／`target`／`available_options`（`entities.md`、`D-7`）。組裝 `target` 時**剝除 URL 的 `userinfo` 區段**（`SEC-2`、`BR7.2`）
+- [x] `EmbeddingPort` 介面：`embed(texts) -> list[list[float]]`、`model_id() -> str`，皆 sync（K-06）
+- [x] `resolve_provider_selection()`：讀四個環境變數 → 驗值域（`BR1.1`）→ 驗 `ollama` 的必填與主機名（`BR1.3`、`NFR7.1`：不得為 `localhost`／`127.0.0.1`／公開 IP）→ 回傳不可變的 `ProviderSelection`。**冪等、無副作用、不建連線、不載模型**（`D-2`、`BR1.5`）
+- [x] `resolve_embedding_port() -> Optional[EmbeddingPort]`：`fulltext` 回 `None`（`BR1.4`、`D-10`），其餘三者回對應實作
+- [x] `StubAdapter`：`hashlib` 摘要**決定性展開**為 1024 個 float，**不同輸入得不同向量**（`D-3`）；`model_id()` 固定 `stub-v1`（`BR3.6`）
+- [x] `OllamaAdapter`：既有 `httpx`，帶模組層**具名常數** timeout（`D-6`、`NFR3.2`），值取自 `EMBEDDING_TIMEOUT_SEC`、預設 `10`。**模組內不得出現裸數字 timeout**
+- [x] `FastembedAdapter`：**lazy import**（`BR6.1`、`[Q4]`=A）；`ImportError` → 拋 `EmbeddingProviderUnavailable` 且訊息含安裝指令（`BR4.3`）
+- [x] 三個實作共通：`embed([])` 回 `[]` 且不碰外部（`BR2.4`）；長度與順序一一對應（`BR2.1`）；每個向量恰 1024 維（`BR2.2`）；**全有或全無**，任一失敗整批拋（`BR2.5`）；**不重試**（`BR2.6`）
+- [x] **超長輸入截斷**到提供者 context 上限 ＋ 記 WARN 含被截字元數，**不拋例外**（`D-4`）
+- [x] 四條 log 規格（`D-5`、`security-design.md §二`）：啟動 INFO、**每次 `embed` 一條含耗時毫秒的 INFO**、截斷 WARN、**例外不由本 Port 記 ERROR**（`D-8`）
+- [x] **不記**：請求內容、向量值、任何憑證（`security-design.md §二`）
+- [x] `SEC-1` 的三條禁令：模組內**不得** import DB session 型別、RBAC 判定函式、FastAPI router 裝飾器
 
 ### Step 4 — Business logic 的測試（**實作之後**）
 
-- [ ] `backend/tests/test_embedding_port.py`，形狀見 `unit-test-instructions.md §二`
-- [ ] 跑 unit-scoped 指令，全綠
+- [x] `backend/tests/test_embedding_port.py`，形狀見 `unit-test-instructions.md §二`
+- [x] 跑 unit-scoped 指令，全綠
 
 ### Step 5 — 啟動整合實作
 
-- [ ] `configure_embedding_env()`：模組層函式，呼叫 `resolve_provider_selection()` 並記啟動 INFO；**失敗即拋**（`BR1.6`，與 `configure_provider_env()` 只記 log 的前例**刻意不同**，`D-1` 已明記）
-- [ ] `backend/main.py` 的 `@app.on_event("startup")`：在 `configure_provider_env()` 與 `init_db()` **之間**插入一行呼叫
+- [x] `configure_embedding_env()`：模組層函式，呼叫 `resolve_provider_selection()` 並記啟動 INFO；**失敗即拋**（`BR1.6`，與 `configure_provider_env()` 只記 log 的前例**刻意不同**，`D-1` 已明記）
+- [x] `backend/main.py` 的 `@app.on_event("startup")`：在 `configure_provider_env()` 與 `init_db()` **之間**插入一行呼叫
 
 ### Step 6 — 啟動整合的測試（**實作之後**）
 
-- [ ] 直接呼叫 `configure_embedding_env()` 的測試（**不經 startup hook**）：合法值通過、缺值／非法值／`localhost` 主機名各自拒絕
-- [ ] 確認 `TestClient(app)` **不觸發** startup hook，故既有測試檔不需設定 embedding 變數——以既有測試全綠為證
+- [x] 直接呼叫 `configure_embedding_env()` 的測試（**不經 startup hook**）：合法值通過、缺值／非法值／`localhost` 主機名各自拒絕
+- [x] 確認 `TestClient(app)` **不觸發** startup hook，故既有測試檔不需設定 embedding 變數——以既有測試全綠為證
 
 ### Step 7 — 環境／建置設定
 
-- [ ] `backend/.env.example` 加 `EMBEDDING_TIMEOUT_SEC=10` ＋ 註解（**`validate_local_dev_template_is_complete()` 機械強制**）
-- [ ] `deploy/docker-compose.deploy.yml` 加 `EMBEDDING_TIMEOUT_SEC: ${EMBEDDING_TIMEOUT_SEC}`（**無 fallback**，比照 `:120-123`）
-- [ ] `deploy/render-env.sh` 加 `EMBEDDING_TIMEOUT_SEC=10`（比照 `:124-127` 的字面值形式）
-- [ ] `deploy/.env.example` 加同一行 ＋ 註解
-- [ ] `scripts/validate_embedding_provider_value.py`：**import** `backend.services.embedding_port` 的值域常數／驗證函式，驗 `render-env.sh` 寫出的 `EMBEDDING_PROVIDER` 值。**嚴禁在本腳本內自行列舉允許值**（`H-I3` 逐字）
-- [ ] `.github/workflows/ci.yml` 的 `repo-contract` job 加一個 step 跑上述腳本（該 job 已有 `actions/setup-python@v5` 與四支同形 validator）
+- [x] `backend/.env.example` 加 `EMBEDDING_TIMEOUT_SEC=10` ＋ 註解（**`validate_local_dev_template_is_complete()` 機械強制**）
+- [x] `deploy/docker-compose.deploy.yml` 加 `EMBEDDING_TIMEOUT_SEC: ${EMBEDDING_TIMEOUT_SEC}`（**無 fallback**，比照 `:120-123`）
+- [x] `deploy/render-env.sh` 加 `EMBEDDING_TIMEOUT_SEC=10`（比照 `:124-127` 的字面值形式）
+- [x] `deploy/.env.example` 加同一行 ＋ 註解
+- [x] `scripts/validate_embedding_provider_value.py`：**import** `backend.services.embedding_port` 的值域常數／驗證函式，驗 `render-env.sh` 寫出的 `EMBEDDING_PROVIDER` 值。**嚴禁在本腳本內自行列舉允許值**（`H-I3` 逐字）
+- [x] `.github/workflows/ci.yml` 的 `repo-contract` job 加一個 step 跑上述腳本（該 job 已有 `actions/setup-python@v5` 與四支同形 validator）
 
 ### Step 8 — 環境／建置設定的測試（**實作之後**）
 
-- [ ] `python3 scripts/validate_env_contract.py` 通過（預期觸發三道：#2 `deploy_stack_is_fully_supplied`、#3 `deploy_template_is_complete`、#6 `local_dev_template_is_complete`）
-- [ ] `python3 scripts/validate_repo_contract.py` 通過
-- [ ] `python3 scripts/validate_embedding_provider_value.py` 通過；並以**暫時把 `render-env.sh` 改成非法值**驗證它會紅（改完還原）
+- [x] `python3 scripts/validate_env_contract.py` 通過（預期觸發三道：#2 `deploy_stack_is_fully_supplied`、#3 `deploy_template_is_complete`、#6 `local_dev_template_is_complete`）
+- [x] `python3 scripts/validate_repo_contract.py` 通過
+- [x] `python3 scripts/validate_embedding_provider_value.py` 通過；並以**暫時把 `render-env.sh` 改成非法值**驗證它會紅（改完還原）
 
 ### Step 9 — 文件
 
-- [ ] `LOCAL-DEV.md` **兩項**（`project.md` blocking）：(a) `EMBEDDING_TIMEOUT_SEC`；(b) `fastembed` 的**帶版本**安裝指令 ＋ HuggingFace 下載來源與快取位置 ＋「**此路徑不經 CI，供應鏈風險由使用它的開發者承擔**」（`SEC-3`）
-- [ ] 確認 `LOCAL-DEV.md` 的隱性硬依賴由 2 個變 **3** 個
+- [x] `LOCAL-DEV.md` **兩項**（`project.md` blocking）：(a) `EMBEDDING_TIMEOUT_SEC`；(b) `fastembed` 的**帶版本**安裝指令 ＋ HuggingFace 下載來源與快取位置 ＋「**此路徑不經 CI，供應鏈風險由使用它的開發者承擔**」（`SEC-3`）
+- [x] 確認 `LOCAL-DEV.md` 的隱性硬依賴由 2 個變 **3** 個
 
 ### Step 10 — 突變驗證（**交付條件，不是選配**）
 
@@ -197,10 +197,10 @@ runner 就緒排在第一個可執行測試步驟之前。
 
 ### Step 11 — 全套比對與追溯
 
-- [ ] `cd backend && python -m unittest discover -s tests` 在改動**前後各跑一次並比對**：新增數 == 本單元新增的測試數；**既有項零失敗**
-- [ ] 寫 `code-summary.md`（含突變表與其紅燈訊息）
-- [ ] 寫 `source-manifest.json`（嚴格 schema，列出全部 10 個應用程式檔）
-- [ ] 寫 `traceability.json`
+- [x] `cd backend && python -m unittest discover -s tests` 在改動**前後各跑一次並比對**：新增數 == 本單元新增的測試數；**既有項零失敗**
+- [x] 寫 `code-summary.md`（含突變表與其紅燈訊息）
+- [x] 寫 `source-manifest.json`（嚴格 schema，列出全部 10 個應用程式檔）
+- [x] 寫 `traceability.json`
 
 ## 三、故事 ↔ 步驟追溯
 

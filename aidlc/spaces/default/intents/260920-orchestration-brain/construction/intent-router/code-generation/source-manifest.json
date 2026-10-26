@@ -23,6 +23,12 @@
     { "path": "deploy/render-env.sh" },
     { "path": "deploy/docker-compose.deploy.yml" },
     { "path": "deploy/docker-compose.test.yml" },
-    { "path": "LOCAL-DEV.md" }
+    { "path": "LOCAL-DEV.md" },
+    { "path": "backend/services/brain_gateway.py" },
+    { "path": "backend/services/brain_gateway_rules.py" },
+    { "path": "backend/tests/brain_gateway_fakes.py" },
+    { "path": "backend/tests/test_brain_gateway_turn.py" },
+    { "path": "backend/tests/test_brain_gateway_memory.py" },
+    { "path": "backend/tests/test_brain_gateway_rules.py" }
   ]
 }

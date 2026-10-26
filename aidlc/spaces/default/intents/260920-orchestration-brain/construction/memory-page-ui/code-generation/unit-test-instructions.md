@@ -85,6 +85,18 @@ cd frontend && npx playwright test tests/e2e/memory-page.spec.ts --list
 | E9 | 內容為 `<img src=x onerror=window.__xss=1>` 的記憶以文字顯示、`window.__xss` 未定義 | 引入 `dangerouslySetInnerHTML` |
 | E10 | 進頁→離開→再進，再次發出 3 個 `GET`；`localStorage`／`sessionStorage` 鍵集合無新增；console 不含種子記憶內容 | 跨頁快取或落地（`NFR4.90`／`NFR7.90`／`SEC-U15-5`） |
 
+### 四之三、合併前必修第 6 項（Request Changes 修訂，計畫 §四之一）
+
+同一支 `tests/e2e/memory-page.spec.ts`、同一個 `describe`，新增 3 個：
+
+| # | 案例 | 會真的失敗的條件 |
+|---|---|---|
+| E11 | `DELETE` 回 404，重讀該區當前頁已不含該則 → 該列消失並播報（`BR34.5` 保留） | 404 後不重讀或不移除 |
+| E12 | `DELETE` 回 404，重讀仍含該則 → 顯示刪除失敗、該列保留 | 404 一律當成已刪除（缺陷本身） |
+| E13 | `DELETE` 回 404，重讀回 500 → 顯示刪除失敗、該列保留 | 重讀失敗時誤判為已刪除 |
+
+本機實跑：`cd frontend && npm run build && npx vite preview --port <port>`，另開 `BASE_URL=http://localhost:<port> npx playwright test tests/e2e/memory-page.spec.ts`（全部以 `page.route()` 攔截，不需完整 stack）。突變「404 一律 `'already-gone'`」→ E12 紅。
+
 ## 五、Mock／Stub 指引
 
 | 對象 | 做法 |

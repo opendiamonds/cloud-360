@@ -35,7 +35,9 @@
     "OPEN-ND9-2",
     "OQ-13",
     "R-01",
-    "R-02"
+    "R-02",
+    "MB-11",
+    "MB-17"
   ],
   "coverage": [
     {
@@ -138,7 +140,7 @@
       "id": "OPEN-ID9-4",
       "status": "OK",
       "target": "backend/scripts/purge_dry_run.sql",
-      "note": "不可逆操作的前置驗證。workflow 的 dry_run 輸入預設 true（只影響手動觸發；排程一律走實際清除），DEPLOY.md 第 2.2.11 節寫明首次啟用前的程序｜另涉及：DEPLOY.md"
+      "note": "不可逆操作的前置驗證。workflow 的 dry_run 輸入預設 true（只影響手動觸發；排程一律走實際清除），DEPLOY.md 第 2.2.11 節寫明首次啟用前的程序｜另涉及：DEPLOY.md｜2026-10-23 依第 17 項重新裁決更新時序：workflow_dispatch 在 ut 併入 main 前不可用，dry-run 改於併入 main 後立即在 main 上執行；因記憶為新功能，部署日＋90 天前排程選取皆為零列，故 dry-run 仍先於第一次實際刪除（code-generation review-03 Major）"
     },
     {
       "id": "OPEN-ID9-3",
@@ -241,6 +243,18 @@
       "status": "N/A",
       "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/hierarchy-data/nfr-requirements/security-requirements.md",
       "note": "擁有者為 hierarchy-data／hierarchy-service 單元。本單元不碰專案階層。"
+    },
+    {
+      "id": "MB-11",
+      "status": "OK",
+      "target": "backend/tests/test_system_account_protection.py",
+      "note": "合併前必修第 11 項（裁決：程式擋下＋列表隱藏）。實作 backend/services/system_accounts.py ＋ backend/services/user_router.py（刪除、改角色、啟停用、授權申請核准／拒絕回 409；GET /list 查詢層排除）。測試 A1–A7；兩項突變皆致紅後還原。未涵蓋：GET /api/collab/users 仍列出保留帳號；資料庫層直接 DELETE 仍可行。"
+    },
+    {
+      "id": "MB-17",
+      "status": "Deferred",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/functional-design/merge-blockers.md",
+      "note": "合併前必修第 17 項。2026-10-20 的裁決（併入 main 前以 workflow_dispatch、ref=ut 手動觸發過渡，屬人工義務）經查無法執行：GitHub 文件 workflow_dispatch 一節逐字『This event will only trigger a workflow run if the workflow file exists on the default branch』，而 origin/main 沒有兩支 workflow。DEPLOY.md 過渡程序未寫入。2026-10-23 使用者重新裁決：接受延後並設期限——本分支第一次部署到 staging 後，ut 須在 90 天內併入 main（記憶為新功能，部署前無資料，期限內不會有資料超過保存期）；已寫入 DEPLOY.md §2.2.11。屬持續中的人工義務，故維持 Deferred。"
     }
   ],
   "open_items": [

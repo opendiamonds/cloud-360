@@ -112,7 +112,7 @@
       在既有的「套用兩次 `schema_rbac.sql`」之後加一個步驟執行本單元的斷言檔。
       **刻意不改 job 的 `id` 與 `name:`**，理由見 §四之二（check name 風險）。
 
-- [x] **Step 7 — 突變驗證**：逐條把 DDL 改錯、確認對應斷言紅燈、還原複驗。
+- [ ] **Step 7 — 突變驗證**：逐條把 DDL 改錯、確認對應斷言紅燈、還原複驗。
       每一項突變都要先確認 **DDL 真的改變了**（`U5` 的 `M1` 踩過「突變本身是 no-op」）。
 
 - [x] **Step 8 — 文件與追溯**：`code-summary.md`、`source-manifest.json`、
@@ -224,3 +224,13 @@ Step 6 擴充既有的 `memory-schema` job（它已有 `pgvector/pgvector:pg18` 
 |---|---|
 | **Approve Plan** | 八個步驟與三個決定如上，開始實作。 |
 | **Request Changes** | 某項要改。常見的：§四之二 的 CI job 改名與否；§四之一 的九欄回補是否該改由上游先修 `entities.md`；§四之三 的索引是否現在就建。 |
+
+## 七、code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。逐項對照「單元」欄：**19 項中沒有一項劃給 `project-meta-data`**。與本單元資料表相關者：
+- 第 15 項（首次部署後、回填 `project_members` 之前擁有者被拒）劃給 `membership-service`；回填是資料寫入與部署順序，不改本單元的 DDL。若該單元選擇把回填併進本單元的 `run_meta_schema_migration.py`，在其計畫中處理並註明。
+- 第 1、4、10 項（自動改選）寫的是本單元建的 `reselection_events`，但修法在改選邏輯（`membership-service`），不改表結構。
+
+另記兩個自本計畫核可後已改變的事實（不改步驟）：§四之三 的 `ix_project_members_user_id` 已由 `U23` 建立；其條件 ②「使用者硬刪除行為是 `OQ-H1`、上游未決」已由 `hierarchy-data` 本輪的必修第 3 項裁決作成（空預設專案隨使用者清除、其餘參照回 409），`schema_rbac.sql` 的對應 COMMENT 已更新。
+
+因此本計畫**不新增步驟**，本輪只重新查驗八個步驟並跑測試。需要真實 PostgreSQL 的斷言（`verify_meta_schema.sql`），本機若無可用的 Docker 或 PostgreSQL，以 CI 的 `memory-schema` job 判定或據實記為本輪未驗。

@@ -238,6 +238,34 @@ demo-scope 頁面。設計文件寫的處置是「同一個 PR 內二擇一」�
 
 **追溯**：本步驟承載整個單元的可稽核性
 
+### Step 12 — 合併前必修第 2 項：非輪次 `error`（Request Changes 修訂）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 2 項（`functional-design/reviews/review-05.md` R-01，Critical，「設計與程式一起錯」）。使用者裁決：**`error` 的 `turnId` 改為可為空**（不另立非輪次錯誤型別）。
+
+**缺陷**：四種情境必須回 `error` 卻不屬任何一輪——(1) `BR2.13` 客戶端封包帶 `turnId` 時的 `INVALID_REQUEST`；(2) `set_sharing_mode` 失敗；(3) `set_work_target` 授權或解析失敗；(4) `BR2.8` 連線建立後的 `UNAUTHORIZED`。現行 `brain_ws_contract.py:370` 的 `ErrorPayload.turnId: str` 與 `:582-590` 把 `ERROR` 放進 `_TURN_SCOPED_TYPES`、`:738-751` 強制非 null，使伺服器只能捏造編號（`brain_gateway.py:1127-1131` 的 `_send_single_error` 現在就以 `_mint_turn_id()` 捏造）。
+
+**新規則（本單元的契約落點）**：
+- `error` 自兩集合中移出，成為**第三類「可為 null」**：envelope `turnId` 為 `str|None`；`ErrorPayload.turnId` 改為 `str|None`（必填鍵、值可為 null）。
+- 判準：屬於某一輪的錯誤（輪內處理失敗、`empty`）帶該輪 `turnId`；回應狀態類客戶端訊息、協定違規、連線層授權失敗時為 `null`。
+- `BR1.5` 保留並涵蓋 null：`error` 的 `payload.turnId` 必須**等於** envelope `turnId`（兩者同為 null 或同為同一值）。
+- `BR1.6` 的互斥窮盡斷言改為**三集合**（輪次／非輪次／`error` 可為 null）互斥且窮盡九個 type，import 時 fail-fast 保留。
+
+- [x] `backend/services/brain_ws_contract.py`：`ErrorPayload.turnId` 改 `Optional[str]`，description 寫明上述判準；`ERROR` 移出 `_TURN_SCOPED_TYPES`，新增 `_EITHER_SCOPED_TYPES = {ERROR}`；互斥窮盡斷言改三集合；`_br1_6_turn_id_partition` 對 `error` 不檢查 null 與否；`BR1.5` validator 對 `error` 比對兩者相等（含同為 null）；模組 docstring 與 `:576-581` 註解同步
+- [x] `backend/tests/test_ws_contract.py` 新增測試：(a) 可構造 `turnId=None` 的 `error` envelope（payload 亦 null）且通過驗證；(b) envelope null 而 payload 非 null → 拒絕（`BR1.5`）；(c) envelope 非 null 而 payload null → 拒絕；(d) 輪次內 `error` 仍可帶非 null 且兩者相等；(e) `done`／`token` 的 null 仍被拒（確認只放寬 `error`）；(f) 三集合互斥且窮盡九個 type
+- [x] 跑 Step 2 的指令確認綠燈；**突變驗證 M6**：把 `ERROR` 放回 `_TURN_SCOPED_TYPES` → 測試 (a) 必須紅 → 還原；**M7**：拿掉 `BR1.5` 對 `error` 的相等檢查 → (b)／(c) 必須紅 → 還原
+- [x] `python3 backend/scripts/dump_ws_contract.py` 重產 repo 根 `ws-contract.json`，`--check` 綠
+- [x] `npm run gen:ws-types` 重產 `frontend/src/types/ws-contract.d.ts`，`npm run check:ws-types` 綠
+- [x] 跑 `npm run lint` 與 `npm run build`：若型別放寬使既有消費端（`frontend/src/brain/useBrainConnection.ts:169-170`、`brainTranscript.ts:289`、`testing/wsFrames.ts:51`）**編譯失敗**，只做讓型別成立的最小修正（例如以 `turnId ?? null` 傳遞），**不改其顯示行為**——非輪次錯誤在畫面上如何呈現屬 `U14 entry-page-ui`，在該單元處理
+- [x] 完整後端套件以 `backend/.venv/bin/python -m unittest discover -s tests`（在 `backend/`）跑綠（含 `U13` 既有測試，確認放寬不破壞閘道）
+- [x] `code-summary.md` append「合併前必修第 2 項」一節：改動、六個新測試、M6／M7 結果、以及下列交接
+
+**交接（不在本單元修，寫進 `code-summary.md`）**：
+- `U13 brain-gateway`：`_send_single_error`（`brain_gateway.py:1127-1131`）不得再以 `_mint_turn_id()` 捏造，四種非輪次情境改送 `turnId=None`，並補 TestClient／WS 測試。屬第 2 項在 `U13` 的落點，於該單元的計畫中處理。
+- `U14 entry-page-ui`：消費端對 `turnId=null` 的 `error` 的呈現（不歸入任何一輪的提示）。
+- 上游 `functional-design` 的 `entities.md`（`ErrorPayload.turnId`、`WsEnvelope.turnId`）與 `rules.md`（`BR1.5`、`BR1.6`、`BR2.8`、`BR2.13`）**不回改**（`team.md` 規則：下游不回改已核可上游）；本節即為對齊修正紀錄，現行契約以 `brain_ws_contract.py` 與 `ws-contract.json` 為準。
+
+**追溯**：`merge-blockers.md` #2、`review-05` R-01；`BR1.5`、`BR1.6`、`BR2.8`、`BR2.13`
+
 ---
 
 ## 步驟 ↔ 故事追溯

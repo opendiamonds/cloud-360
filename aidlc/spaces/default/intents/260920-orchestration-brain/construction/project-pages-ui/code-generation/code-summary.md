@@ -337,3 +337,87 @@ docker exec -i <db-container> psql -U postgres -d cloud360 -c "SELECT indexname 
 
 應用程式檔集合未增減（只修改既有的 `DEPLOY.md`、`ProjectDetailPage.tsx`、`RequirementsTab.tsx`、`project-pages.spec.ts`），`source-manifest.json` 仍為 39 筆。
 
+## 十五、合併前必修第 14 項：成員與需求欄位端點不洩漏專案／系統是否存在（計畫 §九 Step 16–20）
+
+> 完成時間 2026-10-24T06:44:33Z（`date -u +%Y-%m-%dT%H:%M:%SZ` 取值）。使用者裁決 `[PP-MB14]`=A（2026-10-24）。零 DDL、零新環境變數、零新依賴。
+
+### 十五之一、實作（Step 16、Step 18）
+
+| 檔 | 改動 |
+|---|---|
+| `backend/services/membership_facade.py` | `_require_project_role`：非成員（`resolve_project_role` 回 `None`）改丟 `MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)`，照記 `log_denied`；是成員但非 `project_admin` 仍丟 `MembershipForbidden`（403）。`_assert_project_exists` 三處 `f"查不到專案 {project_id}"` 改為 `PROJECT_NOT_FOUND_DETAIL`（沿用 `hierarchy_facade` 的常數，不另抄字串）。缺 `K2` 轉 404 的行為保留。四個端點（清單、邀請、移出、改角色）共用這兩個方法，故一次涵蓋 |
+| `backend/services/membership_errors.py` | `MembershipNotFound` docstring：原「不用於非成員」改寫為「`resolve_project_role` 仍回 `None`，受保護操作的非成員拒絕改用本例外」 |
+| `backend/services/membership_router.py` | `NOT_FOUND_RESPONSE`／`FORBIDDEN_RESPONSE` 說明改寫（403 不再含「不是該專案的成員」；404 涵蓋非成員） |
+| `backend/services/requirement_field_facade.py` | `_authorize` 非成員：先 `_log_denied(..., "not_member")`（WARNING 照記）再丟 `RequirementFieldNotFound`；拆出 `_log_denied`（只記不拋），`_deny` 改為呼叫它後丟 403 |
+| `backend/services/requirement_field_errors.py` | 新增 `NOT_FOUND_DETAIL = SYSTEM_NOT_FOUND_DETAIL`（沿用 `hierarchy_facade`）；`RequirementFieldNotFound` 訊息一律為「查不到系統」、**不含 id**（`system_id` 仍留在屬性上） |
+| `backend/services/requirement_field_router.py` | `ERROR_RESPONSES` 的 403／404 說明改寫 |
+| `openapi.json`、`frontend/src/types/api.d.ts` | `python3 scripts/dump_openapi.py`（輸出「已寫入 openapi.json」）→ `npm run gen:types` 重產；兩檔各含 7 處「合併前必修第 14 項」（`grep -c`）。**如實記載**：兩檔對 HEAD 的 diff 也含工作樹內其他單元尚未提交的 schema（例如 `DeleteUserConflict`），那是由現行程式碼決定性產出，不是本節新增 |
+| `frontend/src/membership/membershipApi.ts` | 新增 `PROJECT_NOT_FOUND_MESSAGE = '查不到這個專案'` 與 `ProjectNotFoundError`；`fetchMembers` 對 404 丟它（不顯示伺服器訊息）；403 維持原權限句。成員清單頁與成員詳情頁都經 `fetchMembers`，故 `MemberDetailPage.tsx` 不需改碼 |
+| `frontend/src/pages/MembersListPage.tsx` | 註解同步（「`list_members` 對非成員回 404」） |
+
+### 十五之二、測試（Step 17、Step 19）
+
+| 檔 | 案例 | 對應 |
+|---|---|---|
+| `backend/tests/test_membership_endpoints.py` | `test_E1` 非成員兩案 403→404（**方法名不改**）；新增 `test_E11`（四端點 ×「不存在 vs 非成員」status＋`content` 逐位元相同、本體 `{"detail": "查不到專案"}`、不含任一 id、成員列數不變）、`test_E12`（成員但非管理者寫入 403；缺 `K3` 對存在／不存在 id 皆 403 且 `content` 相同）、`test_E13`（非成員 404 後 `membership.denied` 照記） | N1、N2 |
+| `backend/tests/test_membership_facade.py` | `test_F5b`：非成員改斷言 `MembershipNotFound`，訊息與不存在的專案相同 | N1 |
+| `backend/tests/test_requirement_field_facade.py` | `test_F7`／`test_F8`／`test_R3`：非成員改斷言 `RequirementFieldNotFound`；`F8`／`R3` 仍斷言恰一行 `reason=not_member` 的 WARNING | N3、N4 |
+| `backend/tests/test_requirement_field_http.py` | `test_H1` ②⑩⑫ 三列 403→404；新增 `test_H8`（讀寫清三端點逐位元相同、`{"detail": "查不到系統"}`、不含 id、列數不變）、`test_H9`（三次 404 恰三行 `requirement_field.denied`、`reason=not_member`） | N3、N4 |
+| `backend/tests/test_mcp_bridge_e2e.py` | `test_ac11_4_1`：直接存取改為 404，經 MCP 為 `not_found` 且 `message` 等於直接存取的 `detail`；`test_every_branch_and_success_leak_nothing` 的 `forbidden` 分支改由缺 `K4` 的成員（`no_k4`）承擔，另加 `not_found (非成員)` 分支（subTest 標籤，非 TCMS 案名） | N5 |
+| `frontend/tests/e2e/member-pages.spec.ts` | 新增 `shows a fixed not-found sentence without the project id when the member list is 404`（清單與詳情皆顯示「查不到這個專案」，頁面文字不含專案編號 48213 與舊形狀 detail）、`keeps the permission sentence when the member list is 403`；stub 加 `membersErrorBody` 選項 | N6 |
+
+### 十五之三、重跑結果（Step 20 閘門）
+
+| 指令（`backend/` 內皆帶 `HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp PYTHONDONTWRITEBYTECODE=1 python3 -B`） | 結果 |
+|---|---|
+| 修改前基準：`-m unittest tests.test_membership_endpoints tests.test_membership_facade tests.test_project_visibility_endpoints tests.test_requirement_field_facade tests.test_requirement_field_http tests.test_mcp_bridge_e2e` | `Ran 76 tests` OK |
+| 只改實作、尚未改測試，同一指令 | `FAILED (failures=13, errors=6)`（全部是預期改變的非成員案） |
+| 改完測試，同一指令 | `Ran 81 tests` OK（新增 E11、E12、E13、H8、H9） |
+| `-m unittest discover -s tests` | `Ran 1319 tests` OK（`skipped=3`） |
+| `python3 -B scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」exit 0 |
+| `npm run check:types` | 「API 型別檔與規格檔一致。」 |
+| `npm run lint` | `✖ 2 problems (0 errors, 2 warnings)`（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，同既有基準） |
+| `npx tsc -b` | exit 0 |
+| `npm run build` 後 `npx vite preview --port 4791`；`BASE_URL=http://localhost:4791 npx playwright test tests/e2e/member-pages.spec.ts` | `13 passed` |
+| 同上，`tests/e2e/project-pages.spec.ts`（回歸） | `23 passed` |
+| repo 根：`python3 scripts/validate_repo_contract.py`／`validate_env_contract.py` | 皆 passed |
+
+### 十五之四、突變（套用 → 紅 → 還原 → sha256 對照基線 → 綠；後端帶 `HYPOTHESIS_NO_SHRINK=1`）
+
+還原一律以檔案編輯工具逆向改回，**未用 `git checkout`**（工作樹含 Step 1–15 尚未提交的改動，checkout 會一併抹掉）。
+
+| 代號 | 突變 | 套用後（指令 → 紅） | 還原後 sha256（＝基線） | 綠 |
+|---|---|---|---|---|
+| `M14-1` | `membership_facade._require_project_role` 非成員改回 `raise MembershipForbidden(...)` | `-m unittest tests.test_membership_endpoints` → `FAILED (failures=6)`：`test_E1`、`test_E11`（GET／POST／DELETE／PATCH 四個 subTest）、`test_E13` | `0779d0f5…eea72ac` | `Ran 13 tests` OK |
+| `M14-2` | `_assert_project_exists` 不存在分支改回 `f"查不到專案 {project_id}"` | `tests.test_membership_endpoints tests.test_membership_facade` → `FAILED (failures=5)`：`test_E11` 四個 subTest、`test_F5b` | `0779d0f5…eea72ac` | `Ran 29 tests` OK |
+| `M14-3` | `requirement_field_facade._authorize` 非成員改回 `self._deny(..., "not_member")`（403） | `tests.test_requirement_field_http tests.test_requirement_field_facade tests.test_mcp_bridge_e2e` → `FAILED (failures=16, errors=5)`：含 `test_H8` 三個 subTest、`test_H9`、`test_H1` ②⑩⑫ 九個 subTest、`test_F7` 三個、`test_F8`、`test_R3`、`test_ac11_4_1`、leak 測試 `not_found (非成員)` 兩個 mode | `0d7e4f37…e5557056` | `Ran 36 tests` OK |
+| `M14-4` | 拿掉非成員的 `self._log_denied(...)`（只丟 404） | 同上指令 → `FAILED (failures=3)`：`test_H9`、`test_F8`、`test_R3` | `0d7e4f37…e5557056` | `Ran 36 tests` OK |
+| `F14` | `membershipApi.fetchMembers` 的 404 改回 `throw new Error(detailMessage(body, '讀取成員失敗'))`（顯示伺服器訊息） | 重 build 後 member-pages e2e → `1 failed, 12 passed`：`shows a fixed not-found sentence without the project id when the member list is 404` | `7d2ac75c…3059dbb` | 重 build 後 `13 passed` |
+
+### 十五之五、取代關係與殘留
+
+- **取代**：`../carried-review-items.md:41` 的「R-01 使用者裁決：接受為殘留……U19 成員清單與 U20 需求欄位端點仍以 404／403 區分」由本節取代（合併前必修第 14 項，`[PP-MB14]`=A）。該檔與已凍結的設計檔**不回改**；`security-design.md` §八 殘留第 4 項同樣以本節為準。
+- **殘留 1**：`membership_service.lock_project`（`:259`）與 `assert_still_has_admin`（`:667`）仍以 `f"查不到專案 {project_id}"` 拋 404；`change_role` 對目標非成員回「使用者 X 不是專案 Y 的成員」。三者只在呼叫者**已通過管理者判定**之後才可達（併發刪除或目標不在專案內），呼叫者已知該專案存在，不構成存在性探測；本節不改。
+- **殘留 2**：「零成員列專案的擁有者」在階層端點可見（`BR87.1` 的擁有者分支），但成員端點以**成員列**判定，故他打成員頁由 403 變為 404「查不到專案」。行為面同樣是拒絕，只是狀態碼改變；與階層端點的可見語意不一致屬既有設計（成員頁只認成員列），本節未擴大。
+- **殘留 3**：前端寫入端點（邀請、移出、改角色）的 404 仍顯示伺服器 `detail`——後端該字串已改為不含 id 的「查不到專案」，故不洩漏編號；計畫只要求清單與詳情改固定句。
+- **ADR-0006 四面向**：IAM——授權判定順序與結果（放行／拒絕）不變，只改非成員拒絕的對外狀態碼與訊息；稽核——兩處拒絕 log 照記，各有測試鎖住（`test_E13`、`test_H9`，`M14-4` 紅燈證實）；網路暴露——收窄（少一個存在性訊號），無新端點；加密——不適用（無資料存放或傳輸變更）。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T02:45:33Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。
+
+- **計畫勾選**：47／47。勾選時留意的偏離（不構成不符）：`ALWAYS_VISIBLE` 寫成帶 docstring 的 `def`（語意相同）；`DEPLOY.md` 部署步驟比計畫多一步 `compose cp schema_rbac.sql`（R-01 的修正，容器內 `REPO_ROOT` 為 `/`、build context 只有 `backend/`，照計畫原指令會失敗）；Step 13「零變更」以 U23 commit `8677b7d` 判定，工作樹內同類檔的改動屬其他單元。
+- **測試**（工作樹含其他單元未提交改動，數字為此工作樹上的結果）：
+  - 後端全套 1319 OK（skipped=3）；本單元五檔 membership_data 12、visibility_queries 9、visibility_static 6、visibility_endpoints 16、write_guard 22 皆 OK；11 模組加 `test_requirement_field_http` 合跑 192 OK；`dump_openapi.py --check` 一致。
+  - 前端 `npm run lint` 0 errors（2 個既存 `exhaustive-deps`：`AssessmentPage:395`、`WorkspacePage:344`）；`check:types`、`check:ws-types` 一致；兩份 tsconfig `--noEmit` 通過；`vite build` 輸出至 scratchpad。
+  - e2e（page.route mock，對 scratchpad build 的 `vite preview`）：`project-pages.spec.ts` 23 ＋ `member-pages.spec.ts` 14，共 37 passed。
+  - `validate_repo_contract.py`、`validate_env_contract.py` 通過；repo 內未留下新的快取或建置產物。
+- **突變抽驗**（scratchpad 副本，還原後 sha256 與基線相同）：G1、M6、N1（facade 守門）、M14-1、D1、F3 皆紅→綠。**存活一道**：把 `hierarchy_service.assert_project_owned_by` 的訊息改回帶 id 全綠——該位置在守門之後，只有「可見但非擁有者的成員」會走到，本就知道專案存在，不構成存在性探測；但計畫 §五 對 N1「任一處改回…→該路徑的逐位元比較案紅」的字面說法過強。
+- **合併前必修第 14 項**：已落地並實測通過（非成員 404 不含 id、角色不足仍 403、拒絕 log 照記；前端清單／詳情與三個寫入函式皆顯示固定句「查不到這個專案」）。第 23 項（`MembersListPage.tsx:55` 非數字 `projectId` 停在載入中）仍待處置、屬 member-pages-ui；本單元頁首 `[成員]` 連結一律帶數字 id，使用流程碰不到。
+- **ADR-0006 四面向**：IAM（`K2` 只在 `HierarchyFacade`、寫入順序為授權→可見性守門→擁有者→service）、Encryption（無新持久資料或傳輸，新檔瀏覽器儲存 API 0 命中）、Network exposure（無新端點）、Audit logging（刪除成功記 `actor_user_id`、非成員拒絕記 WARNING）皆與前文一致。
+- **前端結構約束**：未新增 Context；資料抓取兩層（純抓取函式＋`.then` 更新＋`cancelled` 旗標）；state 一律回傳新物件。
+- **grep 判準**：與前文一致（facade／service 不 import membership、`_visible_project_ids_select` 恰 1 處、`ix_project_members_user_id` 四處同步、前端新檔 `console.` 0、`FANOUT_CONCURRENCY` 恰 1 處）。
+- **本摘要既有文字的過時處（原文不回改）**：§一、§五 全套結果「1157 FAILED」已由 §十五 的 1319 OK 取代；§一 lint 行號 `:365`／`:302` 現為 `:395`／`:344`；static 5 案現 6（U14 加 `S3b`）、membership_data 9 案現 12；§十五 member-pages「13 passed」現 14；§十五 殘留 3「寫入端點 404 仍顯示伺服器 detail」已被 review-02 R-07 推翻（三個寫入函式改丟 `ProjectNotFoundError`），處置見 merge-blockers 第 14 列。`traceability.json` 中 `AC12.5.2` 有後端與畫面兩列，為重複列而非缺口。
+

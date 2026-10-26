@@ -198,3 +198,110 @@ conductor 逐檔比對**內容與權限差異皆為 0**），但 `.pyc` 內嵌�
 而 `STAGE_JUMPED` 是全 stage 共用的 floor，會作廢 `nfr-requirements`／`nfr-design`／
 `infrastructure-design` 三站已 commit 的收據。經使用者裁決不付這個代價。
 **審查本身完整跑完且六項發現全數處置**——缺的是簿記，不是覆蓋。
+
+## 重新查驗（Request Changes 後）
+
+查驗時間：`2026-10-20T06:13:32Z`（`date -u` 取值）。查驗基準：HEAD `fa51564`。
+
+### 觸發原因
+
+使用者對整個 code-generation 站送出 Request Changes，原文：
+
+> 「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」
+
+引擎因此把本單元計畫檔的勾選全部重設為未勾。本單元程式早在 `7ce1bee` 落地，本輪**不改任何應用程式碼**，只逐項對照 repo 現況重新查驗並勾回。
+
+### 19 項合併前必修與本單元的關係
+
+- `merge-blockers.md` 的 19 項中，**劃給 `brain-infra` 的為 0 項**。
+- 第 18 項（Redis `maxmemory 256mb`＋`noeviction` 的容量）劃給 `session-store`／`work-orchestrator`。設定雖位於本單元交付的 `deploy/docker-compose.deploy.yml`，**本輪不修改它**，留待 `session-store` 由人裁決。
+
+### 逐步查驗摘要（43 個勾選：勾回 42、未勾 1）
+
+| Step | 結果 | 查驗依據（開檔實看） |
+|---|---|---|
+| 1 | 3／3 勾回 | `unit-test-instructions.md` 第三節有本單元專屬命令；兩支 validator 可執行。**註**：本機 PATH 無 `python`，只有 `python3`（3.13.7），所有命令以 `python3` 執行 |
+| 2 | 2／2 | `schema_rbac.sql:63` 為 `CREATE EXTENSION IF NOT EXISTS vector;`；`backend/database.py:89` 呼叫 `_ensure_vector_extension()`，`:90` 才是 `create_all()`（計畫寫的 `:76` 已因後續單元位移，判準不變） |
+| 3 | 2／2 | 測試檔存在，見下方命令結果 |
+| 4 | 3／3 | `render-env.sh:75` 必填檢查、`:92` `$` 擋阻名單含 `REDIS_PASSWORD`；heredoc `:131–137` 寫出七個變數（計畫的 `:44–49`／`:59` 已位移） |
+| 5 | 2／2 | 測試檔存在，見下方命令結果 |
+| 6 | 6／6 | `backend.environment:` 七者無 `:-`（`:117–123`）；`redis`／`ollama` 服務、`edge`／`internal` 分段、`db_pg18`／`redis_aof`／`ollama_models` 三個 volume、全服務 `logging:` 與 `memory:`、兩個新 `healthcheck`、兩者 `restart: unless-stopped`、backend 對 `redis`（`service_healthy`）與 `ollama`（`service_started`）兩條 `depends_on`；`cloudflared` 只在 `[edge]`。ACL 資產採 `command:` 的 `--user` 旗標（`:277–291`），與原交付相同形式 |
+| 7 | 2／2 | test compose：Redis 三者 ＋ `EMBEDDING_PROVIDER: stub`、`redis` 服務含自己的 ACL、無 `ollama`、無 AOF／`maxmemory`／具名 volume、只有 `redis` 有 `restart:`、backend 只有 `db`／`redis` 兩條 `depends_on`（`redis` 那條是本單元新增的唯一一條）、db 映像 `pgvector/pgvector:pg18` |
+| 8 | 2／2 | root `docker-compose.yml:17` 為 `pgvector/pgvector:pg18`；無 `logging:`／`networks:`／`memory:`，`ports:` 保留 |
+| 9 | 2／2 | 兩份 `.env.example` 皆以未註解 `KEY=` 列出七個變數 |
+| 10 | 4／4 | 探測步驟（`:313`）以 401 為通過；rollback 迴圈寫 `restored=` 不用 `exit`；`git blame` 確認本單元（`7ce1bee`）在 `env:` 只新增 `REDIS_PASSWORD`（`:75`／`:112`／`:682`），`:76` 的 `OPENROUTER_API_KEY` 由後續 `fa8ce42`（U13）加入，非本單元；`ollama pull` 步驟（`:250`）用 `exec -T` 並區分兩情形 |
+| 11 | **2／3** | 兩支 validator 綠；**全套 unittest 非全綠，未勾**——見下方 |
+| 12 | 3／3 | `DEPLOY.md` §2.2 表列 vector 擴充、§2.2.6、§5（5.1–5.11）；英文半部 `### Database` 有 vector 一句 |
+| 13 | 3／3 | `LOCAL-DEV.md` 第 0 節硬依賴表、H4（pgvector ＋ `pg_available_extensions` 檢查）、H5（`postgres_data` 跨大版本處置） |
+| 14 | 3／3 | 見下方 `gh api` 結果 |
+| 15 | 3／3 | `source-manifest.json` 13 個路徑全部存在；`traceability.json` 46 列（OK 40／N/A 4／Deferred 2），**每個 `OK` 指向的檔皆存在**（9 個不同目標）；本檔存在 |
+
+### 各命令的實際結果
+
+| 命令 | 結果（取自實際輸出） |
+|---|---|
+| `python3 -m unittest tests.test_vector_extension_bootstrap tests.test_render_env_redis -v`（`backend/`） | `Ran 16 tests in 0.587s` → `OK` |
+| `python3 scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.`，exit 0 |
+| `python3 scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.`，exit 0 |
+| `python3 -m unittest discover -s tests`（`backend/`） | `Ran 1204 tests` → `FAILED (failures=28, skipped=1)`；`ERROR:` 類測試 0 個 |
+| `gh api repos/opendiamonds/cloud-360/actions/secrets`（只取名稱） | 13 個名稱，**含 `REDIS_PASSWORD`** |
+| `gh api repos/opendiamonds/cloud-360/actions/variables`（只取名稱） | 2 個名稱，**不含 `REDIS_PASSWORD`** |
+
+**全套 28 個失敗的歸屬**：28 個 `FAIL:` 全部在 `test_mcp_bridge_app`／`test_mcp_bridge_e2e`／`test_mcp_bridge_topology`（U21 `mcp-bridge`），以 `grep -v mcp_bridge` 篩後為 0。失敗訊息逐字為「mcp 版本為 1.29.0，本單元釘選 2.3.0。請在 backend/ 執行：pip install -r requirements.txt」——本機安裝的 `mcp` 為 1.29.0，`backend/requirements.txt:71` 釘 `mcp==2.3.0`。這是**本機環境與釘選版本不符**，不是本單元缺陷，也不在本單元的檔案範圍；本輪不擅自安裝套件。Step 11 第三格因此**維持未勾**，待在依賴已同步的環境重跑全綠後再勾。
+
+**`gh api` 判定**：`REDIS_PASSWORD` 在 secrets、不在 variables，二元判準成立。它從未以 variable 形式存在（2026-09-27 那次查詢兩處皆無，本次只在 secrets），故「誤存為 variable 須重新產生金鑰」的條件**未觸發**，`OPEN-1` 的「尚不存在」已由現況解除。輸出的值一律未轉錄，只看名稱。
+
+### 後續單元對本單元檔案的變更（如實記錄，不屬本單元缺陷）
+
+`git log --oneline 7ce1bee..HEAD -- <source-manifest.json 的 13 個路徑>` 共 21 筆：
+
+```
+624c170d 功能(entry-page-ui): U14 大腦入口頁、脈絡列與子頁面大腦面板
+8677b7d0 功能(project-pages-ui): U23 專案頁、成員可見性與寫入路徑守門
+763a45af 功能(mcp-bridge): U21 MCP bridge 與需求欄位工具
+fa8ce421 功能(brain-gateway): U13 大腦 WebSocket 入口與契約增量
+6dff4d45 功能(requirement-fields): U20 需求欄位服務與代寫者欄收斂
+c2e5687a feat: add script to validate embedding provider values during deployment
+c3d9ef8f 文件(local-dev): 補完 cli 模式退役的同步，並修掉一個會誤判新舊碼的排錯判準
+9781a97a 修正(llm): 移除已退役的 LLM_PROVIDER=cli 模式，消除靜默失敗
+369a5468 整合(merge): 併入 ut（含 #683 成本工作區最佳化）
+b4f0cdc3 重構(a3): Assessment Review/Lens 改走 LangGraph 並修正串流 state
+5fd8f14f 功能(cost): 上傳前工作負載表單並送交 AI 建議
+c282a88a 整合(merge): 將 origin/ut 併入 c1-workspace-optimize
+f06dd1e7 整合(deps): 併入 ut（含 #678 LangGraph 遷移），並修正相容改寫指向未安裝的驅動
+b6ed2390 fix(env): 在 backend/.env.example 補充 DESIGN_LLM_MODEL 並優化 validate_env_contract 的目錄排除
+4b589eb5 修正(deps): 以 psycopg v3 ＋ 顯式 driver 根治，移除 sqlalchemy<2.1 釘版
+fd4d8ea1 Merge remote-tracking branch 'origin/danniel/fix/postgres-driver-psycopg3' into danniel/docs/orchestration-brain-ideation
+4194cd28 修正(database): 自動相容 postgresql 連線字串的 psycopg2 驅動
+bc4eb69d 修正(deps): psycopg stub 補上 __version__，並記載驅動升級的本機步驟
+c80aba97 修正(deps): PostgreSQL 驅動改用 psycopg v3，並以 URL 顯式指定不依賴隱含預設
+9e141456 功能(hierarchy-data): projects／systems／diagram_change_records 三表與一次性遷移
+74ed2cc5 功能(cost): 官方估價教學彈窗與目錄 SKU 規格描述
+```
+
+需特別記下的三處語意變動：
+
+1. **`--maxmemory-policy` 已由 `allkeys-lru` 改為 `noeviction`**（`git log -S noeviction` 指向 `c2e5687a`；compose 註解引 `NFR4.50`／`[N3]=A`）。Step 6 第四格依原交付形狀（`command:` 含 `--appendonly yes`＋`--maxmemory`＋policy 旗標）勾回，**但 policy 值已被後續決定改變**。本單元 `traceability.json` 的 `AC2.1.4` 註記與第 1 節故事追溯表仍寫 `allkeys-lru`，屬過期敘述；本輪依指示不改寫既有產出，記於此處。容量本身是第 18 項，歸 `session-store`。
+2. `render-env.sh` 與兩份 `.env.example` 由後續單元加入 `EMBEDDING_TIMEOUT_SEC`、`BRAIN_SESSION_HISTORY_MAX` 等變數（同出自 `c2e5687a`），使計畫引用的行號全部位移；七個本單元變數與其守門判準不變，本單元兩支測試仍綠。
+3. deploy compose 多了第七個服務 `mcp-bridge` 與 `mcp` 網段（`internal: true`，U21），`traceability.json` 的「服務集合差集 `{cloudflared, ollama}`」與 `S-9` 的「deploy 六個服務」計數因此已非現況；`cloudflared` 仍只在 `edge`，D-3 的核心判準不受影響。
+
+另：`c2e5687a` 的 commit 訊息為英文 `feat:`，不符 `team.md` 的中文 type 規則；非本單元產生，僅記錄。
+
+### 本輪副作用
+
+執行測試會重新產生 `backend/**/__pycache__` 與 `backend/.hypothesis`（本輪未設 `PYTHONDONTWRITEBYTECODE=1`）。依本檔第六節所述，若之後要登記本站審查收據，須在跑測試**之後**才記 `REVIEW_REQUESTED`。
+
+### Step 11 第三格補勾（conductor，`2026-10-20T06:22:00Z`）
+
+使用者裁決以獨立環境解決版本不符：建立 `backend/.venv`（已在 `.gitignore`），以 `backend/.venv/bin/pip install -r backend/requirements.txt` 照釘選安裝（含 `mcp==2.3.0`），系統 Python 與依賴舊版 `mcp` 的 `claude-agent-sdk` 不受影響。在該環境重跑 `backend/.venv/bin/python -m unittest discover -s tests`（`backend/`）：`Ran 1204 tests` → `OK`，上述 28 個 `mcp_bridge` 失敗消失。Step 11 第三格據此勾回，計畫 43／43 完成。之後各單元的完整測試一律以 `backend/.venv/bin/python` 執行。
+
+## 重做（Code Generation 自頭重來，2026-10-24）
+
+因審查收據過期（SOURCE_REVIEW_STALE），使用者選擇 Code Generation 自頭重來；本單元計畫於 `2026-10-24T22:01Z` 前後重新核可。本輪**未改動任何應用程式碼**：developer 逐步對照現行程式驗證 15 個步驟，全部判定 verified、無 fixed，後續單元的刻意改動（deploy.yml、compose、`DEPLOY.md`、`LOCAL-DEV.md`）保留不動。
+
+- 單元專屬測試（`backend/`，`HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_vector_extension_bootstrap tests.test_render_env_redis -v`）：`Ran 16 tests … OK`（7＋9）。
+- 全套（同前綴，`discover -s tests`）：`Ran 1319 tests … OK (skipped=3)`。本輪以前綴避免產生 `.hypothesis`／`.pyc`，不再有上一節所述的副作用。
+- `validate_env_contract.py`、`validate_repo_contract.py`：皆 passed。
+- Step 14 secret 複查（只查名稱）：`REDIS_PASSWORD` 在 secrets、不在 variables（variables 僅 `APP_ID`、`GH_AW_DEFAULT_MODEL_COPILOT`），判準成立。
+- 與計畫字面不同但保留的兩處（皆既存、有註解理由）：`--maxmemory-policy` 為 `noeviction`（`NFR4.50`／`[N3]=A`）；ACL 置於 redis 的 `command:` 而非獨立 aclfile（aclfile 不做變數內插、repo 為 public），兩個 stack 各自一份。
+- `source-manifest.json` 的 13 個路徑與 `traceability.json` 的 46 列經複核仍成立，所有 `OK` 列 target 皆存在；`AC2.1.4` 仍為 Deferred。

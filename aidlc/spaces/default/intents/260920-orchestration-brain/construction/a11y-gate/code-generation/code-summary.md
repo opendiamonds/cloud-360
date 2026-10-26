@@ -200,3 +200,54 @@
 | `aidlc-sensor-traceability.ts` | `pass: false`，`findings_count: 1`，`reason: upstream ID set is empty for unit "a11y-gate"`；`gaps`／`orphans`／`invalid_entries`／`invalid_targets` 皆空。該 sensor 的上游集合只取三個來源：本單元故事的 AC（本單元沒有故事）、`nfr-requirements` 內的 `NFRx.y`（本單元用 `A11Y-S*`）、`functional-design/rules.md` 的 `BRx.y`（本單元沒有）。這就是計畫第八節第 5 點揭露的「no NFRx.y」，照實保留，**不補假父 ID**。`traceability.json` 本身：26 OK（每個 target 皆為單一存在的檔案路徑）、1 N/A（`C-05`）、2 Deferred（`D-07`、`AC-A11Y.1`） |
 | `aidlc-sensor-required-sections.ts`（本檔） | `pass: true`，`findings_count: 0` |
 | `aidlc-sensor-linter.ts`（`tests/e2e/a11y.spec.ts`） | `pass: true`，0 errors、0 warnings |
+
+## 十六、Step 16 回歸驗證（code-generation Request Changes 2026-10-20 之後）
+
+執行時間 `2026-10-24T13:25:57Z` 前後（`date -u` 取值）。本輪**不改程式**：只對其他單元本輪修正後的生產建置重跑本單元的 spec。
+
+**指令**（依序，皆在 repo 根目錄執行）：
+
+1. `npm --prefix frontend run build`（`tsc -b && vite build`，成功；僅既有的 chunk 大小警告）
+2. `npm --prefix frontend run preview -- --port 4173 --strictPort`（背景執行；`curl` 首頁回 `200`）
+3. `BASE_URL=http://localhost:4173 frontend/node_modules/.bin/playwright test --config frontend/playwright.config.ts tests/e2e/a11y.spec.ts --retries=0`
+4. 停止 preview 伺服器
+
+**結果**：`Running 24 tests using 1 worker` → **`24 passed (17.0s)`**，0 failed、0 flaky、0 skipped。基準清單兩個檢查（「基準清單只收頁殼既有違規」「基準清單沒有過期條目」）皆綠，過期檢查未誤紅。
+
+**數量與本檔前文的差異**：前文（第一節至第十五節）寫的是 21 個 `test()`／18 個掃描點；本次實跑為 24 個 `test()`：21 個掃描點（`01`–`18`、`20`–`22`，其中 `20 入口頁已連線狀態`、`21 切換對象選單預設態`、`22 切換對象選單建立錯誤態` 為前文之後加入）＋ 1 個手機寬度檢查（`19`）＋ 2 個基準清單檢查。掃描結果檔 `frontend/test-results/a11y-scan-results/*.json` 本次寫出 **21** 個，以 `grep -L '"entries": []'` 查得非空者 **0** 個——即 21 個掃描點全部零違規條目。
+
+**基準清單**：`frontend/tests/e2e/a11y-baseline.json` 執行前後 sha256 皆為 `7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f`，內容為 `"entries": []`，**未新增任何條目**。`git status` 顯示該檔與 `a11y.spec.ts` 皆無異動。
+
+**新增違規**：無。故第四節第 1 類（應修元件）的停損條件未觸發，本單元未改任何他單元元件。
+
+**新狀態的可達性（照實記錄，本步不新增掃描點）**：
+
+| 新狀態 | 落點 | 是否被現有掃描點掃到 | 依據 |
+|---|---|---|---|
+| 系統提示列 `data-testid="brain-system-notice"` | `frontend/src/components/brain/ConversationView.tsx:51-59` | **否** | 只在對話紀錄有 `kind: 'notice'` 項目時渲染；spec 的大腦 WebSocket 接管（`a11y.spec.ts:187`、`:382-385`、`:397-400`）只是空 handler 或在 `hello` 後回送連線快照，沒有任何掃描點送出使用者訊息或非輪次錯誤訊框 |
+| 「這句沒有送達」（`USER_INTERRUPT_TEXT.rejected`） | `ConversationView.tsx:12`、`:24-26` | **否** | 需要對話中先有一則使用者訊息、再被伺服器以非輪次錯誤拒絕；同上，沒有掃描點產生使用者訊息 |
+| 「查不到這個專案」 | `ProjectDetailPage.tsx:54`（以及 `MembersListPage.tsx` 經 `membershipApi.ts:91` 的固定句） | **否** | 觸發條件為 404；spec 唯一的非 200 回應是 `a11y.spec.ts:608` 的 `projectsApi(page, { status: 500 })`（第 17 點專案清單錯誤態），沒有任何掃描點回 404 |
+
+結論：本次全綠只證明**既有 21 個畫面狀態**在本輪修正後沒有出現新違規；三個新狀態**沒有被任何掃描點覆蓋**，axe 對它們零檢查。是否新增掃描點不屬本步範圍，交 `build-and-test` 與使用者決定。
+
+`source-manifest.json`、`traceability.json` 無檔案變更，未動。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T06:11:06Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。
+
+- **計畫勾選**：15／16。未勾 Step 14：計畫字面要求每個 `test()` 都加 `@note`，現行 27 個 test 中 12 個（03、04、06、08、11、12、13、14、15、16、17、22）沒有 `@note`，HEAD 版本同樣缺，屬既存狀況；撰寫標準 §4.4 把 `@note` 列為非必填，`tcms_validate.py --spec a11y.spec.ts` 27/27、ERROR 0、WARN 0。其餘註解齊全（`@api` 0、`@ui` 27 個皆對得上 `App.tsx`）。另：第 21、22 點（U16 加入）的 `@story` 為 `US9.2`，非計畫寫的 `N-9`。
+- **測試**：
+  - 後端全套 1319 OK（skipped=3），無偶發失敗。
+  - 前端 `npm run lint` 0 errors（2 個既存 warning）；兩份 tsconfig `--noEmit` 通過；`vite build` 輸出至 scratchpad。
+  - `vite preview` 跑 `a11y.spec.ts`：27 passed（24 掃描點＋手機寬度＋2 個基準檢查），24 個結果檔皆無違規；加 `CI=1` 再跑亦 27 passed（約 19 秒）。`memory-page.spec.ts` 18 passed。
+  - 真實 compose stack：本機無 Docker，未跑。
+  - `validate_repo_contract.py`、`validate_env_contract.py` 通過；repo 未留下快取或建置產物。
+- **閘門與依賴**：`ui-regression` 以整套 Playwright 執行會撿到 `a11y.spec.ts`，post-step 讀 `pw-report.json` 的 `.stats.unexpected` 非 0 或報告不存在即 `exit 1`；無專屬 a11y 步驟，`ci.yml` 不跑 Playwright。`@axe-core/playwright` 4.13.0 精確釘選於 devDependencies，lockfile 兩條目皆 `dev: true` 且有 integrity；產品建置內 axe 字樣 0。發布日與 `npm audit` 需連 registry，本輪未重驗。
+- **規則集**：axe-core 4.13.0 在 WCAG 2.1 AA 四標籤下為 69 條；landmark 四條、`region`、`heading-order`、`page-has-heading-one` 不執行，`BOUNDARY_RULES` 十條保留。
+- **突變抽驗**（scratchpad 鏡像，repo 未動，還原後 spec sha256 與 repo 一致）：A 重現 Sidebar `text-gray-400` 違規 → 21 紅（include 範圍外的點維持綠，符合預期），餵給 gate 腳本 exit 1；B 拿掉 `/api/brain/ws` 具體接管 → 隔離層紅；C 基準清單加三筆 → 規則 1、5 與過期檢查皆紅；D gate 腳本對 unexpected=0／1／缺檔分別 exit 0／1／1。
+- **ADR-0006 四面向**：皆不適用（無權限、資料、網路或稽核變更；隔離層使測試不連外，突變 B 實證；附件只含 `violations`／`incomplete`，token 為假值）。
+- **其他合併前必修列的影響**：第 23 列 (c) 對話框焦點圈限 axe 無規則可偵測，本閘門擋不到，修完後須重跑第 11、12、15 點；(a) 非數字 `projectId` 的固定句狀態目前無掃描點覆蓋。第 26 列 R-02 的「真實 stack 從未執行」同樣適用本 spec（未在 compose stack 或 CI runner 跑過，CI 耗時未量測）。Sidebar 兩個 `<nav>`（`:162`、`:218`）缺 `aria-label` 對應 `landmark-unique`（best-practice），在本閘門規則集下不執行，只能人工驗證。
+- **本摘要與追溯文件的過時處（原文不回改）**：各處「21 test／18 點／基準 1 筆／`p→paragraph`」已過時，現為 27 test／24 點／基準 0 筆；§十六的 24 test 現為 27；`ContextBar.tsx:53` 現為 `:109`。`traceability.json` 的 A11Y-S9、A11Y-S10、N-9、D-04 note 數字同樣過時，且上游 id 未涵蓋第 21、22 點對應的 U16 項目。`source-manifest.json` 未列 review-02 時本單元改過一個 class 的 `ConversationView.tsx`（該檔歸 entry-page-ui）。計畫與 unit-test-instructions 的「讀回 18 檔」現為 24。

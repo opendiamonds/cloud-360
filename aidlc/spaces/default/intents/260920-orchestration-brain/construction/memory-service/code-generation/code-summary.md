@@ -435,3 +435,182 @@ deliberately_unchanged`），故這五筆「刻意不動」的記載移到本檔
 而那在一個已帶有先前單元未提交改動的工作樹上**永遠不會成立**——
 正確的判準是「**本單元未新增任何東西**」，不是「檔案未被修改」。
 這是計畫自身的一處驗證步驟缺陷。
+
+## 重新查驗（code-generation Request Changes 後）
+
+> 查驗時間：`2026-10-22T23:36:08Z` 開始、`2026-10-22T23:42:01Z` 結束（皆取自 `date -u`）。
+> 本輪**只做重新查驗，未改任何應用程式碼**；本單元的程式檔在工作樹上無未提交改動
+> （`git status --short -- backend/services/memory_*.py backend/tests/test_memory_*.py backend/models.py` 無輸出）。
+
+### 一、觸發原因
+
+使用者對整站送出 Request Changes，原文：
+
+> 「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」
+
+### 二、19 項中本單元 0 項
+
+依計畫第十節的逐項對照，`construction/functional-design/merge-blockers.md` 的「單元」欄**沒有一項劃給 `memory-service`**。與本單元介面相關的兩項：
+
+| 項 | 所屬單元 | 與本單元的關係 |
+|---|---|---|
+| 第 13 項（`intent_routing.py` 以 `except Exception` 吞下記憶讀取的所有錯誤） | `intent-router` | 本單元已以不同例外型別區分「拒絕」與「依賴失敗」（`memory_errors.py` 的 `MemoryForbidden`／`MemoryNotFound` 與其他例外），修法在呼叫端分別處理，不需改本單元 |
+| 第 6 項（前端 `deleteMemoryRecord` 把任何 404 當成已刪除） | `memory-page-ui` | 本單元對「不存在」與「非擁有者」**刻意回同一個 404**（`[D1]`=A，`memory_facade.py:393-410`），前端無法以狀態碼分辨；修法在前端的解讀，不改本單元的回應語意 |
+
+### 三、逐步查驗表
+
+| 步驟 | 結果 | 依據（檔:行或命令） |
+|---|---|---|
+| 1.1 | 成立 | `git diff --stat -- backend/database.py` 無輸出 |
+| 1.2 | 成立 | 兩個單元範圍指令實跑（見第四節）；unittest 以 `backend/.venv/bin/python` 代替 `python3`、psql 以臨時叢集 `127.0.0.1:54328` 代替 `localhost:5432`，指令形狀不變 |
+| 1.3 | 成立（以現況判） | 這是開工前的時點檢查，git 上無法重現：`verify_memory_schema.sql` 與 HNSW 索引都在 `c2e5687` 一次進入歷史，該提交之前沒有可比較的版本。改以本步的目的（避免重複）查證：`schema_rbac.sql` 內 `USING hnsw` 僅 1 處（`:503-504`） |
+| 1.4 | 成立（以現況判） | 同上，無 git 基準。結構可判：檔頭 `:1-2` 仍寫 `S1`–`S12` ＋ `S13`，本單元的 `S14`／`S15` 位於獨立區段 `:299` 起 |
+| 2.1 | 成立 | `models.py:871` `MemoryRecord` 八欄、`:926` `MemoryAuditEvent` 七欄 |
+| 2.2 | 成立 | `models.py:922`／`:962` `{"schema": "memory"}`；SQLite 以 `:828` 的 `ATTACH DATABASE ':memory:' AS memory` 處理，`helpers.py` 未改 |
+| 2.3 | 成立 | `models.py:757-767` 的區塊註解 |
+| **2.4** | **不成立，維持未勾** | 字面要求「不加 `CheckConstraint`」，而 `models.py` 有四條具名 CHECK（`ck_memory_records_kind`／`_content_not_blank`／`_episodic_has_expiry`／`ck_memory_audit_events_action`）。此偏離為刻意，理由見本檔 §三之一（DDL 有的約束 ORM 必須有，`C4` 鎖住） |
+| 3.1 | 成立 | `memory_ranking.py:80` `key=lambda c: (-c.score, c.identifier)` |
+| 3.2 | 成立 | `memory_ranking.py:32-34` import 集合恰為 `__future__`、`typing`；`C1` 綠燈 |
+| 4.1 | 成立 | `memory_service.py:81-98` `SEARCH_SQL`，`:338` 以 `text()` 執行 |
+| 4.2 | 成立 | `LIMIT` 在 `SEARCH_SQL` 內（`:97`），無應用層事後過濾；`S15` ③ 在真實 PG 上通過 |
+| 4.3 | 成立 | `delete_with_audit` 單一 `commit()`（`:495`）、`widen_scope_with_audit` 單一 `commit()`（`:523`） |
+| 4.4 | 成立 | `memory_facade.py:281` `port.embed` 先於 `:285` `create_record` |
+| 4.5 | 成立 | `memory_service.py:404` `_log_empty_search`，`:449-450` 兩道候選筆數 |
+| 4.6 | 成立 | 三個模組的 `HTTPException` 命中皆在 docstring；`memory_service.py` 無模組層可變容器（模組層 `=` 只有常數與 `__all__`） |
+| 5.1 | 成立 | 五個方法 ＋ `list_records`；授權只在 facade。**本輪前已有後續變更**：`U15` 加入 `_authorize_approved`（`memory_facade.py:184`），仍在 facade 層，判準不受影響 |
+| 5.2 | 成立 | `_authorize_role`（`:158`）一份，`widen_scope`（`:430`）與 `list_audit_events`（`:487`）共用 |
+| 5.3 | 成立 | `memory_facade.py:401`／`:410` 皆拋 `MemoryNotFound`，`:404` 以 `REASON_OWNER` 記日誌；`A5`／`A6` 綠燈 |
+| 5.4 | 成立 | `widen_scope` `:429-430` 先判身分與角色、`:440` 才取列；`list_audit_events` 同形（`:486-487`） |
+| **5.5** | **不成立，維持未勾** | 字面要求「六條路由」，實際五條（`memory_router.py:164`／`:201`／`:246`／`:280`／`:311`）。刻意不為 `search` 開端點，理由見本檔 §三之三 |
+| 5.6 | 成立 | `C3` 綠燈（router 無角色名稱字面值） |
+| 5.7 | 成立 | `main.py:132` `app.include_router(memory_router, prefix="/api/memory")` |
+| 6.1 | 成立 | `test_memory_contract.py` 11 條（`C1`–`C7`），全綠 |
+| 6.2 | 成立 | `test_memory_ranking.py` 7 條、5 個 `@given`，全綠 |
+| 6.3 | 成立 | `test_memory_authz.py` 23 條，全綠 |
+| 6.4 | 成立 | router 無檢索端點，SQLite 測試不經向量路徑；向量路徑由 `S15` 在真實 PG 上通過 |
+| 7.1 | 成立 | `schema_rbac.sql:503-504` `CREATE INDEX IF NOT EXISTS ix_memory_records_embedding_hnsw … USING hnsw (embedding vector_cosine_ops)` |
+| 7.2 | 成立 | `run_meta_schema_migration.py:168`；實跑終檢通過 |
+| 7.3 | 成立 | `verify_memory_schema.sql:320-384`（`S14`，`:367` `SET LOCAL enable_seqscan = off`） |
+| 7.4 | 成立 | `verify_memory_schema.sql:388-574`（`S15` ①②③） |
+| 7.5 | 成立 | `DEPLOY.md:1176` §2.2.12、`:250` 總表 `I` 列 |
+| 8.1 | 成立 | `openapi.json` 含四個 `/api/memory` 路徑；`dump_openapi.py --check` 綠燈 |
+| 8.2 | 成立 | `npm run check:types` 綠燈；`frontend/src/types/api.d.ts` 含 7 處 `/api/memory` |
+| 8.3 | 成立 | 兩者已隨 `c2e5687` 同一提交進入歷史 |
+| 10.1 | 成立 | 同 1.1 |
+| 10.2 | 成立 | `git diff --stat -- backend/requirements.txt` 無輸出 |
+| **10.3** | **不成立，維持未勾** | `git diff --stat -- deploy/` 無輸出，但 `.github/workflows/ci.yml` 有 `6 insertions(+), 6 deletions(-)`。差異全為本輪其他單元的 `P1-P12` → `P1-P16` 文字更正，**不含本單元的任何內容**。本檔 §十 已記載此判準在已有他人改動的工作樹上不可能字面成立 |
+| 10.4 | 成立 | 兩支 validator 皆 `validation passed` |
+| 10.5 | 成立 | `Ran 1241 tests … OK` |
+| 10.6 | 成立 | `規格檔與後端程式碼一致。` |
+| 11.1 | 成立 | `source-manifest.json` 17 個路徑，逐一確認存在 |
+| 11.2 | 成立 | `traceability.json` 80 筆（`AC` 12、`BR` 24、`NFR` 35、`EC` 6、`K` 3），涵蓋計畫所稱 27 條 `NFRx.y` 以上 |
+| 11.3 | 成立 | 本節 |
+
+**合計：勾回 41 格，維持未勾 3 格（2.4、5.5、10.3），共 44 格（`grep -c '^\s*- \[x\]'` 實算），皆為字面與刻意偏離不符，偏離理由先前已記載。**
+Step 9（突變驗證）是表格而非勾選項；本輪未重跑六項突變（只做重新查驗，且本單元程式未變）。
+
+### 四、命令實際輸出
+
+| 命令 | 結果 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_memory_contract tests.test_memory_ranking tests.test_memory_authz -v` | `Ran 41 tests in 1.638s` → `OK` |
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1241 tests in 101.533s` → `OK`（日誌中的 19 行 `ERROR:` 為記錄器輸出，不是測試失敗；`FAIL: test`／`ERROR: test` 0 筆） |
+| `psql … -v ON_ERROR_STOP=1 -f schema_rbac.sql`（兩次） | 兩次 `exit=0`，`ERROR` 0 筆 |
+| `psql … -v ON_ERROR_STOP=1 -f backend/scripts/verify_memory_schema.sql` | `exit=0`，5 條 `NOTICE` 全部通過（含 `S14`、`S15`） |
+| `DATABASE_URL=… .venv/bin/python scripts/run_meta_schema_migration.py` | `exit=0`，`終檢通過`；索引 **9** 個（本單元收尾時為 8，`U23` 在 `8677b7d` 新增一個） |
+| `python3 scripts/dump_openapi.py --check`（`backend/`，venv） | `規格檔與後端程式碼一致。`，`exit=0` |
+| `npm run check:types`（`frontend/`） | `API 型別檔與規格檔一致。` |
+| `python3 scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| `python3 scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+
+真實 PostgreSQL 的環境：本機無 Docker daemon、`localhost:5432` 無回應，故在 scratchpad 以 Homebrew `postgresql@17`（**17.7**）＋ `pgvector`（**0.8.1**）臨時 `initdb`，只開 TCP（`127.0.0.1:54328`，Unix socket 路徑超過 103 位元組上限故關閉），跑完已 `pg_ctl stop`（`pg_isready` 回 `no response`）。CI 用 `pgvector/pgvector:pg18`，主版號不同。
+
+### 五、後續單元對本單元路徑的變更
+
+| 提交／工作樹 | 單元 | 變更 | 對本單元判準的影響 |
+|---|---|---|---|
+| `8cf948c` | `U15` | `memory_facade.py` 加 `_authorize_approved`（六個公開方法第一行）；`memory_router.py` 的 `POST`／`DELETE` 補宣告 403；`memory_errors.py` 加 `reason="pending"` | 無：授權仍只在 facade、router 仍無角色字面值（`C3` 綠）、非擁有者仍為 404。`DELETE` 的 403 只來自帳號未核准，先於取列 |
+| `6dff4d4`、`8677b7d` | `U20`、`U23` | `run_meta_schema_migration.py` 新增他們的物件 | 無：本單元的索引列（`:168`）未動 |
+| 工作樹（未提交） | 合併前必修第 3 項 | `user_router.py:510-517` 直接以 ORM 查 `MemoryRecord`／`MemoryAuditEvent` 計數，作為使用者硬刪除的 409 前置檢查 | 唯讀計數，不經 facade。facade 為唯一入口本來就**無機械強制**（`memory_facade.py` 的「殘留缺口」段）；此處不讀 `content`、不寫入，不違反本單元任何斷言。如實記錄 |
+| 工作樹（未提交） | `embedding-port` | `embedding_port.py` 新增 `FASTEMBED_REGISTRY_NAMES` | 無：`model_id` 不變，`CG8-1`（`fulltext` 之下 `model_id=None`）現況不變 |
+| 工作樹（未提交） | 他單元 | `schema_rbac.sql`、`DEPLOY.md`、`openapi.json`、`api.d.ts`、`ci.yml`、`main.py` | 逐一檢查：`schema_rbac.sql` 的改動在 `H)`／`J)` 區塊的 COMMENT；`openapi.json` 的 diff 無 `/api/memory` 路徑；`main.py` 只加 `ensure_project_members_on_startup()`。皆不觸及本單元 |
+
+### 六、`traceability.json` 狀態值
+
+80 筆的 `status` 只有 `OK`（68）、`N/A`（11）、`Deferred`（1），**無非法值，未改動**。每一筆 `OK` 的 `target` 皆指向存在的檔案。
+
+### 七、未驗項
+
+| 項 | 理由 |
+|---|---|
+| Step 9 的六項突變 | 本輪不重跑（程式未變）；原紀錄見本檔 §四 |
+| CI 的 `pg18` 主版號 | 本機只有 PG17；`S1`–`S15` 在 17.7 上通過 |
+| `CG8-1`／`CG8-2` 等既有 open items | 本輪不處理，狀態不變（見本檔 §七） |
+
+**本輪查驗未發現本單元的新缺陷。**
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T12:58:36Z -->
+
+本輪只查驗、未改任何程式或測試。計畫 44 格勾選 41 格（機械計數：`[x]` 41、`[ ]` 3）。三格未勾的理由記在本節，不寫進計畫檔（計畫檔內的註解會改變已核可內容）：
+
+| 格 | 未勾理由 |
+|---|---|
+| 2.4 不加 `CheckConstraint` | `backend/models.py:908`／`:912`／`:916`／`:958` 有四條具名 CHECK（`ck_memory_records_kind`、`_content_not_blank`、`_episodic_has_expiry`、`ck_memory_audit_events_action`），字面不成立；偏離為刻意，理由見本檔 §三之一，由 `test_memory_contract` C4 鎖住 |
+| 5.5 六條路由 | 實際五條（`memory_router.py:164`／`:201`／`:246`／`:280`／`:311`），`search` 刻意無 HTTP 端點（本檔 §三之三）；分頁與 `limit` 上限成立（A14／A14b 綠） |
+| 10.3 `deploy/`、`ci.yml` diff 為空 | 工作樹上 `ci.yml`、`deploy/.env.example`、`deploy/docker-compose.deploy.yml` 有他單元未提交改動；逐一檢視不含本單元內容 |
+
+勾選但帶限制：1.3／1.4（「開工前」狀態無法由 git 重現，以現況判斷）；10.2（`c2e5687` 為多單元合併提交，無法拆出本單元的那一份，但工作樹 diff 為空、檔內無 `pgvector`）；8.3（openapi 已隨 `c2e5687` 進版控，工作樹 diff 無 `/api/memory` 行）。Step 9 突變驗證本輪未重跑。
+
+測試（`backend/.venv`、`-B`、`PYTHONDONTWRITEBYTECODE=1`）：`test_memory_contract` 11、`test_memory_ranking` 7、`test_memory_authz` 23、`test_memory_pending_authz`（U15 新增）9，合計 50 OK；完整套件 1319 OK（skipped=3）。臨時 PostgreSQL 17.7＋pgvector：`schema_rbac.sql` 連跑兩次 exit 0、`verify_memory_schema.sql` 五條 NOTICE 全通過（含 S14／S15）、`run_meta_schema_migration.py` 終檢通過；已停機並刪除資料目錄。CI 的 `pg18` 仍待確認。
+
+計畫外的後續改動：U15 在 facade 加了 `_authorize_approved` 與對應測試；授權仍只在 facade，router 無角色字串（C3 綠）。
+
+合併前必修清單無項目劃給本單元。相關觀察：#13 的 `intent_routing.py:232` 已單獨捕捉 `MemoryForbidden`，本單元例外足以區分；#6 的同一 404 為 `[D1]`=A 刻意設計；`user_router.py:510-517` 直接以 ORM 計數記憶列（唯讀、不讀 `content`），與 #20 同根——「facade 為唯一入口」無機械強制。
+
+低嚴重度觀察（未列為合併前必修）：檢索與列出不過濾 `expires_at`，已過期但未清除的 episodic 記憶仍可見（functional-design 未規定，不違規）；同一筆記憶併發刪除時後者可能 500 而非 404（推論，未實測）。
+
+## 合併前必修第 22 項處置（2026-10-26）
+
+來源：`construction/functional-design/merge-blockers.md` 第 22 項；計畫第十一節 Step 12–15。
+
+**更正上一段的推論**：併發刪除的後者**不是** 500。本輪在真實 PostgreSQL 上實測（修正前的程式）：第二次 `db.delete(record)` 影響 0 列，SQLAlchemy 只發 `SAWarning: DELETE statement on table 'memory_records' expected to delete 1 row(s); 0 were matched`，不報錯，於是**兩次刪除都「成功」且稽核 `deleted_by_user` 寫了兩筆**（`D1` 斷言失敗訊息 `MemoryNotFound not raised`；`D2` 為 `['deleted', 'deleted'] != ['deleted', 'not-found']`），與 review-03 的實測一致。
+
+### 變更位置
+
+| 檔案 | 位置 | 變更 |
+|---|---|---|
+| `backend/services/memory_service.py` | `:49` | 新增 `from services.memory_errors import MemoryNotFound` |
+| `backend/services/memory_service.py` | `:477-527`（`delete_with_audit`） | 改以 `db.query(MemoryRecord).filter(id == …).delete(synchronize_session="evaluate")` 下刪除並讀回影響列數（`:511`）；**不為 1 時 `rollback()` 並拋 `MemoryNotFound`、不寫稽核**（`:516-518`）；稽核改在刪除之後 `add`，仍為同一交易、一次 `commit()`。選影響列數而不選 `SELECT … FOR UPDATE`：後者在 SQLite dialect 被靜默丟棄，前者在兩個方言上語意相同 |
+| `backend/services/memory_service.py` | `:390-401`（`scored_candidates` docstring，函式 `:387` 起） | 原文「PBT 第 2 條性質是它唯一的機械防線」已不實（該 PBT 吃手造分數、驗不到取負號），改指向本輪兩道新測試。程式碼 `score=-distance`（`:403`）未改 |
+| `backend/services/memory_facade.py` | `:412-420`（`delete`） | `delete_with_audit` 拋 `MemoryNotFound` 時以**呼叫端送來的原值**重拋，使競態下的 404 `detail` 與一般「不存在」逐字相同（`[D1]`=A）；不寫 `reason="owner"` 日誌、不寫稽核 |
+| `backend/tests/test_memory_ranking.py` | `:167-240`（生成域 `distances`、輔助 `_pairs`、新類別 `ScoredCandidatesRealDistanceTest` `:190`） | Step 12：`test_closer_candidate_ranks_first`（`:217`，距離 0.6／1.7／0.05 打亂輸入）與 PBT `test_ranking_is_non_decreasing_in_distance`（`:231`，距離域 `[0, 2]`、200 例），皆照 `MemoryFacade.search` 的組合 `rank_candidates(scored_candidates(pairs))`，以**回查原始距離**斷言 |
+| `backend/tests_pg/test_memory_service_pg.py` | 新檔 | Step 13 `V1`（`:186`）：經生產用 `create_record` 寫三筆（遠、中、近），斷言每列 `embedding IS NOT NULL`、`search_records` 依 `<=>` 回 `[近, 中, 遠]`，再經 `scored_candidates → rank_candidates` 仍為近者在前。Step 14 `D1`（`:230`）：兩 session 先取列再依序刪；`D2`（`:259`）：以 `before_cursor_execute` ＋ barrier 讓兩條連線同時送出 `DELETE`。兩者皆斷言恰一次成功、另一次 `MemoryNotFound`、`deleted_by_user` 稽核恰一筆。每個測試用專屬 `embedding_model` 與 `__u8_service_pg__` 前綴，依 id／前綴清理（無 TRUNCATE） |
+| `source-manifest.json` | `writes` | 新增 `backend/tests_pg/test_memory_service_pg.py` |
+
+`traceability.json` 未改：逐列查過，無註記因本輪變為不實（`BR4.2` 的「單一 commit」、`BR4.3` 的「不存在 → `MemoryNotFound` 且不產生稽核」仍成立）。無 DDL 變更，`schema_rbac.sql`／`DEPLOY.md` 不觸發同步。
+
+### CI（Step 15.1）
+
+`ci.yml` **未改**。CI 的 `concurrency` job（`Concurrency (real PostgreSQL row locks)`）使用 `pgvector/pgvector:pg18` service、先 `psql -f schema_rbac.sql`（含 `vector` extension 與 `memory` schema），再在 `backend/` 跑 `python -m unittest discover -s tests_pg -v`；新檔名符合預設 `test*.py`，會被撿到。merge-blockers 第 22 項 (e) 寫的是「memory-schema job」，但該 job 只跑 `psql`、沒有 Python，`tests_pg` 實際由 `concurrency` job 執行（計畫 Step 15.1 已以 `tests_pg` job 表述）。該 job 的步驟名稱仍寫「(C1-C3)」，與實際測試數不符（本輪之前即已過時），未改以免動到 `ci.yml` 的既有未提交變更。
+
+### 測試數（本機）
+
+| 套件 | 修改前 | 修改後 |
+|---|---|---|
+| `backend/.venv` 執行 `discover -s tests`（SQLite） | 1319，`OK (skipped=3)` | **1321**，`OK (skipped=3)` |
+| `discover -s tests_pg`（一次性 PostgreSQL 17.7 ＋ pgvector 0.8.1，綁 `127.0.0.1:55422`，套用 `schema_rbac.sql`；用完即停機刪除） | 10，`OK` | **13**，`OK` |
+| 本單元三檔 `test_memory_contract`／`test_memory_ranking`／`test_memory_authz` | 41 | 43，`OK`（含 `A15` 交易邊界與刪除 204 路徑，SQLite 路徑維持可用） |
+
+`validate_repo_contract.py` 與 `validate_env_contract.py` 皆通過。測試快取寫到暫存區（`HYPOTHESIS_STORAGE_DIRECTORY`、`PYTHONDONTWRITEBYTECODE=1`、`-B`），repo 內無新增 `.hypothesis`／`.pyc`。
+
+### 三項突變（只在暫存區的 `backend/` 副本執行，repo 檔未動）
+
+| # | 突變 | 結果 | 還原後 |
+|---|---|---|---|
+| 12 | `scored_candidates` 的 `score=-distance` → `score=distance` | **紅**：`test_closer_candidate_ranks_first`、`test_ranking_is_non_decreasing_in_distance` 2 個 FAIL；本單元其餘 41 個測試**仍綠**（證實原缺口） | 9／9 綠 |
+| 13 | `create_record` 的 `if embedding is not None and _supports_vector(db):` → `if False and …`（跳過 `UPDATE … SET embedding`） | **紅**：`V1` FAIL，訊息「embedding 是 NULL——create_record 的 UPDATE ... SET embedding 沒有生效」；本單元 SQLite 43 個測試**仍綠**（證實原缺口） | 3／3 綠 |
+| 14 | 移除 `delete_with_audit` 的 `if deleted != 1: rollback(); raise MemoryNotFound` | **紅**：`D1`（`MemoryNotFound not raised`）、`D2`（`['deleted', 'deleted'] != ['deleted', 'not-found']`）2 個 FAIL | 3／3 綠 |
+
+<!-- 寫入時間：2026-10-26T13:47:47Z -->

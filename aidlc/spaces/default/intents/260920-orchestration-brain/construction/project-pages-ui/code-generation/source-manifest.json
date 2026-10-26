@@ -25,10 +25,25 @@
       "path": "backend/services/hierarchy_service.py"
     },
     {
+      "path": "backend/services/membership_errors.py"
+    },
+    {
       "path": "backend/services/membership_facade.py"
     },
     {
+      "path": "backend/services/membership_router.py"
+    },
+    {
       "path": "backend/services/membership_service.py"
+    },
+    {
+      "path": "backend/services/requirement_field_errors.py"
+    },
+    {
+      "path": "backend/services/requirement_field_facade.py"
+    },
+    {
+      "path": "backend/services/requirement_field_router.py"
     },
     {
       "path": "backend/tests/helpers.py"
@@ -41,6 +56,12 @@
     },
     {
       "path": "backend/tests/test_membership_data.py"
+    },
+    {
+      "path": "backend/tests/test_membership_endpoints.py"
+    },
+    {
+      "path": "backend/tests/test_membership_facade.py"
     },
     {
       "path": "backend/tests/test_project_visibility_endpoints.py"
@@ -56,6 +77,9 @@
     },
     {
       "path": "backend/tests/test_requirement_field_facade.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_http.py"
     },
     {
       "path": "backend/tests/test_work_orchestrator_store.py"
@@ -88,6 +112,12 @@
       "path": "frontend/src/components/projects/SystemCreateAction.tsx"
     },
     {
+      "path": "frontend/src/membership/membershipApi.ts"
+    },
+    {
+      "path": "frontend/src/pages/MembersListPage.tsx"
+    },
+    {
       "path": "frontend/src/pages/ProjectCreatePage.tsx"
     },
     {
@@ -110,6 +140,9 @@
     },
     {
       "path": "frontend/src/types/api.d.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/member-pages.spec.ts"
     },
     {
       "path": "frontend/tests/e2e/project-pages.spec.ts"

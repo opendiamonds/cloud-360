@@ -192,7 +192,7 @@
       "id": "NFR13.23",
       "status": "OK",
       "target": "backend/tests/test_brain_gateway_handshake.py",
-      "note": "① LoadFailureTest.test_redis_unavailable_during_handshake_closes_1011_and_unregisters；② turn DispatchTest.test_redis_failure_after_ready_keeps_connection。審查 R-03：握手期未預期例外 → 1011（handshake test_unexpected_error_during_snapshot_closes_1011），連線後 → error(INTERNAL_ERROR)、連線保留（turn test_unexpected_error_in_a_message_keeps_connection；突變 X8）。"
+      "note": "① LoadFailureTest.test_redis_unavailable_during_handshake_closes_1011_and_unregisters；② turn DispatchTest.test_redis_failure_after_ready_keeps_connection。審查 R-03：握手期未預期例外 → 1011（handshake test_unexpected_error_during_snapshot_closes_1011），連線後 → error(INTERNAL_ERROR)、連線保留（turn test_unexpected_error_in_a_message_keeps_connection；突變 X8）。合併前必修第 2 項(a)（BR2.8 T9）：連線後的未預期例外若發生在開啟中的輪內，以該輪 turnId 結束該輪，否則 turnId=null（turn ErrorTurnIdTest 三案；突變 M3、M5）。"
     },
     {
       "id": "NFR13.24",
@@ -294,7 +294,7 @@
       "id": "NFR13.40",
       "status": "OK",
       "target": "backend/tests/brain_gateway_fakes.py",
-      "note": "recv_json 對本單元送出的每一則做 WsEnvelope.model_validate（全部測試皆經此路徑）；AST 斷言模組內無以 \"type\" 為鍵的 dict 字面。"
+      "note": "recv_json 對本單元送出的每一則做 WsEnvelope.model_validate（全部測試皆經此路徑）；AST 斷言模組內無以 \"type\" 為鍵的 dict 字面。合併前必修第 2 項(a)：非輪次 error 另經 assert_non_turn_error 斷言 envelope 與 payload 的 turnId 鍵存在且為 null（ErrorPayload 的「必填鍵、值可為 null」）。"
     },
     {
       "id": "NFR13.41",
@@ -423,6 +423,18 @@
       "status": "OK",
       "target": "backend/services/brain_gateway_rules.py",
       "note": "審查 review-01 的 R-01～R-07 處置見 code-summary 第十二節；deploy/render-env.sh 檔頭註解同步（R-07）。"
+    },
+    {
+      "id": "CG-MB2A-ERROR-TURNID",
+      "status": "OK",
+      "target": "backend/services/brain_gateway.py",
+      "note": "合併前必修第 2 項(a)：BR2.8 錯誤 turnId 規則表 T1–T9。_send_single_error 一律 turnId=null（T1–T5、T7）；_on_unexpected 依 Connection.open_turn 以該輪 turnId 結束開啟中的輪次，否則 null（T9）；_mint_turn_id 呼叫點只剩 _on_user_message 與 GatewaySink.emit_turn。測試：limits NonTurnErrorTurnIdTest（T1、T2）與 StructuralTest.test_mint_turn_id_only_where_a_turn_really_opens、handshake VersionTest.test_second_hello_after_ready_is_a_non_turn_error（T4）、turn ErrorTurnIdTest 五案（T3、T5、T9×3）與 ClarifyTest.test_none_stays_silent_and_a_foreign_id_is_invalid_request（T6）、fanout NonTurnRequestErrorTest 三案（T7）。突變 M1–M4 與附加 M5 見 code-summary 第十三節。"
+    },
+    {
+      "id": "CG-MB19-OPENROUTER-SECRET",
+      "status": "OK",
+      "target": ".github/workflows/deploy.yml",
+      "note": "合併前必修第 19 項：2026-10-24 以 gh api repos/opendiamonds/cloud-360/actions/secrets 與 .../actions/variables 唯讀列名稱——OPENROUTER_API_KEY 在 secrets（13 個名稱之一）、不在 variables（2 個名稱：APP_ID、GH_AW_DEFAULT_MODEL_COPILOT）。只能證明現況，無法證明它過去從未存為 variable（API 無歷史）。詳見 code-summary 第十三節。"
     }
   ]
 }

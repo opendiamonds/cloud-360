@@ -87,6 +87,51 @@
 **Data model**（Step 3–4，WebSocket 契約）、**Business logic**（Step 5–6）、**API / endpoint**（Step 7–8，掛載與移除）依序「實作 → 測試」；
 **Repository / data access** 層本單元不新增（經既有 `SessionStore`／facade）；**Frontend** 只做 DEMO 移除與 e2e 落地頁改寫（Step 9）。方法論未改。
 
+## 六、code-generation Request Changes（2026-10-20）：合併前必修第 2 項(a) 與第 19 項
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項。劃給本單元的是：
+
+- **第 2 項(a)**：`brain-ws-contract` 已依使用者裁決把 `error` 的 `turnId` 改為「必填鍵、值可為 null」，契約說明逐字要求「伺服器**不得**為非輪次錯誤捏造一個 turnId」（`brain_ws_contract.py:371-380`）。閘道仍以 `_send_single_error`（`brain_gateway.py:1146-1150`）的 `tid = turn_id or _mint_turn_id()` 為每一則非輪次錯誤捏造編號。該列要求本單元訂出逐個錯誤來源的 `turnId` 規則表並附測試。
+- **第 19 項**：合併前 `OPENROUTER_API_KEY` 必須已設為 GitHub secret。程式端已於 Step 11 完成（`deploy.yml:76`、`:83` 的必要檢查）；**未完成的是查證 secret 確實存在**。
+
+**實測現況（以唯讀查證取得）**：`_send_single_error` 有 13 個呼叫點（`grep -n "_send_single_error" brain_gateway.py` 扣掉定義行），全部不帶 `turn_id` 參數，因此每一則都是捏造編號；另有一個既存缺口——`_dispatch_client_message` 拋出未預期例外時（`:1130-1132`），若該則訊息已開啟一輪（`user_message` 或對應反問的 `select_clarify_candidate`），錯誤以新編號送出，**原本那一輪永遠收不到終止事件**，前端會一直等。
+
+**使用者裁決**（`[GW-MB2]`，2026-10-24）：反問等待中收到格式錯誤的選擇訊息（過不了 `WsClientEnvelope` 驗證，例如 `candidateId` 型別不對）→ **不算輪內**，以 `turnId=null` 送錯誤，**反問保留**，使用者可重選。
+
+**BR2.8 錯誤 `turnId` 規則表**（本表取代 functional-design `rules.md:144`、`:302`、`:382` 的「以新 turnId 送出」三處；已凍結的設計檔不回改，取代關係記入 code-summary）：
+
+| # | 錯誤來源（`brain_gateway.py`） | 代碼 | `turnId` |
+|---|---|---|---|
+| T1 | 二進位訊框、訊框過大、頻率超限（`_reject`，`:1088`／`:1092`／`:1102`） | `INVALID_REQUEST`／`RATE_LIMITED` | `null` |
+| T2 | 每則重驗拋例外（`:1110`） | 依 `error_for` | `null` |
+| T3 | 信封驗證失敗（非 JSON、非物件、未知 type、偷帶 turnId、缺必填欄位；**含反問等待中格式錯誤的選擇訊息**，`[GW-MB2]`=A，`:1126`） | `INVALID_REQUEST` | `null`；`pending_clarify` 不清除 |
+| T4 | ready 之後再收到 `hello`（`:1166`） | `INVALID_REQUEST` | `null` |
+| T5 | `select_clarify_candidate` 時沒有待選反問（`:1531`） | `INVALID_REQUEST` | `null` |
+| T6 | `select_clarify_candidate` 格式正確但 id 不在候選內（`:1541`，現行不變） | `INVALID_REQUEST` | 該輪 `T`，並結束該輪 |
+| T7 | `set_work_target`／`set_sharing_mode`／`correct_work_item` 失敗（`:1574`、`:1588`、`:1591`、`:1605`、`:1608`、`:1633`；`_error_for_request` 的 `turn is None` 分支 `:1500`） | 依 `error_for` | `null`（三者皆非輪次請求，BR1.6） |
+| T8 | 輪內處理失敗、`EMPTY_RESPONSE`、`emit_turn` 推播（`_fail_turn`、`_end_turn`、`GatewaySink.emit_turn`） | 依原規則 | 該輪 `T`（現行不變） |
+| T9 | `_dispatch_client_message` 拋未預期例外（`:1130-1132`） | `INTERNAL_ERROR` | 若該則訊息已開啟一輪且該輪尚未終止 → 以該輪 `T` 結束該輪；否則 `null` |
+
+- [x] **Step 13 — 業務邏輯：實作**
+  - `_send_single_error` 拿掉 `turn_id` 參數與 `_mint_turn_id()`，envelope 與 payload 的 `turnId` 一律為 `None`（T1–T5、T7）。
+  - T9：連線記住「最近一則開啟的輪次」（`user_message` 建立 `Turn` 時、`select_clarify_candidate` 取出待選反問時設定）；`:1130` 的未預期例外分支若該輪尚未終止即走 `_fail_turn`（帶 `T`），否則送 `null` 錯誤。輪次終止後該參照不影響下一則訊息。
+  - T3：信封驗證失敗的分支不碰 `pending_clarify`（現行已不碰；以測試鎖住）。
+  - `_mint_turn_id()` 只留在兩個真正開啟一輪的位置：`_on_user_message` 建立 `Turn`、`GatewaySink.emit_turn`。
+  - log 關聯：非輪次錯誤原本無 log 使用該捏造編號，不新增欄位。
+- [x] **Step 14 — 業務邏輯：測試**
+  - T1–T5、T7 每列至少一案：斷言收到的 `error` envelope 與 payload 的 `turnId` 皆為 `None`，且通過 `WsEnvelope.model_validate`。
+  - T3：反問等待中送 `candidateId` 型別錯誤的選擇 → `null` 錯誤；再送合法 id → 以原輪 `T` 繼續交辦。
+  - T6：維持既有案例（帶 `T`）。
+  - T9：以替身讓輪內流程拋未預期例外 → 收到帶 `T` 的 `error(INTERNAL_ERROR)`、該輪不再收到任何訊息、下一則 `user_message` 正常開新輪；非輪次訊息拋未預期例外 → `null`。
+  - 結構測試：AST 斷言 `_mint_turn_id` 的呼叫點恰為上述兩處。
+  - 既有測試中斷言非輪次錯誤帶非 null `turnId` 者，依本表改寫（方法名不改，避免 TCMS 案例成孤兒）。
+  - 突變（記入 `code-summary.md`）：M1 `_send_single_error` 還原為捏造編號 → T1–T5、T7 案紅；M2 信封驗證失敗時清除 `pending_clarify` → T3 案紅；M3 T9 分支不理會開啟中的輪次 → T9 案紅；M4 在 `_on_set_work_target` 加回 `_mint_turn_id()` → 結構測試紅。
+- [x] **Step 15 — 第 19 項查證**：以 `gh api repos/opendiamonds/cloud-360/actions/secrets` 與 `.../actions/variables` 各查一次名稱（唯讀，只列名稱、不讀值），確認 `OPENROUTER_API_KEY` 在 secrets、不在 variables（`project.md ## Mandated`）。缺少或誤存為 variable → 不由我設定，記為合併前阻擋並回報使用者；若曾存為 variable，依同條規則須重新產生金鑰。
+- [x] **Step 16 — 驗證**：本單元全部測試、`tests.test_ws_contract`、全套 `python -m unittest discover -s tests`、`dump_ws_contract.py --check`、`dump_openapi.py --check`、`validate_env_contract.py`、`validate_repo_contract.py`。
+- [x] **Step 17 — 文件與追溯**：`code-summary.md` 新增一節（規則表、取代關係、突變結果、第 19 項查證結果、交接 `entry-page-ui` 的第 2 項(b)：前端須把 `turnId=null` 的錯誤呈現為不屬於任何輪次，不得歸入或解除進行中輪次的等待）；`merge-blockers.md` 第 2、19 列以純 append 方式更新處置；`traceability.json`、`source-manifest.json` 更新。
+
+**不在本次範圍**：第 2 項(b)（`entry-page-ui` 的 `useBrainConnection.ts:173`），在該單元處理；`WsServerMessageType`／`ErrorPayload` 契約不再修改（第 2 項的契約層已完成）。
+
 ## Testing Contract
 
 ```json

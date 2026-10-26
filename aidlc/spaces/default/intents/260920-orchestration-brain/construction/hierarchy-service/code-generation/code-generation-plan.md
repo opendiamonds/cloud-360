@@ -200,10 +200,18 @@ Python 沒有真正的封裝。`BR1.4` 的 `violation_behaviour` 已如實記載
 
 ## 六、完成判準（二元，缺一不可）
 
-- [ ] `python -m unittest discover -s tests -v` 全綠，且**全套**無迴歸
-- [ ] `python3 scripts/validate_repo_contract.py` 綠燈
-- [ ] `python3 scripts/validate_env_contract.py` 綠燈（`NFR8.1`）
-- [ ] `python3 backend/scripts/dump_openapi.py --check` 綠燈（`NFR5.1`）
-- [ ] `openapi.json` 中五個 path 皆存在，且衝突端點的 responses 含 `409`（`NFR5.2`）
+- [x] `python -m unittest discover -s tests -v` 全綠，且**全套**無迴歸
+- [x] `python3 scripts/validate_repo_contract.py` 綠燈
+- [x] `python3 scripts/validate_env_contract.py` 綠燈（`NFR8.1`）
+- [x] `python3 backend/scripts/dump_openapi.py --check` 綠燈（`NFR5.1`）
+- [x] `openapi.json` 中五個 path 皆存在，且衝突端點的 responses 含 `409`（`NFR5.2`）
 - [ ] 突變驗證逐項 RED，零存活
 - [ ] `git diff --stat` 不含 §三「不動的檔案」清單中的任何一項（`NFR8.1`）
+
+## 七、code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。逐項對照該表「單元」欄：**19 項中沒有一項劃給 `hierarchy-service`**。以 §三 的檔案反查各項的修法落點：
+- 第 14 項（成員頁以 403／404 洩漏專案是否存在）劃給 `project-pages-ui`，該頁的可見性判定在 U23 的路徑上，不在本單元 `hierarchy_router.py` 的五個 path；若 U23 修正時需要動本單元檔案，在 U23 的計畫中處理並註明。
+- 第 3 項已在 `hierarchy-data` 修正，改的是 `user_router.py`，不觸及本單元檔案。
+
+因此本計畫**不新增步驟**，本輪只重新查驗 §六 的七項完成判準並跑測試。**判準第 7 項的解讀**：它指的是本單元**自己的變更**（原 commit）不碰「不動的檔案」，以 `git show --stat <本單元 commit>` 判定；本輪工作樹另含其他單元修正必修項時對 `schema_rbac.sql`、`DEPLOY.md`、`LOCAL-DEV.md` 的改動，那些不屬本單元的 diff。完整套件一律以 `backend/.venv` 執行（本機系統 Python 的套件版本與 `requirements.txt` 不一致）。

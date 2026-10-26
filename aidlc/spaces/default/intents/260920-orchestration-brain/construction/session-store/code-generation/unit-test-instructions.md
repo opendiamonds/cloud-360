@@ -37,6 +37,19 @@ python -m unittest tests.test_session_store_behaviour -v
 python -m unittest discover -s tests -v
 ```
 
+**本機執行一律用 `backend/.venv`**（系統 Python 的套件版本與 `requirements.txt` 不一致）：
+`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest <上述模組>`。
+
+### 2.1 合併前必修第 12、18 項（Request Changes 修訂，計畫第十節）
+
+| 項 | 檔案 | 案例（通過條件） |
+|---|---|---|
+| #12 | `tests/test_session_store_behaviour.py` | 首次建立後 key 有 TTL；替身在 EXEC 前模擬連線中斷 → key 不存在（無無 TTL 半成品）；`set_work_target` 後 TTL 已續期；替身的 MULTI／EXEC 在 EXEC 前對讀取不可見 |
+| #18 | `tests/test_session_types.py` | PBT：修剪後整段 UTF-8 位元組 ≤ 200 KB、則數 ≤ 上限、保留最新且順序不變 |
+| #18 | `tests/test_session_store_behaviour.py` | 以 4000 個中文字的訊息灌滿一段 → 觸發的是位元組上限（則數遠低於 200）；Lua 載體與純函式在同一輸入下結果相同 |
+
+突變（先 `grep -c` 確認寫入、還原後為 0）：交易拆回逐條並在中間注入失敗 → #12 半成品案例紅；拿掉位元組條件 → #18 PBT 與行為案例紅。真實 Redis 的 MULTI／EXEC 原子性與 Lua 執行屬 §六 無法在 CI 驗證之列，本機若以 scratchpad 臨時 `redis-server` 實測則記錄結果，否則據實記為未驗。
+
 ## 三、三個測試檔的職責切分
 
 | 檔案 | 驗什麼 | 不驗什麼 |

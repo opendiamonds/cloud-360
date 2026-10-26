@@ -40,6 +40,9 @@
       "path": "backend/tests/test_work_orchestrator_store.py"
     },
     {
+      "path": "backend/tests/test_work_orchestrator_capacity.py"
+    },
+    {
       "path": "backend/tests/test_work_orchestrator_capabilities.py"
     },
     {
@@ -65,6 +68,30 @@
     },
     {
       "path": "backend/tests_redis/test_work_item_lua.py"
+    },
+    {
+      "path": "backend/services/brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_rules.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_turn.py"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "LOCAL-DEV.md"
+    },
+    {
+      "path": "deploy/.env.example"
+    },
+    {
+      "path": "backend/.env.example"
+    },
+    {
+      "path": "deploy/docker-compose.deploy.yml"
     }
   ]
 }

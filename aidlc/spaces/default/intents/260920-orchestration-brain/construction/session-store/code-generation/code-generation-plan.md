@@ -69,71 +69,71 @@
 
 ### Step 1 — 專案結構與設定骨架
 
-- [ ] 1.1 建立 `backend/services/session_scripts/` 目錄（Lua 腳本的落點）
-- [ ] 1.2 `backend/requirements.txt` 新增 Redis 客戶端；在該行上方加註解說明**為何不用 `==` 精確釘選**（該檔檔頭逐字：精確釘選的理由是 OpenAPI 輸出的位元決定性，而本依賴不影響 OpenAPI）
-- [ ] 1.3 在 `code-summary.md` 記錄 `nfr-design` 審查 `R-01` 的對齊：儲存結構已於 `nfr-design` 定案，本站不重決
+- [x] 1.1 建立 `backend/services/session_scripts/` 目錄（Lua 腳本的落點）
+- [x] 1.2 `backend/requirements.txt` 新增 Redis 客戶端；在該行上方加註解說明**為何不用 `==` 精確釘選**（該檔檔頭逐字：精確釘選的理由是 OpenAPI 輸出的位元決定性，而本依賴不影響 OpenAPI）
+- [x] 1.3 在 `code-summary.md` 記錄 `nfr-design` 審查 `R-01` 的對齊：儲存結構已於 `nfr-design` 定案，本站不重決
 
 ### Step 2 — 驗證測試執行器並記錄單元範圍指令
 
-- [ ] 2.1 確認 `python -m unittest` 可執行；記錄本單元的**三個**精確指令於 `unit-test-instructions.md`（不得用 `python -m unittest` 裸跑全套）
-- [ ] 2.2 新增 `backend/services/session_errors.py`：`SessionBackendUnavailable(reason=...)`、`SessionMessageTooLong`、三個原因碼常數 `REDIS_UNREACHABLE`／`REDIS_OOM`／`REDIS_COMMAND_ERROR`
+- [x] 2.1 確認 `python -m unittest` 可執行；記錄本單元的**三個**精確指令於 `unit-test-instructions.md`（不得用 `python -m unittest` 裸跑全套）
+- [x] 2.2 新增 `backend/services/session_errors.py`：`SessionBackendUnavailable(reason=...)`、`SessionMessageTooLong`、三個原因碼常數 `REDIS_UNREACHABLE`／`REDIS_OOM`／`REDIS_COMMAND_ERROR`
 
 ### Step 3 — 資料模型／資料庫行為：實作
 
-- [ ] 3.1 `session_types.py`：`SegmentId` 封閉集合（`EC4`）、`SessionMessage`、`ConversationSegment`、`BrainSession`、`PageScope`
-- [ ] 3.2 `session_types.py`：`trim_history(messages, cap)` **參考實作**——`BR3.4` 的語意（丟最舊、保序、已達上限時不動）。**檔案層註解明記它不是生產載體**，生產載體是 Lua（`performance-design.md` 的唯一載體原則）
-- [ ] 3.3 序列化／反序列化：Hash 欄位 ↔ 型別。欄位前綴 `seg:`／`tgt:`／`meta`（`OPEN-N10-7` 的命名空間）
+- [x] 3.1 `session_types.py`：`SegmentId` 封閉集合（`EC4`）、`SessionMessage`、`ConversationSegment`、`BrainSession`、`PageScope`
+- [x] 3.2 `session_types.py`：`trim_history(messages, cap)` **參考實作**——`BR3.4` 的語意（丟最舊、保序、已達上限時不動）。**檔案層註解明記它不是生產載體**，生產載體是 Lua（`performance-design.md` 的唯一載體原則）
+- [x] 3.3 序列化／反序列化：Hash 欄位 ↔ 型別。欄位前綴 `seg:`／`tgt:`／`meta`（`OPEN-N10-7` 的命名空間）
 
 ### Step 4 — 資料模型／資料庫行為：寫測試並跑
 
-- [ ] 4.1 `test_session_types.py`：`@given` PBT 三條 property——①輸出長度 ≤ cap；②輸出是輸入的後綴；③輸入長度 ≤ cap 時輸出等於輸入
-- [ ] 4.2 `test_session_types.py`：段識別封閉集合的拒絕測試；序列化往返（round-trip）測試
-- [ ] 4.3 跑 `python -m unittest tests.test_session_types -v`，綠燈
+- [x] 4.1 `test_session_types.py`：`@given` PBT 三條 property——①輸出長度 ≤ cap；②輸出是輸入的後綴；③輸入長度 ≤ cap 時輸出等於輸入
+- [x] 4.2 `test_session_types.py`：段識別封閉集合的拒絕測試；序列化往返（round-trip）測試
+- [x] 4.3 跑 `python -m unittest tests.test_session_types -v`，綠燈
 
 ### Step 5 — 儲存層（`redis_gateway`）：實作
 
 - [ ] 5.1 連線池：`min 5 / max 20`、`idle timeout 10m`、`max lifetime 30m`（`performance-design.md` 的算式）
-- [ ] 5.2 逾時：連線 2s、指令 1s；冪等方法重試至多 2 次、指數退避**含抖動**；`append_message` **不重試**
-- [ ] 5.3 **原因碼分類**：連線層例外 → `REDIS_UNREACHABLE`；回覆以 `OOM ` 開頭 → `REDIS_OOM`；其餘指令錯誤 → `REDIS_COMMAND_ERROR`。全部包成 `SessionBackendUnavailable(reason=...)`
-- [ ] 5.4 **日誌建構函式**：固定欄位白名單 `sessionKey`／`segmentId`／`method`／`reason`／`elapsedMs`／`droppedCount`／`attempt`，**不接受任意 `kwargs`**（`NFR4.63`；`EC6` 對齊見 §三）
-- [ ] 5.5 Lua 腳本載入與 `EVALSHA` 快取；`NOSCRIPT` 時回退 `EVAL`
+- [x] 5.2 逾時：連線 2s、指令 1s；冪等方法重試至多 2 次、指數退避**含抖動**；`append_message` **不重試**
+- [x] 5.3 **原因碼分類**：連線層例外 → `REDIS_UNREACHABLE`；回覆以 `OOM ` 開頭 → `REDIS_OOM`；其餘指令錯誤 → `REDIS_COMMAND_ERROR`。全部包成 `SessionBackendUnavailable(reason=...)`
+- [x] 5.4 **日誌建構函式**：固定欄位白名單 `sessionKey`／`segmentId`／`method`／`reason`／`elapsedMs`／`droppedCount`／`attempt`，**不接受任意 `kwargs`**（`NFR4.63`；`EC6` 對齊見 §三）
+- [x] 5.5 Lua 腳本載入與 `EVALSHA` 快取；`NOSCRIPT` 時回退 `EVAL`
 
 ### Step 6 — 儲存層：寫測試並跑
 
-- [ ] 6.1 手寫 in-memory Redis 替身（支援 `HGET`／`HSET`／`HGETALL`／`EXPIRE`／`TTL`／`EVAL`），置於 `backend/tests/` 內
-- [ ] 6.2 原因碼分類的三個案例（含 `OOM ` 前綴字串）
-- [ ] 6.3 重試行為：冪等方法重試、`append_message` 不重試
-- [ ] 6.4 跑 `python -m unittest tests.test_session_store_behaviour -v`
+- [x] 6.1 手寫 in-memory Redis 替身（支援 `HGET`／`HSET`／`HGETALL`／`EXPIRE`／`TTL`／`EVAL`），置於 `backend/tests/` 內
+- [x] 6.2 原因碼分類的三個案例（含 `OOM ` 前綴字串）
+- [x] 6.3 重試行為：冪等方法重試、`append_message` 不重試
+- [x] 6.4 跑 `python -m unittest tests.test_session_store_behaviour -v`
 
 ### Step 7 — 商業邏輯（`session_store` ＋ Lua）：實作
 
-- [ ] 7.1 `load`／`touch`：`BR1.6`（不存在回 `None`）、`BR1.3`（續期）
-- [ ] 7.2 `append_message(session_key, segment_id, role, text)`：**帶段識別**（`BR3.1`）；入口檢查長度（`OPEN-N10-6`）；走 `append_message.lua`
-- [ ] 7.3 `set_sharing_mode(session_key, scope, mode)`：入口頁拒絕（`BR2.2`）；切 isolated 走 `switch_to_isolated.lua`（建段＋複製＋改模式，原子）；切回 shared 只改 `pageModes`（`BR2.5`，不刪段）
-- [ ] 7.4 `set_work_target(session_key, segment_id, principal, …)`：先呼叫 `K-07` 的 `HierarchyFacade.resolve_work_target`，例外**原樣上傳**（`BR4.6`）；寫解析結果含 `null`（`BR4.5`）
-- [ ] 7.5 `append_message.lua`：解碼→追加→修剪到 cap→編碼寫回→`EXPIRE`
-- [ ] 7.6 `switch_to_isolated.lua`：段不存在則建立並逐欄複製 `tgt:shared`→`tgt:<P>`；寫 `pageModes[P]=isolated`；`EXPIRE`
+- [x] 7.1 `load`／`touch`：`BR1.6`（不存在回 `None`）、`BR1.3`（續期）
+- [x] 7.2 `append_message(session_key, segment_id, role, text)`：**帶段識別**（`BR3.1`）；入口檢查長度（`OPEN-N10-6`）；走 `append_message.lua`
+- [x] 7.3 `set_sharing_mode(session_key, scope, mode)`：入口頁拒絕（`BR2.2`）；切 isolated 走 `switch_to_isolated.lua`（建段＋複製＋改模式，原子）；切回 shared 只改 `pageModes`（`BR2.5`，不刪段）
+- [x] 7.4 `set_work_target(session_key, segment_id, principal, …)`：先呼叫 `K-07` 的 `HierarchyFacade.resolve_work_target`，例外**原樣上傳**（`BR4.6`）；寫解析結果含 `null`（`BR4.5`）
+- [x] 7.5 `append_message.lua`：解碼→追加→修剪到 cap→編碼寫回→`EXPIRE`
+- [x] 7.6 `switch_to_isolated.lua`：段不存在則建立並逐欄複製 `tgt:shared`→`tgt:<P>`；寫 `pageModes[P]=isolated`；`EXPIRE`
 
 ### Step 8 — 商業邏輯：寫測試並跑
 
-- [ ] 8.1 五個方法的 happy path
-- [ ] 8.2 **授權委派**：`K-07` raise `HierarchyForbidden` 時 `set_work_target` 原樣上傳且**不落地**
-- [ ] 8.3 **逐段驗證**（`BR4.7`）：對**第二段**（非 `shared`）也跑一次 allow/deny
-- [ ] 8.4 `BR2.2`：入口頁切換被拒
-- [ ] 8.5 `BR2.5`：切回 shared 後該段仍在；再切 isolated **回到同一段**（`[S2]`=A 的重入）
-- [ ] 8.6 `BR3.2`：讀取某段只得到該段訊息（`AC3.1.2`／`AC6.1.3`）
-- [ ] 8.7 `OPEN-N10-6`：超長訊息 raise `SessionMessageTooLong`，**不是** `SessionBackendUnavailable`
-- [ ] 8.8 `BR3.5`：上限參數缺值時啟動失敗
+- [x] 8.1 五個方法的 happy path
+- [x] 8.2 **授權委派**：`K-07` raise `HierarchyForbidden` 時 `set_work_target` 原樣上傳且**不落地**
+- [x] 8.3 **逐段驗證**（`BR4.7`）：對**第二段**（非 `shared`）也跑一次 allow/deny
+- [x] 8.4 `BR2.2`：入口頁切換被拒
+- [x] 8.5 `BR2.5`：切回 shared 後該段仍在；再切 isolated **回到同一段**（`[S2]`=A 的重入）
+- [x] 8.6 `BR3.2`：讀取某段只得到該段訊息（`AC3.1.2`／`AC6.1.3`）
+- [x] 8.7 `OPEN-N10-6`：超長訊息 raise `SessionMessageTooLong`，**不是** `SessionBackendUnavailable`
+- [x] 8.8 `BR3.5`：上限參數缺值時啟動失敗
 
 ### Step 9 — API／端點層
 
 **本單元零 HTTP 端點**（`BR5.3`）。本層改為**部署驗證**：
 
-- [ ] 9.1 `deploy.yml` 新增部署後步驟：寫 fixture session（三段、各有訊息與不同作業對象、`pageModes` 一鍵 isolated）→ 記錄五項基準與剩餘 TTL
-- [ ] 9.2 `docker compose restart redis` → **等待條件為「以 app ACL 身分實際讀回 fixture 的某一欄位成功」**，附重試上限與總逾時；**不使用 healthcheck**（審查 `R-01` Critical）
+- [x] 9.1 `deploy.yml` 新增部署後步驟：寫 fixture session（三段、各有訊息與不同作業對象、`pageModes` 一鍵 isolated）→ 記錄五項基準與剩餘 TTL
+- [x] 9.2 `docker compose restart redis` → **等待條件為「以 app ACL 身分實際讀回 fixture 的某一欄位成功」**，附重試上限與總逾時；**不使用 healthcheck**（審查 `R-01` Critical）
 - [ ] 9.3 逐項比對五項；`NFR4.57` 的 TTL 斷言為**區間**（< 原值且 > 原值 − 寬限）；步驟置於部署序列**最後**，並在步驟說明中**明確宣告**它會中斷當下使用者的 session（審查 `R-02`：不寫假緩解）
-- [ ] 9.4 失敗時讓 deploy job 失敗以觸發既有 rollback；**不得** `logger.warning` 帶過
-- [ ] 9.5 刪除 fixture session
+- [x] 9.4 失敗時讓 deploy job 失敗以觸發既有 rollback；**不得** `logger.warning` 帶過
+- [x] 9.5 刪除 fixture session
 
 ### Step 10 — 前端行為
 
@@ -142,18 +142,18 @@
 
 ### Step 11 — 環境／建置設定
 
-- [ ] 11.1 `BRAIN_SESSION_HISTORY_MAX`（值 **200**）寫進 `render-env.sh`、兩份 `.env.example`、`deploy` 與 `test` 兩份 compose、repo 根 `docker-compose.yml`（若它起 backend）
-- [ ] 11.2 `deploy/docker-compose.deploy.yml` 的 `maxmemory-policy` → `noeviction`
-- [ ] 11.3 `LOCAL-DEV.md` 同步（**blocking**）：新環境變數、Redis 為本機硬依賴
-- [ ] 11.4 `DEPLOY.md` 記載 `noeviction` 的理由與還原驗證步驟
-- [ ] 11.5 跑 `python3 scripts/validate_repo_contract.py` 與 `python3 scripts/validate_env_contract.py`
+- [x] 11.1 `BRAIN_SESSION_HISTORY_MAX`（值 **200**）寫進 `render-env.sh`、兩份 `.env.example`、`deploy` 與 `test` 兩份 compose、repo 根 `docker-compose.yml`（若它起 backend）
+- [x] 11.2 `deploy/docker-compose.deploy.yml` 的 `maxmemory-policy` → `noeviction`
+- [x] 11.3 `LOCAL-DEV.md` 同步（**blocking**）：新環境變數、Redis 為本機硬依賴
+- [x] 11.4 `DEPLOY.md` 記載 `noeviction` 的理由與還原驗證步驟
+- [x] 11.5 跑 `python3 scripts/validate_repo_contract.py` 與 `python3 scripts/validate_env_contract.py`
 
 ### Step 12 — 文件與追溯
 
-- [ ] 12.1 `traceability.json`：id 來源為上游 `traceability.json` **∪** markdown（審查 `R-03`）
-- [ ] 12.2 `code-summary.md`：交付物、刻意不動的四項與其驗證、承接未關的項目
-- [ ] 12.3 `source-manifest.json`：**只含** `stage`／`unit`／`version`／`writes` 四個欄位（多一個欄位會讓 `REVIEW_REQUESTED` 被拒）
-- [ ] 12.4 全套回歸：`python -m unittest discover -s tests -v` 綠燈；`dump_openapi.py --check` 通過；`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空
+- [x] 12.1 `traceability.json`：id 來源為上游 `traceability.json` **∪** markdown（審查 `R-03`）
+- [x] 12.2 `code-summary.md`：交付物、刻意不動的四項與其驗證、承接未關的項目
+- [x] 12.3 `source-manifest.json`：**只含** `stage`／`unit`／`version`／`writes` 四個欄位（多一個欄位會讓 `REVIEW_REQUESTED` 被拒）
+- [x] 12.4 全套回歸：`python -m unittest discover -s tests -v` 綠燈；`dump_openapi.py --check` 通過；`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空
 
 ## 五、突變驗證（六項，每項須實際看到紅燈再還原）
 
@@ -305,5 +305,35 @@
 **第一條是本單元最容易出的錯**：`logger.warning(f"...{session}")` 在功能上完全
 正常、測試也會綠，而它把整段對話寫進公開可讀的日誌。故 Step 5.4 把白名單做成
 **建構函式的參數簽章**而非文件約定——簽章擋得住，文件擋不住。
+
+## 十、合併前必修第 12、18 項（code-generation Request Changes 修訂，2026-10-23）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 12 項（`nfr-design` review-02 R-01）與第 18 項（`infrastructure-design` work-orchestrator review-01 R-02；`nfr-requirements` session-store review-02 R-01）。第 18 項的單元欄為「session-store／work-orchestrator」，容量上界由本單元的修剪承載，故在本單元處理。使用者於 2026-10-23 裁決，兩題皆選建議項。
+
+### Step 13 — 第 12 項：寫入與續期以 Redis 交易一次送出（裁決：MULTI／EXEC）
+
+**缺陷**：首次建立 session（`_ensure_meta`，`session_store.py:528-543`：兩次 `HSET`）與 `set_work_target`（`:394-407`：`_ensure_meta` ＋ `HSET` ＋ `EXPIRE`）都是多個獨立指令；中途行程中止或 key 剛好過期，可能留下**無 TTL** 的 key，永不過期。
+
+- [x] `backend/services/redis_gateway.py`：新增一個以 `pipeline(transaction=True)`（MULTI／EXEC）送出「同一 key 的多個 `HSET` ＋ 一個 `EXPIRE`」的方法；沿用既有方法的錯誤分類、原因碼與日誌白名單（§九），不新增可記錄內容的參數。
+- [x] `session_store.py`：`_ensure_meta` 的建立與 `set_work_target` 的寫入＋續期改走該方法，使「寫入」與「設定 TTL」同進同退。`append_message`／`set_sharing_mode` 若有同形狀的多指令寫入，一併改；已由 Lua 承載而原子者不動。
+- [x] 測試：替身（`tests/` 的 Redis fake）支援 MULTI／EXEC 語意（未 EXEC 前不可見、EXEC 時全部生效）；斷言首次建立後 key 有 TTL；模擬 EXEC 之前連線中斷 → key 不存在（不會留下無 TTL 的半成品）；`set_work_target` 後 TTL 已續期。突變：把交易拆回逐條指令並在中間注入失敗 → 「無 TTL 半成品」案例紅。
+- [x] 真實 Redis 的原子性屬 §六「無法在 CI 驗證」之列，據實記載；本機可用 scratchpad 臨時 `redis-server` 實測時記錄結果。
+
+### Step 14 — 第 18 項：每段加 200 KB 位元組上限（裁決：每段對話大小上限）
+
+**缺陷**：容量承諾（`deploy/.env.example:145-146`：300 個同時存活 session ≈ 90 MB）以「每則 500 B」的平均假設計算，而單則上限是 4000 字元（`DEFAULT_MESSAGE_MAX_CHARS`，`session_store.py:113`）；最壞每 session 約 3 段 × 200 則 × 4000 個中文字 ≈ 7 MB，`maxmemory 256mb`＋`noeviction` 下最壞約 35 個 session 即滿，滿後所有 session 寫入失敗。
+
+- [x] 新增模組常數 `DEFAULT_SEGMENT_MAX_BYTES = 200 * 1024`（以 UTF-8 位元組計；刻意不做環境變數，理由同 `OPEN-ND19-6`：環境設定契約的三處同步成本不值得）。
+- [x] `BR3.4` 修剪改為**兩個條件取較嚴者**：每段最多 `BRAIN_SESSION_HISTORY_MAX` 則，**且**整段序列化後 ≤ 200 KB；超過時從最舊的訊息開始丟，直到兩者都成立。純函式版（`session_types` 的修剪）與 Lua 生產載體**同一語意**，Lua 以位元組長度（`string.len`）判斷。
+- [x] 單則訊息本身大於 200 KB 不可能發生（4000 字元 × 最多 4 位元組 = 16 KB），故不需「單則超限」分支；以斷言寫明此前提。
+- [x] 容量算式改用最壞值：每 session 最壞 3 段 × 200 KB ≈ 600 KB；`maxmemory 256mb` 的 80% ≈ 204 MB ÷ 600 KB ≈ **340** 個 session，對得上 300 的承諾。更新 `deploy/.env.example:145-146` 的註解、`DEPLOY.md` 的 Redis 容量說明（含 `noeviction` 滿載的後果與 `MEMORY STATS` 觀察方式）、`deploy/docker-compose.deploy.yml` redis `command:` 旁的註解；**`maxmemory` 值與 `noeviction` 不變**。
+- [x] 測試：PBT（`session_types` 的修剪）新增 property——任何輸入修剪後整段位元組數 ≤ 上限、則數 ≤ 上限、保留的是最新的那幾則且順序不變；行為測試以 4000 個中文字的訊息灌滿一段，斷言位元組上限生效而非則數上限。突變：拿掉位元組條件 → 新 property 與行為案例紅。
+- [x] `validate_env_contract.py`、`validate_repo_contract.py` 綠（只改註解，未新增變數）。
+
+### Step 15 — 驗證與紀錄
+
+- [x] 本單元三個測試模組與完整套件（`backend/.venv`）全綠。
+- [x] `merge-blockers.md` 第 12、18 列回填處置；`code-summary.md` append 本節紀錄（改動檔:行、測試、突變、容量重算、未驗項）；`source-manifest.json`、`traceability.json`（加 `MB-12`／`MB-18`）更新。`brain-infra` 的 `traceability.json`／計畫 Step 6 仍寫 `allkeys-lru` 的過期敘述，不屬本單元，於 `code-summary.md` 註明由 `brain-infra` 的記錄承接（該處已記載）。
+- 追溯：`merge-blockers.md` #12／#18；`BR3.4`、`BR3.5`、`NFR4.40`、`NFR4.41`、`NFR4.50`。
 
 ## Plan Approval

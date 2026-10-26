@@ -82,6 +82,8 @@
     "FR3.3",
     "FR4",
     "FR6.1",
+    "MB-12",
+    "MB-18",
     "NFR1",
     "NFR2",
     "NFR2.40",
@@ -379,7 +381,7 @@
       "id": "BR3.4",
       "status": "OK",
       "target": "backend/services/session_scripts/append_message.lua",
-      "note": "**唯一生產載體**；參考實作在 backend/services/session_types.py::trim_history（僅供 PBT 與替身）。測試 backend/tests/test_session_types.py::TrimHistoryPropertyTest 三條 PBT（突變 M1）＋ backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest"
+      "note": "**唯一生產載體**；參考實作在 backend/services/session_types.py::trim_history（僅供 PBT 與替身）。測試 backend/tests/test_session_types.py::TrimHistoryPropertyTest 三條 PBT（突變 M1）＋ backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest。2026-10-23 起修剪條件加上每段 200 KB 位元組上限（取較嚴者），見 MB-18 列"
     },
     {
       "id": "BR3.5",
@@ -616,6 +618,18 @@
       "note": "功能需求的驗收面在U13／U14 的使用者可見層，而本單元 kind 為 service、零使用者可見面。它對本單元的要求已下沉為具名規則 **BR3.3**——這幾條是 `rules.md` 中**條文逐字引用本 id** 的規則（機械推導，非人工指派），各自的程式落點見本表對應列。"
     },
     {
+      "id": "MB-12",
+      "status": "OK",
+      "target": "backend/services/redis_gateway.py",
+      "note": "merge-blockers.md 第 12 項（裁決 MULTI／EXEC）。RedisGateway.hset_fields_and_expire 以 pipeline(transaction=True) 送同一 key 的多個 HSET ＋ 一個 EXPIRE；session_store.py 的 _ensure_meta、set_work_target、set_sharing_mode 切回 shared 三處改走它（append_message 與切 isolated 已由 Lua 原子承載）。另以 _strip_pipeline_annotation 拿掉 redis-py 在 pipeline 例外訊息前附的指令全文（含被寫入的值）。測試 backend/tests/test_session_store_behaviour.py::TransactionalWriteTest（7 案；突變「交易拆回逐條」→ 無 TTL 半成品案例 4 子案例紅）＋ RealRedisParityTest 的兩條交易案例（opt-in，需 REDIS_URL，不在 CI）"
+    },
+    {
+      "id": "MB-18",
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "merge-blockers.md 第 18 項（裁決每段對話大小上限）。修剪取「BRAIN_SESSION_HISTORY_MAX 則」與「整段序列化後 ≤ DEFAULT_SEGMENT_MAX_BYTES（200 KB，backend/services/session_types.py）」較嚴者；Lua 以 string.len(cjson.encode(...)) 量位元組，參考實作 trim_history 以 cjson_encoded_size 量同一個東西。最壞 3 × 200 KB ≈ 600 KB／session；256 MB 的 80% ≈ 349 個。測試 backend/tests/test_session_types.py::TrimHistoryByteCapPropertyTest（2 條 @given ＋ 1 條 cjson 長度實測值）、backend/tests/test_session_store_behaviour.py::SegmentByteCapTest（4 案）、backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest（迴圈條件靜態斷言）、RealRedisParityTest（opt-in，真實 Redis 8.8.0 逐步一致）"
+    },
+    {
       "id": "NFR1",
       "status": "N/A",
       "target": "上層 NFR 標題（非本單元可驗證的條款）",
@@ -701,15 +715,15 @@
     },
     {
       "id": "NFR4.40",
-      "status": "GAP",
-      "target": "在本單元強制的上界下不成立：最壞情況每 session 2.4–7.2 MB，256 MB 僅容 ~106／~35 個，要求為 ≥300",
-      "note": "**在本單元實際強制的上界下，本條不成立。** 逐項算式：單一 session 的最壞情況 = 3 段（`SEGMENT_IDS`）× 200 則（`BRAIN_SESSION_HISTORY_MAX`）× 4000 字元（`DEFAULT_MESSAGE_MAX_CHARS`）= **2,400,000 字元**，即 **≈2.4 MB**（每字元 1 位元組）；而本產品的對話是中文，UTF-8 下 CJK 每字元 3 位元組，故真實最壞情況達 **≈7.2 MB**。對 `maxmemory 256mb` 為 **≈106 個**（ASCII）／**≈35 個**（CJK）session；對本條自己承諾的 **90 MB**（256 MB 的 35%，該檔為 AOF 緩衝與 Redis 自身開銷保留的餘裕）則僅 **≈37 個**／**≈12 個**。**要求是 ≥300。**原推導的每則 **500 B** 被該檔自己標為「假設，非量測」，而它現在與一個**大三個數量級**的強制上界直接矛盾——500 B 的平均假設無法同時與 4000 字元（CJK 下 12000 B）的硬上限並存。**本單元使這個缺口變得可見，而不是造成它**：在本單元引入單則長度上限之前，`messageHistory` 的位元組量**根本沒有上界**（`nfr-requirements` `R-02` 查出的正是這點），所以「已填滿上界的 session」在此之前甚至不是一個有限的量；把最壞情況變成可計算的，正是讓這個容量下限的不成立浮現出來的那個動作。**不以調整上界來讓本條通過**：要讓 300 個成立需要每則 ≤500 B，而那會拒絕一段正常長度的中文訊息（≈166 字），與 `FR1.1` 逐字接受的自由文字輸入牴觸。待辦的具體形狀：以**實測**的每則位元組數重算本節兩條算式，並連同單則上限的數值一起裁決；見 code-summary.md 第九節開放項 2"
+      "status": "OK",
+      "target": "backend/services/session_scripts/append_message.lua",
+      "note": "**2026-10-23 由 GAP 改為 OK：merge-blockers.md 第 18 項的每段 200 KB 位元組上限關掉了本列原本記載的缺口。** 修剪取筆數上限與位元組上限較嚴者（Lua 生產載體強制），最壞情況 = 3 段 × 200 KB = 600 KB／session；300 個已填滿上界的 session ≈ 176 MiB，為 maxmemory 256 MB 的 ≈69%，不觸及 maxmemory（本條的要求）；以 80% 計 ≈349 個。**仍須如實記載的兩件事**：(1) 原推導寫 300 個 ≈ 90 MB、為 maxmemory 的 35%，留給 AOF 緩衝與 Redis 開銷的餘裕是 2.8 倍；以最壞值計只剩約 1.45 倍——要求成立，餘裕變小。(2) 同 key 的 U12 工作項集合不在本上界內（OPEN-N10-3、scalability-requirements.md 該條的前提）。以下為改狀態前的原記載，保留不改寫：**在本單元實際強制的上界下，本條不成立。** 逐項算式：單一 session 的最壞情況 = 3 段（`SEGMENT_IDS`）× 200 則（`BRAIN_SESSION_HISTORY_MAX`）× 4000 字元（`DEFAULT_MESSAGE_MAX_CHARS`）= **2,400,000 字元**，即 **≈2.4 MB**（每字元 1 位元組）；而本產品的對話是中文，UTF-8 下 CJK 每字元 3 位元組，故真實最壞情況達 **≈7.2 MB**。對 `maxmemory 256mb` 為 **≈106 個**（ASCII）／**≈35 個**（CJK）session；對本條自己承諾的 **90 MB**（256 MB 的 35%，該檔為 AOF 緩衝與 Redis 自身開銷保留的餘裕）則僅 **≈37 個**／**≈12 個**。**要求是 ≥300。**原推導的每則 **500 B** 被該檔自己標為「假設，非量測」，而它現在與一個**大三個數量級**的強制上界直接矛盾——500 B 的平均假設無法同時與 4000 字元（CJK 下 12000 B）的硬上限並存。**本單元使這個缺口變得可見，而不是造成它**：在本單元引入單則長度上限之前，`messageHistory` 的位元組量**根本沒有上界**（`nfr-requirements` `R-02` 查出的正是這點），所以「已填滿上界的 session」在此之前甚至不是一個有限的量；把最壞情況變成可計算的，正是讓這個容量下限的不成立浮現出來的那個動作。**不以調整上界來讓本條通過**：要讓 300 個成立需要每則 ≤500 B，而那會拒絕一段正常長度的中文訊息（≈166 字），與 `FR1.1` 逐字接受的自由文字輸入牴觸。待辦的具體形狀：以**實測**的每則位元組數重算本節兩條算式，並連同單則上限的數值一起裁決；見 code-summary.md 第九節開放項 2"
     },
     {
       "id": "NFR4.41",
       "status": "OK",
       "target": "backend/services/session_store.py",
-      "note": "可計算的硬上界**已存在**：段數上界 3（backend/services/session_types.py::SEGMENT_IDS）× 每段筆數上限 BRAIN_SESSION_HISTORY_MAX（Lua 強制）× 每則 DEFAULT_MESSAGE_MAX_CHARS（append_message 入口強制），pageModes 固定 2 鍵，其餘皆為純量。**該上界的數值大小是另一回事**，見 NFR4.40。**一項明確在上界之外**：同 key 的工作項集合由 U12 擁有（OPEN-N10-3）"
+      "note": "可計算的硬上界**已存在**：段數上界 3（backend/services/session_types.py::SEGMENT_IDS）× 每段筆數上限 BRAIN_SESSION_HISTORY_MAX（Lua 強制）× 每則 DEFAULT_MESSAGE_MAX_CHARS（append_message 入口強制），pageModes 固定 2 鍵，其餘皆為純量。**該上界的數值大小是另一回事**，見 NFR4.40。2026-10-23 起另有每段 200 KB 的位元組上限（Lua 強制，MB-18），上界因此是 3 × 200 KB，不再依賴每則平均位元組數的假設。**一項明確在上界之外**：同 key 的工作項集合由 U12 擁有（OPEN-N10-3）"
     },
     {
       "id": "NFR4.44",

@@ -113,3 +113,114 @@
 修補輪測試結果：後端 43/43（含 B8、B9）；`npm run lint` 0 error；`npm run build` 通過；e2e 15/15、`--repeat-each=5` 75/75；`tcms_validate --spec` 15 案、0 ERROR、0 WARN。
 
 **R-05（專案／成員服務的同類缺口）**：仍為交接事項，承接方式於核可關卡交使用者決定。
+
+## 重新查驗與合併前必修第 6 項
+
+> 記錄時間：2026-10-23T12:09:55Z（`date -u`）。來源：code-generation 整站 Request Changes；本單元承接 `functional-design/merge-blockers.md` 第 6 項（`review-02` R-08），使用者裁決「收到 404 就重新讀清單確認」（計畫 §四之一）。
+
+### 一、Steps 1–12 重新查驗
+
+| Step | 判定 | 查證方式 |
+|---|---|---|
+| 1 | 成立 | `frontend/src/memory/`（4 檔）、`frontend/src/components/memory/`（4 檔）存在 |
+| 2 | 成立 | `tests.test_memory_authz` 可載入且綠；spec 檔已存在，`--list` 的「0 個」條件已不適用（現為 18 案） |
+| 3 | 成立 | `hierarchy_facade.py:63` import `user_is_approved`、`:166` `is_approved: bool = True`、`:188` 由 `mint_principal` 填入；`memory_facade.py` 六個公開方法首行呼叫 `_authorize_approved`（:272、:315、:352、:393、:429、:486），`REASON_PENDING`（:109） |
+| 4 | 成立 | `tests.test_memory_pending_authz` 存在並綠（見下方指令輸出） |
+| 5 | 成立 | `memory_router.py:88` `FORBIDDEN_RESPONSE`，檔頭 :29-42 已說明 403 來自身分 |
+| 6 | 成立 | `dump_openapi.py --check`、`npm run check:types` 皆一致 |
+| 7 | 成立（本輪改動 `memoryApi.ts` 的 404 語意，見二） | 四個模組存在 |
+| 8 | 成立 | `App.tsx:113` `/memory`、`Sidebar.tsx:245-248` `sidebar-memory-link`，以 `canSeeMemoryEntry` 判定 |
+| 9 | 成立 | lint 0 error；build 通過；四個關鍵字在本單元檔案 grep 0 命中 |
+| 10 | 成立 | e2e 18/18（含本輪新增 3 案） |
+| 11 | 成立 | 兩支 contract validator 通過 |
+| 12 | 成立 | 本檔、`source-manifest.json`、`traceability.json` 存在 |
+
+**本輪其他單元改過的共用檔對本單元判準的影響**（如實記錄，本單元未改這些檔）：
+
+| 共用檔 | 改動 | 影響 |
+|---|---|---|
+| `hierarchy_facade.py` | `HierarchyFacade._authorize` 首行加 `if not principal.is_approved: raise HierarchyForbidden`（2026-10-20） | 本檔 §六 第一列交接事項「`HierarchyFacade` 同類缺口」**已由 hierarchy-service 修正**，不再是待承接事項；`Principal.is_approved` 的讀者由一個變兩個，本單元的 B7／B9 語意不變 |
+| `intent_routing.py` | `_memory_notes` 對 `MemoryForbidden` 原樣向上傳遞（合併前必修第 13 項） | 本檔 §二 第一點「`intent_routing.py` 已會攔下該例外並在無記憶下繼續」**已不成立**：現為以授權錯誤結束該輪。本單元 B6（同進程直呼 facade raise `MemoryForbidden`）不受影響，仍綠 |
+| `user_router.py` | 硬刪除預檢會計數 `memory_records`／`memory_audit_events` | 不觸及本單元的判準；本單元後端測試全綠 |
+| `memory_facade.py` | 本輪無工作樹改動（最後改動為本單元的 `8cf948c`） | — |
+
+### 二、Step 13 實作
+
+| 檔:行 | 改動 |
+|---|---|
+| `frontend/src/memory/memoryApi.ts:85-91` | 新增型別 `DeleteMemoryOutcome = 'deleted' \| 'not-found-unconfirmed'` |
+| `frontend/src/memory/memoryApi.ts:120` | 404 回 `'not-found-unconfirmed'`（原為 `'already-gone'`）；檔內 docstring 改寫為「404 不等於已刪除」 |
+| `frontend/src/components/memory/MemoryZone.tsx:77-80` | 兩則失敗文字常數 `STILL_LISTED_TEXT`、`UNCONFIRMED_TEXT` |
+| `frontend/src/components/memory/MemoryZone.tsx:230-245` | `deleteRecord(memoryId, rowPage)`：204 → `'deleted'`；待確認 → 以 `fetchMemoryRecords(token, kind, offsetFor(rowPage), limit)` 重讀；不含該則 → `'already-gone'`（既有移除＋播報路徑）；仍含 → 拋 `STILL_LISTED_TEXT`；重讀失敗 → 拋 `UNCONFIRMED_TEXT` |
+| `frontend/src/components/memory/MemoryZone.tsx:364` | 傳入 `MemoryItem` 時綁定該列所在頁 `page` |
+| `frontend/src/components/memory/MemoryItem.tsx:45-50、:90` | 僅註解：`deleteRecord` 的 `'already-gone'` 改為「經重讀確認」 |
+| `frontend/tests/e2e/memory-page.spec.ts:882-985` | 新增 3 案（含結構化規格註解），既有 15 案名稱未改 |
+
+設計要點：確認重讀是**純確認**——不遞增 `requestSeq`、不寫入任何 state，列表落地仍只經 `applyLoaded`，故不與翻頁、背景重抓互相覆蓋；`MemoryItem` 的失敗分支（`failed` 狀態、`刪除失敗：…` 文字與播報、焦點回到刪除鍵）原樣沿用。資料抓取仍是「純抓取函式 ＋ 呼叫端 callback」兩層，無 effect 內 setState。後端未改、不依賴錯誤訊息字串。
+
+### 三、測試與突變
+
+新增案例（計畫與 `unit-test-instructions.md §四之三` 編為 E11–E13，與 §七 修補輪既有的 E11–E15 撞號；spec 註解以 `MB6-E11`…`MB6-E13` 區分）：
+
+| 編號 | 案例名稱（TCMS 名稱的 test 段，落地後不可改） |
+|---|---|
+| MB6-E11 | `a 404 delete counts as deleted only after a re-read no longer lists the record`（語意區；斷言 404 後恰多 1 個 `kind=semantic、limit=200、無 offset` 的 GET，該列消失並播報） |
+| MB6-E12 | `a 404 delete whose re-read still lists the record fails and keeps the row`（情節區第 2 頁；斷言重讀為 `offset=20、limit=21`，該列保留並顯示「刪除失敗」） |
+| MB6-E13 | `a 404 delete whose re-read fails is reported as a failure and keeps the row`（語意區；重讀 500，該列保留、區塊不進錯誤態） |
+
+突變（每項：套用→重建→紅→還原）：
+
+| 突變 | 結果 |
+|---|---|
+| M1：「404 一律 `'already-gone'`」（待確認即回 `'already-gone'`，不重讀） | MB6-E11、E12、E13 三案皆紅（E11 因少了確認 GET 而紅；E12 為計畫指定的紅燈案例） |
+| M2：重讀失敗視同已刪除 | 僅 MB6-E13 紅 |
+| M3：重讀仍列出也視同已刪除 | 僅 MB6-E12 紅 |
+
+M2 第一次套用時 `tsc -b` 因未使用常數失敗、建置未更新，該次結果作廢；改寫突變使建置成功後重跑，以上為有效結果。三項還原後全套重跑綠（見下）。
+
+### 四、各命令實際輸出
+
+| 指令 | 輸出 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_memory_pending_authz tests.test_memory_authz tests.test_memory_contract` | `Ran 43 tests` / `OK` |
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1269 tests in 96.662s` / `OK (skipped=3)` |
+| `python3 backend/scripts/dump_openapi.py --check` | `規格檔與後端程式碼一致。` |
+| `npm run check:types` | `API 型別檔與規格檔一致。` |
+| `npm run lint` | `✖ 2 problems (0 errors, 2 warnings)`（兩個 warning 不在本單元檔案，`WorkspacePage.tsx:344` 等） |
+| `npm run build` | `✓ built in 492ms`（chunk 大小 warning 為既存） |
+| `npx vite preview --port 4187 --strictPort`（背景）＋ `BASE_URL=http://localhost:4187 npx playwright test tests/e2e/memory-page.spec.ts` | `18 passed (18.5s)` |
+| 同上 `--repeat-each=5` | `90 passed (1.5m)` |
+| `python3 scripts/tcms_validate.py --spec frontend/tests/e2e/memory-page.spec.ts` | `通過 18/18　ERROR 0　WARN 1` |
+| `python3 scripts/validate_env_contract.py`、`python3 scripts/validate_repo_contract.py` | 皆 `validation passed` |
+
+preview 伺服器跑完即停止。最後一次 e2e 之後，`MemoryZone.tsx` 只改了一段註解（已接受風險的措辭），lint 與 build 已重跑通過，e2e 未再重跑。
+
+**WARN 判讀**：MB6-E13 的 `@api GET /api/memory/records -> 500` 不在 OpenAPI 宣告集合（200／403／422）內。500 在此模擬的是基礎設施或代理層失敗（確認重讀本身失敗），不是端點宣告的行為；依指示不改後端，故不補 `responses=`，WARN 保留。
+
+### 五、已接受風險
+
+只重讀該列所在的那一頁。兩次請求之間若有更早的記憶被刪除使清單位移，該則可能滑到前一頁而被誤判為已刪除；機率低，且後果與裁決前（404 一律視為已刪除）相同。情節區探測列 `limit=21` 只涵蓋「往後」位移一筆，不涵蓋此情境。
+
+### 六、偏離與未驗項
+
+| # | 項目 | 說明 |
+|---|---|---|
+| 1 | 「當前頁」的詮釋 | 計畫寫「該區目前這一頁」。實作取**該列被渲染時畫面上的頁**（按下確認那一刻的頁），而非 404 回應到達時的頁：刪除在途時使用者若翻頁，以新頁重讀必然不含該則，會誤判為已刪除。通常兩者相同 |
+| 2 | 編號撞號 | 計畫的 E11–E13 與 §七 既有 E11–E15 撞號，以 `MB6-` 前綴區分；`unit-test-instructions.md` 為已核可內容，未改 |
+| 3 | `source-manifest.json` 未改 | 本輪寫入的四個檔（`memoryApi.ts`、`MemoryZone.tsx`、`MemoryItem.tsx`、`memory-page.spec.ts`）皆已在既有條目（`frontend/src/memory/`、`frontend/src/components/memory/`、spec 檔）涵蓋範圍內，無新路徑 |
+| 4 | 未驗 | `regression.spec.ts` 與 `ui-regression` 完整 stack（需 docker）；真實後端的 404 情境（本單元 e2e 全以 `page.route()` 攔截） |
+| 5 | 文件過期 | 本檔 §二 第一點（`intent_routing.py` 降級）與 §六 第一列（`HierarchyFacade` 交接）已被其他單元的改動推翻，見一之表；原文不回改 |
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T15:11:36Z -->
+
+本輪只查驗、未改任何程式或測試。計畫 17 格全部勾選（機械計數：`[x]` 17、`[ ]` 0）。Step 2 的「spec 尚不存在時 `--list` 回 0」因 spec 早已存在而無法重現，以執行器可用（後端三檔 43 OK、Playwright 收集 18 案）判定。
+
+測試與檢查（本機實跑）：後端完整套件 1319 OK（skipped 3；log 中 23 行 `ERROR:` 皆為 logger 輸出）；單元範圍 `test_memory_pending_authz`／`test_memory_authz`／`test_memory_contract` 43 OK；`npm run lint` 0 errors、2 個既有 `exhaustive-deps` warning（非本單元）；`check:types` 一致；`tsc -b` 通過（只更新既有且已 gitignore 的 `node_modules/.tmp/*.tsbuildinfo` mtime）；`vite build` 輸出到 scratchpad 成功。e2e：以 `vite preview` 服務 scratchpad 建置實跑 `memory-page.spec.ts` **18/18 passed**（`--reporter=list`、`--output` 指到 scratchpad），跑完已停。兩支 contract validator 通過。突變未重跑，沿用本檔 §五、§七、「重新查驗」§三。git status（含 `--ignored`）前後無新增。
+
+合併前必修 **#6 屬實已解決**：`memoryApi.ts:119-120` 只有 204 回 `'deleted'`，404 回 `'not-found-unconfirmed'`，其他狀態碼拋例外；`MemoryZone.tsx:230-244` 收到 404 後以該列所在頁的同一組參數重讀（不動 `requestSeq`、不寫 state）：已不含該則 → 走 204 的移除與播報路徑；仍含 → 拋 `STILL_LISTED_TEXT` 保留該列；重讀失敗 → 拋 `UNCONFIRMED_TEXT` 保留該列。三個 e2e（`:899`、`:934`、`:966`）本輪綠，`:934` 斷言重讀參數為 `offset=20`、`limit=21`。已接受風險（重讀只看一頁，位移超過一筆時可能誤判）見第 6 列補記 (a)。
+
+已核可計畫／測試說明與程式的落差（不回改計畫）：Step 8 的「放在 `Sidebar.tsx:209-216` DEMO SCOPE 區塊之後」——該區塊已由後續單元移除，現位於「專案」之後、管理區之前，符合線框 §14；Step 3 的「`HierarchyFacade` 不改」——`hierarchy_facade.py:214` 已有 `is_approved` 拒絕（hierarchy-service review-01，2026-10-20）；Step 7 的 `fetchMemoryRecords` 多一個 `token` 參數，404 處置已由 Step 13 取代；`unit-test-instructions.md` 寫後端 7 案、e2e 10＋3 案，實為 9 案與 18 案（E11–E13 與修補輪撞號，spec 以 `MB6-` 註解區分）；測試說明的本機指令用 `python3` 與裸 `npx playwright`，預設 reporter 會寫出 `frontend/pw-report.json` 與 `junit.xml`。
+
+候選問題（未修，交審查判定）：member-pages-ui 的兩種形狀在本單元不適用（`/memory` 無路由參數，`/me` 失敗有 `memory-page-identity-error`；本單元無 dialog，`DeleteConfirmRow` 為就地 `role="group"`，有 Escape 取消與焦點歸還）。(1) 刪除送出期間確認列卸載、刪除入口 `disabled`，焦點掉到 `body`；成功時情節區只在被刪列位於目前頁時才移焦點。(2) Sidebar「我的記憶」的 `<nav>` 沒有 `aria-label`，旁邊「專案」的有，可能觸發 axe `landmark-unique`。

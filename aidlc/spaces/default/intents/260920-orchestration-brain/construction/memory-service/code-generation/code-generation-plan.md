@@ -137,7 +137,7 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 - [x] 2.1 `backend/models.py` 新增 `MemoryRecord`（**八欄**，省略 `embedding`）與 `MemoryAuditEvent`（七欄）
 - [x] 2.2 兩個模型的 `__table_args__` 必須指定 `{"schema": "memory"}`；**但 SQLite 無 schema 概念**——確認 `create_all` 在 SQLite 下的行為（若 schema 前綴導致失敗，以 `helpers.py` 既有的處置形狀解決，**不得**改既有 helper 的語意）
 - [x] 2.3 `embedding` 的省略必須有逐字註解，寫明理由（`NFR8.20` 的 `requirements.txt` diff 為空）與一致性測試的斷言形式
-- [x] 2.4 **不加 `CheckConstraint`**：封閉集合在應用層承載（沿用 `U18` 先例，`functional-design/entities.md §三` 已定）
+- [ ] 2.4 **不加 `CheckConstraint`**：封閉集合在應用層承載（沿用 `U18` 先例，`functional-design/entities.md §三` 已定）
 
 ### Step 3 — 純函式層（implement）
 
@@ -159,7 +159,7 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 - [x] 5.2 角色判定**只實作一份**，由 `BR5.1` 與 `BR6.1` 共用
 - [x] 5.3 **`[D1]`=A 的回應收斂**：`delete` 的「不存在」與「非擁有者」**皆拋 `MemoryNotFound`**；但拋出前以 `reason="owner"` 寫日誌
 - [x] 5.4 `widen_scope`／`list_audit_events` **先判角色、後取記憶**（`NFR7.22`）
-- [x] 5.5 `memory_router.py`：六條路由（含新增的 `POST`）＋ offset／limit 分頁 ＋ 伺服器端 `limit` 上限
+- [ ] 5.5 `memory_router.py`：六條路由（含新增的 `POST`）＋ offset／limit 分頁 ＋ 伺服器端 `limit` 上限
 - [x] 5.6 router **不做授權判定**，只做 HTTP ↔ 例外轉譯
 - [x] 5.7 `main.py` 註冊，prefix `/api/memory`
 
@@ -212,7 +212,7 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 
 - [x] 10.1 `git diff --stat -- backend/database.py` 仍為空
 - [x] 10.2 `git diff --stat -- backend/requirements.txt` **為空**（`NFR8.20`）
-- [x] 10.3 `git diff --stat -- deploy/ .github/workflows/ci.yml` **為空**
+- [ ] 10.3 `git diff --stat -- deploy/ .github/workflows/ci.yml` **為空**
 - [x] 10.4 `python3 scripts/validate_repo_contract.py` ＋ `validate_env_contract.py` 綠燈
 - [x] 10.5 `cd backend && python3 -m unittest discover -s tests` 全綠
 - [x] 10.6 `python3 scripts/dump_openapi.py --check` 綠燈
@@ -381,3 +381,37 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 在功能上完全正常、測試也會綠，而它把整列（含 `content`）寫進公開可讀的日誌。
 故 6.1 第 ⑤ 條是**靜態**斷言（掃日誌呼叫的引數形狀），
 不只依賴 6.3 的執行期字串比對——後者只在被觸發的路徑上有效。
+
+## 十、code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。逐項對照「單元」欄：**19 項中沒有一項劃給 `memory-service`**。與本單元介面相關的兩項，落點與本單元的關係如下：
+- 第 13 項（`intent_routing.py:192-229` 以 `except Exception` 吞下記憶讀取的所有錯誤，連授權拒絕也當成一般降級）劃給 `intent-router`。本單元的讀取介面已以不同例外型別區分「拒絕」與「依賴失敗」（`MemoryForbidden`／`MemoryNotFound` 與服務層的其他錯誤），修法是 `intent-router` 改為分別處理，不需改本單元；若該單元查出本單元的例外不足以區分，在其計畫中處理並註明。
+- 第 6 項（前端 `deleteMemoryRecord` 把任何 404 都當成已刪除）劃給 `memory-page-ui`。本單元對「不存在」與「不是你的」**刻意回同一個 404**（Step 5.3，防止枚舉；本節之前的設計已定案），故前端無法以狀態碼分辨，修法落在前端如何解讀 404，不改本單元的回應語意。
+
+因此本計畫**不新增步驟**，本輪只重新查驗既有步驟並跑測試（完整套件一律以 `backend/.venv` 執行）。
+
+## 十一、合併前必修第 22 項（2026-10-26 使用者裁決：先修再重審）
+
+來源：`construction/functional-design/merge-blockers.md` 第 22 項（code-generation 重做時 review-03 的 Major ＋ Minor）。本節是本輪唯一新增的工作；第三節既有步驟的勾選狀態不變。
+
+### Step 12 — 取負號的真實距離測試（Business logic - write and run its tests）
+
+- [x] 12.1 在 `backend/tests/test_memory_ranking.py`（或新檔）新增測試：以真實距離值餵 `scored_candidates`，斷言距離較近的候選排在前面
+- [x] 12.2 突變：把 `score=-distance` 改為 `score=distance`，該測試必須變紅（只在暫存區副本做）
+
+### Step 13 — 向量寫入與檢索的端到端測試（Repository / data access - write and run its tests）
+
+- [x] 13.1 在 `backend/tests_pg` 新增測試：真實 PostgreSQL ＋ pgvector 上走 `create_record` → `search_records`，斷言該列 `embedding IS NOT NULL` 且檢索查得到該筆
+- [x] 13.2 突變：跳過 `UPDATE ... SET embedding`，該測試必須變紅（只在暫存區副本做）
+
+### Step 14 — 併發雙重刪除只寫一筆稽核（Business logic - implement ＋ test）
+
+- [x] 14.1 `delete_with_audit` 刪除前以 `SELECT ... FOR UPDATE` 鎖住該列，或檢查 DELETE 實際影響的列數；為 0 時拋 `MemoryNotFound`、不寫稽核。SQLite 路徑維持可用
+- [x] 14.2 在 `backend/tests_pg` 新增併發刪除測試：兩個 session 刪同一列，斷言稽核 `deleted_by_user` 恰一筆、第二次得到 `MemoryNotFound`
+- [x] 14.3 突變：拿掉 14.1 的保護，該測試必須變紅（只在暫存區副本做）
+
+### Step 15 — CI 與收尾（Environment/build configuration ＋ Documentation and traceability）
+
+- [x] 15.1 確認 CI 的 `tests_pg` job 會跑到 Step 13、14 的測試（image 含 pgvector、schema 已載入）；不足時以最小改動修 `ci.yml` 並說明
+- [x] 15.2 完整後端套件與 `tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）全綠；`validate_repo_contract.py`、`validate_env_contract.py` 綠燈
+- [x] 15.3 新檔加入 `source-manifest.json`；`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 22 項處置段（變更位置、測試數、三項突變結果）

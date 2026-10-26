@@ -64,6 +64,18 @@ python3 scripts/dump_openapi.py --check
 
 結果記入 `code-summary.md`。
 
+### 四之一、合併前必修第 18 項（Request Changes 修訂，計畫 §六 Step 13–16）
+
+| 測試檔 | 新增案例 | 會真的失敗的條件 |
+|---|---|---|
+| `test_work_orchestrator_store.py` | 第 6 筆進行中被拒、終態不計入上限、轉終態後超過 20 筆刪最舊、進行中永不被刪、同 `createdAt` 刪除順序決定性、key 不存在仍回原值 | Lua／參考實作少任一檢查 |
+| `test_work_orchestrator_store.py`（`@given`） | 任意交辦與轉終態序列後，進行中 ≤ 5、終態 ≤ 20 | 上限或刪除任一失效 |
+| `test_work_orchestrator_flow.py` | 已有 4 筆時交辦 2 個意圖 → 整批拒絕且 Redis 無新欄位；併發下 Lua 回上限 → 同批已寫入項轉 `失敗`；轉終態後 `requestText` ≤ 200 字 | 預檢只看單筆、半批殘留、未截斷 |
+| 閘道測試（`tests/test_brain_gateway*.py` 擇既有檔） | `WorkCapacityExceeded` → `INVALID_REQUEST` 加上固定訊息 | 落到 `INTERNAL_ERROR` |
+| `tests_redis/test_work_item_lua.py`（opt-in） | 以上 store 案例對真 Redis 與參考實作逐案比對 | Lua 與參考實作語意分歧 |
+
+突變（每項套用 → 紅 → 還原 → 綠）：拿掉 Lua 上限檢查；拿掉 `dispatch` 預檢；拿掉終態刪除；刪除對象改成進行中項；拿掉 `requestText` 截斷。執行一律用 `backend/.venv`、`PYTHONDONTWRITEBYTECODE=1`。
+
 ## 五、覆蓋率
 
 repo 無覆蓋率量測機制（`team.md`）；以上列每個元件 5–8 個案例、四個純函式的 PBT、stateful 模型測試與突變驗證作為實際門檻，不宣稱百分比。

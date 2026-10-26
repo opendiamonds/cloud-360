@@ -209,3 +209,59 @@ PBT 在**那裡**適用，可失敗的性質是**排列不變性**（`ORDER BY j
 | `OPEN-P5` | carried | 沒有機制保證有人去執行腳本；`deploy.yml` 不呼叫任何遷移腳本 |
 | `OPEN-ND18-3` | carried | `FR12.2` 的人工角色變更稽核仍無承載者；本站不自行決定表的語意範圍 |
 | `OQ-H1` | carried | 使用者硬刪除的行為上游刻意未決，以 COMMENT 承接 |
+
+## 重新查驗（code-generation Request Changes 後，conductor，`2026-10-20T23:05:36Z`）
+
+**觸發**：使用者對整站送出 Request Changes（原文：「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」）。19 項無一劃給本單元（計畫 §七，使用者已核可）。本輪**未改任何應用程式碼**；引擎於核可時重設 8 格勾選，逐格對照現況勾回。
+
+| Step | 查驗依據 |
+|---|---|
+| 1、5 | `backend/scripts/verify_meta_schema.sql` 存在，執行指令記於 `unit-test-instructions.md` |
+| 2 | `schema_rbac.sql:568` 起為 `J) U18 project-meta-data` 區塊；檔頭 `:12` 列入涵蓋清單 |
+| 3 | `backend/scripts/run_meta_schema_migration.py` 存在，`BLOCKS_TO_RUN = ("X", "I", "J")` |
+| 4 | `DEPLOY.md:251` 表格列 J、§2.2.9 為執行步驟；§2.2.8 已改為指向 2.2.9 |
+| 6 | `.github/workflows/ci.yml:393` 在 `memory-schema` job 內執行 `verify_meta_schema.sql` |
+| 7 | 突變紀錄見本檔先前章節；本輪未改 DDL 結構（只改 COMMENT），該結果仍適用 |
+| 8 | 本檔、`source-manifest.json`（5 個路徑，皆存在）、`traceability.json` 存在 |
+
+| 命令（`backend/`，`.venv`） | 結果 |
+|---|---|
+| `tests.test_retention_purge_contract` | `Ran 10 tests` → `OK` |
+| `tests.test_membership_data` | `Ran 9 tests` → `OK` |
+| 完整套件 | `Ran 1223 tests` → `OK`（本輪 memory-data 查驗時所跑，其後無程式變更） |
+
+**本輪未驗**：`verify_meta_schema.sql` 需要真實 PostgreSQL；本機無 Docker daemon、`localhost:5432` 無回應。CI 最近一次 `memory-schema` job（run `38117175745`，`a5200fc`）為 success，其後 `J)` 區塊被 `6dff4d4`（U20）與 `8677b7d`（U23）改過，並有本輪 `hierarchy-data` 的 COMMENT 修改，故以下次推送後的 CI 結果為準。
+
+**狀態更新**：上表 `OQ-H1` 已由 `hierarchy-data` 本輪的必修第 3 項作成（使用者裁決：空預設專案隨使用者清除、其餘參照回 409），`project_members.user_id` 的 COMMENT 已同步更新；本表該列保留原文作為歷史紀錄。
+
+**審查後補正（review-02，READY，3 個 Minor）**：`ci.yml` 的步驟名稱與註解由「P1-P12」更新為「P1-P16」（U20 加了 P13–P16；只改步驟名稱與註解，job 的 `id`／`name:` 不變，故不影響必要檢查名稱，YAML 解析通過）；`DEPLOY.md:251` 的「無資料遷移」補上 U20 條件式欄位轉型的例外。第三項（`verify_meta_schema.sql` 未重跑）維持，待推送後以 CI 結果回填。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T06:30:04Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有產出，**程式碼與文件改動為 0**。計畫 8 格勾 7 格：**Step 7（突變驗證）未勾**——計畫要求實際改壞 DDL 確認紅燈，本輪未重跑；§七的 10 項 RED 是先前版本的紀錄。後續單元的改動一律保留（U19 的 `cause` 欄與 `ck_reselection_events_cause`、U20 的 varchar 型別與條件式收斂 DO 區塊、U23 的 `ix_project_members_user_id`）。
+
+### 本機真實 PostgreSQL 實跑（上節第三項「未重跑」本輪補上）
+
+Homebrew PostgreSQL **17.7** ＋ pgvector 0.8.1，在 scratchpad 建一次性叢集（只開 TCP，port 55432）；CI 用 `pgvector:pg18`，版本不同。跑完已停機、刪除資料目錄，未碰任何共用或 staging 資料庫，無殘留程序。
+
+| 步驟 | 結果 |
+|---|---|
+| 第一次套用 `schema_rbac.sql` | exit 0（3 則 already exists 通知） |
+| 第二次套用（可重跑） | exit 0 |
+| `verify_meta_schema.sql` | exit 0；結構類 P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16 與行為類 P4／P7／P10／P11 全部通過 |
+| 照 CI 的 U20 步驟 A 降回舊定義（`downgrade_requirement_fields.sql`） | exit 0 |
+| 步驟 B `run_meta_schema_migration.py` | exit 0；索引 9 個、CHECK／UNIQUE 9 條、U20 欄位收斂本次有執行、清掉非空舊值 0 筆、終檢通過 |
+| 收斂後再跑 verify | exit 0，P1–P16 全通過 |
+| 再跑一次遷移腳本 | 「本次未執行（欄位已是 varchar(64)…）」、「終檢通過」（經管線執行，exit code 未直接擷取；「終檢通過」只在回傳 0 的路徑印出） |
+| 全套 `-m unittest discover -s tests`（`backend/.venv`） | `Ran 1319 tests`、`OK (skipped=3)`（本單元無 Python 測試模組） |
+| `validate_repo_contract.py`、`validate_env_contract.py` | 皆 passed |
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- 計畫 §三之二 寫 `reselection_events` 8 欄，現為 9 欄（U19 的 `cause`）；§三之三 寫 `updated_on_behalf_of` 為 `INTEGER REFERENCES users`，現為 `VARCHAR(64)`、無外鍵（U20）；§四之三 說不建 `user_id` 索引，現已由 U23 建立。
+- 測試說明只列 P1–P12（實為 P1–P16），P5 寫「恰為 8 欄」（斷言實為 9 欄）；指令的 `-d cloud360` 與預設 port 視環境而定。
+- 檔內過時註解（不影響行為，本輪未改，交 build-and-test 一併清理）：`verify_meta_schema.sql:99` 仍寫 8 欄（`:103` 實查 9 欄）；`ci.yml:328` 寫「12 條斷言（P1-P16）」；`ci.yml:383` 寫 P13–P16 由 U20 加入，實際 P13／P14 為 U19（`verify_meta_schema.sql:2-4`）；`DEPLOY.md:795` 仍寫「本節的 P1–P12」，同段 `:791` 已寫 16 條。
+
+`source-manifest.json` 的 5 條路徑全部存在且仍屬本單元（J) 區塊 `schema_rbac.sql:567-808`；`ci.yml:388-393`）。

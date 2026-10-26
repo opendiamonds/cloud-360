@@ -338,6 +338,40 @@ ADR-0020 已把 `U13` 從 `K-16` 的 `consumed_by` 移除，加上 ADR-0021，`r
 
 `test-after` 的五個可測層在本單元的落點：**Data model / database behavior** 不新增（零 DDL）；**Repository / data access** 不新增（經既有 `U20` facade，以 HTTP 呼叫）；**Business logic** 為 Step 2–3 的純函式與 `dispatch`；**API / endpoint** 為 Step 4–7 的 `create_app`、server 入口與端到端；**Frontend behavior** 本單元無變更。Environment/build configuration 為 Step 8–11、13；Documentation and traceability 為 Step 12、14。方法論未改。
 
+## 八、code-generation Request Changes（2026-10-20）：合併前必修第 7、8 項
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，並逐項裁決需人工判斷者。劃給本單元的是第 7、8 項（皆屬 ADR-0006）。
+
+**使用者裁決（2026-10-24，於本站逐項提問）**：
+- **第 7 項（Encryption）**：**沿用 2026-10-14T23:02:07Z 的裁決結案**（`nfr-design/security-design.md:83-84`），不改程式。查證現況：bridge 只在專屬網段 `mcp`（`deploy/docker-compose.deploy.yml:446`；`:483-486` 中只有 `mcp` 為 `internal: true`），成員只有 `backend` 與 `mcp-bridge`，無 `ports:`；backend 目前沒有任何程式呼叫 bridge（`OPEN-MB21-1`）。這仍是對上游「本機迴環或加密」（`requirements.md:618`）的**例外**，不是符合；殘餘風險：同主機上被入侵且位於 `mcp` 網段內的容器（目前只有 `backend`）可竊聽 token。§六 第 1 項維持原揭露。
+- **第 8 項（Audit logging）**：**推翻 `[MBN1]`=A**，改為成功讀取補一行帶使用者身分的 log，使 `requirements.md:620` ③「稽核主體必須是使用者本人」在讀取面也成立。本項取代 §六 第 2 項與 `OPEN-MB21-14` 的結案理由。
+
+**跨單元**：落點在 `U20 requirement-field-service` 已交付的 `backend/services/requirement_field_facade.py`（`read_fields`，`:301-305`）。只加 log，不改回傳、不改授權、零 DDL、零新環境變數。
+
+### Step 15 — 讀取稽核 log：實作
+
+- `RequirementFieldFacade.read_fields` 在授權通過、取得資料之後，記**一行 INFO**，形狀比照既有 `_log_change`（`:444-467`）與 `_deny`（`:268-283`）：訊息 `requirement_field.read system_id=%s user_id=%s on_behalf=%s`，`extra` 帶 `story_id`、`action="view"`、`system_id`、`user_id`、`on_behalf`（若 `read_fields` 的呼叫端沒有代寫語意則固定 `False`，以實際簽章為準）。
+- **不記**欄位值、欄位 key 清單、使用者原句、token；`system_id` 取授權後的 `known_id`，不是輸入原值。
+- 被拒的讀取維持只有 `_deny` 那一行（不重複記）。
+- logger 沿用模組既有的 `"cloud360.<module>"` 形式 logger，不新建。
+
+### Step 16 — 讀取稽核 log：測試
+
+- 在 `U20` 既有的 facade 測試檔（以實際檔名為準）新增：
+  - 成功讀取 → `assertLogs` 恰一筆 `requirement_field.read`，`user_id` 等於呼叫者、`system_id` 等於授權後的 id；
+  - 以唯一標記字串（`uuid4()`）寫入的欄位值**不出現**在該 log 的訊息與 `extra`；
+  - 被拒讀取（非成員）→ 只有 `requirement_field.denied`，沒有 `requirement_field.read`。
+- 經 MCP 的端到端：`tests/test_mcp_bridge_e2e.py` 的成功讀取案（`AC11.4.3`）加斷言 backend 端記了帶該使用者 `user_id` 的 `requirement_field.read`。
+- 突變（記入 `code-summary.md`）：M-A 拿掉這行 log → 成功讀取案紅；M-B log 改記欄位值 → 標記不外洩案紅；M-C 改在授權前記 → 被拒讀取案紅。每項套用 → 紅 → 還原 → sha256 對照基線 → 綠。
+- **前置**：本機 `mcp` 套件版本須與釘選一致（目前本機為 1.29.0、釘選 2.3.0，`test_mcp_bridge_*` 28 案因此失敗），先在 `backend/` 執行 `pip install -r requirements.txt` 再跑 MCP 端到端；若無法安裝，端到端那一案記為未驗證，facade 層三案照常必綠。
+
+### Step 17 — 文件與追溯
+
+- `code-summary.md` 新增一節：兩項裁決、Step 15–16 的變更與測試結果、突變結果、§六 第 2 項與 `OPEN-MB21-14` 被取代。
+- `merge-blockers.md` 第 7、8 列：以純 append 方式在處置欄末尾記載。
+- `source-manifest.json` 加入 `backend/services/requirement_field_facade.py` 與改到的測試檔；`traceability.json` 補 `requirements.md:620` ③ 的讀取面落點。
+- 驗證：全套 `python -m unittest discover -s tests`、`validate_repo_contract.py`、`validate_env_contract.py`、`dump_openapi.py --check`（應不漂移）。
+
 ## Testing Contract
 
 ```json

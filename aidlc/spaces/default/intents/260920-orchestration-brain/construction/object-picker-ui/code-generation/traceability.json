@@ -338,7 +338,7 @@
       "id": "OPN-26",
       "status": "OK",
       "target": "frontend/tests/e2e/object-picker.spec.ts",
-      "note": "C 規則適用：本檔 32 案＋a11y 兩掃描點；A／B 不適用（code-summary §九）"
+      "note": "C 規則適用：本檔 33 案＋a11y 兩掃描點；A／B 不適用（code-summary §九）"
     },
     { "id": "NFR11.100", "status": "N/A", "target": "屬 U23 project-pages-ui 的需求，上游僅引為處置先例，本單元不承接" },
     { "id": "NFR11.140", "status": "N/A", "target": "屬 U14 entry-page-ui 的需求，上游僅引為處置先例，本單元不承接" }

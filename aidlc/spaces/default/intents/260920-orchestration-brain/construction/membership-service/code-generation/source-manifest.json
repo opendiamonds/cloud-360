@@ -10,6 +10,8 @@
     { "path": "backend/services/membership_facade.py" },
     { "path": "backend/services/membership_router.py" },
     { "path": "backend/scripts/backfill_project_members.py" },
+    { "path": "backend/services/membership_backfill.py" },
+    { "path": "backend/tests/test_brain_gateway_startup.py" },
     { "path": "backend/tests/test_membership_data.py" },
     { "path": "backend/tests/test_membership_facade.py" },
     { "path": "backend/tests/test_membership_endpoints.py" },

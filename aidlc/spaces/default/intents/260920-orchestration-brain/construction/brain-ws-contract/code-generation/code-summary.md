@@ -490,3 +490,120 @@ restart) invalidates the fingerprint/receipt and reopens Plan Approval」）。
 (3) 留著 R-04 的代價是我們剛為 `BR2.13` 修掉的那個**靜默漏做**，只是換一個 id。
 
 **這是一項如實記載的殘留風險，不得在摘要中寫成「全部經審查確認」。**
+
+## 合併前必修第 2 項（Request Changes 修訂）
+
+<!-- 寫入時間：2026-10-20T07:08:20Z（`date -u` 取值） -->
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 2 項（`functional-design/reviews/review-05.md` R-01，Critical）。
+**使用者裁決**：`error` 的 `turnId` 改為可為空，不另立非輪次錯誤型別。計畫 Step 12。
+
+### 改動清單（行號為修改後的檔）
+
+| 檔:行 | 改動 |
+|---|---|
+| `backend/services/brain_ws_contract.py:7-8` | 模組 docstring 改為「輪次／非輪次／`error` 可為 null 三分」 |
+| `backend/services/brain_ws_contract.py:371-382` | `ErrorPayload.turnId` 由 `str` 改為 `Optional[str]`（必填鍵、值可為 null），description 寫明判準與「不得捏造」 |
+| `backend/services/brain_ws_contract.py:588-613` | `BR1.6` 註解改三類；`ERROR` 移出 `_TURN_SCOPED_TYPES`（5 → 4）；新增 `_EITHER_SCOPED_TYPES = {ERROR}`（`:609-613`） |
+| `backend/services/brain_ws_contract.py:626-644` | import 期互斥窮盡斷言改為**三集合**兩兩互斥 ＋ 聯集等於九個 type，fail-fast 保留；迴圈變數 `del`（`:638`） |
+| `backend/services/brain_ws_contract.py:646-652` | `_TERMINAL_TYPE_VALUES` 不變（仍含 `error`），補註解：比對用 `!=`，兩份同為 null 時通過，不得把 ERROR 拿掉 |
+| `backend/services/brain_ws_contract.py:711-722` | `WsEnvelope.turnId` description 同步三類規則 |
+| `backend/services/brain_ws_contract.py:775-777` | `_br1_6_turn_id_partition` 對 `_EITHER_SCOPED_TYPES` 直接放行（一致性由 `_validate_raw` 的 `BR1.5` 鎖住） |
+| `backend/tests/test_ws_contract.py:176-192` | **既有測試 (4) 的修改**：輪次集合大小 5 → 4、docstring 改寫。不改的話放寬後必然紅燈，因它斷言 `error` 的 null 被拒——那正是本項要推翻的行為 |
+| `backend/tests/test_ws_contract.py:239-` | 新增 `WsEnvelopeErrorTurnIdNullableTest`，6 個測試 |
+| `ws-contract.json` | 重產（`+11 −4`） |
+| `frontend/src/types/ws-contract.d.ts` | 重產（`+3 −3`）：`ErrorPayload.turnId: string` → `string \| null`，兩段 description 更新 |
+| `frontend/src/brain/useBrainConnection.ts:171-173` | **前端最小修正**（見下） |
+
+**`BR1.5` validator 本身未改程式碼**：它原本就以 `payload_turn_id != envelope_turn_id` 比對，`None == None` 時通過、一 null 一非 null 時拒絕，已滿足「兩者同為 null 或同為同一值」。原本擋住 null 的是 `ErrorPayload.turnId: str` 與 `BR1.6` 的輪次集合。
+
+### 六個新測試（`WsEnvelopeErrorTurnIdNullableTest`）
+
+| # | 測試 | 涵蓋 |
+|---|---|---|
+| (8) | `test_non_turn_error_with_both_turn_ids_null_is_accepted` | 兩份皆 null 可構造 |
+| (9) | `test_error_with_null_envelope_and_non_null_payload_is_rejected` | `BR1.5`，訊息含 `BR1.5` |
+| (10) | `test_error_with_non_null_envelope_and_null_payload_is_rejected` | `BR1.5`，訊息含 `BR1.5` |
+| (11) | `test_turn_scoped_error_still_carries_matching_turn_id` | 輪內 error 仍帶同值編號 |
+| (12) | `test_relaxation_is_limited_to_error` | `token`（訊息含 `BR1.6`）與 `done` 的 null 仍被拒 |
+| (13) | `test_three_partitions_are_disjoint_and_exhaustive` | 三集合兩兩互斥、聯集 9、可為 null 集合恰為 `{error}` |
+
+每個都帶 `@purpose`／`@given`／`@step`／`@pass`／`@story` 規格註解（沿用本檔既有慣例）；`@api`／`@ui` 依既有理由刻意缺席。
+
+### 突變驗證（改錯 → 開檔確認突變生效 → 跑 → 還原 → 複驗綠）
+
+| # | 突變 | 確認生效的方式 | 結果 |
+|---|---|---|---|
+| M6 | `ERROR` 放回 `_TURN_SCOPED_TYPES`，`_EITHER_SCOPED_TYPES` 清空（不清空的話 import 期互斥斷言會先炸，紅燈來源就不是 (8)） | `grep -A8 "^_TURN_SCOPED_TYPES"` 印出含 `ERROR` | `tests.test_ws_contract` 跑 17 個：**(8) ERROR**（`ValidationError`）、(13) FAIL、(4) FAIL（`len==4`）；`FAILED (failures=2, errors=1)`。**(8) 轉紅，符合預期** |
+| M7 | 自 `_TERMINAL_TYPE_VALUES` 移除 `error`（即拿掉 `BR1.5` 對 error 的相等檢查） | `grep -A2 "^_TERMINAL_TYPE_VALUES"` 印出只剩 `done` | 跑 17 個：**(9) FAIL、(10) FAIL**，另 (1)(2)(3) 的 `type='error'` 子案例 FAIL；`FAILED (failures=5)`。**(9)(10) 轉紅，符合預期** |
+
+M7 額外紅的 (1) 包含 happy path：原因是測試 helper `payload_for` 依 `_TERMINAL_TYPE_VALUES` 決定是否填 payload 的 `turnId`，突變後 error 的 payload `turnId` 保持 `None` 而斷言期待 `turn-0001`。這是 helper 與被測集合耦合，不影響判讀（(9)(10) 不經 helper）。
+
+兩項還原後複驗：`Ran 23 tests` → `OK`。
+
+### 命令實際輸出
+
+| 命令 | 輸出 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_ws_contract tests.test_dump_ws_contract -v` | `Ran 23 tests in 0.071s` / `OK` |
+| 同上改用系統 `python3`（計畫 Step 2 原指令） | `Ran 23 tests in 0.074s` / `OK` |
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1210 tests in 98.079s` / `OK`（含 `U13` 既有測試，放寬未破壞閘道） |
+| `.venv/bin/python scripts/dump_ws_contract.py` | `已寫入 ws-contract.json`，exit 0 |
+| `.venv/bin/python scripts/dump_ws_contract.py --check` | `WS 契約規格檔與後端程式碼一致。`，exit 0 |
+| `npm run gen:ws-types` | `openapi-typescript 7.13.0`，`../ws-contract.json → src/types/ws-contract.d.ts` |
+| `npm run check:ws-types` | `WS 契約型別檔與規格檔一致，且 sideEffect 的哨兵值說明仍在（BR4.4）。`，exit 0 |
+| `npm run lint` | `✖ 2 problems (0 errors, 2 warnings)`（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的既有 `exhaustive-deps`） |
+| `npm run build`（修正前） | `tsc -b` 失敗 2 處：`useBrainConnection.ts(174,15)` TS2322、`(182,40)` TS2345，皆為 `string \| null` 不可指派給 `string` |
+| `npm run build`（修正後） | `✓ built in 733ms`（僅既有的 chunk > 500 kB 警告） |
+| `aidlc engine sensor-traceability ...` | `pass: true`，`findings_count: 0` |
+
+### 前端最小修正
+
+`frontend/src/brain/useBrainConnection.ts` 的 `case 'error'`：
+
+```ts
+const turnId = env.turnId ?? payload.turnId ?? '';
+```
+
+（修正前為 `env.turnId ?? payload.turnId`。）沿用同檔 `cost_card` 分支既有的 `env.turnId ?? ''` 形狀，而非計畫舉例的 `?? null`——下游的 `act({type:'error', turnId})` 與 `turnTextRef` 的鍵型別是 `string`，改傳 `null` 需連帶改 reducer 的動作型別，超出「讓型別成立的最小修正」。對所有帶編號的 error，行為與修正前位元相同；`turnId=null` 的 error 在修正前是契約不可構造的，故沒有既有顯示行為被改。
+
+計畫點名的另兩處消費端 **無需修改**：`brainTranscript.ts` 的 `turnId: string | null`（`:62`）與 `src/brain/testing/wsFrames.ts:50-52` 的 `errorFrame(turnId: string, …)` 在放寬後仍可編譯（`string` 可指派給 `string | null`）。計畫寫的路徑 `testing/wsFrames.ts` 實際在 `src/brain/testing/wsFrames.ts`。
+
+### 追溯與清單
+
+- `traceability.json`：新增 `MB-2`（`OK` → `backend/services/brain_ws_contract.py`，並列入 `upstream_ids`）；`BR2.13` 的 `Deferred` 說明補上「`U13` 須以 `turnId=null` 送出 `INVALID_REQUEST`、不得捏造」。`BR1.5`／`BR1.6` 既有列（`OK` → `backend/tests/test_ws_contract.py`）不變，該檔仍存在且已涵蓋新測試。sensor 0 findings。
+- `source-manifest.json`：新增 `frontend/src/brain/useBrainConnection.ts`（先前未列）。其餘改動路徑已在清單內。
+
+### 交接（不在本單元修）
+
+- **`U13 brain-gateway`**：`_send_single_error`（`brain_gateway.py:1127-1128`，`tid = turn_id or _mint_turn_id()`）不得再以 `_mint_turn_id()` 捏造。四種非輪次情境（`BR2.13` 的 `INVALID_REQUEST`、`set_sharing_mode` 失敗、`set_work_target` 授權或解析失敗、`BR2.8` 連線建立後的 `UNAUTHORIZED`）改送 `turnId=None`（envelope 與 payload 皆 null），並補 TestClient／WS 測試。呼叫點目前在 `:1091`、`:1107`、`:1113`、`:1124`、`:1147`。本單元未改 `brain_gateway.py`，完整後端套件全綠只代表放寬沒有打破既有閘道測試，**不代表**閘道已停止捏造。
+- **`U14 entry-page-ui`**：消費端對 `turnId=null` 的 `error` 的呈現（不歸入任何一輪的提示）。目前 `useBrainConnection.ts` 把它當成 `turnId=''` 的 error 送進 reducer，只是讓型別成立，不是設計過的呈現。
+- **上游對齊紀錄**：`functional-design` 的 `entities.md`（`ErrorPayload.turnId`、`WsEnvelope.turnId`）與 `rules.md`（`BR1.5`、`BR1.6`、`BR2.8`、`BR2.13`）**不回改**（`team.md`：下游不回改已核可上游）。本節即為對齊修正紀錄：現行規則以 `backend/services/brain_ws_contract.py` 與 `ws-contract.json` 為準——`error` 的 `turnId` 可為 null，屬於某一輪時帶該輪的值，兩份必須相等。
+
+## 重做（Code Generation 自頭重來，2026-10-24）
+
+<!-- 寫入時間：2026-10-24T23:20:50Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步驗證既有程式碼，**未改任何程式碼**。
+
+### 逐步驗證
+
+Step 1–12 全部符合，計畫 69 個核取方塊已勾。Step 4、6、9 與 Step 12 的突變（M1–M7、四項閘門突變）沿用本檔 §三 與上節的紀錄，本輪未重跑。
+
+### 測試與閘門（本輪實跑，未在 repo 內寫入 `.pyc`／`.hypothesis`）
+
+| 指令 | 結果 |
+|---|---|
+| `python3 -B -m unittest tests.test_ws_contract tests.test_dump_ws_contract -v`（`backend/`） | `Ran 23 tests`、`OK`：`test_ws_contract.py` 17 個（U2 自有 13 個 ＝ 原 7 ＋ 必修項 6；另 4 個 `WorkTargetPayload` 名稱欄位測試為後續單元依 ADR-0022 C-8 新增）、`test_dump_ws_contract.py` 6 個 |
+| `python3 -B -m unittest discover -s tests`（`backend/`） | `Ran 1319 tests`、`OK (skipped=3)` |
+| `python3 -B scripts/dump_ws_contract.py --check`（`backend/`） | 一致，exit 0 |
+| `npm --prefix frontend run check:ws-types` | 一致，exit 0 |
+| `npm --prefix frontend run check:types` | 一致，exit 0 |
+| `npm --prefix frontend run lint` | 0 errors、2 warnings（既存 `exhaustive-deps`） |
+| `python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` | 皆 passed |
+
+### 自上次審查以來由後續單元造成的變化（保留，不回改）
+
+- `frontend/src/pages/BrainPage.tsx` 已由 `U13 brain-gateway`（commit `fa8ce42`）刪除；subprotocol 的消費端改為 `frontend/src/brain/brainProtocol.ts:40-45`，由 `useBrainConnection.ts:150` 呼叫。`source-manifest.json` 因此移除該路徑（15 → 14 條）；本檔 §一 的「14 個應用程式來源路徑」與 Step 8 的敘述保留為當時紀錄。
+- `WsSubprotocol` 多了 `protocolName`（`U13`，ADR-0020 C-1）；ESLint subprotocol 規則擴為三條選擇器。
+- 上節「交接」兩項皆已由後續單元完成：`U13` 的 `_send_single_error` 不再捏造 turnId、`U14` 的 null 錯誤呈現改走系統提示（見 `construction/functional-design/merge-blockers.md` 第 2 項）。`useBrainConnection.ts` 留在清單內，因本單元 Step 12 曾修改它；其現行內容主要屬 `U14`。`brainTranscript.ts`、`testing/wsFrames.ts` 的改動屬 `U14`，不列入本單元。

@@ -478,3 +478,163 @@ AST 盤點確認成因：`append_message` 與 `set_work_target` **都**呼叫
 **這一類錯誤的危險在於它看起來像已驗證過的描述**：事實（切回後狀態不變）是
 對的，只有**機制的歸屬**是錯的，而照它去找 `decode_session` 裡的路由邏輯的人
 會找不到東西，進而懷疑的是自己而不是這份文件。
+
+---
+
+## 重新查驗與合併前必修第 12、18 項
+
+> 記錄時間：2026-10-23T00:56:07Z（`date -u` 取值）。來源：使用者對整站送出
+> Request Changes，本單元承接 `construction/functional-design/merge-blockers.md`
+> 第 12、18 項；裁決寫在計畫第十節（Step 13–15）與 `unit-test-instructions.md §2.1`。
+
+### 一、Steps 1–12 重新查驗（引擎重設了勾選，逐格開檔查證後勾回）
+
+| 結果 | 步驟 | 依據 |
+|---|---|---|
+| 勾回 | 1.1–1.3、2.1–2.2、3.1–3.3、4.1–4.3、5.2–5.5、6.1–6.3、7.1–7.6、8.1–8.8、9.1–9.5、11.1–11.5、12.1–12.4 | 逐一開檔：目錄與檔案存在、常數與方法存在、測試類別存在；三個測試模組本輪開工前實跑 **82 條 OK**（18＋20＋44，與第六節一致）、全套 **1241 條 OK**、兩支 validator 與 `dump_openapi.py --check` 綠 |
+| **未勾（新發現）** | **5.1** | `redis_gateway.py:84-87` 宣告了 `POOL_MIN_SIZE=5`／`POOL_IDLE_TIMEOUT_SECONDS=600`／`POOL_MAX_LIFETIME_SECONDS=1800`，但全 `backend/` 對這三個常數**零使用**（只出現在宣告與 `__all__`）；`build_redis_client` 只把 `POOL_MAX_SIZE` 傳給 `ConnectionPool`（`max_connections`）。即 `max 20` 成立，`min 5`／idle 10m／lifetime 30m **沒有被套用**。redis-py 的 `ConnectionPool` 本身沒有這三個參數，要做須另寫機制。第十三節把它記成 ✅，那是不實的。本輪不修（不在第 12、18 項範圍），**需要裁決**：實作、或把三個常數與計畫該格改寫為「redis-py 不支援，不實作」 |
+| 維持未勾 | **6.4** | 第十三節「Step 6.4 的時序偏離」：該指令在 Step 7 之前無法執行、實際於 Step 7 之後才首次跑。先前刻意未勾且有記載，維持 |
+
+勾回時如實記錄的兩處**後續單元合法改動**：
+
+- **9.3「步驟置於部署序列最後」**：`U14` 的步驟 6a（`deploy.yml` 的「Verify the brain WS subprotocol survives the tunnel」）已插在本單元的還原驗證之後，故它不再是**字面上**的最後一道驗證；它仍在全部既有健康檢查之後、記錄 last-good 之前，「中斷發生在服務已確認可用之後」的理由不受影響。
+- **12.4「`openapi.json`、`api.d.ts` diff 為空」**：工作樹對 `HEAD` 有 diff（167／143 行），全部來自本 intent 其他單元；本單元的貢獻以 `git diff HEAD -- openapi.json frontend/src/types/api.d.ts | grep -icE "session_store|redis|brain_session|BrainSession"` 量為 **0**，`dump_openapi.py --check` 綠；`backend/database.py` 對 `HEAD` 零 diff。與第三節同一個解讀，字面的「diff 為空」在累積多單元的工作樹上不成立。
+
+### 二、第 12 項：寫入與續期以 MULTI／EXEC 一次送出
+
+**先判斷 Lua 承載者**：`append_message.lua` 在同一支腳本內 `HSET`＋`EXPIRE`（`:83-84`），`switch_to_isolated.lua` 同（`:67-68`），兩者已原子，**不動**。非原子的多指令寫入共三處，全部改走新方法：
+
+| 位置 | 原本 | 現在 |
+|---|---|---|
+| `session_store.py:555-590` `_ensure_meta` | `EXISTS` → `HSET meta` → `HSET seg:shared`（TTL 等下一個指令才設） | `EXISTS` → 交易（`HSET meta`、`HSET seg:shared`、`EXPIRE`） |
+| `session_store.py:433-446` `set_work_target` | `HSET tgt:<seg>` → `EXPIRE` | 交易（`HSET tgt:<seg>`、`EXPIRE`） |
+| `session_store.py:540-553` `_write_meta_and_expire`（`set_sharing_mode` 切回 shared） | `HSET meta` → `EXPIRE` | 交易（`HSET meta`、`EXPIRE`）。**計畫未點名這一處**，依 Step 13 第二格「同形狀的多指令寫入一併改」納入 |
+
+新方法 `redis_gateway.py:499-547` `RedisGateway.hset_fields_and_expire(method, key, fields, ttl_seconds, *, idempotent, segment_id=None)`：`pipeline(transaction=True)`、逐欄位 `HSET` ＋ 一個 `EXPIRE`、經既有 `_call`（原因碼、重試、日誌白名單不變），未新增任何可記錄內容的參數。
+
+**實作中發現並處理的一個新洩漏面**：redis-py 的 `Pipeline.annotate_exception` 會把例外訊息改寫成 `Command # N (<指令全文，截到 100 字元>) of pipeline caused error: …`——**被寫入的值**（作業對象識別碼的組合、meta）會進入例外訊息，而 `SessionBackendUnavailable` 以 `raise … from exc` 帶著它；同時前綴讓 `OOM ` 字串退路失效。處置：`redis_gateway.py:286-308` `_strip_pipeline_annotation` 就地拿掉前綴（型別不變）。以真實 redis-py 8.1.0 實測：`annotate_exception` 與 `truncate_text(max_length=100)` 的原始碼如上述；WRONGTYPE 情境下未處理時訊息為 `Command # 1 (HSET u10-...) of pipeline caused error: WRONGTYPE …`（本例 key 很長，截斷後未含值；key＋欄位較短時值會落在前 100 字元內）。
+
+**已知、未處理的既存窗口（不在第 12 項範圍）**：`_ensure_meta` 的 `EXISTS` 與交易之間不是原子的——兩個並行的第一次寫入都可能看到「不存在」，後到者的交易會把先到者剛追加的 `seg:shared` 蓋回 `[]`。這在本輪之前就存在（當時是兩次獨立 `HSET`），交易沒有讓它更好或更壞。修法候選是交易內改用 `HSETNX`，但那會改變計畫寫明的「多個 `HSET`」形狀，故未做，**需要裁決是否另開一項**。
+
+### 三、第 18 項：每段 200 KB 位元組上限
+
+| 位置 | 內容 |
+|---|---|
+| `session_types.py:220` | `DEFAULT_SEGMENT_MAX_BYTES = 200 * 1024`（非環境變數） |
+| `session_types.py:223-241` `cjson_encoded_size` | 量「cjson 編碼後的位元組數」。**實測 Redis 8.8.0 的 cjson 與 Python json 只有兩處長度不同**：`/` → `\/`（＋1）、`0x7f` → `\u007f`（＋5）（`redis-cli EVAL "return cjson.encode({a='x/y\127', b='中'})"` 的 `od -c` 輸出；`string.len` 分別為 18、11）。不補這兩項，Lua 與參考實作在臨界值附近會丟不同筆數 |
+| `session_types.py:244-247` `segment_size_bytes`、`:250-` `trim_history(messages, cap, max_bytes=DEFAULT_SEGMENT_MAX_BYTES)` | 兩條件取較嚴者，自最舊端丟；**剩一則時停止**（段不得被清空——cjson 會把空表編成 `{}`） |
+| `append_message.lua:39`、`:58-81` | `ARGV[5]` 為位元組上限；每則 `string.len(cjson.encode(arr[i]))` 只編碼一次，整段 = 2 ＋ Σ ＋ (n−1)；迴圈 `while #arr > 1 and (#arr > cap or total > max_bytes)` |
+| `session_store.py:119`、`:123`、`:202-213` | 「單則不可能超過段上限」的前提以算式確認、不成立即 `raise ValueError`（不用 `assert`，`-O` 會拿掉它）。**對計畫算式的更正**：計畫寫「4000 字元 × 最多 4 位元組 = 16 KB」，但 cjson 對控制字元與 `0x7f` 輸出 6 位元組的 `\u00XX`，最壞是 4000 × 6 ＋ 封套保留 1024 ＋ 2 = **25,026 B**，仍遠小於 204,800 B，前提成立、結論不變 |
+| `session_store.py:306` | `append_message` 把 `self._segment_max_bytes` 傳為 `ARGV[5]` |
+
+**容量重算（以 Python 實算，非手寫）**：
+
+| 算式 | 值 |
+|---|---|
+| 一則 4000 個中文字的訊息（含封套） | 12,087 B；一段只放得下 **16** 則（193,409 B） |
+| 單一 session 最壞 | 3 × 204,800 = 614,400 B ≈ 600 KB |
+| 256 MiB 的 80% ÷ 600 KB | **349.5**（計畫以十進位概算寫 340；兩者都 ≥ 300） |
+| 256 MiB ÷ 600 KB | 436.9 |
+| 300 個最壞 session | 175.8 MiB ＝ `maxmemory` 的 **68.7%** |
+| 對原算式自己承諾的 90 MB | 153.6 個 |
+
+**一個須讓下游知道的落差（不是裁決製造的正確性問題，故未停下）**：`NFR4.40` 的要求是「≥ 300 個已填滿上界的 session **不觸及 `maxmemory`**」，以最壞值成立（68.7%）；但它的推導欄寫「90 MB，為 256 MB 的 35%，留 2.8 倍餘裕給 AOF 緩衝與 Redis 開銷」，以最壞值計餘裕只剩約 1.45 倍。另 `observability-design.md` 對 `NFR4.60` 定的 35% 門檻在最壞情況下約 150 個 session 就會觸發——`NFR4.60` 本身仍是 `GAP`（無採集點、無告警管道），故目前沒有實際後果。
+
+文件同步（只改註解，未新增變數；`maxmemory 256mb` 與 `noeviction` 不變）：`deploy/.env.example:145-149`、`deploy/docker-compose.deploy.yml:259-267`（redis `command:` 的 `--maxmemory` 旁）、`DEPLOY.md`「`maxmemory 256mb` 的暫定依據」整段改以最壞值表達＋新增「`noeviction` 滿載時會發生什麼、怎麼觀察」（`MEMORY STATS` 以 app 身分執行的指令）。**偏離計畫的兩處擴充**：(1) `backend/.env.example:147-149` 有同一個過期事實（`≈ 300 KB／session`），一併改；(2) 依 `project.md` 規則「改任一 `.env.example` 要同步 `LOCAL-DEV.md`」，`LOCAL-DEV.md:357-359`（同一句的鏡像）與 `:647`（新增一列疑難排解：長訊息時不到 200 則就丟最舊——這是把行為當成判斷依據的那一類文件，不改會讓人把正常行為判成 bug）。
+
+順帶修正一個本單元自己的過期引用：`deploy.yml:511` 寫 healthcheck 的說明在 `docker-compose.deploy.yml:258-261`，實際在 `:307-310`（本輪之前已過期；本輪在 compose 插入 9 行註解後更遠）。**未修**：`memory-retention-purge.yml:55` 引用 `docker-compose.deploy.yml:345`（`U9` 的檔，實際在 `:395`，同樣是本輪之前就過期）。
+
+### 四、新測試
+
+| 檔案 | 類別 | 條數 |
+|---|---|---|
+| `tests/test_session_store_behaviour.py:1040-` | `TransactionalWriteTest`（替身 MULTI／EXEC 語意、建立即帶 TTL、四入口在 EXPIRE 持續失敗時不留無 TTL key、`set_work_target` 與切回 shared 的單一交易、pipeline 例外訊息去值、空欄位拒絕） | 7 |
+| 同檔 `:1203-` | `SegmentByteCapTest`（4000 字中文灌滿一段觸發位元組上限、短訊息仍由筆數上限截、前提不成立拒絕建構、上限確實傳入 Lua `ARGV[5]`） | 4 |
+| 同檔 `:1311-` | `RealRedisParityTest`（**opt-in**，`REDIS_URL` 未設定即 skip 並印原因，判定沿用 `tests_redis.redis_skip_reason`）：Lua 與參考實作逐步一致、真實交易帶 TTL、真實 pipeline 錯誤去值 | 3（CI 中 skip） |
+| `tests/test_session_types.py:102-` | `TrimHistoryByteCapPropertyTest`：2 條 `@given`（兩上限同時成立；最長合格後綴且順序不變）＋ cjson 長度實測值 1 條；另 `test_cap_must_be_a_positive_integer` 加位元組上限的拒絕案例、property ③ 改寫為「兩上限內不動」 | ＋3 |
+| `tests/test_session_contract.py:283-298` | 迴圈條件斷言改為新的兩條件形狀 ＋ `string.len(cjson.encode(arr[i]))` | 0（改寫既有 1 條） |
+
+替身（同檔 `FakeRedis`／新 `FakePipeline`）新增 `pipeline(transaction=True)`：EXEC 前只排佇列、EXEC 時依序全部套用；`fail_next`／新的 `fail_commands`（持續失敗，模擬行程在送出該指令時死掉）命中時在套用任何指令之前拋出。`WorkItemFakeRedis` 等子類別自動繼承。新增測試的規格註解（`@purpose`／`@given`／`@step`／`@pass`／`@story`）以 docstring 承載；本單元無端點與 UI，故不寫 `@api`／`@ui`。
+
+### 五、突變驗證（每項先 `grep -c` 確認寫入、跑測試看紅、還原、`grep -c` 為 0、複驗綠）
+
+| # | 突變 | `grep -c` 寫入／還原 | 結果 |
+|---|---|---|---|
+| M12 | `hset_fields_and_expire` 改為逐條 `HSET`…`EXPIRE`（不用交易） | 3 ／ 0 | `test_interruption_before_exec_never_leaves_a_key_without_ttl` **4 個子案例全紅**（四入口皆留下無 TTL 的 key）；另 6 條交易形狀案例連帶紅（7 failures ＋ 1 error／58）。還原後 58 OK |
+| M12S | 拿掉 `_strip_pipeline_annotation` 呼叫 | 1 ／ 0 | 替身案例 `test_pipeline_error_message_loses_the_written_values_but_keeps_the_reason` 紅；真實 Redis 案例 `test_real_pipeline_error_is_classified_and_stripped_of_written_values` 紅（訊息為 `Command # 1 (HSET u10-...) of pipeline caused error: WRONGTYPE …`） |
+| M18 | 參考實作拿掉 `or total > max_bytes` | 1 ／ 0 | `TrimHistoryByteCapPropertyTest.test_output_fits_both_caps` 與 `SegmentByteCapTest.test_full_length_cjk_messages_hit_the_byte_cap_not_the_count_cap` 紅（2 failures／79） |
+| M18L | Lua 拿掉 `or total > max_bytes` | 1 ／ 0 | CI 可見的只有 `test_the_lua_script_contains_the_trim_loop`（靜態）紅；真實 Redis `test_lua_trim_matches_the_reference_on_the_same_input` 15 個子案例紅（第 5 輪起分歧，即位元組上限開始觸發處） |
+| M18C | `cjson_encoded_size` 拿掉 `/`、`0x7f` 的補正 | 1 ／ 0 | `test_cjson_size_counts_the_escapes_python_json_does_not_emit` 紅；真實 Redis 一致性案例自第 0 輪起紅（位元組數不相等） |
+
+**誠實限定**：M18L 在 CI 只由一條字串靜態斷言抓到——Lua 的真實行為 CI 驗不到（第八節同一條限制）。M12 在替身上驗的是**呼叫形狀與語意模型**；真實 Redis 的交易原子性見下節本機實測，不在 CI。
+
+### 六、本機真實 Redis 實測（scratchpad 臨時 `redis-server`，跑完已 `shutdown nosave`）
+
+Redis 8.8.0（`/opt/homebrew/bin/redis-server`，未安裝新套件）、redis-py 8.1.0（`backend/.venv`）。
+
+| 實測 | 結果 |
+|---|---|
+| `MULTI` → `HSET` → `HSET` → 斷線（不送 `EXEC`）（`scratchpad/redis/multi_abort_probe.py`） | `EXISTS = 0`、`TTL = -2`：交易整個被丟棄 |
+| 對照組：逐條 `HSET`、`HSET`，在 `EXPIRE` 前停止 | `EXISTS = 1`、`TTL = -1`：**第 12 項描述的缺陷形態實際重現** |
+| `--maxmemory 2mb --maxmemory-policy noeviction` 灌滿後呼叫 `hset_fields_and_expire`（`oom_probe.py`） | `reason = redis_oom`、cause 型別 `OutOfMemoryError`、訊息不含寫入值、key 未建立 |
+| `REDIS_URL=redis://localhost:6397/15 … -m unittest tests.test_session_store_behaviour.RealRedisParityTest tests_redis.test_work_item_lua` | **8 tests OK**（本單元 3 ＋ `U12` 既有 5，確認 gateway 的改動沒有弄壞工作項腳本） |
+
+### 七、各命令實際數字（自 `backend/`，`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest …`）
+
+| 指令 | 結果 |
+|---|---|
+| `tests.test_session_types` | 21 tests OK（原 18） |
+| `tests.test_session_contract` | 20 tests OK |
+| `tests.test_session_store_behaviour` | 58 tests OK（skipped=3，即 opt-in 真實 Redis 三條；原 44） |
+| `discover -s tests`（全套） | **1258 tests OK（skipped=3）**；開工前 1241 OK，差 17 ＝ 3 ＋ 14 |
+| `python3 scripts/validate_repo_contract.py` | passed |
+| `python3 scripts/validate_env_contract.py` | passed |
+| `.venv/bin/python scripts/dump_openapi.py --check`（自 repo 根以 `backend/scripts/…`） | 規格檔與後端程式碼一致 |
+| `bun .claude/tools/aidlc-sensor-traceability.ts --output-path …/traceability.json` | `pass:false`、`gaps:["NFR4.60"]`、`findings_count:1`（原為 2：`NFR4.40` 已由第 18 項關掉並改為 `OK`；`NFR4.60` 仍是刻意的真實缺口，見第十五節） |
+
+### 八、追溯與清單
+
+- `traceability.json`：新增 `MB-12`（`OK`，target `backend/services/redis_gateway.py`）、`MB-18`（`OK`，target `backend/services/session_scripts/append_message.lua`），兩者也加入 `upstream_ids`；`NFR4.40` 由 `GAP` 改 `OK`（note 保留原記載並寫明改狀態的依據與兩個仍須知道的落差）；`BR3.4`、`NFR4.41` 的 note 補上位元組上限。
+- `source-manifest.json`：本輪動到的程式與文件路徑**全部已在既有 `writes` 內**，故未改動（`merge-blockers.md` 屬 record，不是 source）。
+- `merge-blockers.md` 第 12、18 列「處置」欄已回填。
+- `brain-infra` 的 `traceability.json`／計畫 Step 6 仍寫 `allkeys-lru` 的過期敘述：不屬本單元，由 `brain-infra` 的記錄承接（該處已記載）。
+
+### 九、未驗項
+
+- 真實 Redis 的交易原子性與 Lua 位元組修剪**不在 CI**：`ci.yml` 的 backend job 沒有 Redis，`RealRedisParityTest` 在 CI 中 skip。本機實測結果見第六節；staging 上首次部署時仍應以 app 身分跑一次 `EVAL`（第九節開放項 7 未變）。
+- `noeviction` 在 256 MB 下的真實滿載行為未驗（只在 2 MB 的臨時實例上驗了分類路徑）。
+- 容量算式的 Redis Hash 內部開銷（欄位超過 64 位元組即改用 hashtable 編碼）未量測；600 KB 是值的大小上界，不含結構開銷。
+
+### conductor 處置實作方提出的兩項裁決請求（`2026-10-23T01:06:28Z`）
+
+兩項皆屬工程判斷而非產品決定，conductor 直接處置：
+
+| 項 | 處置 |
+|---|---|
+| `_ensure_meta` 的並行窗口（`EXISTS` 與交易之間非原子，後到者的預設值可把先到者剛追加的 `seg:shared` 蓋回 `[]`——資料遺失） | `redis_gateway.hset_fields_and_expire` 新增 `only_if_absent` 參數（改送 `HSETNX`）；`_ensure_meta` 以它建立預設值，後到者成為 no-op、只續期 TTL；`EXISTS` 保留為快速路徑。替身新增 `_cmd_hsetnx`。新測試 `test_concurrent_first_write_does_not_wipe_the_shared_segment`（把 `EXISTS` 替換為「不存在」重現競態窗口，斷言共享段與 meta 不變）；既有 `test_session_creation_writes_and_ttl_in_one_transaction` 的期望改為 `HSETNX, HSETNX, EXPIRE`。突變 M12N（改回 `HSET`；`grep -c` 確認為 1）→ 兩案紅；還原後為 0。屬第 12 項同一交易機制的延伸，在已核可計畫 Step 13 的意圖之內 |
+| 計畫 Step 5.1 的連線池 min／idle／lifetime | redis-py 的 `ConnectionPool` 沒有對應參數，三個常數（`POOL_MIN_SIZE`／`POOL_IDLE_TIMEOUT_SECONDS`／`POOL_MAX_LIFETIME_SECONDS`）宣告卻從未生效，屬死碼（`team.md`：零死碼紀律）。已自 `redis_gateway.py` 與其 `__all__` 移除，註解改寫為事實；`git grep` 確認 repo（`aidlc/` 以外）無其他引用。Step 5.1 **維持未勾**——其字面要求在此函式庫上不可實作，而不是被做到 |
+
+驗證：本單元三個測試模組 `Ran 100 tests` → `OK (skipped=3)`；完整套件（`backend/.venv`）`Ran 1259 tests` → `OK (skipped=3)`；`__all__` 中的名稱皆可解析。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T13:27:22Z -->
+
+本輪只查驗、未改任何程式或測試。計畫 60 格勾選 58 格（機械計數：`[x]` 58、`[ ]` 2）。
+
+| 格 | 未勾理由 |
+|---|---|
+| 5.1 連線池 | 只有 `max 20`（`redis_gateway.py:88`）；`min 5`／idle 10 分／lifetime 30 分在 redis-py `ConnectionPool` 上無對應參數，三個死碼常數已於前輪移除（見上節） |
+| 9.3 步驟置於部署序列最後 | 已不成立：`deploy.yml:447` 的 Redis 重啟還原驗證之後，多了 U14 的阻擋步驟 `Verify the brain WS subprotocol survives the tunnel`（`:586`）。WS 檢查失敗時，使用者 session 已被重啟中斷才回滾；步驟註解 `:443-446` 的「placed LAST」與現況不符。宣告會中斷 session 與 TTL 區間判斷兩項仍成立 |
+
+勾選但帶說明：6.4 本輪實跑全綠而勾（前輪刻意未勾的紀錄 `code-summary.md:496` 因此與計畫不一致）；Step 13、14 的突變紅燈引用既有紀錄，本輪未重跑；11.1 根目錄 `docker-compose.yml` 不起 backend，條件不觸發。
+
+測試（`backend/.venv`、`-B`、`PYTHONDONTWRITEBYTECODE=1`）：本單元五個模組 112 OK（skipped 3，為需 `REDIS_URL` 的 `RealRedisParityTest`）；完整套件 1319 OK（skipped 3）。暫起本機 `redis-server` 8.8.0（127.0.0.1、不存檔）：`RealRedisParityTest` 3 ＋ `tests_redis.test_work_item_lua` 7 共 10 OK，已關閉並刪除資料。兩支 contract validator 與 `dump_openapi.py --check` 綠燈；repo 快取前後 mtime 不變。
+
+合併前必修：
+- **#12 屬實已解決**：`hset_fields_and_expire` 以 `pipeline(transaction=True)` 包住 HSET／HSETNX＋EXPIRE，`_ensure_meta`／`set_work_target`／切回 shared 皆經它；真實 Redis 補驗三個首寫入口皆帶 TTL 86400、EXEC 前斷線不留 key、`noeviction` 超限時 Lua 與交易路徑皆回 `reason=redis_oom` 且不留半成品、讀取照常。
+- **#18 屬實已解決**：`DEFAULT_SEGMENT_MAX_BYTES = 200*1024`，Lua 與參考實作同語意取較嚴者，`SessionStore` 建構時以算式拒絕不可能的設定；`maxmemory 256mb`＋`noeviction` 未改。
+
+已核可計畫／測試說明與程式的落差（不回改計畫）：交付物表 #11 寫 `BRAIN_SESSION_HISTORY_MAX`「無值」而 Step 11.1 寫「值 200」，程式照 11.1；Step 14 的「≈340 個 session」現行文件已為 308.8（U12 計入工作項，每 session 695,400 B，餘裕約 2.9%）；`unit-test-instructions.md` 的指令未帶 `-B` 與 `HYPOTHESIS_STORAGE_DIRECTORY`，照字面跑會留快取。
+
+候選問題（未修，交審查與使用者判定）：(1) 308.8 以序列化位元組計，本機 `MEMORY USAGE` 多約 1.8%，staging 映像預設 jemalloc 依級距推算可能多約 14%（推算、未量測），「300 session 在 80% 以內」可能不成立；(2) 還原驗證 `hgetall | sort`（`deploy.yml:499/544`）抓不到兩欄位值互換；(3) 即上表 9.3 的順序；(4) `redis-cli --pass` 使密碼出現在 runner 程序清單；(5) `_ensure_meta` 的 `EXISTS` 與後續寫入間 key 到期，可重建出缺 `seg:shared` 或 `meta` 的 key（TTL 仍在）。

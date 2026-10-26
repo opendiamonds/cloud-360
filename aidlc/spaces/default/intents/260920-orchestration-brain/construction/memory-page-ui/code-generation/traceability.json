@@ -42,7 +42,8 @@
     "SEC-U15-2",
     "SEC-U15-3",
     "SEC-U15-4",
-    "SEC-U15-5"
+    "SEC-U15-5",
+    "MB-6"
   ],
   "coverage": [
     {
@@ -168,8 +169,8 @@
     {
       "id": "BR34.5",
       "status": "OK",
-      "target": "frontend/src/memory/memoryApi.ts",
-      "note": "404 映射為 already-gone；其他失敗不移除並顯示錯誤。"
+      "target": "frontend/src/components/memory/MemoryZone.tsx",
+      "note": "2026-10-23 合併前必修第 6 項後：memoryApi 的 404 只回 not-found-unconfirmed；MemoryZone.deleteRecord 重讀該列所在頁，不再列出才視同已刪除（already-gone），仍列出或重讀失敗皆不移除並顯示刪除失敗。e2e MB6-E11–E13。"
     },
     {
       "id": "BR34.6",
@@ -290,6 +291,12 @@
       "status": "OK",
       "target": "frontend/tests/e2e/memory-page.spec.ts",
       "note": "e2e E10 console 不含內容。"
+    },
+    {
+      "id": "MB-6",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "合併前必修第 6 項（functional-design/merge-blockers.md #6，review-02 R-08）：404 不直接視為已刪除，重讀該區當前頁確認。實作 frontend/src/memory/memoryApi.ts（404 → not-found-unconfirmed）與 frontend/src/components/memory/MemoryZone.tsx（deleteRecord 確認重讀）。e2e MB6-E11（重讀已不含 → 移除並播報）、MB6-E12（重讀仍含 → 刪除失敗、保留）、MB6-E13（重讀 500 → 刪除失敗、保留）；突變「404 一律 already-gone」→ 三案皆紅（含 MB6-E12）。"
     }
   ]
 }

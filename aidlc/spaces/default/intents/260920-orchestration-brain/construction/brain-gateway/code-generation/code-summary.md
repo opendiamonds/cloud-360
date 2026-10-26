@@ -296,3 +296,95 @@ rm -f "$hdr"
 **測試結果（2026-10-13T22:42Z 前後實跑）**：本單元 8 支 **103 案 OK**（rules 21、handshake 14、turn 20、fanout 10、memory 12、limits 12、startup 5、ws_contract 9；連跑 3 次皆綠；本機無 redis-py 時 skip 1，以暫存目錄的 redis-py 加入 `PYTHONPATH` 後 103 案全過、0 skip）。受影響的既有測試 `tests.test_dump_ws_contract tests.test_intent_routing_structure tests.test_work_orchestrator_flow tests.test_session_store_behaviour tests.test_render_env_redis` 115 案 OK。`validate_env_contract.py`、`validate_repo_contract.py` passed。
 
 **突變全表重跑**：第三節的 15 項加 R01、X6、X7、X8 共 19 項，皆「紅 → 綠」；X7 第一版未抓到（卡住的分頁在扇出順序上排在後面，依序送出也不影響前者），已把卡住的改為順序在前的那條後重跑為紅。突變還原後以 `git diff` 確認兩個模組只含本節的修正。
+
+## 十三、合併前必修第 2 項(a) 與第 19 項（計畫 §六 Step 13–17；完成於 2026-10-24T03:11Z，`date -u`）
+
+### 13.1 BR2.8 錯誤 `turnId` 規則表（落地版）
+
+本表**取代** functional-design `rules.md:144`（重驗其他例外「以新 turnId 送 error」）、`:302`（ready 後再收到 hello「以新 turnId 送出」）、`:382`（無 PendingClarify「新 turnId 送 error」）三處。已凍結的設計檔不回改，以本節為準。依據：契約 `ErrorPayload.turnId` 為「必填鍵、值可為 null」，且逐字要求伺服器不得為非輪次錯誤捏造 turnId（`brain_ws_contract.py:371-380`，契約層由 `brain-ws-contract` 完成，本單元未改契約）；`[GW-MB2]`=A（2026-10-24）。
+
+| # | 錯誤來源（`brain_gateway.py`，本輪修改後的行號） | 代碼 | `turnId` | 測試 |
+|---|---|---|---|---|
+| T1 | 二進位訊框、訊框過大、頻率超限（`_reject` → `_send_single_error`） | `INVALID_REQUEST` | `null` | limits `NonTurnErrorTurnIdTest.test_rejected_frames_carry_null_turn_id`（三種各一次） |
+| T2 | 每則重驗拋非認證例外（`_receive_loop`，`:1113`） | `INTERNAL_ERROR` | `null` | limits `NonTurnErrorTurnIdTest.test_revalidation_exception_carries_null_turn_id` |
+| T3 | 信封驗證失敗，含反問等待中格式錯誤的選擇（`:1131`）；**不碰 `pending_clarify`** | `INVALID_REQUEST` | `null`，反問保留 | turn `ErrorTurnIdTest.test_malformed_select_while_clarifying_keeps_the_clarify` |
+| T4 | ready 之後再收到 `hello`（`_dispatch_client_message`） | `INVALID_REQUEST` | `null` | handshake `VersionTest.test_second_hello_after_ready_is_a_non_turn_error` |
+| T5 | `select_clarify_candidate` 時沒有待選反問（`_on_select`） | `INVALID_REQUEST` | `null` | turn `ErrorTurnIdTest.test_select_without_pending_clarify_has_null_turn_id` |
+| T6 | 選擇格式正確但 id 不在候選內（`_on_select` → `_fail_turn_exc`，現行不變） | `INVALID_REQUEST` | 該輪 `T` | turn `ClarifyTest.test_none_stays_silent_and_a_foreign_id_is_invalid_request`（**新增**斷言 envelope 與 payload 的 turnId 等於 clarify 的 turnId；方法名未改） |
+| T7 | `set_work_target`／`set_sharing_mode`／`correct_work_item` 失敗；`_error_for_request` 的 `turn is None` 分支 | 依 `error_for` | `null` | fanout `NonTurnRequestErrorTest` 三案（id 非十進位 → `INVALID_REQUEST`；`set_sharing_mode` 拋 `RuntimeError` → `INTERNAL_ERROR`；找不到工作項 → `INVALID_REQUEST`） |
+| T8 | 輪內失敗、`EMPTY_RESPONSE`、`emit_turn` 推播（`_fail_turn`、`_end_turn`、`GatewaySink.emit_turn`） | 原規則 | 該輪 `T`（現行不變） | 既有案例 |
+| T9 | `_dispatch_client_message` 拋未預期例外（`_on_unexpected`，`:1142`） | `INTERNAL_ERROR` | 開啟中且未終止的輪 → 該輪 `T` 並結束；否則 `null` | turn `ErrorTurnIdTest` 三案（見下） |
+
+**實作要點**：
+
+- `_send_single_error(conn, code, message)` 拿掉 `turn_id` 參數與 `_mint_turn_id()`，envelope 與 payload 的 `turnId` 皆為 `None`。呼叫點 13 處（`grep -c "_send_single_error(conn" services/brain_gateway.py` → 13，不含定義行）。
+- `Connection.open_turn`（`:233`）：`_on_user_message` 建立 `Turn` 後設定（`:1276`）、`_on_select` 取出待選反問後設定（`:1562`）；`_receive_loop` 在每則訊息處理前清空、`finally` 再清空（`:1133`、`:1140`），故參照不跨訊息殘留。
+- `_on_unexpected`：`open_turn` 存在且 `ledger.is_terminal` 為假 → `_fail_turn_exc`（帶 `T`）；若 `pending_clarify` 指向同一輪則一併清除，使之後的選擇走 T5 而不是接續一個已終止的輪。否則送 `null` 錯誤。
+- `_mint_turn_id()` 呼叫點只剩 `BrainGateway._on_user_message` 與 `GatewaySink.emit_turn`，由 limits `StructuralTest.test_mint_turn_id_only_where_a_turn_really_opens`（AST，含別名式引用的計數）鎖住。
+- log：非輪次錯誤原本就沒有 log 使用捏造編號，未新增欄位。
+- 既有測試中**沒有**斷言非輪次錯誤帶非 null `turnId` 的案例（`grep -n "turnId" tests/test_brain_gateway_*.py` 逐一檢視），故無需改寫既有斷言；只在 T6 既有案例加強斷言。
+- 新增共用斷言 `tests/brain_gateway_fakes.py::assert_non_turn_error`：`WsEnvelope.model_validate` ＋ envelope 與 payload 的 `turnId` 鍵存在且為 `None` ＋ 代碼。
+
+**T9 的三案**：(1) `test_unexpected_exception_inside_a_turn_ends_that_turn`：交辦前的 `_resolve_and_dispatch` 拋 `RuntimeError` → 最後一則為 `error(INTERNAL_ERROR)`，turnId 非 null 且等於 classify 收到的 `turn_id`；之後 0.3 秒內無訊息；恢復後下一句以不同 turnId 正常 `done`。(2) `test_unexpected_exception_after_select_ends_the_clarified_turn`：選定反問候選後同一例外 → 以 clarify 的 turnId 結束；再送選擇 → T5 `null`。(3) `test_unexpected_exception_in_a_non_turn_request_is_null_and_keeps_the_clarify`：反問等待中 `set_sharing_mode` 拋未預期例外 → `null`，反問保留，之後選 c1 以原 turnId 交辦完成。
+
+### 13.2 測試結果（2026-10-24 實跑；指令皆在 `backend/`）
+
+| 指令 | 結果 |
+|---|---|
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_ws_contract tests.test_brain_gateway_rules tests.test_brain_gateway_handshake tests.test_brain_gateway_turn tests.test_brain_gateway_fanout tests.test_brain_gateway_memory tests.test_brain_gateway_limits tests.test_brain_gateway_startup` | 修改前 129 案 OK（skip 1）；修改後 **141 案 OK（skip 1）**，新增 12 案（limits 3、handshake 1、fanout 3、turn 5） |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_dump_ws_contract tests.test_intent_routing_structure tests.test_work_orchestrator_flow tests.test_session_store_behaviour` | 127 案 OK（skip 3） |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests` | 1308 案，**28 失敗**（skip 4），全部在 `test_mcp_bridge_app`（10）、`test_mcp_bridge_e2e`（16，其中一案兩個 subTest）、`test_mcp_bridge_topology`（2）：`mcp_topology.assert_prerequisites` 逐字「mcp 版本為 1.29.0，本單元釘選 2.3.0。請在 backend/ 執行：pip install -r requirements.txt」——**本機環境未依 `requirements.txt` 安裝**，與本單元無關；本輪未安裝套件（計畫未指名），未在正確環境複驗 |
+| `python3 scripts/dump_ws_contract.py --check` | 一致（exit 0） |
+| `python3 scripts/dump_openapi.py --check` | 一致（exit 0） |
+| `python3 scripts/validate_env_contract.py`（repo 根） | passed |
+| `python3 scripts/validate_repo_contract.py`（repo 根） | passed |
+
+### 13.3 突變（`HYPOTHESIS_NO_SHRINK=1`；套用 → 紅 → 還原 → sha256 對照 → 綠）
+
+修改後基線：`shasum -a 256 services/brain_gateway.py` = `49748a714ad32a1194682aae90e3a2a6d79103a4aa1d11ba4af2d74e402c13b3`。每項還原後實測 sha256 與基線相同。突變執行的指令為上表第一列去掉 `tests.test_ws_contract`（124 案）。
+
+| 突變 | 結果 |
+|---|---|
+| M1 `_send_single_error` 還原為 `tid = _mint_turn_id()`、envelope 與 payload 共用 | 紅：failures=11——T1、T2、T3、T4、T5、T7×3、T9 的兩個 null 分支案（after_select 的第二次選擇、non_turn_request）、結構測試 |
+| M2 信封驗證失敗時 `conn.pending_clarify = None` | 紅：failures=1——`test_malformed_select_while_clarifying_keeps_the_clarify` |
+| M3 `_on_unexpected` 一律送 `null`（條件前加 `False and`） | 紅：failures=2——T9 的 inside_a_turn、after_select |
+| M4 `_on_set_work_target` 開頭加回 `_mint_turn_id()` | 紅：failures=1——`test_mint_turn_id_only_where_a_turn_really_opens` |
+| M5（計畫外加做）拿掉每則訊息前後的 `open_turn = None` | 紅：failures=1——`test_unexpected_exception_in_a_non_turn_request_is_null_and_keeps_the_clarify` |
+
+還原後同一指令 141 案 OK（skip 1）。
+
+### 13.4 第 19 項查證（唯讀，只列名稱）
+
+- `gh api repos/opendiamonds/cloud-360/actions/secrets --jq '[.total_count, (.secrets[].name)]'` → 13 個名稱，**含 `OPENROUTER_API_KEY`**。
+- `gh api repos/opendiamonds/cloud-360/actions/variables --jq '[.total_count, (.variables[].name)]'` → 2 個名稱（`APP_ID`、`GH_AW_DEFAULT_MODEL_COPILOT`），**不含 `OPENROUTER_API_KEY`**。
+- 結論：現況符合 `project.md ## Mandated`（在 secrets、不在 variables），第 19 項不構成合併前阻擋。**限制**：API 只能證明現況，無法證明它過去從未存為 variable；若使用者知道曾誤存，依同條規則仍須重新產生金鑰。未讀取任何值。
+
+### 13.5 交接 `entry-page-ui`（第 2 項(b)，不在本單元範圍）
+
+伺服器自本輪起對 T1–T5、T7 與 T9 的非輪內分支送 `turnId=null` 的 `error`。前端（`useBrainConnection.ts:173` 目前以 `?? ''` 讓型別成立）須把 `turnId=null` 的錯誤呈現為**不屬於任何輪次**：不得歸入任何輪次、不得以空字串當輪次鍵（第二則會覆寫第一則），也不得因它 `setAwaitingReply(false)`／`clearPending` 而解除另一個進行中輪次的等待；並附 e2e。帶 `turnId` 的 `error`（T6、T8、T9 輪內分支）仍是該輪的終止事件。
+
+### 13.6 追溯與清單
+
+- `traceability.json`：新增 reverse `CG-MB2A-ERROR-TURNID`、`CG-MB19-OPENROUTER-SECRET`；`NFR13.23`、`NFR13.40` 的 note 補記本輪案例。
+- `source-manifest.json`：本輪動到的 6 個檔（`backend/services/brain_gateway.py`、`backend/tests/brain_gateway_fakes.py`、`backend/tests/test_brain_gateway_{limits,handshake,fanout,turn}.py`）皆已在清單內，未新增項目。
+- `construction/functional-design/merge-blockers.md` 第 2、19 列的處置欄末尾已追加本輪結果。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T01:09:04Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。
+
+- **計畫勾選**：17／17。
+- **測試**（`backend/`，快取導向 scratchpad）：
+  - 全套 `unittest discover -s tests`：1319 OK（skipped=3）。
+  - 本單元 8 支共 143 OK、0 skip（ws_contract 17、rules 22、handshake 18、turn 39、fanout 13、memory 13、limits 15、startup 6）。§13.2 的 141 案（skip 1）與 §十二各檔數字已過時，部分增量來自其他單元加進同批檔案。
+  - `dump_ws_contract.py --check`、`dump_openapi.py --check`、`validate_env_contract.py`、`validate_repo_contract.py`、前端 `check:ws-types`、`tsc -b --noEmit`：皆通過；`eslint .` 0 errors（2 個既存 `exhaustive-deps` warning）。e2e 依計畫由 CI `ui-regression` 執行，本輪未跑。
+  - 突變抽驗 4 項（只在 scratchpad 副本，未寫回 repo）：第 18 項 `BUSY_SKIPPED` 不清 probe、§13 M1 捏造編號、M3 T9 一律 `null`、`terminal_sent` 判準改回 `ledger.is_terminal`——皆紅→還原→綠；其餘先前記載的突變未逐一重跑。
+- **合併前必修第 19 項**：`deploy.yml` 必要 secret 檢查含 `OPENROUTER_API_KEY`，`render-env.sh`、`DEPLOY.md`、`deploy/.env.example`、`LOCAL-DEV.md` 已同步。本輪唯讀列名：secrets 含 `OPENROUTER_API_KEY`，variables 不含（API 只證明現況）。**缺口**：沒有測試斷言 `deploy.yml` 的必要檢查含該名稱；merge-blockers 第 19 列狀態欄開頭仍寫「待處置」，與其後「已查證、不構成阻擋」不一致。
+- **第 2 列**：(a) 後端已落地；(b) 屬 `entry-page-ui` 尚未做，在此之前伺服器送出的 `turnId=null` 錯誤在前端會被當成空字串輪次，「反問保留、可重選」目前只在後端成立。
+- **示範大腦網關**：`backend/services/brain_router.py` 與 `frontend/src/pages/BrainPage.tsx` 已由本分支 `fa8ce42` 刪除，舊示範 commit 不是 `origin/ut` 的祖先，從未進過 `ut`；剩下的引用只有註解與兩處「必須已刪除」的斷言。
+- **PBT**：`test_brain_gateway_rules.py` 有 7 個 `@given`，落在純函式。
+- **ADR-0006 四面向**：與 §八 一致（認證先於 accept＋逐則重驗＋60 秒背景重驗；token 只在 subprotocol 標頭；連線、訊框、頻率、握手上限皆有測試；握手與每則訊息記稽核）。
+- **grep 判準**：時間原語只在 `GatewayTiming` 預設值；logger 僅 `"cloud360.brain_gateway"`；`_mint_turn_id` 兩個呼叫點；`_send_single_error(conn` 13 處、`turnId` 皆 `None`。`brain_gateway_rules.py` 無 httpx／sqlalchemy／DB session，但匯入 `work_orchestrator`、`session_store` 的例外與常數，並非完全零依賴（不違反計畫判準）。
+- **與本摘要既有文字不符處**：§13.1 寫 T9 以 `ledger.is_terminal` 判斷，現行程式為 `turn.terminal_sent`（review-02 R-08 的修正，處置見 merge-blockers 第 2 列）；計畫 §六規則表行號為修改前的值。

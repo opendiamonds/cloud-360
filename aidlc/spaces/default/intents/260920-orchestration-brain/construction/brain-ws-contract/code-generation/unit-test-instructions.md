@@ -66,6 +66,26 @@ cd backend && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ws_contra
 | M4 | 把白名單的預期集合改成「只要是子集就通過」 | (5) |
 | M5 | 把 `sort_keys=True` 拿掉 | (6) |
 
+### 合併前必修第 2 項（Request Changes 修訂，計畫 Step 12）
+
+`test_ws_contract.py` 新增 **6** 個測試（元件合計 7 → 13，超出 Standard 的 5–8 上限；超出部分是必修項的回歸測試，`scope_floor` 允許為特定缺陷加最窄的測試）：
+
+| # | 測什麼 | 通過條件 |
+|---|---|---|
+| (8) | 非輪次 `error` 可構造 | envelope `turnId=None`、`ErrorPayload.turnId=None` 通過驗證 |
+| (9) | envelope null、payload 非 null | `ValidationError`（`BR1.5`） |
+| (10) | envelope 非 null、payload null | `ValidationError`（`BR1.5`） |
+| (11) | 輪次內 `error` 仍可帶編號 | 兩者同值非 null 通過 |
+| (12) | 只放寬 `error` | `done`、`token` 的 `turnId=None` 仍被拒 |
+| (13) | 三集合分類 | 輪次／非輪次／`error` 可為 null 三集合互斥且聯集等於九個 type |
+
+| # | 突變 | 預期轉紅 |
+|---|---|---|
+| M6 | 把 `ERROR` 放回輪次集合 | (8) |
+| M7 | 拿掉 `BR1.5` 對 `error` 的相等檢查 | (9)(10) |
+
+**完整後端套件**（`scope_floor`，確認放寬不破壞 `U13` 既有測試）：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`。本機系統 Python 的套件版本與 `requirements.txt` 不一致，完整套件一律用 `backend/.venv`。
+
 **突變本身也要確認生效**：改完先開檔確認內容真的變了。
 本 repo 踩過一次 `_SERVICE_ABBREVIATIONS = {} or {...}`——`or` 回傳右側，突變根本沒作用，
 測試當然綠，差點被讀成「測試沒抓到」。

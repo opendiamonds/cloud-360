@@ -295,3 +295,59 @@ SQL 側 308 列（1 個 INSERT 區塊錨點）、Python 側 352 列。
 | 2 | **`reverse` 寫成 `{artifact, ids}` 的索引形狀**，而 schema 要的是 `{id, status, target}`；另有 `PD-1`／`PD-2`／`PD-3` 三列放在 `coverage` 但不在 `upstream_ids` 內。 | `reverse` 改為 schema 形狀並只留三個計畫缺陷列；原索引保留於非 schema 鍵 `artifact_index`。另有 7 列的 `status` 使用封閉集合之外的值（`Accepted`／`OK（副作用）`／`Unresolved`／`Reported`），已逐列更正並在 `target` 內就地註明原值。 |
 
 修正後 `traceability` sensor：**`pass: true`、0 findings**（修正前 65 項）。
+
+## 重新查驗（code-generation Request Changes 後，conductor，`2026-10-20T08:32:07Z`）
+
+**觸發**：使用者對整站送出 Request Changes（原文：「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」）。`merge-blockers.md` 第 4 項劃給本單元，但其程式落點在 `membership-service`（計畫 §一之一，使用者已核可）。本輪**未改任何應用程式碼**；引擎於核可時重設 49 格勾選，逐格對照現況勾回 47 格。
+
+| 查驗項 | 依據 |
+|---|---|
+| Step 2／3／5／6（矩陣 352 列、組合完整、三條可達性與蘊含、log 列出 `K1`–`K4`、SQL／Python 兩份逐列等值） | `tests.test_rbac_story_ids_seed` 7 個測試全綠，各案即為該步的斷言 |
+| Step 4 | `rbac.py` `ensure_missing_role_permissions` 以 `inserted_pairs` 記錄 `(role, story_id)`，未記使用者身分 |
+| Step 7 | `schema_rbac.sql:16` 為「預設矩陣（352 列）」、`:1248` 為 `-- 352` |
+| Step 8 | `DEPLOY.md:1347`／`:1361`／`:1366`（中文）與 `:2198`／`:2209`（英文）皆為 352（行號已因後續單元位移，五處數量不變） |
+| Step 9 | `user_router.py:118-121` 有 `K1`–`K4` 四個標籤；`CATALOG_EXCLUDED_STORIES`（`:124`）仍只含 `J1` |
+| Step 11 | 完整套件綠（見下表） |
+| Step 1／12 | runner 可用；`code-summary.md`／`source-manifest.json`／`traceability.json` 存在 |
+
+**10c／10d 維持未勾**：照計畫字面執行的 `M3`／`M4` 測試仍為綠，屬計畫缺陷 `PD-2`（見本檔該節）；有效突變 `M3-eff`／`M4-eff` 已證明斷言非恆真。勾上會讓計畫宣稱一件字面上未成立的事。
+
+| 命令 | 結果 |
+|---|---|
+| `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_rbac_story_ids_seed`（`backend/`） | `Ran 7 tests` → `OK` |
+| `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`（`backend/`） | `Ran 1219 tests` → `OK` |
+| `python3 scripts/validate_repo_contract.py` | passed |
+
+本機系統 Python 的套件版本與 `requirements.txt` 不一致，本輪一律以 `backend/.venv` 執行。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T00:46:38Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。計畫 49 格勾選 47 格：**10c、10d 照實保持未勾**，與上一輪相同——照計畫字面只改 SRE 一列時測試仍綠（§五 PD-2；對照現行 seed，SRE、Ops_Lead、Platform_Engineer 三角色的 K3／K4 三旗標皆為 false，推理仍成立），有效的寫法為 M3-eff／M4-eff。突變本輪未重跑，沿用 §四紀錄。後續單元對共用檔的改動一律保留。
+
+### 逐步查驗摘要
+
+- Step 2–3：`rbac_seed_data.py:316-359` 有 K1–K4 共 44 列；ast 解析全矩陣 352 列 ＝ 11 角色 × 32 story id，每組合恰一列；K3 view 8 角色、edit 4 角色。`test_rbac_story_ids_seed.py` 7 個測試涵蓋 U3-V1～V5。
+- Step 4–6：`rbac.py:84-121` 的 `ensure_missing_role_permissions` 只輸出一行 INFO 彙總（角色／story_id，無使用者身分）；測試 6 斷言 log、測試 7 比對 Python 與 SQL 兩份 seed 逐列一致。
+- Step 7–9：`schema_rbac.sql:16`、`:1248` 為 352；`DEPLOY.md` `:1386`、`:1400`、`:1405`、`:2300`、`:2311` 為 352；`user_router.py:124-127` 有四個 K 標籤，`CATALOG_EXCLUDED_STORIES`（`:130`）仍只有 J1，`/roles/catalog` 在 `:640`。
+- 合併前必修第 4 項：帳號狀態檢查落在 `membership_service.py:471-501`，本單元的 seed、log、標籤不涉及邀請或改選流程，無矛盾。
+
+### 測試與閘門（本輪實跑，`backend/.venv`，快取導向 scratchpad，未寫入 repo）
+
+| 指令 | 結果 |
+|---|---|
+| `-m unittest tests.test_rbac_story_ids_seed` | `Ran 7 tests`、`OK` |
+| `-m unittest tests.test_rbac`／`tests.test_collab` | `Ran 6 tests`、`OK`／`Ran 20 tests`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1319 tests`、`OK (skipped=3)` |
+| `scripts/dump_openapi.py --check` | 一致 |
+| `python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` | 皆 passed |
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- 全套基準數：§三寫 432、上節寫 1219，現為 1319（後續單元新增測試）。
+- 行號：計畫 Step 7 的 `:12`／`:761` 現為 `:16`／`:1248`；Step 8 的 577/591/596/1259/1270（及本檔 §八 的 1347/1361/1366/2198/2209）現為 1386/1400/1405/2300/2311；Step 9 的 `:60`／`:90`／`:310`（及本檔的 `:118-121`／`:124`）現為 `:91`、`:124-127`、`:130`、`:640`；Step 4 的「`rbac.py:110` 附近」現為 `:84-121`。
+- `unit-test-instructions.md` 的 `cd backend && python -m unittest …` 實際須用 `backend/.venv/bin/python`，並加 `-B` 與 `PYTHONDONTWRITEBYTECODE=1` 以免在 repo 內寫出快取。
+- 突變表 M3／M4 仍是 PD-2 的缺陷寫法，有效寫法見 §五。
+
+`source-manifest.json` 的 6 條路徑全部存在且仍屬本單元。

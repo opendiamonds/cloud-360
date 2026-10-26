@@ -119,6 +119,12 @@
     },
     {
       "path": "LOCAL-DEV.md"
+    },
+    {
+      "path": "backend/services/requirement_field_facade.py"
+    },
+    {
+      "path": "backend/tests/test_requirement_field_facade.py"
     }
   ]
 }

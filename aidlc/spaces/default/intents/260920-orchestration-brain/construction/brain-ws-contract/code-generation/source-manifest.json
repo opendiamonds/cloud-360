@@ -14,7 +14,7 @@
     { "path": "frontend/package.json" },
     { "path": "frontend/package-lock.json" },
     { "path": "frontend/eslint.config.js" },
-    { "path": "frontend/src/pages/BrainPage.tsx" },
+    { "path": "frontend/src/brain/useBrainConnection.ts" },
     { "path": ".github/workflows/ci.yml" },
     { "path": "scripts/validate_repo_contract.py" }
   ]

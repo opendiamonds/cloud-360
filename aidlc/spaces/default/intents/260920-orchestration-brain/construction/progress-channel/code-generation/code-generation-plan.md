@@ -263,6 +263,14 @@ return StreamingResponse(event_generator(), media_type="text/event-stream")   # 
 
 ---
 
+## §四之一 code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項合併前必修，各在所屬單元修正並附測試。逐項對照該表「單元」欄：**19 項中沒有一項劃給 `progress-channel`**（第 18 項的單元欄為 `session-store／work-orchestrator`，與本單元無關）。另以本單元交付的檔案（`backend/services/progress_channel.py` 等，見 `source-manifest.json`）反查各項的修法落點，亦無一項需要改動本單元的檔案。
+
+因此本計畫**不新增步驟**；既有 12 格步驟維持原樣（已全部完成）。本輪的工作是：依現況重新查驗 12 格仍成立、以 `backend/.venv` 跑本單元測試與完整後端套件，結果附加於 `code-summary.md`。
+
+---
+
 ## §五 Plan Approval
 
 本計畫 ＋ 其中逐字貼入的 Testing Contract ＋ `unit-test-instructions.md` 三者一併送核。

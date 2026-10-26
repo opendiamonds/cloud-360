@@ -407,3 +407,249 @@ cd frontend && npx playwright test tests/e2e/member-pages.spec.ts
 
 **這五項是真實的覆蓋缺口**，不是「不需要測」。它們進入核可關卡供裁決是否值得在本輪補齊。
 
+## 重新查驗與合併前必修第 9 項
+
+> 記錄時間 `2026-10-23T11:20:31Z`（`date -u` 取值）。來源：使用者對整站送 Request Changes，
+> 本單元承接 `functional-design/merge-blockers.md` 第 9 項，裁決「前端分頁顯示全部」（計畫 §五之一）。
+
+### 一、Steps 1–14 重新查驗（逐格開檔）
+
+| Step | 結果 | 查證依據 |
+|---|---|---|
+| 1 | 勾回 | `git status` 對 `frontend/package.json`、`package-lock.json`、`playwright.config.ts` 無改動；`testDir: './tests/e2e'` 仍在 |
+| 2 | 勾回 | `npx playwright test tests/e2e/member-pages.spec.ts --list` 可收集（輸出見 §四）；指令仍記於 `unit-test-instructions.md` §二 |
+| 3 | 勾回 | `failureSignal.ts` 的 `SignalKind`（5 個字面值，:29-34）、`SignalEndpoint`（6 個，:42-48），無 `message`／`detail`／`displayName` 欄位 |
+| 4 | 勾回 | `LiveRegion.tsx:50-51` 的 `role="status"` 與 `data-testid="live-region"` 寫死 |
+| 5 | 勾回 | `membershipApi.ts` 六個函式皆經 `apiUrl()`，422 以 `typeof detail` 分流（:106-110、:173-176），各失敗路徑呼叫 `emitFailureSignal` |
+| 6 | 勾回 | `ReselectionBanner.tsx:180` 的 `can('K3', 'view')` 前置、`:247` 宿主 `role="status"`；`Layout.tsx:26` 直接渲染，未走 `slotRegistry` |
+| 7 | 勾回 | `MembersListPage.tsx` 兩層抓取、`canManage` 兩段式不變；**100 列閘已由 Step 15 取代為分頁**（見 §二） |
+| 8 | 勾回 | `InviteMemberDialog.tsx` 未改，案例 4、8（現編號）仍綠 |
+| 9 | 勾回 | `MemberDetailPage.tsx:296`／`:319` 的 `OPEN-MP24-7` 佔位仍在 |
+| 10 | **維持未勾** | 路由半邊已完成（`App.tsx` 兩條路由皆以 `CapabilityRoute` `K3`／`view` 包覆）；`Sidebar.tsx` 半邊依 §四 F-1 刻意未做。**前提已變動（如實記載，不自行改判）**：F-1 寫「前端不存在任何專案頁或 `/projects` 路由」，現況 `U23`（commit `8677b7d`）已加入 `Sidebar.tsx` 的 `/projects` 入口與 `ProjectDetailPage.tsx:83` 的 `project-members-link`，故成員頁現在可由「側欄 → 專案 → 成員」到達。本單元仍未改 `Sidebar.tsx`，是否據此視為 Step 10 已滿足由 conductor／使用者判定 |
+| 11 | 勾回 | spec 現為 **11** 個案例（原 10 ＋ 本輪 1b），對生產建置實跑 11/11 綠 |
+| 12 | 勾回 | `npm run lint` 0 errors、`npm run build`（含 `tsc -b`）通過，輸出見 §四 |
+| 13 | 勾回 | `source-manifest.json` 存在、可解析；本輪改動的兩支檔已在 `writes[]` 內，無新增路徑 |
+| 14 | 勾回 | 本檔與 `traceability.json` 已更新（見 §五） |
+
+**共用檔被其他單元改動的影響**：`membership-service` 把 `PUT /api/auth/{user_id}/active` 的 409 改為
+`Union[LastAdminGuardReport, ReservedAccountConflict]` 並新增 500／503，`openapi.json` 與 `api.d.ts` 隨之重產。
+**本單元不消費該端點**：`membershipApi.ts` 對 `/active` 的命中數為 0，`MemberDetailPage` 的 409 來自
+`PATCH`／`DELETE /api/membership/projects/{id}/members/{uid}`（`membershipApi.ts:222`、`:256`），本體仍是
+`LastAdminGuardReport`；停用端點的唯一前端消費者是 `AdminPage.tsx`（不屬本單元）。重產後的 `api.d.ts`
+仍匯出 `LastAdminGuardReport`（:1492），`tsc -b` 通過。結論：**對本單元無影響**。
+
+### 二、Step 15 改動（檔:行）
+
+| 檔案 | 改動 |
+|---|---|
+| `frontend/src/pages/MembersListPage.tsx:18-30` | 刪除 `MAX_RENDERED_MEMBERS = 100` 與其註解，改為 `MEMBERS_PER_PAGE = 50` 與「為什麼是前端分頁」的註解 |
+| `:49-50` | 新增 `requestedPage` state |
+| `:121-131` | `handleInvited` 新列附加後跳到新列所在頁（`:126`，`Math.ceil((members.length + 1) / 50)`） |
+| `:145-155` | `totalPages`／`currentPage`／`visibleMembers` 皆為導出值；`currentPage` 夾在 [1, 總頁數]，當前頁變空即退回最後一個非空頁——**不用 effect**（`react-hooks/set-state-in-effect`） |
+| `:192-197` | 刪除「成員過多，請聯絡管理者」提示與 `tooMany` 閘；表格無條件渲染（載入完成且無抓取錯誤時） |
+| `:211` | 列的 `map` 改走 `visibleMembers` |
+| `:243-277` | 分頁列 `member-list-pagination`（表格之外）：`member-list-prev-page`、`member-list-page-info`（「第 N／M 頁、共 K 位」）、`member-list-next-page`；邊界呈現但停用 |
+| `frontend/tests/e2e/member-pages.spec.ts:209-288` | 案例 1 改寫並改名、新增案例 1b，皆附 `@purpose`／`@api`／`@ui`／`@given`／`@step`／`@pass`／`@story` |
+
+`canManage` 仍以**完整** `members` 找自身那一列（不受切頁影響）；切頁不發請求，案例 1 另斷言翻頁全程 `membersGets() === 1`。
+後端零改動，`OPEN-MP24-6`（伺服器分頁）仍開放。`MAX_RENDERED_MEMBERS`／`member-list-too-many`／「成員過多」在 `src` 與 `tests` 的 grep 命中數皆為 **0**。
+
+### 三、測試名稱變更（TCMS 孤兒案例處置用，`unit-test-instructions.md` §七）
+
+| 動作 | `test()` 字串 |
+|---|---|
+| 舊名（作廢） | `U24 member pages › renders the member list up to 100 rows and replaces it with a notice beyond that` |
+| 新名（取代舊名） | `U24 member pages › paginates more than 100 members 50 per page so every member stays reachable` |
+| 新增 | `U24 member pages › splits exactly 100 members into two pages of 50` |
+
+改名是必要的：舊名斷言的正是缺陷本身（「超過 100 改顯示提示」），沿用舊名會讓 TCMS 案例描述與行為相反。
+TCMS 上舊名案例將變成無執行結果的孤兒，同步時須手動封存。
+
+### 四、各命令實際輸出
+
+| 命令 | 實際輸出（摘錄） |
+|---|---|
+| `cd frontend && npm run lint` | `✖ 2 problems (0 errors, 2 warnings)`——`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344`（皆 `exhaustive-deps`，非本單元檔案；行號較前次記載漂移，屬他檔改動） |
+| `cd frontend && npm run build` | `✓ 324 modules transformed.` … `✓ built in 828ms`（另有既存的 chunk > 500 kB 提示） |
+| `npx playwright test tests/e2e/member-pages.spec.ts --list` | `Total: 11 tests in 1 file` |
+| `BASE_URL=http://localhost:4179 npx playwright test tests/e2e/member-pages.spec.ts`（對 `npx vite preview --port 4179` 的生產建置） | `11 passed (9.7s)`；還原突變後重建重跑 `11 passed (7.8s)` |
+
+**環境說明**：本 spec 全部走 `page.route()` 攔截，不需要後端與資料庫，故以 `npm run build` ＋ `vite preview`
+服務生產建置即可實跑（沿用 §五之二：計數類斷言須對生產建置執行）。**未**對 `deploy/docker-compose.test.yml` 的完整 stack 執行，
+那一層由 CI 的 `ui-regression` 承擔。
+
+### 五、突變驗證
+
+| 突變 | 受測案例 | 結果 | 還原後 |
+|---|---|---|---|
+| 表格條件加回 `members.length <= 100`（還原整表隱藏閘） | 1 | **RED**（`expect(locator).toBeVisible() failed … element(s) not found`，spec:238） | GREEN |
+| `totalPages` 改為 `Math.floor(len / 50) + 1`（off-by-one） | 1b | **RED**（Expected `第 1／2 頁、共 100 位`，Received `第 1／3 頁、共 100 位`）；案例 1 在此突變下仍綠（101 位兩式皆得 3） | GREEN |
+
+兩個突變還原後以 grep 確認 `<= 100`／`floor` 命中數為 0，重建後全套 11/11 綠。
+
+### 六、未驗項（如實記載）
+
+| 項目 | 狀態 |
+|---|---|
+| 「當前頁變空退回前一頁」 | 已實作（導出值夾取），**無 e2e 斷言**。現行三種操作中只有移出會減少成員，而移出會導回清單頁重新掛載（頁次重置為 1），故此路徑在現有流程中不可由使用者觸發；它是對未來就地移除的防護 |
+| 「邀請後跳到新列所在頁」 | 已實作，**無 e2e 斷言**（案例 3 只有 2 位成員，新列本就在第 1 頁） |
+| 完整 stack（`docker-compose.test.yml`）上的 e2e | 未跑，由 CI `ui-regression` 承擔 |
+| TCMS 同步 | 未做；舊名案例需在 `tcms-test-cases` 站處置 |
+
+### 七、偏離
+
+1. **未重用既有 `PaginationControl.tsx`**，在本頁內寫一組分頁列。理由：該元件為深色主題（`bg-slate-800`）、`aria-label` 寫死為「使用者清單分頁」、總數字樣為「筆」，且語意是伺服器分頁（`pageSize` 取自回應）；修改它會波及 `AdminPage`。計畫要求「沿用既有 Tailwind 樣式與 `data-testid` 慣例」，本頁沿用的是自己的淺色樣式與 `member-list-*` testid 前綴。
+2. **新增「邀請後跳到新列所在頁」**，計畫未明列。理由：不跳頁時在第 1 頁邀請的新列會落在看不見的最後一頁，「就地新增一列」（`BR23.2`）在超過 50 位時不可觀察。未增加任何請求。
+3. **案例 1 改名**（見 §三）。計畫已預見「若必須改 `test()` 字串」並要求記錄。
+4. `source-manifest.json` **未改**：本輪改動的兩支檔已在 `writes[]` 內，無新增或刪除的 application-source 路徑。
+
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T14:47:12Z -->
+
+本輪只查驗、未改任何程式或測試。計畫 20 格勾選 18 格（機械計數：`[x]` 18、`[ ]` 2）。
+
+| 格 | 未勾理由 |
+|---|---|
+| Step 9 `[移出專案]` 就地移除 | 實作為移出成功後 `navigate()` 回清單頁、清單頁重新掛載時再抓一次（`MemberDetailPage.tsx` 的 `handleRemove`），不是就地移除；本檔 F-2 已記「本設計下不可達」，案例 3 斷言清單請求多恰好 1 次。角色下拉就地更新、二次確認、409 守門文案、`OPEN-MP24-7` 佔位皆已完成 |
+| Step 10 在 `Sidebar.tsx` 新增入口 | 兩條路由已以 `CapabilityRoute` `K3`／`view` 包住（`App.tsx:169-198`），但本單元未改 `Sidebar.tsx`；成員頁經「側欄專案 → `/projects` → `ProjectDetailPage.tsx:83` 成員連結」可達（U23 `8677b7d`）。`merge-blockers.md` 第 9 列記 review-03 判定已滿足；本輪照字面維持未勾 |
+
+測試與檢查（本機實跑）：`npm run lint` 0 errors、2 個既有 `exhaustive-deps` warning（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344`，非本單元）；`npx tsc -b`、`check:types`、`check:ws-types` 通過；`vite build` 成功（輸出指到 scratchpad，未覆寫 `frontend/dist`）。e2e：本 spec 的請求全以 `page.route()` 攔截，以 `vite preview` 服務 scratchpad 建置實跑 `member-pages.spec.ts` **14 passed**，跑完已停 preview；`docker-compose.test.yml` 全 stack 未跑，由 CI `ui-regression` 承擔。後端完整套件 1319 OK（skipped 3）。突變未重跑，沿用本檔既有紀錄。repo 內測試輸出與快取 mtime 未變。
+
+合併前必修 **#9 屬實已解決**：`MAX_RENDERED_MEMBERS`／「成員過多」／`member-list-too-many` 在 `frontend/src` 與 `tests` 零命中；`MembersListPage.tsx` 改為 `MEMBERS_PER_PAGE = 50` 的前端分頁，不再整表隱藏；案例 1（101 位：第 1 頁 50 列、「第 1／3 頁、共 101 位」、第 3 頁可見並進入第 101 位，清單請求僅 1 次）與 1b（剛好 100 位為 2 頁）實跑綠。後端分頁（`OPEN-MP24-6`）仍為開放項。#14 為本單元的依賴：前端對 404 一律顯示「查不到這個專案」，三個 404／403 案例實跑綠；後端部分屬 `project-pages-ui`。
+
+已核可計畫／測試說明與程式的落差（不回改計畫）：`unit-test-instructions.md` §四寫 8 個案例，spec 實為 14 個（新增 1b 與 review、#14 的 404／403 案例；案例 1 改名對照見本檔）；Step 7 的「100 列渲染閘」已被 Step 15 前端分頁取代，依 Step 15 勾選；Step 15 的「當前頁變空退回前一頁」與「邀請後跳到新列所在頁」有實作但無 e2e 斷言，且前者在現行流程不可達。
+
+候選問題（未修，交審查判定）：(1) 網址 `projectId`（或詳情頁 `userId`）非數字時，effect 直接 return，畫面永遠停在「載入中…」且無 console 訊號，與 `SEC-U24-6` 不符；(2) 邀請與移出確認兩個對話框宣告 `role="dialog" aria-modal="true"`，但沒有焦點圈限、不能按 Escape 關閉，鍵盤可 Tab 到背景；(3) `inviteMember` 網路失敗時發出的訊號種類為 `invite-validation-failed`，語意錯誤；(4) 已接受的提醒：分頁列無 `aria-live`、按鈕觸控尺寸未達 44px、快速連續邀請時 `handleInvited` 讀舊的 `members.length`。
+
+## 合併前必修第 23 項處置（2026-10-26）
+
+<!-- 寫入時間：2026-10-26T14:24:00Z -->
+
+依計畫 §五之二（Step 16–20）處置 `merge-blockers.md` 第 23 項的 (a)–(d)。訊號種類標錯那一項（Minor）不在範圍，未改。
+
+### 一、程式改動（行號為本次寫入後的現況）
+
+| 檔案 | 位置 | 改動 |
+|---|---|---|
+| `frontend/src/pages/MembersListPage.tsx` | :52 | `invalidProjectId = !Number.isFinite(projectId)`（導出值，不進 state） |
+| 同上 | :75、:96 | 抓取 effect 以 `invalidProjectId` 判斷跳過；依賴陣列補上它 |
+| 同上 | :101-104 | 新 effect：`invalidProjectId` 為真時呼叫 `emitFailureSignal({ kind: 'members-fetch-failed', endpoint: 'GET /projects/:id/members' })`——與 404 走同一組種類／端點，effect 內不 setState |
+| 同上 | :106-108、:208、:225-229、:245、:297 | `showLoading`／`shownError`／`shownLiveMsg` 三個導出值：非數字時不顯示「載入中…」、錯誤區塊與 live region 都顯示固定句 `PROJECT_NOT_FOUND_MESSAGE`（「查不到這個專案」），表格與分頁列不渲染 |
+| 同上 | :68、:156-159、:171、:185、:215、:332 | `inviteButtonRef` ＋ `closeInvite()`：取消、Escape、201、403 四條關閉路徑都把焦點還給「邀請成員」鈕 |
+| `frontend/src/components/membership/InviteMemberDialog.tsx` | :4、:58、:68、:111 | 掛上 `useDialogKeyboard`；送出中 Escape 不關閉（與停用的「取消」一致） |
+| `frontend/src/pages/MemberDetailPage.tsx` | :5、:65-84、:195、:201、:206、:350、:364、:379 | `confirmDialogRef`／`removeButtonRef` ＋ `closeConfirm()`；掛上 `useDialogKeyboard`（`open: confirmOpen`，移出中 Escape 不關閉）；取消、Escape、409、403、其他錯誤五條留在本頁的關閉路徑都把焦點還給「移出專案」鈕 |
+| `frontend/src/hooks/useDialogKeyboard.ts`（**新檔**，68 行） | 全檔 | 共用 hook：Escape 關閉、Tab／Shift+Tab 在對話框內首尾循環，焦點已在對話框外時下一次 Tab 收回。焦點圈限沿用 `components/brain/ObjectPicker.tsx` 的 `onKeyDown` 形狀；監聽掛在 `window` 沿用 `components/ShareModal.tsx`／`components/cost/EstimateSaveModal.tsx`。不新增依賴 |
+| `frontend/tests/e2e/member-pages.spec.ts` | :896、:932、:987 | 三個新案例（見二），各附 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 規格註解；非數字案例沒有任何 API 請求，故不寫 `@api` |
+
+`source-manifest.json` 加入 `frontend/src/hooks/useDialogKeyboard.ts`。`traceability.json` 只改一處變為不實的註記：`BR25.1` 原寫「焦點預設在取消已實作但未斷言」，現由新案例斷言。
+
+### 二、新增的 e2e 案例（名稱一經合併不得再改）
+
+1. `shows the fixed not-found sentence instead of loading forever when the project id is not a number`：開 `/projects/abc/members` → 錯誤區塊恰為「查不到這個專案」、「載入中…」0 命中、表格 0 命中；網路靜止後 `[membership] ` 開頭的 console 恰一筆 `members-fetch-failed GET /projects/:id/members`、不含 `abc`；members 端點請求 0 次。
+2. `keeps keyboard focus inside the invite dialog, closes it on Escape and returns focus to the invite button`：開啟後焦點在使用者 ID 欄；連按 Tab 六次每次都在對話框內；第一欄 Shift+Tab 到「取消」；Escape 後對話框消失、焦點在「邀請成員」鈕；再開一次按「取消」焦點同樣回原鈕。
+3. `keeps keyboard focus inside the remove confirmation, closes it on Escape and returns focus to the remove button`：開啟後焦點在「取消」；Tab 四次都在確認框內；「取消」上 Shift+Tab 到「確認移出」；Escape 後確認框消失、焦點在「移出專案」鈕、DELETE 請求 0 次。
+
+### 三、測試結果（本機實跑）
+
+- `npx eslint .`：**0 errors**、2 warnings（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的既有 `exhaustive-deps`，非本單元）。
+- `npx tsc -b`：通過。
+- `npx vite build --outDir <scratchpad>/fe23-dist`：成功（未寫 `frontend/dist`）。
+- 以 `vite preview` 在 4823 埠服務該建置：`member-pages.spec.ts` **17 passed**（原 14 ＋ 新 3）；`a11y.spec.ts` **27 passed**（含掃描點 11 邀請對話框初始狀態、12 邀請對話框拒絕狀態、15 移出確認對話框）。輸出目錄指到 scratchpad，跑完已停 preview；repo 內 `test-results/`、`pw-report.json`、`junit.xml` 的 mtime 未變。
+- `deploy/docker-compose.test.yml` 全 stack 未跑，由 CI `ui-regression` 承擔。
+
+### 四、突變驗證（只改暫存區副本 `fe23-mut`，`node_modules` 以 symlink 共用；repo 檔案未動）
+
+每次突變都重新建置、在 4824 埠預覽，以 repo 的 spec 跑對應案例。
+
+| # | 突變 | 結果 |
+|---|---|---|
+| M1 | 拿掉 Step 16：`invalidProjectId` 固定為 false，抓取 effect 改回原本的提早 return | 案例 1 **紅**：`member-list-error` 找不到（畫面停在「載入中…」） |
+| M1b | 只拿掉訊號 effect 內的 `emitFailureSignal` 呼叫 | 案例 1 **紅**：console 訊號陣列為空，期望恰一筆 |
+| M2 | hook 內拿掉 Tab 處理（焦點圈限） | 案例 2 **紅**（第 3 次 Tab 後焦點離開對話框）、案例 3 **紅**（第 2 次 Tab 後焦點離開確認框） |
+| M3 | hook 內拿掉 Escape 關閉 | 案例 2、3 **紅**：Escape 後對話框仍在（count 1，期望 0） |
+| M4 | 拿掉 `closeInvite`／`closeConfirm` 內的焦點回復 | 案例 2、3 **紅**：Escape 後觸發按鈕未取得焦點 |
+
+還原後以 `diff -r` 確認副本 `src/` 與 repo 完全相同，再跑三個新案例 **3 passed**。
+
+### 五、未做與留意
+
+- **詳情頁的非數字 `projectId` 仍會停在「載入中…」**：`MemberDetailPage.tsx` 的抓取 effect 同樣在 `!Number.isFinite(projectId)` 時直接 return。第 23 項與 Step 16 只點名清單頁（第 23 項逐字說詳情頁的非數字 `userId` 會顯示「找不到這位成員」），故本輪未改，交審查判定是否另列。
+- `merge-blockers.md` 第 9 列引用的 `MembersListPage.tsx` 行號（:30、:152-155、:243-277、:126）因本輪插入而位移；本輪不得編輯該檔，未更正。
+- `traceability.json` 的 `US12.1` 一列仍引用案例 1 的舊名（第 9 項改名前即如此，非本輪造成），本輪依指示未動。
+- 邀請 201 後焦點也回到「邀請成員」鈕（與另外三條關閉路徑一致）；新列所在頁的跳頁行為不變。
+
+## 合併前必修第 23 項補修：成員詳情頁（2026-10-26）
+
+<!-- 寫入時間：2026-10-26T15:10:31Z -->
+
+依計畫 §五之三（Step 21–24）處置審查 `review-05` 的 `R-11`（Major：詳情頁非數字 `projectId` 永遠停在「載入中…」）與 `R-15`（Minor：對話框其餘關閉路徑缺焦點斷言）。上節「五、未做與留意」第一點所記的詳情頁缺口由本節關閉。
+
+### 一、程式改動（行號為本次寫入後的現況）
+
+| 檔案 | 位置 | 改動 |
+|---|---|---|
+| `frontend/src/pages/MemberDetailPage.tsx` | :6、:10 | 匯入 `emitFailureSignal` 與 `PROJECT_NOT_FOUND_MESSAGE` |
+| 同上 | :44-56 | 註解 ＋ `invalidProjectId = !Number.isFinite(projectId)`（導出值，不進 state）。只看 `projectId`：`userId` 非數字時抓取照常、畫面顯示「找不到這位成員」，本來就不會卡住 |
+| 同上 | :105、:128 | 抓取 effect 以 `invalidProjectId` 判斷跳過；依賴陣列補上它 |
+| 同上 | :130-136 | 新 effect：`invalidProjectId` 為真時呼叫 `emitFailureSignal({ kind: 'members-fetch-failed', endpoint: 'GET /projects/:id/members' })`——與 404 同一組種類／端點、與清單頁同形；effect 內不 setState |
+| 同上 | :138-140、:247、:257、:259-261 | `showLoading`／`shownError`／`shownLiveMsg` 三個導出值：非數字時不顯示「載入中…」、錯誤區塊（`member-detail-error`）與 live region 顯示固定句「查不到這個專案」；主內容與「找不到這位成員」仍以 `isLoading` 閘住，故不渲染 |
+| `frontend/tests/e2e/member-pages.spec.ts` | :1024-1152 | 三個新案例（見二），各附 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 規格註解；後兩案另附 `@api`。非數字案例沒有任何 API 請求，故不寫 `@api` |
+
+`InviteMemberDialog.tsx`、`MembersListPage.tsx`、`useDialogKeyboard.ts` 本輪**未改**：(b)(c) 兩條路徑的行為在 §五之二 已實作，本輪只補斷言。`source-manifest.json` **未改**（無新增或刪除的 application-source 路徑；`MemberDetailPage.tsx` 與 spec 已在 `writes[]` 內）。`traceability.json` **未改**：逐筆檢查後無因本輪變為不實的註記（`BR25.1` 的註記仍成立）。
+
+### 二、e2e 案例名稱（§五之二 與 §五之三 新增者，供 `tcms-test-cases` 同步；名稱一經合併不得再改）
+
+TCMS 案例名為 `U24 member pages › <test>`：
+
+| 來源 | `test()` 字串 | spec 行 |
+|---|---|---|
+| §五之二 Step 18 (a) | `shows the fixed not-found sentence instead of loading forever when the project id is not a number` | :896 |
+| §五之二 Step 18 (b) | `keeps keyboard focus inside the invite dialog, closes it on Escape and returns focus to the invite button` | :932 |
+| §五之二 Step 18 (b) | `keeps keyboard focus inside the remove confirmation, closes it on Escape and returns focus to the remove button` | :987 |
+| §五之三 Step 22 (a) | `shows the fixed not-found sentence instead of loading forever when the detail page project id is not a number` | :1033 |
+| §五之三 Step 22 (b) | `ignores Escape while an invite is in flight and returns focus to the invite button once it completes` | :1067 |
+| §五之三 Step 22 (c) | `returns focus to the remove button after the remove confirmation is closed by a last-admin 409` | :1124 |
+
+各案內容：
+- (a) 開 `/projects/abc/members/1` → `member-detail-error` 恰為「查不到這個專案」、「載入中…」與「找不到這位成員。」皆 0 命中；網路靜止後 `[membership] ` 開頭的 console 恰一筆 `members-fetch-failed GET /projects/:id/members` 且不含 `abc`；members 端點請求 0 次。
+- (b) 以 route 延遲 POST（測試自持一個 promise 放行）→ 送出鈕顯示「送出中…」且確認 POST 已到達後按 Escape，等一個 animation frame 後對話框數仍為 1；放行（201）後對話框數為 0、新成員出現在表格、「邀請成員」鈕取得焦點。
+- (c) DELETE 回 409（`LastAdminGuardReport`，一個專案）→ 確認框數為 0、`guard-report` 可見、「移出專案」鈕取得焦點。選 409 而非 403：兩條在 `handleRemove` 都經 `closeConfirm()`，409 另有可見的守門回報，可同時確認走的是錯誤分支而非取消。
+
+`unit-test-instructions.md` 仍寫「8 個案例」（凍結文件，本輪依指示不改）；spec 實為 **20** 個案例（`--list`：`Total: 20 tests in 1 file`）。
+
+### 三、測試結果（本機實跑）
+
+- `npx eslint .`：**0 errors**、2 warnings（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的既有 `exhaustive-deps`，非本單元）。
+- `npx tsc -b`：通過。
+- `npx vite build --outDir <scratchpad>/fe23b-dist`：成功（未寫 `frontend/dist`；既存 chunk > 500 kB 提示）。
+- 以 `vite preview` 在 4853 埠服務該建置，`npx playwright test tests/e2e/member-pages.spec.ts tests/e2e/a11y.spec.ts --reporter=list --output=<scratchpad>/pw23b`：**47 passed**（`member-pages.spec.ts` **20**＝原 17 ＋ 新 3；`a11y.spec.ts` **27**）。跑完已停 preview。以 `--reporter=list` 覆寫設定檔的 json／junit reporter，repo 內 `pw-report.json`、`junit.xml`（mtime 22:23 CST，早於本輪）與 `test-results/` 未被寫入。
+- `deploy/docker-compose.test.yml` 全 stack 未跑，由 CI `ui-regression` 承擔。
+
+### 四、突變驗證（只改暫存區副本 `fe23b-mut`，`node_modules` 以 symlink 共用；repo 檔案未動）
+
+每次突變都重新建置、在 4854 埠預覽，以 repo 的 spec 以 `-g` 跑對應案例。
+
+| # | 突變 | 結果 |
+|---|---|---|
+| M5 | 拿掉 Step 21：`invalidProjectId` 固定為 false，抓取 effect 改回 `!Number.isFinite(projectId)` 提早 return | 案例 (a) **紅**：`member-detail-error` 找不到（畫面停在「載入中…」），spec:1044 |
+| M6 | `InviteMemberDialog.tsx` 的 `escapeDisabled: submitting` 改為恆 false（送出中的 Escape 停用條件改錯） | 案例 (b) **紅**：送出中 Escape 後對話框數 Expected 1、Received 0，spec:1106 |
+| M7 | `MemberDetailPage.tsx` 的 409 分支以 `setConfirmOpen(false)` 取代 `closeConfirm()`（拿掉錯誤路徑的焦點回復） | 案例 (c) **紅**：`member-detail-remove` 未取得焦點（Received inactive），spec:1150 |
+
+每次還原後以 `diff -r` 確認副本 `src/` 與 repo 完全相同；全部還原後重跑三個新案例 **3 passed**。
+
+### 五、計畫勾選（本輪重新查驗）
+
+29 格勾 27 格、未勾 2 格（機械計數：`[x]` 27、`[ ]` 2）。Steps 1–8、11–24 依現況成立：`package.json`／`package-lock.json`／`playwright.config.ts` 無 diff；`--list` 可收集 20 案；`failureSignal.ts` 仍為 5 個 `SignalKind`、6 個 `SignalEndpoint`；`LiveRegion.tsx:50-51` 的 `role="status"`／`data-testid`；`ReselectionBanner.tsx:180` 的 `can('K3', 'view')`、`Layout.tsx:26` 直接渲染；`App.tsx:176`、`:189` 兩條路由；`merge-blockers.md` 第 9 列已回填。未勾兩格與前輪同理由：
+
+| 格 | 未勾理由 |
+|---|---|
+| Step 9 `[移出專案]` 就地移除 | 實作為移出成功後 `navigate()` 回清單頁、清單頁重新掛載時再抓一次，不是就地移除；其餘（角色下拉就地更新、二次確認、409 守門文案、`OPEN-MP24-7` 佔位）皆成立 |
+| Step 10 在 `Sidebar.tsx` 新增入口 | 路由半邊成立；本單元未改 `Sidebar.tsx`。成員頁經「側欄專案 → `/projects` → `ProjectDetailPage.tsx:83` 成員連結」可達，`merge-blockers.md` 第 9 列記 review-03 判定已滿足；照計畫字面維持未勾，是否改判由 conductor／使用者決定 |
+
+### 六、未做與留意
+
+- `review-05` 的 `R-08`（分頁列 `aria-live` 與 44px）、`R-09`／`R-14`（邀請後跳頁的閉包長度與無斷言）、`R-13`（訊號種類標錯）不在 §五之三 範圍，未改。
+- (c) 只斷言 409 一條錯誤路徑；403 與「其他錯誤」兩條同樣經 `closeConfirm()`，未各自斷言。
+- `merge-blockers.md`、`unit-test-instructions.md`、問題檔依指示未動。

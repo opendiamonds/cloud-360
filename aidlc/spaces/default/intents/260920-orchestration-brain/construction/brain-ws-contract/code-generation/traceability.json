@@ -47,7 +47,8 @@
     "BR4.3",
     "BR4.4",
     "BR4.5",
-    "BR4.6"
+    "BR4.6",
+    "MB-2"
   ],
   "coverage": [
     {
@@ -218,7 +219,7 @@
     {
       "id": "BR2.13",
       "status": "Deferred",
-      "target": "型別層已交付：WsClientEnvelope 與六個 client payload 皆無 turnId 欄位，backend/services/brain_ws_contract.py 使它在型別上不可構造，backend/tests/test_ws_contract.py 的 (6) 斷言之，backend/scripts/dump_ws_contract.py 的白名單斷言在建置期鎖住它。但 BR2.13 的 statement 有第二半——「伺服器收到即視為協定違規：拒絕該訊息並回 error(INVALID_REQUEST)，不得靜默忽略」——那是執行期行為，屬 U13 brain-gateway，本單元無法承載。標 Deferred 與結構相同的 BR1.3／BR2.5 一致（code-generation 審查 R-01：初版標純 OK，會讓 U13 讀 traceability.json 時認定此條無須處理，而執行期拒絕隨之靜默消失）。落點 U13。"
+      "target": "型別層已交付：WsClientEnvelope 與六個 client payload 皆無 turnId 欄位，backend/services/brain_ws_contract.py 使它在型別上不可構造，backend/tests/test_ws_contract.py 的 (6) 斷言之，backend/scripts/dump_ws_contract.py 的白名單斷言在建置期鎖住它。但 BR2.13 的 statement 有第二半——「伺服器收到即視為協定違規：拒絕該訊息並回 error(INVALID_REQUEST)，不得靜默忽略」——那是執行期行為，屬 U13 brain-gateway，本單元無法承載。標 Deferred 與結構相同的 BR1.3／BR2.5 一致（code-generation 審查 R-01：初版標純 OK，會讓 U13 讀 traceability.json 時認定此條無須處理，而執行期拒絕隨之靜默消失）。落點 U13。合併前必修第 2 項（MB-2）之後，該 error(INVALID_REQUEST) 不屬任何一輪，U13 須以 turnId=null（envelope 與 payload 皆 null）送出，不得以 _mint_turn_id() 捏造；契約已由 backend/services/brain_ws_contract.py 的 _EITHER_SCOPED_TYPES 放行。"
     },
     {
       "id": "BR2.14",
@@ -279,6 +280,11 @@
       "id": "BR4.6",
       "status": "OK",
       "target": "backend/scripts/dump_ws_contract.py"
+    },
+    {
+      "id": "MB-2",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py"
     }
   ]
 }

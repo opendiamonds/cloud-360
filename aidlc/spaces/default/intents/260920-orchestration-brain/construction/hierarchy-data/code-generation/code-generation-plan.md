@@ -118,96 +118,121 @@
 
 ### 步 1 — 測試執行器就緒（契約要求先於第一個測試步）
 
-- [ ] 確認 `python -m unittest discover -s tests -v` 在 `backend/` 下可執行（brownfield 既有）
-- [ ] 確認 `backend/tests/helpers.py` 的 `psycopg2` MagicMock ＋ in-memory SQLite 策略可承載本單元
-- [ ] **本單元的精確指令**寫進 `unit-test-instructions.md`（不得用裸的 `python -m unittest`）
+- [x] 確認 `python -m unittest discover -s tests -v` 在 `backend/` 下可執行（brownfield 既有）
+- [x] 確認 `backend/tests/helpers.py` 的 `psycopg2` MagicMock ＋ in-memory SQLite 策略可承載本單元
+- [x] **本單元的精確指令**寫進 `unit-test-instructions.md`（不得用裸的 `python -m unittest`）
 
 **故事追溯**：無（基礎設施步）
 
 ### 步 2 — 資料模型：`schema_rbac.sql` 的 DDL（實作）
 
-- [ ] `projects`：`id`、`name`（非空白）、`owner_user_id`（FK → `users.id`）、`is_default`、`created_at`
-- [ ] `systems`：`id`、`project_id`（FK → `projects.id`）、`name`、`is_default`、`created_at`
-- [ ] `diagram_change_records`：`id`、`diagram_id`（FK → `user_diagrams.id`）、`source`（封閉列舉，本輪唯一值 `brain_orchestration`）、`actor_user_id`（FK → `users.id`，**必填**）、`requirement_summary`、`requirement_label`、`created_at`
-- [ ] `user_diagrams.system_id`：**可為空**，FK → `systems.id`，`ON DELETE RESTRICT`（`BR1.2`）
-- [ ] `projects` 的 FK ← `systems.project_id` 亦為 `ON DELETE RESTRICT`（`BR1.1`）
-- [ ] **兩個部分唯一約束，各自只引用自己表內的欄位**（`BR1.3`）：
+- [x] `projects`：`id`、`name`（非空白）、`owner_user_id`（FK → `users.id`）、`is_default`、`created_at`
+- [x] `systems`：`id`、`project_id`（FK → `projects.id`）、`name`、`is_default`、`created_at`
+- [x] `diagram_change_records`：`id`、`diagram_id`（FK → `user_diagrams.id`）、`source`（封閉列舉，本輪唯一值 `brain_orchestration`）、`actor_user_id`（FK → `users.id`，**必填**）、`requirement_summary`、`requirement_label`、`created_at`
+- [x] `user_diagrams.system_id`：**可為空**，FK → `systems.id`，`ON DELETE RESTRICT`（`BR1.2`）
+- [x] `projects` 的 FK ← `systems.project_id` 亦為 `ON DELETE RESTRICT`（`BR1.1`）
+- [x] **兩個部分唯一約束，各自只引用自己表內的欄位**（`BR1.3`）：
       `projects` 以 `(owner_user_id)` WHERE `is_default`；`systems` 以 `(project_id)` WHERE `is_default`
-- [ ] `diagram_change_records.created_at` 索引（`U4-R1`：清除查詢否則全表掃描）
-- [ ] 全部使用 `IF NOT EXISTS` 等可重跑安全寫法
-- [ ] `COMMENT ON` 標註：`system_id` 為歸屬權威來源、`source` 的涵蓋面、`is_default` 是遷移冪等承載
-- [ ] 更新檔頭涵蓋清單
+- [x] `diagram_change_records.created_at` 索引（`U4-R1`：清除查詢否則全表掃描）
+- [x] 全部使用 `IF NOT EXISTS` 等可重跑安全寫法
+- [x] `COMMENT ON` 標註：`system_id` 為歸屬權威來源、`source` 的涵蓋面、`is_default` 是遷移冪等承載
+- [x] 更新檔頭涵蓋清單
 
 **故事追溯**：`US9.1`（`AC9.1.1` 三層可被表達、`AC9.1.4` 不變量的資料面）
 
 ### 步 3 — 資料模型的測試（實作後）
 
-- [ ] 兩個部分唯一約束各自可建且真的擋住第二筆
-- [ ] `ON DELETE RESTRICT` 在兩層都擋住（刪 `systems` 其下有圖、刪 `projects` 其下有 `systems`）
-- [ ] `system_id` 可為空（**這是 `U4-V2` 夾具的前提，也是 `OQ-H2`／`S-7` 牽制的那一點**）
-- [ ] `actor_user_id` 必填（缺值即失敗）
-- [ ] `source` 的封閉列舉拒絕未定義值
+- [x] 兩個部分唯一約束各自可建且真的擋住第二筆
+- [x] `ON DELETE RESTRICT` 在兩層都擋住（刪 `systems` 其下有圖、刪 `projects` 其下有 `systems`）
+- [x] `system_id` 可為空（**這是 `U4-V2` 夾具的前提，也是 `OQ-H2`／`S-7` 牽制的那一點**）
+- [x] `actor_user_id` 必填（缺值即失敗）
+- [x] `source` 的封閉列舉拒絕未定義值
 
 **故事追溯**：`AC9.1.4`
 
 ### 步 4 — 遷移的資料讀寫（實作）
 
-- [ ] `backend/services/hierarchy_migration.py`：模組層函式 `migrate_hierarchy(db) -> MigrationCounts`
-- [ ] 取得「持有至少一張架構圖的使用者」清單
-- [ ] 每位使用者：取得或建立預設 `project`／`system`（`BR2.5`），**先解析預設 project，再以其 id 為範圍找 system**（`rules.md §三` 的獨佔寫入紀律）
-- [ ] 把該使用者 `system_id` 為空的圖掛入其預設 system
-- [ ] **不修改任何既有欄位**（`BR2.3`／`AC9.1.3`）
+- [x] `backend/services/hierarchy_migration.py`：模組層函式 `migrate_hierarchy(db) -> MigrationCounts`
+- [x] 取得「持有至少一張架構圖的使用者」清單
+- [x] 每位使用者：取得或建立預設 `project`／`system`（`BR2.5`），**先解析預設 project，再以其 id 為範圍找 system**（`rules.md §三` 的獨佔寫入紀律）
+- [x] 把該使用者 `system_id` 為空的圖掛入其預設 system
+- [x] **不修改任何既有欄位**（`BR2.3`／`AC9.1.3`）
 
 **故事追溯**：`AC9.1.2`、`AC9.1.3`
 
 ### 步 5 — 遷移資料讀寫的測試（實作後）
 
-- [ ] 兩位使用者、各有數張 `system_id` 為空的圖 → 遷移後各自掛入自己的預設 system
-- [ ] 不持有圖的使用者**不**被建立預設專案（`BR2.5` 的收窄）
-- [ ] 遷移前後，架構圖的 `owner_user_id`／`title`／`xml_data`／`updated_at` 逐欄未變（`BR2.3`）
+- [x] 兩位使用者、各有數張 `system_id` 為空的圖 → 遷移後各自掛入自己的預設 system
+- [x] 不持有圖的使用者**不**被建立預設專案（`BR2.5` 的收窄）
+- [x] 遷移前後，架構圖的 `owner_user_id`／`title`／`xml_data`／`updated_at` 逐欄未變（`BR2.3`）
 
 **故事追溯**：`AC9.1.2`、`AC9.1.3`
 
 ### 步 6 — 業務邏輯：交易邊界、計數、終檢（實作）
 
-- [ ] **逐使用者一個交易**（`S-8`）：該使用者的建立與改寫要麼全成要麼全不成
-- [ ] 回傳計數：處理幾位使用者、建立幾組預設專案／系統、改寫幾張圖（`BR2.6`）
-- [ ] 終檢：`system_id IS NULL` 的列數為 0，**不為 0 即 raise，不得 `logger.warning`**（`BR2.1`／`AC9.1.4`）
-- [ ] 冪等：`system_id` 已非空即跳過；預設專案／系統「存在就取用」（`BR2.2`）
-- [ ] **唯一約束拒絕寫入時必須往外拋**，不得被 `except Exception` 吞掉（`U4-V4`）
-- [ ] `backend/scripts/run_hierarchy_migration.py`：獨立指令，呼叫同一個入口，失敗以非零結束碼收場（`Q2=A`）
-- [ ] logger 名稱用 `"cloud360.hierarchy_migration"`（`team.md` 的既成慣例）
+- [x] **逐使用者一個交易**（`S-8`）：該使用者的建立與改寫要麼全成要麼全不成
+- [x] 回傳計數：處理幾位使用者、建立幾組預設專案／系統、改寫幾張圖（`BR2.6`）
+- [x] 終檢：`system_id IS NULL` 的列數為 0，**不為 0 即 raise，不得 `logger.warning`**（`BR2.1`／`AC9.1.4`）
+- [x] 冪等：`system_id` 已非空即跳過；預設專案／系統「存在就取用」（`BR2.2`）
+- [x] **唯一約束拒絕寫入時必須往外拋**，不得被 `except Exception` 吞掉（`U4-V4`）
+- [x] `backend/scripts/run_hierarchy_migration.py`：獨立指令，呼叫同一個入口，失敗以非零結束碼收場（`Q2=A`）
+- [x] logger 名稱用 `"cloud360.hierarchy_migration"`（`team.md` 的既成慣例）
 
 **故事追溯**：`AC9.1.4`
 
 ### 步 7 — 業務邏輯的測試（實作後）
 
-- [ ] 終檢在有殘留空值時 **raise**（不是 warning）
-- [ ] 計數三個欄位的值正確
-- [ ] **重跑一次**：沒有第二組預設專案／系統、已掛好的圖沒有被重新指派（`U4-V5`）
-- [ ] 部分失敗後重跑可補完（逐使用者交易的直接後果，`S-8`）
-- [ ] 獨立指令在終檢失敗時以非零結束碼收場
+- [x] 終檢在有殘留空值時 **raise**（不是 warning）
+- [x] 計數三個欄位的值正確
+- [x] **重跑一次**：沒有第二組預設專案／系統、已掛好的圖沒有被重新指派（`U4-V5`）
+- [x] 部分失敗後重跑可補完（逐使用者交易的直接後果，`S-8`）
+- [x] 獨立指令在終檢失敗時以非零結束碼收場
 
 **故事追溯**：`AC9.1.4`
 
 ### 步 8 — 部署設定（`U4-D1`，blocking）
 
-- [ ] `DEPLOY.md`：表／欄位清單更新
-- [ ] `DEPLOY.md`：**前進步驟**——遷移指令怎麼跑、預期輸出（三個計數）
-- [ ] `DEPLOY.md`：**回復程序**——清空 `system_id` 並刪除新建的 `projects`／`systems` 列（`decisions.md:90`／`:126` 逐字）
-- [ ] `DEPLOY.md`：**部分狀態**——「部分使用者已遷移」是合法可恢復狀態，重跑即補完（`S-8`）
-- [ ] `DEPLOY.md`：**靜止前置**——遷移期間應用不得接流量（`U4-V6`）；並註明現行 `deploy.yml` 尚無有序步驟（`S-9`）
-- [ ] `schema.sql`（建議，非 blocking）
+- [x] `DEPLOY.md`：表／欄位清單更新
+- [x] `DEPLOY.md`：**前進步驟**——遷移指令怎麼跑、預期輸出（三個計數）
+- [x] `DEPLOY.md`：**回復程序**——清空 `system_id` 並刪除新建的 `projects`／`systems` 列（`decisions.md:90`／`:126` 逐字）
+- [x] `DEPLOY.md`：**部分狀態**——「部分使用者已遷移」是合法可恢復狀態，重跑即補完（`S-8`）
+- [x] `DEPLOY.md`：**靜止前置**——遷移期間應用不得接流量（`U4-V6`）；並註明現行 `deploy.yml` 尚無有序步驟（`S-9`）
+- [x] `schema.sql`（建議，非 blocking）
 
 **故事追溯**：無（部署義務）
 
 ### 步 9 — 文件與追溯
 
-- [ ] `code-summary.md`
-- [ ] `traceability.json`
-- [ ] `source-manifest.json`：逐一列出本單元建立／修改的每一個應用原始碼路徑
+- [x] `code-summary.md`
+- [x] `traceability.json`
+- [x] `source-manifest.json`：逐一列出本單元建立／修改的每一個應用原始碼路徑
 
 **故事追溯**：無
+
+### 步 10 — 合併前必修第 3 項：刪除使用者不得回 500（Request Changes 修訂）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 3 項（`functional-design/reviews/review-06.md` R-04）。`OQ-H1`（刪使用者時的專案處置）由使用者於 2026-10-20 裁決：**空的預設專案一併清掉，其餘改回 409**。
+
+**缺陷**：`projects.owner_user_id`（`schema_rbac.sql:348`）無 `ON DELETE`，而預設專案由遷移／首次建圖自動建立，所以 `user_router.py:308-324` 的 `_hard_delete_user` 在 `db.delete(user)` 的 commit 時拋 `IntegrityError` → 500。同形狀的無 `ON DELETE` 參照還有：`diagram_change_records.actor_user_id`（:415）、`project_members.user_id`／`invited_by`（:600／:603）、`reselection_events.promoted_user_id`／`previous_owner_user_id`（:649／:650）、`system_requirement_fields.updated_by`（:701）、`memory.memory_records.owner_user_id`（:456）、`memory.memory_audit_events.actor_user_id`（:517）、`estimate_audit_events.actor_user_id`（:312）、`architecture_reviews.created_by`（:143）、`wa_lenses.updated_by`（:183）。
+
+**裁決後的規則**：
+1. **自動清除（同一交易）**：該使用者擁有、`is_default = TRUE`、其下所有 system 皆無架構圖、且除他本人外沒有其他成員列的專案——刪其 `systems`，再刪 `project`（`project_members` 經 `ON DELETE CASCADE` 隨之消失）。
+2. **其餘一律 409，不回 500**：刪除前以一次預檢列舉所有仍指向該使用者、且不在規則 1 清除範圍內的參照（上列各欄），有任何一筆即 `HTTPException(409)`，回應本體列出「哪一類資料、幾筆」（例：非空或非預設專案、其他專案的成員資格、記憶、稽核操作者紀錄）。**稽核類紀錄不刪**。
+3. **保底**：commit 時若仍拋 `IntegrityError`（預檢漏列的新表），rollback 並回 409（通用訊息＋記 log），不得回 500。
+4. 既有「仍擁有架構圖 → 403」（`user_router.py:314-319`）**維持不變**，不在本項範圍內改狀態碼。
+5. 兩個呼叫點（`DELETE /{user_id}` `:794` 與拒絕授權申請並刪除 `:641`）共用同一函式，行為一致。
+
+**與第三節「不做任何 APIRouter」的關係**：本步修改既有 `user_router.py` 的刪除路徑，是第三節的**明文例外**——`merge-blockers.md` 把第 3 項劃給本單元，且缺陷的根源是本單元建立的 `projects` 表。不新增 router、不新增端點；依 `team.md` 的 `user_router.py` 規則就地沿用既有形狀，不抽 service 層。
+
+- [x] `backend/services/user_router.py`：`_hard_delete_user` 加規則 1 的空預設專案清除、規則 2 的預檢與 409、規則 3 的 `IntegrityError` 保底；兩個端點的 `responses=` 宣告 409（讓 `openapi.json` 與前端型別看得到，比照 `:662-671` 的既有寫法）
+- [x] 重產 `openapi.json`（`backend/scripts/dump_openapi.py`），`--check` 綠；前端 `npm run check:types` 綠
+- [x] `backend/tests/test_user_delete_hierarchy.py`（新檔，TestClient，`team.md` B 規則）：(a) 只有空預設專案的使用者 → 200，且其預設 project／system／成員列皆已刪除；(b) 預設專案下有架構圖的使用者 → 不回 500（既有 403 或 409，斷言不是 500 且使用者仍在）；(c) 是他人專案成員的使用者 → 409，回應列出成員資格，使用者與成員列皆仍在；(d) 有 `diagram_change_records` 操作者紀錄的使用者 → 409，紀錄仍在；(e) 擁有非預設專案 → 409；(f) 拒絕授權申請並刪除的路徑對只有空預設專案的待審帳號 → 200；(g) 模擬預檢未涵蓋的外鍵於 commit 拋 `IntegrityError` → 409 而非 500
+- [x] 突變驗證 M-D1：拿掉規則 1 的清除 → (a) 紅；M-D2：拿掉預檢 → (c)(d) 紅（應落到保底 409 或 500，斷言回應本體列出資料類別即可紅）；M-D3：拿掉 `IntegrityError` 保底 → (g) 紅
+- [x] 完整後端套件以 `PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m unittest discover -s tests`（在 `backend/`）跑綠
+- [x] `schema_rbac.sql` 的 `projects.owner_user_id`、`project_members.user_id` 兩處 COMMENT 由「deliberately NOT decided (OQ-H1)」改為記載本裁決與落點（**COMMENT 文字變更，非 DDL 結構變更**；仍依 `project.md ## Mandated` 同步 `DEPLOY.md` 說明刪除使用者的新行為）
+- [x] `code-summary.md` append「合併前必修第 3 項」一節；`traceability.json` 補 `MB-3` 列；`source-manifest.json` 補新路徑
+
+**故事追溯**：`merge-blockers.md` #3、`review-06` R-04、`OQ-H1`
 
 ---
 

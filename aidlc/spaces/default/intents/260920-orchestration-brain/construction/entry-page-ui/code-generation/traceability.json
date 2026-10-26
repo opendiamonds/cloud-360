@@ -126,7 +126,7 @@
       "id": "AC1.1.3",
       "status": "OK",
       "target": "frontend/tests/e2e/entry-page-live.spec.ts",
-      "note": "L2「平台自我竄改句子顯示固定拒絕訊息」——本機未執行（需 docker-compose.test.yml，Docker daemon 未啟動），交 build-and-test；攔截層 E12 驗 token 逐訊框呈現"
+      "note": "L2「平台自我竄改句子顯示固定拒絕訊息」——尚未在真實 stack 執行（需 docker-compose.test.yml）；依 2026-10-27 裁決改由計畫 Step 23 的一次 CI 實跑（ui-regression）承擔，跑完前不宣稱為綠；攔截層 E12 驗 token 逐訊框呈現"
     },
     {
       "id": "AC1.1.4",
@@ -310,7 +310,7 @@
       "id": "AC8.1.4",
       "status": "OK",
       "target": "frontend/tests/e2e/regression.spec.ts",
-      "note": "既有 15 個 e2e 依 [EPI2]=A 與 infra R-01／R-02 處置；需真實 stack，本機未執行（Docker daemon 未啟動），交 build-and-test"
+      "note": "既有 15 個 e2e 依 [EPI2]=A 與 infra R-01／R-02 處置，合併前必修第 26 項 (e) 再於 not.toHaveURL(/\\/login$/) 之後補正向落點（toHaveURL(/\\/$/) ＋ brain-entry-page 可見）；需真實 stack，尚未執行，依 2026-10-27 裁決改由計畫 Step 23 的一次 CI 實跑（ui-regression）承擔，跑完前不宣稱為綠"
     },
     {
       "id": "AC9.1.1",
@@ -452,7 +452,7 @@
       "id": "BR92.6",
       "status": "OK",
       "target": "frontend/src/brain/brainProtocol.ts",
-      "note": "parseInbound 未知 type 忽略、errorCategory 以 never 窮盡；E49"
+      "note": "parseInbound 未知 type 忽略、errorCategory 以 never 窮盡；E49。合併前必修第 2 項(b)（[EP-MB2]=A）：turnId=null 的 error 由 useBrainConnection.ts 派送 systemNotice、ConversationView.tsx 渲染 brain-system-notice；entry-page.spec.ts「等待中收到非輪次錯誤只多一則系統提示」「連續兩則非輪次錯誤各自保留」「帶輪次的錯誤標在該輪且不出現系統提示」"
     },
     {
       "id": "BR92.7",
@@ -482,7 +482,7 @@
       "id": "BR93.3",
       "status": "OK",
       "target": "frontend/src/brain/brainTranscript.ts",
-      "note": "pendingConnId 於任一輪終止解除；E15"
+      "note": "pendingConnId 於任一輪終止解除；E15。非輪次錯誤（systemNotice）不解除任何輪次的等待：entry-page.spec.ts「等待中收到非輪次錯誤只多一則系統提示」（brain-user-message 的 data-pending、送出鈕停用）"
     },
     {
       "id": "BR93.4",
@@ -572,7 +572,7 @@
       "id": "BR95.4",
       "status": "OK",
       "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
-      "note": "選定只送一次、picking 後停用；E19"
+      "note": "選定只送一次、picking 後停用；E19。選擇被非輪次錯誤拒絕（[GW-MB2]=A 的 T3）→ brainTranscript.ts 的 systemNotice 把本段 picking 改回 default 可重選：entry-page.spec.ts「反問選擇被非輪次錯誤拒絕後可重選」"
     },
     {
       "id": "BR95.5",

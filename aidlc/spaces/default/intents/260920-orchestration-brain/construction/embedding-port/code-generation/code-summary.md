@@ -234,3 +234,154 @@ autonomy 欄位無 CLI、改該欄位的 `Edit` 也被拒，形成無 agent 側�
   未逐行審 `render-env.sh`／`docker-compose.deploy.yml` 的非 embedding 部分、未看
   `DEPLOY.md` diff、未重新推導 `P1`–`P6` 是否為對的六個性質）如實記載於審查檔，
   **不視為已驗證**。
+
+## 重新查驗（code-generation Request Changes 後）
+
+<!-- 查驗時間 2026-10-20T08:44:01Z（date -u 取值）。本節為純 append，上方內容不改。 -->
+
+### 觸發原因
+
+使用者對整站送出 Request Changes，原文：「修正 functional-design/merge-blockers.md
+列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）
+逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」引擎因此把本單元
+計畫的勾選全部重設；使用者已再次核可原計畫。
+
+**19 項中劃給本單元的為 0 項**，故本輪**不改任何應用程式碼**，只逐格回 repo 現況
+查證計畫的 38 個 checkbox。本單元程式落地於 commit `c2e5687`（2026-10-11）。
+
+### 逐步查驗（依據為 HEAD `fa51564` 加工作樹現況）
+
+| 步驟 | 格數 | 結果 | 依據 |
+|---|---|---|---|
+| Step 1 | 2 | 2 勾 | `embedding_port.py:48` logger 為 `"cloud360.embedding_port"`；`requirements.txt` 無 `fastembed`（`:11` `httpx`、`:30` `hypothesis`）。`c2e5687` 對 `requirements.txt` 的 +16 行是同一 commit 夾帶的 `U10` 的 `redis`，非本單元 |
+| Step 2 | 3 | 3 勾 | `test_embedding_port.py:12` 為 `import tests.helpers`；`unit-test-instructions.md §一`／`§六.1` 載有指令；`discover` 實跑撿到本檔 30 測試 |
+| Step 3 | 12 | 12 勾 | 例外 `:182-217`（建構子 `:202-203` 剝 userinfo）；`ProviderSelection` frozen `:220`；`resolve_provider_selection` `:352`；`resolve_embedding_port` `:717`；`_stub_vector` `:568`（SHA-256 展開）、`STUB_MODEL_ID` `:75`；`OllamaAdapter` `:610` `timeout=EMBEDDING_TIMEOUT_SEC`（具名常數 `:277`，預設 `:126`）；`FastembedAdapter` lazy import `:671`、安裝指令 `:128`；`embed` template `:453-482`＋`_verify_shape`；截斷 WARN `:491-516`；每次 embed INFO `:475`；模組內無 `logger.error`／`exception`；import 僅標準庫 `:35-46`，`Session`／`require_story_action`／`APIRouter` 零命中 |
+| Step 4 | 2 | 2 勾 | 測試檔存在；本輪實跑 30 OK |
+| Step 5 | 2 | 2 勾 | `configure_embedding_env` `:736`；`main.py:59` `configure_provider_env()` → `:64` `configure_embedding_env()` → `:91` `init_db()`，次序仍成立（其間另有 `U10`／`U13` 等後續單元加的呼叫，不影響本步的「之間」） |
+| Step 6 | 2 | 2 勾 | `test_configure_embedding_env_*` 四個（`:546`、`:567`、`:583`、`:607`）；全套 1219 OK 即 `TestClient(app)` 不觸發 hook 的證據 |
+| Step 7 | 6 | 6 勾 | `backend/.env.example:189`、`deploy/.env.example:136`、`render-env.sh:138`、`docker-compose.deploy.yml:124`（無 fallback）；驗證器 import `ALLOWED_PROVIDERS`／`resolve_provider_selection`（`:34-35`）；`ci.yml:175-176` 位於 `repo-contract` job（`:141` 起） |
+| Step 8 | 3 | 3 勾 | 三支 validator 本輪皆 passed（見下表）。紅燈路徑：**未改動 `render-env.sh`**，改以行程內替換 `literal_assignments` 的回傳值把 `EMBEDDING_PROVIDER` 改成 `olama` 餵進 `main()`，回 `rc=1` 且訊息指名 `deploy/render-env.sh`；`git status` 確認檔案未動 |
+| Step 9 | 2 | **0 勾** | 見下方「未勾的兩格」 |
+| Step 11 | 4 | 4 勾 | 前後比對沿用 `§二` 的已記紀錄（基線 439 → 469）；本輪全套 1219 OK、零失敗；`code-summary.md`／`source-manifest.json`（10 檔）／`traceability.json` 皆存在 |
+
+合計：**勾回 36 格，未勾 2 格**。Step 10 為表格，無 checkbox；本輪不重跑突變。
+
+### 未勾的兩格（本單元自己的文件缺口，本輪依指示不修）
+
+1. **Step 9 第 1 格**：(a) `EMBEDDING_TIMEOUT_SEC` **成立**（`LOCAL-DEV.md:369`）；
+   (b) 帶版本安裝指令**成立**（`:103`、`:609` 的 `pip install 'fastembed>=0.7,<0.8'`），
+   但 **HuggingFace 下載來源與快取位置**、以及 `SEC-3` 要求的「**此路徑不經 CI，
+   供應鏈風險由使用它的開發者承擔**」**兩者皆不在 `LOCAL-DEV.md`**——
+   `grep -i 'hugging\|cache\|不經\|風險由\|SEC-3\|RR-2'` 對 HEAD 與 `c2e5687` 版本皆零命中。
+   該句目前只存在於 `embedding_port.py` 的 `FastembedAdapter` docstring。
+2. **Step 9 第 2 格**：`LOCAL-DEV.md:30` 的標題仍為「**兩個**『不在 requirements.txt 裡』
+   的硬依賴」，`c2e5687` 版本（`:28`）亦同；計畫要求的「由 2 個變 3 個」未發生。
+
+上方 `§一` 對 `LOCAL-DEV.md` 的描述（「硬依賴表、第 1 節前置檢查、第 3 節 `.env`、
+常見卡關 ＋2 列」）未宣稱這兩項，`§四`／`§六` 也未記載刻意不做的理由，故判定為
+**當時漏做**而非刻意未勾。`traceability.json` 的 `BR6.3` 標 `OK` 不受影響——它
+承載的是「改 `.env.example` 即同步 `LOCAL-DEV.md`」，該義務成立。
+
+### 本輪實跑命令與輸出（數字照錄）
+
+| 命令 | 結果 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_embedding_port` | `Ran 30 tests in 0.541s` · `OK` |
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1219 tests in 96.685s` · `OK` |
+| `python3 scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| `python3 scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+| `python3 scripts/validate_embedding_provider_value.py` | `passed（3 份設定來源）` |
+| 驗證器紅燈路徑（行程內替換，不改檔） | `main()` 回 `1` |
+| `bash -n deploy/render-env.sh` | ok |
+
+全套由 `§二` 的 469 增為 1219，差額為後續單元的新增測試，非本單元。
+
+### 後續單元對本單元路徑的變更（`git log --oneline c2e5687..HEAD -- <path>`）
+
+| 路徑 | `c2e5687` 之後的 commit |
+|---|---|
+| `backend/services/embedding_port.py` | 無 |
+| `backend/tests/test_embedding_port.py` | 無 |
+| `scripts/validate_embedding_provider_value.py` | 無 |
+| `backend/.env.example` | 無 |
+| `backend/main.py` | `6dff4d4`（U20）、`fa8ce42`（U13）、`624c170`（U14） |
+| `deploy/.env.example` | `fa8ce42`（U13） |
+| `deploy/render-env.sh` | `fa8ce42`（U13） |
+| `deploy/docker-compose.deploy.yml` | `763a45a`（U21） |
+| `.github/workflows/ci.yml` | `6dff4d4`（U20）、`763a45a`（U21） |
+| `LOCAL-DEV.md` | `fa8ce42`（U13）、`763a45a`（U21） |
+
+本單元的三個新檔在落地後零變更。其餘六檔為共用檔，後續單元的變更未移除或改寫本
+單元的行（上表 Step 5／7 的逐行依據即取自 HEAD）。工作樹另有未提交改動
+（`brain_ws_contract.py`、`user_router.py`、`test_ws_contract.py`、
+`test_user_delete_hierarchy.py`），皆不在本單元 manifest 內。
+
+### `traceability.json`
+
+`status` 全部落在合法值：`OK` 38、`Deferred` 5、`N/A` 1；`OK` 列的 target
+（`embedding_port.py`、`test_embedding_port.py`、`main.py`、`render-env.sh`、
+`docker-compose.deploy.yml`、`LOCAL-DEV.md`）皆存在。**本輪未修改該檔。**
+
+### Step 9 兩格補做（conductor，`2026-10-20T08:47:48Z`）
+
+重新查驗發現 Step 9 的兩格在 `c2e5687` 落地時即未完成、且本檔未記載刻意不做的理由，屬漏做；依「殘留當場修」於本輪補上（在已核可計畫範圍內，不改應用程式碼）：
+
+| 格 | 補做內容 |
+|---|---|
+| (b) fastembed 的下載來源、快取位置、`SEC-3` 風險句 | `LOCAL-DEV.md` 第 0 節新增「第三個：本機向量檢索的 `fastembed`」小節：帶版本安裝指令 `pip install 'fastembed>=0.7,<0.8'`、下載來源 HuggingFace Hub（`multilingual-e5-large` 約 1 GB）、快取位置（預設系統暫存目錄下 `fastembed_cache`，可用 `FASTEMBED_CACHE_PATH` 改）、逐字「此路徑不經 CI，供應鏈風險由使用它的開發者承擔」（`SEC-3`／`RR-2`） |
+| 硬依賴 2 → 3 | `LOCAL-DEV.md` 該節標題由「兩個」改為「三個」；`git grep` 確認 repo 內（`aidlc/` 以外）無其他引用舊標題 |
+
+**未實地驗證的一點**：快取預設位置與 `FASTEMBED_CACHE_PATH` 這個變數名取自 `fastembed` 套件的既有行為，`backend/.venv` 未安裝 `fastembed`（本單元刻意不加入 `requirements.txt`），故未在本機開原始碼核對；裝了 `fastembed` 的開發者若發現不符，以套件實際行為為準並更新 `LOCAL-DEV.md`。`validate_repo_contract.py` 補做後重跑仍 passed。計畫 38 格現為全數勾選。
+
+### 審查後修正：fastembed 路徑從未能用（conductor，`2026-10-20T16:30:53Z`，使用者裁決「修正」）
+
+本站審查（`reviews/review-01.md`，READY）質疑上節的模型名稱與大小。conductor 於 scratchpad 的臨時 venv 安裝 `fastembed>=0.7,<0.8` 實測，查出一個**程式缺陷**：`FastembedAdapter` 以身分字串 `multilingual-e5-large` 呼叫 `TextEmbedding(model_name=...)`，fastembed 回 `ValueError: Model multilingual-e5-large is not supported in TextEmbedding`——本機 `EMBEDDING_PROVIDER=fastembed` 路徑自落地起從未能用。CI 與部署都不裝 fastembed，故六道閘門全綠。此缺陷不在 `merge-blockers.md` 19 項內；使用者裁決當場修正。
+
+| 改動 | 內容 |
+|---|---|
+| `backend/services/embedding_port.py` | 新增 `FASTEMBED_REGISTRY_NAMES = {"multilingual-e5-large": "intfloat/multilingual-e5-large"}`，`_load_model` 改以登錄名載入。**刻意不改身分字串**：身分是記憶列 `embeddingModel` 的值與 `FASTEMBED_MODEL` 的設定值，改它要動 `MEMORY_RECORD_EMBEDDING_MODELS`、四份設定範本與 ADR-008 的遷移；登錄名只影響載入。`__all__` 加入該常數 |
+| `backend/tests/test_embedding_port.py` | 新增 2 案：`test_fastembed_is_loaded_by_its_registry_name_not_the_identity`（以假 fastembed 模組記錄 `TextEmbedding` 收到的名稱，斷言為登錄名）、`test_fastembed_registry_names_cover_every_legal_identity`（對照表鍵集合等於 fastembed 合法身分） |
+| `LOCAL-DEV.md` | 更正上節寫錯的兩處：權重約 **2.24 GB**（原寫 1 GB）、來源為 HuggingFace `qdrant/multilingual-e5-large-onnx` 並有 GCS 備援；新增「模型名稱有兩個」說明與可執行前置檢查；第 0 節開頭「兩個依賴」改為「三個」並點名三者（審查 Minor：與 `:30` 標題矛盾）；快取位置與 `FASTEMBED_CACHE_PATH` 已從 fastembed 原始碼核對屬實 |
+
+| 驗證 | 結果 |
+|---|---|
+| 突變 M-F1：`_load_model` 改回傳身分字串（先 `grep -c MUTATION` 確認為 1） | 新案 1 紅，其餘綠；還原後 `grep -c MUTATION` 為 0 |
+| `tests.test_embedding_port`（`backend/.venv`） | `Ran 32 tests` → `OK` |
+| 完整套件（`backend/.venv`） | `Ran 1221 tests` → `OK` |
+| 真套件核對（臨時 venv 安裝 fastembed 0.7） | `intfloat/multilingual-e5-large` 在 `list_supported_models()` 內，`dim=1024`、`size_in_GB=2.24` |
+| `validate_repo_contract.py`／`validate_env_contract.py` | 皆 passed |
+
+**仍未自動化**：「fastembed 真的認得這個登錄名」無法在 CI 驗證（套件刻意不在 `requirements.txt`），只能靠 `LOCAL-DEV.md` 的前置檢查；fastembed 升到 0.8 以後若改登錄名，只會在本機首次使用時以「模型載入失敗」大聲失敗。本修正在本單元收據登記之後進行，未經本站審查。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T01:03:43Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。計畫 38 格全部勾選；後續單元對共用檔（`main.py`、各 `.env.example`、`render-env.sh`、`docker-compose.deploy.yml`、`ci.yml`、`LOCAL-DEV.md`）的改動一律保留。突變本輪未重跑，沿用 §三紀錄；Step 11 的「改動前後比對」沿用舊基線紀錄，本輪無法重建改動前狀態。上節的 fastembed 登錄名修正本輪隨本單元送審。
+
+### 逐步查驗摘要
+
+- Step 1–3：`embedding_port.py` 的 logger（`:48`）、`EmbeddingProviderUnavailable`（`:197-232`，建構時剝除帳密）、`EmbeddingPort`（`:446`）、`resolve_provider_selection`（`:367`）、fulltext 回 `None`（`:748`）、Stub 1024 維與 `stub-v1`（`:75`、`:412`）、具名 timeout 常數（`:292`、`:625`，無裸數字）、fastembed lazy import（`:683-697`）、截斷 WARN（`:506`）、模組層只 import 標準庫（`:35-46`）皆符合。
+- Step 5–6：`configure_embedding_env`（`:753`）於 `main.py:65` 呼叫，在 `configure_provider_env()`（`:60`）之後、`init_db()`（`:92`）之前；中間另有後續單元（U10、U13）的檢查，條件仍成立。
+- Step 7–8：`backend/.env.example:193`、`deploy/docker-compose.deploy.yml:124`（無 fallback）、`deploy/render-env.sh:138`、`deploy/.env.example:136`；驗證腳本 import `ALLOWED_PROVIDERS`／`resolve_provider_selection` 不自列值域，於 `ci.yml:175-176` 的 `repo-contract` job 執行。紅燈路徑以行程內替換回傳值驗證（`EMBEDDING_PROVIDER='olama'` 被擋），未改檔。
+- Step 9：`LOCAL-DEV.md:402`（timeout 變數）、`:67-79`（fastembed 安裝、下載來源、快取位置、SEC-3）、`:10`／`:30`（隱性硬依賴「三個」）。
+
+### 測試與閘門（本輪實跑，`backend/.venv`，快取導向 scratchpad，未寫入 repo）
+
+| 指令 | 結果 |
+|---|---|
+| `-m unittest tests.test_embedding_port` | `Ran 32 tests`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1319 tests`、`OK (skipped=3)` |
+| `scripts/dump_openapi.py --check` | 一致 |
+| `validate_repo_contract.py`、`validate_env_contract.py`、`validate_embedding_provider_value.py`（repo 根） | 皆 passed（後者「3 份設定來源」） |
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- 測試數：現為 32；`unit-test-instructions.md` §六寫 30、§二寫 16，測試檔 docstring 寫「17 個測試」。
+- 計畫 Step 2／11 的 `python -m unittest` 本機無 `python`，須用 `python3` 或 `backend/.venv/bin/python`（§六已記，計畫本文未改）。
+- 全套基準：上節記 1219、更早記 439 → 469，現為 1319。
+- 行號：計畫寫 compose `:120-123`、render-env `:124-127`，現為 `:120-124`、`:134-138`。
+- Step 8 驗證腳本實際驗三份來源並多驗 `EMBEDDING_TIMEOUT_SEC` 等鍵，範圍寬於計畫；本輪未逐道確認計畫所稱觸發的三道 env-contract 檢查，只確認整支腳本通過。
+- `LOCAL-DEV.md:675` 仍寫隱性前置條件只有兩個（`claude` CLI、n8n webhook），與 `:10`／`:30` 的「三個」不一致；該句非本單元交付，未改。
+
+`source-manifest.json` 的 10 條路徑全部存在且仍屬本單元。

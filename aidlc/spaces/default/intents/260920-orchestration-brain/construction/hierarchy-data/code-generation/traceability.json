@@ -14,7 +14,8 @@
     "U4-D1",
     "S-5", "S-6", "S-7", "S-8", "S-9", "S-10", "S-11",
     "OQ-H1", "OQ-H2", "OQ-H3", "OQ-3",
-    "DG-2", "DG-3"
+    "DG-2", "DG-3",
+    "MB-3"
   ],
   "coverage": [
     { "id": "AC9.1.1", "status": "Deferred", "target": "U7 hierarchy-service ＋ U14 entry-page-ui — 三層路徑的**顯示**不在本單元；本單元只交付它需要的資料形狀（projects → systems → user_diagrams.system_id）" },
@@ -42,7 +43,7 @@
     { "id": "SEC-1", "status": "OK", "target": "零 APIRouter、零 service 層讀寫函式；模組唯一公開名稱為 migrate_hierarchy／MigrationCounts／HierarchyMigrationError／CHANGE_RECORD_SOURCE_BRAIN，其餘皆底線前綴。OpenAPI drift 閘門（dump_openapi.py --check）通過，證明端點集合未變" },
     { "id": "SEC-2", "status": "OK", "target": "兩支新檔對 os.environ／getenv／API_KEY／PASSWORD／SECRET 的 grep 結果為零；遷移沿用 database.py 的既有 DATABASE_URL。validate_env_contract.py 通過" },
     { "id": "SEC-3", "status": "OK", "target": "本單元三支 Python 檔對 ^\\s*(from|import)\\s+(httpx|requests|fastapi) 與 APIRouter(／@app.／@router.websocket 的 grep 結果皆為零（檢查對象即 source-manifest.json 所列的本單元檔案）" },
-    { "id": "SEC-4", "status": "Partial", "target": "(1) 遷移失敗大聲＝OK（AC9.1.4）；(2) 遷移留計數＝OK（BR2.6）；(3) 清除留計數＝Deferred（S-5 未落地，U4-R3 空轉）；(4) DiagramChangeRecord 自身＝結構 OK（actor_user_id NOT NULL ＋ COMMENT 寫明不得預設填工作階段擁有者），但**稽核保證仍待 OQ-H3 定案**，本單元不宣稱它已滿足" },
+    { "id": "SEC-4", "status": "Deferred", "target": "（原記為非法狀態值 Partial，2026-10-20 依允許的五種狀態改記 Deferred；已完成與未完成部分如下）(1) 遷移失敗大聲＝OK（AC9.1.4）；(2) 遷移留計數＝OK（BR2.6）；(3) 清除留計數＝Deferred（S-5 未落地，U4-R3 空轉）；(4) DiagramChangeRecord 自身＝結構 OK（actor_user_id NOT NULL ＋ COMMENT 寫明不得預設填工作階段擁有者），但**稽核保證仍待 OQ-H3 定案**，本單元不宣稱它已滿足" },
     { "id": "U4-V1", "status": "Deferred", "target": "U5／N-2 擁有的共用真實 PostgreSQL CI job（尚不存在）；寫進 CI 的動作落點 ci-pipeline（CONDITIONAL）。**本站已在本機以 pgvector/pgvector:pg18 容器實際執行過該 job 的六個步驟**（見 code-summary.md §五），但那是一次人工驗證，不是 CI 閘門" },
     { "id": "U4-V2", "status": "Deferred", "target": "同 U4-V1。本站的本機驗證已構造該前置狀態（兩位持有圖的使用者、system_id 為空的三張圖）" },
     { "id": "U4-V3", "status": "Deferred", "target": "同 U4-V1。不變量查詢已在本機真實 PG 上執行並回 0" },
@@ -61,11 +62,12 @@
     { "id": "S-9", "status": "Deferred", "target": "ci-pipeline／deployment-pipeline（皆 CONDITIONAL）。本站的承載是 DEPLOY.md 2.2.7 的靜止段落，其中逐字寫明 deploy.yml:121-124 用單一 up -d --build 一次拉起整座 stack、故該有序窗口目前沒有承載者" },
     { "id": "S-10", "status": "N/A", "target": "U5 的 nfr-design。OQ-3 的 episodic memory 那一半不屬本單元" },
     { "id": "S-11", "status": "Deferred", "target": "U12 work-orchestrator（先解出行動者再異動、改圖與寫紀錄同交易）＋ U16（訊息呈現）。本單元的承載是 actor_user_id NOT NULL ＋ COMMENT 寫明不得預設填工作階段擁有者" },
-    { "id": "OQ-H1", "status": "Deferred", "target": "U7。projects.owner_user_id **刻意不加任何 ON DELETE 子句**（與既有 user_diagrams.user_id 相同形狀），這是「不定案」在 DDL 上的誠實表示；COMMENT ON COLUMN 逐字記下這一點" },
+    { "id": "OQ-H1", "status": "OK", "target": "使用者 2026-10-20 裁決（空的預設專案一併清掉，其餘改回 409），落在應用層 backend/services/user_router.py::_hard_delete_user；DDL 仍無 ON DELETE，schema_rbac.sql 的 projects.owner_user_id 與 project_members.user_id 兩處 COMMENT 改記裁決。驗證見 MB-3" },
     { "id": "OQ-H2", "status": "Deferred", "target": "U7（facade／生命週期）＋ U16（新建圖時的歸屬選擇）。本單元維持 system_id 可為空、不收 NOT NULL；COMMENT ON COLUMN 寫明理由（與 AC9.1.3 衝突）" },
     { "id": "OQ-H3", "status": "Deferred", "target": "U12 的 functional-design（CONDITIONAL；若被 skip 則無承接站）。本單元的承載見 S-11" },
     { "id": "OQ-3", "status": "N/A", "target": "本單元範圍內的那一半（S-4）已由 nfr-design 結案為不加密；OQ-3 自身主體（episodic memory）屬 U5" },
-    { "id": "DG-2", "status": "Partial", "target": "兩層 ON DELETE RESTRICT 關掉「刪除造成懸空」這一條路（BR1.1／BR1.2，已在真實 PG 18 實測）。**另兩條路（把已掛好的圖改回空、新插入的圖不帶值）本單元未關**，處置為 OQ-H2" },
-    { "id": "DG-3", "status": "N/A", "target": "本輪 DiagramChangeRecord 只寫不讀為已接受的狀態（Q2=A）。本單元交付結構但**不交付寫入端**（寫入端是 U12），所以本 intent 結束時這張表會是空的" }
+    { "id": "DG-2", "status": "Deferred", "target": "（原記為非法狀態值 Partial，2026-10-20 改記 Deferred）兩層 ON DELETE RESTRICT 關掉「刪除造成懸空」這一條路（BR1.1／BR1.2，已在真實 PG 18 實測）。**另兩條路（把已掛好的圖改回空、新插入的圖不帶值）本單元未關**，處置為 OQ-H2" },
+    { "id": "DG-3", "status": "N/A", "target": "本輪 DiagramChangeRecord 只寫不讀為已接受的狀態（Q2=A）。本單元交付結構但**不交付寫入端**（寫入端是 U12），所以本 intent 結束時這張表會是空的" },
+    { "id": "MB-3", "status": "OK", "target": "backend/services/user_router.py（_empty_default_project_ids／_blocking_user_references／_purge_empty_default_projects／_hard_delete_user；DELETE /api/auth/{user_id} 與 POST /api/auth/authorization-requests/{request_id}/reject 宣告並回 409）＋ backend/tests/test_user_delete_hierarchy.py（(a)–(g) 七案，SQLite 外鍵開啟；突變 M-D1／M-D2／M-D3 各自致紅）＋ openapi.json ＋ frontend/src/types/api.d.ts ＋ schema_rbac.sql 兩處 COMMENT ＋ DEPLOY.md「刪除使用者的行為」小節" }
   ]
 }

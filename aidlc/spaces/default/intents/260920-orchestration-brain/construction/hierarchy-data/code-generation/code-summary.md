@@ -400,3 +400,176 @@ PostgreSQL 18 上也全部擋住（`§五`）。
 | commit 前執行 `validate_repo_contract.py` | **完成**，passed |
 | commit 前執行 `validate_env_contract.py` | **完成**，passed |
 | 異動 `backend/database.py` 的 schema 補丁時同步 `LOCAL-DEV.md` | **未觸發**——本單元不改 `database.py`（遷移落在 `services/`，`functional-spec.md §七` 末段已預告此條以落點為條件） |
+
+---
+
+## 十一、重新查驗（Request Changes 後）
+
+<!-- 2026-10-20T07:51:36Z（`date -u` 取值） -->
+
+使用者對整站送 Request Changes，引擎把計畫步 1–9 的勾選重設。本節逐格回 repo 現況開檔查證，**不是**沿用上一輪的結論。步 1–9 的程式在 `9e14145`（`功能(hierarchy-data): projects／systems／diagram_change_records 三表與一次性遷移`）落地，本輪**未修改**其中任何一支檔。
+
+**結果：步 1–9 共 47 格全部勾回 `[x]`，未勾 0 格**（`grep -c` 計畫檔的 `- [x]` 得 54，扣步 10 的 7 格）。
+
+| 步 | 查證方式 | 結論 |
+|---|---|---|
+| 1 | `backend/.venv` 跑 `unittest discover`（基線見下）；讀 `tests/helpers.py`；`unit-test-instructions.md §二` 的精確指令仍在 | 成立。**後續單元已合法改動 `helpers.py`**：stub 對象由 `psycopg2` 改為 `psycopg`（v3），且只在未安裝時才 stub；in-memory SQLite ＋ `StaticPool` 策略不變，仍可承載本單元 |
+| 2 | 讀 `schema_rbac.sql:340-438`（區塊 H） | 成立：三表、`system_id` 可空 ＋ `fk_user_diagrams_system` `ON DELETE RESTRICT`、`systems.project_id` `ON DELETE RESTRICT`、`uq_projects_default_per_owner`／`uq_systems_default_per_project` 兩個部分唯一索引各只引用本表欄位、`ix_diagram_change_records_created_at`、`IF NOT EXISTS`／條件式 `DO` 區塊、三處 `COMMENT`、檔頭 `:10-11` 涵蓋清單 |
+| 3 | `TestHierarchySchema` 的案例名 ＋ 實跑 | 成立（五項各有對應案例；另有兩個結構守門案例） |
+| 4 | 讀 `backend/services/hierarchy_migration.py` | 成立：`migrate_hierarchy(db) -> MigrationCounts`、`_users_holding_diagrams`（join `users`）、`_resolve_default_pair` 先專案後以 `project_id` 找系統、`_assign_unassigned_diagrams` 走 `text()` 不走 ORM |
+| 5 | `TestHierarchyMigrationData` 三案 ＋ 實跑 | 成立 |
+| 6 | 同上檔 ＋ 讀 `backend/scripts/run_hierarchy_migration.py` | 成立：逐使用者 commit、例外 rollback 後 `raise`（不吞）、終檢 `raise HierarchyMigrationError`、logger `"cloud360.hierarchy_migration"`、獨立指令失敗回 1 |
+| 7 | `TestHierarchyMigrationLogic` 五案 ＋ 實跑 | 成立 |
+| 8 | 讀 `DEPLOY.md` §2.2 物件表與 §2.2.7（前進步驟、靜止前置含 `deploy.yml:121–124` 的誠實記載、中途失敗可恢復、回復程序）；`schema.sql` 區塊 H | 成立 |
+| 9 | 本檔、`traceability.json`、`source-manifest.json` 皆存在 | 成立 |
+
+**實際輸出**：
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_hierarchy_migration` → `Ran 15 tests … OK`（`unit-test-instructions.md §三` 寫 13 個；實際多兩個結構守門案例 `test_pre_existing_system_id_without_a_foreign_key_is_rejected` 與 `test_schema_rbac_sql_matches_migration_ddl`，本輪未增減）
+- 改動前的完整套件基線：`Ran 1210 tests in 91.490s` → `OK`
+
+**後續單元改過、但與步 1–9 的宣稱有出入的一處（如實記錄，本輪不改）**：`projects.is_default` 的 COMMENT 仍寫「Written ONLY by services/hierarchy_migration.py」；本輪未查證後續單元（`U7` 建圖路徑等）是否已成為第二個寫入端。若已是，`BR2.5` 的「獨佔寫入紀律」前提需另行重審。
+
+---
+
+## 十二、合併前必修第 3 項：刪除使用者不得回 500（計畫步 10）
+
+<!-- 2026-10-20T07:51:36Z（`date -u` 取值） -->
+
+來源：`construction/functional-design/merge-blockers.md` 第 3 項（`review-06` R-04）。`OQ-H1` 裁決（使用者，2026-10-20）：**空的預設專案一併清掉，其餘改回 409**。
+
+### 1. 改動的檔（行號為改動後）
+
+| 檔 | 位置 | 內容 |
+|---|---|---|
+| `backend/services/user_router.py` | `:14-15`、`:23-37` | 匯入 `or_`、`IntegrityError` 與十一個模型 |
+| 同上 | `:325-374` | `DeleteUserBlockingReference`、`DeleteUserConflict`（409 本體）、`_UserDeleteBlocked`、`_DELETE_USER_409_DOC`、`_delete_blocked_response` |
+| 同上 | `:377-406` | `_empty_default_project_ids`（規則 1 的判定） |
+| 同上 | `:409-511` | `_blocking_user_references`（規則 2 的一次性預檢，11 類） |
+| 同上 | `:514-540` | `_purge_empty_default_projects`（規則 1 的清除） |
+| 同上 | `:543-599` | `_hard_delete_user`：既有 403 原樣保留在預檢之前（規則 4）；預檢 → 409；清除 → `db.delete(user)` → commit；`IntegrityError` → rollback ＋ `logger.error` ＋ 通用 409（規則 3） |
+| 同上 | `:888-894`、`:918-930` | `POST /authorization-requests/{id}/reject`：`responses=` 宣告 409；攔 `_UserDeleteBlocked` 回 409 |
+| 同上 | `:1047`、`:1083-1086` | `DELETE /{user_id}`：同上（規則 5：兩入口共用 `_hard_delete_user`） |
+| `backend/tests/test_user_delete_hierarchy.py` | 新檔，323 行 | 7 個 TestClient 案例 (a)–(g) |
+| `openapi.json` | +65 | 兩個端點的 409 ＋ 兩個 schema |
+| `frontend/src/types/api.d.ts` | +48 | `npm run gen:types` 重產 |
+| `schema_rbac.sql` | `:365`、`:598-600`、`:629` | `projects.owner_user_id` 與 `project_members.user_id` 兩處 COMMENT 改記裁決與落點；`:598-600` 的行內 SQL 註解同步（原寫「上游刻意未決」，不改會與 COMMENT 矛盾）。**無 DDL 結構變更** |
+| `DEPLOY.md` | `:498-529` | 新增「刪除使用者的行為」小節：規則表、409 類別清單、維運意涵、只讀查詢 |
+
+### 2. 預檢涵蓋的參照清單（實作前自行重數）
+
+`grep -n -i "references *\(public\.\)\?users" schema_rbac.sql` 得 19 欄（排除 `:703`／`:811`／`:862` 三處註解與 COMMENT 字串）。處置分四類：
+
+| 欄（`schema_rbac.sql` 行） | ON DELETE | 處置 |
+|---|---|---|
+| `user_diagrams.user_id`（:90） | 無 | 既有 403（規則 4，不變） |
+| `diagram_shares.user_id`（:113）、`user_diagram_chats.user_id`（:126） | 無 | 既有流程先刪（不變） |
+| `estimate_sets.owner_user_id`（:260）、`estimate_shares.user_id`（:305） | CASCADE | 不需處理 |
+| `role_authorization_requests.user_id` | CASCADE（ORM `models.py:80`；**不在** `schema_rbac.sql`） | 既有流程先刪（不變） |
+| `projects.owner_user_id`（:348） | 無 | 規則 1 清除範圍外 → `owned_projects` |
+| `project_members.user_id`（:600）／`invited_by`（:603） | 無 | 規則 1 範圍外 → `project_memberships`／`project_member_invitations` |
+| `reselection_events.promoted_user_id`（:649）／`previous_owner_user_id`（:650） | 無 | `reselection_events`（稽核，不刪） |
+| `system_requirement_fields.updated_by`（:701） | 無 | 規則 1 範圍外的系統 → `system_requirement_fields` |
+| `memory.memory_records.owner_user_id`（:456） | 無 | `memory_records` |
+| `memory.memory_audit_events.actor_user_id`（:517） | 無 | `memory_audit_events`（稽核） |
+| `diagram_change_records.actor_user_id`（:415） | 無 | `diagram_change_records`（稽核） |
+| `estimate_audit_events.actor_user_id`（:312） | 無 | `estimate_audit_events`（稽核） |
+| `architecture_reviews.created_by`（:143） | 無 | `architecture_reviews` |
+| `wa_lenses.updated_by`（:183） | 無 | `wa_lenses` |
+
+**計畫列出的 13 欄全數涵蓋，計畫沒有漏列的無 `ON DELETE` 參照。** ORM 一致性：對 `backend/` 全部 `.py` grep `ForeignKey("users.id"`，上表每一欄在 `models.py` 都有對應且 `ondelete` 一致（`Project.owner_user_id:394`、`ProjectMember.user_id:563`／`invited_by:577`、`ReselectionEvent:622`／`:629`、`SystemRequirementField.updated_by:724`、`MemoryRecord.owner_user_id:885`、`MemoryAuditEvent.actor_user_id:943`、`DiagramChangeRecord.actor_user_id:486`、`EstimateAuditEvent.actor_user_id:325`、`ArchitectureReview.created_by:147`、`WaLens.updated_by:174`）。`backend/database.py:245/318/346/525` 的補丁 DDL 與上表同形。
+
+### 3. 實作中的判斷（偏離或補充，逐項說明）
+
+1. **409 本體的 `detail` 維持字串，結構化清單另放 `blocking_references`**。`AdminPage.tsx:197` 與 `AuthorizationRequestsPage.tsx` 都以 `data.detail` 顯示錯誤；`HTTPException(detail=<dict>)` 會讓畫面顯示 `[object Object]`。因此改用 `JSONResponse`（比照同檔 `update_user_active` 的 409 寫法），本體為 `{"detail": "<含類別與筆數的可讀字串>", "blocking_references": [...]}`。`blocking_references` 在 spec 中非必填，因為拒絕端點既有的「此申請已處理」409 只有 `detail`。
+2. **規則 1 的子列以明確刪除處理**（`project_members`、`system_requirement_fields`），不只依賴 `ON DELETE CASCADE`：bulk `query.delete()` 不走 ORM cascade，SQLite 未開外鍵時也不會連帶刪除；明確刪除讓兩種方言結果一致。**後果需揭露**：空預設專案底下若有需求欄位值，會隨系統一起刪掉（裁決的「空」以「無架構圖、無他人成員」定義，未把需求欄位列為「非空」條件）。
+3. **(g) 以真實外鍵模擬，未用 mock**：測試在 SQLite 建一張預檢不認識、外鍵指向 `users` 的表並插一列，刪除父列時 commit 的 flush 拋出真正的 `IntegrityError`。比 `unit-test-instructions.md` 寫的「以 mock 注入」更接近正式環境，故採用。
+4. **既存缺陷順手修掉，由 (f) 實測抓到**：拒絕並刪除端點在 `_hard_delete_user` commit 之後才讀 `req.requested_role`；該申請列已被刪除，refresh 觸發 `ObjectDeletedError` → **500，而帳號其實已刪除**（HEAD 的 `:645` 同樣如此，正式環境 `SessionLocal` 預設 `expire_on_commit=True`，與測試同）。修法是刪除前先取值（`:921`）。既有測試沒有任何一支走過這個端點，所以這個 500 一直沒被看到。
+5. **與 `BR1.1`「`MembershipFacade` 是唯一入口」的張力**：清除與預檢在 `user_router.py` 直接以 ORM 讀寫 `projects`／`project_members`，沒有經 facade。計畫明文要求就地沿用、不抽 service 層（`team.md` 的 `user_router.py` 規則），且 `BR1.1` 約束的是 per-project **授權判定**，不是帳號刪除時的資料清理；`test_project_visibility_static.py` 的五條靜態斷言全綠。仍列為審查時應確認的一點。
+
+### 4. 測試與突變結果
+
+精確指令（於 `backend/`）：`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy -v` → `Ran 22 tests … OK`（15 ＋ 7）。
+
+`setUp` 以 `PRAGMA foreign_keys=ON` 開啟外鍵並讀回 `1` 守門；`tearDown` 先關外鍵再 `drop_all`（否則 `DROP TABLE users` 被外鍵擋下——第一次實跑即因此 7 個 teardown error，已修）。
+
+| 突變 | 改法 | 預期紅 | 實際 |
+|---|---|---|---|
+| M-D1 | `_purge_empty_default_projects(...)` 改成 `pass` | (a) | **(a)(f) 紅**（落到保底 409，非 200） |
+| M-D2 | `blocking = []` 取代預檢 | (c)(d) | **(c)(d)(e) 紅**（落到保底 409、清單為空） |
+| M-D3 | `except IntegrityError` 改成 `except ZeroDivisionError` | (g) | **(g) 紅**：`AssertionError: 500 != 409` |
+
+每次突變前以 `grep -c "MUTATION"` 確認突變已寫入（回 1）、還原後回 0，還原後 22 個案例全綠。
+
+### 5. 各命令的實際輸出
+
+| 命令 | 結果 |
+|---|---|
+| `.venv/bin/python scripts/dump_openapi.py` 後 `--check` | `已寫入 openapi.json`；`規格檔與後端程式碼一致。` exit 0；`openapi.json` +65 行 |
+| `npm run check:types`（重產前） | `型別檔已漂移`（預期） |
+| `npm run gen:types` 後 `npm run check:types` | `API 型別檔與規格檔一致。`；`api.d.ts` +48 行 |
+| `npx tsc -b`（於 `frontend/`） | exit 0，無輸出 |
+| `python3 scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| `python3 scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+| 完整套件 `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1217 tests in 92.282s` → `OK`（基線 1210 ＋ 本輪 7） |
+
+**沒有跑的**：前端 `npm run lint` 與 Playwright e2e（本項未改任何手寫前端檔，只重產型別檔）；真實 PostgreSQL 上的刪除行為（預檢與保底只在 SQLite 外鍵開啟下驗證；PostgreSQL 對 `NO ACTION` 的檢查時點在敘述結束，結果相同但未實測）。
+
+### 6. ADR-0006 四面向
+
+| 面向 | 判定 |
+|---|---|
+| IAM | 適用，**不變**：兩端點仍掛 `require_story_action("J3a", "edit")`；拒絕端點的 `admin_may_decide_role` 仍在刪除之前 |
+| Encryption | 不適用：無新資料、無新傳輸 |
+| Network exposure | 適用，**無新暴露面**：零新端點；409 本體多回各類資料筆數，只對已具 `J3a.edit` 的管理員可見 |
+| Audit logging | 適用：稽核類紀錄（`reselection_events`、`memory_audit_events`、`diagram_change_records`、`estimate_audit_events`）一律保留、改回 409；保底路徑記 `logger.error`；`_audit_append` 只在刪除成功後寫 |
+
+### 7. Open items
+
+- 新增指向 `users.id` 且無 `ON DELETE` 的欄位時，須手動加進 `_blocking_user_references`；**沒有機械檢查**強制這一點，漏了只會退成通用 409（不會 500）。
+- 曾操作過稽核類資料的帳號無法硬刪除——這是裁決的直接後果，維運改用停用；已寫進 `DEPLOY.md`。
+
+## 十三、審查後補測（conductor，`2026-10-20T08:07:29Z`）
+
+本站審查（`reviews/review-02.md`）判定 READY，但列一個 Major：規則 1「空預設專案」的兩個條件沒有測試守住——拿掉「除本人外無其他成員」會經 `project_members` 的 `ON DELETE CASCADE` 靜默刪掉他人的成員列與整個專案；`test_b` 的圖屬於 target，只走到既有 403，碰不到 `has_diagram` 條件。這是誤刪資料類缺口，依「殘留當場修」於收據登記、單元完成後立即補上（不改產品程式，只加測試）：
+
+| 新測試 | Given | 斷言 |
+|---|---|---|
+| `test_h_default_project_with_another_member_is_not_purged` | target 的預設專案（無圖）有 alice 為 member | 409、`owned_projects`；專案與 alice 的成員列、target 皆仍在 |
+| `test_i_default_project_holding_someone_elses_diagram_is_not_purged` | target 的預設系統下掛 alice 的圖，target 本人無圖 | 409、`owned_projects`；專案、系統、圖、target 皆仍在 |
+
+突變驗證（先以 `grep -c MUTATION` 確認突變已寫入，還原後確認為 0）：
+
+| # | 突變 | 結果 |
+|---|---|---|
+| M-D4 | `_empty_default_project_ids` 的 `other_member` 條件改為恆不成立 | `test_h` 紅（其餘 8 案綠） |
+| M-D5 | `has_diagram` 條件改為恆不成立 | `test_i` 紅（其餘 8 案綠） |
+
+還原後 `tests.test_user_delete_hierarchy`：`Ran 9 tests` → `OK`；完整套件（`backend/.venv`）：`Ran 1219 tests` → `OK`。
+
+審查其餘四項 Minor（清除未逐筆稽核、409 未給下一步、拒絕路徑修正無突變、預檢與 commit 之間的競態）未在本輪處置，以已接受風險進入紀錄；其中「清除會連帶刪掉空預設專案下使用者填寫的系統需求欄位」已向使用者揭露。
+
+## 十四、重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T00:07:58Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。計畫 54 格全部勾選；後續單元對共用檔（`schema_rbac.sql`、`DEPLOY.md`、`user_router.py`、`openapi.json`、`api.d.ts`）的改動一律保留。
+
+### 逐步查驗摘要
+
+- 步 1–9：DDL（`schema_rbac.sql:338-437` 的 H 區塊、兩層 `ON DELETE RESTRICT`、兩個部分唯一索引）、遷移讀寫與邏輯、獨立指令的非零結束碼、`DEPLOY.md` §2.2.7 與 `schema.sql:82-118` 皆與計畫相符。
+- 步 10（合併前必修第 3 項）：`user_router.py:581-637` 的 `_hard_delete_user` 三條規則（空預設專案同交易清除、11 類參照預檢回 409、`IntegrityError` 保底 409）、兩個端點的 `responses=_DELETE_USER_409_DOC`、`openapi.json`／`api.d.ts` 的 `DeleteUserConflict` 皆在。**突變 M-D1～M-D5 本輪未重跑**（須暫時改壞程式碼），沿用 §十二、§十三 的紀錄。
+
+### 測試與閘門（本輪實跑，快取導向 scratchpad，未寫入 repo）
+
+| 指令 | 結果 |
+|---|---|
+| `python3 -B -m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy -v`（`backend/`） | `Ran 24 tests`、`OK`（遷移 15 ＝ 計畫 13 ＋ 外鍵守門、DDL 一致性 2；刪除 9 ＝ 計畫 (a)–(g) ＋ (h) 預設專案有其他成員、(i) 預設專案下有他人建立的圖） |
+| `python3 -B -m unittest discover -s tests`（系統 `python3` 與 `backend/.venv` 各一次） | 皆 `Ran 1319 tests`、`OK (skipped=3)` |
+| `python3 -B scripts/dump_openapi.py --check` | 一致，exit 0 |
+| `npm --prefix frontend run check:types` | 一致，exit 0 |
+| `python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` | 皆 passed |
+
+### 與已核可測試說明的落差（凍結文件不改，以本節為準）
+
+`unit-test-instructions.md` §二的單元指令只列 `tests.test_hierarchy_migration`，實際單元範圍另含 `tests.test_user_delete_hierarchy`；§三的「合計 13 個案例」與刪除測試「7 個案例」已過時，現況為 24 個（遷移 15、刪除 9）。`source-manifest.json` 的 10 條路徑全部存在且仍屬本單元。

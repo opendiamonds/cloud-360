@@ -86,6 +86,55 @@ Testing Contract 的 14 步基線中：**Data model**（Step 3–4，Redis 工�
 （Step 5–6，對既有能力的呼叫）、**Business logic**（Step 7–8）依序「實作 → 測試」；**API** 層本單元無端點
 （Step 9 只做漂移確認）；**Frontend** 層無程式，省略。方法論未改。
 
+## 六、code-generation Request Changes（2026-10-20）：合併前必修第 18 項的工作項那一半
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項。劃給本單元的是**第 18 項**（與 `session-store` 共有）。`session-store` 已在 2026-10-23 處理對話那一半，每段上限 200 KB；該列逐字寫明「**不在本上界內**：同 key 的 `U12` 工作項集合（`OPEN-N10-3`），`work-orchestrator` 那一半的容量未由本項處理」。
+
+**實測現況（以唯讀查證取得）**：
+- `put_work_item.lua` 只檢查 key 是否存在、欄位是否已存在，**沒有任何筆數上限**，全 `backend/services` 也沒有刪除 `wi:*` 欄位的路徑。
+- 每則請求最多產生 3 筆（`work_orchestrator_rules.CAPABILITY_NAMES` 三種能力）。每筆最大約 7.5 KB：`requestText` 上限 2000 字（`REQUEST_TEXT_MAX_CHARS`），`ensure_ascii=False` 下中文約 6 KB，其他欄位約 1.5 KB。
+- 工作階段 TTL 會隨使用者互動續期（`session_store.py` 的 `touch` 與各寫入方法），所以活躍的工作階段裡，工作項會無上限累積。
+- 容量帳：`maxmemory 256mb` 的 80% ≈ 214.7 MB，除以 300 個工作階段 ≈ 699 KiB／個；扣掉對話最壞值 3 × 200 KiB = 600 KiB，剩約 **99 KiB** 給工作項。
+
+**使用者裁決**（本站問題檔 `[WO-MB18]`）：**限筆數＋完成後瘦身**。
+- 同時進行中（處理中＋等待中）最多 **5 筆**。
+- 已結束（完成、失敗、已停掉）只保留最近 **20 筆**。
+- 轉為已結束時，`requestText` 截成 **200 字**（`CHANGE_SUMMARY_MAX_CHARS`，變更摘要本來就只取這個長度）。
+- 最壞值：5 × 7.5 KiB + 20 × 約 2.1 KiB ≈ **80 KiB**，低於 99 KiB，300 個工作階段的承諾成立。
+
+- [x] **Step 13 — 資料模型：實作**
+  - 新常數 `work_orchestrator_rules.MAX_ACTIVE_WORK_ITEMS = 5`、`MAX_TERMINAL_WORK_ITEMS = 20`（模組常數，非環境變數）。
+  - **`put_work_item.lua`**：新增 `ARGV[3]`（進行中上限）。腳本內以 `HGETALL` 解碼 `wi:*`，計算 `status` 不屬於三種終態的筆數；已達上限即回 **`-1`**，不寫入。key 不存在或欄位已存在仍回 `0`。
+  - **`update_work_item.lua`**：新增 `ARGV`（已結束保留數）。補丁使該項**由非終態轉為終態**時，腳本依 `createdAt`（同值再以欄位名，決定性）刪除超出 20 筆的最舊終態欄位（`HDEL`）。只刪終態項，不碰進行中項。
+  - **參考實作**：`ref_put_work_item`／`ref_update_work_item` 同語意更新。
+  - **`SessionStore`**：`put_work_item` 改回三值：已寫入／已到期或重複／已達上限，形狀由實作決定，但呼叫端必須能區分第三種。
+  - **`requestText` 截斷**：在 Python 端做（`WorkOrchestrator` 送出轉終態的補丁時一併帶 `"requestText": text[:CHANGE_SUMMARY_MAX_CHARS]`），**不在 Lua 以位元組截斷**，避免切壞 UTF-8。
+- [x] **Step 14 — 資料模型：測試**
+  - `test_work_orchestrator_store.py`（替身）：第 6 筆進行中被拒且不寫入、終態項不計入上限、轉終態後超過 20 筆刪最舊、進行中項永不被刪、同 `createdAt` 的刪除順序決定性、key 不存在仍回原值。
+  - `tests_redis/test_work_item_lua.py`（opt-in）：Lua 與參考實作逐案比對上述案例。
+  - 以 `hypothesis` 加一條性質：任意交辦與轉終態序列後，進行中 ≤ 5 且終態 ≤ 20。
+- [x] **Step 15 — 業務邏輯：實作**
+  - `dispatch` 在寫入任何一筆**之前**，先以 `load_work_items` 計算「現有進行中＋本批筆數」，超過 5 即丟新例外 `WorkCapacityExceeded`，**整批不寫**，避免一則請求只建了一半。
+  - 若預檢通過後 Lua 仍回「已達上限」（同一工作階段的併發交辦），把本批已寫入的項以補丁轉為 `失敗`，`failureReason` 為固定字串；再丟 `WorkCapacityExceeded`。
+  - 所有轉終態的補丁帶截斷後的 `requestText`。
+  - **跨單元（`U13 brain-gateway`）**：`brain_gateway_rules.error_for` 把 `WorkCapacityExceeded` 對應到既有代碼 `INVALID_REQUEST`（**不改 WS 契約**的 `code` 列舉）。訊息為固定字串「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」，經 `brain_gateway.py:1521` 既有的 `_fail_turn_exc` 送出。
+- [x] **Step 16 — 業務邏輯：測試**
+  - `test_work_orchestrator_flow.py`：已有 4 筆進行中時交辦 2 個意圖 → 整批拒絕、Redis 無新欄位、回 `WorkCapacityExceeded`；併發交辦下 Lua 回上限 → 已寫入的同批項轉 `失敗`；轉終態後 `requestText` 長度 ≤ 200。
+  - 閘道測試：`WorkCapacityExceeded` → `INVALID_REQUEST`，加上固定訊息。
+  - 突變驗證（記入 `code-summary.md`），每項都要讓對應測試轉紅：
+    - 拿掉 Lua 的上限檢查；
+    - 拿掉 `dispatch` 的預檢；
+    - 拿掉終態刪除；
+    - 刪除改成刪進行中項；
+    - 拿掉 `requestText` 截斷。
+- [ ] **Step 17 — 文件與追溯**
+  - **容量說明**：`DEPLOY.md` 與 `LOCAL-DEV.md` 的 Redis 容量段、`deploy/.env.example` 與 `backend/.env.example` 的容量註解改寫為「對話 600 KiB＋工作項 80 KiB／工作階段」，300 個工作階段 ≈ 199 MiB ≈ 78%。
+  - **合併前必修清單**：`merge-blockers.md` 第 18 列標為已修正。
+  - **其他文件**：`code-summary.md` 新增一節；`traceability.json` 與 `source-manifest.json` 更新。
+  - **驗證**：`validate_env_contract.py` 與 `validate_repo_contract.py` 通過，`dump_openapi.py --check` 不漂移。
+
+**不在本次範圍**：`requestText` 靜態加密（§二 第 15 項，仍併入上游 `OQ-3`）；前端工作清單如何顯示「只保留最近 20 筆」（工作清單由 `U14` 消費，本次只在 `code-summary.md` 交接）。
+
 ## Testing Contract
 
 ```json

@@ -149,11 +149,19 @@ memory-schema:            # N-2
 
 ## 五、完成判準（二元）
 
-- [ ] `N-2` job 綠燈，且**兩次**套用 `schema_rbac.sql` 皆成功（`BR1.3`）
-- [ ] `verify_memory_schema.sql` 的全部斷言通過
-- [ ] `python3 scripts/validate_repo_contract.py` 綠燈
-- [ ] `python3 scripts/validate_env_contract.py` 綠燈（本單元零新變數）
-- [ ] `cd backend && python3 -m unittest discover -s tests` **無迴歸**
+- [x] `N-2` job 綠燈，且**兩次**套用 `schema_rbac.sql` 皆成功（`BR1.3`）
+- [x] `verify_memory_schema.sql` 的全部斷言通過
+- [x] `python3 scripts/validate_repo_contract.py` 綠燈
+- [x] `python3 scripts/validate_env_contract.py` 綠燈（本單元零新變數）
+- [x] `cd backend && python3 -m unittest discover -s tests` **無迴歸**
       （基線 497；本單元不新增 Python 測試，故應維持 497）
-- [ ] `DEPLOY.md` 含兩張新表、`psql` 驗證指令與主機加密狀態（`NFR6.1`）
-- [ ] `git diff --stat` 不含 §二「不動的檔案」清單中的任何一項
+- [x] `DEPLOY.md` 含兩張新表、`psql` 驗證指令與主機加密狀態（`NFR6.1`）
+- [x] `git diff --stat` 不含 §二「不動的檔案」清單中的任何一項
+
+## 六、code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。逐項對照「單元」欄：**19 項中沒有一項劃給 `memory-data`**。與本單元資料表相關的兩項落點如下，皆不在本單元：
+- 第 11 項（清除用系統 actor 可被刪除，刪除後 `memory_audit_events.actor_user_id` 的外鍵讓 90 天清除停擺）劃給 `memory-purge`。附帶事實：`hierarchy-data` 本輪的必修第 3 項修正已讓「仍被 `memory_audit_events` 參照的使用者」刪除時回 409，所以**首次清除之後**系統 actor 已刪不掉；首次清除之前仍可被刪、且 `GET /list` 仍列出它——這兩點留給 `memory-purge` 處理。
+- 第 6 項（`deleteMemoryRecord` 把任何 404 都當成已刪除）劃給 `memory-page-ui`，屬前端。
+
+因此本計畫**不新增步驟**，本輪只重新查驗 §五 七項判準。**解讀**：判準 5 的「基線 497」是本單元當時的數字，現況以「完整套件無迴歸、全綠」判定（本機一律以 `backend/.venv` 執行）；判準 1、2 需要真實 PostgreSQL（`N-2` job），本機若無可用的 Docker 或 PostgreSQL，以 CI 最近一次 `memory-schema` job 的結果或據實記為本輪未驗；判準 7 指本單元自己的變更，不含本輪其他單元修正必修項時對 `DEPLOY.md`、`schema_rbac.sql` 的改動。

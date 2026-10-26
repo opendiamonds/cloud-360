@@ -228,3 +228,31 @@ repo 沒有覆蓋率量測機制（`team.md`：`org.md` 的 80% line coverage「
 - **log 斷言**：`self.assertLogs("cloud360.brain_gateway", level="WARNING")` 比對 `work_target_names_failed` 與 `exc=<類別名>`，並斷言訊息不含測試名稱字串；`HierarchyForbidden` 案用 `assertNoLogs`（Python ≥ 3.10）。
 - **前端 stub**：專案名、系統名、圖名、使用者原句、token 各以獨特假字串（例如 `e2e-u14-<字尾>`）產生，供 `EPN-13`／`EPN-14` 的斷言；`/api/auth/me` 的權限回應以 helper 組出（形狀沿用 `member-pages.spec.ts` 的 `setupApp`，該檔 `:573` 的 `{ loc, msg, type }` 不含 `payload` 鍵，不受新 lint 選擇器影響）；退避、4403 與上限案以 `page.clock.install()` ＋ `runFor` 快轉，不以真實等待。
 - **限制（如實記載）**：攔截層不碰真實後端，前後端形狀一致由 `ws-contract.json` 漂移閘門、`check:ws-types` 與 `wsFrames.ts` 的 `tsc -b` 承擔；真實 stack 層只經 nginx 一跳，Cloudflare 兩跳由部署步驟 6a（協定名項）與人工實測（`bearer.` 項、瀏覽器端）承擔；真實 backend 重啟（`AC2.1.4`）與 `vite dev` 下的 StrictMode 雙重 effect（nfr-requirements `R-04`）只能手動，交 `tcms-test-cases` 分桶。
+
+## 七、合併前必修第 2 項(b)：非輪次錯誤的呈現（計畫 §九 Step 16–18）
+
+在 `frontend/`：
+
+```bash
+npm run lint
+npx tsc -b
+npm run check:ws-types
+npm run build
+# 另開 vite preview（生產建置）後：
+BASE_URL=http://localhost:<port> npx playwright test tests/e2e/entry-page.spec.ts
+```
+
+| 案例 | 斷言 |
+|---|---|
+| E1 等待中收到 null 錯誤 | 出現一則 `brain-system-notice`；等待狀態仍在；之後該輪 `token`＋`done` 呈現在原輪 |
+| E2 連續兩則 null 錯誤 | 兩則系統提示都在 |
+| E3 反問選擇後收到 null 錯誤 | 反問恢復可點選；再選一次會送出 `select_clarify_candidate` |
+| E4 帶 turnId 的錯誤 | 該輪標為錯誤；不出現系統提示 |
+
+突變（套用 → 紅 → 還原 → sha256 對照基線 → 綠；每次突變後重新 `npm run build`）：
+
+| 突變 | 預期紅燈 |
+|---|---|
+| M-N1 還原 `?? ''` 路徑 | E1、E2 |
+| M-N2 `systemNotice` 呼叫 `clearPending` | E1 |
+| M-N3 `picking` 改為 `resolved` | E3 |

@@ -41,48 +41,48 @@
 
 ## 三、實作步驟（`test-after`，逐層實作後補該層測試）
 
-- [ ] **Step 1 — 專案結構與設定確認（零變更）**
+- [x] **Step 1 — 專案結構與設定確認（零變更）**
   確認無需新增依賴、無需改 `package.json`、無需改 `playwright.config.ts`
   （`testDir: './tests/e2e'` 已涵蓋新檔）。本步驟只做確認與記錄，不寫程式。
   追溯：`TS-U24-1`、`TS-U24-7`。
 
-- [ ] **Step 2 — 驗證測試執行器並記下本單元專屬指令**
+- [x] **Step 2 — 驗證測試執行器並記下本單元專屬指令**
   執行 `cd frontend && npx playwright test tests/e2e/member-pages.spec.ts --list`
   確認收集機制可用（檔案尚不存在時應回報 0 個測試而非設定錯誤）。
   指令記入 `unit-test-instructions.md`。
   追溯：`TS-U24-2`。
 
-- [ ] **Step 3 — `failureSignal.ts`：失敗訊號的封閉型別（實作）**
+- [x] **Step 3 — `failureSignal.ts`：失敗訊號的封閉型別（實作）**
   `SignalKind` 五個字面值、`SignalEndpoint` 六個路徑樣板、`emitFailureSignal()`。
   **刻意沒有 `message`／`detail`／`displayName` 欄位**，使 `SEC-U24-1` 成為型別層保證。
   追溯：`SEC-U24-1`、`SEC-U24-6`。
 
-- [ ] **Step 4 — `<LiveRegion />`（實作）**
+- [x] **Step 4 — `<LiveRegion />`（實作）**
   `{ message, srOnly? }`、不持有狀態、`role="status"` 寫死於元件內、
   `data-testid="live-region"`。做成**可共用形狀**供 `U23` 沿用（`HO-U24-1`）。
   追溯：`BR27.1`、`TS-U24-6`、`HO-U24-1`。
 
-- [ ] **Step 5 — `membershipApi.ts`：抓取函式層（實作）**
+- [x] **Step 5 — `membershipApi.ts`：抓取函式層（實作）**
   六個純抓取函式，**不碰 state**（`TS-U24-4`：`react-hooks/set-state-in-effect`
   為 error 級）。URL 一律經 `apiUrl()`（`TS-U24-3`）。手寫 `Authorization: Bearer`
   沿用既有 40 處形狀。422 以 `detail` 的**型別**分流（字串 vs 物件陣列，`BR23.1`）。
   每個失敗路徑呼叫 `emitFailureSignal()`。
   追溯：`SEC-U24-4`、`SEC-U24-6`、`TS-U24-3`、`TS-U24-4`。
 
-- [ ] **Step 6 — `ReselectionBanner.tsx` 與 `Layout.tsx` 掛載（實作）**
+- [x] **Step 6 — `ReselectionBanner.tsx` 與 `Layout.tsx` 掛載（實作）**
   `<ReselectionBannerHost>` 帶 `role="status"`、**無條件渲染**、只放要被朗讀的文字；
   `<ReselectionBannerActions>` 的兩個控件放在宿主**之外**的兄弟節點
   （`role="status"` 隱含 `aria-atomic="true"`）。掛載時先 `can("K3","view")`，
   為 false 則**不發請求**（`UIP-2` 的 0 次）。直接渲染於 `Layout.tsx` 的 React 樹內。
   追溯：`BR21.1`、`BR21.3`、`BR26.1`–`BR26.3`、`UIP-2`。
 
-- [ ] **Step 7 — `MembersListPage.tsx`（實作）**
+- [x] **Step 7 — `MembersListPage.tsx`（實作）**
   兩層抓取形狀（純函式 ＋ 呼叫端更新 state ＋ `useEffect` 的 `cancelled` flag）。
   `canManage` ＝ 自己那一列的 `role` ∈ {owner, admin} **AND** `can("K3","edit")`。
   100 列渲染閘放在「資料→視圖」轉換點。載入／錯誤經 `<LiveRegion />`。
   追溯：`UIP-1`、`UIP-4`、`BR22.1`–`BR22.3`、`BR25.2`、`SEC-U24-5`。
 
-- [ ] **Step 8 — `InviteMemberDialog.tsx`（實作）**
+- [x] **Step 8 — `InviteMemberDialog.tsx`（實作）**
   角色只提供列舉內選項；422 兩種語意分流的文案；成功後**就地新增一列**。
   追溯：`BR23.1`、`UIP-3`、`AC12.6.1`。
 
@@ -98,7 +98,7 @@
   `Sidebar.tsx` 依既有的「按 user story 大類分層」慣例新增入口。
   追溯：`SEC-U24-3`、`project.md` 的 Sidebar 分層規則。
 
-- [ ] **Step 11 — 前端行為的測試（`test-after` 的測試步驟）**
+- [x] **Step 11 — 前端行為的測試（`test-after` 的測試步驟）**
   `frontend/tests/e2e/member-pages.spec.ts`，**8 個案例**，逐一對應
   `cicd-pipeline.md` §五 的斷言標的表：
   (1) 100 列上限＋提示、(2) 橫幅請求數（有／無 `K3 view` 兩個分支）、
@@ -111,15 +111,15 @@
   結果記入 `code-summary.md`。
   追溯：全部 `UIP-*`、`SEC-U24-*`、`BR2x.y`。
 
-- [ ] **Step 12 — 建置與 lint 驗證**
+- [x] **Step 12 — 建置與 lint 驗證**
   `cd frontend && npm run lint`（須維持 0 errors）與 `npx tsc -b`（須通過）。
   **如實記載**：`tsc -b` 對「後端加欄、前端漏接」無效（`team.md` 已記載），
   故它的通過**不構成**資料形狀正確的證據——那由 Step 11 的 e2e 承擔。
 
-- [ ] **Step 13 — `source-manifest.json`**
+- [x] **Step 13 — `source-manifest.json`**
   列出本單元建立／修改／刪除的每一個 application-source 路徑（含殼層與產生器寫的檔）。
 
-- [ ] **Step 14 — 文件與追溯**
+- [x] **Step 14 — 文件與追溯**
   `code-summary.md`（含突變驗證結果）與 `traceability.json`。
 
 ## 四、刻意**不**做的事（避免 scope 蔓延）
@@ -142,6 +142,41 @@
 | Step 9 | `US12.2`（改角色）、`US12.5`／`US12.6`（移出）：`AC12.2.1`、`AC12.2.2`（部分，受 `OPEN-MP24-7` 阻塞）、`AC12.6.2` |
 | Step 10 | `US12.1` 的入口可達性 |
 | Step 11 | 以上全部的可驗證面 |
+
+## 五之一、合併前必修第 9 項（code-generation Request Changes 修訂，2026-10-23）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 9 項（`nfr-requirements` `review-05` R-02），劃給本單元。使用者於 2026-10-23 裁決：**前端分頁顯示全部**。
+
+**缺陷**：`frontend/src/pages/MembersListPage.tsx:34`（`MAX_RENDERED_MEMBERS = 100`）與 `:182-187`：成員超過 100 位時整張表不渲染，只顯示「成員過多，請聯絡管理者」。成員頁是唯一的成員管理入口，101 人的專案連「移除成員回到 100 以下」都做不到——`UIP-1` 從效能取捨變成功能斷崖（`nfr-requirements:2d9eec8d` 已記此形狀）。
+
+- [x] **Step 15 — 拿掉 100 列整表隱藏閘，改為前端分頁**：每頁 50 位（模組常數，不做環境變數），以既有清單資料在前端切頁；提供上一頁／下一頁與「第 N／M 頁、共 K 位」；沿用既有 Tailwind 樣式與 `data-testid` 慣例。後端 `list_members` 已回傳全部成員，**不改任何 `U19` 端點**（第四節「不改 `U19` 的任何端點」維持；`OPEN-MP24-6` 伺服器分頁仍為開放項，不在本步範圍）。
+- [x] 分頁與既有行為的交互：邀請／改角色／移出後**不整份重抓**（案例 3 的既有保證不變），本地更新後若當前頁變空則退回前一頁；`canManage` 判定不因分頁增加請求（案例 4 不變）；橫幅宿主不受影響。
+- [x] 刪除「成員過多，請聯絡管理者」提示與 `MAX_RENDERED_MEMBERS` 常數及其註解，改寫為分頁的事實（不留死碼）。
+- [x] **測試**（`tests/e2e/member-pages.spec.ts`）：案例 1 改為「構造 101 位 → 清單存在、第 1 頁 50 列、共 3 頁；翻到第 3 頁可見第 101 位且其管理控件可用」；另加「構造 100 位 → 共 2 頁」。依 `unit-test-instructions.md §七` 名稱穩定性規則，案例 1 若必須改 `test()` 字串，於 `code-summary.md` 記明舊名與新名，供 TCMS 同步時處理孤兒案例。突變：還原 100 列整表隱藏閘 → 案例 1 紅。
+- [x] 本單元 e2e 需本機 stack（`deploy/docker-compose.test.yml`）；本機無 Docker daemon 時，至少跑 `npm run lint`、`npm run build`（`tsc -b`）與 `npx playwright test tests/e2e/member-pages.spec.ts --list`，e2e 實跑據實記為未驗（由 CI 的 `ui-regression` 承擔）。
+- [x] `merge-blockers.md` 第 9 列回填處置；`code-summary.md` append 本節紀錄；`source-manifest.json`、`traceability.json`（加 `MB-9`；`UIP-1` 相關列更新說明）。
+- 追溯：`merge-blockers.md` #9；`UIP-1`、`US12.1`、`AC12.1.1`。
+
+## 五之二、合併前必修第 23 項（2026-10-26 使用者裁決：先修再重審）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 23 項（code-generation 重做時 review-04 的 Major ＋ Minor）。訊號種類標錯那一項只記 Minor，不在本節範圍。
+
+- [x] **Step 16 — 非數字 `projectId` 不再停在載入中**：`MembersListPage.tsx` 在網址 `projectId` 不是有限數字時，顯示與 404 相同的固定句「查不到這個專案」，並依 `SEC-U24-6` 經 `emitFailureSignal()` 發出訊號；不顯示「載入中…」。沿用 `team.md` 的兩層抓取形狀（不在 effect 內同步 setState）。
+- [x] **Step 17 — 兩個對話框的鍵盤行為**：邀請對話框與移出確認框加上焦點圈限（Tab／Shift+Tab 不離開對話框）、Escape 關閉、關閉後焦點回到觸發按鈕；形狀沿用 repo 內既有支援 Escape 的對話框，不新增依賴。
+- [x] **Step 18 — 測試**（`tests/e2e/member-pages.spec.ts`，`test-after`）：(a) 非數字 `projectId` → 顯示固定句、不顯示「載入中…」、有一筆失敗訊號；(b) 兩個對話框各斷言 Escape 關閉、Tab 不離開對話框、關閉後焦點回原按鈕。新案例附 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 規格註解。
+- [x] **Step 19 — 突變驗證**（只在暫存區副本做）：拿掉 Step 16 的處理 → (a) 紅；拿掉 Step 17 的焦點圈限／Escape／焦點回復 → (b) 對應斷言紅。結果記入 `code-summary.md`。
+- [x] **Step 20 — 回歸與收尾**：`npm run lint`（0 errors）、`npx tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠（對話框改動後重跑無障礙掃描點 11、12、15）；新檔加入 `source-manifest.json`，`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 23 項處置段。
+- 追溯：`merge-blockers.md` #23；`SEC-U24-6`、`AC-A11Y.1`、`US12.1`、`US12.6`。
+
+## 五之三、第 23 項補修：成員詳情頁（2026-10-26T14:59:26Z 使用者裁決：再開一次本單元，現在補修）
+
+**來源**：review-05 R-11（Major，Still applies）——`MemberDetailPage.tsx` 抓取 effect 在 `projectId` 不是有限數字時直接 return、`isLoading` 永遠為 true，`/projects/abc/members/1` 永遠停在「載入中…」且無訊號；原 R-11 涵蓋兩頁，第 23 項原文只寫清單頁。另含 review-05 的新 Minor（對話框其他關閉路徑無焦點斷言）。
+
+- [x] **Step 21 — 詳情頁非數字 `projectId`**：`MemberDetailPage.tsx` 比照 Step 16 的形狀（導出值、不在 effect 內同步 setState），在 `projectId` 不是有限數字時顯示與 404 相同的固定句、經 `emitFailureSignal()` 發一筆訊號、不顯示「載入中…」。
+- [x] **Step 22 — 測試**（`member-pages.spec.ts`）：(a) `/projects/abc/members/1` → 固定句、無「載入中…」、一筆訊號；(b) 邀請送出中（以 route 延遲請求）按 Escape 對話框仍在，請求完成後才關閉並把焦點還給「邀請成員」鈕；(c) 移出確認的 409 或 403 路徑關閉後焦點回到「移出專案」鈕。附規格註解。
+- [x] **Step 23 — 突變驗證**（只在暫存區副本做）：拿掉 Step 21 → (a) 紅；把送出中的 Escape 停用條件改錯 → (b) 紅；拿掉錯誤路徑的焦點回復 → (c) 紅。結果記入 `code-summary.md`。
+- [x] **Step 24 — 回歸與收尾**：lint 0 errors、`tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠；`code-summary.md` 追加補修段，並列出本節與 §五之二 新增的全部 e2e 案例名稱，供 `tcms-test-cases` 同步（案名合併後不得再改）。
+- 追溯：`merge-blockers.md` #23；review-05 R-11；`SEC-U24-6`、`US12.2`。
 
 ## 六、核可關卡
 

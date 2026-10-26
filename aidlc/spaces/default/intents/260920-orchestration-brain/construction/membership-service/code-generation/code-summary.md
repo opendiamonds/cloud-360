@@ -267,3 +267,198 @@ summary for the human」。本計畫**不就地編輯那兩份已凍結的檔案
 > 的世界裡本來就成立，它們防的是**相反方向**的錯誤（鎖的範圍過大）。
 > 為它們各造一個突變需要分別引入「表級鎖」與「守門也取鎖」兩種實作，
 > 而那兩個突變不在 `§七` 的清單裡。如實記載為差異而非宣稱已做。
+
+## 重新查驗與合併前必修第 1、4、10、15、16 項
+
+> 紀錄時間：2026-10-20T23:50:41Z（`date -u`）。來源：使用者對 code-generation 整站送
+> Request Changes，本單元承接 `functional-design/merge-blockers.md` 第 1、4、10、15、16 項；
+> 四項裁決皆選建議項（計畫 Step 15a–15e、`unit-test-instructions.md` §3.1）。
+
+### 一、Steps 1–14 重新查驗
+
+逐格對照 repo 現況，全部成立並勾回：例外與值物件（`membership_errors.py`／`membership_types.py`）、
+ORM 兩表與 `cause` 欄（`schema_rbac.sql`、`verify_meta_schema.sql`、`DEPLOY.md` §2.2.9 為 9 欄）、
+`M1`–`M8`、`hierarchy_service.create_project_nocommit` 與 `hierarchy_router` 經 facade 建專案、
+停用端點的 409 宣告、回填腳本、`ci.yml` 的 `concurrency` job、`tests_pg/`、`DEPLOY.md` §2.2.10、
+`LOCAL-DEV.md`、manifest 與追溯檔。兩點如實記載：
+
+- Step 5「不改 `backend/database.py`」：本分支相對 `origin/ut` 該檔有 +47／−2，來源是其他單元
+  （`7ce1bee9` brain-infra、`c80aba97`／`f06dd1e7` 驅動改 psycopg v3、`369a5468` 合併 ut），
+  **本單元（含本輪）沒有改它**；工作樹相對 HEAD 的 diff 為空。
+- Step 5 的「聚合版 `assert_can_deactivate` 一次 `HAVING count(*) = 1`」已被本輪 15a 取代（見下），
+  勾回的是「當輪交付成立」，現行形狀以本節為準。
+
+### 二、Step 15 的實作與改動檔:行（行號為本輪結束時）
+
+| 項 | 改動 | 檔:行 |
+|---|---|---|
+| 15a（#1＋#4） | 單一謂詞 `is_qualified_successor`（啟用、`user_can(..., "K3", "edit", authorization_status=...)`）與集合版 `qualified_successors`（一次 join ＋ 以角色為鍵的快取） | `backend/services/membership_service.py:467`、`:515` |
+| 15a | `projects_losing_last_admin` 改為「是管理者且無合格接手人」 | `membership_service.py:572` |
+| 15a | `reselect_for_project` 候選與冪等判定只算合格者；參數更名 `deactivated_user_id` | `membership_service.py:944` |
+| 15a | `reselection_scope`＝擁有的 ∪ 是管理者的專案 | `membership_service.py:1035` |
+| 15a（#4 邀請） | `assert_invitee_has_global_permission` 補 `is_active`；拒絕訊息說明帳號狀態 | `membership_service.py:849`；`membership_errors.py:75`（`reason`） |
+| 15a | 刪除已無呼叫者的 `member_snapshots`（改由 `qualified_successors` 產生 `MemberSnapshot`） | `membership_service.py`（原 `:282`） |
+| 15b（#10） | `ReselectionOutcome`（events／failed_project_ids／lock_timeout_project_ids） | `membership_service.py:1018`、`:1051` |
+| 15b | `ReselectionFailureReport` | `backend/services/membership_types.py:130` |
+| 15b | 停用端點：`responses=` 宣告 500／503；條件改為 `not request.is_active`（已停用帳號重送即重跑改選、不重跑守門）；失敗回 500，全部為逾時回 503 | `backend/services/user_router.py:962`、`:971`、`:1067`、`:1071` |
+| 15c（#15） | 新模組 `membership_backfill.py`（`run_backfill`／`ensure_project_members_on_startup`），SQL 改 `CURRENT_TIMESTAMP`、前置檢查改 `inspect().has_table` 以支援 SQLite | `backend/services/membership_backfill.py`（新檔） |
+| 15c | startup 在 `init_db()` 之後呼叫 | `backend/main.py:24`、`:98` |
+| 15c | 腳本改呼叫同一函式（輸出與結束碼語意不變） | `backend/scripts/backfill_project_members.py` |
+| 15d（#16） | `LOCK_TIMEOUT_MS = 5000`、`SET LOCAL lock_timeout = '5000ms'`（PostgreSQL 方言才送）、`55P03` 轉 `MembershipLockTimeout` | `membership_service.py:114`、`:180`–`:228` |
+| 15d | `MembershipLockTimeout` | `membership_errors.py:108` |
+| 15d | router 轉 503，三個取鎖端點宣告 `LOCK_TIMEOUT_RESPONSE` | `backend/services/membership_router.py:129`、`:159`、`:214`、`:257`、`:294` |
+
+**合格接手人的詮釋（如實揭露）**：裁決字面是「只回報該使用者是最後一位 `project_admin` 且沒有
+合格接手人的專案」，同一段又規定改選冪等判定的「已有其他管理者」只算合格者。本實作把守門的
+「最後一位管理者」也以同一口徑計算（其他管理者不合格則不算），判準因此收斂為「該使用者是管理者、
+且專案內除他以外沒有任何合格成員」。差別只在「另有一位**不合格**的管理者」那一格：字面讀法會放行，
+而放行後改選的冪等判定不承認那位管理者、又找不到合格接手人，專案停用後實際無人能管——正是本項
+要消除的狀態。`M7` 的第 (3) 格明示這一格。
+
+**`NFR12.10` 的取捨**：守門不再是單次 `HAVING count(*) = 1`。現為「一次取管理者專案（含名稱）
+＋ 一次 join 取這些專案的其他成員與帳號狀態 ＋ 至多『不同全域角色數』次的權限列讀取
+（`user_can`，11 個 canonical role 為上界）」，與專案數、成員數都無關，不是逐專案 N+1。
+不把合格判定寫成 SQL 的理由：權限矩陣只有一份（`role_permissions`，經 `user_can` 讀），
+在 SQL 另寫一份會違反 `team.md` 的「單一真實來源」。
+
+**15c 的 guard 判斷**：不加「表不存在就略過」。startup 路徑上兩張表由 `init_db()` 的
+`Base.metadata.create_all()` 建立（`Project`／`ProjectMember` 都在 `models.Base`），表不存在代表
+`init_db()` 沒完成，應該啟動失敗。既有測試不受影響的原因：`TestClient(app)` 不觸發 startup；
+唯一觸發 startup 的 `test_brain_gateway_startup.py` 把 `init_db` 換成替身，故同步把新步驟換成替身，
+並把順序斷言擴為 `routing → gateway → init_db → backfill`。
+
+### 三、新增與改寫的測試
+
+| 檔 | 測試 | 對應 |
+|---|---|---|
+| `backend/tests/test_membership_facade.py` | `F9`（有合格接手人→放行並升任）、`F10`（停用／待核准／僅 view 三種不合格成員各自不解除守門、不被升任）、`F11`（非擁有但為最後管理者的專案也被改選）、`F12`（PostgreSQL 方言替身：SQL 順序、`55P03` 轉譯、其他 SQLSTATE 原樣拋）、`F12b`（SQLite 不送 `lock_timeout`） | #1、#4、#16 |
+| 同檔改寫 | `F7`（候選改為 `K3.edit` 的 erin／frank，並放入更早加入但不合格的 carol 作反例）、`F8`（被改選者改為 alice） | #1 |
+| `backend/tests/test_membership_endpoints.py` | `E8`（邀請停用／待核准帳號→422 且無成員列，同角色啟用帳號 201 對照）、`E9`（注入單一專案失敗→500、列出該專案、另一專案已改選；重送→200、不重複事件）、`E10`（取鎖逾時→邀請／改角色／移出 503，停用端點 503） | #4、#10、#16 |
+| 同檔改寫 | `E2`（橫幅事件的被改選者改為 alice） | #1 |
+| `backend/tests/test_membership_data.py` | `M9`（補齊、dry-run、不把被移出的擁有者加回）、`M10`（冪等）、`M11`（終檢失敗→拋出、記 ERROR、無寫入） | #15 |
+| 同檔改寫 | `M7`（參照實作改為逐專案逐成員套用 `is_qualified_successor`；新增「不合格第二管理者仍受阻」「改為合格後解除」兩格） | #1 |
+| `backend/tests/test_brain_gateway_startup.py` | 啟動順序斷言加入成員補齊；`_quiet_startup` 加入其替身 | #15 |
+| `backend/tests_pg/test_membership_concurrency.py` | 新增 `C4`（真實逾時）；`C3` 改為移出 bob（bob 是合格接手人，降級不足以讓守門擋下）；`setUpClass` 呼叫 `database._ensure_j5_schema()` 補上 `users.authorization_status`（`schema_rbac.sql` 沒有這一欄，而守門現在會讀它） | #1、#16 |
+
+新增測試皆有 `@purpose`／`@given`／`@step`／`@pass`／`@story`（HTTP 者另有 `@api`）註解。
+
+### 四、突變驗證（每項以 Edit 寫入帶 `# MUTANT` 標記的突變，`grep -c MUTANT` 確認為 1 後執行，還原後確認為 0）
+
+| # | 突變 | 結果 |
+|---|---|---|
+| a | `is_qualified_successor` 拿掉 `is_active` 檢查 | **RED**：`F10`（inactive）兩個斷言 |
+| b | 合格判定的 `user_can` 改傳 `authorization_status=None` | **RED**：`F10`（pending）兩個斷言 |
+| c | `SUCCESSOR_ACTION` 由 `edit` 改 `view` | **RED**：`F10`（view_only）、`F2b`、`F7` |
+| d | `reselection_scope` 只取擁有的專案 | **RED**：`F11` |
+| e | 邀請端拿掉 `is_active` 檢查 | **RED**：`E8`（ivy） |
+| f | 停用端點拿掉失敗回報（`if False and outcome.failed_project_ids`） | **RED**：`E9`（200≠500）、`E10`（200≠503） |
+| g | 補齊 SQL 拿掉「無成員列」條件 | **RED**：`M10`（唯一約束 IntegrityError）、`M9`（插入 2 列） |
+| h | `lock_project` 不送 `SET LOCAL lock_timeout` | **RED**：`F12`；真實 PostgreSQL 上 `C4` 亦 RED（T2 卡在 `waiting_for_lock` 直到 60 秒 join 上限） |
+| i | 改選呼叫條件改回 `deactivating`（已停用帳號重送不重跑） | **RED**：`E9` 重送後 frank 仍是 member |
+
+全部還原後 `grep -c MUTANT` 於 `membership_service.py`／`membership_backfill.py`／`user_router.py`／
+`membership_router.py` 皆為 0。未做：`membership_router._translate` 的 503 分支沒有單獨突變（`E10` 直接覆蓋它的輸出）。
+
+### 五、各命令的實際輸出
+
+| 命令 | 結果 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints tests.test_brain_gateway_startup` | **Ran 44 tests, OK** |
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | **Ran 1234 tests in 103.3s, OK** |
+| `DATABASE_URL=postgresql+psycopg://postgres@localhost:55432/cloud360 … -m unittest -v tests_pg.test_membership_concurrency`（本機丟棄式 PostgreSQL 17.7 ＋ pgvector，套用 `schema_rbac.sql`） | **Ran 4 tests in 8.1s, OK**；`C4` 實測等待 5001.2 ms 後逾時 |
+| 同上，`discover -s tests_pg` | **Ran 10 tests, OK** |
+| 補齊函式與腳本在同一個 PostgreSQL 上實跑 | dry-run `before=1 inserted=0`、實跑 `inserted=1`、重跑 `inserted=0`；腳本 `--dry-run` 與實跑皆 exit 0 |
+| `backend/.venv/bin/python backend/scripts/dump_openapi.py` 後 `--check` | 「規格檔與後端程式碼一致」，exit 0 |
+| `cd frontend && npm run gen:types && npm run check:types` | 「API 型別檔與規格檔一致」，exit 0 |
+| `python3 scripts/validate_repo_contract.py` | passed |
+| `python3 scripts/validate_env_contract.py` | passed |
+| `git diff --stat -- backend/database.py deploy/` | 無輸出（本輪未改） |
+
+`openapi.json` 的重 dump 另外帶進一處**不是本單元的**差異：`DELETE /api/auth/{user_id}` 等兩個端點的
+409 `DeleteUserConflict`（`hierarchy-data` 合併前必修第 3 項的未提交改動，先前未重 dump）。
+現在規格檔與程式一致；這兩處屬 `hierarchy-data`，此處只記載來源。
+
+### 六、未驗項
+
+- **CI 的 `concurrency` job** 本輪未觸發（未 push）；`tests_pg` 只在本機丟棄式 PostgreSQL 17.7 驗過，
+  CI 用的是 `pgvector/pgvector:pg18`。
+- **staging 首次啟動時的自動補齊**未驗；本機只在丟棄式資料庫上驗了補齊函式與腳本。
+- 多個 backend 行程同時啟動時兩邊同時插入同一列、其一撞唯一約束而啟動失敗的情境未驗；目前 compose
+  只有一個 `uvicorn` 行程，重啟後冪等收斂（已寫入 `DEPLOY.md` §2.2.10）。
+- 前端消費端（不在本單元，未改）：`frontend/src/pages/AdminPage.tsx:161-186` 的 `handleToggleActive`
+  在 `!res.ok` 時以 `data.detail` 顯示錯誤 toast，故 500／503 會顯示本體的 `detail`（「帳號已停用，但下列
+  專案的自動改選失敗……請重送」），但**不列出 `failed_project_ids`**，且該列不就地更新、仍顯示「啟用」
+  ——操作者再按一次送出的正好是 `is_active=false`，即重送補跑。此行為只由讀碼推得，未以 e2e 驗證。
+
+### 七、與計畫的偏離
+
+1. 15c 改動啟動路徑（原 Step 12 寫「不動啟動路徑」），依裁決落在 `main.py`，`database.py` 不動，判準 3 仍成立。
+2. 15d 的語句寫成 `SET LOCAL lock_timeout = '5000ms'`（由 `LOCK_TIMEOUT_MS` 產生，與 `'5s'` 等價），避免常數與字面值兩份。
+3. 停用端點的逾時回 503 的條件是「失敗**全部**是取鎖逾時」；混合失敗回 500。裁決只說「停用端點轉 503」，
+   而停用端點的取鎖只發生在改選、且已被逐專案捕捉成失敗清單，故以此收斂並宣告兩者共用同一個本體。
+4. 修改了另一單元的測試檔 `backend/tests/test_brain_gateway_startup.py`（把新 startup 步驟換成替身並納入順序斷言），
+   否則該檔觸發 startup 時會連一個不存在的 PostgreSQL 而失敗。
+5. `tests_pg` 呼叫 `database._ensure_j5_schema()`（私有函式）而非在測試內另寫 DDL，理由是單一真實來源。
+6. 計畫 §三之一的兩項 Minor（`R-01`／`R-02`）仍為開放，本輪未處理。
+
+### 審查後補正（conductor，`2026-10-21T00:02:49Z`）
+
+本站審查（`reviews/review-03.md`）判定 READY（0 Critical、0 Major、5 Minor）。收據登記、單元完成後補兩項：
+
+| Minor | 處置 |
+|---|---|
+| 2：`reselect_for_project` 的「無合格管理者也無合格接手人」分支只記 INFO、端點回 200，與第 10 項「失敗不得無聲」相悖 | 新增 `membership_errors.NoQualifiedSuccessor`，該分支改為拋出；`run_auto_reselection` 既有的例外處理把它計入 `failed_project_ids`（記 ERROR），停用端點因而回 500。`test_F10` 補斷言三種不合格情形的專案皆出現在 `failed_project_ids`。突變 M-R1（改回 `return None`；`grep -c` 確認為 1）→ `test_F10` 三個子案紅；還原後 `grep -c MUTANT` 為 0 |
+| 3：`membership_backfill.py` 終檢失敗訊息把原因推測為孤兒 `owner_user_id`，但 `projects.owner_user_id` 有外鍵 | 訊息改為指出可能是查詢條件不一致或並行寫入，並指向 `--dry-run` |
+
+驗證：本單元四支測試檔 `Ran 44 tests` → `OK`；完整套件（`backend/.venv`）`Ran 1234 tests` → `OK`；`dump_openapi.py --check` 一致。
+
+其餘三項 Minor（1：自我降級／移出仍用原始管理者數，口徑與停用守門不一致；4：`users.authorization_status` 不在 `schema_rbac.sql`、`tests_pg` 依賴私有 `_ensure_j5_schema()`；5：`AdminPage.tsx` 遇 500／503 不顯示 `failed_project_ids`）以已接受風險進入紀錄；第 5 項屬 `AdminPage`（單元外消費端）。本補正在收據登記之後進行，未經本站審查。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T07:02:11Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。後續單元對共用檔的改動一律保留。上節的補正本輪隨本單元送審。
+
+### 計畫 67 格：勾 59、留 8
+
+留下的 8 格，對應的程式都已落地、測試全綠，未勾的理由分兩類：
+
+| 格 | 理由 |
+|---|---|
+| Step 5「聚合版用一次 `GROUP BY … HAVING count(*) = 1`」 | 已被 Step 15a 取代：現為兩次查詢 ＋ 依角色快取的 `user_can`（`projects_losing_last_admin`，`membership_service.py:573`）；「不取鎖」仍成立 |
+| Step 6 等價測試 | M7 用明確案例，不是計畫要求的隨機成員集合；其 docstring（`test_membership_data.py:347` 起）仍描述 `HAVING` |
+| Step 7b | 七個方法、principal 在前、具名 `project_id`、單一交易、冪等規則皆在（`membership_facade.py:200-459`），但「三條路徑共用同一個守門判定」已被 15a 改寫，停用路徑改用合格接手人判準 |
+| Step 7c | 觸發範圍與冪等條件已被 15a 改寫：範圍為「擁有的專案 ∪ 為管理者的專案」，冪等只計合格管理者（`reselection_scope`、`reselect_for_project`） |
+| Step 12 第一條「不動啟動路徑」 | 與 15c 改為啟動時自動補齊（`main.py:93-99`）直接矛盾 |
+| Step 15a、15b、15c | 實作與測試皆在且綠，但框內含突變驗證；本輪未重跑，前一輪紀錄見本檔「重新查驗與合併前必修」節 |
+
+### 合併前必修第 1、4、10、15、16 項：程式與測試皆在
+
+| 項 | 程式 | 測試 |
+|---|---|---|
+| #1 | `is_qualified_successor`／`qualified_successors`／`projects_losing_last_admin`（`membership_service.py:468-637`） | F9、F10、F11 |
+| #4 | `assert_invitee_has_global_permission` 的 `is_active` 檢查 | E8、F10 |
+| #10 | `ReselectionOutcome`；改選失敗時停用端點回 500／503，重送會重跑改選 | E9 |
+| #15 | `membership_backfill.py`，`main.py:99` 啟動時呼叫 | M9、M10、M11 |
+| #16 | `SET LOCAL lock_timeout`（`membership_service.py:228`），逾時轉 503 | F12、F12b、E10、`tests_pg` C4 |
+
+### 測試與閘門（本輪實跑，`backend/.venv`，快取導向 scratchpad，未寫入 repo）
+
+| 指令 | 結果 |
+|---|---|
+| 本單元四個模組（data／facade／endpoints／gateway startup） | `Ran 47 tests`、`OK` |
+| `discover -s tests` | `Ran 1319 tests`、`OK (skipped=3)` |
+| `tests_pg` | `Ran 10 tests`、`OK`；C1–C4 全綠，C4 等待 5001.8 ms。**Homebrew PostgreSQL 17.7 ＋ pgvector**，scratchpad 一次性實例（`127.0.0.1:55439`），套用 `schema_rbac.sql` 後執行；跑完停機、刪除資料目錄，無殘留程序，未碰共用或 staging 資料庫。CI 用 pg18 |
+| `dump_openapi.py --check`、`npm --prefix frontend run check:types` | 皆一致 |
+| `validate_repo_contract.py`、`validate_env_contract.py` | 皆 passed |
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- 計畫 Step 9c 的停用端點行號 `:654`／`:676`／`:682` 現約為 `user_router.py:1058`、`:1062-1081`、`:1116`。
+- 計畫 Step 5、7b、7c、12 與 §七判準 3 的字面已被 Step 15a／15c 改寫而框內原文未改（即上表的未勾格）。
+- 計畫 Step 9b 與 10 的「無權 → 403」：自合併前必修第 14 項（另一單元）起，非成員改回 404，只有成員內權限不足與缺 `K3` 仍為 403（E1、E12）。
+- 測試說明 §2.2 只列 `tests_pg.test_membership_concurrency`，CI 與 `LOCAL-DEV.md` 實跑 `discover -s tests_pg`，會一併跑其他單元的 PG 測試。
+- 測試說明 §三的測試數 8／8／7／3（合計 26）已過時，現為 data 11、facade 14、endpoints 13、pg 4。
+
+`source-manifest.json` 的 28 條路徑全部存在且含本單元內容；`membership_backfill.py` 目前為 untracked。工作樹中 `deploy/` 等其他未提交變更屬其他單元，不列入本 manifest。

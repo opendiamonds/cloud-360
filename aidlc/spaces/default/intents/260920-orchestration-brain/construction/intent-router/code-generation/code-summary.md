@@ -314,3 +314,104 @@ blocking 規則不觸發**）、不建 circuit breaker、不設 fallback 模型�
    變成不可交辦，與 `P4` 無關），**`P4` 本身沒有紅**。亦即凹陷這個缺陷會被整套
    測試抓到，但抓到它的不是那條宣稱在測單調性的 property——改成區間抽取之後
    `P4` 自己就紅了（見 `M3`）。
+
+## 重新查驗與合併前必修第 5、13 項
+
+> 寫入時間 `2026-10-23T11:03:03Z`（`date -u`）。來源：使用者對 code-generation 整站送 Request Changes；本單元承接 `construction/functional-design/merge-blockers.md` 第 5、13 項（計畫 §五之一、Step 13–15）。以下數字皆為本輪最後一次程式改動之後實跑的輸出。
+
+### 一、Steps 1–12 重新查驗
+
+逐格開檔或執行查證後全部成立並勾回：八個模組與四個具名例外存在；五個 `BRAIN_ROUTER_*` 在 `intent_routing_config.py` 讀取、門檻缺值即 `RuntimeError`；runner（`tests.test_langgraph_runtime` 8 測試 OK）；`_REFERENT_MEMORY_KINDS` 為模組層常數；`StateGraph(_RouterState)`（`intent_routing_port.py:394`）；`openrouter_chat_model` 的 `temperature: float | None = 0.0`；五個變數在 `deploy/render-env.sh`（字面 `0.7`，`:144`）、`deploy/.env.example`、`deploy/docker-compose.deploy.yml`、`deploy/docker-compose.test.yml`、`backend/.env.example`、`LOCAL-DEV.md` 皆有，且未進 `deploy.yml` 的 secret 守衛；`source-manifest.json` 為四鍵嚴格 schema。Step 4 的「經 `SessionStore` 讀」與 Step 6 的「簽章收能力清單」照本檔 §四 偏離 #1、#9 的既有紀錄判定（意圖成立、實作形狀不同），不是本輪新偏離。
+
+### 二、第 5 項：選定澄清候選後保留 `referent` 與其他槽位
+
+| 檔:行 | 改動 |
+|---|---|
+| `backend/services/intent_routing_types.py:201`／`:218` | 新增 `ClarifyOption`（`candidate_id`／`slot_index`／`intent`）與 `ClarifyResolution`（`options`／`settled`，皆 tuple） |
+| `backend/services/intent_routing_types.py:260` | `IntentDecision.resolution`：`field(default=None, compare=False, repr=False)`，**行程內、不序列化** |
+| `backend/services/intent_routing_predicate.py:252`／`:258`／`:289`／`:337` | `_clarify_id`（候選 id 的唯一產生點）、`clarify_resolution_for`（決定性）、`intents_after_choice`（被選候選的完整 `Intent` ＋ 已確定槽位，依槽位序）；`decide` 的澄清分支填入 `resolution` |
+| `backend/services/brain_gateway.py:1338` | `_clarify_intent` 把判定存入 `PendingClarify.decision`（該欄位原本只供 `kind=target` 用） |
+| `backend/services/brain_gateway.py:1528` 起 | `_on_select`：以 `intents_after_choice` 重建；對照缺失或對不上 → `INTERNAL_ERROR`，**不退回只帶 `capability` 的舊形狀**；`candidateId=None` 安靜結束與非候選 id 回 `INVALID_REQUEST` 兩段程式未動；之後仍走 `_resolve_and_dispatch(scan=True)`（`BR64.13` 的原句掃描不變） |
+
+**對 `K-10` 欄位集合的對齊紀錄**：`K-10` 的 `IntentDecision` 欄位集合為 `{intents, confidence, below_threshold, candidates}`。本輪在型別上多一個 `resolution`，它**不是線上形狀**——`ClarifyCandidate` 的四個欄位與 `ws-contract.json` 一字未動（`dump_ws_contract.py --check`：「WS 契約規格檔與後端程式碼一致。」），閘道送 `clarify` 時本來就是逐欄組 `ClarifyCandidate`，不序列化判定物件。已核可上游不回改；此欄位應在下一輪契約修訂時追認為「行程內附帶資料」。
+
+**殘留（如實記載）**：同一句有兩個以上槽位**都**需澄清時，`select_clarify_candidate` 一次只帶一個 `candidateId`（`K-02`），選定其一只交辦該槽位與已確定槽位，其餘不確定槽位**不交辦**——替它挑一個讀法正是 `FR1.3` 要防的事。使用者不會被告知另一件事未交辦；是否需要逐槽位多輪反問屬產品取捨，本輪未擴張。
+
+### 三、第 13 項：記憶授權拒絕時本輪以授權錯誤結束
+
+| 檔:行 | 改動 |
+|---|---|
+| `backend/services/intent_routing.py:93`／`:232` | `_memory_notes`：`except MemoryForbidden` 記 WARN（不含輸入）後 `raise`；其餘例外照舊降級（`D-1` 不變） |
+| `backend/services/brain_gateway.py:335`／`:352`／`:369` | `MemoryPrefetch.forbidden_reason`、`_PrefetchForbidden`、`MemoryPrefetchAdapter.search` 對同一 principal 重拋 `MemoryForbidden` |
+| `backend/services/brain_gateway.py:1637` 起（`_prefetch`） | 預取工作攔下 `MemoryForbidden` 以結果帶回（不計入熔斷、`turn.prefetch="forbidden"`） |
+| `backend/services/brain_gateway.py:1295-1297` | `_on_user_message` 記 `WARNING memory_forbidden turnId=… reason=…`（`_log` 白名單內欄位，不含輸入原文與記憶內容） |
+| `backend/services/brain_gateway_rules.py:275`／`:301` | `error_for(MemoryForbidden)` → 既有代碼 `UNAUTHORIZED`；訊息新增 `forbidden_memory`「你目前沒有權限使用大腦的記憶，這一輪已停止」 |
+
+**為什麼閘道也要改**：計畫只點名 `_memory_notes`，但正式接線（`build_brain_gateway`）注入 `IntentRouter` 的是 `MemoryPrefetchAdapter`，真的 `MemoryFacade.search` 在閘道的預取工作裡執行；預取失敗一律被 `MemoryWorker.run` 收成 `FAILED`，轉接器再拋 `PrefetchUnavailable`。只改 `_memory_notes` 的話，正式環境裡 `MemoryForbidden` **永遠到不了**它——修正會只在單元測試裡成立。
+
+**`MemoryNotFound` 的處置**：`MemoryFacade.search` 不會拋它（只有 `delete` 與 `widen_scope` 會，`memory_facade.py:401`／`:410`／`:440`）；若未來出現，走降級分支並記 WARN。
+
+**可達性與既有流程**：待核准帳號在握手（`_auth_once` 的 `user_can(..., authorization_status=…)` → 4403）與每則訊息重驗時已被擋下（`test_brain_gateway_handshake.py:103-107` 既有斷言），故裁決**不會讓待核准帳號的既有流程壞掉**——它們本來就進不到這一輪。本路徑在正式環境只在核准狀態於重驗與預取之間被撤銷時可達，屬縱深。熔斷開啟或預取逾時時 facade 根本沒被呼叫、沒有授權判定，仍降級（不是本輪改動造成的新缺口，但如實記載）。授權錯誤沿用 `BR64.6` 的既有順序：先寫使用者訊息到該段歷程、再送 `error`。
+
+### 四、新測試（皆含結構化規格註解）
+
+| 測試 | 檔 |
+|---|---|
+| `ClarifyResolutionTest`：3 例 ＋ 1 條 `@given`（`test_every_candidate_restores_its_intent_plus_every_settled_slot`） | `backend/tests/test_intent_routing_predicate.py:662` 起 |
+| `MemoryForbiddenIsNotDegradedTest`：2 例（手寫替身，未用 `unittest.mock`） | `backend/tests/test_intent_routing_context.py:204` 起 |
+| `test_select_keeps_the_referent_of_the_chosen_reading`、`test_select_dispatches_the_settled_slot_too_in_sentence_order`、`test_none_stays_silent_and_a_foreign_id_is_invalid_request` | `backend/tests/test_brain_gateway_turn.py:243`／`:272`／`:303` |
+| `test_memory_authorization_denial_ends_the_turn_as_unauthorized`（三段換成真 `IntentRouter`，模型 factory 一被呼叫即失敗） | `backend/tests/test_brain_gateway_memory.py:97` |
+| `error_for` 表新增 `MemoryForbidden → UNAUTHORIZED` 一列 | `backend/tests/test_brain_gateway_rules.py` |
+
+替身同步：`tests/brain_gateway_fakes.py` 的 `low_confidence` 附帶 `resolution`（與真 `U11` 同形），`FakeRouter` 對 `MemoryForbidden` 不降級、原樣向上（與真 `U11` 同形）。
+
+### 五、突變（每項先 `grep -c` 確認寫入為 1、還原後為 0）
+
+| 突變 | 結果 | 紅的測試 | 還原後 |
+|---|---|---|---|
+| `_on_select` 還原為 `Intent(chosen.capability, None)`（`MUTATION-5`，`grep -c` 為 2：import 與賦值兩行） | 紅，2 失敗 | `test_select_keeps_the_referent_of_the_chosen_reading`、`test_select_dispatches_the_settled_slot_too_in_sentence_order` | `test_brain_gateway_turn` 31 OK |
+| 產生端 `clarify_resolution_for` 的 `referent` 改 `None`（`MUTATION-5P`） | 紅，5 失敗 | `ClarifyResolutionTest` 的 3 例（含 `@given`，其中一例兩個 subTest）＋ `test_select_keeps_the_referent_of_the_chosen_reading` | 綠 |
+| `MemoryForbidden` 併回 `except Exception`（`MUTATION-13`） | 紅，2 失敗 | `test_a_memory_authorization_denial_ends_the_turn_before_any_model_call`、`test_memory_authorization_denial_ends_the_turn_as_unauthorized` | 綠 |
+| 閘道預取不攔 `MemoryForbidden`（`MUTATION-13G`） | 紅，1 失敗 | `test_memory_authorization_denial_ends_the_turn_as_unauthorized` | 綠 |
+
+### 六、命令與實際數字
+
+| 指令（`backend/`，`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python`） | 結果 |
+|---|---|
+| `-m unittest tests.test_langgraph_runtime` | 8 OK |
+| 本單元 scoped 五模組 | **83 OK**（predicate 19、parser 18、context 8、port 18、structure 20） |
+| `@given` 裝飾器行數（`^\s*@given\(`，predicate） | **8**（`P1`–`P7` ＋ 本輪新增的還原性質） |
+| `test_brain_gateway_{turn,memory,rules,fanout,handshake,limits,startup}` | 31／13／21／10／17／12／6，全 OK |
+| `-m unittest discover -s tests` | **1269 OK（skipped=3）** |
+| `scripts/dump_ws_contract.py --check`（同上 venv） | 「WS 契約規格檔與後端程式碼一致。」 |
+| `python3 scripts/validate_env_contract.py`（repo 根目錄） | `Cloud-360 environment configuration contract validation passed.` |
+| `python3 scripts/validate_repo_contract.py`（repo 根目錄） | `Cloud-360 repository contract validation passed.` |
+| `traceability.json` | 131 列（新增 `MB-5`／`MB-13`，皆 `OK`）：OK 106、Deferred 14、N/A 10、GAP 1 |
+
+### 七、偏離與未驗項
+
+| # | 內容 |
+|---|---|
+| 1 | **改動超出計畫點名的位置**：第 13 項計畫只點名 `_memory_notes` 與「閘道結束本輪」，實作另改了閘道的預取與轉接器（理由見 §三）；`brain_gateway_rules.py` 新增一則訊息鍵 `forbidden_memory`（**代碼**沿用既有 `UNAUTHORIZED`，未新增；沿用 `forbidden_target` 的訊息會對使用者說「你沒有權限選擇這個作業對象」，與事實不符） |
+| 2 | 第 13 項的 L0 測試依 `unit-test-instructions.md` 指定放在 `test_intent_routing_context.py`，但受測的是 L0（`intent_routing.py`）而非 L2；以手寫替身維持該檔「零 `unittest.mock`」的前提，並在檔內註明 |
+| 3 | 每元件測試數再向上偏離：predicate 19、context 8（原 15、6） |
+| 4 | **未驗**：真實 PostgreSQL／Ollama／OpenRouter 下的整條路徑（CI 與本輪皆為替身）；`brain-gateway` 單元的重新查驗需註明 `brain_gateway.py`／`brain_gateway_rules.py` 的這兩處改動屬本單元承接的第 5、13 項 |
+| 5 | 本單元**未動** `brain_gateway.py` 的 `_send_single_error` 捏造 turnId 一事（第 2 項，屬 `brain-gateway` 單元） |
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T13:53:16Z -->
+
+本輪只查驗、未改任何程式或測試。計畫 43 格全部勾選（機械計數：`[x]` 43、`[ ]` 0）。三格意圖成立但實作形狀與字面不同，判定為已滿足，偏離如下（皆已見於本檔 §四，或由第 5 項的修正帶入）：Step 4 讀 `U13` 傳入的 `BrainSession` 而非經 `SessionStore`（偏離 #1），Step 5 的對應測試為 `test_session_read_failure_propagates_untouched`；Step 6 的 `build_routing_prompt` 參數為 `user_text`／`work_target_hint`／`recent_messages`／`memory_notes`，能力清單由函式內常數產生（偏離 #9）；Step 1 實為九個 frozen dataclass（多出的 `ClarifyOption`／`ClarifyResolution` 由 Step 13 修第 5 項加入）。
+
+測試（`backend/.venv`、`-B`、`PYTHONDONTWRITEBYTECODE=1`）：`test_langgraph_runtime` 8 OK；本單元五個模組 83 OK；完整套件 1319 OK（skipped 3）；兩支 contract validator 綠燈；`dump_openapi.py --check` 與 `dump_ws_contract.py --check` 一致。未呼叫真實 LLM，未重跑突變。
+
+ADR-0006 PBT：符合。`test_intent_routing_predicate.py` 的 P1–P7 全為 `@given`，另有一條 `@given` 驗澄清還原對照；`StrategyReachesEveryBranchTest` 斷言各分支皆可抽到。
+
+合併前必修：
+- **#5 屬實已解決**：`decide` 在澄清路徑附上僅存在於程序內的 `IntentDecision.resolution`（`compare=False`、`repr=False`），`intents_after_choice` 依原句槽位順序回傳被選候選的完整 `Intent`（含 `referent`）加上其餘已定槽位；`_on_select` 改用它重建判定，對照缺失時回 `INTERNAL_ERROR`。殘留 `OPEN-MB5-1`（兩個以上槽位都要澄清時，其餘槽位不交辦也不告知）已於 10-24 以 `[EP-MB5]`=A 交給後續 intent。
+- **#13 屬實已解決**：`_memory_notes` 對 `MemoryForbidden` 記 WARN 後原樣上拋（`intent_routing.py:232`），其他例外照舊降級；閘道的 `_prefetch` 一併處理，不計入熔斷，`error_for` 映射為既有的 `UNAUTHORIZED`，安全日誌不含輸入原文。
+
+已核可計畫／測試說明與程式的落差（不回改計畫）：三個測試檔的測試數超出 Testing Contract 每元件 5–8 個的上限（predicate 約 19、port 18、structure 約 21），覆蓋未減但字面不符 `strategy_volume`；`merge-blockers.md` 第 5、13 列與本檔「重新查驗」節引用的 `brain_gateway.py` 行號已因後續單元平移約 60 行（如 `:1338`→`:1400`、`:1528`→`:1590`、`:1637`→`:1700`、`:1297`→`:1357`、`:369`→`:372`、`brain_gateway_rules.py:301`→`:306`），內容正確。
+
+候選問題（未修，交審查判定）：(1) 記憶授權被拒時，閘道仍先把使用者原文寫入 session 歷程才送出錯誤（`BR64.6` 既有順序；只在核准狀態於訊息重驗與預取之間被撤銷時可達）；(2) 選定後重建的判定只取被選候選的 `confidence`，無分數時填 `0.0`；(3) 「指涉詞未解析 → 選定 → 再問對象」這條完整路徑沒有專門測試。

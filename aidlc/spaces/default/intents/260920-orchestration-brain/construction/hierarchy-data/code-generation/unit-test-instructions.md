@@ -48,6 +48,30 @@ python -m unittest tests.test_hierarchy_migration -v
 **合計 13 個案例、三個元件**，落在 Standard 的每元件 5–8 區間內（資料讀寫層 3 個略低，
 理由是該層的行為面窄——它只有「掛入」與「不動既有欄位」兩件事，硬湊到 5 個會寫出重複斷言）。
 
+### 合併前必修第 3 項（Request Changes 修訂，計畫步 10）
+
+新增測試檔 `backend/tests/test_user_delete_hierarchy.py`（TestClient，`team.md` B 規則；以 `app.dependency_overrides` 覆寫 `get_db`／授權 dependency，沿用 `tests/helpers.py` 的 in-memory SQLite），**7** 個案例：
+
+| # | Given | 通過條件 |
+|---|---|---|
+| (a) | 只有空預設專案（含預設 system、本人成員列）的使用者 | `DELETE` 回 200；使用者、該 project、system、成員列皆不存在 |
+| (b) | 預設專案下有架構圖 | 回應**不是 500**；使用者仍存在 |
+| (c) | 是他人專案的成員 | 409；回應本體列出成員資格；使用者與成員列仍在 |
+| (d) | 有 `diagram_change_records` 操作者紀錄 | 409；紀錄仍在 |
+| (e) | 擁有非預設專案 | 409；專案仍在 |
+| (f) | 拒絕授權申請並刪除，待審帳號只有空預設專案 | 200；帳號與其空預設專案皆刪除 |
+| (g) | commit 時拋 `IntegrityError`（以 mock 注入，模擬預檢未涵蓋的新外鍵） | 409，不是 500；交易已 rollback |
+
+**SQLite 注意**：SQLite 預設不強制外鍵；需要外鍵行為的案例必須先 `PRAGMA foreign_keys=ON`，否則 (b)–(e) 在缺陷存在時也會綠（恆真）。突變驗證 M-D1／M-D2／M-D3 見計畫步 10。
+
+本項的精確指令（在 `backend/`）：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy -v
+```
+
+完整套件（`scope_floor`）一律用 `backend/.venv`：`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`——本機系統 Python 的套件版本與 `requirements.txt` 不一致。
+
 ---
 
 ## 四、逐案例的斷言要點（避免寫出恆真測試）

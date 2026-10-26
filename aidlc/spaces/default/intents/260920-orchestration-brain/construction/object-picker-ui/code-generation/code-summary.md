@@ -156,3 +156,36 @@ A 不適用（不改 `role_permissions`）；B 不適用（不新增或修改 HT
 | G-4 | 新建架構圖的系統歸屬無端點 | D-5 |
 | G-5 | 受邀成員看得到但選不了自己的非擁有專案 | `OPEN-OP16-5`（即 `OPEN-PP23-6` ③） |
 | G-6 | 「建立者在選單開啟後被移出」時，建立系統顯示「請稍後再試」會誘使無效重試；本站判可接受，若不接受須重開 `U23` 的 `objectCreateAction` | `N-04` |
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T13:15:10Z -->
+
+本輪只查驗既有程式碼是否符合核可計畫，不改程式碼。
+
+**計畫勾選**：15 步勾 13 步。未勾：
+- Step 10（回歸全綠）：`entry-page`（60）、`memory-page`、`member-pages`、`project-pages` 全綠；`entry-page-live.spec.ts` 5 案在本機全紅，卡在登入後的 `toHaveURL`，需 `docker-compose.test.yml` 真實環境，要等 CI `ui-regression`。與合併前必修第 26 項 R-02 同一缺口。
+- Step 12（環境與建置檢查）：建置（含 `tsc -b`）、`validate_repo_contract.py`、`validate_env_contract.py` 皆通過；但 `ws-contract.json` 雜湊現為 `4d91872…`，與比較基準 `fbe262e…` 不同（工作樹未提交的 `error.turnId` 可為 null，屬合併前必修第 2 項，非本單元檔）；`git diff --stat` 在共用工作樹有其他單元變更，照計畫字面無法驗證（本單元 manifest 只列 frontend 檔）。
+
+**測試**（scratchpad 複本建置，repo 未寫入）：
+- `eslint .`：0 errors、2 warnings。
+- `tsc -b && vite build`：通過。
+- Playwright：object-picker 33、a11y 27、entry-page 60，共 120 passed／0 failed；另跑 memory-page、member-pages、project-pages 全綠，entry-page-live 5 failed（缺真實環境）。
+- 本單元未動 backend，未跑 backend unittest。
+
+**突變抽驗**（皆在 scratchpad 複本，全數還原後 `diff -r` 位元相同）：
+| 編號 | 突變 | 紅燈 |
+|---|---|---|
+| M-R08 | `useBrainConnection.ts:430` 改回無條件重設 `lastSentRef` | entry-page 兩案（原句未送達、反問可重選） |
+| M-R09a | 建立表單 submit 加回 `onFailure(null)` | 「重試建立時播報區不在兩次失敗之間退回清單狀態」 |
+| M-R09b | `reportFormFailure` 拿掉零寬空白 | 兩案播報測試 |
+| M-D05 | `ContextBar.tsx:44` 刪掉斷線清 `pickerOpen` | 斷線關閉選單案 |
+| M-NFKC | `objectPickerModel.ts:81` 拿掉 NFKC | 全形搜尋命中半形案 |
+
+Step 11 的 17 道突變本輪只獨立重跑 5 道，其餘依 §五 既有紀錄。
+
+**review-02 的 R-08、R-09 已修**：
+- R-08：`useBrainConnection.ts:84-86` 新增 `afterNonTurnSend`，`setWorkTarget`（`:428-432`）、`correctWorkItem`（`:412`）、`setSharingMode`（`:422`）改用它；守護測試在 `entry-page.spec.ts:2090`、`:2124`。修正與測試都落在 `entry-page-ui` 的檔，兩單元合併時不可拆開。
+- R-09：建立表單 submit 不再清空 `formFailure`，重唸改用 `ObjectPicker.tsx:305-308` 的零寬空白做法；守護測試在 `object-picker.spec.ts:1342`、`:1371`。
+
+**過期數字**（本輪未改）：`traceability.json` OPN-26 與計畫 Step 15 寫 32 案，實為 33 案；`code-summary-corrections.md` §九「59 passed（32＋27）」現應為 60；§七 的 `ws-contract.json` 完工值已因第 2 項變更而不同。

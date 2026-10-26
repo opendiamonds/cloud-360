@@ -178,3 +178,67 @@ facade 定義例外、service 使用它們；service 的函式又被 facade 呼�
 6. **未跑 `tcms-test-cases`**：`project.md` 的 blocking 規則要求每個 intent 的
    construction 必經該 stage。本單元的 28 個自動化測試屬「已自動化」桶，
    但覆蓋盤點與 TCMS 同步屬該 stage，不在本站。
+
+## 重新查驗（code-generation Request Changes 後，conductor，`2026-10-20T22:30:14Z`）
+
+**觸發**：使用者對整站送出 Request Changes（原文：「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」）。`merge-blockers.md` 19 項無一劃給本單元（計畫 §七，使用者已核可）。本輪**未改任何應用程式碼**，只重新查驗 §六 七項完成判準。
+
+| # | 判準 | 結果 |
+|---|---|---|
+| 1 | 全套無迴歸 | `backend/.venv` 執行 `discover -s tests`：`Ran 1221 tests` → `OK`；本單元 `tests.test_hierarchy_service`：`Ran 34 tests` → `OK` |
+| 2 | `validate_repo_contract.py` | passed |
+| 3 | `validate_env_contract.py` | passed |
+| 4 | `dump_openapi.py --check` | 「規格檔與後端程式碼一致」，exit 0 |
+| 5 | 五個 path 與 409 | `openapi.json` 含 `/api/hierarchy/{projects, projects/{project_id}, projects/{project_id}/systems, systems/{system_id}, diagram-changes}` 五個 path；四個寫入端點（兩個 POST、兩個 DELETE）的 responses 皆含 `409` |
+| 6 | 突變零存活 | 本檔 §三 記載 11 項皆 RED；本輪未改程式，該結果仍適用 |
+| 7 | 本單元變更不碰「不動的檔案」 | **未勾，無法驗證**：本單元三支新檔（`hierarchy_facade.py`／`hierarchy_service.py`／`hierarchy_router.py`）首次出現在 `c2e5687`，那是一筆 521 檔、跨多個單元的批次提交（英文 `feat:` 訊息），其中確實含 `schema_rbac.sql`、`DEPLOY.md`、`rbac.py` 等，但無法從提交歸屬判定哪些是本單元改的；另以 `git log` 查禁改檔案的歷史，沒有任何標為本單元（`hierarchy-service`／U7）的提交。判準以「提交歸屬」為前提，而該前提在此不成立，故據實不勾 |
+
+另：本單元先前沒有 `source-manifest.json`，引擎拒絕登記審查請求；依計畫 §三 補寫 7 個路徑（皆確認存在）。審查指出漏列 `backend/tests/test_hierarchy_migration.py`（§一 第 8 列與 OPEN-CG7-1 承認本單元改過它），本輪未補，以已接受風險進入紀錄。
+
+### 審查後修正：待核准帳號可操作專案／系統（conductor，`2026-10-20T22:37:40Z`，使用者裁決「現在就修，附測試」）
+
+本站審查（`reviews/review-01.md`，READY）列一個 Major（ADR-0006 IAM）：`HierarchyFacade._authorize` 只以角色查 `K2`，未讀 `Principal.is_approved`；而 `get_user_from_token` 只擋 `is_active`，故自行註冊、尚未核准的帳號只要角色在 `K2` 矩陣內，就能列舉、建立與刪除專案／系統。conductor 開檔確認屬實（`hierarchy_facade.py:208` 與 `Principal` 的註解自承「`HierarchyFacade` 尚未讀它」）。此缺陷與必修第 4 項同形但屬另一條授權路徑，不在 19 項內。
+
+| 改動 | 內容 |
+|---|---|
+| `backend/services/hierarchy_facade.py` | `_authorize` 開頭加 `if not principal.is_approved: raise HierarchyForbidden(story_id="K2", action=action)`——判定來源與 `MemoryFacade` 相同（`user_is_approved`），拒絕形狀與角色不足相同，API 形狀與 `openapi.json` 不變；`Principal.is_approved` 的註解改為列出兩個讀者 |
+| `backend/tests/test_hierarchy_service.py` | `T2c`：待核准帳號（角色同 alice）五個 path 皆 403，且專案數不變、既有專案仍在；`T2d`：同角色已核准帳號建立專案 201（對照組，證明 403 來自核准狀態） |
+
+| 驗證 | 結果 |
+|---|---|
+| 突變 M-H1：核准檢查改為恆不成立（`grep -c` 確認為 1） | `T2c` 紅，其餘綠；還原後 `grep -c MUTATION` 為 0 |
+| `tests.test_hierarchy_service`（`backend/.venv`） | `Ran 36 tests` → `OK` |
+| 完整套件（`backend/.venv`） | `Ran 1223 tests` → `OK` |
+
+本修正在本單元收據登記之後進行，未經本站審查。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T05:51:14Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐項查驗既有程式碼，**程式碼改動為 0**。後續單元對共用檔的改動一律保留。上節的修正本輪隨本單元送審。
+
+### 計畫 §六 的七個勾選框：勾 5、留 2
+
+| 項 | 狀態 | 依據 |
+|---|---|---|
+| 1 全綠且全套無迴歸 | 勾 | `tests.test_hierarchy_service` `Ran 36 tests`、`OK`；全套 `Ran 1319 tests`、`OK (skipped=3)`（`backend/.venv`，快取導向 scratchpad） |
+| 2 `validate_repo_contract.py` | 勾 | passed |
+| 3 `validate_env_contract.py` | 勾 | passed |
+| 4 `dump_openapi.py --check` | 勾 | 一致；另 `npm --prefix frontend run check:types` 一致 |
+| 5 五個 path 與 409 | 勾 | `openapi.json` 有五個 `/api/hierarchy` path；POST projects、POST systems、兩個 DELETE 的 responses 含 409（`hierarchy_router.py:174`／`:241`／`:277`／`:303` 的 `responses=CONFLICT_RESPONSE`），GET systems 另宣告 404（`:216`） |
+| 6 突變零存活 | **未勾** | 本輪未重跑突變；§三的 11 項 RED 是針對當時版本，後續單元已改過同一批檔，不能直接當成現行版本的證據 |
+| 7 diff 不碰「不動的檔案」 | **未勾** | §七 指定以 `git show --stat <本單元 commit>` 判定，但本單元沒有獨立 commit：`hierarchy_facade.py` 是在 `c2e5687` 這個 521 檔的批次 commit 中新增，同一 commit 含 `schema_rbac.sql`、`DEPLOY.md`、`deploy/*` 等禁改清單項目。替代證據：`source-manifest.json` 的 7 條寫入路徑皆不在禁改清單內，但計畫規定的判法無法執行 |
+
+第 6、7 項留給 build-and-test 處理：前者在現行程式碼上重跑 §三突變表，後者改以 manifest 寫入範圍或分支 diff 判定。
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- `openapi.json` 在 repo 根（`dump_openapi.py:33`），計畫 §三 第 7 列寫 `backend/openapi.json`。
+- 計畫的 `python3 backend/scripts/dump_openapi.py --check` 實際須在 `backend/` 下執行 `scripts/dump_openapi.py --check`；裸 `python` 須改用 `backend/.venv`。
+- facade 方法：計畫寫「8 個方法」，§四列 9 個 ＋ 3 個判定支援方法；現況另有後續單元新增的 `create_project_nocommit`（`:233`）、`describe_work_target`（`:453`）、`list_diagrams_of_system`（`:489`）、`list_projects_by_ids`（`:546`）、`list_systems_unscoped`（`:559`）。
+- `list_projects` 現有必填的 `project_visible` callable（`:385`），可見範圍改由成員資格判定，不再是「擁有者即過濾條件」。
+- 計畫決定 3 的 `_mint` 現為公開的 `mint_principal`（`hierarchy_router.py:48`），`_MINT` sentinel 仍在（`:136`），T4 通過；BR6.4 第 1 道約束仍成立（router 未呼叫 `project_exists`／`get_project_owner`／`get_project_of_system`）。
+- 測試說明列 T1–T26，實際測試方法 36 個。
+
+`source-manifest.json` 的 7 條路徑全部存在且仍屬本單元（`models.py` 的 Project `:380`、System `:426`、DiagramChangeRecord `:461`、`UserDiagram.system_id` `:106`；`main.py:13` import、`:118` `include_router`）。

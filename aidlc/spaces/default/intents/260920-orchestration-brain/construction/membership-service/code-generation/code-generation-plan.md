@@ -183,7 +183,7 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 - [x] `resolve_project_role` 的查詢：`WHERE project_id = ? AND user_id = ?`，覆蓋者是既有 `uq_project_members_project_user`。**不新增索引**（`performance-design.md §二之二` 的判準）。
 - [x] `list_members` 的查詢（含 `display_name`，需 join `users`）。
 - [x] **單專案判定函式** `admin_count_after(project_id, 假設的變更) >= 1`——`BR2.1` 的唯一謂詞。
-- [x] **聚合版** `assert_can_deactivate`：一次 `GROUP BY project_id HAVING count(*) = 1`，找出該使用者獨任管理者的全部專案（`[N3]`=C）。**不取鎖**（`NFR12.3`：它是跨專案唯讀掃描，取鎖會讓一次停用鎖住該使用者的全部專案）。
+- [ ] **聚合版** `assert_can_deactivate`：一次 `GROUP BY project_id HAVING count(*) = 1`，找出該使用者獨任管理者的全部專案（`[N3]`=C）。**不取鎖**（`NFR12.3`：它是跨專案唯讀掃描，取鎖會讓一次停用鎖住該使用者的全部專案）。
 - [x] **取鎖輔助函式**：`SELECT ... FOR UPDATE` 鎖父 `projects` 列；多專案時**一律按 `projects.id` 遞增**逐一取鎖（`security-design.md §一之二`）。**不得用 `WHERE id IN (...) FOR UPDATE`**——它的取鎖順序由執行計畫決定、不保證。
 - [x] **不改 `backend/database.py`**（`NFR12.5`；判準是該檔 diff 為空）。
 - 追溯：`NFR12.1`–`NFR12.3`、`NFR12.8`、`NFR12.10`、`NFR12.11`、`NFR12.13`、`BR2.1`、`BR2.3`。
@@ -192,18 +192,18 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 
 - [x] `resolve_project_role`：查得／查無（`None`）兩側。
 - [x] `list_members`：欄位集合與排序。
-- [x] **等價測試**（`NFR12.12`／`[N3]`=C）：對隨機成員集合比對「聚合查詢的結果」與「逐專案呼叫單專案判定函式的結果」是否相同。它需要資料庫，**故不是 PBT 的作用對象**——與 `select_successor` 不同。可在既有 SQLite 路徑執行（`GROUP BY ... HAVING` 在 SQLite 可用，且**不需要鎖**）。
+- [ ] **等價測試**（`NFR12.12`／`[N3]`=C）：對隨機成員集合比對「聚合查詢的結果」與「逐專案呼叫單專案判定函式的結果」是否相同。它需要資料庫，**故不是 PBT 的作用對象**——與 `select_successor` 不同。可在既有 SQLite 路徑執行（`GROUP BY ... HAVING` 在 SQLite 可用，且**不需要鎖**）。
 - 追溯：`NFR12.12`、`BR1.6`、`BR2.1`。
 
 ### Step 7 — 業務邏輯：實作
 
 - [x] **7a `select_successor`（純函式）**：簽章只接受 `list[MemberSnapshot]`；**不得注入 session、不得讀任何外部狀態**（`BR4.1`）。排序鍵 `(joined_at, user_id)` 取最小者（`BR4.2`），形狀沿用 `backend/cost/estimate_readers.py:247-251` 的 `best_clouds`。
-- [x] **7b `MembershipFacade` 的七個公開方法**（`K-16` 的 `public_interface`）：`resolve_project_role`／`list_members`／`invite_member`／`remove_member`／`change_role`／`assert_can_deactivate`／`select_successor`。每個方法第一個參數為 `principal`，`project_id` 為**具名參數**（`BR1.4`）。授權判定**先於任何讀寫**，失敗即中止（`BR1.5` 的 `hard_rule`）。
+- [ ] **7b `MembershipFacade` 的七個公開方法**（`K-16` 的 `public_interface`）：`resolve_project_role`／`list_members`／`invite_member`／`remove_member`／`change_role`／`assert_can_deactivate`／`select_successor`。每個方法第一個參數為 `principal`，`project_id` 為**具名參數**（`BR1.4`）。授權判定**先於任何讀寫**，失敗即中止（`BR1.5` 的 `hard_rule`）。
   - `invite_member`：**非冪等**（`BR3.3`）；全域權限前置檢查不過 → `MissingGlobalPermission`，且**整個操作在單一交易內**故被拒時不留半套狀態（`BR3.2`／`AC12.5.3`）。
   - `remove_member`：對已非成員**回成功**（`BR3.4`／`[FD2]`=A）。
   - `change_role`：可有**多位** `project_admin`，指定第二位**不得覆寫**第一位（`BR3.5`）；成功時寫稽核列。
   - 三條減少管理者的路徑（停用／自我降級／自我移出）共用**同一個**守門判定，且位於三者**共同上游**（`BR2.1`）。**不另立「至少一位成員」的謂詞**（`BR2.2`）。
-- [x] **7c 自動改選流程**：觸發條件是 `project_owner` 的**帳號被停用**（`BR4.4`），在停用**成功之後**才跑。**逐專案獨立交易**，各自取鎖、各自釋放（`scalability-design.md §二`；`BR4.3` 的冪等性使逐專案獨立安全）。冪等：該專案已有 `project_admin`（排除被停用的 owner）則**不執行、不寫事件**（`BR4.3`）。
+- [ ] **7c 自動改選流程**：觸發條件是 `project_owner` 的**帳號被停用**（`BR4.4`），在停用**成功之後**才跑。**逐專案獨立交易**，各自取鎖、各自釋放（`scalability-design.md §二`；`BR4.3` 的冪等性使逐專案獨立安全）。冪等：該專案已有 `project_admin`（排除被停用的 owner）則**不執行、不寫事件**（`BR4.3`）。
 - [x] **7d 稽核與結構化 log**：
   - 稽核列寫 `ReselectionEvent`，五個事實齊備（`BR5.1`）；**不得只用 `logger.info`**（`BR5.2`）。
   - `cause` 區分兩種來源（`BR5.3`）；`previous_owner_user_id` 在兩種 `cause` 下指不同的人且**這是刻意的**（`BR5.4`）。
@@ -250,7 +250,7 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 
 ### Step 12 — 既有專案的回填腳本
 
-- [x] 新增 `backend/scripts/backfill_project_members.py`，沿用 `U18` 的 `[P1]`=A 形狀：獨立腳本、單一交易、**大聲失敗（非零碼）**、不動啟動路徑。
+- [ ] 新增 `backend/scripts/backfill_project_members.py`，沿用 `U18` 的 `[P1]`=A 形狀：獨立腳本、單一交易、**大聲失敗（非零碼）**、不動啟動路徑。
 - [x] 內容：對每個 `projects` 列，若該專案無任何 `project_members` 列，則插入一列 `(project_id, owner_user_id, 'project_admin', now())`。
 - [x] **冪等**：以「無任何成員列」為條件，故重跑安全。
 - [x] **自我終檢**：commit 前斷言「`projects` 中無成員列的專案數為 0」；不為 0 即 rollback ＋ 非零碼。
@@ -278,6 +278,40 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 - [x] **14c `source-manifest.json`**：列出本單元建立／修改／刪除的**每一個**應用程式碼路徑（含 shell、scaffolding、generator 寫的檔）。
 - [x] **14d `traceability.json`**：枚舉 20 條 `AC12.x`、29 條 `NFR12.x`、29 條 `BRx.y`，每個 `OK` 的 target 必須是一個**存在的** workspace 相對路徑。
 - [x] **14e `code-summary.md`**：檔案清單、關鍵實作決定、測試覆蓋摘要、與計畫的偏離，以及 §三之一 兩項仍開放的 Minor。
+
+### Step 15 — 合併前必修第 1、4、10、15、16 項（code-generation Request Changes 修訂，2026-10-20）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 1、10、15、16 項（劃給本單元）與第 4 項（自 `rbac-story-ids` 移交，見該單元計畫 §一之一與清單第 4 列的「必做」）。使用者於 2026-10-20 逐項裁決，四題皆選建議項。
+
+**15a — 第 1 ＋ 4 項：守門只在「無合格接手人」時擋下，改選候選須合格**（裁決：有合格接手人就改選，沒有才擋）
+- 定義**合格接手人**（單一謂詞，守門與改選共用，`functional-design:c34` 的共同上游）：同專案的**其他**成員，且 `users.is_active` 為真、`authorization_status == "approved"`、其全域角色持有 `K3.edit`（`user_can(..., "K3", "edit", authorization_status=...)`）。這是已核可 `BR7.3` 的落地（`rbac-story-ids/functional-design/rules.md`：候選集合只含 `K3.edit` 持有者；無人符合則擋下停用）。
+- `projects_losing_last_admin`／`assert_can_deactivate`：只回報「該使用者是最後一位 `project_admin` **且**沒有合格接手人」的專案；其餘放行。
+- `run_auto_reselection`：處理範圍改為「該使用者擁有的專案 ∪ 該使用者是最後一位管理者的專案」（否則放行後的非擁有專案會變成無管理者）；`reselect_for_project` 只從合格接手人中以 `select_successor` 挑選，冪等判定的「已有其他管理者」也只算合格者。
+- 邀請（第 4 項的另一半）：`assert_invitee_has_global_permission` 加 `is_active` 檢查（`authorization_status` 已由 `user_can` 擋下）。
+- **對齊紀錄**：上游 `BR2.1`／`BR6.1`（停用即擋）與 AC12.4.1（自動改選）字面互斥，本步依使用者裁決以 `BR7.3` 收斂；已核可的 `functional-design` 產出不回改，以本節與 `code-summary.md` 為準。
+
+**15b — 第 10 項：改選失敗要回報，且可重送停用來重跑**（裁決：回報失敗＋可重送）
+- 維持逐專案獨立交易；`run_auto_reselection` 回傳成功事件**與失敗的專案清單**。
+- `PUT /api/auth/{user_id}/active`：任何專案改選失敗時回 **500**，本體列出 `failed_project_ids` 並說明帳號**已停用**、可重送同一請求補跑；不再回 200。`responses=` 宣告此 500 形狀。
+- 對**已停用**的帳號再送 `is_active=false`：不重跑守門（不是 active→inactive 的轉換），但**重跑改選**（`BR4.3` 冪等，已改好的專案不重複）。
+
+**15c — 第 15 項：後端啟動時自動補齊專案成員**（裁決：啟動時自動補齊）
+- 把 `backfill_project_members.py` 的補齊邏輯抽成可匯入的函式（腳本保留，改為呼叫同一函式），由 `backend/main.py` 的 startup 在 `init_db()` 之後呼叫：只插入「專案無任何成員列」時的擁有者 `project_admin` 列，冪等、單一交易、自我終檢。
+- 失敗即**大聲失敗**（記 ERROR 並讓啟動失敗），不靜默略過——擁有者被擋在自己專案外是無聲的權限錯誤。
+- **與原計畫的偏離（明記）**：原 Step 12 寫「不動啟動路徑」、§七 判準 3 要求 `backend/database.py` diff 為空（`NFR12.5`）。本步依使用者裁決改動啟動路徑，但**落在 `main.py`、不動 `database.py`**，判準 3 仍成立；屬 seed 語意變更，依 `project.md ## Mandated` 同步 `DEPLOY.md` §2.2.10（改為「啟動時自動執行，腳本供手動補跑」）與 `LOCAL-DEV.md`。
+
+**15d — 第 16 項：取鎖等待上限 5 秒，逾時回 503**（裁決：5 秒）
+- `lock_project`：在 PostgreSQL 上於取鎖前執行 `SET LOCAL lock_timeout = '5s'`（SQLite 無此語意，略過並以 dialect 判斷），模組常數 `LOCK_TIMEOUT_MS = 5000`（與 `LOCK_WAIT_WARN_MS` 同樣不做環境變數，理由同 `OPEN-ND19-6`）。
+- 逾時（`LockNotAvailable`／SQLSTATE `55P03`）轉為新例外 `MembershipLockTimeout`；成員端點與停用端點將它轉為 **503**「請稍後再試」，交易已 rollback、連線釋放。`responses=` 宣告 503。
+
+**15e — 測試與驗證**
+- [ ] 15a 實作 ＋ 測試：守門在「有合格接手人」時放行並改選、「無合格接手人」時 409；候選排除待核准、停用、只有 `K3.view` 的成員；邀請停用帳號 → 拒、邀請待核准帳號 → 拒；非擁有但為最後管理者的專案也被改選。突變：拿掉合格謂詞中任一條件 → 對應測試紅。
+- [ ] 15b 實作 ＋ 測試：注入單一專案改選失敗 → 停用端點回 500 且列出該專案、其他專案仍改選成功；重送停用 → 失敗專案補跑成功、已成功的專案不產生第二筆事件。突變：拿掉失敗回報 → 紅。
+- [ ] 15c 實作 ＋ 測試：有專案無成員列時呼叫補齊函式 → 擁有者成為 `project_admin`；重跑不產生重複；終檢失敗時拋出。突變：拿掉「無成員列」條件 → 重複寫入測試紅。
+- [x] 15d 實作 ＋ 測試（SQLite 路徑）：以 PostgreSQL dialect 的 mock 確認取鎖前送出 `SET LOCAL lock_timeout`；`MembershipLockTimeout` → 端點 503。`backend/tests_pg/` 另加一條真實 PG 測試：一個交易持鎖時第二個交易於約 5 秒後得到 503 對應的例外（CI 的 `concurrency` job 驗證，本機無 PostgreSQL 時據實記為未驗）。
+- [x] `openapi.json` 重 dump（`--check` 綠）、前端型別無漂移；`validate_repo_contract.py`／`validate_env_contract.py` 綠；完整套件（`backend/.venv`）全綠。
+- [x] `DEPLOY.md`、`LOCAL-DEV.md` 同步；`merge-blockers.md` 第 1、4、10、15、16 列回填處置；`code-summary.md` append 本步紀錄（改動檔:行、測試、突變結果、未驗項）；`source-manifest.json`、`traceability.json` 更新。
+- 追溯：`merge-blockers.md` #1／#4／#10／#15／#16；`BR7.3`、`BR4.3`、`BR4.4`、`AC12.4.1`、`NFR12.24`／`NFR12.25`。
 
 ## 六、步驟 → 故事追溯
 

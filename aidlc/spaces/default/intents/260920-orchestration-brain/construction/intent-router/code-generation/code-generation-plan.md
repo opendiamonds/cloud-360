@@ -171,6 +171,32 @@ stage 檔 Critical Rules 逐字：NFR 的可量測目標與 Testing Contract 的
 | 每元件測試數 | **5–8** | Testing Contract `obligations.strategy_volume` |
 | 既有測試套件 | **保持全綠** | Testing Contract `obligations.scope_floor` |
 
+## 五之一、合併前必修第 5、13 項（code-generation Request Changes 修訂，2026-10-23）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 5 項（`review-03` R-04）與第 13 項（`nfr-design` `review-03` R-03），皆劃給本單元。第 13 項由使用者於 2026-10-23 裁決；第 5 項的修法不涉產品取捨（恢復既有設計意圖），conductor 已向使用者說明。
+
+### Step 13 — 第 5 項：選定澄清選項後保留 `referent` 與其他槽位的意圖
+
+**缺陷**：`brain_gateway.py:1525-1530` 的 `_on_select` 只以被選候選的 `capability` 重建 `IntentDecision(intents=(Intent(chosen.capability, None),), ...)`。被選槽位原本解析出的 `referent` 與同一句話中其他**已確定**槽位的意圖全部遺失（例：「改這張圖，順便估成本」澄清其一，另一件被丟棄）。`ClarifyCandidate`（`K-10`）只帶 `id`／`label`／`capability`／`confidence`，不足以還原。
+
+- [x] 路由器產生澄清判定時，於**行程內**同時提供「候選 id → 該候選代表的完整 `Intent`（含 `referent`）與它所屬的槽位」以及「其他已確定槽位的 `Intent`」，供閘道還原；**不改 `ClarifyCandidate` 的線上欄位與 `ws-contract.json`**（`K-10`／`K-02` 的線上形狀不動）。若必須在 `IntentDecision` 上加欄位，該欄位標明「行程內、不序列化」，並在 `code-summary.md` 記為對 `K-10` 欄位集合的對齊紀錄（已核可上游不回改）。L5 純函式層仍不得引入隨機值（`BR3.6`），對照資料以決定性方式產生。
+- [x] `brain_gateway.py` 的 `_on_select`（屬 `brain-gateway` 單元的檔，因第 5 項劃給本單元而在此修，於該單元的重新查驗時註明）：`PendingClarify` 保存上述對照，選定後以「被選候選的完整 `Intent` ＋ 其他已確定槽位的 `Intent`」重建判定，再走既有的 `_resolve_and_dispatch`。
+- [x] 測試：單槽位澄清選定後 `referent` 被保留；多槽位（一個不確定、一個確定）選定後兩個意圖都進入派送，順序與原句一致；「都不是」（`candidateId=None`）仍安靜結束（`AC1.2.3` 不變）；不在候選集合內的 id 仍回 `INVALID_REQUEST`。突變：還原為只帶 `capability`／`None` → `referent` 與多槽位案例紅。
+
+### Step 14 — 第 13 項：記憶被拒絕存取時，本輪以授權錯誤結束（裁決：授權錯誤結束）
+
+**缺陷**：`intent_routing.py:216-228` 的 `_memory_notes` 以 `except Exception` 把所有記憶讀取錯誤都當成「`U8` 不可用、降級繼續」，連授權拒絕（`MemoryForbidden`，實際發生於待核准帳號——`MemoryFacade._authorize_approved` 在取列之前擋下）也被吞掉。
+
+- [x] `_memory_notes`：`MemoryForbidden` **不降級**，向上傳遞；其餘例外照舊降級並記 WARN（`D-1` 不變）。`MemoryNotFound` 若可能出現於 `search`，判定其語意後在 `code-summary.md` 寫明處置。
+- [x] 呼叫鏈（`fetch_routing_context` → `classify` → 閘道）把它轉為本輪的授權錯誤：閘道以既有錯誤碼（`UNAUTHORIZED` 或 `rules.error_for` 對應的授權類代碼，沿用既有封閉表，不新增碼）結束本輪，並記一筆 WARN 級安全日誌（不含記憶內容、不含使用者輸入原文）。
+- [x] 測試：facade 拋 `MemoryForbidden` → 分類不被呼叫（或本輪不派送）、閘道送出授權錯誤；facade 拋一般例外 → 仍降級繼續（`memory_degraded` 為真）；日誌不含輸入原文。突變：把 `MemoryForbidden` 併回 `except Exception` → 授權案例紅。
+
+### Step 15 — 驗證與紀錄
+
+- [x] 本單元五個測試模組、`brain-gateway` 受影響的既有測試、完整套件（`backend/.venv`）全綠；L5 的七條 PBT 仍綠。
+- [x] `merge-blockers.md` 第 5、13 列回填處置；`code-summary.md` append 本節紀錄（改動檔:行、測試、突變、對 `K-10` 的對齊紀錄若有）；`source-manifest.json`（含 `brain_gateway.py`）、`traceability.json`（加 `MB-5`／`MB-13`）更新。
+- 追溯：`merge-blockers.md` #5／#13；`BR3.6`、`BR5.1`、`BR5.5`、`D-1`、`AC1.2.3`。
+
 ## 六、核可關卡
 
 本計畫與 `unit-test-instructions.md` 的核可題目在

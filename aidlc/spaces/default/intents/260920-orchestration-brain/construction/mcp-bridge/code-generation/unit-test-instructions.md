@@ -126,3 +126,31 @@ repo 沒有覆蓋率量測機制（`team.md`）。實際門檻是：每元件 5�
 - **唯一標記字串**：token、agent 名、欄位值各以 `uuid4()` 產生，斷言工具結果、log、回應標頭都不含它。
 - **產物**：T-8 在暫存目錄放手改的副本，不改正式檔。
 - **限制揭露**：路線 A／B 的 backend 經 `ASGITransport`，沒有真實 TCP；路線 C 下，SDK client 專有的行為只由互通案例保證。
+
+## 七、合併前必修第 8 項：成功讀取的稽核 log（計畫 §八 Step 15–16）
+
+前置：本機 `mcp` 套件須與 `backend/requirements.txt` 的釘選一致（`pip install -r requirements.txt`，在 `backend/`）；否則 MCP 端到端一案記為未驗證。
+
+在 `backend/`（以 `HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad、`PYTHONDONTWRITEBYTECODE=1 python3 -B` 執行，避免在 repo 留下快取）：
+
+```bash
+# facade 層（U20 既有測試檔，檔名以實際為準）＋ MCP 端到端
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_requirement_field_facade tests.test_mcp_bridge_e2e -v
+# 全套
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests
+```
+
+| 案例 | 斷言 |
+|---|---|
+| R1 成功讀取 | `assertLogs` 恰一筆 `requirement_field.read`；`user_id` 為呼叫者、`system_id` 為授權後的 id |
+| R2 不外洩 | 以 `uuid4()` 標記寫入的欄位值不出現在該 log 的訊息與 `extra` |
+| R3 被拒讀取 | 只有 `requirement_field.denied`，沒有 `requirement_field.read` |
+| R4 經 MCP 成功讀取（`AC11.4.3`） | backend 端記了帶該使用者 `user_id` 的 `requirement_field.read` |
+
+突變（套用 → 紅 → 還原 → sha256 對照基線 → 綠；`HYPOTHESIS_NO_SHRINK=1`）：
+
+| 突變 | 預期紅燈 |
+|---|---|
+| M-A 拿掉讀取 log | R1、R4 |
+| M-B log 改記欄位值 | R2 |
+| M-C 改在授權前記 log | R3 |

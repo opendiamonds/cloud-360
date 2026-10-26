@@ -141,6 +141,24 @@ RAISE EXCEPTION '...' END IF; END $$;` 樣板。`-v ON_ERROR_STOP=1` 使任一�
 （例如重複記同一個 `memory_id` 兩次、漏一個）仍會通過 `R5`。
 `R6` 比對的是**集合相等**，而那是 `FR4.7`「刪除留稽核」在列層級的實際內容。
 
+### 3.1 合併前必修第 11 項（Request Changes 修訂，計畫 Step 13）
+
+新增 `backend/tests/test_system_account_protection.py`（TestClient，`team.md` B 規則；以 `app.dependency_overrides` 覆寫 `get_db`／`get_current_user`，in-memory SQLite）：
+
+| # | Given | 通過條件 |
+|---|---|---|
+| A1 | seed 保留帳號 `SYSTEM.retention-purge`（`is_active=False`、role `system`） | `DELETE /api/auth/{id}` 回 409，列仍在 |
+| A2 | 同上 | `PUT /api/auth/{id}/role` 回 409，角色未變 |
+| A3 | 同上 | `PUT /api/auth/{id}/active`（`is_active=true`）回 409，仍為停用 |
+| A4 | 同上，另有兩位一般使用者 | `GET /api/auth/list` 的項目不含保留帳號，`total` 為 2 |
+| A5 | — | `system_accounts.RETENTION_SYSTEM_ACTOR_USERNAME` 等於 `scripts/seed_retention_system_actor.py` 的 `SENTINEL_USERNAME` |
+
+突變：拿掉刪除的保留判定 → A1 紅；拿掉列表排除 → A4 紅（每項先 `grep -c` 確認突變已寫入，還原後為 0）。
+
+第 17 項不改程式，無自動化測試；其驗證是 `DEPLOY.md` 程序的人工執行。
+
+完整套件一律以 `backend/.venv` 執行：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`（本機系統 Python 的套件版本與 `requirements.txt` 不一致）。
+
 ## 四、覆蓋率目標
 
 | 項目 | 值 |

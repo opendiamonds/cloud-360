@@ -464,3 +464,133 @@ YAML，Python 覆蓋率工具量不到它們。**本摘要不宣稱滿足該數�
 | `OPEN-ID9-2` | `issues: write` 無先例；替代方案已寫明 | 關卡上的具名權限增量 |
 | `OPEN-ID9-3` | 既有 SQLite 測試路徑看不到 seed——本輪以 `S13` ＋ `R1`–`R10` **部分關閉** | 餘留 |
 | `tcms-test-cases` | **blocking，且至今未對本 intent 的任何單元執行過** | construction 階段，部署之前 |
+
+## 重新查驗與合併前必修第 11、17 項
+
+> 紀錄時間：2026-10-22T08:25:56Z（`date -u` 取值）。背景：使用者對 code-generation 送 Request Changes，本單元承接 `merge-blockers.md` 第 11、17 項；裁決見計畫第十節。
+
+### 一、Steps 1–12 重新查驗（全部重新勾回）
+
+逐格開檔查證，皆成立。真實 PostgreSQL 的斷言本輪**有實跑**：本機無 Docker，於 scratchpad 以 Homebrew `postgresql@17`（17.7，含 pgvector）臨時建叢集（TCP `localhost:55439`、僅本輪使用），跑完以 `pg_ctl stop` 停掉。
+
+| 檢查 | 實際結果 |
+|---|---|
+| `schema_rbac.sql` 全新資料庫套用兩次 | 兩次 rc=0（`K)` 的 `ON CONFLICT` 可重跑） |
+| `verify_memory_schema.sql`（含 `S13`） | rc=0，`S13` 通過（後續單元新增的 `S14`／`S15` 一併通過） |
+| `verify_purge_sql.sql`（`R1`–`R10`，於 repo 根目錄） | rc=0，「R1-R10 全部通過」 |
+| `tests_pg.test_purge_atomicity` | `Ran 3 tests` / `OK` |
+| `seed_retention_system_actor.py`（列已存在的重跑路徑） | rc=0，終檢三項通過，未輸出 `DATABASE_URL` |
+| `tests.test_retention_purge_contract` | `Ran 10 tests` / `OK` |
+| `git diff --stat HEAD -- backend/database.py` | 空 |
+
+計畫 1.4（開工前「尚無 `K)` 標題」）是開工時的前置條件；現況為**恰好一個** `K)` 標題（`schema_rbac.sql:811`），無重複字母，故勾回。Step 11（突變）在計畫中無勾選框，前輪結果見本檔第四節，本輪未重跑。後續單元的合法改動：`ci.yml` 的 `memory-schema` job 已擴充為 `P1-P16` 等步驟，`verify_purge_sql.sql` 步驟仍在（`ci.yml:543`）。
+
+### 二、第 11 項（Step 13）——已完成
+
+| 檔案 | 改動 |
+|---|---|
+| `backend/services/system_accounts.py`（新） | `RETENTION_SYSTEM_ACTOR_USERNAME`、`RESERVED_SYSTEM_USERNAMES`、`RESERVED_ACCOUNT_CONFLICT_DETAIL`、`is_reserved_system_account(user)`（大小寫敏感逐字比對）。不讀 DB、不 raise `HTTPException` |
+| `backend/services/user_router.py` | 新 `ReservedAccountConflict` model 與 `_reserved_account_response()`；`GET /list` 查詢層排除（:846，`total` 與分頁共用同一基底查詢）；`POST /authorization-requests/{id}/approve`（:925）、`.../reject`（:974）、`PUT /{id}/active`（:1055）、`DELETE /{id}`（:1173）、`PUT /{id}/role`（:1243）對保留帳號回 409。疊加在 `hierarchy-data`（刪除預檢 409）與 `membership-service`（停用 500／503）之上，未覆蓋它們 |
+| `openapi.json`、`frontend/src/types/api.d.ts` | 重 dump／重產 |
+| `DEPLOY.md` §2.2.11 | 「它會出現在 Admin 使用者清單上」一段在本修正後為假，改寫為新的保護範圍與其邊界（同一事實的傳播，非第 17 項的過渡程序） |
+
+409 的回應形狀：刪除與拒絕沿用既有宣告的 `DeleteUserConflict`（`blocking_references` 為空清單）；改角色與核准宣告 `ReservedAccountConflict`；啟停用的 409 宣告改為 `Union[LastAdminGuardReport, ReservedAccountConflict]`——原守門報告形狀不變（`MemberDetailPage` 依賴它），`npx tsc -b` rc=0。
+
+新測試 `backend/tests/test_system_account_protection.py`（含結構化規格註解）：A1 刪除 409 且列仍在；A2 改角色 409 且角色仍為 `system`；A3 啟用 409 且仍停用；A4 列表分兩頁取回皆 `total=2`、聯集恰為兩位一般使用者；A5 以 AST 從 seed 腳本解析 `SENTINEL_USERNAME` 與常數比對；A6 拒絕授權申請 409、帳號與 pending 申請皆不動；A7 保留名的全小寫變體停用帳號仍可刪除（判定未被放寬）。`Ran 7 tests` / `OK`。
+
+突變（每項先 `grep -c MUTATION-MB11` 確認寫入＝1，還原後＝0）：
+
+| 突變 | 結果 |
+|---|---|
+| 刪除端點的保留判定改為 `if False:` | A1 紅：`AssertionError: 200 != 409 : {"ok":true,"deleted_username":"SYSTEM.retention-purge"}`；還原後 7/7 綠 |
+| 列表基底查詢拿掉排除條件 | A4 紅：`AssertionError: 3 != 2`；還原後 7/7 綠 |
+
+### 三、第 17 項（Step 14）——**未執行，待重新裁決**
+
+裁決是「併入 `main` 前以 `workflow_dispatch`、`ref=ut` 手動觸發過渡」。執行前查證發現它**做不到**：GitHub 文件 *Events that trigger workflows* 的 `workflow_dispatch` 一節逐字為「This event will only trigger a workflow run if the workflow file exists on the default branch」（與 `schedule` 同一句），而 `git ls-tree --name-only origin/main .github/workflows/` 沒有 `memory-retention-purge.yml` 與 `memory-retention-watchdog.yml`（`origin/ut` 目前亦無）。照該程序操作，手動觸發會因找不到 workflow 而失敗。附帶：監看只計 `status=success&event=schedule` 的 run（`memory-retention-watchdog.yml:124`），過渡期內手動觸發的監看必然判為逾期並開 issue，不提供訊號。
+
+依指示，裁決會製造新的正確性問題時停下回報、不自行改變裁決：`DEPLOY.md` 的過渡程序**未寫入**（寫一份做不到的程序比不寫更糟），`merge-blockers.md` 第 17 列記為「待重新裁決」，計畫 Step 14 兩格與 Step 15 第二格維持未勾。
+
+### 四、各命令實際結果
+
+| 命令 | 結果 |
+|---|---|
+| `cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1241 tests in 94.345s` / `OK` |
+| `backend/.venv/bin/python backend/scripts/dump_openapi.py` → `--check` | 「規格檔與後端程式碼一致。」rc=0 |
+| `cd frontend && npm run gen:types` → `npm run check:types` | 「API 型別檔與規格檔一致。」rc=0 |
+| `cd frontend && npx tsc -b` | rc=0 |
+| `python3 scripts/validate_repo_contract.py` | passed |
+| `python3 scripts/validate_env_contract.py` | passed |
+
+### 五、未驗項與偏離
+
+- **偏離（擴充）**：計畫只點名拒絕路徑；核准授權申請也會改保留帳號的角色，故同樣擋下並宣告 409（正常流程不會為它產生申請，屬縱深防禦）。啟停用的 409 擋下**兩個方向**（重送停用會觸發與它無關的自動改選）。
+- **未涵蓋（新發現）**：`GET /api/collab/users`（`collab_router.py:304`，分享對象清單）仍列出保留帳號；`team.md` 反對趁機改動 `collab_router.py`，記為後續項。資料庫層直接 `DELETE` 不受應用程式保護。
+- `openapi.json`／`api.d.ts` 相對 `HEAD` 的 diff 也含先前單元（`hierarchy-data`、`membership-service`）尚未 commit 的改動，本輪無法把自己的差量從工作樹中單獨分離；`--check` 與 `check:types` 皆綠。
+- `OPEN-ND9-1`（系統 actor 出現在 Admin 清單）由本輪處置關閉。
+
+### 第 17 項重新裁決（conductor，`2026-10-22T23:26:39Z`）
+
+上節記載的「2026-10-20 裁決無法執行」由 conductor 向使用者說明（`workflow_dispatch` 同樣要求 workflow 檔在預設分支上），並指出關鍵事實：記憶是本分支新增的功能，部署前沒有任何記憶列，第一筆最早要在部署後 90 天才到期。使用者重新裁決：**接受延後，設期限——本分支第一次部署到 staging 後，`ut` 須在 90 天內併入 `main`**。
+
+處置：不改程式與 workflow；`DEPLOY.md` §2.2.11 補寫手動觸發同樣不可行、期限與理由、以及「部署日＋90 天」須記在可見位置；`merge-blockers.md` 第 17 列改為「以期限處置，屬持續中的人工義務」；`traceability.json` 的 `MB-17` 維持 `Deferred` 並更新說明。
+
+**計畫 Step 14 兩格維持未勾**：其字面內容（手動觸發程序、「每週手動觸發」的人工義務）已被重新裁決取代，勾上會讓計畫宣稱一件沒有做、也做不到的事。Step 15 第二格（紀錄回填）於本節完成後勾上。
+
+### 審查後補正（conductor，`2026-10-22T23:32:29Z`）
+
+本站審查（`reviews/review-03.md`）判定 READY（1 Major、3 Minor）。審查查證了 #17 的前提成立（`origin/ut` 的 `schema_rbac.sql` 無 `memory_records`；唯一寫入路徑 `memory_service.create_record` 設 `expires_at = created_at + 90 天`）。
+
+| 發現 | 處置 |
+|---|---|
+| Major：新裁決使 `workflow_dispatch` 在併入 `main` 前不可用，而排程一律真實清除，`OPEN-ID9-4` 的「首次真實清除前先 dry-run」失去順序 | `DEPLOY.md` §2.2.11 補寫順序：併入 `main` 後**立即**在 `main` 上 `dry_run=true` 跑一次；因部署日＋90 天前排程選取皆為零列，dry-run 仍先於第一次實際刪除；若已有測試資料使計數不為 0，先停用排程再核對。`traceability.json` 的 `OPEN-ID9-4` 說明同步更新 |
+| Minor 4：期限沒有負責人 | `DEPLOY.md` 指名負責人 Danniel，唯一記錄位置為部署當天開立的 GitHub issue |
+| Minor 2：核准申請路徑無測試；改角色／啟用／拒絕未做突變 | 未處置，以已接受風險進入紀錄 |
+| Minor 3：`GET /api/collab/users` 仍列出保留帳號 | 未處置（不影響清除完整性；`team.md` 反對趁機改 `collab_router.py`），以已接受風險進入紀錄 |
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T07:32:06Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。後續單元對共用檔的改動一律保留。**安全**：本輪未觸發任何 workflow，未連任何共用或 staging 資料庫，清除 SQL 只在 scratchpad 的一次性資料庫上執行。
+
+### 計畫 51 格：勾 45、留 6
+
+| 格 | 理由 |
+|---|---|
+| Step 1.4「目前沒有 `K)`」 | 開工前的前置檢查，`K)` 現已存在，照字面不可能成立；其目的（無重複字母）成立：`grep -c "^-- K) "` 為 1 |
+| Step 2.6「role 不在 `CANONICAL_ROLES`」 | 實作改以資料庫 `role_permissions` 判定（`seed_retention_system_actor.py` 的 `verify_postconditions`），理由寫在程式內：import `services.rbac` 會經 `auth._resolve_secret_key`，在 staging 可能崩潰；`CANONICAL_ROLES` 的字面比對改由 `test_sentinel_role_is_not_canonical` 承擔 |
+| Step 8.1 `--env-file deploy/.env` | 實作為 `--env-file deploy/.env.example`（`memory-retention-purge.yml:188`）：`deploy.yml` 每次部署結束會刪除 `deploy/.env`（`:632`、`:726`），照計畫寫每天都會失敗；實際連線帳號與資料庫由容器內讀取，不依賴範本值（理由見 workflow `:34-65`、`:180-182`）。8.1 其餘項目皆成立 |
+| Step 13 第四格 | 測試 A1–A7 皆通過，但框內含突變驗證，本輪未重跑 |
+| Step 14 兩格 | 「`ref=ut` 手動觸發過渡、每週手動」已被 2026-10-23 的 90 天期限裁決取代（`workflow_dispatch` 同樣要求 workflow 檔在 `main`）；`DEPLOY.md` 與 merge-blockers 第 17 列寫的是新裁決 |
+
+### 合併前必修第 11、17 項
+
+- **#11**：`system_accounts.py` 與 `user_router.py` 對保留帳號回 409——刪除 `:1173`、改角色 `:1243`、啟用 `:1055`、拒絕申請 `:974`、核准 `:925`；清單於查詢層排除（`:846`，`total` 亦排除）。`test_system_account_protection.py` 7 個測試全綠。仍未涵蓋（第 11 列已記）：`GET /api/collab/users` 仍列出它、資料庫層直接 DELETE 仍可行。
+- **#17**：`DEPLOY.md:1140-1158` 載明 `workflow_dispatch` 同樣需要檔案在 `main`、首次部署 staging 後 90 天內 `ut` 須併入 `main`、負責人、以 issue 記錄期限、併入後先 dry-run。**附帶後果**：watchdog 只計 `event=schedule` 的成功 run，故在 `ut` 併入 `main` 之前它一旦執行就會判逾期並開 issue——第 17 列有寫，`DEPLOY.md` 的期限段落未明講。
+
+### 測試與閘門（本輪實跑，`backend/.venv`，快取導向 scratchpad，未寫入 repo）
+
+| 指令 | 結果 |
+|---|---|
+| `tests.test_retention_purge_contract` ＋ `tests.test_system_account_protection` | `Ran 17 tests`、`OK` |
+| `discover -s tests` | `Ran 1319 tests`、`OK (skipped=3)` |
+| `dump_openapi.py --check`、`npm --prefix frontend run check:types` | 皆一致 |
+| `validate_repo_contract.py`、`validate_env_contract.py` | 皆 passed |
+| PG：`schema_rbac.sql` 套用兩次 | 兩次 exit 0 |
+| PG：`verify_memory_schema.sql` | S1–S15 全部通過（含 S13） |
+| PG：`verify_purge_sql.sql`（repo 根執行） | 刪除記憶 1 列、寫稽核 1 列、刪除舊稽核 1 列，R1–R10 全部通過 |
+| PG：`tests_pg.test_purge_atomicity` | `Ran 3 tests`、`OK` |
+| PG：`seed_retention_system_actor.py`、`purge_dry_run.sql` | 終檢通過；dry-run exit 0，系統帳號 1 列、`all_inactive` 為 t |
+
+PG 環境：Homebrew PostgreSQL **17.7** ＋ pgvector 0.8.1，scratchpad 一次性叢集，只走 TCP（`127.0.0.1:55439`，Unix socket 路徑超過 103 bytes 上限故停用）；跑完 `pg_ctl stop`、刪除資料目錄、無殘留程序。CI 用 pg18。
+
+### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
+
+- 計畫 §2 說 `run_meta_schema_migration.py`「只加註解」，實際另有 `BLOCK_SENTINELS["K"]`（`:120-130`）這筆資料，不改變執行行為；`BLOCKS_TO_RUN` 仍為 `("X","I","J")`。
+- Step 3.1 的「非 canonical」同樣以 `role_permissions` 判定（SQL 看不到 Python 常數）。
+- Step 6.2 第二個測試名為 `test_committed_purge_writes_one_audit_row_per_deleted_memory`，與計畫字面不同、與測試說明一致。
+- 測試說明 §3.1 列 8 條，實為 10 條；第 11 項測試列 A1–A5，實為 A1–A7。
+- 行號：`schema_rbac.sql:715`→`:886`、`:478`→`:511`、`:460-461`→`:473`；`user_router.py:403/406/408`→約 `:716/:719`；`memory-retention-purge.yml` 註解引用的 `deploy.yml:376-378/472`→`:632/:726`、`:124/:471`→`:129/:725`（皆為註解或文件，事實本身仍成立）。
+
+`source-manifest.json` 的 18 條路徑全部存在且仍屬本單元；`backend/services/system_accounts.py` 與 `backend/tests/test_system_account_protection.py` 目前為 untracked，**提交時須一併納入**。

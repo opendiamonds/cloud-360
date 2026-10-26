@@ -389,3 +389,94 @@
 **新增突變列（13 列，全紅）**：M09w、M35、M36、M37、M38、M39、M40、M41、M42、M43、M44、M45、M46——其中 M09w 為 M09 在寫入案例的對應列。以腳本計數，合計突變 51 列、51 列紅；既有 38 列在本輪修改後重跑仍全紅。
 
 **測試數變化**：137 → 147（app ＋3：序列化攔截、lifespan 失敗兩案；startup ＋6：R-10 四案、`--port`、`--max-concurrency`；e2e ＋1：牆鐘取消；T-1 寫入案名稱改為 `test_interleaved_writes_keep_identity_and_agent`）。
+
+## 十四、合併前必修第 7、8 項（計畫 §八 Step 15–17，2026-10-24）
+
+來源：`construction/functional-design/merge-blockers.md` 第 7、8 列（皆屬 ADR-0006）。使用者 2026-10-24 於本站逐項裁決。
+
+### 兩項裁決
+
+| 項 | 裁決 | 程式變更 |
+|---|---|---|
+| 第 7 項（Encryption） | **沿用 2026-10-14T23:02:07Z 的裁決結案**（`nfr-design/security-design.md:83-84`）。bridge 只在專屬網段 `mcp`（`deploy/docker-compose.deploy.yml:446` 的 `networks: [mcp]`；`:485-486` 的 `mcp:`／`internal: true`），成員只有 `backend` 與 `mcp-bridge`，無 `ports:`；backend 目前沒有程式呼叫 bridge（`OPEN-MB21-1`）。這是對 `requirements.md:618`「本機迴環或加密」的**例外**，不是符合；殘餘風險：同主機上被入侵且位於 `mcp` 網段內的容器（目前只有 `backend`）可竊聽 token。第十一節第 1 項的揭露維持 | 無 |
+| 第 8 項（Audit logging） | **推翻 `[MBN1]`=A**：成功讀取補一行帶使用者身分的 log，使 `requirements.md:620` ③「稽核主體必須是使用者本人」在讀取面也成立 | 見下 |
+
+**取代**：第八節 Audit logging 列中「成功的讀取無帶使用者身分的紀錄（`OPEN-MB21-14`，已接受）」、第十一節第 2 項，以及計畫 §六 第 2 項與 `OPEN-MB21-14` 的結案理由，自本節起由下面的實作取代。上述原文不回改。
+
+### Step 15 — 實作（跨單元，`U20` 已交付檔）
+
+- `backend/services/requirement_field_facade.py`：`read_fields` 在 `_authorize` 通過、`fetch_rows` 與 `compose_field_set` 之後呼叫新增的 `_log_read(principal, known_id)`；`_log_read` 記一行 INFO `requirement_field.read system_id=%s user_id=%s on_behalf=%s`，`extra` 帶 `story_id`（`K4`）、`action="view"`、`system_id`、`user_id`、`on_behalf`。`read_fields` 簽章沒有代寫參數，故 `on_behalf` 固定 `False`。
+- `system_id` 取授權後的 `known_id`（整數），不是輸入原值；不記欄位值、欄位 key 清單、使用者原句、token。被拒讀取維持只有 `_deny` 那一行。logger 沿用模組既有的 `"cloud360.requirement_fields"`。模組 docstring 的 log 段同步列入 `.read`。
+- 不改回傳、不改授權、零 DDL、零新環境變數。`git diff --stat` 該檔：`27 +++++++++-`。
+
+### Step 16 — 測試
+
+| 案例 | 落點 | 斷言 |
+|---|---|---|
+| R1 | `tests/test_requirement_field_facade.py::test_R1_successful_read_logs_reader_identity_once` | `system_id` 以字串傳入；恰一筆 `requirement_field.read`，(`story_id`, `action`, `system_id`, `user_id`, `on_behalf`) ＝ (`K4`, `view`, 整數系統 id, editor, False) |
+| R2 | `…::test_R2_read_log_never_carries_field_values` | 以 `uuid4()` 標記寫入後讀取：回傳含標記；讀取期間所有 record 的訊息與 `__dict__` 不含標記 |
+| R3 | `…::test_R3_denied_read_logs_only_the_denial` | outsider（非成員）讀取：log 恰為 `["requirement_field.denied"]`（reason＝`not_member`），`requirement_field.read` 0 筆 |
+| R4 | `tests/test_mcp_bridge_e2e.py::AcceptanceTest.test_ac11_4_3_member_read_equals_direct_get` | 兩種協定版本（`MODES`）經 MCP 讀取期間，backend 端的 `requirement_field.read` 為 `[(owner.id, system.id)] × len(MODES)` |
+
+**前置**：在 `backend/` 執行 `python3 -m pip install -r requirements.txt`，`mcp` 由 1.6.0 升為 2.3.0（`python3 -m pip show mcp`）。pip 回報一項與本 repo 無關的全域衝突：`claude-agent-sdk 0.2.135 requires mcp<2.0.0,>=1.23.0`。R4 因此**已實際執行**，不是未驗證。
+
+**執行結果**（皆在 `backend/`，`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad、`PYTHONDONTWRITEBYTECODE=1 python3 -B`）：
+
+| 指令 | 結果 |
+|---|---|
+| `-m unittest tests.test_requirement_field_facade -v` | `Ran 11 tests`、`OK` |
+| `-m unittest tests.test_requirement_field_facade tests.test_mcp_bridge_e2e` | `Ran 26 tests`、`OK` |
+| 本單元全部 11 個 `test_mcp_bridge_*` 模組（`unit-test-instructions.md` 第二節「全單元」指令） | `Ran 147 tests`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1313 tests`、`OK (skipped=3)`；`grep -cE "^(FAIL\|ERROR): test"` 為 0 |
+| `scripts/dump_openapi.py --check` | `規格檔與後端程式碼一致。`（不漂移） |
+| `scripts/gen_mcp_tools.py --check` | `MCP 工具宣告與輸入一致。` |
+| repo 根目錄 `python3 scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| repo 根目錄 `python3 scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+
+`skipped=3` 不在本單元測試檔內（`test_mcp_bridge_static` 斷言本單元 skip 為 0，且在上表 147 案中為綠）。
+
+### 突變驗證（scratchpad 腳本 `mb_mutate.py`，`HYPOTHESIS_NO_SHRINK=1`；每項：套用 → 跑 R1–R4 → 還原 → sha256 對照基線）
+
+基線 sha256（`shasum -a 256 services/requirement_field_facade.py`）：`f3900ca36f4aa59d743a8f7eb3b6225c2ef59f2a763d2cf7d434fabb5c1c9cf6`。
+
+| 突變 | 內容 | R1 | R2 | R3 | R4 | 預期紅燈是否命中 | 還原後 sha256 ＝ 基線 |
+|---|---|---|---|---|---|---|---|
+| M-A | 拿掉 `read_fields` 中的 `_log_read` 呼叫 | 紅 | 紅 | 綠 | 紅 | 是（預期 R1、R4） | 是 |
+| M-B | `_log_read` 的 `extra` 加入 `values=[r.value for r in rows]` | 綠 | 紅 | 綠 | 綠 | 是（預期 R2） | 是 |
+| M-C | 改在 `_authorize` 之前以輸入原值記 log | 紅 | 綠 | 紅 | 紅 | 是（預期 R3） | 是 |
+
+還原後 R1–R4 一次重跑：`OK`、退出碼 0。M-A 下 R2 也紅，是因為 R2 先斷言恰一筆讀取 log；M-C 下 R1／R4 也紅，是因為 log 的 `system_id` 變成輸入的字串而非授權後的整數。
+
+### Step 17 — 文件與追溯
+
+- `merge-blockers.md` 第 7、8 列的處置欄由「待處置」改為本節的裁決與落點（只改該儲存格）。
+- `source-manifest.json`：`writes` 由 39 筆增為 41 筆，加入 `backend/services/requirement_field_facade.py`、`backend/tests/test_requirement_field_facade.py`（`backend/tests/test_mcp_bridge_e2e.py` 原已在列）。
+- `traceability.json`：`upstream_ids` 與 `coverage` 由 89 筆增為 90 筆，新增 `FR11.6`（note 限定為 `requirements.md:620` ③ 的讀取面，target 為 facade 測試檔）；`reverse` 由 10 筆增為 11 筆，新增 `CG-READ-AUDIT`（target 為 facade）。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T01:31:10Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。計畫的 17 步為 `### Step N` 標題、無勾選框，故計畫檔不變，逐步判定記於此。
+
+- **逐步判定**：Step 1、2、4–13、15、16 符合；Step 3、14、17 部分符合：
+  - Step 3：層序為 PathRouter → MethodGuard → Gate → WallClock → BodyLimit → ExactPath → CredentialContext（牆鐘與本體上限對調為既記 D-1）。**「MethodGuard 排在並行閘門之前」（計畫 #22）沒有測試鎖住**：在 scratchpad 副本把 MethodGuard 移到閘門之內，guards 12 案與 app／e2e／topology／static 47 案全綠——`test_get_sse_is_405_without_slot` 只在回應結束後斷言 `in_flight == 0`，名額於 `finally` 歸還，順序對調後仍成立；M21 測的是拿掉 405 守門而非順序。
+  - Step 14：本摘要有過時處（見下）。
+  - Step 17：merge-blockers 第 7、8 列為整格替換「待處置」，非計畫字面的純 append；內容正確。
+- **Step 1 中途關卡**：路線 A（`mcp==2.3.0`、`MCP_ROUTE="same-interpreter"`）、17-A、16-A，均不需另取同意；16-A 只在 `json_response=True` 下實測。ADR-0021 已移入 `inception/decisions/0021-mcp-bridge-x04-contract-increments.md`，Status Accepted，與草案只差兩行。
+- **測試**（`backend/`，快取導向 scratchpad；前後比對 repo 內 583 個快取檔 mtime 無變化）：
+  - 全套 1319 OK（skipped=3）。
+  - 本單元 11 支共 147 OK（generator 11、pure 25、guards 12、dispatch 13、app 10、startup 19、topology 5、artifacts 8、e2e 15、static 17、deploy 12），零 skip。
+  - `test_requirement_field_facade`＋`_http` 21 OK；`gen_mcp_tools.py --check`、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py` 皆通過。
+  - 突變抽驗（scratchpad 副本，未寫回）：#12 閘門永不拒絕、#31 改掛 `internal`、#32 拿掉 `continue-on-error` 皆紅→還原綠；#22 順序對調**未轉紅**（見上）。
+- **合併前必修第 7、8 項**：第 7 項裁決結案、現況與敘述一致；第 8 項 `_log_read` 已實作（授權後、用授權後的 `known_id`、不記值），R1–R3、R5 與 e2e R4 皆綠。
+- **第 14 項對本單元的影響**：非成員經 MCP 讀取現為 `not_found`；e2e AC11.4.1 已改斷言，`forbidden` 分支改由缺 K4 的成員承擔。本輪已就地更正 `traceability.json` 的 AC11.4.1 note；計畫 §四 仍寫 `forbidden`（已核可，不改）。
+- **PBT**：`test_mcp_bridge_generator.py` 八個類別各一個 `@given`（第 191–294 行），pure 另 1 個（性質六）。
+- **ADR-0006 四面向**：與第八節一致；Audit logging 格的「成功讀取無帶使用者身分的紀錄（已接受）」已由第十四節取代。
+- **grep 判準**：`mcp` 只在 `app.py` import（`server.py` 經 `app` 間接，D-2）；`httpx` 只在 `executor.py`；`main.py`／`services/` 引用 `mcp_bridge` 零命中；`os.environ`／`getenv` 零；`jwt`／`jose`／`base64` 零 import；`__init__.py` 0 位元組；本單元測試零 skip。
+- **本摘要既有文字的過時處（如實記載，原文不回改）**：
+  1. 未記 review-02 的 R-11–R-13 處置、R5 測試、e2e 竄改 token 的偶發修正（改簽章首字元）、AC11.4.1 改為 `not_found`；這些處置以 merge-blockers 第 7、8、14 列為準。
+  2. 第十四節 facade 測試 11 案（現 12）、全套 1313（現 1319）；facade sha256 基線 `f3900ca3…` 與「diff 27 行」已因第 14 項再改同檔而失效（現 `0d7e4f37…`、+51 行）。
+  3. ADR-0021 未列入 `source-manifest.json`（record 內檔案，manifest 只收工作區程式）。
+  4. D-7 寫「未安裝到本機全域 python3」，第十四節前置卻寫已 `pip install -r requirements.txt`；實查本機全域 `python3` 的 `mcp` 現為 2.3.0，與 repo 外工具 `claude-agent-sdk` 要求的 `mcp<2.0.0` 衝突。
+  5. `backend/.venv` 為 Python 3.13.7，Dockerfile 與 CI 為 3.12。

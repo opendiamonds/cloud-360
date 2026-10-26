@@ -438,3 +438,55 @@ generator、cost calculator、agent routing）皆不在本單元。
 
 **七項皆未命中**，故 `schema_rbac.sql` ＋ `DEPLOY.md` 的 blocking 同步與 `LOCAL-DEV.md`
 的同步義務皆不適用於本單元。
+
+## 重新查驗（code-generation Request Changes 後，conductor，`2026-10-20T08:11:02Z`）
+
+**觸發**：使用者對整站送出 Request Changes（原文：「修正 functional-design/merge-blockers.md 列出的 19 項合併前必修，各在所屬單元修正並附測試；需人工裁決的項目（#7、#8 等）逐項問我。object-picker-ui 的 R-08、R-09 已修，重新審查即可。」）。`merge-blockers.md` 19 項中**沒有一項劃給本單元**，修法落點亦不觸及 `source-manifest.json` 的 7 個路徑；計畫 §四之一記載此對照，使用者已重新核可。引擎在核可時重設 12 格勾選，本輪逐格對照現況勾回，**未改任何應用程式碼**。
+
+| Step | 查驗依據（開檔／grep 實看） |
+|---|---|
+| 1 | `progress_channel.py:55` logger 為 `"cloud360.progress_channel"`；模組 docstring 在 |
+| 3–5 | `DuplicateChannelKey`（:116）、同步 `_admit`（:205）、`open`／`close`／`async publish`／`async drain`（:281／:288／:302／:326） |
+| 6 | `design_agent.py` 已無 `_progress_queue`／`_last_xml`；錯誤改為固定字串「產圖發生錯誤」（:119）；`MemorySaver()` 保留 1 處 |
+| 7 | 三個呼叫點（`agent_router.py:131-162`、`wa_collab_orchestrator.py:87-122`、`test_agent.py:45-70`）皆以 `secrets.token_urlsafe(32)` 鑄鍵、`try/except DuplicateChannelKey`、`finally` 中 `close` |
+| 8 | `wa_collab_orchestrator.py:73` 的 `_remap_design_events` 仍以 `"xml"` 等既有 type 分派（:107） |
+| 2、9、10 | 見下方命令結果 |
+| 11、12 | `code-summary.md`、`traceability.json` 存在 |
+
+| 命令（`backend/`） | 結果 |
+|---|---|
+| `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_progress_channel tests.test_progress_channel_contract` | `Ran 13 tests` → `OK`（計畫寫 12 個；多的一個為先前輪次已加入的既有測試） |
+| `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` | `Ran 1219 tests` → `OK` |
+
+後續變更：`git log -- backend/services/progress_channel.py` 最新一筆為 `c2e5687`（英文 `feat:` 訊息，非本單元產生）；本單元判準未受影響。本機系統 Python 的套件版本與 `requirements.txt` 不一致，本輪一律以 `backend/.venv` 執行。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-25T00:27:45Z（`date -u` 取值） -->
+
+Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後，逐步查驗既有程式碼，**程式碼改動為 0**。計畫 12 格全部勾選；後續單元對共用檔的改動一律保留。突變 M1–M6 本輪未重跑（須暫時改壞程式碼），沿用 §四的紀錄。
+
+### 逐步查驗摘要
+
+- Step 1–5：`progress_channel.py` 的 docstring、`ProgressEvent` 封閉四類、同步 `_admit` 與 BR4.1 丟棄優先序、上界 18 × 8（`:154-170`）、`open`／`publish`／`drain`／`close` 四個操作皆符合。
+- Step 6：`design_agent.py` 內 `_progress_queue`、`_last_xml` 零命中；`_drain_progress` 收 `request_key`（`:198`），`request_key` 為必填關鍵字參數（`:213-219`），兩個例外出口為固定字串（`:121`、`:283`），`MemorySaver` 保留（`:211`）。
+- Step 7–8：三個呼叫點（`agent_router.py:131-162`、`wa_collab_orchestrator.py:87-122`、`test_agent.py:45-70`）以 `secrets.token_urlsafe(32)` 鑄鍵、`DuplicateChannelKey` 回固定訊息、`close` 在 `finally`；`wa_collab_orchestrator.py:96-117` 的 remap 原樣可用。
+- Step 9–12：兩支測試檔、本檔與 `traceability.json`（27 個識別碼）皆在。
+
+### 測試與閘門（本輪實跑，快取導向 scratchpad，未寫入 repo）
+
+| 指令（`backend/`，`backend/.venv`） | 結果 |
+|---|---|
+| `python3 -B -m unittest tests.test_progress_channel tests.test_progress_channel_contract -v` | `Ran 13 tests`、`OK` |
+| `python3 -B -m unittest discover -s tests` | `Ran 1319 tests`、`OK (skipped=3)` |
+| `python3 -B scripts/dump_openapi.py --check` | 一致 |
+| `python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py`（repo 根） | 皆 passed |
+
+### 與已核可測試說明的落差（凍結文件不改，以本節為準）
+
+1. 行為測試為 8 個而非 7 個：另有整合測試 `RunDesignAgentIsolationIntegrationTest.test_two_overlapping_run_design_agent_calls_keep_their_own_events`（`test_progress_channel.py:377`），兩支檔合計 13 個（說明寫 12）。
+2. 測試 12 第二子句釘的是 `EXPECTED_EXCEPTION_BINDINGS = 0`，不是「等於 2 且皆綁 `e`」——兩個 handler 已改為裸 `except Exception:`（理由見 `test_progress_channel_contract.py:351-364` 與 §五）；M6 的預期因此為「新增任何 `except ... as` 即紅燈」。
+3. runner 指令實際須用 `backend/.venv` 的 Python，說明 §一 寫的是裸 `python`。
+4. 計畫中 `design_agent.py:31`、`:32`、`:103`、`:160`、`:169`、`:214`、`:216`、`:218` 與 `agent_router.py:124-128` 為改動前行號，現行位置見上方 Step 6–7。
+
+`source-manifest.json` 的 7 條路徑全部存在且仍屬本單元。

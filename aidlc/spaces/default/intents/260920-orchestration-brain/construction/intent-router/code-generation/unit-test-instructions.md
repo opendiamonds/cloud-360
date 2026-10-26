@@ -51,6 +51,19 @@ python3 -m unittest -v tests.test_langgraph_runtime
 
 既有測試檔，應全綠。綠燈即證明 runner、`tests.helpers` 的 stub、import 路徑都正常。
 
+### 合併前必修第 5、13 項（Request Changes 修訂，計畫 §五之一）
+
+本機一律以 `backend/.venv/bin/python`（系統 Python 套件版本與 `requirements.txt` 不一致），並加 `PYTHONDONTWRITEBYTECODE=1`。
+
+| 項 | 落點 | 案例（通過條件） |
+|---|---|---|
+| #5 | `tests/test_intent_routing_predicate.py` 或 `_context`（產生端） | 澄清判定附帶的行程內對照：每個候選 id 對應的 `Intent` 含原 `referent`；其他已確定槽位的 `Intent` 齊備；同輸入兩次結果相同（決定性） |
+| #5 | `brain-gateway` 既有測試檔（`_on_select`） | 單槽位選定 → 派送的 `Intent` 帶原 `referent`；多槽位選定 → 兩個意圖都被派送且順序與原句一致；`candidateId=None` 仍安靜結束；非候選 id 仍 `INVALID_REQUEST` |
+| #13 | `tests/test_intent_routing_context.py` | facade 拋 `MemoryForbidden` → 向上傳遞、不降級；拋一般例外 → `memory_degraded` 為真 |
+| #13 | `brain-gateway` 既有測試檔 | 記憶授權拒絕 → 本輪以授權類錯誤碼結束、不派送；日誌不含輸入原文 |
+
+突變（每項先 `grep -c` 確認寫入、還原後為 0）：`_on_select` 還原為 `Intent(capability, None)` → #5 案例紅；`MemoryForbidden` 併回 `except Exception` → #13 案例紅。完整套件：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`。
+
 ## 三、每個元件的測試範圍（standard：5–8 個／元件）
 
 ### `test_intent_routing_predicate.py` —— L5 純函式（**ADR-0006 的 PBT 落點**）

@@ -174,3 +174,62 @@
 | `BASE_URL=http://localhost:4173 npx playwright test tests/e2e/object-picker.spec.ts --reporter=list` | **32 passed** |
 | 同上加 `tests/e2e/a11y.spec.ts`（還原後複驗） | **56 passed**（32＋24） |
 | `python3 scripts/tcms_validate.py --spec frontend/tests/e2e/object-picker.spec.ts` | **32/32、ERROR 0、WARN 0** |
+
+## 九、Request Changes 後的回歸驗證（計畫 §八 Step 15；2026-10-24T14:14:23Z）
+
+本輪不改程式。目的是確認其他單元在上一輪改到的畫面（`entry-page-ui` 的對話系統提示與 `ConversationView.tsx` 的顏色、`a11y-gate` 新增的三個掃描點）沒有讓本單元的案例或選單掃描點變紅。
+
+| 指令 | 結果 |
+|---|---|
+| `npm --prefix frontend run build`（含 `tsc -b`） | 通過（`vite build` 轉換 324 個模組；只有既有的 chunk 大於 500 kB 警告） |
+| `npm --prefix frontend run preview -- --port 4173 --strictPort`（背景） | 4173 動工前無人監聽；`curl` 回 200；測完以背景任務停止指令關閉，`lsof -iTCP:4173 -sTCP:LISTEN` 複查無監聽 |
+| `BASE_URL=http://localhost:4173 frontend/node_modules/.bin/playwright test --config frontend/playwright.config.ts tests/e2e/object-picker.spec.ts tests/e2e/a11y.spec.ts --retries=0 --reporter=list` | **59 passed / 0 failed**（49.3s）：`U16 object picker` **32**、`U17 a11y gate` **27**（含本單元的「21 切換對象選單預設態」「22 切換對象選單建立錯誤態」兩個掃描點） |
+| `npm --prefix frontend run lint` | **0 errors、2 warnings**（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，與 §七、§八同兩檔；數量未增，行號隨他單元改動位移） |
+| `python3 scripts/validate_repo_contract.py` | 通過（「Cloud-360 repository contract validation passed.」） |
+
+`a11y.spec.ts` 由 §八 的 24 案增為 27 案，增加的 3 案來自 `a11y-gate` 本輪新增的掃描點（23 入口頁對話系統提示列、24 入口頁原句未送達、25 成員清單查不到專案），不屬本單元。
+
+`source-manifest.json`、`traceability.json` 本輪無變更，未改動。未在本輪重跑：`entry-page.spec.ts`、`entry-page-live.spec.ts` 與其他 spec（不在 Step 15 範圍）、`validate_env_contract.py`、`tcms_validate.py`。
+
+## 十、review-02（READY）兩項 Minor 的處置（使用者 2026-10-24 裁決「兩項都現在修」；記於 2026-10-24T15:01:48Z）
+
+審查 `reviews/review-02.md` 的 R-08、R-09。凍結文件（本目錄與 `entry-page-ui/code-generation/` 的 `code-generation-plan.md`、`code-summary.md`、`unit-test-instructions.md`、`traceability.json`、`source-manifest.json`）一律未改，處置只記於本節與 `functional-design/merge-blockers.md` 第 2 列。
+
+### 修正 1（R-08）：非輪次請求不覆寫待決的原句／反問選擇標記
+
+- **跨單元揭露**：本修正改的是 `frontend/src/brain/useBrainConnection.ts`，該檔歸 `entry-page-ui` 所有（列於其 `source-manifest.json`），並**細化**其 `[EP-R2]` 規則（`merge-blockers.md` 第 2 列最後一段）。
+- **改動**：新增純函式 `afterNonTurnSend(last)`——標記為「尚未收到任何輪次訊息」（`answered=false`）的 `user_message` 或 `select_clarify_candidate` 時原樣保留，否則回 `NOTHING_SENT`。`setWorkTarget`、`setSharingMode`、`correctWorkItem` 三個送出點由「一律重設為 `NOTHING_SENT`」改為經它判定。其餘規則不變：標記只在該請求收到第一則輪次訊息（`markAnswered`）或被一次非輪次錯誤的判定用掉時解除，連線重建時歸零。檔頭 `LastSent` 註解補上依據。
+- **依據（逐行查證）**：閘道 `backend/services/brain_gateway.py` 的 `_receive_loop`（第 1082 行起）逐則 `await self._dispatch_client_message(...)`，`_on_user_message`（第 1307 行起）在同一個 await 內跑完整輪；所以被拒原句的 turnId=null error 必先於後送 `set_work_target` 的任何回應，受理的原句則先送出該輪訊息。
+- **對既有案例的影響（揭露）**：`entry-page.spec.ts` 既有案「反問等待中作業對象切換失敗不重開反問」（名稱不變）原前置是「反問選擇未獲任何回應就送 `set_work_target`，之後的 null 錯誤不得重開反問」。依上述依序處理，那個時點到達的 null 錯誤**只可能是反問選擇被拒**，新規則下應重開，原斷言與本修正直接衝突（實跑紅：`data-state` 期望 picking）。處置：前置改為伺服器先以 `t-mb6` 的 token 與 done 受理該選擇（反問轉 `resolved`），再切換對象並收到 null 錯誤，斷言反問仍為 `resolved`（非 `default`）、候選 target-2 仍停用、原句不標未送達；`@purpose`／`@step`／`@note` 同步改寫。曾試「斷線重連後在新連線切換」的寫法，實跑不可行：重連快照的 `work_items` 會把 picking 收成 `resolved`。**副作用**：舊突變 M-R2（不論最後送出種類一律重開反問）在本規則下已無任何依序處理可達的情境能區分（存在 picking 的反問 ⇔ 標記正是那次待決的反問選擇），即等價突變，本案不再對它變紅；此點如實記載，非遺漏。
+- **新增 e2e（`entry-page.spec.ts`，沿用既有寫法與規格註解區塊）**：
+  - 「送出原句後切換對象再被非輪次錯誤拒絕時原句標為未送達」：送出原句 → 選單點專案 7（送出 1 則 `set_work_target`，伺服器不回推）→ 伺服器送 turnId=null 的 `INVALID_REQUEST` → 1 則系統提示、原句 `data-pending=false` 且含「這句沒有送達」、重試鈕可按、輸入列填字後送出鈕可按。
+  - 「反問選擇送出後切換對象再被非輪次錯誤拒絕時反問可重選」（反問選擇一側，同一修正）：按候選 target-1（picking）→ 選單點專案 7 → null 錯誤 → 反問 `data-state=default`、target-2 可按。
+
+### 修正 2（R-09）：重試建立時播報區不退回清單狀態文字
+
+- **改動**：`ObjectPickerCreateForm.submit` 移除每輪送出前的 `onFailure(null)`，`onFailure` 型別收窄為 `(message: string) => void`。`ObjectPicker` 新增 `reportFormFailure`：與目前 `formFailure` 相同時附一個零寬空白（`REANNOUNCE_MARK`＝U+200B，再相同就拿掉），兩個表單（專案、系統）都改傳它。與 `useBrainConnection` 的 `announceFresh` 同一做法；更新式為純函式，不用 `RegExp`（U16 lint 區塊）。開表單、取消、建立成功時清空 `formFailure` 的既有行為不變。
+- **既有案例調整**：「連續兩次同樣的建立失敗都被播報」（名稱不變）的比對改為去掉零寬空白後比對（新增共用 `stripMark`），`@purpose`／`@note` 改述重唸機制。
+- **新增 e2e（`object-picker.spec.ts`）**：「重試建立時播報區不在兩次失敗之間退回清單狀態」：清單有 1 個自有專案、POST 一律 409；播報區先為「已載入 1 個專案」；自第一次送出起連送兩次，斷言 POST 2 次、去掉零寬空白後等於「已有同名的專案，請換一個名稱」的播報恰 2 次、且這段期間播報區沒有任何一次含「已載入」。
+
+### 實跑（皆對 `vite preview` 生產建置，port 4811，跑完已停止 preview）
+
+| 指令 | 結果 |
+|---|---|
+| `npm --prefix frontend run build` | 通過（324 個模組；只有既有的 chunk 大於 500 kB 警告） |
+| `BASE_URL=http://localhost:4811 frontend/node_modules/.bin/playwright test --config frontend/playwright.config.ts tests/e2e/entry-page.spec.ts tests/e2e/object-picker.spec.ts tests/e2e/a11y.spec.ts --retries=0` | **120 passed / 0 failed**：`U14 entry page` **60**（58＋2 新）、`U16 object picker` **33**（32＋1 新）、`U17 a11y gate` **27**（數字取自 `--list` 輸出 `Total: 120 tests in 3 files`） |
+| `npm --prefix frontend run lint` | **0 errors、2 warnings**（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，既存） |
+| `tsc -b frontend` | exit 0 |
+| `python3 scripts/validate_repo_contract.py` | 通過 |
+
+### 突變（每項：套用 → 重建 → `--retries=0` 跑該 spec → 以檔案編輯還原 → sha256 與基線相同；未用 git checkout）
+
+基線（`shasum -a 256`）：`useBrainConnection.ts` `512878183e24fc5c4a63b920a834758eec188eac426e761387627afde5a80619`、`ObjectPickerCreateForm.tsx` `127b366ead16a5e14c2d2a1118d7abe4d4a933b8ddfbb7d1d2eecc9813379e2d`、`ObjectPicker.tsx` `28477cc2a5c4ee9593d1c422a80f4a3d56aeed8cc7c1cdba5737fafc7b568fa9`。
+
+| 編號 | 突變 | 結果 |
+|---|---|---|
+| M-R8 | `afterNonTurnSend` 一律回 `NOTHING_SENT`（等同還原三個送出點的覆寫） | `entry-page.spec.ts` **58 passed / 2 failed**：「送出原句後切換對象…原句標為未送達」紅（`data-pending` 期望 false 收到 true）、「反問選擇送出後切換對象…反問可重選」紅（`data-state` 期望 default 收到 picking） |
+| M-R9 | `submit` 內還原 `onFailure(null)`（以型別斷言呼叫，使建置通過） | `object-picker.spec.ts` **32 passed / 1 failed**：「重試建立時播報區不在兩次失敗之間退回清單狀態」紅（期間播報區出現「已載入 1 個專案」） |
+
+兩項還原後三檔 sha256 皆與基線相同；重建後上表三個 spec 合計 120 passed。
+
+**未做**：`tcms_validate.py`、`validate_env_contract.py`、`check:ws-types` 本輪未跑（未改契約與環境設定）；`entry-page-live.spec.ts` 未跑。

@@ -54,6 +54,7 @@
     "UIP-3",
     "UIP-4",
     "UIP-5",
+    "MB-9",
     "AC12.1.2",
     "AC12.1.3",
     "AC12.2.4",
@@ -65,10 +66,16 @@
   ],
   "coverage": [
     {
+      "id": "MB-9",
+      "status": "OK",
+      "target": "frontend/src/pages/MembersListPage.tsx",
+      "note": "merge-blockers.md 第 9 項（nfr-requirements review-05 R-02）：成員超過 100 位時整表隱藏，使唯一的成員管理入口失效。依使用者 2026-10-23 裁決改為前端分頁（每頁 50 位、上一頁／下一頁、「第 N／M 頁、共 K 位」），未改任何 U19 端點。測試：tests/e2e/member-pages.spec.ts 案例 1（改寫並改名）與 1b（新增），突變皆致紅。未斷言：「當前頁變空退回」與「邀請後跳到新列所在頁」。"
+    },
+    {
       "id": "UIP-1",
       "status": "OK",
       "target": "frontend/src/pages/MembersListPage.tsx",
-      "note": "閘門在「資料→視圖」轉換點，不在列的 map 內部，故「不渲染半套清單」是結構保證。100 取自 user_router.py:146-147 的 MAX_PAGE_SIZE，不另立數字。突變驗證：> 改為 >= 使 100 位那一半紅燈（m1）。 實作落點（完整）：frontend/src/pages/MembersListPage.tsx (MAX_RENDERED_MEMBERS 渲染閘) + tests/e2e/member-pages.spec.ts『renders the member list up to 100 rows and replaces it with a notice beyond that』"
+      "note": "**2026-10-23 合併前必修第 9 項改寫**（使用者裁決「前端分頁顯示全部」）：原 100 列整表隱藏閘與「成員過多」提示已移除——它讓超過 100 位的專案無法經唯一入口管理成員。現為前端分頁：MEMBERS_PER_PAGE = 50，切頁在「資料→視圖」轉換點（visibleMembers），頁次為導出值並夾在 [1, 總頁數]；切頁不發請求。實作落點：frontend/src/pages/MembersListPage.tsx（MEMBERS_PER_PAGE、totalPages／currentPage／visibleMembers、member-list-pagination）＋ tests/e2e/member-pages.spec.ts『paginates more than 100 members 50 per page so every member stays reachable』（取代舊名『renders the member list up to 100 rows and replaces it with a notice beyond that』）與『splits exactly 100 members into two pages of 50』。突變：還原整表隱藏閘 → 案例 1 紅；總頁數 off-by-one → 1b 紅。伺服器分頁（OPEN-MP24-6）仍開放。"
     },
     {
       "id": "UIP-2",
@@ -200,7 +207,7 @@
       "id": "BR25.1",
       "status": "OK",
       "target": "frontend/src/pages/MemberDetailPage.tsx",
-      "note": "二次確認的**存在**經 e2e 間接驗證（案例 3 必須先點 member-detail-remove 才找得到 remove-confirm-accept；少了確認框該步驟即失敗）。「焦點預設在取消」已實作但未斷言。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (confirmOpen 二次確認 ＋ cancelButtonRef 預設焦點) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』"
+      "note": "二次確認的**存在**經 e2e 間接驗證（案例 3 必須先點 member-detail-remove 才找得到 remove-confirm-accept；少了確認框該步驟即失敗）。「焦點預設在取消」自合併前必修第 23 項（2026-10-26）起經 e2e 斷言（開啟確認框後 remove-confirm-cancel 為焦點）。 實作落點（完整）：frontend/src/pages/MemberDetailPage.tsx (confirmOpen 二次確認 ＋ cancelButtonRef 預設焦點) + tests/e2e/member-pages.spec.ts『updates the list in place after invite, role change and removal without refetching it』『keeps keyboard focus inside the remove confirmation, closes it on Escape and returns focus to the remove button』"
     },
     {
       "id": "BR25.2",

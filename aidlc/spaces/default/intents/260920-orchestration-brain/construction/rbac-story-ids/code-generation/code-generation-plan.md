@@ -175,6 +175,19 @@ Testing Contract 的 `methodology` 為 **`test-after`**、`test_strategy` 為
 
 ---
 
+## 一之一、code-generation Request Changes（2026-10-20）：合併前必修第 4 項的落點
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。該表把**第 4 項**（`review-03` R-01：`BR7.1`–`BR7.3` 只檢查受邀者的角色，未檢查 J5 `authorization_status` 與 `is_active`，待核准或已停用的帳號可能被加為成員或被自動選為管理者）劃給本單元。
+
+**本單元不新增程式步驟，第 4 項的程式修正落在 `membership-service`（U19）**，理由：
+1. 本單元 `functional-design/rules.md:886-888` 逐字：「`BR7.1`–`BR7.5` 是本單元**定義**而由 `U19` **執行**的規則」（`BR5.5`）。本單元交付的程式只有 seed 矩陣、`rbac.py` 的 log 與 `STORY_FEATURE_LABELS`（見 `source-manifest.json`），沒有任何邀請或自動改選的執行路徑可加檢查。
+2. 檢查的實際落點是 `backend/services/membership_service.py`（`REQUIRED_INVITEE_STORY_ID = "K3"` 於 `:71`，邀請與改選候選集合的判定在同檔）。把 `authorization_status == "approved"` 與 `is_active` 疊加在 `K3` 檢查之上，並附「待核准帳號被邀請 → 拒」「已停用帳號被邀請 → 拒」「自動改選跳過待核准／已停用成員」的測試，是 U19 的計畫步驟。
+3. 已核可的 `rules.md` **不回改**（`team.md`：下游不回改已核可上游）；`BR7.1`–`BR7.3` 疊加帳號狀態條件一事，以本節與 `membership-service` 計畫中的對齊紀錄為準。
+
+本節同時記載一個既存狀態：Step 10 的 `10c`（`M3`）與 `10d`（`M4`）在先前輪次即為未勾。本輪不改變其狀態，交由本輪重新查驗與審查判定是否確實未做。
+
+---
+
 ## 二、刻意省略的六個基準步驟，逐一記明理由
 
 | `plan_profile.steps` 的項目 | 省略理由 |

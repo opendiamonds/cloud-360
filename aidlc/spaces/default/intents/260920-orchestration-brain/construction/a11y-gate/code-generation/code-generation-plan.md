@@ -55,7 +55,7 @@
 - [x] **Step 11 — 跑測試並做突變驗證（`M1`–`M12`）**：全綠後逐一套用 `security-design.md` 第八節 `M1`–`M10` 與 `D-08` 的 `M11`／`M12`，每一道：套用 → 確認紅在預期的那一層 → 還原 → 確認綠；`M10` 以環境變數注入一次性失敗並設 `CI=1` 使 `retries: 1` 生效，驗證過期檢查不誤紅——若誤紅，依 `D-03` 備案改以 project `dependencies` 拆出過期檢查（會改 `playwright.config.ts`，記入 `code-summary.md`）。
 - [x] **Step 12 — 規則分類實查（`D-06`）**：以 `axe.getRules(['wcag2a','wcag2aa','wcag21a','wcag21aa'])` 列出實際執行的規則，與 `C-03` 規則 5 清單交叉比對；不符時以實查為準，調整 Step 8(a) 的清單並記錄。
 - [x] **Step 13 — 環境與建置檢查**：`npm run lint`（0 errors，warning 數不增）；`npm run build`（含 `tsc -b`）；`grep -rn "axe-core" frontend/src` 為 0、`dist/` 內 `axe` 為 0（`A11Y-S1`）；`python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` 通過；實測 `a11y.spec.ts` 總耗時（`H-2`）。
-- [x] **Step 14 — 規格註解（`test-case-authoring.md` §4.4）**：21 個 `test()` 前各加 `@purpose`／`@given`／`@step`／`@pass`／`@ui`／`@story`／`@note`；`@ui` 用 `App.tsx` 實有的路由；`@story` 寫 `N-9`（無故事單元）；**不寫 `@api`**（受測對象不打真實 API，寫了是假端點）。`describe` 名稱定為 `U17 a11y gate`，合併後不得再改。
+- [ ] **Step 14 — 規格註解（`test-case-authoring.md` §4.4）**：21 個 `test()` 前各加 `@purpose`／`@given`／`@step`／`@pass`／`@ui`／`@story`／`@note`；`@ui` 用 `App.tsx` 實有的路由；`@story` 寫 `N-9`（無故事單元）；**不寫 `@api`**（受測對象不打真實 API，寫了是假端點）。`describe` 名稱定為 `U17 a11y gate`，合併後不得再改。
 - [x] **Step 15 — 文件與追溯**：`code-summary.md`（含第三節各帶入事項的結果、第四節的修改清單、Step 3 的版本資訊、Step 10 的完整初始違規清單、Step 11 的突變結果、Step 13 的耗時）、`traceability.json`、`source-manifest.json`。
 
 ## 六、交付檔案（預估）
@@ -81,6 +81,14 @@
 3. **e2e 只能在本機以 `vite preview` 跑**：Docker 不在本機時，`ui-regression` 的真實 compose stack 跑不了；本單元的 spec 全部走攔截層，與 stack 的差異只在前端是否由 nginx 服務，不影響掃描結果。
 4. **證據留存缺口不在本單元修**：`ui-regression` 沒有 artifact 上傳，綠燈時 axe 結果零留存。
 5. **追溯 sensor 會報 no NFRx.y IDs**，原因是上游沒有無障礙 NFR，照實保留。
+
+## 九、code-generation Request Changes（2026-10-20）：本單元無劃入的合併前必修項
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項。逐列核對該檔第 1–19 列的「單元」欄，**沒有任何一列劃給 `a11y-gate`**（`grep -c "a11y" merge-blockers.md` 為 1，唯一命中是第 2 列記載 `a11y.spec.ts` 作為 entry-page-ui 修正的回歸測試）。
+
+但其他單元本輪的修正改到了本單元掃描的畫面：`entry-page-ui` 新增對話中的系統提示列與「這句沒有送達」狀態，`member-pages-ui` 的成員頁新增「查不到這個專案」狀態。因此本輪只做回歸驗證，不改程式。
+
+- [x] **Step 16 — 回歸驗證**：以 `npm run build` ＋ `vite preview` 生產建置跑 `tests/e2e/a11y.spec.ts` 全部案例須全綠；`a11y-baseline.json` **不得新增條目**（新出現的違規屬第四節第 1 類，應修元件而非收進基準——若出現即停下回報，不在本單元擅改他單元元件）；過期檢查不得誤紅。結果記入 `code-summary.md` 新增一節；`source-manifest.json`、`traceability.json` 無變更則不動。
 
 ## Testing Contract
 

@@ -79,3 +79,31 @@ repo 無覆蓋率量測機制（`team.md`）；以每元件 5–8 案、純函�
 - 專案／系統：經 `HierarchyFacade` 建立，不直接插表；專案 > 50 的案例以迴圈建立。
 - U11／U12：以替身取代 `IntentRouter.classify` 與 `WorkOrchestrator`，介面依已交付簽章；不呼叫任何 LLM。
 - 唯一標記字串：token、使用者原句各以 `uuid4()` 產生，斷言 log、回應標頭與送出訊息不含它。
+
+## 七、合併前必修第 2 項(a)：錯誤 `turnId` 規則表（計畫 §六 Step 13–16）
+
+執行指令與 §二 相同（本單元測試一行 ＋ `tests.test_ws_contract`），另跑全套：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests
+```
+
+| 案例 | 落點檔案 | 斷言 |
+|---|---|---|
+| T1 訊框過大／二進位／頻率超限 | `test_brain_gateway_limits.py` | `error` 的 envelope 與 payload `turnId` 皆為 `None`，且通過 `WsEnvelope.model_validate` |
+| T2 重驗拋例外 | `test_brain_gateway_limits.py` | 同上 |
+| T3 信封驗證失敗；反問等待中格式錯誤的選擇 | `test_brain_gateway_turn.py` | `null` 錯誤；反問保留，之後合法選擇以原輪 `T` 交辦 |
+| T4 ready 後再送 `hello` | `test_brain_gateway_handshake.py` | `null` 錯誤、連線保留 |
+| T5 無待選反問時送選擇 | `test_brain_gateway_turn.py` | `null` 錯誤 |
+| T7 三種非輪次請求失敗 | `test_brain_gateway_fanout.py` | 每種一案，`null` 錯誤 |
+| T9 未預期例外 | `test_brain_gateway_turn.py` | 輪內 → 帶 `T` 的 `INTERNAL_ERROR` 且該輪之後無訊息、下一輪正常；非輪次 → `null` |
+| 結構 | `test_brain_gateway_rules.py` 或既有結構測試檔 | AST：`_mint_turn_id` 呼叫點恰為 `_on_user_message` 與 `GatewaySink.emit_turn` |
+
+突變（每項：套用 → 確認紅 → 還原 → 以 sha256 對照基線並確認綠）：
+
+| 突變 | 預期紅燈 |
+|---|---|
+| M1 `_send_single_error` 還原為 `turn_id or _mint_turn_id()` | T1–T5、T7 |
+| M2 信封驗證失敗時清除 `pending_clarify` | T3 |
+| M3 T9 分支不理會開啟中的輪次（一律 `null`） | T9 輪內案 |
+| M4 `_on_set_work_target` 加回 `_mint_turn_id()` | 結構測試 |

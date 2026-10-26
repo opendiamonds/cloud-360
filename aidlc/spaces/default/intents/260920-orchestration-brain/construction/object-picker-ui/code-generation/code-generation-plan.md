@@ -55,9 +55,9 @@
 - [x] **Step 7 — 前端行為測試：寫並跑 `object-picker.spec.ts`**：沿用 `entry-page.spec.ts` 的假大腦（`routeWebSocket` ＋ `wsFrames.ts` 建構器）與 `page.route`。至少涵蓋：`frontend-components.md` §十之一的 11 列（依第二節取代表修正）、`N-01` 兩情境、`N-02` 的 30 專案請求計數與搜尋命中、`D-01` 的展開與補抓競態、`OPN-02` 晚到回應、`D-02` 的同任務雙送出、`OPN-05`／`D-05` 斷線（含連續兩次）、`OPN-13` 惡意名稱、`OPN-14` 特殊字元、`OPN-15` 主控台計數與儲存鍵、`OPN-21` 字串 id 與「目前」、`NFR2.160` 回推前不變、`NFR11.160` pathname 序列（三頁）、`OPN-16` 404 文案、全形搜尋。請求計數類一律對 preview 執行。跑綠。
 - [x] **Step 8 — lint 區塊（Environment/build configuration）**：依 `security-design.md` §一 ＋ `D-06` 在 `frontend/eslint.config.js` 末端新增區塊；`npm run lint` 0 errors、warning 數不增。
 - [x] **Step 9 — 無障礙掃描點**：`a11y.spec.ts` 新增兩個掃描點（`logical-components.md` §二），樁化全部 `/api/hierarchy`；跑 `U17` 全部 test 綠，`a11y-baseline.json` 不變。若掃出選單違規，在本單元修（只改選單檔案的無障礙屬性）；選單以外的違規停下回報。
-- [x] **Step 10 — 回歸**：跑 `entry-page.spec.ts`、`entry-page-live.spec.ts` 與其他既有 brain 相關 spec 全綠（`OPEN-OP16-4`）。
+- [ ] **Step 10 — 回歸**：跑 `entry-page.spec.ts`、`entry-page-live.spec.ts` 與其他既有 brain 相關 spec 全綠（`OPEN-OP16-4`）。
 - [x] **Step 11 — 突變驗證（M1–M16）**：依 `security-design.md` §六 ＋ `D-02`／`D-07`／`D-01` 逐一套用 → 確認紅在預期的檢查（lint 或 e2e） → 還原 → 確認綠。**M9 必須實際看到紅燈**，看不到就改測法（`D-02`）。每條結果記錄。
-- [x] **Step 12 — 環境與建置檢查**：`npm run build`（含 `tsc -b`）；`N-05` 三個比較基準完工後重取並比對相同；`python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` 通過；`git diff --stat` 中 `backend/`、`deploy/`、`.github/` 零變更。
+- [ ] **Step 12 — 環境與建置檢查**：`npm run build`（含 `tsc -b`）；`N-05` 三個比較基準完工後重取並比對相同；`python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` 通過；`git diff --stat` 中 `backend/`、`deploy/`、`.github/` 零變更。
 - [x] **Step 13 — 規格註解（`test-case-authoring.md` §4.4）**：`object-picker.spec.ts` 每個 `test()` 前加 `@purpose`／`@given`／`@step`／`@pass`／`@ui`／`@story`（`US9.2`）／`@note`；`@ui` 只用 `App.tsx` 實有路由（`/`、`/workspace`、`/assessment`）；**不寫 `@api`**（全部攔截，寫了是假端點）。`describe` 名稱定為 `U16 object picker`，合併後不得再改。
 - [x] **Step 14 — 文件與追溯**：`code-summary.md`（第三節各事項結果、三個重開檔的改動清單、`D-05` 採用寫法的 lint 實證、突變結果、比較基準、關卡事項 `G-1`–`G-6`）、`traceability.json`、`source-manifest.json`。
 
@@ -84,6 +84,14 @@
 4. **斷線時清 `pickerOpen` 的寫法**依審查讀規則原始碼的結論採「依前值調整 state」；仍以 `npm run lint` 實證並記錄。
 5. **e2e 只能在本機以 `vite preview` 跑**（無 Docker）；全部走攔截層。
 6. **關卡事項**：`G-1` `CreateConfirmCard` 不實作；`G-2` `AC9.2.3` 字面；`G-3` 刪除路徑不存在；`G-4` 新建圖無系統歸屬；`G-5` 成員選不了非自有專案；`G-6` 被移出的建立者看到「請稍後再試」。
+
+## 八、code-generation Request Changes（2026-10-20）：R-08／R-09 已修，本輪重新審查
+
+使用者送出 Request Changes 時逐字寫明「object-picker-ui 的 R-08、R-09 已修，重新審查即可」。查證：兩項的修正記於 `code-summary-corrections.md` §八（`:150-158`）——R-08 更正 `traceability.json` 三列，R-09 收窄 `resize` 判定為只看寬度並加 `overscroll-contain`。`merge-blockers.md` 第 1–19 列沒有任何一列劃給本單元。
+
+本輪不改程式；但其他單元本輪改到了本單元會碰到的畫面（`entry-page-ui` 的對話系統提示與 `ConversationView.tsx` 的顏色、`a11y-gate` 新增三個掃描點），所以先做一次回歸再送審。
+
+- [x] **Step 15 — 回歸驗證**：以 `npm run build` ＋ `vite preview` 生產建置跑 `tests/e2e/object-picker.spec.ts`（應為 32 案）與 `tests/e2e/a11y.spec.ts` 全綠；`npm run lint` 0 errors；`python3 scripts/validate_repo_contract.py` 通過。結果記入 `code-summary-corrections.md` 新增一節；`source-manifest.json`、`traceability.json` 無變更則不動。任一失敗即停下回報，不在本單元修他單元的檔。
 
 ## Testing Contract
 

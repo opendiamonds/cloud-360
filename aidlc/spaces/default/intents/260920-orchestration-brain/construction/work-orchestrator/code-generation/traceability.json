@@ -384,6 +384,24 @@
       "status": "OK",
       "target": "backend/services/redis_gateway.py",
       "note": "U10 既存缺陷已於本批修正（使用者 2026-10-12 裁決）：is_noscript_error 另認 RedisErrorTypes.noscript（redis-py 8.x 的 NoScriptError），保留原 NOSCRIPT 前綴判定。回歸測試 backend/tests/test_redis_gateway_noscript.py（CI）與 tests_redis.test_work_item_lua.GatewayColdStartTest（真實 Redis）；突變驗證見 code-summary.md 第五節 F1。"
+    },
+    {
+      "id": "CG-MB18-CAPACITY",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_store.py",
+      "note": "合併前必修第 18 項（OPEN-N10-3；計畫 §六 Step 13–17；使用者裁決 [WO-MB18]=A）。實作：put_work_item.lua（進行中 ≥ MAX_ACTIVE_WORK_ITEMS=5 回 -1）、update_work_item.lua（非終態→終態時修剪到 MAX_TERMINAL_WORK_ITEMS=20，只刪其他終態項）、session_types.ref_put_work_item／ref_update_work_item、SessionStore.WorkItemPutResult。測試：WorkItemCapacityTest（10 案）、WorkItemCapacityPropertyTest（@given：進行中 ≤ 5、終態 ≤ 20、進行中從不被刪）；真實 Redis 一致性 backend/tests_redis/test_work_item_lua.py 的 test_put_capacity_cases_match_the_reference／test_update_prune_cases_match_the_reference（opt-in，不在 CI）。"
+    },
+    {
+      "id": "CG-MB18-DISPATCH",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "WorkCapacityFlowTest（6 案）：整批預檢（4＋2 整批拒絕且 Redis 無新欄位、3＋2 照常建立、終態不佔名額）、併發越線時同批已寫入項轉失敗（failureReason＝PHRASES[capacity_exceeded]）、轉終態 requestText 截成 200 字（停掉與逾時兩路）。實作在 work_orchestrator.dispatch／_abandon_batch／_cas。"
+    },
+    {
+      "id": "CG-MB18-GATEWAY",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_rules.py",
+      "note": "跨單元（U13）：brain_gateway_rules.error_for 把 WorkCapacityExceeded 對到既有 INVALID_REQUEST，訊息固定「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」（不改 WS 契約）。WorkCapacityErrorTest；端到端 backend/tests/test_brain_gateway_turn.py 的 WorkCapacityTurnTest。"
     }
   ]
 }

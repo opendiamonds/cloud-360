@@ -86,6 +86,23 @@ SQLAlchemy 的隱含預設，而該預設在 2.1 由 `psycopg2` 改為 `psycopg`
 合計 **26** 個測試，分佈符合 standard 的「每元件 5–8」（併發那一檔是 3，
 因為它只有三個斷言面，而硬湊到 5 個會製造恆真測試）。
 
+### 3.1 合併前必修第 1、4、10、15、16 項（Request Changes 修訂，計畫 Step 15）
+
+新增測試落在既有三支檔與 `tests_pg/`（超出每元件 5–8 的部分是必修項的回歸測試，`scope_floor` 允許為特定缺陷加最窄的測試）：
+
+| 項 | 檔案 | 案例（通過條件） |
+|---|---|---|
+| #1＋#4 | `test_membership_facade.py` | 最後一位管理者停用、有合格接手人 → 守門放行，接手人成為 `project_admin` 並寫一筆 `auto_reselection` 事件；無合格接手人 → `LastAdminGuard`；候選中待核准／停用／只有 `K3.view` 的成員一律不被選中；非擁有但為最後管理者的專案也被改選 |
+| #4 | `test_membership_endpoints.py` | 邀請已停用帳號 → 拒；邀請待核准帳號 → 拒（皆不寫成員列） |
+| #10 | `test_membership_endpoints.py` | 注入單一專案改選失敗 → 停用端點 500，本體列出該專案 id；其他專案已改選；重送停用 → 補跑成功，且已成功的專案不產生第二筆事件 |
+| #15 | `test_membership_data.py` | 補齊函式：無成員列的專案 → 擁有者成為 `project_admin`；重跑不重複；終檢失敗拋出 |
+| #16 | `test_membership_facade.py` | PostgreSQL dialect 下取鎖前送出 `SET LOCAL lock_timeout`（mock 連線記錄 SQL）；SQLite 下不送；`MembershipLockTimeout` → 端點 503 |
+| #16 | `tests_pg/test_membership_concurrency.py` | 一個交易持鎖時，第二個交易約 5 秒後得到 `MembershipLockTimeout`（真實 PG，CI 的 `concurrency` job） |
+
+突變（每項先 `grep` 確認突變已寫入，還原後確認為 0）：合格謂詞拿掉 `is_active`／`approved`／`K3.edit` 任一條件 → 對應案例紅；拿掉失敗回報 → #10 案例紅；拿掉「無成員列」條件 → #15 重複案例紅；拿掉 `SET LOCAL lock_timeout` → #16 mock 案例紅。
+
+完整套件一律以 `backend/.venv` 執行：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`（本機系統 Python 的套件版本與 `requirements.txt` 不一致）。`tests_pg/` 需真實 PostgreSQL，本機無 Docker 時以 CI 結果為準並據實記為本輪未驗。
+
 ## 四、Mock／stub 指引
 
 | 對象 | 做法 |

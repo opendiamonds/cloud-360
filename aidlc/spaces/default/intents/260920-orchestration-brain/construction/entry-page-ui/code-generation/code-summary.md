@@ -308,3 +308,176 @@ seed 角色 `Platform_Admin` 與 `Developer` 皆具 `K1 view`（`rbac_seed_data.
 | `projectName` 型別宣告 | 宣告只在 `ws-contract.d.ts:339`；其餘 4 處為讀取（`ContextBar.tsx`、`brainProtocol.ts`）與建構器參數（`wsFrames.ts`） | 符合 `NFR5.140` |
 | `cloud360.brain.v1\|'bearer\.'` | 1：`ws-contract.d.ts:462`（產生檔） | 見 §十二 第 4 點 |
 | `console.`（`src/brain`、`components/brain`、`EntryPage.tsx`） | 5：malformed frame、ignored message type（兩處）、connection closed（關閉碼）、empty turn（turnId） | 皆只帶 type／關閉碼／turnId，不含 payload |
+
+## 十六、合併前必修第 2 項(b) 與 `OPEN-MB5-1`（計畫 §九 Step 16–18，2026-10-24）
+
+### 十六之一、裁決
+
+- `[EP-MB2]`=A：非輪次錯誤（`turnId === null`）以對話中的**系統提示列**呈現——在當前段落末端插入獨立項目、不歸屬任何輪次、每則各自保留；不動任何進行中輪次；反問處於 `picking` 時收到 null 錯誤（`[GW-MB2]`=A 的 T3）改回 `default`、可重選。
+- `[EP-MB5]`=A：`OPEN-MB5-1` 交後續 intent（逐槽位多輪澄清），本分支不改程式。**已知限制**：同一句有兩個以上槽位需澄清時，選定其一只交辦該槽位與已確定槽位，其餘不確定槽位不交辦，使用者也不會收到「另一部分沒有執行」的提示。
+
+### 十六之二、變更
+
+| 檔案 | 變更 |
+|---|---|
+| `frontend/src/brain/useBrainConnection.ts:169-198` | `error` 分支：`turnId` 以 `string \| null` 取得（拿掉 `?? ''` 與暫時註解）；null → 派送 `systemNotice`、`setAnnouncement(message)` 後返回，**不** `setAwaitingReply(false)`、**不**刪 `turnTextRef`；帶 turnId 者維持原路徑 |
+| `frontend/src/brain/brainTranscript.ts` | 新增 `NoticeItem`（`:73`，`kind: 'notice'`、`id`、`code`、`message`、`segment`）與 `systemNotice` 動作（`:113`、reducer `:318`）：只 `append`，不呼叫 `clearPending`／`updateTurn`、不進 `turnSegment`；同段 `picking` 的反問改回 `default` 並清 `pickedId` |
+| `frontend/src/components/brain/ConversationView.tsx` | 新增 `SystemNotice`（`data-testid="brain-system-notice"`、`data-code`，沿用既有紅色錯誤文字樣式，不另設 aria-live——播報由連線寫入既有 LiveRegion，避免重複）；notice 項目下同樣列出錨定其上的工作項（`anchorWorkItems` 會把錨點落在最後一則項目上，未渲染會讓工作項消失）；使用者原句新增 `data-pending`（`true`／`false`）供 e2e 觀察等待旗標 |
+| `frontend/src/brain/testing/wsFrames.ts:51` | `errorFrame` 的 `turnId` 改為 `string \| null`（envelope 與 payload 兩份同值，BR1.5） |
+| `frontend/tests/e2e/entry-page.spec.ts` | 新增 4 案（見十六之三），規格註解比照既有形狀 |
+
+**解讀（記明）**：計畫寫「若該連線的反問處於 `picking`」；`ClarifyItem` 不帶連線 id，而 `picking` 只由本頁連線的 `selectCandidate` 在本頁所讀段設定，故以「`systemNotice` 所屬段（接收頁目前讀取的段）中處於 `picking` 者」實作，不跨段改動其他頁留下的反問。`type: 'error'` 動作的 `turnId` 維持 `string`——型別上 null 只可能走 `systemNotice`。
+
+### 十六之三、e2e 與指令（全部實跑）
+
+指令：`npm --prefix frontend run lint`（0 errors、2 warnings，皆為既存 `exhaustive-deps`：`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344`）；`frontend/node_modules/.bin/tsc -b frontend` 結束碼 0；`npm --prefix frontend run check:ws-types` 一致；`npm --prefix frontend run build` 成功；`vite preview --port 4179 --strictPort` 服務生產建置後 `BASE_URL=http://localhost:4179 playwright test --config frontend/playwright.config.ts entry-page.spec.ts`：**53 passed**（既有 49 ＋ 新 4）；回歸 `entry-page.spec.ts object-picker.spec.ts a11y.spec.ts` 合計 **109 passed**（53 ＋ 32 ＋ 24）。每次執行後停止 preview 伺服器。
+
+| 計畫代號 | 測試名稱（`U14 entry page › …`） | 斷言 |
+|---|---|---|
+| E1 | `等待中收到非輪次錯誤只多一則系統提示` | 1 則 `brain-system-notice`；原句 `data-pending=true`；送出鈕停用；0 則大腦訊息；之後 `t-mb1` 的 token＋done 呈現在該輪（`data-status=done`），系統提示仍 1 則、送出鈕恢復 |
+| E2 | `連續兩則非輪次錯誤各自保留` | 2 則系統提示，依序內容與 `data-code` 正確；0 則大腦訊息 |
+| E3 | `反問選擇被非輪次錯誤拒絕後可重選` | 選 target-1 → `picking`；null 錯誤後 `default`、target-2 可點；再選送出第 2 則 `select_clarify_candidate{candidateId:target-2}` |
+| E4 | `帶輪次的錯誤標在該輪且不出現系統提示` | `t-mb4` 訊息 `data-status=error` 含訊息；0 則系統提示；送出鈕恢復 |
+
+### 十六之四、突變（套用 → 紅 → 還原 → sha256 對照基線 → 綠；每次突變後重新 `npm run build` 並重啟 preview）
+
+基線 sha256：`useBrainConnection.ts` `3018179c…7e3a`、`brainTranscript.ts` `f551e2ec…a3f4`。
+
+| 突變 | 改動 | 結果（4 案） | 還原 |
+|---|---|---|---|
+| M-N1 | `useBrainConnection.ts:171` 改回 `env.turnId ?? payload.turnId ?? ''` | 3 紅：E1、E2（預期）與 E3（皆為 `brain-system-notice` 期望 1／2、實得 0）；E4 綠 | sha256 與基線相同 |
+| M-N2 | `systemNotice` 解除所有使用者輪次等待（`clearPending` 的語意；動作本身不帶連線 id，以清除全部 `pendingConnId` 表達） | 1 紅：E1（`data-pending` 期望 `true`、實得 `false`）；其餘綠 | sha256 與基線相同 |
+| M-N3 | `systemNotice` 把 `picking` 改為 `resolved` | 1 紅：E3（`data-state` 期望 `default`、實得 `resolved`）；其餘綠 | sha256 與基線相同 |
+
+還原後的全綠即十六之三的 53／109 案（在三道突變全部還原之後執行）。
+
+### 十六之五、ADR-0006 四面向與規則判定
+
+- IAM：不涉及（純前端呈現，伺服器授權不變）。encryption：不涉及（不新增儲存；系統提示只在記憶體 transcript）。network exposure：不涉及（零新連線、零新 HTTP 路徑）。audit logging：不涉及（console 未新增輸出，訊息不寫 log）。
+- `schema_rbac.sql`／`DEPLOY.md`、`LOCAL-DEV.md`：不觸發（零 DDL、未動 `database.py`／`nginx.conf`／`.env.example`／`render-env.sh`）。前端依賴鍵集合不變。
+- **同批合併約束**：本項必須與 `brain-gateway`（第 2 項 (a)）同批合併，理由記於 `functional-design/merge-blockers.md` 第 2 列。
+- 未做：真實 stack 層（`entry-page-live.spec.ts`）未對本項重跑——攔截層已直接注入 null 錯誤，真實 stack 下無可決定性觸發 T3 的路徑。
+
+## 重做（Code Generation 自頭重來，2026-10-25）
+
+<!-- 寫入時間：2026-10-26T03:35:12Z -->
+
+以既有實作逐步查驗已核可計畫，未修改任何程式碼。
+
+- **計畫勾選**：47／48。未勾第 291 行（Step 13：對 `docker-compose.test.yml` stack 跑 6a 正案與突變 D1）——本機 Docker daemon 未啟動，無法執行；與 HEAD 版勾選狀態一致。附帶說明：第 279、280 行（e2e 撰寫）依「交付物存在」勾選，`entry-page-live.spec.ts` 5 案、`regression.spec.ts` 13 案、`estimate-workspace.spec.ts` 2 案需真 stack，本輪只做 `--list`（21 tests 可列出），**不宣稱為綠**，突變 X1、X2 亦未執行。Step 16、17 的 null 錯誤語意依 `[EP-R2]`=A 修訂（最後送出的是未獲回應的 `user_message` 時解除等待並標未送達），以 merge-blockers 第 2 列為準。
+- **測試**（工作樹含其他單元未提交改動）：
+  - 後端全套：Ran 1319、**FAILED (failures=1, skipped=3)**——唯一失敗為 U13 的 `test_brain_gateway_limits.RevalidationTest.test_idle_connection_revalidates_every_sixty_seconds`（期望 4403、實得 4401），以真實時間輪詢、只在全套負載下出現；同 class 單獨重跑 5 次皆 OK，判為偶發。不能排除與本單元在握手多出的 `to_thread` 有關，與 §十二第 7 點記的偶發屬同類但案例不同。
+  - 本單元 18 模組：329 OK（skipped=3）；`dump_ws_contract.py --check`、`dump_openapi.py --check` 一致。
+  - 前端 `npm run lint` 0 errors（2 個既存 warning）；`tsc -b`、`check:ws-types`、`check:types` 通過；`vite build` 輸出至 scratchpad，`vite preview` 跑 `entry-page.spec.ts`：**60 passed**（§四、§十六之三的 49／53 已過時）。
+  - `validate_repo_contract.py`、`validate_env_contract.py` 通過；repo 未留下快取或建置產物（`tsc -b` 只更新 gitignore 的 `node_modules/.tmp/*.tsbuildinfo`）。
+- **合併前必修第 2 列 (b)**：已落地（`turnId == null` 走 `systemNotice`，無 `?? ''` 頂替；`token`／`cost_card` 缺 turnId 丟棄並 warn；反問依 `reopenPicking` 改回可選、依 `undeliveredUserId` 標未送達），null 錯誤相關 e2e 11 案全綠。須與 brain-gateway 的 (a) 同批合併。
+- **示範入口**：`大腦（示範）`、`DEMO SCOPE`、`'/brain'`、`brain_router` 在 `frontend/src`、`backend/main.py`、`backend/services` 皆 0 命中；`BrainPage.tsx`、`brain_router.py` 不存在（U13 `fa8ce42` 移除）；正式入口已接上（`DefaultRedirect` 對 `K1 view` 渲染 `EntryPage`、`sidebar-entry-link`）。
+- **6a 失敗只回滾、不開 revert**：**未實作**。`deploy.yml` rollback job 的「Open a revert PR for the bad merge」為 `if: always()`，不區分失敗來源；`DEPLOY.md` §5.13 亦寫失敗後會開 revert。仍為 build-and-test／合併前必做。
+- **突變抽驗**（scratchpad 副本，還原後 `cmp` 相同）：MA `reopenPicking=false`、MB `undeliveredUserId=null`、MC notice 改 `resolved` 各紅 2 案；後端 W1 拿掉可見性守門紅 5、V1 閉包回 `bool(ids)` 紅 5。
+- **ADR-0006 四面向**：IAM（gateway／facade 不 import 成員符號、靜態鎖在位）；token 只在 WebSocket 子協定、不進 URL／log，新程式不碰 storage（`AuthContext` 既有的 `sessionStorage` 非本單元引入）；console 7 處只帶 type／關閉碼／turnId；Encryption 與 Network exposure 零新持久化、零新端點。
+- **grep 判準**（Step 11）：storage 字樣 1 處（註解）；`4000`、`fetch(`、app 匯入 `brain/testing` 皆 0；`App.tsx`／`BrainTranscriptContext.tsx` 的 `key=` 皆 0；`cloud360.brain.v1` 只在產生檔。
+- **追溯文件**：`source-manifest.json` 53 路徑與 U14 commit `624c170` 雙向一致；`traceability.json` 106 列（101 OK、5 N/A）target 皆存在。§十六之二的行號與 E1 語意已被 `[EP-R2]` 修訂取代（以 merge-blockers 為準）。`unit-test-instructions.md` 寫 `python scripts/...`，本 worktree 只有 `python3`。
+
+## 第 26 項處置（計畫 §十 Step 19–22 與 Step 24 的非 CI 部分）
+
+<!-- 寫入時間：2026-10-26T23:31:19Z（date -u） -->
+
+來源：`construction/functional-design/merge-blockers.md` 第 26 列（review-03 R-01、R-02）。本段取代上方「重做」段中「6a 失敗只回滾、不開 revert：**未實作**」一句的現況描述（該句保留作為當時紀錄）。
+
+### 一、Step 19：`deploy.yml`
+
+| 位置（改後行號） | 變更 |
+|---|---|
+| `:35-43` | deploy job `outputs` 新增 `brain_ws_probe_failed: ${{ steps.brain_ws_probe.outcome == 'failure' }}`，附註解說明為何用 `outcome` |
+| `:596` | 步驟 6a「Verify the brain WS subprotocol survives the tunnel」加 `id: brain_ws_probe`；步驟內容未改 |
+| `:656-657` | rollback job 上方註解補「6a 失敗不開 revert PR」 |
+| `:798-805` | 「Open a revert PR for the bad merge」的 `if` 由 `always()` 改為 `always() && needs.deploy.outputs.brain_ws_probe_failed != 'true'`，附註解 |
+| `:889`、`:944-947` | notify job 的「Compose the Slack payload」新增 env `BRAIN_WS_PROBE_FAILED`，`REVERT_PR` 為空且 6a 失敗時印「Revert PR: 刻意未開（…）」，不再誤報為「衝突或建立失敗，需人工處理」 |
+
+不變的部分：rollback job 的 `if`（仍是 `failure() && needs.deploy.result == 'failure' && …`）、`permissions`、還原 last-good 步驟（無 `if`，預設 `success()`）、擷取失敗 log 與 Deploy Doctor 兩步（仍 `if: always()`）；未新增 secret；未碰 `deploy/.env` 的產生路徑（`render-env.sh` 仍是唯一產生點）。6a 以外的失敗來源：output 為 `'false'`（6a 成功或被略過），revert 照舊開。output 缺值（空字串）時 `'' != 'true'` 成立，也照舊開——失敗方向偏向既有行為。
+
+**超出 brief 字面的一處**：notify 的 Slack 文字。不改的話，6a 失敗時 `revert_pr` 為空，現行訊息會寫「未建立（衝突或建立失敗），需人工處理」，等於叫維運者去手動 revert，正好違反本項裁決。只改了該分支的文字與一個 env，不改 notify 的觸發條件與權限。
+
+**job outputs 在 job 失敗時仍可讀的依據**（context7 本輪無法使用：API key 無效，改查官方文件與 runner 原始碼）：
+1. GitHub Docs〈Workflow syntax〉`jobs.<job_id>.outputs`：「Job outputs containing expressions are evaluated on the runner at the end of each job.」「Job outputs are available to all downstream jobs that depend on this job.」該節**沒有**寫失敗時的行為。
+2. GitHub Docs〈Contexts〉：`steps.<step_id>.outcome` 為「The result of a completed step before continue-on-error is applied. Possible values are `success`, `failure`, `cancelled`, or `skipped`.」6a 沒有 `continue-on-error`，故 `outcome` 與 `conclusion` 相同；6a 因前面步驟失敗而沒跑時為 `skipped`。
+3. `actions/runner` 原始碼 `src/Runner.Worker/JobExtension.cs` 的 `FinalizeJob`：「Evaluate job outputs」區塊只以 `message.JobOutputs != null` 為條件，**不檢查** `jobContext.Result`；`FinalizeJob` 不論 job 成敗都會執行。值為空或可能含 secret 的 output 會被略過——本 output 的值是 `true`／`false`，兩者皆非空、不含 secret。
+4. repo 內前例：notify job 已在 deploy 失敗時讀 `needs.deploy.outputs.deployed`／`started`。但 `gh run list --workflow deploy.yml --status failure` 只有一筆（2026-07-12，早於 notify job），**沒有**實際失敗 run 可佐證，此點只算一致性，不算證據。
+
+**未驗證**：上述語意未在真實 Actions run 上觀察過（`ui-regression` 不執行 `deploy.yml`，本輪也不觸發部署）。第一次 6a 真正失敗時，應在該 run 的 notify 步驟 log 確認 `BRAIN_WS_PROBE_FAILED: true`，且 rollback job 顯示 revert 步驟為 Skipped。另：job 逾時或被取消時 6a 的 `outcome` 可能為 `cancelled`，此時 revert 會照舊開；6a 的最長耗時約 12 ×（5＋5）秒，遠低於 30 分鐘，判為可接受，記錄於此。
+
+### 二、Step 20：`DEPLOY.md`
+
+只改 §5.13 兩處：
+- `:2229`：括號改為「`rollback` 還原 last-good、交 Deploy Doctor，**但不開 revert PR**」，並補理由、裁決來源與機制（`brain_ws_probe` → `brain_ws_probe_failed` → revert 步驟的 `if`）、其他失敗來源照舊開、Slack 訊息會寫「刻意未開」。
+- `:2239`：「以 revert PR 回滾並交使用者裁決」改為「自動流程只還原 last-good（不開 revert PR），由維運者依上表定位後交使用者裁決；是否需要人工 revert 屬該裁決的一部分」。
+
+同檔其他提到 revert PR 的段落逐一判讀，**皆未改**：
+| 行 | 內容 | 判定 |
+|---|---|---|
+| `:1929-1930` | Redis 重啟驗證失敗 → rollback（還原、開 revert PR、Doctor） | 該步驟不是 6a，行為不變，仍為真 |
+| `:2029` | rollback job「該步驟之後三個 `if: always()` 步驟」 | revert 步驟的 `if` 仍以 `always()` 起頭；耗時估算不受影響 |
+| `:2036` | rollback 逾時 → revert PR 沒開 | 與失敗來源無關，仍為真 |
+| `:2057` | deploy job 被砍 → 自動 rollback ＋ revert PR | 逾時時 6a 的 `outcome` 不是 `failure`，revert 照開，仍為真 |
+| `:2126` | `EMBEDDING_PROVIDER` 缺值 → 自動 rollback ＋ revert PR | 該失敗發生在 6a 之前，仍為真 |
+| `:2246` | 「6a 失敗回滾後用它定位」 | 仍會回滾，仍為真 |
+
+### 三、Step 21：測試與突變
+
+`backend/tests/test_brain_ws_deploy_probe.py` 新增 `BrainWsProbeRollbackRoutingTest`（`:101-206`，4 案，皆附 `@purpose`／`@given`／`@step`／`@pass`／`@story`；受測對象是 workflow 檔，不寫 `@api`）：
+- `test_probe_result_leaves_the_deploy_job_via_outputs`：(i) 6a 有 `id`，deploy job outputs 恰有一個值為 `steps.<6a id>.outcome|conclusion == 'failure'`。
+- `test_revert_pr_step_is_skipped_when_probe_failed`：(ii) revert 步驟的 `if` 含 `always()` 且含 `needs.deploy.outputs.<該 output> != 'true'`。
+- `test_restore_and_doctor_still_run_when_probe_failed`：(iii) 雙向——rollback job 的 `if`、還原步驟與 Doctor 步驟的 `if` 都**不**引用該 output。
+- `test_slack_message_does_not_report_skipped_revert_as_conflict`：notify 讀該 output 且有「刻意未開」分支。
+
+測試不寫死 output 名稱：先由 6a 的 `id` 反查 outputs，(ii)／(iii) 再以查到的名稱比對。
+
+突變（腳本 `/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/mb26_mutate.py`）：突變施加在 `deploy.yml` 的**記憶體副本**上（以替身取代測試模組的 `DEPLOY_WF`），不寫任何檔；真實檔 sha256 前後皆為 `3b6d08cd508b5e4338b3370914a752dcbf54c342187526cfda60bc3bcbebb4f5`。
+
+| 代號 | 突變 | 紅燈（4 案中） | 還原後 |
+|---|---|---|---|
+| R1 | revert 步驟的 `if` 改回 `always()` | 1：`test_revert_pr_step_is_skipped_when_probe_failed` | 4／4 綠 |
+| R2 | 還原步驟加 `if: needs.deploy.outputs.brain_ws_probe_failed != 'true'` | 1：`test_restore_and_doctor_still_run_when_probe_failed` | 4／4 綠 |
+| R3 | 拿掉 deploy job 的 `brain_ws_probe_failed` output | 4（全部，第一案為直接斷言，其餘因找不到 output） | 4／4 綠 |
+
+### 四、Step 22：正向落點斷言
+
+admin（`Platform_Admin`）與 Developer 在 `rbac_seed_data.py:317`、`:325` 皆具 `K1 view`，落點為入口頁 `/`；`EntryPage.tsx:34` 的 `brain-entry-page` 無條件渲染。故正向落點一律為 `toHaveURL(/\/$/)` ＋ `getByTestId('brain-entry-page')` 可見，加在既有 `not.toHaveURL(/\/login$/)` 之後（原斷言保留）。
+
+| 原位置 | 測試 | 原有的後續錨點 | 本輪補上（改後行號） |
+|---|---|---|---|
+| `regression.spec.ts:93` | 登出後返回登入頁 | 「登出系統」可見（證明已在登入後版面，但不證明落點） | `:95-96`；`@step`／`@pass` 同步 |
+| `:117` | Platform_Admin 看得到系統管理區 | 「系統管理」可見 | `:121-122`；`@step`／`@pass` 同步 |
+| `:162` | Developer 看不到系統管理區（admin 段） | **無**：下一步直接 `goto('/admin/authorization-requests')` | `:168-169`；`@step` 同步 |
+| `:177` | 同上（Developer 段） | `sidebar-entry-link` 可見 | `:186-187`（`/waiting-approval` 在此即紅）；`@step`／`@pass` 同步 |
+| `:196`（`gotoAdmin`，8 案共用） | 使用者管理頁 8 案 | 點「使用者角色」後的 heading | `:207-208`；8 案的 `@step` 描述的是進入管理頁，與新增斷言不衝突，未改 |
+| `estimate-workspace.spec.ts:18`（`login` helper，2 案共用）與 `:36` | 兩案 | 其後 `goto('/cost')` 與頁面元素 | helper `:20-21`（`:36` 的重複 `not.toHaveURL` 未動，落點已由 helper 承擔）；兩案 `@step` 同步 |
+
+`describe`／`test` 字串零變更（`git diff -U0` 中含 `test(`／`describe(` 的變更行為 0）；`--list` 兩檔共 16 個測試，與改前相同。
+
+### 五、驗證（全部實跑）
+
+- 後端全套：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests` → **Ran 1326 tests，OK (skipped=3)**（約 105 秒；工作樹含其他單元未提交改動）。上一輪記的 U13 limits 偶發本次未出現。
+- `tests.test_brain_ws_deploy_probe tests.test_mcp_bridge_deploy`：20 案 OK（新增 4 案）。
+- `dump_ws_contract.py --check`、`dump_openapi.py --check`、`npm run check:ws-types`、`npm run check:types`：一致。
+- `npm run lint`：0 errors、2 warnings（既存）；`npm run build`：通過。
+- 攔截層回歸：`vite preview`（port 4173，已關閉）＋ `BASE_URL=http://localhost:4173 npx playwright test tests/e2e/entry-page.spec.ts` → **60 passed（42.0 秒）**。
+- `python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py`：通過。
+- 本輪未連 staging、未連共用 DB／Redis，未 commit、未 push、未觸發任何 workflow。
+
+### 六、規則判定
+
+- `LOCAL-DEV.md`：不觸發（本輪未改 `database.py` schema 補丁、`deploy/nginx.conf`、任何 `.env.example`、`render-env.sh`）。
+- `schema_rbac.sql`／`DEPLOY.md` 的 schema 同步：不觸發（零 DDL、零 seed 變更）；`DEPLOY.md` 的修改屬部署行為文件。
+- ADR-0006 四面向：**IAM**——rollback job 權限（`contents`／`pull-requests`／`actions: write`）未變，且 6a 失敗時少用一次 `contents: write`＋`pull-requests: write`；**Encryption**——不適用（無資料持久化與傳輸變更）；**Network exposure**——不適用（無新端點、無新對外呼叫）；**Audit logging**——6a 失敗的處置在 Actions log（revert 步驟顯示 Skipped）與 Slack 訊息（「刻意未開」）兩處可見，未減少可觀察性，output 值只有 `true`／`false`、不含 secret。
+
+### 七、計畫勾選
+
+全計畫 54 個核取方塊，現勾 51 個：Step 1–18 共 48 個中除第 291 行外的 47 個（逐項重新查驗後重勾），加 Step 19–22 的 4 個。查驗依據：ADR 正式檔存在且 Status 為 Accepted；三個前端目錄存在；facade 讀取方法的非測試呼叫點集合與 Step 1 一致（`brain_gateway.py` 5 處＝計畫 4 處＋本單元自己新增的 `describe_work_target`、`session_store.py` 1 處、`hierarchy_facade.py` 對 service 層）；後端全套、契約 drift、lint、build、攔截層 60 案、兩支 validator 皆綠；`frontend/package.json` 的依賴鍵在 U14 commit `624c170` 前後相同（現況多出的 `@axe-core/playwright` 由 U17 `e2771a0` 引入）；code-summary 各段、`source-manifest.json`、`traceability.json` 存在；Step 16–18 的 `systemNotice`、`brain-system-notice` 與 merge-blockers 第 2、5 列紀錄在位。Step 19–22 勾選。**第 291 行、Step 23、Step 24 不勾**（後兩者待 CI 實跑）。
+
+### 八、CI 結果與未驗證項
+
+- **CI 結果：待 CI 實跑**（Step 23，由主對話向使用者確認 commit 範圍、目標分支與 PR 後執行）。屆時記錄：`entry-page-live.spec.ts` 5 案、`regression.spec.ts` 中受影響 13 案、`estimate-workspace.spec.ts` 2 案的結果、總執行時間（對照 `ui-regression` 的 15 分鐘 `timeout 15m npx playwright test`）、`.stats.unexpected` 是否為 0、run 連結。
+- 突變 X1／X2：未在真實 stack 執行。
+- 6a 對 compose stack 的正反案（D1）與 rollback 分流的真實 Actions 行為：`ui-regression` 不執行 `deploy.yml`，CI 也跑不到，交 build-and-test；第 291 行不勾。
+- `traceability.json`：只更正兩條不實註記（`AC1.1.3`、`AC8.1.4` 原寫「交 build-and-test」，改為依 2026-10-27 裁決由 Step 23 的一次 CI 實跑承擔、跑完前不宣稱為綠；`AC8.1.4` 另補 (e) 的正向落點）。`source-manifest.json`：本輪無新增檔（五個改動檔皆已列入），未改。

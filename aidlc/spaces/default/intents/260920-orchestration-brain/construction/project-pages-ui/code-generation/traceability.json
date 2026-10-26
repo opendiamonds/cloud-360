@@ -55,7 +55,9 @@
     "NFR8.100",
     "NFR11.100",
     "NFR11.101",
-    "NFR11.102"
+    "NFR11.102",
+    "AC12.5.2",
+    "AC11.4.1"
   ],
   "coverage": [
     {
@@ -381,6 +383,24 @@
       "status": "OK",
       "target": "frontend/tests/e2e/project-pages.spec.ts",
       "note": "'switches tabs by keyboard without history entries or requests'：pathname 與 history.length 不變；突變 F5 使本案紅。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "backend/tests/test_membership_endpoints.py",
+      "note": "合併前必修第 14 項（[PP-MB14]=A）：非成員仍被拒，但成員四端點對「不存在」與「存在但非成員」回同一個不含 id 的 404。test_E1（非成員改 404）、test_E11（逐位元相同）、test_E12（成員之內角色不足與缺 K3 仍 403）、test_E13（拒絕 log 照記）；實作在 backend/services/membership_facade.py 的 _require_project_role／_assert_project_exists。突變 M14-1、M14-2 使 test_E11 紅。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/member-pages.spec.ts",
+      "note": "畫面面：'shows a fixed not-found sentence without the project id when the member list is 404' 與 'keeps the permission sentence when the member list is 403'；實作在 frontend/src/membership/membershipApi.ts 的 ProjectNotFoundError。突變 F14 使前者紅。"
+    },
+    {
+      "id": "AC11.4.1",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "合併前必修第 14 項：需求欄位讀寫清三端點對非成員回與「系統不存在」逐位元相同的 404（test_H8），requirement_field.denied reason=not_member 照記（test_H9）；MCP 路徑的結果仍等於直接存取（backend/tests/test_mcp_bridge_e2e.py 的 test_ac11_4_1，形狀由 forbidden 變為 not_found）。實作在 backend/services/requirement_field_facade.py 的 _authorize。突變 M14-3、M14-4 使 H8／H9 紅。"
     }
   ]
 }

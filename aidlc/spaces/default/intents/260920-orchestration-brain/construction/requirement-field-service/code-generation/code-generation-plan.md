@@ -80,6 +80,25 @@ Testing Contract 的 14 步基線中，**Frontend** 層本單元無程式（畫�
 **Data model**（Step 3–4）、**Repository**（Step 5–6）、**Business logic**（Step 7–8）、
 **API**（Step 9–10）四層依序「實作 → 測試」。方法論未改。
 
+## 六、code-generation Request Changes（2026-10-20）的對照結果
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項，各在所屬單元修正並附測試。逐項對照「單元」欄：**19 項中沒有一項劃給 `requirement-field-service`**，全文對 `requirement-field-service`／`U20`／`K4` 亦零命中（唯一含 `requirements` 字樣的第 8 項指的是 `requirements.md` 的稽核主體要求，劃給 `mcp-bridge`）。
+
+前序單元的修正對本單元的影響：`hierarchy-service` 為 `HierarchyFacade._authorize` 補上待核准檢查（第 3 項相關的缺口）——本單元的授權自 Step 7 起即自行判定待核准（Step 8 的「同進程（`U13` 路徑）的待核准與全域層拒絕」案例鎖住它），不依賴該修正，但兩者現在同形。
+
+因此本計畫**不新增步驟**，本輪只重新查驗既有步驟（Step 1–12）並以 `backend/.venv` 重跑本單元測試（`test_requirement_field_facade`、`test_requirement_field_http`）與 `dump_openapi.py --check`。
+
+## 七、合併前必修第 24 項（2026-10-26 使用者裁決：先修再重審）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 24 項（code-generation 重做時 review-03 R-01 Major ＋ `DEPLOY.md` 矛盾）。上方第六節「沒有合併前必修劃給本單元」已因第 24 項而過時，保留原文作為歷史紀錄。
+
+- [x] **Step 13 — 業務邏輯：實作 NUL 拒絕**：`_write_authorized` 對含 NUL（`\u0000`）的值拋 `RequirementFieldValidationError`；於 `requirement_field_errors.py` 登錄一則新的固定訊息（不回顯值），router 照既有轉譯回 422。
+- [x] **Step 14 — 測試**：`test_requirement_field_http.py`（`TestClient`＋SQLite）新增 NUL 值 → 422 且 `detail` 為該固定訊息的案例；`tests_pg/test_requirement_field_pg.py` 新增真實 PostgreSQL 上 NUL 值不再拋 `DataError`／回 500 的案例。
+- [x] **Step 15 — 突變驗證**（只在暫存區副本做）：拿掉 NUL 檢查 → Step 14 兩案皆紅。結果記入 `code-summary.md`。
+- [x] **Step 16 — 文件**：把 `DEPLOY.md` 約第 730–732 行改成與同檔 U20 小節（約第 842 行：`create_all` 建表、只缺 COMMENT 與收斂）一致，只改該段。
+- [x] **Step 17 — 回歸與收尾**：完整後端套件、`tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py` 全綠；`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 24 項處置段。
+- 追溯：`merge-blockers.md` #24；review-03 R-01；`BR41`–`BR46` 的輸入驗證。
+
 ## Testing Contract
 
 ```json

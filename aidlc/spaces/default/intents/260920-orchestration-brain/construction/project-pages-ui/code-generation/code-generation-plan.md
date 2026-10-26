@@ -361,6 +361,39 @@
 
 `test-after` 的五個可測層：**Data model / database behavior**＝Step 3–4（索引、ORM、遷移腳本常數）；**Repository / data access**＝Step 5–6（可見性謂詞、`list_projects_by_ids`、訊息常數）；**Business logic**＝Step 7–8（facade 守門與委派、靜態鎖、既有測試回歸）；**API / endpoint**＝Step 9–10（router、`openapi.json`、`TestClient`、語句數）；**Frontend behavior**＝Step 11–12（三頁、佇列、e2e）。plan_profile 的 Project structure／runner 兩步為 Step 1–2；Environment/build configuration 為 Step 13（零改動、只驗證）；Documentation and traceability 為 Step 14–15。方法論未改。
 
+## 九、code-generation Request Changes（2026-10-20）：合併前必修第 14 項
+
+使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 的 19 項。劃給本單元的是**第 14 項**：成員頁以 403 對 404 洩漏專案是否存在。nfr-design 時使用者曾接受為殘留（`../carried-review-items.md:41`），之後列入合併前必修。
+
+**實測現況（唯讀查證）**：
+- 成員端點 `/api/membership/projects/{id}/members` 的 GET／POST／DELETE／PATCH：facade 依序 `_authorize_global`（403）→ `_assert_project_exists`（`membership_facade.py:132-141`，不存在回 404，訊息 `f"查不到專案 {project_id}"` 帶 id）→ `_require_project_role`（`:156-164`，非成員回 403）。所以有 `K3` 的人能以 403／404 探出專案編號是否存在。
+- 階層端點 `/api/hierarchy` 已統一：不存在與不可見都回 404，且訊息為固定句 `PROJECT_NOT_FOUND_DETAIL = "查不到專案"`（`hierarchy_facade.py:114`），由 `test_project_visibility_endpoints.py:226` 的 `test_E15` 鎖住逐位元相同。
+- 需求欄位端點（`U20`）同形：`requirement_field_facade.py:243-266` 的 `_authorize` 對不存在的系統回 `RequirementFieldNotFound`（404），對非成員 `_deny(..., "not_member")`（403）。
+- 前端 `membershipApi.ts:116-135` 對 403 顯示「你沒有檢視這個專案成員的權限」，對 404 顯示伺服器訊息（含 id）；`MembersListPage.tsx:85` 註解寫「`list_members` 對非成員回 403」。
+- 既有測試 `test_membership_endpoints.py:108-114`（`test_E1`）斷言非成員 GET／POST 為 403。
+
+**使用者裁決**（`[PP-MB14]`，2026-10-24）：**成員端點與需求欄位端點都修**——「不存在」與「存在但非成員」一律回**同一個不含 id 的 404**（比照階層端點）；「是成員但不是管理者」等**成員之內**的權限不足維持 403；缺全域權限（`require_story_action`）維持 403（不依專案而變，不洩漏存在）。
+
+**跨單元**：`U19 membership-service`（`membership_facade.py`）、`U20 requirement-field-service`（`requirement_field_facade.py`、其 router 的錯誤對照與 `responses=` 說明）、`U24 member-pages-ui`（`membershipApi.ts`、`MembersListPage.tsx`、`MemberDetailPage.tsx`）、`U21 mcp-bridge` 的 e2e（`AC11.4.1`：無權專案經 MCP 讀取，結果仍須等於同一使用者直接存取的結果，只是由 `forbidden` 變為 `not_found` 形狀）。零 DDL、零新環境變數。
+
+- [x] **Step 16 — 後端：實作**
+  - `MembershipFacade`：把「專案存在」與「呼叫者是成員」合併為一個判定——不存在或非成員都丟 `MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)`（沿用 `hierarchy_facade.PROJECT_NOT_FOUND_DETAIL`，單一真實來源，不另抄一份字串）；成員但角色不足仍丟 `MembershipForbidden`。四個端點皆適用；`_assert_project_exists` 現行把缺 `K2` 轉 404 的行為保留。
+  - `RequirementFieldFacade._authorize`：非成員改丟 `RequirementFieldNotFound`，回應訊息與「系統不存在」逐位元相同、不含 id；內部仍記既有的 `requirement_field.denied ... reason=not_member` WARNING（稽核不因對外改 404 而消失）。
+  - 兩支 router 的 OpenAPI `responses=` 說明改寫（403 不再包含「不是該專案的成員」；404 說明涵蓋不可見）；重產 `openapi.json` 與前端 `src/types/api.d.ts`。
+- [x] **Step 17 — 後端：測試**
+  - 成員端點：對每個端點，「不存在的專案」與「存在但非成員」的回應 status＋body **逐位元相同**（比照 `test_E15` 形狀）；成員但只有 view 的人寫入仍 403；缺 `K3` 仍 403。改寫 `test_membership_endpoints.py` 的 `test_E1` 中非成員兩案為 404（**方法名不改**，避免 TCMS 案例成孤兒）。
+  - 需求欄位端點：讀、寫、清三個端點同樣做「不存在 vs 非成員」逐位元相同；非成員仍留 `requirement_field.denied` WARNING。
+  - MCP e2e：`AC11.4.1` 的結果改為與直接存取相同的 404 形狀。
+  - 突變（記入 code-summary）：M14-1 成員端點非成員改回 403 → 逐位元案紅；M14-2 404 訊息改回帶 id → 逐位元案紅；M14-3 需求欄位非成員改回 403 → 該案紅；M14-4 拿掉非成員的 WARNING → 稽核案紅。每項套用 → 紅 → 還原 → sha256 對照基線 → 綠。
+- [x] **Step 18 — 前端：實作**
+  - `membershipApi.ts`：成員清單與成員詳情的 404 改顯示固定句「查不到這個專案」（與 `ProjectDetailPage.tsx:52-62` 的 `ProjectNotFound` 同語意，不再顯示伺服器訊息），403 維持「你沒有檢視／管理這個專案的權限」（此時只剩「是成員但角色不足」與缺全域權限兩種）。`MembersListPage.tsx:85` 的註解同步。
+- [x] **Step 19 — 前端：測試**
+  - `frontend/tests/e2e/member-pages.spec.ts` 新增：成員清單 API 回 404 → 顯示「查不到這個專案」且頁面不出現專案編號；回 403 → 顯示權限句。以 `vite preview` 生產建置實跑；突變「404 改回顯示伺服器訊息」→ 該案紅。
+- [x] **Step 20 — 文件、契約閘門與追溯**
+  - `dump_openapi.py --check`、`npm run check:types`、`validate_repo_contract.py`、`validate_env_contract.py`、全套 `python -m unittest discover -s tests`、前端 `npm run lint`、`npx tsc -b`。
+  - `code-summary.md` 新增一節；`merge-blockers.md` 第 14 列以純 append 方式更新處置；`source-manifest.json`、`traceability.json` 更新。
+  - 回覆既有殘留紀錄：`../carried-review-items.md:41` 的「接受為殘留」由本節取代，記入 code-summary 的取代關係（不回改已凍結的設計檔）。
+
 ## Testing Contract
 
 ```json

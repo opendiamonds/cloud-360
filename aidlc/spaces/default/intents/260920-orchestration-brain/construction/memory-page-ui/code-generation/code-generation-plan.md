@@ -69,6 +69,19 @@
 | `US4.4`（擁有者與可見範圍的伺服器端判定；pending 缺口） | Step 3–6 |
 | INV-3（`interaction-spec.md:33`） | Step 7、8 |
 
+## 四之一、合併前必修第 6 項（code-generation Request Changes 修訂，2026-10-23）
+
+**來源**：`construction/functional-design/merge-blockers.md` 第 6 項（`review-02` R-08），劃給本單元。使用者於 2026-10-23 裁決：**收到 404 就重新讀清單確認**。
+
+**缺陷**：`frontend/src/memory/memoryApi.ts:108-109` 把**任何** 404 都映射為 `'already-gone'`。路徑錯誤、反向代理或部署未含該路由而回的 404，也會讓使用者看到「刪除成功」而實際什麼都沒刪。後端對「不存在」與「不是你的」刻意回同一個 404（`memory-service` 計畫第十節、`[D1]`=A，防枚舉），故前端無法以狀態碼分辨；`BR34.5`（已被 90 天清除者視同刪除成功）的語意保留。
+
+- [x] **Step 13 — 404 的二次確認**：`deleteMemoryRecord` 收到 404 時不直接回 `'already-gone'`，改回一個「待確認」結果；呼叫端（`MemoryZone.tsx` 的刪除流程）隨即重新讀取**該區目前這一頁**（沿用既有抓取函式，參數與畫面當前頁相同），該則不在結果中 → 視同已刪除（移除該列並沿用既有播報）；仍在 → 顯示「刪除失敗」並保留該列。重讀本身失敗（網路／5xx）→ 顯示「刪除失敗」，不移除該列（寧可保守）。404 以外的狀態維持既有處理。沿用 `team.md` 的前端資料抓取兩層與 `set-state-in-effect` 約束；**不改後端**、不依賴錯誤訊息字串。
+- [x] **限制如實記載**：只重讀當前頁，若在兩次請求之間有更早的記憶被刪除使清單位移，該則可能落到另一頁而被誤判為已刪除——機率低，且後果與裁決前相同，於 `code-summary.md` 記為已接受風險。
+- [x] **測試**（`tests/e2e/memory-page.spec.ts`，`page.route()` 攔截）：E11「`DELETE` 回 404 且重讀清單已不含該則 → 該列消失並播報」；E12「`DELETE` 回 404 但重讀清單仍含該則 → 顯示刪除失敗、該列保留」；E13「`DELETE` 回 404 且重讀回 500 → 顯示刪除失敗、該列保留」。加結構化規格註解。突變：還原為「404 一律 `'already-gone'`」→ E12 紅。依 §七 名稱穩定性規則，既有案例名稱不改。
+- [x] 本單元 e2e 全以 `page.route()` 攔截，可比照 `member-pages-ui` 以 `npm run build` ＋ `vite preview` ＋ `BASE_URL` 在本機實跑；另跑 `npm run lint`（0 error）、`npm run build`。
+- [x] `merge-blockers.md` 第 6 列回填處置；`code-summary.md` append 本節紀錄；`source-manifest.json`、`traceability.json`（加 `MB-6`）更新。
+- 追溯：`merge-blockers.md` #6；`BR34.5`、`US4.2`、`AC4.2.1`。
+
 ## 五、方法論與 contract 基線的對應
 
 Testing Contract 的 14 步基線中，**Data model** 與 **Repository** 兩層本單元無改動（零 schema、`memory_service` 不改），故省略；**Business logic**（Step 3–4）、**API**（Step 5–6）、**Frontend**（Step 7–10）三層依序「實作 → 測試」。方法論未改。

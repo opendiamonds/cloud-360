@@ -90,14 +90,15 @@
     "NFR21.38",
     "NFR21.39",
     "NFR21.40",
-    "NFR21.41"
+    "NFR21.41",
+    "FR11.6"
   ],
   "coverage": [
     {
       "id": "AC11.4.1",
       "status": "OK",
       "target": "backend/tests/test_mcp_bridge_e2e.py",
-      "note": "AcceptanceTest.test_ac11_4_1_non_member_rejected_with_same_reason：非成員經 MCP 讀取得 forbidden，message 等於同 token 直接 GET 的 detail；記錄包裝恰 1 筆且帶該使用者 token；legacy 與 auto 兩種協定版本皆跑。"
+      "note": "AcceptanceTest.test_ac11_4_1_non_member_rejected_with_same_reason：非成員經 MCP 讀取得 not_found（合併前必修第 14 項後；原為 forbidden，forbidden 分支改由缺 K4 的成員承擔），message 等於同 token 直接 GET 的 detail；記錄包裝恰 1 筆且帶該使用者 token；legacy 與 auto 兩種協定版本皆跑。"
     },
     {
       "id": "AC11.4.2",
@@ -626,6 +627,12 @@
       "status": "OK",
       "target": "backend/tests/test_mcp_bridge_deploy.py",
       "note": "路線 A：Dockerfile 無 mcp 字樣（未改）。"
+    },
+    {
+      "id": "FR11.6",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "僅涵蓋 requirements.md:620 Audit logging ③ 的讀取面（merge-blockers 第 8 項，推翻 [MBN1]=A）：成功讀取由 RequirementFieldFacade.read_fields 在授權通過後記一行 requirement_field.read（INFO，user_id＝讀取者本人、system_id＝授權後的 known_id），不記欄位值。測試 R1（恰一筆、身分正確）、R2（uuid4 標記值不進訊息與 extra）、R3（被拒讀取只有 requirement_field.denied）；經 MCP 的端到端見 test_mcp_bridge_e2e.AcceptanceTest.test_ac11_4_3_member_read_equals_direct_get（R4）。寫入與清空面原已由 updated_by 斷言涵蓋。FR11.6 其餘內容（token 傳遞使 require_story_action 照常執行）由 AC11.4.1／AC11.4.3 列涵蓋。"
     }
   ],
   "reverse": [
@@ -688,6 +695,12 @@
       "status": "OK",
       "target": "backend/tests/test_mcp_bridge_e2e.py",
       "note": "程式審查 review-01 的 R-01..R-10 全數處置；新增突變 13 列全紅（code-summary 第十三節）。"
+    },
+    {
+      "id": "CG-READ-AUDIT",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "跨單元落點（U20 已交付檔）：read_fields 末尾呼叫 _log_read；只加 log，不改回傳、不改授權、零 DDL、零新環境變數。對應 FR11.6／requirements.md:620 ③ 的讀取面。"
     }
   ]
 }
