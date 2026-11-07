@@ -97,6 +97,12 @@ on:
       # （本分支自 2026-09-28 起即為此紅燈）。它是 `dump_openapi.py` 的 WS 對應物，
       # 上面那一行早就在清單裡，這一支只是當初漏掉。
       - 'backend/scripts/dump_ws_contract.py'
+      # 260920-orchestration-brain：`ci.yml` 又新增三處 `run:` 直接呼叫，掃描面隨之
+      # 擴大：repo-contract 的 embedding provider 檢查、backend 的 MCP tool spec
+      # drift、memory-schema 的 U20 遷移步驟。少了它們 COVERAGE-2 紅。
+      - 'scripts/validate_embedding_provider_value.py'
+      - 'backend/scripts/gen_mcp_tools.py'
+      - 'backend/scripts/run_meta_schema_migration.py'
   # [US:S-10] 的可展示性需要手動觸發。第一段不碰網路也不用憑證，多按幾次沒有副作用；
   # 第二段有 `if:` 把關，缺憑證或缺測試 Project 時整段跳過。
   workflow_dispatch:

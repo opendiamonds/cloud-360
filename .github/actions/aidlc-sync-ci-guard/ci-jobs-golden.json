@@ -1,6 +1,6 @@
 {
   "_comment": "NFR-C1 基準快照：四個既有 job 的 name / runs-on / steps。基準隨合法的 CI 演進重新產生，每次重產都要在 commit message 逐項說明差異。由 check-ci-yml.py --emit-golden 產生，不要手改。",
-  "_source_sha256": "b94cecc84ea6a65edf2742f378e71a5299fb843ff072d6b228f3f0680d13b20b",
+  "_source_sha256": "a854442aae2a573b8a06b76f5251bf6f381b46e0a55af1616d986e08eb229b22",
   "jobs": {
     "backend": {
       "name": "Backend (import + unit tests)",
@@ -39,6 +39,10 @@
         {
           "name": "WS contract spec drift",
           "run": "python scripts/dump_ws_contract.py --check"
+        },
+        {
+          "name": "MCP tool spec drift",
+          "run": "python scripts/gen_mcp_tools.py --check"
         },
         {
           "env": {
@@ -150,6 +154,10 @@
         {
           "name": "Validate pricing lookup boundary",
           "run": "python scripts/validate_pricing_lookup_boundary.py"
+        },
+        {
+          "name": "Validate embedding provider values",
+          "run": "python scripts/validate_embedding_provider_value.py"
         }
       ]
     }

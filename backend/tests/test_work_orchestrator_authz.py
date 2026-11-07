@@ -88,8 +88,12 @@ class RealAppAuthorizationTest(unittest.TestCase):
         clock = FakeClock()
         recorder = FacadeRecorder()  # 只替換記憶寫入（嵌入 Port 與本案無關）
         sink = RecordingSink()
+        # 時鐘凍結、sleep 用真的：本案走真實 app，請求要花真實時間（DB、執行緒池）。
+        # 若沿用 clock.sleep，看門迴圈每圈把假時鐘推進一個切片，600 圈就越過 300 秒
+        # 的 deadline，而實際可能只過了幾十毫秒，CI 較慢時會誤判逾時。本類別不驗逾時，
+        # 凍結後卡住的情況改由 drain 的 5 秒上限大聲失敗。
         orchestrator = WorkOrchestrator(
-            app, store, clock=clock, sleep=clock.sleep,
+            app, store, clock=clock, sleep=asyncio.sleep,
             session_factory=self.SessionLocal,
             memory_facade_factory=recorder.memory_factory,
         )
