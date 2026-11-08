@@ -127,13 +127,36 @@ Testing Contract 的 14 步基線中：**Data model**（Step 3–4，Redis 工�
     - 拿掉終態刪除；
     - 刪除改成刪進行中項；
     - 拿掉 `requestText` 截斷。
-- [ ] **Step 17 — 文件與追溯**
+- [x] **Step 17 — 文件與追溯**
   - **容量說明**：`DEPLOY.md` 與 `LOCAL-DEV.md` 的 Redis 容量段、`deploy/.env.example` 與 `backend/.env.example` 的容量註解改寫為「對話 600 KiB＋工作項 80 KiB／工作階段」，300 個工作階段 ≈ 199 MiB ≈ 78%。
   - **合併前必修清單**：`merge-blockers.md` 第 18 列標為已修正。
   - **其他文件**：`code-summary.md` 新增一節；`traceability.json` 與 `source-manifest.json` 更新。
   - **驗證**：`validate_env_contract.py` 與 `validate_repo_contract.py` 通過，`dump_openapi.py --check` 不漂移。
 
 **不在本次範圍**：`requestText` 靜態加密（§二 第 15 項，仍併入上游 `OQ-3`）；前端工作清單如何顯示「只保留最近 20 筆」（工作清單由 `U14` 消費，本次只在 `code-summary.md` 交接）。
+
+## 六之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔（`DEPLOY.md` 等），使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔找出收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或引用的部分（Step 17 的 Redis 容量段「對話 600 KiB＋工作項 80 KiB／工作階段」、工作項上限 5／20、`requestText` 截斷、`WorkCapacityExceeded` 對應），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的方式，跑本單元七個模組與四個兄弟模組，記下實跑測試數；`dump_openapi.py --check` 亦在副本跑。Lua 真實原子性案例不執行並寫明理由。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查的每一項，逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記；需改程式、測試或共用文件者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（既有列已涵蓋者引用之）。Step 17 若仍未勾，寫明原因與是否已由他列承接。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 六之三、合併前必修第 36 列（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。其中**第 36 列劃給本單元**（review-02 R-05、R-06、R-08 與 review-03 新發現 2，皆 Minor）。本節只修第 36 列的 (a)–(d)，不擴大範圍；`work_orchestrator.py` 中記憶走主連線的呼叫端（承擔者未定，待使用者裁決）**不在本節**。偏離與理由寫進 `code-summary.md`；本節各格完成即勾，既有各格若因本輪改動而證據失效，改為未勾並寫明理由。
+
+- [x] **Step 18 — (a) R-05 Lua 取捨**：`session_scripts/put_work_item.lua`（約 :50）與 `update_work_item.lua`（約 :53）每次寫入以 `HGETALL` 解碼整個 `wi:*` 集合。預設處置為**補取捨註解**（在兩檔 `HGETALL` 前寫明：集合筆數受進行中上限與修剪約束、量級下 O(n) 可接受、何時須改為計數欄位）；不改演算法、不改回傳值與 `ARGV` 介面。`session_types.py` 的參考實作若有同形註解需求一併對齊。
+- [x] **Step 19 — (b) R-06 修剪後送停掉**：新增一個專屬案例：終態工作項先被修剪（走真實修剪路徑，不手刪欄位），再送停掉 → 拋 `WorkItemNotFound`（`work_orchestrator.py` 約 :338-340），閘道回「找不到這個工作項」的那一層若在本單元測得到則一併斷言。放在 `test_work_orchestrator_flow.py`（或相鄰既有模組），不改既有案名；加結構化規格註解（docstring 形式的 `@purpose`／`@given`／`@step`／`@pass`／`@story`）。
+- [x] **Step 20 — (c) R-08 cjson 對照**：在 `tests_redis/test_work_item_lua.py` 新增一案，以真實 Redis 的 `cjson.encode`（`EVAL` 回傳 `string.len(cjson.encode(...))`）比對 `session_types.cjson_encoded_size` 對同一組含控制字元、Unicode、數字的輸入是否同長度；缺 Redis 時沿用該模組既有的 skip 條件。`DEPLOY.md` 容量段的「Redis 大版本升級後須重跑」先以 `grep -n` 確認現況（約 :1931 已有一段）；已涵蓋則不改並在 `code-summary.md` 記明行號，未涵蓋才補，且只改該段。
+- [x] **Step 21 — (d) 紀錄更正**：`code-summary.md` 以 Edit 在本輪一節更正兩處說法，不刪改原文：第八節「此行為未以測試鎖住」→「查無識別碼已有測試（flow:433），缺修剪後再送停掉的專屬案例（本輪 Step 19 補上）」；前輪第一節「必為 `git diff 624c170 7a50a40` 的子集」→「無法證明為子集，故另以逐行重讀與重算補強」。
+- [x] **Step 22 — 突變驗證**（只在 scratchpad 副本做，repo 內被測檔不動）：Step 19 拿掉修剪路徑或讓停掉在查無時回成功 → 新案紅；Step 20 把 `cjson_encoded_size` 對某類字元的長度改錯 → 新案紅（若本機無 Redis 而 skip，據實記為未驗）；還原後綠。結果記入 `code-summary.md`。
+- [x] **Step 23 — 回歸**：在 scratchpad 副本跑本單元七個模組與四個兄弟模組、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py`（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）；`tests_redis` 只對本機一次性 Redis（綁 127.0.0.1，用完即刪）跑，起不來據實記為未驗。repo 內不得產生 `.pyc`／`__pycache__`／`.hypothesis`；不得連 staging 或共用 DB／Redis。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 加 `MB-36` 並保持合法 JSON；`source-manifest.json` 只在本輪新增寫入檔時補列；`merge-blockers.md` 第 36 列處置欄就地補記結論、保留原文。
+- 追溯：`merge-blockers.md` #36；review-02 R-05、R-06、R-08；review-03 新發現 2；`BR52.4`、`NFR12.18`。
 
 ## Testing Contract
 

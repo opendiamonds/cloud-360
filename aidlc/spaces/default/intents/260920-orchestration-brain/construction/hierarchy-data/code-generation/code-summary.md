@@ -237,14 +237,51 @@ job，直接違反 `U4-V1`。
 `ci-pipeline`／`deployment-pipeline`）。實作者與部署者都不得因為 `DEPLOY.md`
 寫了靜止就認為靜止已經生效。
 
-### 3. DDL 存在兩處，而**只有欄位集合被測試鎖住**
+### 3. DDL 存在三處，而**只有遷移模組與 `schema_rbac.sql` 之間的欄位集合被測試鎖住**
 
+<!-- 2026-10-29 修訂（review-03 R-03／R-04）：原標題為「DDL 存在兩處，而只有欄位集合被測試鎖住」 -->
+
+DDL 存在**三處**：遷移模組（`services/hierarchy_migration.py` 的 `Table` 物件）、
+`schema_rbac.sql` 的 H 區塊、`schema.sql` 的 H 區塊。
 `schema_rbac.sql` 只在空 data volume 執行，既有環境的唯一路徑是遷移程序自己
-（`K-04` 的 `context_why_migration_is_the_only_path` 逐字），所以兩處 DDL 是必要的，
+（`K-04` 的 `context_why_migration_is_the_only_path` 逐字），所以前兩處 DDL 是必要的，
 不是疏漏。`test_schema_rbac_sql_matches_migration_ddl` 鎖住的是**欄位名集合**
 與四個識別字的存在，**沒有**鎖住型別、`NOT NULL`、`CHECK` 條文與 `ON DELETE` 動作
 ——那需要把兩份 DDL 都套到同一個真實 PostgreSQL 再比對 `information_schema`，
 屬 `§六` 第 1 項那個 CI job 的內容。
+
+**一致性測試鎖不到什麼（review-03 R-03）**。該測試實際做三件事：以正規式抽出
+`schema_rbac.sql` 三個 `CREATE TABLE IF NOT EXISTS` 區塊的欄位名集合並與 `Table.c.keys()`
+比對；以 `assertRegex` 確認 `ADD COLUMN IF NOT EXISTS system_id`；以子字串 `assertIn`
+確認三個索引名存在。下列漂移**全部不會被它抓到**：
+
+- 欄位型別與長度（如 `VARCHAR(255)`、`VARCHAR(32)`）
+- `NOT NULL`
+- `PRIMARY KEY`
+- 外鍵目標與 `ON DELETE` 動作（`schema_rbac.sql` 一側把 `RESTRICT` 改成 `CASCADE` 會綠；突變 M7 改的是 Python 模組，不是 SQL 檔）
+- `CHECK` 內容，含 `source` 的列舉值
+- 預設值（`DEFAULT FALSE`、`DEFAULT now()`）
+- 欄位順序
+- `uq_*` 是否仍為 `UNIQUE`，以及其 `WHERE is_default` 條件是否還在（只驗名稱子字串）
+
+曾被突變驗證過的只有「少一個欄位」（M6）這一類。以上各項只由**尚未存在**的真實
+PostgreSQL CI job（`U4-V1`，見本節第 1 項）承接；在它落地之前，這些面向沒有任何自動化保證。
+
+**第三處：`schema.sql`（review-03 R-04）**。它是**刻意不加鎖的參考副本**——`DEPLOY.md:198`
+逐字「`schema.sql` 僅核心 DDL 參考，完整新環境請用 `schema_rbac.sql`」，一致性測試不讀它。以 2026-10-29 讀檔逐項實查
+（`schema.sql:78-152` 對 `schema_rbac.sql:345-440`）的現況：
+
+| 面向 | 結論 |
+|---|---|
+| 三表的欄位、型別、`NOT NULL`、預設值、`CHECK`（含 `source` 列舉與兩個非空白檢查）、外鍵目標與 `ON DELETE`（`systems.project_id RESTRICT`、`diagram_id CASCADE`、`actor_user_id` 無動作） | 語意一致；寫法不同（`schema.sql` 用表層 `FOREIGN KEY` 與 `SERIAL NOT NULL ＋ PRIMARY KEY (id)`、`TIMESTAMP WITH TIME ZONE`；`schema_rbac.sql` 用欄內 `REFERENCES`、`SERIAL PRIMARY KEY`、`TIMESTAMPTZ`），屬同義寫法 |
+| `user_diagrams.system_id` 欄位與 `fk_user_diagrams_system`（`ON DELETE RESTRICT`） | 一致 |
+| `uq_projects_default_per_owner`、`uq_systems_default_per_project`（含 `WHERE is_default`）、`ix_diagram_change_records_created_at`、`ix_diagram_change_records_diagram_id` | 兩處皆有 |
+| `ix_projects_owner_user_id`、`ix_systems_project_id`、`ix_user_diagrams_system_id` | **`schema.sql` 缺**（3 個索引） |
+| `COMMENT ON`：`projects.is_default`、`projects.owner_user_id`、`systems.is_default`、`user_diagrams.system_id`、`diagram_change_records`（表）、`.source`、`.actor_user_id` | **`schema.sql` 全缺**（7 條；其檔頭已寫明「COMMENT 見 schema_rbac.sql 區塊 H」） |
+
+以 `schema.sql` 建出的資料庫在約束面與 `schema_rbac.sql` 等價，差在三個非唯一索引
+（效能）與 COMMENT（文件）。是否要把它也納入一致性測試，留待 `U4-V1` 那個 CI job 一併
+決定；本輪依計畫第六節的處置原則不改共用檔。
 
 **本站新增了兩個計畫外的測試案例**（計畫定 13 個，實際 15 個）。這是**對計畫的偏離，
 在此明白揭露**，不是悄悄加的：
@@ -573,3 +610,221 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 ### 與已核可測試說明的落差（凍結文件不改，以本節為準）
 
 `unit-test-instructions.md` §二的單元指令只列 `tests.test_hierarchy_migration`，實際單元範圍另含 `tests.test_user_delete_hierarchy`；§三的「合計 13 個案例」與刪除測試「7 個案例」已過時，現況為 24 個（遷移 15、刪除 9）。`source-manifest.json` 的 10 條路徑全部存在且仍屬本單元。
+
+## 十五、共用檔異動後重新驗證（計畫第五節，2026-10-29）
+
+<!-- 驗證時間：2026-10-29T23:11:33Z 起、2026-10-29T23:20:48Z 回歸完成；本段寫入時間 2026-10-29T23:32:52Z（皆 `date -u` 取值） -->
+
+**程式碼改動為 0。** 本節只重新驗證，不改任何程式或共用檔。
+
+### 1. 收據逐檔比對
+
+以 `shasum -a 256 -c` 對 `reviewed-source-683dfe2e79a1.tsv` 的 10 個檔逐檔比對：
+
+| 檔案 | 結論 |
+|---|---|
+| `backend/scripts/run_hierarchy_migration.py`、`backend/services/hierarchy_migration.py`、`backend/services/user_router.py`、`backend/tests/test_hierarchy_migration.py`、`backend/tests/test_user_delete_hierarchy.py`、`frontend/src/types/api.d.ts`、`openapi.json`、`schema.sql`、`schema_rbac.sql` | 9 檔與收據逐位元相同（`OK`） |
+| `DEPLOY.md` | 不同：收據 `2608a131…`，現況 `d9b0571c…` |
+
+### 2. `DEPLOY.md` 的 hunk 來源判定（逐位元組證明，不是推論）
+
+收據當時的 `DEPLOY.md` 不在 git 歷史中（`git rev-list --all -- DEPLOY.md` 的每個版本都對不上 `2608a131`），所以改用重建法：以 `624c170:DEPLOY.md` 對現況做 `difflib` 得 19 段差異，對所有 1～4 段的組合各自「只回退這幾段」並算 SHA-256：
+
+- 回退第 3、17、18 段 → **恰等於收據的 `2608a131`**；
+- 只回退第 17、18 段 → 恰等於 `requirement-field-service` 10-27 審查收據的 `27898f42`。
+
+收據時間線與之一致：`2608a131` 從 10-24 一路維持到 10-26 21:58（本機時間），之後變為 `27898f42`（10-27 06:50），再變為現況 `d9b0571c`（10-27 08:16）。因此收據之後的變動恰為三段：
+
+| 段 | 現行行號 | 所在小節 | 來源 |
+|---|---|---|---|
+| 3 | 730–738 | 2.2.9 U18 專案中繼資料（617 行起）「誠實的代價」 | 合併前必修 **#24**（`requirement-field-service` (d)：與 U20 小節的 `create_all` 說法對齊） |
+| 17 | 2229 | §5.13 入口頁部署後實測 | 合併前必修 **#26**（`entry-page-ui` (b)：步驟 6a 失敗只還原 last-good、不開 revert PR） |
+| 18 | 2239 | §5.13 | 同上 |
+
+#22、#23、#25 未改 `DEPLOY.md`。**三段都不觸及本單元的段落**：2.2.7（330–530 行，含前進步驟、靜止前置、部分狀態、回復程序與 498 行的「刪除使用者的行為」）。第 3 段的文字僅提及「2.2.7 的那支也沒被呼叫」，未改 2.2.7 本身。
+
+### 3. 回歸（暫存區副本執行，不在工作樹產生快取）
+
+工作樹以 `rsync`（排除 `.git`、`node_modules`、`backend/.venv`、`__pycache__`、`.hypothesis`、`.aidlc-engine`）複製到 scratchpad，以工作樹的 `backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本內執行：
+
+| 指令（於副本 `backend/`） | 結果 |
+|---|---|
+| `-m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy` | `Ran 24 tests`、`OK`（`grep -c 'def test_'`：15 ＋ 9） |
+| `-m unittest discover -s tests` | `Ran 1326 tests in 92.298s`、`OK (skipped=3)` |
+| `scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」exit 0 |
+| `node scripts/check-api-types.mjs`（於副本 `frontend/`，暫時 symlink 工作樹的 `node_modules`，跑完移除） | 「API 型別檔與規格檔一致。」exit 0 |
+
+跑完刪除副本；以 `find -newer <marker>` 確認工作樹新增的 `.pyc`／`.hypothesis` 為 **0**（期間新增的只有 AI-DLC 引擎與 hook 自身的檔）。
+
+**本輪未重跑突變 M-D1～M-D5**（`user_router.py` 的三條規則與兩個條件），沿用 §十二.4 與 §十三的紀錄；本輪只在副本上做了 R-12 的突變（見 §十六）。
+
+**測試環境的一處現況更正**：計畫步 1 與 `unit-test-instructions.md` §一寫的是 `psycopg2` 的 MagicMock，而 `backend/tests/helpers.py` 現在 stub 的是 **`psycopg`（v3）**（`helpers.py:22`、`:25` 的 `sys.modules.setdefault("psycopg", …)` 與其子模組），仍走 in-memory SQLite。stub ＋ SQLite 的策略不變，所以步 1 仍成立；凍結文件不改，以本句為準。
+
+## 十六、review-03 未處理 Minor 的處置（計畫第六節，2026-10-29）
+
+依計畫第六節的處置原則，**本輪不改任何程式碼與共用檔**（`DEPLOY.md`、`user_router.py`、`run_hierarchy_migration.py`、`hierarchy_migration.py` 皆在多個單元的審查收據內）。需要動程式或共用文件的項目在此記為已知限制並指派落點；只動本單元紀錄檔即可解決的項目已直接修。下文的「文件同步」指 **build-and-test 之前的一次文件同步**，R-07、R-08、R-13 的 docstring／`DEPLOY.md` 修改都歸在那裡。
+
+| 項 | 處置 |
+|---|---|
+| R-03 | 已修：§六.3 補「一致性測試鎖不到什麼」清單，寫明只由尚未存在的 `U4-V1` 真實 PG CI job 承接 |
+| R-04 | 已修：§六.3 標題與內文改為 DDL 存在三處，附 `schema.sql` 與 `schema_rbac.sql` 的讀檔逐項差異表（`schema.sql` 缺 3 個非唯一索引與 7 條 COMMENT，約束面等價） |
+| R-05 | 已修：`traceability.json` 的 `SEC-4` 列補第 (5) 點（`diagram_id ON DELETE CASCADE` 是第二條無稽核消失路徑；補救為獨立保留表或軟刪除，不得改回 `NO ACTION`） |
+| R-06 | 已修：`traceability.json` 的 `BR2.4` 列改為實數 15，並寫明 `test_schema_rbac_sql_matches_migration_ddl` 的本體不呼叫遷移 |
+| R-07 | 已知落差，見下 |
+| R-08 | 已知落差，見下 |
+| R-10 | 已知缺口，見下 |
+| R-11 | 已知缺口，見下 |
+| R-12 | 已做突變，見下 |
+| R-13 | 已知限制，見下 |
+
+### R-07：獨立指令的三個結束碼
+
+`backend/scripts/run_hierarchy_migration.py` 的 `main()` 實際有三個結束碼，`test_standalone_command_exits_non_zero_when_the_final_check_fails` 三個都有斷言：
+
+| 結束碼 | 意義 | 操作者該怎麼做 |
+|---|---|---|
+| 0 | 遷移成功，終檢通過 | 繼續部署 |
+| 1 | 遷移失敗（終檢未通過，或 DDL／寫入被資料庫拒絕）；已 commit 的使用者保留進度 | 依錯誤訊息處置後**重跑同一支指令** |
+| 2 | 呼叫方式錯誤（帶了未知參數）；**未執行任何事** | 修正呼叫方式再跑 |
+
+**已知落差**：`main()` 的 docstring 仍寫「回傳 0（成功）或 1（任何失敗）」，`DEPLOY.md` 2.2.7 只寫「結束碼 0 才算成功。非零即代表終檢未通過（或 DDL／寫入被拒）」——兩處都沒有 2 的意義，以 `== 1` 分支的部署腳本會誤判。落點：build-and-test 前的文件同步（不在本輪改，理由見本節開頭）。
+
+### R-08：`default_pairs_created` 會低報
+
+`_resolve_default_pair()` 以 `created = project_row is None` 判定，只看**專案**是否新建。在「預設專案在、預設系統缺」的狀態（只有人工介入才可達，因為遷移是 `is_default` 的唯一寫入端），本次會新建一個系統而 `created` 仍為 `False`，`default_pairs_created` 因此**少算**，而這個計數正是 `BR2.6` 用來判斷「做到哪」的依據。`MigrationCounts` 的 docstring 尚未註明這一點，補註留待同一次文件同步。
+
+### R-10：刪除使用者的成功路徑稽核不含清除筆數
+
+規則 1 清除空預設專案時，會在同一交易內一併刪除其系統、成員列，以及這些系統下的 `system_requirement_fields`（預檢只在最後修改者為他人時阻擋）。兩個成功路徑的稽核訊息（`user_router.py:992-997` 的「拒絕並刪除 …」、`:1206-1210` 的 `User Deleted`）只記錄刪了哪個帳號，**不含被清除的專案／系統／需求欄位筆數**。這是不可復原的刪除，屬 ADR-0006 audit logging 面向的已知缺口。落點：合併前或 build-and-test（需改 `user_router.py`，讓 `_hard_delete_user` 回傳清除摘要並寫進稽核內容）。`unit-test-instructions.md` §三已補註需求欄位屬清除範圍（conductor 於核可前完成；本輪已核對該段文字存在）。
+
+### R-11：409 的 `detail` 沒有下一步
+
+`_hard_delete_user` 的 409 `detail` 為「無法刪除：仍有資料指向此使用者——<類別> N 筆…」，沒有告訴管理員接下來怎麼做。依裁決，稽核類紀錄不刪，所以寫過記憶、改過圖（變更紀錄）、建過架構審查或估價稽核的帳號**永遠無法硬刪除**。`DEPLOY.md` 513 行已列出 11 類阻擋類別（程式 `_blocking_user_references` 也實算為 11 類），517 行也建議改用停用（`PUT /api/auth/{user_id}/active`），但管理員在畫面上看到的 `detail` 沒有這句話。落點同 R-10。
+
+### R-12：拒絕授權申請路徑修正的突變驗證
+
+只在暫存區副本改，工作樹未改。
+
+| # | 突變 | 結果 |
+|---|---|---|
+| M-R12 | `reject_authorization_request` 的稽核訊息由預先取值的 `{requested_role}` 改回 commit 後才讀的 `{req.requested_role}`（`user_router.py:994`） | `test_f_reject_and_delete_purges_the_empty_default_project` **紅**：`AssertionError: 500 != 200`（`Ran 9 tests`、`FAILED (failures=1)`，其餘 8 案綠） |
+| 還原 | 副本檔與工作樹的 `user_router.py` 以 `cmp` 比對完全相同 | `Ran 9 tests`、`OK` |
+
+由此可證 (f) 的 200 確實是靠「commit 前先取值」這個修正撐住的。
+
+### R-13：預檢到 commit 之間沒有鎖
+
+`_hard_delete_user` 先預檢（`_empty_default_project_ids`、`_blocking_user_references`），再清除與 commit，中間沒有任何鎖。若預檢通過後、commit 之前，另一個請求把某人加進該使用者的空預設專案，清除時會把那位新成員的 `project_members` 列一併刪掉；PostgreSQL 預設的 Read Committed 隔離層級擋不住這種情況。管理員刪帳號是低頻的手動動作，所以實際發生的機率很低。`_hard_delete_user` 的 docstring 與 `DEPLOY.md` 2.2.7「刪除使用者的行為」小節目前都沒有記載這一點，留待同一次文件同步。
+
+### 勾選重設
+
+這次重開把計畫的 68 格勾選全部重設（重開時 `grep -c -- '- \[x\]'` 為 0、`- [ ]` 為 68）。第二節（步 1–10）54 格，逐步對照 repo 現況實查後勾回：
+
+- DDL：`schema_rbac.sql:345-440`。
+- 遷移模組、獨立指令、測試案例：本節與 §十五 所列。
+- `DEPLOY.md` 2.2.7 各子節、`schema.sql` 的 H 區塊。
+- `openapi.json` 兩個端點的 409。
+- 兩處 COMMENT 已改記 OQ-H1 裁決。
+- `source-manifest.json` 的 10 條路徑。
+
+第五節 2 格、第六節 12 格隨各項完成時逐一勾選。勾選後的實數記於下方處置紀錄。
+
+### 處置紀錄
+
+- 2026-10-29T23:35:16Z（`date -u`）：第五、六節處置完成。
+  - `python3 scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」
+  - `traceability.json` 以 `python3 -I` 的 `json.load` 解析成功（`coverage` 51 列、`upstream_ids` 51 個）。
+  - 寫入本行時計畫勾選為 `- [x]` 67、`- [ ]` 1（`grep -c` 實算）；唯一未勾的是「收尾」本身，寫完本行即勾，完成後為 68／0。
+  - 本輪程式碼與共用檔改動為 0；只改了本單元的 `code-summary.md`、`traceability.json` 與計畫勾選。
+
+## 十七、合併前必修第 28 列的剩餘部分（計畫第七節，2026-11-01）
+
+<!-- 執行時間：2026-11-01T00:31:53Z 起；本節寫入時間 2026-11-01T00:44:20Z（皆 `date -u` 取值） -->
+
+第 28 列 (c)(d) 與 `DEPLOY.md` §2.2.7 的結束碼段已由 `brain-infra` A4 修畢（見 `construction/brain-infra/code-generation/code-summary.md` A4、A13）。本節只做本單元剩下的 (a)(b) 與一支新測試檔。**程式行為改動為 0**：兩支 Python 檔的 diff 只在 docstring 內（`git diff` 刪除行只有舊 docstring 首行一行）。
+
+### 1. 兩處 docstring 改動（行號為改動後）
+
+| 項 | 位置 | 內容 | 與程式核對 |
+|---|---|---|---|
+| (a) | `backend/scripts/run_hierarchy_migration.py:48-64`（`main()` docstring） | 三個結束碼：0 成功（終檢通過）；1 遷移失敗（終檢未通過，或 DDL／寫入被拒），已 commit 的使用者保留進度，處置後重跑；2 呼叫方式錯誤（帶了任何參數），未執行任何事。另註明部署腳本須以「是否為 0」判斷，不得只比 `== 1` | 2 → `:65-67` 的 `if argv: … return 2`，位於 `:73` 的 `SessionLocal()` 與 `:75` 的 `migrate_hierarchy(db)` 之前；1 → `:76-87` 的 `except Exception` 分支；0 → `:96`。與 `DEPLOY.md:361`（「結束碼 1 代表終檢未通過（或 DDL／寫入被拒）……結束碼 2 代表呼叫方式錯誤……未執行任何事」）一致 |
+| (b) | `backend/services/hierarchy_migration.py:186-201`（`MigrationCounts` docstring，新增 `:194-200`） | `default_pairs_created` 只以預設專案是否新建計數；「預設專案在、預設系統缺」時補建系統但計數為 0；判斷進度時須另以 `SELECT count(*) FROM systems WHERE is_default` 查證 | `:411` 的 `created = project_row is None`；補建系統的分支（`if system_row is None:`）不改 `created` |
+
+**一處與派工說明的出入**：派工規則的「只可改」清單列了 `run_hierarchy_migration.py` 與新測試檔，未列 `hierarchy_migration.py`；但 (b) 的 `MigrationCounts` 就定義在該檔（本單元 `source-manifest.json` 所列的檔），故照 (b) 的指示只改其 docstring，不改任何行為。
+
+### 2. 新測試檔 `backend/tests/test_hierarchy_migration_exit_codes.py`（4 案）
+
+先查既有 `test_hierarchy_migration.py`：`test_standalone_command_exits_non_zero_when_the_final_check_fails` 已斷言未知參數回 2，但**沒有**斷言「未執行任何事」；既有計數案例全部從零預設專案起跑，分不出「專案新建」與「系統新建」。故新檔不重複既有案例：
+
+| 案例 | 斷言 |
+|---|---|
+| `test_bad_invocation_returns_2_without_running_anything` | `main(["--dry-run"])` 回 2，mock 的 `SessionLocal` 與 `migrate_hierarchy` 皆 0 次呼叫；對照 `main([])` 回 0 且兩者各 1 次（證明 mock 接在實際路徑上，避免「未被呼叫」恆真） |
+| `test_split_pair_backfills_the_system_but_counts_zero` | 預設專案在、無系統、1 張空 `system_id` 的圖 → `MigrationCounts(1, 0, 1)`；該專案下預設系統數 0 → 1；專案仍 1 個；圖掛到補建的系統 |
+| `test_main_docstring_states_all_three_exit_codes` | `main.__doc__` 含 0／1／2 與「保留其進度」「重跑」「呼叫方式錯誤」「未執行任何事」，且不再含舊句「或 1（任何失敗）」 |
+| `test_migration_counts_docstring_discloses_the_under_report` | `MigrationCounts.__doc__` 含「只以預設專案是否新建計數」「低報」「預設專案在、預設系統缺」「計數為 0」 |
+
+首行 `import tests.helpers`，沿用 in-memory SQLite；各案附 `@purpose`／`@given`／`@step`／`@pass`／`@story`，`@api`／`@ui` 刻意缺席（零端點、零畫面）。
+
+### 3. 突變驗證（只在副本 `scratchpad/hd-copy2`）
+
+| # | 突變 | 結果 |
+|---|---|---|
+| M-X1 | `main()` 的 `return 2` 改為 `return 1` | 紅：新檔 `test_bad_invocation…` 與既有 `test_standalone_command…`（`Ran 19`、`FAILED (failures=2)`） |
+| M-X2 | `_resolve_default_pair` 補建系統時設 `created = True`（補建系統也計數） | 紅：`test_split_pair_backfills_the_system_but_counts_zero`（`failures=1`） |
+| M-X3 | 刪除 `main()` docstring 的結束碼 2 說明三行 | 紅：`test_main_docstring_states_all_three_exit_codes`（`failures=1`） |
+| M-X4（補） | 參數檢查移到遷移執行之後（先跑遷移再回 2） | 紅：新檔 `test_bad_invocation…` 與既有 `test_standalone_command…`（`failures=2`）——新案的「0 次呼叫」斷言抓得到「回 2 但已執行」 |
+| 還原 | 兩檔與突變前 sha256 比對 | `run_hierarchy_migration.py` `3cffba9e…`、`hierarchy_migration.py` `cd06c19d…` 皆 `OK`，且與 repo 工作樹相同；`Ran 19 tests`、`OK` |
+
+另因 `user_router.py` 自收據後有變動（見下），於副本重跑步 10 的三個突變：M-D1（規則 1 清除改為空摘要）→ (a)(f) 紅；M-D2（預檢改為空清單）→ (c)(d)(e)(h)(i) 紅；M-D3（`except IntegrityError` 改為 `except ValueError`）→ (g) 紅；還原後 `cmp` 與工作樹相同、`Ran 9 tests` `OK`。
+
+### 4. 共用檔重驗（最新收據 `reviewed-source-f1d5899107ee.tsv`，對應 commit `7a50a40`）
+
+`shasum -a 256` 逐檔比對 10 檔：5 檔相同（`run_hierarchy_migration.py`、`hierarchy_migration.py`、兩支測試檔、`schema.sql`——前兩者為本輪改動前比對）；5 檔變動，皆為工作樹相對 `HEAD`（= 收據內容）的未 commit 改動：
+
+| 檔 | 收據之後的改動 | 是否觸及本單元 |
+|---|---|---|
+| `schema_rbac.sql` | 檔頭新增 I) 涵蓋清單（`:19-23`）；I) 區塊 `cloud360_memory` 角色與說明（`:555-612`）；J) 區塊第 31 列 (c)(g) 註解（`:642-652`） | **否**：H) 區塊 `:345-445` 無任何 hunk；三表 DDL 已逐行重讀（`:350-443`） |
+| `DEPLOY.md` | `:250` I) 列；**§2.2.7 內兩段**：`:361` 結束碼 1／2（第 28 列 (a)，brain-infra A4）、`:513-520` 刪除使用者小節新增稽核筆數（第 27 列）、409 下一步（第 28 列 (c)）、無鎖競態（第 28 列 (d)）、停用前置（第 21 列）；其餘 hunk 在 §2.2.8 以後 | **是，但為預期中的同步**：`:361` 與本輪 (a) 的 docstring 一致；`:513-520` 與 `user_router.py` 現況一致（`_DELETE_BLOCKED_NEXT_STEP`、`_UserPurgeSummary.audit_text()`）。前進步驟、靜止前置、部分狀態、回復程序四小節（`:341`／`:388`／`:413`／`:434`）無 hunk |
+| `backend/services/user_router.py` | 第 27 列：`_UserPurgeSummary`（`:561-577`）、`_purge_empty_default_projects` 回傳筆數（`:580-611`）、兩處稽核訊息寫筆數（`:1045-1046`、`:1260-1261`）；第 28 列 (c)：`_DELETE_BLOCKED_NEXT_STEP`（`:359`）接在 409 `detail`（`:657-660`）；(d)：`_hard_delete_user` docstring 競態段（`:628-636`）；第 33 列 (a)：記憶兩類計數改經 `MemoryFacade`（`:475`、`:521`、`:526`、`:553`） | **是（刪除使用者路徑）**：規則 1／2／3 的結構不變（預檢 `:650-651`、清除 `:668`、保底 `:672`），以全套與 M-D1～M-D3 重跑確認仍成立 |
+| `openapi.json`、`frontend/src/types/api.d.ts` | `MemoryCreateRequest.content` 加 `maxLength: 4000` 與描述 | **否**：本單元的兩個 409 宣告未動（`openapi.json` 中 `"409"` 計 11 處）；副本 `dump_openapi.py --check` exit 0 |
+
+### 5. 回歸（副本執行）
+
+| 指令（於副本 `backend/`，`.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH` 與 `HYPOTHESIS_STORAGE_DIRECTORY` 指進副本） | 結果 |
+|---|---|
+| `-m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy tests.test_hierarchy_migration_exit_codes` | `Ran 28 tests`、`OK`（`grep -c 'def test_'`：15 ＋ 9 ＋ 4） |
+| `-m unittest discover -s tests` | `Ran 1372 tests in 93.161s`、`OK (skipped=3)` |
+| `scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」exit 0 |
+
+### 6. review-04 各項現況（逐項附行號）
+
+| 項 | 現況 |
+|---|---|
+| R-01～R-06、R-09、R-12 | 審查已標 `Resolved (reviewer)`；本輪無變動 |
+| R-07 | **已解決**：`main()` docstring `:48-64`（本輪）＋ `DEPLOY.md:361`（brain-infra A4） |
+| R-08 | **已解決**：`MigrationCounts` docstring `:194-200`（本輪），行為由新案鎖住 |
+| R-10 | **已解決（他單元）**：第 27 列由 brain-infra A4 落地，`user_router.py:1045-1046`、`:1260-1261` 稽核訊息含連帶清除筆數；`DEPLOY.md:513` 已記載 |
+| R-11 | **已解決（他單元）**：`user_router.py:359`、`:657-660` 的 409 `detail` 附下一步；`DEPLOY.md:515` |
+| R-13 | **已解決（他單元）**：`user_router.py:628-636` docstring 與 `DEPLOY.md:517` 記載無鎖競態 |
+| R-14 | **本輪就地補記**：`.github/workflows/ci.yml:322` 的 `memory-schema` job 確實存在，已兩次套用 `schema_rbac.sql`（含 H）），但 job 內 `hierarchy` 命中 0 次。`traceability.json` 的 `U4-V1`～`U4-V3`、`S-6` 已改為「共用 job 已存在、U4 專屬步驟未加」。§六.1／§六.3 的舊句「尚不存在」以本句為準。**承接動作需改 `ci.yml`（共用檔），記為已知限制交 conductor** |
+| R-15 | **已解決**：`merge-blockers.md` 第 27 列（R-10）與第 28 列（R-07、R-08、R-11、R-13）已登錄並已落地 |
+| R-16 | **部分**：`unit-test-instructions.md:77` 的 2026-11-01 現況註記已列三個模組的完整指令；但 §一（`:13`、`:17` 仍寫 `psycopg2`）、§二（`:27` 只跑一個模組）、§三（`:50`「合計 13 個案例」）、§六（`:113`「13 個案例」「既有 21 個測試檔」）仍未更新。派工規則不允許本輪改該檔，**交 conductor**。現況以本節第 5 項為準：本單元 28 案、後端全套 1372 |
+| R-17 | **本輪就地補記**：§〇～§十一為 2026-09-28 首輪紀錄，其中的案例數（15）、既有測試數（378／393）、上游 id 數（50）、manifest 路徑數（6）皆已過時，**數字以 §十四之後與本節為準**（現況：本單元 28 案、全套 1372、上游 id 52、manifest 11 條）。`traceability.json` `SEC-3` 已改為「首輪三支檔；`user_router.py` 是既有 router 的修改，不在此檢查範圍」。派工限定本檔只能 append，故未在第 1 行後加橫幅 |
+| R-18 | **本輪就地補記**：§六.3 差異表「兩個非空白檢查」應為**三個**（`ck_projects_name_not_blank`、`ck_systems_name_not_blank`、`ck_diagram_change_records_summary_not_blank`；`schema_rbac.sql` H) 區塊三處 `CHECK (length(trim(` 實查） |
+
+另更正 `traceability.json` `MB-3` 列的過時案例數（「(a)–(g) 七案」→「(a)–(i) 九案」）。
+
+### 7. 交 conductor 的項目（需改共用檔或本輪不得改的檔）
+
+1. R-14：在 `ci.yml` 的 `memory-schema` job 比照 U18／U20 加 U4 步驟（遷移連跑兩次、不變量查詢、`ON DELETE` 實測、兩份 DDL 比對）——需新增 merge-blockers 列或指定承接站。
+2. R-16：`unit-test-instructions.md` §一／§二／§三／§六 的過時數字與 `psycopg2` 字樣。
+3. 第 28 列狀態字：(a)(b) 已由本輪完成、(c)(d) 已由 brain-infra A4 完成，第 28 列可更新為已修正（`merge-blockers.md` 屬共用檔，本輪未改）。
+
+### 8. 勾選重設與收尾
+
+- 本輪開始時計畫勾選 `- [x]` 0、`- [ ]` 75（`grep -c` 實算，重開時全部重設）。逐格依現況重查後勾回：步 1–10 的 54 格（DDL `schema_rbac.sql:350-443`、遷移模組與指令、15 ＋ 9 案的測試、`DEPLOY.md` §2.2.7 五個小節 `:341`／`:388`／`:413`／`:434`／`:498`、`openapi.json` 的 409、步 10 突變於本輪副本重跑）；第五節 2 格、第六節 12 格（其處置紀錄見 §十五、§十六；R-07、R-08 的「已知落差」已於本節解決）；第七節 7 格（本節）。步 1 第二格的 `psycopg2` 字樣過時（現為 `psycopg` v3 stub，見 §十五.3），策略不變故仍勾。**未勾 0 格**。
+- 勾選後實算：`- [x]` 75、`- [ ]` 0；計畫只改勾選（以去勾還原後與改前備份 `diff` 相同驗證）。
+- `traceability.json`：`python3 -I` 的 `json.loads` 解析成功，`coverage` 52 列、`upstream_ids` 52 個，兩集合相同（新增 `MB-28`）。
+- `source-manifest.json`：補 `backend/tests/test_hierarchy_migration_exit_codes.py`，共 11 條。
+- `python3 -B scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」；`python3 -B scripts/validate_env_contract.py`：「Cloud-360 environment configuration contract validation passed.」
+- 處置紀錄：2026-11-01T00:44:20Z（`date -u`）本節完成。

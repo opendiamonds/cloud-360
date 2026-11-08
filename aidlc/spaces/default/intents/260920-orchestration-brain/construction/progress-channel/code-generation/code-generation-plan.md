@@ -271,6 +271,18 @@ return StreamingResponse(event_generator(), media_type="text/event-stream")   # 
 
 ---
 
+## §四之二 合併前必修共用檔修正後的回歸驗證（2026-11-01）
+
+**來源**：2026-10-31 的 Request Changes 重開全部單元；共用檔修正已集中於 `brain-infra` 完成（`merge-blockers.md` 第 41 列）。合併前必修清單沒有任何一列劃給 `progress-channel`，`brain-infra` 的交接清單（其 `code-summary.md` A13）亦無本單元項目，故**本單元無新修正項、不改程式**。本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-4d5e2ac3a2e1.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分（`backend/services/progress_channel.py` 與其呼叫端、`DuplicateChannelKey` 的接住點），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的實體複製副本上跑 `unit-test-instructions.md` 的本單元指令與後端全套須全綠，記下實跑測試數。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查（`reviews/review-02.md`）的每一項，逐項以 `grep -n`／讀檔附行號確認現況。只需改紀錄者在 `code-summary.md` 就地補記；需改程式或共用文件者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **勾選重設**：對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+---
+
 ## §五 Plan Approval
 
 本計畫 ＋ 其中逐字貼入的 Testing Contract ＋ `unit-test-instructions.md` 三者一併送核。

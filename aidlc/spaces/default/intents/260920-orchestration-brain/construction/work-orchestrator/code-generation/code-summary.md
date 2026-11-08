@@ -335,6 +335,8 @@ Lua 端（MB1a／MB3a／MB4a）**只有** `tests_redis` 會紅：CI 的替身跑
 決定；本單元不改 WS 契約。交辦超過 5 筆進行中時，使用者會在本輪收到 `error`（`INVALID_REQUEST`）與固定句
 「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」——`U14` 不需另做判斷。
 
+> **2026-10-31 補記（review-02 R-03、R-06）**：(1) 上句的固定句已依 review-01 R-03 改為「同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。」（`brain_gateway_rules.py:282`），上句引文已過時。(2) **對已被修剪的終態項送停掉會收到錯誤，不是 no-op**：`work_orchestrator.py:338-340` 在 Redis 查無該項時拋 `WorkItemNotFound`，只有仍存在的終態項才走 `:341-342` 的 `BR55.2` no-op；閘道把它對到 `INVALID_REQUEST`＋「找不到這個工作項」（`brain_gateway_rules.py:310-311`、`:277`）。只有用戶端持有修剪前的舊清單、又對其中被刪掉的已結束項送 `correct_work_item` 時會發生；前端以整批取代工作項清單，平常不會遇到。`U14` 若要把這個錯誤呈現得更溫和（例如收到後重抓清單、不顯示錯誤），由 `U14` 決定；本單元的程式不改，此行為未以測試鎖住（見本檔 2026-10-31 一節的已知限制）。
+
 ### 其他
 
 - 合併前必修清單 `construction/functional-design/merge-blockers.md` 第 18 列：已於原儲存格**附加** `work-orchestrator` 那一半的處置，
@@ -360,3 +362,212 @@ Lua 端（MB1a／MB3a／MB4a）**只有** `tests_redis` 會紅：CI 的替身跑
 - **ADR-0006 四面向**（本摘要先前無逐項表，以下為本輪逐面查證）：IAM 成立（能力呼叫帶使用者 token 經既有授權 dependency，authz 5 案雙向）；network exposure 成立（無新端點、`openapi.json` 未變）；encryption 為已揭露缺口（`requestText` 在 Redis 為明文，併入上游 `OQ-3`）；audit logging 部分成立（存回成功寫變更紀錄；重啟後 `persisting` 孤兒無法補寫、`AC10.2.4` Deferred 為 `OPEN-WO12-6`；token 與原句不入 log 有測試）。
 - **grep 判準**：禁止 import 清單 0 筆；`asyncio.wait_for` 只在 docstring；logger 僅 `"cloud360.work_orchestrator"` 一處；log 帶 token／requestText／utterance 0 筆；rules 模組只 import 兩個型別模組。
 - **與計畫字面不同處**：Step 15 的固定訊息措辭依 review-01 R-03 改為「同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。」（已於第 18 列揭露）；`_cas` 結果未知時比對補丁全部欄位，比計畫更嚴。
+
+## 共用檔異動後的重新驗證與補審（計畫 §六之二，2026-10-31T00:51:08Z）
+
+本輪**未改任何程式碼、測試或共用文件**。寫入只有：本檔（本節，與第八節「交接給 `U14`」下的一段補記）、`traceability.json`（新增 1 條、更正 2 條的 note）、計畫的勾選格。
+
+### 一、共用檔重驗（收據 `reviewed-source-2324b6d9533e.tsv`，30 個檔逐一 `shasum -a 256`）
+
+| 結果 | 檔案 |
+|---|---|
+| **變動（1 個）** | `DEPLOY.md`（收據 `2608a131…` → 現況 `d9b0571c…`） |
+| 逐位元相同（29 個） | 收據其餘全部：`LOCAL-DEV.md`、兩份 `.env.example`、`deploy/docker-compose.deploy.yml`、`brain_gateway_rules.py`、`hierarchy_facade.py`、`hierarchy_service.py`、`redis_gateway.py`、兩支 Lua、`session_store.py`、`session_types.py`、`work_orchestrator{,_capabilities,_rules}.py`、`tests_redis/` 兩檔、12 支 `backend/tests/` 檔（含 `test_work_orchestrator_capacity.py`、`work_orchestrator_fakes.py`） |
+
+**收據當下的前像無法逐位元重建**：`2608a131…` 不等於 git 中任何版本——`7a50a40^`（＝`624c170`）為 `d499fb48…`、`7a50a40`（10-27）為 `d9b0571c…`（＝現況，工作樹與 HEAD 無差異）。收據當下是兩者之間未 commit 的工作樹（同一雜湊也出現在其他 13 個單元的收據裡，`session-store` code-summary 已有相同判定）。故以**超集**判定：讀 `git diff 624c170 7a50a40 -- DEPLOY.md` 的**全部** hunk（收據之後的改動必為其子集）。
+
+| hunk（現況行號） | 歸屬 | 是否碰到本單元負責或引用的部分 |
+|---|---|---|
+| `:251`、`:498-530`、`:599-603`、`:730-738`、`:953-964`、`:973`、`:986`、`:989-993`、`:1011-1012`、`:1018`、`:1032-1037`、`:1091-1097`、`:1147-1164` | `U18`／`U19`／`U20`／`U9`／系統帳號（合併前必修第 3、11、15、17 項等） | 否 |
+| `:1802-1876` | Redis 容量表與 `noeviction` 滿載說明 | **是**（本單元 Step 17 的容量段）。無法逐位元證明收據之後未再動，故本輪逐行重讀並以程式常數重算，結論為**一致**：`:1808-1813` 寫 5／20（`MAX_ACTIVE_WORK_ITEMS`、`MAX_TERMINAL_WORK_ITEMS`）、`requestText` 進行中 ≤ 6000 B、轉已結束 ≤ 300 B、圖名 ≤ 300 B，對 `work_orchestrator_rules.py:54`、`:56`、`:71`、`:74`、`:79`；`:1822` 的 `5 × 7,800 ＋ 20 × 2,100 = 81,000 B ≈ 79.1 KiB` 對 `:85`、`:87`；`:1819` 的 600 KiB 對 `session_types.py:220` 的 `DEFAULT_SEGMENT_MAX_BYTES = 200 * 1024`；`:1823-1825` 的 695,400 B、≈ 308.8 個、≈ 199.0 MiB、≈ 77.7% 以 `python3` 重算全部相符（614,400／81,000／695,400／214,748,364÷695,400＝308.8／199.0 MiB／77.7%）；`:1855` 的「對話 600 KiB ＋ 工作項 ≈ 79.1 KiB」即 Step 17 的容量句（計畫字面「80 KiB、≈ 199 MiB、≈ 78%」為 R-01 修正前的估計，差在四捨五入，review-02 R-02 註已判定不構成矛盾） |
+| `:2229`、`:2239` | §5.13 6a 只回滾不開 revert PR（`U14` 第 26 項） | 否 |
+
+DEPLOY.md 全檔 `grep` `WorkCapacityExceeded` 0 筆、`requestText` 只在 `:1813`——`WorkCapacityExceeded` 對應（`brain_gateway_rules.py:313-314` → `INVALID_REQUEST`）不在 DEPLOY.md，該檔自收據後逐位元相同。
+
+**結論**：收據之後可證實的改動都不碰本單元負責或引用的段落；容量段本輪重讀重算，與程式一致。附帶核對 Step 17 的其他容量文件（皆自收據後逐位元相同）：`LOCAL-DEV.md:360-362`、`deploy/.env.example:148-150`、`backend/.env.example:149-151`、`deploy/docker-compose.deploy.yml:266-268` 都是 79.1 KiB／199.0 MiB／77.7%。
+
+### 二、回歸（scratchpad 副本，未在 repo 內執行）
+
+副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/wo-copy/`（`backend/` 全部含 `tests_redis/`，排除 `.venv`、`__pycache__`、`.hypothesis`、`.env`；另含 `schema_rbac.sql`、`schema.sql`、`openapi.json`、`DEPLOY.md`、`LOCAL-DEV.md`、`deploy/`、`scripts/`）。直譯器 `backend/.venv/bin/python -B -P`，`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=<副本>/backend`、`env -u REDIS_URL`，直譯器內 `os.chdir(<副本>/backend)` 後跑 `unittest`。
+
+| 指令 | 結果 |
+|---|---|
+| 計畫指定的 11 個模組（本單元 7：store、capabilities、rules、model、flow、boundaries、authz；兄弟 4：`session_store_behaviour`、`session_types`、`session_contract`、`hierarchy_service`） | **`Ran 241 tests` → `OK (skipped=3)`**，實跑 238、跳過 3 |
+| 補充（收據內但不在上列 11 個）：`test_work_orchestrator_capacity`、`test_brain_gateway_rules`、`test_brain_gateway_turn`、`test_redis_gateway_noscript` | **`Ran 72 tests` → `OK`** |
+| `backend/scripts/dump_openapi.py --check`（副本） | 「規格檔與後端程式碼一致。」 |
+| repo 內 `backend/` 以 `find -mmin -20`（排除 `.venv`）檢查 | 0 筆（未在 repo 留下 `.pyc`／`.hypothesis/`）；`.hypothesis/` 落在副本 |
+
+跳過的 3 條皆為 `test_session_store_behaviour` 的真實 Redis 一致性案例，原因逐字「REDIS_URL 未設定：tests_redis 是 opt-in 的真實 Redis 一致性測試，不在 CI」。輸出中的 `ERROR:cloud360.session_store:session_backend_unavailable …` 是測試刻意觸發並斷言的日誌，不是失敗。
+
+**`tests_redis.test_work_item_lua` 本輪不執行**：需要真實 Redis，而本輪規定不得連任何 Redis（含本機暫起者）。兩支 Lua、`session_types.py` 與該測試檔自收據後逐位元相同，故沿用 2026-10-26「重做」節的紀錄（7 OK，一次性本機 Redis 8.8.0）；替身與參考實作的對應案例（store 的容量 10 案＋`@given`、flow 的 `WorkCapacityFlowTest`）本輪已在上表重跑通過。
+
+### 三、review-02 發現逐項現況
+
+| ID | 審查狀態 | 本輪查證（行號為現況） | 處置 |
+|---|---|---|---|
+| R-01（Major） | Resolved | 位元組上界常數仍在 `work_orchestrator_rules.py:71-87`；DEPLOY.md 容量表 `:1819-1825` 重算一致（第一節） | 不需動作 |
+| R-02 | Resolved | `work_orchestrator_rules.py:49-52` 的註解已不抄容量數字、改指向 `DEPLOY.md`（審查寫 `:48-50`；該檔自收據後未變，實際註解範圍為 `:49-52`，差一行屬定位誤差，非後續改動）；計畫 Step 17 字面為舊估計（只能勾選、不得改內文） | 不需動作 |
+| R-03 | Resolved | `brain_gateway_rules.py:282` 為新句；`grep "已達 5 項"` 在 `backend/services`、`backend/tests`、`frontend/src` 只剩 `brain_gateway_rules.py:281` 一條說明註解。本檔第八節「交接給 `U14`」與 `traceability.json` `CG-MB18-GATEWAY` 仍引用舊句 | **紀錄更正**：交接段下方已就地補記；`traceability.json` 該條 note 已加更正 |
+| R-04 | Resolved | `unit-test-instructions.md` §一 已寫明 `tests_redis` 不在 CI；merge-blockers 第 18 列（`merge-blockers.md:27`）已揭露 | 不需動作 |
+| R-05 | Unresolved | 仍成立：`put_work_item.lua:50`、`update_work_item.lua:53` 為 `redis.call('HGETALL', key)`，兩檔無取捨註解 | **已知限制**（需改程式或其註解），見第四節 |
+| R-06 | Unresolved | 仍成立：`work_orchestrator.py:338-340` 查無即拋 `WorkItemNotFound`，`:341-342` 才是終態 no-op；閘道對到「找不到這個工作項」（`brain_gateway_rules.py:277`、`:310-311`） | 審查給兩條路，取**紀錄那一條**：交接段已補記此行為（第八節「交接給 `U14`」下）。「以測試鎖住」那一半需新增測試，列為已知限制，見第四節 |
+| R-07 | New | `test_work_orchestrator_capacity.py` 已納入版控（`git ls-files --error-unmatch` 列得出）；`source-manifest.json:43` 已列；`traceability.json` 原無條目 | **紀錄修正**：新增 `CG-MB18-BYTE-BOUND`（target 為該檔，note 列 8 案與承接的位元組上界／`NFR4.40`／`US1.1`）；Step 17 本輪勾選（第五節） |
+| R-08 | New | 仍成立：`tests_redis/test_work_item_lua.py` 的 7 個 `test_` 方法（`:123`、`:136`、`:146`、`:162`、`:201`、`:216`、`:267`）無以真實 `cjson.encode` 比對 `cjson_encoded_size` 的案例；DEPLOY.md 只在 `:1829`、`:1833` 提到 cjson，未註明 Redis 大版本升級要重跑 | **已知限制**（需新增測試並改 DEPLOY.md），見第四節 |
+
+順帶一處同類紀錄更正：`traceability.json` 的 `CG-MB18-DISPATCH` note 原寫「轉終態 `requestText` 截成 200 字」，R-01 之後實為先取 200 字再以 300 B 封頂（中文即前 100 字），已在該 note 加更正。
+
+### 四、已知限制——需 conductor 併入 `merge-blockers.md`
+
+登錄前已查 `merge-blockers.md` 全檔（`grep` `HGETALL`／`cjson`／`work-orchestrator`／`WorkItemNotFound`／`tests_redis`）：
+
+| # | 內容 | 需改的對象 | 既有列涵蓋情形 |
+|---|---|---|---|
+| (a) R-05 | 兩支 Lua 以 `HGETALL` 讀整個 session hash（含最多 614,400 B 對話段）只為篩 `wi:` 欄位（`put_work_item.lua:50`、`update_work_item.lua:53`）；改 `HKEYS`＋逐一 `HGET`，或至少在程式註解記載取捨與預期延遲 | 程式（Lua） | 第 18 列（`merge-blockers.md:27`）的「本輪未修（如實揭露）」段**已揭露**，寫「規模下接受，未改」，但**沒有列為待修、也沒有指定承擔者**。是否另開列或在第 18 列明訂「接受」由 conductor 決定 |
+| (b) R-06 的測試那一半 | 對「已被修剪的終態項送停掉 → `WorkItemNotFound`」補一條測試鎖住現行行為（或改為 no-op 並以測試鎖住） | 測試（或程式＋測試） | 第 18 列**已揭露**行為本身（「交接 `U14`／`U13` 決定呈現，本輪未加測試」）；未列為待修 |
+| (c) R-08 | `tests_redis` 增一案：以真實 `cjson.encode` 量對抗字元集合，與 `session_types.cjson_encoded_size` 比對；DEPLOY.md 容量表註明升級 Redis 大版本時要重跑該案 | 測試＋`DEPLOY.md` | **無列涵蓋**。第 34 列 (g)（`merge-blockers.md:43`）談的是 `DEPLOY.md:1824` 的「≈ 308.8 個」要標序列化位元組下界與配置器前提、以 `MEMORY USAGE` 實量，與 cjson 等價性不同件，但同改 `DEPLOY.md` 容量表，可同批處理 |
+
+另兩件沿用既有揭露、不重複登錄：Lua 路徑只由 opt-in 的 `tests_redis` 覆蓋、CI 不跑（review-02 R-04，第 18 列已揭露；承擔者未指定）；`requestText` 靜態加密不在範圍（計畫 §二 第 15 項，併入上游 `OQ-3`）。
+
+### 五、勾選重設
+
+基準為本檔「重做」節（2026-10-26：16／17，Step 17 未勾）。
+
+| 格 | 判定 | 理由 |
+|---|---|---|
+| Step 1–8、13–16 | 勾 | 實作與測試檔自收據後逐位元相同（第一節）；相關測試本輪在副本重跑通過（第二節）。Step 4／14 的 `tests_redis` 案例未重跑，依據為檔案未變＋10-26 的真實 Redis 紀錄 |
+| Step 9 | 勾 | `dump_openapi.py --check` 本輪在副本重跑一致 |
+| Step 10 | 勾 | 突變驗證未重跑；被突變的程式與抓紅的測試自收據後逐位元相同，第三節與第八節的紀錄仍有效 |
+| Step 11 | 勾 | 零新環境變數不變；兩支 validator 本輪重跑通過 |
+| Step 12 | 勾 | 本檔、`source-manifest.json`（自收據後未改）、`traceability.json`（本輪只增補與更正 note）皆在 |
+| Step 17 | **勾**（前輪未勾） | 前輪未勾的兩個原因本輪都已消除：容量段（DEPLOY.md 重讀重算一致；`LOCAL-DEV.md`、兩份 `.env.example` 逐位元相同且數字一致）；`traceability.json` 已補 `test_work_orchestrator_capacity.py` 的條目（R-07），該測試檔已納入版控。`merge-blockers.md` 第 18 列已標「**已修正**」（`merge-blockers.md:27`，含 `work-orchestrator` 那一半）。驗證三項（兩支 validator、`dump_openapi.py --check`）本輪重跑通過。仍開著的 R-05／R-06 測試／R-08 不屬 Step 17 的範圍，已列第四節 |
+| §六之二 前四格 | 勾 | 第一至第四節與本節 |
+| §六之二「收尾」 | 本節寫入、兩支 validator 再跑綠後勾選 | — |
+
+實算（本節寫入當下，`grep -c "^- \[x\]"`／`grep -c "^- \[ \]"`）：**已勾 21／未勾 1**（未勾者為「收尾」格本身）；收尾格勾選後的實算見本節最末一行。
+
+### 六、收尾
+
+- `traceability.json`：`python3 -c "import json; json.load(...)"` 通過（`reverse` 11 條、`coverage` 49 條）。
+- `scripts/validate_repo_contract.py`、`scripts/validate_env_contract.py`：本節寫入前皆通過；本節寫入後重跑，逐字「Cloud-360 repository contract validation passed.」、「Cloud-360 environment configuration contract validation passed.」。
+- 收尾格勾選後實算：`grep -c "^- \[x\]"` ＝ **22**、`grep -c "^- \[ \]"` ＝ **0**。計畫檔對 HEAD 的差異只有勾選格與 conductor 先前加入的 §六之二 內文，本輪未動任何其他文字。
+- ADR-0006 四面向：本輪未改程式，與「重做」節的逐面判定相同（IAM 成立、network exposure 成立、encryption 為已揭露缺口 `OQ-3`、audit logging 部分成立 `OPEN-WO12-6`）。
+
+## 合併前必修第 36 列（計畫 §六之三 Step 18–24，2026-11-08T00:34:42Z）
+
+範圍只有第 36 列的 (a)–(d)。`work_orchestrator.py` 中記憶走主連線的呼叫端（承擔者未定）**未動**。
+
+本輪寫入：`backend/services/session_scripts/put_work_item.lua`、`backend/services/session_scripts/update_work_item.lua`（皆只增註解行）、`backend/tests/test_work_orchestrator_flow.py`（新增 1 案）、`backend/tests_redis/test_work_item_lua.py`（新增 1 案）、本檔（本節）、`traceability.json`（新增 `MB-36`、`CG-MB18-BYTE-BOUND` 的 note 補一句更正）、計畫的勾選格、`merge-blockers.md` 第 36 列處置欄。四個程式／測試檔皆已列在 `source-manifest.json`，故該檔未改。**未改** `DEPLOY.md`、`session_types.py`、`work_orchestrator.py`。
+
+### 一、Step 18 — (a) R-05 Lua 取捨註解
+
+| 檔 | 註解行 | `HGETALL` 現行行號 |
+|---|---|---|
+| `put_work_item.lua` | `:50-62` | `:63` |
+| `update_work_item.lua` | `:53-63`（在 `prune_terminal` 函式內） | `:64` |
+
+註解寫明：讀回的是**整個** session hash（含 `meta`、`tgt:*`、三段 `seg:*`），成本 O(n)；現行量級下接受的理由（`wi:*` 最多「進行中上限＋已結束保留數」個、每筆與每段都有位元組上界，整個 hash 的序列化上界指向 `DEPLOY.md` 的 Redis 容量表，**不抄數字**——沿用兩檔「上限值由呼叫端經 ARGV 傳入、本檔不抄第二份」的既有原則）；須改寫的時機（調高任何上限之前，或 staging `SLOWLOG` 出現本腳本）；兩種改法（`HKEYS`＋逐一 `HGET`，或原子維護計數欄位），並註明改法會改變腳本行為面、須連同參考實作與 `tests_redis/` 一起改。
+
+- **只增註解**：`git diff -U0` 的增刪行過濾掉 `+ --` 開頭者後為 0 行；演算法、回傳值、`ARGV` 介面不變。腳本原始碼改變使 SHA1 改變，`RedisGateway` 由原始碼算 SHA，`NOSCRIPT` 時退回 `EVAL`（冷啟動案 `GatewayColdStartTest` 本輪在真實 Redis 實跑通過）。
+- **事實補正（不改結論）**：第 36 列 (a) 寫「兩檔**每次寫入**以 `HGETALL` 解碼」。`put_work_item.lua` 確為每次建項都掃；`update_work_item.lua` 的 `HGETALL` 在 `prune_terminal` 內，只在「非終態 → 終態」那一次呼叫（`run()` 的 `if not was_terminal and terminal[item.status]`），其餘補丁只做單欄 `HGET`／`HSET`。已寫進該檔註解。
+- **`session_types.py` 參考實作未加註解**：`_work_item_statuses` 同樣掃全部欄位，但它只在 in-memory 替身與一致性測試中執行，沒有 Redis round-trip 成本可言，其 docstring 已寫明「與兩支 Lua 的掃描同形」。無同形註解需求，故不動（計畫 Step 18 末句的條件不成立）。
+
+### 二、Step 19 — (b) R-06 修剪後送停掉
+
+新增 `CorrectTest.test_correct_after_the_terminal_item_was_pruned_raises_not_found`（`test_work_orchestrator_flow.py:441`），既有案名未改，附 `@purpose`／`@given`／`@step`／`@pass`／`@story` docstring。
+
+- 流程：交辦 1 項並 `drain` 跑完（最舊的已結束項）；之後每次推進假時鐘 1 秒再交辦並跑完，共 20 項（`R.MAX_TERMINAL_WORK_ITEMS`）。第 20 項跑完時斷言最舊項**仍在**（排除「它一開始就不存在」的空洞通過）；第 21 項跑完時由**生產的轉終態路徑**（`WorkOrchestrator._cas` → `SessionStore.update_work_item` → 替身執行 `session_types.ref_update_work_item`）把它修剪掉，未手刪任何欄位。
+- 斷言：剩 20 筆且全為終態、最舊項不在；`correct` 拋 `WorkItemNotFound`（`work_orchestrator.py:340`）；之後 Redis 內工作項逐欄相同、推送數不變；把該例外交給 `brain_gateway_rules.error_for` → `("INVALID_REQUEST", "找不到這個工作項")`（`brain_gateway_rules.py:310-311`、`:277`）。閘道那一層因為 `error_for` 是純函式、本單元可直接呼叫，故一併斷言；閘道的 WS 送出路徑屬 `U13`，未在本單元測。
+- **如實揭露**：替身的修剪是**參考實作**，不是 Lua。真實 Lua 修剪與參考實作的一致性由 `tests_redis/test_work_item_lua.py` 既有的 `test_update_prune_cases_match_the_reference`（`prune_oldest`／`self_not_victim`／`tie_by_field_name`）承擔，本輪在本機 Redis 實跑通過。
+
+### 三、Step 20 — (c) R-08 真實 cjson 對照
+
+新增 `WorkItemLuaParityTest.test_cjson_encoded_size_matches_real_cjson_encode`（`tests_redis/test_work_item_lua.py:252`），沿用該類別既有的 `@unittest.skipIf(_SKIP …)`（`REDIS_URL` 未設或 `redis` 不可匯入即 skip 並印原因）。12 組輸入，各以 `EVAL "return string.len(cjson.encode(cjson.decode(ARGV[1])))"` 量長度、與 `session_types.cjson_encoded_size` 比對：控制字元（`\x00\x01\x08\x0b\x1f`）、短跳脫（`\n\t\r\b\f`）、DEL、斜線、引號與反斜線、中文、emoji、`é ß U+2028 U+2029 U+FEFF`、整數（含 int32 上限）、`null`／布林、巢狀、一筆含斜線／DEL／控制字元／emoji 的工作項。不放空陣列（cjson 預設把解碼後的空陣列編回 `{}`，已在 docstring 寫明）。
+
+**本輪結果：12 組全部長度一致**（Redis 8.8.0，本機一次性實例）。
+
+**`DEPLOY.md` 未改**：`grep -n "大版本" DEPLOY.md` → `:1931`；`:1931-1934` 逐字已有「**Redis 大版本升級後必須重跑那支測試與 `tests_redis/` 的工作項 Lua 測試**（合併前必修第 36 列 (c)）……只比對 Python 端的測試不會變紅」。該段為工作樹內未 commit 的改動（`git show HEAD:DEPLOY.md | grep -n 大版本` 0 筆），由他列處理時加入；本輪新案正落在它點名的 `tests_redis/` 內，故已涵蓋，依計畫不改。第 36 列 (c) 原文引的 `DEPLOY.md:1829`、`:1833` 是舊行號，現況容量表在 `:1916-1934`。
+
+### 四、Step 21 — (d) 紀錄更正（原文不刪改）
+
+1. **第八節「交接給 `U14`」下的 2026-10-31 補記**（本檔 `:338`）末句「本單元的程式不改，**此行為未以測試鎖住**」說法過頭，更正為：「**查無識別碼已有測試**（`test_work_orchestrator_flow.py` 的 `test_correct_is_a_no_op_on_terminal_items_and_rejects_unknown_ids`，原 `:433`，現 `:433`），**缺修剪後再送停掉的專屬案例**（本輪 Step 19 補上，`:441`）」。
+2. **前輪「共用檔異動後的重新驗證與補審」第一節**（本檔 `:377`）「讀 `git diff 624c170 7a50a40 -- DEPLOY.md` 的全部 hunk（**收據之後的改動必為其子集**）」更正為：「收據當下的前像不等於 git 中任何版本，**無法證明收據之後的改動為該 diff 的子集，故另以逐行重讀與重算補強**」（該節對容量段的逐行重讀與重算確實做了，結論不受影響；錯的只是「必為子集」這個無法證明的宣稱）。
+
+### 五、Step 22 — 突變驗證（只在 scratchpad 副本；每項 套用 → 跑 → 還原 → 以 sha256 比對 → 再跑）
+
+腳本 `/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/wo_mb36_mutate.py`；repo 內被測檔未動。
+
+| # | 突變（副本） | 跑的案例 | 突變後 | 還原 sha256 相同 | 還原後 |
+|---|---|---|---|---|---|
+| M1 | `session_types.ref_update_work_item` 的 `if excess > 0:` → `if False and excess > 0:`（拿掉替身的修剪路徑） | Step 19 新案 | **FAILED (failures=1)** | 是 | OK |
+| M2 | `work_orchestrator.correct` 查無時 `raise WorkItemNotFound` → `return None`（停掉在查無時回成功） | Step 19 新案 | **FAILED (failures=1)** | 是 | OK |
+| M3 | `cjson_encoded_size` 拿掉 `+ text.count("/")` | Step 20 新案（真實 Redis） | **FAILED (failures=3)**（slash、nested、work_item 三個 subTest） | 是 | OK |
+| M4 | `cjson_encoded_size` 拿掉 `+ 5 * text.count("\x7f")` | Step 20 新案（真實 Redis） | **FAILED (failures=3)**（del、nested、work_item） | 是 | OK |
+
+### 六、Step 23 — 回歸（scratchpad 副本）
+
+副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/wo-copy/`（repo 全部，排除 `frontend/node_modules`、`backend/.venv`、`__pycache__`、`.hypothesis`、三份 `.env`、`frontend/dist`）。直譯器 `backend/.venv/bin/python -B`，`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp`，工作目錄為副本的 `backend/`。
+
+| 指令 | 結果 |
+|---|---|
+| 計畫的 11 個模組（本單元 7＋兄弟 4），`env -u REDIS_URL` | **`Ran 242 tests` → `OK (skipped=3)`**（前輪 241；＋1 為 Step 19 新案）。跳過 3 條為 `test_session_store_behaviour` 的真實 Redis 案，原因同前輪 |
+| 補充 4 個模組（`test_work_orchestrator_capacity`、`test_brain_gateway_rules`、`test_brain_gateway_turn`、`test_redis_gateway_noscript`） | **`Ran 72 tests` → `OK`** |
+| `tests_redis.test_work_item_lua` ＋ `tests.test_session_store_behaviour`，`REDIS_URL=redis://127.0.0.1:6399/15` | **`Ran 67 tests` → `OK`**，0 skip（`tests_redis` 8＝前輪 7＋Step 20 新案；behaviour 59，前述 3 條本輪實跑） |
+| `backend/scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」 |
+| `scripts/validate_repo_contract.py`（`GIT_OPTIONAL_LOCKS=0`） | 「Cloud-360 repository contract validation passed.」 |
+| `scripts/validate_env_contract.py` | 「Cloud-360 environment configuration contract validation passed.」 |
+
+**一次性 Redis**：Homebrew `redis-server` 8.8.0，`--bind 127.0.0.1 --port 6399 --save '' --appendonly no`，資料目錄在 scratchpad；用完 `shutdown nosave` 並刪除資料目錄。未連 staging 或任何共用 DB／Redis，未連網路。
+
+### 七、勾選
+
+計畫只勾本節（§六之三）各格；計畫內文未改，以本輪開工前的副本 `diff` 確認差異只有勾選字元。**觀察**：本輪開工時全檔 29 格**全部未勾**（`grep -c -- '- \[x\]'` ＝ 0），與前輪紀錄的「22／0」不同——計畫在前輪之後被 conductor 改寫（加入 §六之三）時一併重設了勾選。依本輪規定只勾本節，未重勾 Step 1–17 與 §六之二 各格；是否重勾由 conductor 決定（前輪第五節的逐格判據仍可沿用，但本輪改了 Step 4／8／14 涉及的 `test_work_orchestrator_flow.py` 與 `tests_redis/test_work_item_lua.py`——都是新增案、既有案未動，且相關模組本輪實跑全綠）。
+
+實算見本節最末一行。
+
+### 八、已知限制與範圍外觀察（需 conductor 判斷是否併入 `merge-blockers.md`）
+
+- **新的 cjson 對照案仍是 opt-in、不在 CI**（與第 18 列已揭露的 `tests_redis` 不在 CI 同一件；承擔者未指定）。它能抓到「cjson 行為變了」，但只在有人對真實 Redis 跑它時。
+- **cjson 對照的輸入集合不含浮點數與超過 14 位有效數字的整數**：`cjson_encoded_size` 的 docstring 本就把它們排除在對象外（工作項與訊息不含浮點數）。若日後工作項加入浮點欄位，本對照不會報警。
+- 範圍外（未處理）：`work_orchestrator.py` 中記憶走主連線的呼叫端，承擔者待使用者裁決。
+
+### 九、ADR-0006 四面向
+
+| 面向 | 判定 | 理由 |
+|---|---|---|
+| IAM | 不受影響 | 未改授權路徑；Step 19 斷言的是既有查無錯誤，不改 `correct` 的主體檢查 |
+| encryption | 不受影響 | 未改資料內容與傳輸；`requestText` 靜態加密仍為已揭露缺口 `OQ-3` |
+| network exposure | 不受影響 | 未新增服務或埠；測試用 Redis 只綁 127.0.0.1 且用完即刪 |
+| audit logging | 不受影響 | 未改日誌；新測試不記錄任何內容 |
+
+勾選實算（Step 18–24 全部勾選後，`grep -c -- '- \[x\]'`／`grep -c -- '- \[ \]'`）：**已勾 7／未勾 22**（已勾者即本節 7 格；未勾 22 格為 Step 1–17 與 §六之二 5 格，原因見第七節）。以開工前副本比對，計畫檔差異只有這 7 個勾選字元，檔案大小不變。
+
+### 七之二、既有 22 格重判（conductor 追加指示，2026-11-08T00:44:06Z）
+
+conductor 確認這 22 格是被整站 Request Changes 重設，不是證據失效，並依 §六之三 前言「既有各格維持完成，除非本輪改動使其證據失效」要求重判。本次**未跑任何測試、未寫任何快取**，只做唯讀的 `shasum -a 256`、`git diff`、`grep` 與 `stat`，再改勾選字元。
+
+**對最新收據 `reviewed-source-6a096499e51a.tsv`（2026-10-31）逐檔比對，共 30 檔**：19 檔逐位元相同，11 檔變動。
+
+- **逐位元相同（19）**：`work_orchestrator{,_capabilities,_rules}.py`、`session_types.py`、`redis_gateway.py`、`hierarchy_service.py`、`brain_gateway_rules.py`、`tests_redis/__init__.py`，以及 `backend/tests/` 的 11 檔（store、capabilities、rules、model、boundaries、authz、capacity、`work_orchestrator_fakes.py`、`test_brain_gateway_rules.py`、`test_brain_gateway_turn.py`、`test_redis_gateway_noscript.py`）。
+- **本輪自己改的（4）**：兩支 Lua 只增註解行；`test_work_orchestrator_flow.py`、`tests_redis/test_work_item_lua.py` 各只新增一案，既有案未動。四檔都在本輪回歸中實跑通過（242／72／67，第六節）。
+- **他列改的（7）**：`session_store.py`、`hierarchy_facade.py`、`DEPLOY.md`、`LOCAL-DEV.md`、`backend/.env.example`、`deploy/.env.example`、`deploy/docker-compose.deploy.yml`。
+  - 七檔的 mtime 皆早於本輪副本建立時刻（`stat`：最晚 07:14:50，副本建於 08:22:26 之後；本機時間），故本輪的 242／72／67 回歸跑的就是現況位元組。
+  - `git diff HEAD` 中，`session_store.py`（+16／−2）與 `hierarchy_facade.py`（+34）的增刪行對 `work_item`／`wi:`／`put_work`／`update_work`／`load_work`／`capacity` 皆 0 命中；工作項三方法仍在 `session_store.py:503`、`:508`、`:543`。
+  - 容量文件逐檔 `grep` 重驗：`DEPLOY.md:1918-1922`（81,000 B ≈ 79.1 KiB、695,400 B、≈ 308.8、≈ 199.0 MiB、≈ 77.7%）、`LOCAL-DEV.md:390-391`、`backend/.env.example:159-160`、`deploy/.env.example:155-157`、`deploy/docker-compose.deploy.yml:272-274` 都是 79.1 KiB／199.0 MiB／77.7%。以 `python3` 重算 695,400、308.8、199.0、77.7，全部相符。`merge-blockers.md` 第 18 列仍為「已修正」。
+
+| 格 | 判定 | 理由 |
+|---|---|---|
+| Step 1 | 勾 | `tests_redis/__init__.py` 逐位元相同 |
+| Step 2 | 勾 | `unit-test-instructions.md` §二 的指令本輪照原樣實跑（第六節） |
+| Step 3、13 | 勾 | 兩支 Lua 只增註解（`git diff` 過濾後非註解行為 0）；`session_types.py`、`session_store.py` 的工作項方法未動；真實 Redis 一致性 8 案本輪實跑通過 |
+| Step 4、14 | 勾 | store 測試逐位元相同；`tests_redis` 只新增一案；本輪實跑通過 |
+| Step 5、6 | 勾 | capabilities 程式與測試逐位元相同，並在 242 案中實跑 |
+| Step 7、15 | 勾 | `work_orchestrator{,_rules}.py`、`brain_gateway_rules.py` 逐位元相同 |
+| Step 8、16 | 勾 | flow 只新增 Step 19 一案；其餘業務邏輯測試與閘道測試逐位元相同；本輪實跑通過 |
+| Step 9 | 勾 | `dump_openapi.py --check` 本輪實跑一致 |
+| Step 10 | 勾 | 被突變的程式（`work_orchestrator*.py`、`session_types.py`）逐位元相同；Lua 只增註解，不改任何突變點的語意；抓紅的測試逐位元相同或只新增案 |
+| Step 11 | 勾 | 兩支 validator 本輪實跑通過 |
+| Step 12 | 勾 | 本檔、`source-manifest.json`、`traceability.json`（本輪新增 `MB-36`，仍是合法 JSON）皆在 |
+| Step 17 | 勾 | 容量段五檔重驗一致（見上）；第 18 列仍為已修正；validator 與 `--check` 本輪通過 |
+| §六之二 五格 | 勾 | 前輪的五項工作與紀錄都還在（本檔「共用檔異動後的重新驗證與補審」一節）。其中「共用檔重驗」的比對基準已被本節取代（現況以 `6a096499e51a` 為準，結論相同）；「前輪審查發現」所登錄的 R-05、R-06、R-08 已由本輪第 36 列修掉，登錄本身仍成立 |
+
+**沒有任何一格判為證據失效。**計畫檔以本次改勾前的副本比對，只差 22 個勾選字元；再與本輪開工前的副本比對，也只差勾選字元，檔案大小同為 34,020 B。實算：`grep -c -- '- \[x\]'` ＝ **29**，`grep -c -- '- \[ \]'` ＝ **0**。

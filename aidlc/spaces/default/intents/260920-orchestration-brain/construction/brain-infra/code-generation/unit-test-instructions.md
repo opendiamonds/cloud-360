@@ -40,8 +40,10 @@
 Build and Test 每個單元重跑整套）：
 
 ```bash
-cd backend && python -m unittest tests.test_vector_extension_bootstrap tests.test_render_env_redis -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest tests.test_vector_extension_bootstrap tests.test_render_env_redis -v
 ```
+
+> **直譯器與快取（review-03 R-03 更正，2026-10-29）**：本機 PATH 沒有 `python`、只有 `python3`；而系統 `python3` 的 `mcp` 為 1.29.0（`requirements.txt` 釘選 2.3.0），全套測試會出現與本單元無關的失敗。一律用 `backend/.venv/bin/python`。`PYTHONDONTWRITEBYTECODE=1` 與 `-B` 避免產生 `.pyc`；在工作樹內跑測試仍會產生 `.hypothesis` 等快取並改變引擎的來源指紋，需要不影響審查時，先 rsync 到暫存目錄再執行。兩支測試檔實作合計 16 個測試（7 ＋ 9，以 `grep -c 'def test_'` 實數；下方第四節的「規劃」數字保留原樣，並就地註明實作數）。
 
 兩支驗證器（本單元的主要閘門，從 repo 根執行）：
 
@@ -53,15 +55,17 @@ python3 scripts/validate_repo_contract.py
 既有套件保持綠（Testing Contract 的 `scope_floor` 要求，從 `backend/` 執行）：
 
 ```bash
-cd backend && python -m unittest discover -s tests -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest discover -s tests -v
 ```
+
+> **現況註記（2026-10-31，合併前必修共用檔集中修正）**：計畫「合併前必修：共用檔集中修正」一節的 A1–A11 會改到多個單元的共用檔，A12 的驗證範圍因此擴大為：後端全套 `unittest discover`、`backend/scripts/dump_openapi.py --check`、A2–A9 的六支新測試檔（`test_membership_lone_owner`、`test_project_delete_requires_admin`、`test_user_delete_audit_counts`、`test_membership_eligibility_guards`、`test_memory_input_limits`、`test_session_role_limit`）、前端 `npm run lint`／`npm run check:types`／`npm run build`，以及 e2e `a11y`、`memory-page`、`member-pages`、`project-pages`、`sidebar-landmarks`。**全部只在 scratchpad 的實體複製副本上執行**（`node_modules` 須是依 `package-lock.json` 完整安裝的一份，不可直接沿用 repo 現況；副本內不得有指回 repo 的 symlink），後端用 `.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`-P`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本。e2e 以 `vite preview` 跑生產建置、全走 `page.route()` 攔截。不連 DB、Redis 或網路；CI 才有的 PostgreSQL job（`memory-schema` 等）本機不跑，寫明未驗。
 
 **執行器就緒性**：以上命令在本單元的第一個測試寫出來之前就已經可執行（brownfield，
 執行器既有）。Step 1 是**驗證**這件事，不是 bootstrap。
 
 ## 四、規劃的測試案例
 
-### `test_vector_extension_bootstrap.py`（6 個）
+### `test_vector_extension_bootstrap.py`（規劃 6 個；實作 7 個）
 
 | # | 測什麼 | 通過條件 |
 |---|---|---|
@@ -75,7 +79,7 @@ cd backend && python -m unittest discover -s tests -v
 案例 2 是這一組的核心——它是清單第 12 項「呼叫點在 `create_all()` 之前」這條**二元判準**
 的唯一自動化守門者，而既有六支 `_ensure_*` 全在之後，實作者照既有形狀做就會放錯邊。
 
-### `test_render_env_redis.py`（5 個）
+### `test_render_env_redis.py`（規劃 5 個；實作 9 個）
 
 以 `subprocess` 在暫存目錄執行 `bash deploy/render-env.sh`，注入不同的環境變數。
 
@@ -94,7 +98,7 @@ cd backend && python -m unittest discover -s tests -v
 
 ## 五、覆蓋率目標
 
-- **Standard 策略**要求每個元件 5–8 個測試：兩個可測元件各 6／5 個，合計 **11 個新測試**，符合。
+- **Standard 策略**要求每個元件 5–8 個測試：兩個可測元件規劃各 6／5 個，合計 **11 個新測試**，符合（實作為 7／9，合計 16 個）。
 - **`org.md` 的 80% line coverage**：本 repo **沒有覆蓋率量測機制**（無 `.coveragerc`、
   無 `coverage`／`pytest-cov`、CI 無 coverage step）。`team.md` 已逐字記載它
   「既無法量測也無法強制，是宣告而非閘門」。本單元**不新增**覆蓋率工具（獨立的工具鏈決策，

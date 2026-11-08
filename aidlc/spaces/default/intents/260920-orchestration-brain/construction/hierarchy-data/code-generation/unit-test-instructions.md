@@ -24,8 +24,10 @@
 在 `backend/` 目錄下執行：
 
 ```bash
-python -m unittest tests.test_hierarchy_migration -v
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest tests.test_hierarchy_migration -v
 ```
+
+> **直譯器與快取（2026-10-29 更正）**：本機 PATH 沒有 `python`、只有 `python3`，且系統 `python3` 的套件版本與 `requirements.txt` 不一致，一律用 `backend/.venv/bin/python`。`PYTHONDONTWRITEBYTECODE=1` 與 `-B` 避免產生 `.pyc`；在工作樹內跑測試仍會產生 `.hypothesis` 等快取並改變引擎的來源指紋，需要不影響審查時，先 rsync 到暫存目錄再執行。**實作案例數與下方第三節的規劃數不同**（`test_hierarchy_migration.py` 規劃 13、實作 15；`test_user_delete_hierarchy.py` 規劃 7、實作含後補的 (h)(i)），實數以 `grep -c 'def test_'` 計、記於 `code-summary.md`。
 
 **不得使用裸的 `python -m unittest discover -s tests`**——Build and Test 會逐單元執行
 每個單元的指令，未限定範圍會讓整套測試被跑 N 次。
@@ -62,6 +64,8 @@ python -m unittest tests.test_hierarchy_migration -v
 | (f) | 拒絕授權申請並刪除，待審帳號只有空預設專案 | 200；帳號與其空預設專案皆刪除 |
 | (g) | commit 時拋 `IntegrityError`（以 mock 注入，模擬預檢未涵蓋的新外鍵） | 409，不是 500；交易已 rollback |
 
+**清除範圍含需求欄位（review-03 R-10 補註，2026-10-29）**：規則 1 清除空預設專案時，其下 system 的 `system_requirement_fields` 列會一併消失（預檢只在最後修改者為他人時阻擋）。成功路徑的稽核訊息目前不含被清除的專案／系統／需求欄位筆數，為已知缺口，記於 `code-summary.md`。
+
 **SQLite 注意**：SQLite 預設不強制外鍵；需要外鍵行為的案例必須先 `PRAGMA foreign_keys=ON`，否則 (b)–(e) 在缺陷存在時也會綠（恆真）。突變驗證 M-D1／M-D2／M-D3 見計畫步 10。
 
 本項的精確指令（在 `backend/`）：
@@ -69,6 +73,8 @@ python -m unittest tests.test_hierarchy_migration -v
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy -v
 ```
+
+> **現況註記（2026-11-01，計畫第七節）**：新增 `backend/tests/test_hierarchy_migration_exit_codes.py`（合併前必修第 28 列 (a)(b)：`main()` 結束碼 2、`default_pairs_created` 低報行為與兩處 docstring）。本單元指令擴為 `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest tests.test_hierarchy_migration tests.test_user_delete_hierarchy tests.test_hierarchy_migration_exit_codes -v`。一律只在 scratchpad 的實體複製副本上執行（不得 symlink 回 repo），`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本；不連 DB、Redis 或網路。
 
 完整套件（`scope_floor`）一律用 `backend/.venv`：`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests`——本機系統 Python 的套件版本與 `requirements.txt` 不一致。
 
@@ -116,7 +122,7 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_hierarchy_migr
 理論上不受影響。但**必須實際驗證**：
 
 ```bash
-python -m unittest discover -s tests -v
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest discover -s tests -v
 ```
 
 這條指令**只在 Build and Test 那一站跑一次**（驗證既有套件未被破壞），

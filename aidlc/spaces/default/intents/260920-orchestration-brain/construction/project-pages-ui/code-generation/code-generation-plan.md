@@ -394,6 +394,26 @@
   - `code-summary.md` 新增一節；`merge-blockers.md` 第 14 列以純 append 方式更新處置；`source-manifest.json`、`traceability.json` 更新。
   - 回覆既有殘留紀錄：`../carried-review-items.md:41` 的「接受為殘留」由本節取代，記入 code-summary 的取代關係（不回改已凍結的設計檔）。
 
+## 九之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔（`DEPLOY.md`、`backend/services/requirement_field_errors.py`、`backend/services/requirement_field_facade.py`、`backend/tests/test_requirement_field_http.py`、`frontend/src/pages/MembersListPage.tsx`、`frontend/tests/e2e/member-pages.spec.ts` 等），使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔找出收據之後的改動（`git diff`／`git log -p`；收據版本無法由 git 重建時，可試以 hunk 子集重建收據雜湊，重建不了則讀涵蓋它的整段 diff 並寫明無法證明為子集、以逐行重讀補強），判定是否碰到本單元負責或引用的部分（`project_visible` 的可見性過濾與 15 處 `ALWAYS_VISIBLE` 補丁、不洩漏專案／系統是否存在的 404 收斂、`MembersListPage.tsx` 與 `membershipApi.ts` 的 404／403 文案、`member-pages.spec.ts` 中本單元寫入的案例、`DEPLOY.md` 本單元段落），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的方式，跑第二節的合併指令與第七節的六個模組、`dump_openapi.py --check`；前端依現況註記決定執行範圍並寫明。記下實跑測試數。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查的每一項，逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記；需改程式、測試或共用文件者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（既有列已涵蓋者引用之）。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 九之三、合併前必修第 25、39 列（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。其中**第 25、39 列劃給本單元**。第 25 列 (a)(b) 的程式修正已由 `brain-infra` A3 落地（`brain-infra/code-generation/code-summary.md` 第 447 行起：可達性結論「可達」、`hierarchy_facade.delete_project`／`delete_system` 新增 `project_admin` 注入判定、`membership_service.can_administer_project`、新測試 `backend/tests/test_project_delete_requires_admin.py` 4 案與突變 M1–M4）。2026-11-08 使用者裁決：**保留「零成員列的擁有者可刪除」這個等價條件**（只在成員回填跑完前出現；已核可的 `test_project_write_guard.py` (c) 案例不動）。第 39 列 (a)（d 組三案只斷言 404 狀態碼）依 2026-10-26T02:56:46Z 使用者裁決「只記 Minor、不列入」維持不修。故本節**預設不改產品程式**，只做現況確認、揭露文字同步與回歸；若查證發現 A3 的修正不成立或被他單元改壞，停止並回報 conductor，不得自行擴大範圍。偏離與理由寫進 `code-summary.md`；既有各格若被 Request Changes 重設為未勾，依收據（本單元 `code-generation/` 下最新 `reviewed-source-*.tsv`）逐檔 `shasum -a 256` 比對與本輪回歸結果逐格重判，不成立者維持未勾並寫明理由。**不得改動 `unit-test-instructions.md`、`code-generation-questions.md`**（受 Plan Approval 綁定）。
+
+- [x] **Step 21 — 第 25 列 (a)(b) 現況確認**：以 `grep -n`／讀檔附行號確認 A3 的改動仍在且與 brain-infra code-summary 所述一致：`hierarchy_facade.py` 的 `PROJECT_ADMIN_REQUIRED_DETAIL`、`HierarchyProjectAdminRequired`、兩個刪除方法在擁有者檢查之後呼叫 `project_admin`；`membership_service.can_administer_project` 的兩支成立條件；`membership_facade.project_admin_check`；`hierarchy_router.py` 兩個刪除端點的注入。另以讀碼確認 `membership-service` 本輪第 21 列改動（`projects_losing_last_admin`、獨自一人的專案）未改變 `change_role` 可降級建立者這個可達性結論。結論寫入 `code-summary.md`。
+- [x] **Step 22 — 第 25 列 (d)／第 39 列 (b) 揭露文字同步**：`code-summary.md` 十二節第 1 項（約 :276）以 Edit 就地補一段區塊級補記（原文不刪不改）：刪除專案與系統原本只認 `projects.owner_user_id`、不查 per-project 角色；已由 `brain-infra` A3 改為要求 `project_admin`，例外為「該專案零成員列且呼叫者是擁有者」（2026-11-08 使用者裁決保留），附 `test_project_delete_requires_admin.py` 與 `test_project_write_guard.py` (c) 的引用。
+- [x] **Step 23 — 回歸**：在 scratchpad 副本跑 `tests.test_project_delete_requires_admin`、`test_project_write_guard`、`test_hierarchy_service`、`test_project_visibility_static`、`test_project_visibility_endpoints`、`test_project_visibility_queries`、三支 membership 測試，及 `unit-test-instructions.md` 第二節的合併指令、`dump_openapi.py --check`（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）；另在副本把 `can_administer_project` 對有成員列者一律回 True → 確認 `test_project_delete_requires_admin` 的降級案轉紅、還原後綠（只做這一項複驗，不重做 A3 全部突變）。`validate_repo_contract.py`、`validate_env_contract.py` 在 repo 以 `python3 -B` 跑。不跑前端指令（本輪無前端改動；e2e 由 CI 的 `ui-regression` 承擔，據實記為未在本輪驗證）。repo 內不得產生 `.pyc`／`__pycache__`／`.hypothesis`；不得連 staging、共用 DB／Redis 或網路。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 加 `MB-25`、`MB-39` 並保持合法 JSON；`source-manifest.json` 只在新增寫入檔時補列；`merge-blockers.md` 第 25、39 列處置欄就地補記結論（含 2026-11-08 使用者裁決）、保留原文。
+- 追溯：`merge-blockers.md` #25、#39、#21；review-03 新發現；review-04 R-08、R-09；ADR-0006 IAM。
+
 ## Testing Contract
 
 ```json

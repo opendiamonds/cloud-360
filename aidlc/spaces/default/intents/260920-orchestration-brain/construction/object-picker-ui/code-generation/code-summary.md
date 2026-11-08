@@ -189,3 +189,84 @@ Step 11 的 17 道突變本輪只獨立重跑 5 道，其餘依 §五 既有紀�
 - R-09：建立表單 submit 不再清空 `formFailure`，重唸改用 `ObjectPicker.tsx:305-308` 的零寬空白做法；守護測試在 `object-picker.spec.ts:1342`、`:1371`。
 
 **過期數字**（本輪未改）：`traceability.json` OPN-26 與計畫 Step 15 寫 32 案，實為 33 案；`code-summary-corrections.md` §九「59 passed（32＋27）」現應為 60；§七 的 `ws-contract.json` 完工值已因第 2 項變更而不同。
+
+## 合併前必修共用檔修正後的回歸驗證（計畫 §九 Step 16–20）
+
+<!-- 寫入時間：2026-11-08T04:41:18Z -->
+
+`merge-blockers.md` 本輪處理的列（第 2 列剩餘、第 20／29、21、25、27、28、30–40 列）沒有任何一列劃給本單元。本輪**不改程式**，只做回歸與紀錄。
+
+### Step 16 — 共用檔重驗
+
+收據：`reviewed-source-871111006c47.tsv`（`code-generation/` 下 mtime 最新，2026-10-26T21:16:04 本地時間）。以 Python `hashlib` 逐列解析 tab 分隔欄位（每列以 tab 起首），9 檔中 **7 檔相同、2 檔變動**：
+
+| 檔 | 收據 sha256（前 12） | 現況（前 12） | 結果 |
+|---|---|---|---|
+| `frontend/eslint.config.js` | `3c7d850c6f9b` | `3c7d850c6f9b` | 相同 |
+| `frontend/src/brain/objectPickerData.ts` | `5b8294f41bbe` | 同 | 相同 |
+| `frontend/src/brain/objectPickerModel.ts` | `91460415b89b` | 同 | 相同 |
+| `frontend/src/components/brain/ContextBar.tsx` | `926ccce984c6` | `53b40ca704b8` | **變動** |
+| `frontend/src/components/brain/ObjectPicker.tsx` | `28477cc2a5c4` | 同 | 相同 |
+| `frontend/src/components/brain/ObjectPickerCreateForm.tsx` | `127b366ead16` | 同 | 相同 |
+| `frontend/src/components/brain/ObjectPickerGroup.tsx` | `cd3fdacbaaed` | 同 | 相同 |
+| `frontend/tests/e2e/a11y.spec.ts` | `111c0a78c1d0` | `03292e3a545f` | **變動** |
+| `frontend/tests/e2e/object-picker.spec.ts` | `33a85d8279bc` | 同 | 相同 |
+
+手動複核（`shasum -a 256`）：`eslint.config.js` 為 `3c7d850c6f9b2ca7…314a3b`，與收據逐字相同；`ContextBar.tsx` 為 `53b40ca704b860aa…693909e`，與收據不同、與 Python 結果相同。兩個變動檔的收據版即 HEAD `7a50a40` 的內容（`git show 7a50a40:<檔> | shasum` 分別為 `926ccce984c6`、`111c0a78c1d0`），變動全部是工作樹未提交的改動；`7a50a40..HEAD` 沒有任何 commit 碰 `frontend/`。
+
+判定（依 `git diff`）：
+
+- **`ContextBar.tsx`**（+3／−1）：只改 `state === 'connecting'` 的骨架（現 `:109-111`），`role="img"` → `role="status"`，加兩行註解（合併前必修第 40 列 (i)）。這是 `U14` 的五態顯示，本單元在此檔負責的部分——檔頭說明 `:26-27`、`pickerOpen` `:34`、依前值調整 `:41-46`、斷線焦點與播報 effect `:48-58`、`brain-context-switch-object` `:135`——一行未動。`object-picker.spec.ts` 與 `entry-page.spec.ts` 對「連線中」骨架 0 處以 `role` 定位（`grep -n "getByRole('img'\|role=\"img\""` 0 命中）；`a11y.spec.ts:662` 以可及標籤 `{ label: '連線中' }` 排除，`aria-label` 未變。**不碰本單元。**
+- **`a11y.spec.ts`**（+51／−10）：`:77` 註解更新、`:460-463` 掃描點計數註解 24→25、新增第 26 掃描點 `memberDetailInvalidProject`（`:732-743`）與其 test（`:1282-1294`）、11 個既有 test 補 `@note`、過期檢查的 `24` 改 `25`（`:1327-1331`）。本單元的兩個掃描點：定義 `pickerDefault`／`pickerCreateError`（`:666-689`）**無 hunk**；test 名稱 `21 切換對象選單預設態`（`:1222`）、`22 切換對象選單建立錯誤態`（`:1236`）不變，只有 `@story` 由 `US9.2` 改為 `N-9、US9.2`（`:1219`、`:1233`）及 22 點補一行 `@note`——TCMS 名稱不受影響。**不碰本單元負責的部分。**
+
+依賴檔（不在收據內，本單元以之為前提）：`brainSession.ts`、`useBrainConnection.ts`、`projectsApi.ts`、`objectCreateAction.ts`、`fanoutQueue.ts`、`AuthContext.tsx`、`LiveRegion.tsx`、`wsFrames.ts`、`entry-page.spec.ts` 在工作樹皆與 HEAD 相同，mtime 皆早於收據；`useBrainConnection.ts` 的 sha256 `512878183e24…` 與 `code-summary-corrections.md` 末節 R-08／R-09 突變基線相同。工作樹其他前端變動（`Sidebar.tsx:247-248` 補 `aria-label="我的記憶"`、`api.d.ts` 記憶端點 503 說明、`MemoryItem.tsx`／`MemoryZone.tsx`／`MemberDetailPage.tsx`、`memory-page.spec.ts`、未追蹤的 `sidebar-landmarks.spec.ts`）本單元皆未引用。
+
+### Step 17 — 回歸
+
+在 scratchpad 實體副本（`rsync` 前端、`openapi.json`、`ws-contract.json`；`node_modules` 以 `cp -cR` 帶入；未連網路、未 `npm install`；複製後 `diff -rq src`、`tests` 與 repo 相同）執行：
+
+| 指令 | 結果 |
+|---|---|
+| `npm run lint` | **0 errors、2 warnings**（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，與前輪同兩處，數量未增） |
+| `npm run check:types` | 「API 型別檔與規格檔一致。」 |
+| `npm run check:ws-types` | 「WS 契約型別檔與規格檔一致，且 sideEffect 的哨兵值說明仍在（BR4.4）。」 |
+| `npm run build`（含 `tsc -b`） | 通過（只有既有的 chunk 大於 500 kB 警告） |
+| `npx vite preview --host 127.0.0.1 --port 4823 --strictPort` ＋ `BASE_URL=http://127.0.0.1:4823 npx playwright test tests/e2e/object-picker.spec.ts tests/e2e/a11y.spec.ts tests/e2e/entry-page.spec.ts --reporter=line` | **121 passed / 0 failed**（1.4m）；`--list` 實算 `object-picker` 33、`a11y` 28、`entry-page` 60 |
+| `python3 -B scripts/validate_repo_contract.py`（repo） | passed |
+| `python3 -B scripts/validate_env_contract.py`（repo） | passed |
+
+preview 跑完已停止（`curl` 4823 回 000）。`entry-page-live.spec.ts` 需 `docker-compose.test.yml` 真實 stack，本機未跑，交 CI `ui-regression`。
+
+**ContextBar 相關突變重驗**（因 `ContextBar.tsx` 自收據後變動，重跑 §五中以它為對象的三道；皆在副本以檔案編輯套用 → `vite build` → `--retries=0 -g '斷線時選單關閉'`）：
+
+| 編號 | 套用 | 結果 |
+|---|---|---|
+| M11 | 刪除依前值調整中的 `if (status !== 'ready' && pickerOpen) setPickerOpen(false);` | 紅：重連後選單 Expected 0 / Received 1 |
+| M16a | 刪除斷線 effect 的 `sectionRef.current?.focus();` | 紅：`activeElement` Expected `brain-context-bar` / Received null |
+| M16b | 刪除 `window.setTimeout(() => announce('連線中斷，已關閉作業對象選單'), 0);` | 紅：`__announcements` 深比較不符 |
+
+還原後副本 `ContextBar.tsx` 與 repo `cmp` 相同、`diff -rq src` 相同，重建後該案綠。其餘 14 道突變的對象檔與檢查（`object-picker.spec.ts`、`eslint.config.js`）自收據後逐位元相同，沿用 §五 紀錄。
+
+### Step 18 — 前輪審查（review-03）的未結項
+
+| 項 | 現況（附行號） | 處置 |
+|---|---|---|
+| R-10（`set_work_target` 自身被拒時誤判原句未送達） | `useBrainConnection.ts:243-244` 仍只依 `lastSentRef` 判定，`:412`／`:422` 以 `afterNonTurnSend` 保留待決標記；`entry-page.spec.ts` 無「原句已受理、只回 `set_work_target` 的非輪次錯誤」一案（`:1790-1905` 的非輪次案皆為其他情境）；本單元紀錄未登記此取捨 | 需改程式或補 `entry-page-ui` 的測試，屬已知限制，交 conductor 併入 `merge-blockers.md` |
+| R-11（manifest／追溯未涵蓋 `useBrainConnection.ts`、`entry-page.spec.ts`） | `source-manifest.json`、`traceability.json` 對兩檔 `grep -n` 0 命中 | 本節規定 `source-manifest.json` 不因本輪無程式變更而改動，故不改；交 conductor 登記此跨單元耦合 |
+| R-12（Step 10／12 未指派；過期數字） | 過期數字的現況更正如下；Step 10、12 的未勾理由見 Step 19 | 紀錄補記（本段） |
+
+R-12 的數字現況（本輪實算）：`object-picker.spec.ts` **33** 案（計畫 Step 15 本文寫 32，計畫內文依規定不改）；`a11y.spec.ts` **28** 案（`a11y-gate` 新增第 26 掃描點）；`code-summary-corrections.md` §九 的「59 passed（32＋27）」為 2026-10-24 當時的快照，現況為 61（33＋28）；`traceability.json` OPN-26 note 已寫 33 案，無需更動。Step 10 的 `entry-page-live.spec.ts` 指派 CI `ui-regression`；Step 12 的 `ws-contract.json` 基準由 conductor 決定改以本單元 manifest 範圍重寫或維持未勾。
+
+### Step 19 — 勾選重判
+
+引擎重新綁定後全部 20 格為未勾。逐格判定：
+
+- **勾**：Step 1–9、11、13、14（證據檔自收據後逐位元相同，或變動處已於本輪重驗：Step 6 的 `ContextBar` 擴充部分未動且 33＋60 案綠、M11／M16a／M16b 重紅；Step 9 的兩個掃描點定義未動、`a11y` 28 案綠、`a11y-baseline.json` `git hash-object` 仍為 `7f19696e…`）；Step 15（本輪以生產建置重跑 `object-picker`、`a11y` 全綠，lint 0 errors，`validate_repo_contract.py` 通過；案數現為 33 而非本文的 32）；Step 16–20（本節）。
+- **不勾**：Step 10——`entry-page-live.spec.ts` 本機無真實 stack，仍無綠燈證據，交 CI `ui-regression`。Step 12——建置、兩支 validator、`package.json` 依賴鍵（5 個 dependencies／19 個 devDependencies）與 `a11y-baseline.json` 皆符，但 `git hash-object ws-contract.json` 為 `4d91872957e8…`，與動工前基準 `fbe262e97d64…` 不同（他單元合併前必修第 2 項，已提交於 `7a50a40`）；`git diff --stat -- backend deploy .github` 為 44 檔變更，皆屬他單元，照計畫字面仍無法驗證。
+
+### Step 20 — 收尾
+
+`source-manifest.json`、`traceability.json` 本輪未改動（無程式變更；OPN-26 已是 33 案）。repo 內未新寫入測試或建置產物：`frontend/junit.xml`、`frontend/pw-report.json` mtime 仍為 2026-11-07T23:44:00（本輪開始前即如此）；repo 內無 `*.tsbuildinfo`（`node_modules` 外）；`backend/.hypothesis` mtime 仍為 2026-10-27T07:26:41。所有 Playwright 與建置皆在副本內執行，副本於回報前刪除。
+
+<!-- 寫入時間：2026-11-08T04:44:33Z -->
+勾選完成後實算（`grep -c '^- \[x\]'`／`grep -c '^- \[ \]'`）：**18 勾／2 未勾**（未勾為 Step 10、Step 12）。與勾選前副本以「勾選字元正規化後 `diff`」比對無其他差異，計畫只動了勾選字元。收尾時 `git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'` 為空，scratchpad 副本已刪除。

@@ -24,6 +24,8 @@ cd backend && python -m unittest tests.test_progress_channel -v
 cd backend && python -m unittest discover -s tests -v
 ```
 
+> **現況註記（2026-11-01，合併前必修共用檔修正後的回歸）**：本輪不新增測試。上列兩條指令一律只在 scratchpad 的實體複製副本上執行（不得 symlink 回 repo），直譯器用 `backend/.venv/bin/python -B`（本機 PATH 沒有 `python`，系統 `python3` 套件版本與 `requirements.txt` 不一致），並帶 `PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本。不連 DB、Redis 或網路。
+
 **驗證要點**（在寫第一個測試之前確認）：
 
 1. `backend/tests/` 下的新檔會被 `discover` 自動撿到——**無需任何 CI 設定變更**。

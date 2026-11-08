@@ -34,9 +34,9 @@
     },
     {
       "id": "BR1.2",
-      "status": "OK",
+      "status": "Deferred",
       "target": "schema_rbac.sql",
-      "note": "grant 以 DO 區塊 ＋ format(%I) 承載，不假設角色名，且只授 memory schema 的 USAGE／DML／SEQUENCE。**無自動化驗證**（OPEN-CG5-1）：需第二個資料庫角色，而 N-2 的 service container 只有 superuser。使用者已於計畫核可時知悉。"
+      "note": "2026-10-30 更正（review-02 R-03，Major）：**邊界未落地**。schema_rbac.sql I) 區塊末尾的 DO 區塊只把 memory schema 的 USAGE／DML／SEQUENCE 授予 current_user（執行 DDL 的擁有者角色），對它是空操作；沒有記憶專用角色、沒有對 public 的 REVOKE。原註記「只授 memory schema」描述的是語句形狀，不是邊界。屬 ADR-0006 **IAM** 面向缺口。承接：construction/functional-design/merge-blockers.md 第 29 列（建立記憶專用角色、REVOKE public 寫入、CI 以第二角色斷言越界被拒、同步修 DEPLOY.md 2.2.8 與 COMMENT ON SCHEMA memory 的語氣）。本輪因共用檔限制不改程式與文件。見 OPEN-CG5-1。 〔2026-11-06 加註，計畫 §八〕邊界已由 brain-infra A1 落地（未 commit）：schema_rbac.sql:594-596 以 pg_roles 判斷、無密碼 CREATE ROLE cloud360_memory LOGIN；:600-606 只授 memory 的 USAGE、表 DML、序列與 DEFAULT PRIVILEGES；:607-609 撤銷 public 的表、序列與 CREATE；ci.yml:389 以該角色本身跑 backend/scripts/verify_memory_role.sql（R0-R3）；DEPLOY.md:613 起新增小節並更正語氣。驗證強度：只有靜態測試 test_memory_db_role（7 個，綠）；真實 PostgreSQL 本輪未驗（本機無 Docker daemon），CI 亦未跑過（A1 尚未 commit）。status 刻意維持 Deferred：在 R0-R3 於真實 PostgreSQL 綠燈之前不改為 OK。部署前另有 OPEN-MB20-SECRET 阻擋。"
     },
     {
       "id": "BR1.3",
@@ -132,7 +132,7 @@
       "id": "AC4.1.2",
       "status": "N/A",
       "target": "BR1.2",
-      "note": "grant 邊界已落地（DO 區塊），但**無自動化驗證**（OPEN-CG5-1）；行為面屬 U8。"
+      "note": "2026-10-30 更正：grant 邊界**未落地**（DO 區塊只授 current_user、為空操作；無記憶專用角色、無對 public 的 REVOKE），見 BR1.2 與 OPEN-CG5-1，承接 merge-blockers.md 第 29 列；行為面屬 U8。 〔2026-11-06 加註〕grant 邊界已由 brain-infra A1 落地（記憶專用角色 cloud360_memory，見 BR1.2 的加註與行號），真實 PostgreSQL 未驗；記憶表的實際存取改用該角色仍屬 U8 memory-service。"
     },
     {
       "id": "AC4.1.3",
@@ -195,7 +195,12 @@
     {
       "id": "OPEN-CG5-1",
       "severity": "named-gap",
-      "text": "**`BR1.2`（grant 邊界）沒有任何自動化驗證，而它是資料庫層的唯一邊界。** 驗它需要第二個資料庫角色並以該角色嘗試對 `public` 越界，而 `N-2` 的 service container 只有 superuser。做得到（job 內建角色＋切換連線），本輪未做，**使用者已於計畫核可時明確知悉**。承接站：`U8 memory-service` 的 code-generation（它是第一個真正以受限角色連線的消費端）。"
+      "text": "**2026-10-30 改寫（review-02 R-03）：`BR1.2` 的邊界目前未落地。** grant 只給 `current_user`、為空操作；無記憶專用角色、無對 `public` 的 REVOKE。原文把它描述成「已實作、未驗證」，實為「未實作」。屬 ADR-0006 **IAM** 面向缺口。`DEPLOY.md` 2.2.8 與 `COMMENT ON SCHEMA memory` 的「邊界已生效」語氣與現況不符，本輪因共用檔限制不改。承接：`construction/functional-design/merge-blockers.md` 第 29 列（取代原寫的承接站 `U8 memory-service`）。 〔2026-11-06 加註，計畫 §八〕**邊界已由 `brain-infra` A1 落地（程式與文件層，未 commit）**：`schema_rbac.sql:594-611`（角色、只授 `memory`、撤銷 `public`、`COMMENT ON ROLE`）、`ci.yml:389`（R0–R3 步驟）、`DEPLOY.md:613` 起（記憶專用資料庫角色小節）。**驗證強度：靜態測試綠；真實 PostgreSQL 本輪未驗、CI 亦未跑過**。本項保留開啟，直到 R0–R3 在真實 PostgreSQL 綠燈。"
+    },
+    {
+      "id": "OPEN-MB20-SECRET",
+      "severity": "blocking-before-deploy",
+      "text": "**照錄自 `brain-infra` A1（2026-10-31T23:19:56Z 以 `gh api` 只列名稱查證）：repository secret `MEMORY_DB_PASSWORD` 在 secrets 與 variables 兩處皆不存在。** 在使用者建立該 secret 之前，`deploy.yml` 的必要 secret 檢查會失敗；既有環境另須在含 A1 的部署之前先跑 `run_meta_schema_migration.py`（`DEPLOY.md` 記憶專用資料庫角色小節）。**未解決**，不得標為已處置。"
     },
     {
       "id": "OPEN-CG5-2",
@@ -204,8 +209,8 @@
     },
     {
       "id": "OPEN-M5",
-      "severity": "named-gap",
-      "text": "**承接且仍開啟：既有非空 volume 的 schema 建立路徑未定。** `schema_rbac.sql` 只掛在 `/docker-entrypoint-initdb.d/`（空 volume 才跑），而 `192.168.10.10` 是既有環境。已寫進 `DEPLOY.md` 2.2.8 作為部署前必須決定的事項。對照：`vector` 擴充有兩處承載（initdb ＋ `database.py` 的 `_ensure_vector_extension()`），記憶 schema **沒有**對應的啟動補丁。"
+      "severity": "resolved",
+      "text": "**已關閉（2026-10-20，見 code-summary.md 六之 2）：由 U18 的 `backend/scripts/run_meta_schema_migration.py`（`BLOCKS_TO_RUN = (\"X\", \"I\", \"J\")`）承載，`DEPLOY.md` 2.2.8 已改指 2.2.9。以下為原文。** 承接且仍開啟：既有非空 volume 的 schema 建立路徑未定。** `schema_rbac.sql` 只掛在 `/docker-entrypoint-initdb.d/`（空 volume 才跑），而 `192.168.10.10` 是既有環境。已寫進 `DEPLOY.md` 2.2.8 作為部署前必須決定的事項。對照：`vector` 擴充有兩處承載（initdb ＋ `database.py` 的 `_ensure_vector_extension()`），記憶 schema **沒有**對應的啟動補丁。"
     },
     {
       "id": "OPEN-N5-3",

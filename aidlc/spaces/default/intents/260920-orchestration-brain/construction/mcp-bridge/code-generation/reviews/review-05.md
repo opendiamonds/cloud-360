@@ -1,0 +1,63 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Iteration:** 1
+
+### Prior Findings
+
+| ID | Now | Severity | Note |
+|---|---|---|---|
+| R-07 | Fixed | Minor | requirements.txt:71 mcp==2.3.0、:78 sse-starlette==3.0.3、:79 mcp-types==2.3.0 實際存在（工作樹未提交，HEAD 與收據同為舊版）。安裝路徑讀檔確認：backend/Dockerfile:17 與 ci.yml:264、:446、:632 皆為 pip install -r requirements.txt；其餘 pip install 只有 aidlc-sync-selftest.yml:196（pyyaml）與 ui-regression 的 kiwitcms-junit.xml-plugin，不碰 mcp。原 finding 的 manylinux 乾跑已在 code-summary 第 384 列記錄（98 套件全取得 wheel，含 cryptography、cffi、rpds-py）。殘餘提醒：釘選只存在工作樹，提交時必須帶上 requirements.txt 與 test_mcp_bridge_static.py 的 regex 配套，否則 CI 的靜態案會紅。 |
+| R-11 | Fixed | Minor | security-design.md 加了三則區塊級取代註記，git diff 為 19 行新增、0 行刪除，原文未動。compose 行號 :452 與 :491-492 在工作樹讀檔屬實（HEAD 為 :446 與 :485-486，code-summary 有說明）；facade :319 為 _log_read 呼叫、:465-483 為 _log_read 本體，屬實。但 Encryption 註記的殘餘風險措辭與 merge-blockers 第 7 列不一致，見新發現 2。 |
+| R-14 | Fixed | Minor | 讀碼推演成立。build_guarded_app 為 PathRouter(MethodGuard(gate))，新案以 max_concurrency=1 加扣住的 POST（wait_in_flight 輪詢到 in_flight==1，名額確實是真實 gate 計數而非假設）占滿後送 GET 與 DELETE。現行順序下兩者在 MethodGuard 即得 405 且 inner.calls 仍為 1。突變（MethodGuard 移入 gate 內）時 gate 先回 503 與 over_concurrency，status 斷言與 request_rejected 的 reason 斷言都紅；既有 test_get_sse_is_405_without_slot 在閘門空著時兩種順序都綠，新案確實補上缺口。放行後的 POST 與 in_flight 歸零斷言也有效。 |
+| R-15 | Fixed | Minor | 讀碼推演成立。新案走真實 SDK client、bridge、backend ASGI app（SQLite）；bridge 的 calls.py 只檢查空白不檢查 NUL，所以請求會抵達 backend，facade 在 requirement_field_facade.py:374 拋 value/nul_char，router 對應 422（requirement_field_router.py:137），outcomes.py 的 _DETAIL_ROWS 把 422 對應為 invalid_argument。斷言覆蓋 error 與 retryable、backend 恰收一個 PUT、tool_call log 為 invalid_argument 加 422、唯一標記不出現在結果與 log、DB 無列。突變（422 改為 internal_error）時 structured error 斷言紅，成立。不回顯斷言對 bridge 把參數或 detail 回顯的退化有效；backend 固定訊息本身不含值，故此斷言保護的是 bridge 層。 |
+
+### New Findings
+
+| Severity | Location | Finding | Required action |
+|---|---|---|---|
+| Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/mcp-bridge/code-generation/code-summary.md > 計畫 §八之二 五格的重判（「34 列相同、7 列變動、0 列缺檔」） | 對收據 reviewed-source-11286bfe5152.tsv 逐檔重算 sha256 的結果是 32 列相同、9 列變動。第 8、9 列變動是本輪自己改的 test_mcp_bridge_guards.py 與 test_mcp_bridge_e2e.py，不在該節 7 列表內，所以 34 加 7 等於 41 的算式不成立。9 檔的 HEAD 版 sha256 全部等於收據值，這一點屬實，其餘 7 列的檔名與判讀也屬實，只有計數與歸類有誤。 | 把計數更正為 32 相同、9 變動，並註明其中 2 檔是本輪 (c)(d) 新增的測試檔；不影響勾選結論。 |
+| Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/mcp-bridge/nfr-design/security-design.md > §七 取代註記（約 :86-90）與 §九 表後註記 | 註記把 Encryption 殘餘風險寫成「改寫為 mcp 網段內被入侵的容器」。但 merge-blockers.md 第 7 列明文要求：主機本機行程（含自架 runner）能否連到 mcp-bridge:8080 取決於 Docker 引擎版本、部署後才量測，量測前殘餘風險不得讀成只限 mcp 網段內的容器。註記因此比權威紀錄樂觀，而這是 ADR-0006 encryption 面的殘餘風險。另外註記的 compose 行號是工作樹值，HEAD 為 :446 與 :485-486，註記本身沒說明（只在 code-summary 有）。 | 在 §七 註記補一句：殘餘風險另含主機本機行程是否可達 mcp-bridge:8080（部署後量測，見 merge-blockers 第 7 列與 DEPLOY.md §5.12）；並註明行號為工作樹值（HEAD 為 :446、:485-486），以句子引用為準。 |
+
+### Validation Tool Results
+
+| Tool | Result | Interpretation |
+|---|---|---|
+| git diff（security-design.md） | numstat 19 新增、0 刪除 | 原文未動，只增不刪屬實。 |
+| shasum -a 256 對收據 11286bfe5152 逐檔比對（唯讀） | 32 相同、9 變動；9 檔 HEAD 版皆等於收據值 | 與 code-summary 的「34／7」不符，見新發現 1；HEAD 等於收據值的說法屬實。 |
+| 計畫勾選與內文比對（對 scratchpad 的 mb38-plan-before.md 做 diff） | 只有 12 個核取方塊 [ ] 變 [x]，grep 計數已勾 12、未勾 0 | 除勾選字元外內文未變，與宣稱一致。 |
+| 安裝路徑 grep（Dockerfile、ci.yml、其他 workflow） | 皆經 requirements.txt；其餘 pip install 不涉 mcp | 與 Step 18 結論一致。 |
+| 測試執行 | 未執行（依審查限制，不跑任何測試或 python） | 以讀碼與突變推演判定；171 案結果引用作者紀錄，未獨立複驗。 |
+
+### Summary
+
+第 38 列 (a)–(d) 的內容成立：兩個新測試都走真實路徑，且在指定突變下必然轉紅，R-07、R-11、R-14、R-15 皆判 Fixed。僅留兩項 Minor：收據比對的計數寫成 34／7 而實際為 32／9，以及 Encryption 取代註記低估了 merge-blockers 第 7 列要求保留的殘餘風險（主機本機行程可達性）；無 Critical，Major 為零，故 READY。
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | backend/tests/test_mcp_bridge_e2e.py > IdentityIsolationTest.interleave（約 170-215 行）；backend/tests/mcp_topology.py > Barrier；code-summary.md 第五節「已知限制」 | 新設計問題。BR78.4（身分隔離，ADR-0006 IAM 面向）的測試靈敏度不足，有三處。(1) 屏障掛在 backend 記錄包裝內，此時 bridge 已讀完 Authorization 並組好請求，屏障只能證明「A 的請求抵達 backend 時 B 也已進入 bridge」，無法強迫「寫入 ContextVar 與讀取之間」的交錯窗口；M09 能轉紅靠的是 8 個 worker 的自然交錯（作者以連跑 4 次紅作證），不是屏障，與 unit-test-instructions 所稱「不靠 asyncio.gather 的機率」不符，且該屏障是單發（arrived 一旦設定就不再扣）。(2) 寫入變體在 M09 下仍綠（作者在已知限制中承認），而 BR78.4 明文要求寫入變體斷言 updated_by。(3) interleave 對兩位使用者傳入同一個 agent 值（兩組 worker 都用 agent="cost"），所以 X-Cloud360-Agent 的逐請求隔離（決定 on_behalf_of，BR74.4）完全沒有保護：把 RawHeaders.agent 改存模組變數，現有測試全綠。 | 讓 owner 與 outsider 的 worker 使用不同的已登錄 agent（cost 與 architecture），並在 backend 記錄包裝與持久列斷言各自的 on_behalf_of；補一個 agent 變數的突變（agent 改存模組變數）並記入突變表且須轉紅。為 M09 找一個確定性的窗口（例如 create_app 的測試縫或 exchange 前的可注入 await 屏障，或把交錯回合數與每回合最低重疊數寫進斷言），使寫入變體在 M09 下也轉紅；做不到時，在 code-summary 明寫「身分隔離的偵測是機率性的」並把連跑次數提高到足以支撐宣稱。 | Resolved (reviewer) |
+| R-02 | Minor | backend/mcp_bridge/limits.py > REQUEST_WALL_TIMEOUT_S 與 OVERALL_TIMEOUT_S、BODY_READ_TIMEOUT_S；backend/mcp_bridge/guards.py > WallClock（作者偏離 D-1） | 新引入。D-1 把牆鐘移到本體閘門外是正確的（否則最壞 14 秒、stop_grace_period 關係式不成立），但移動後牆鐘 12 秒恰等於本體期限 2 秒加 backend 整體期限 10 秒，零餘裕，pure 測試的斷言是 ≥（容許相等）。慢速上傳者在約 2 秒時送完本體、backend 又掛住時，backend 交換在約 12 秒逾時，再加 SDK 序列化的數十毫秒，牆鐘較可能先觸發，client 會得到非 BR76.1 形狀的裸 503 與 request_timeout，而不是 backend_unavailable 且 retryable: true；tool_call 那一行則因取消而記成 internal_error、http_status 為 null。 | 在 limits.py 的關係式加入餘裕（例如牆鐘 ≥ 本體期限 + 整體期限 + 1 秒，並同步 stop_grace_period 與 DEPLOY.md §5.12 的算式），或把本體讀取時間從整體期限中扣除；pure 測試改為嚴格大於。 | Resolved (reviewer) |
+| R-03 | Minor | backend/tests/test_mcp_bridge_e2e.py > DisconnectTest.test_slow_backend_with_drop_loop_does_not_exhaust_pool；code-summary.md 第三節 D-6 與第五節突變表 | 新引入。D-6 把判準由「20 行 tool_call」改為「抵達 backend 的請求數等於 tool_call 行數、名額歸零、之後呼叫成功」，方向合理，但只斷言 records ≥ 1：實際抵達 backend 的同時請求數不受保證，高於連線池與閘門上限（16）的壓力前提沒有被斷言，連線池耗盡這個 nfr-design R-02 要防的缺陷可能根本沒被施壓。0.05 秒斷線對 0.2 秒 backend 延遲的時序在慢速 CI 上也可能讓抵達數趨近 0，造成不穩定。突變表沒有任何一列針對 DisconnectTest（M32 鎖的是 json_response 前提）。 | 在迴圈中觀察並斷言峰值同時在途數（例如 gate.in_flight 峰值或 recorder 最大並行）達到上限附近，或調整時序使其確定；補一列突變（例如名額在交換結束前歸還，或名額從不歸還）並記入突變表。 | Resolved (reviewer) |
+| R-04 | Minor | backend/mcp_bridge/server.py > serve_until_stopped、_run；backend/mcp_bridge/cli.py > parse_args | 新設計問題。uvicorn 在 lifespan 啟動失敗時（BridgeApp._lifespan 送出 lifespan.startup.failed）只會讓 Server.serve 正常返回、server.started 維持 False，serve_until_stopped 不檢查，_run 回傳 0，容器以退出碼 0 結束並被 restart: unless-stopped 靜默重啟。另外 --max-concurrency 0 會讓 BridgeLimits 拋 ValueError、--port 超出範圍會拋 OverflowError，兩者都以 traceback 結束，而不是 startup_failed 單行 ERROR（OSError 才有被接住）。 | serve_until_stopped 在 server.started 為 False 時回報失敗並使 _run 回傳非零；cli 對 max-concurrency 與 port 做範圍驗證並走 log_startup_failed。補一個測試（替身 lifespan 失敗時退出碼非零）。 | Resolved (reviewer) |
+| R-05 | Minor | backend/mcp_bridge/app.py > on_call_tool 與 to_call_tool_result（115-126 行）；backend/mcp_bridge/dispatch.py > run_tool_call（57-63 行） | 新設計問題。總攔截只包住 _execute；run_tool_call 返回之後的 to_call_tool_result（json.dumps、CallToolResult 建構）發生在攔截之外，而 Step 1 的 S-9 實測舊式協定版本會把處理函式拋出的例外字串原樣送回 client。目前該路徑的例外文字不含 token，但可能含 backend 回應的內容片段（例如無法編碼的字元），且 tool_call 已經記為 ok，client 與 log 的結果不一致。 | 把結果序列化納入同一個總攔截（例如在 on_call_tool 以 try 包住並回 internal_error），或把 to_call_tool_result 移進 run_tool_call 的 try；補一個以 mock 讓 to_call_tool_result 拋例外的 legacy 案例，斷言回應不含例外字串。 | Resolved (reviewer) |
+| R-06 | Minor | backend/mcp_bridge/guards.py > WallClock、ConcurrencyGate；code-summary.md 第十二節 K-6 | 新設計問題。K-6 只實測了「client 斷線」不取消處理函式；WallClock 逾時是取消外層 ASGI 呼叫，這是另一條路徑。舊式協定版本的處理函式跑在 session manager 的 task group 裡，取消 handle_request 後處理函式可能繼續執行到整體期限，而名額已在 finally 歸還，使實際並行可短暫超過閘門上限。guards 測試用 FakeInner，沒有觸及真實 SDK。 | 以真實 SDK 拓樸補一個牆鐘逾時案例，觀察處理函式是否仍在執行與名額；若會超出，在文件揭露上限為「閘門值加上仍在跑的逾時處理函式」，或讓 exchange 能感知取消。 | Resolved (reviewer) |
+| R-07 | Minor | backend/requirements.txt > mcp==2.3.0；code-summary.md 第十二節 K-1 與 S-17 | 新設計問題。SDK 行為假設總表是在 mcp==2.3.0 加上一次解析出的傳遞依賴（sse-starlette 3.0.3、mcp-types 2.3.0 等）上實測的，但只有 mcp 本身精確釘選；其餘傳遞依賴沒有 pin 或 constraints，而 team.md 已記載 CI、Docker build、staging 三處各自解析最新版（D-7 實際撞到 sse-starlette 3.4.8 與 starlette 的衝突就是前兆）。K-1 的解析報告來自作者的開發機，沒有證明 python:3.12-slim（linux amd64、無編譯器）上 cryptography、cffi、rpds-py 都取得 manylinux wheel；Dockerfile 沒有 gcc，缺 wheel 時映像建置會失敗，而這個失敗只會出現在部署時。 | 加入 constraints 檔或釘住 sse-starlette 與 mcp-types 的解析結果；在 CI 的 docker-build 之外，以 pip install --only-binary=:all: 對 linux amd64 做一次乾跑，把結果記入 code-summary；升版仍須重跑 K-1 到 K-11。 | Unresolved |
+| R-08 | Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/mcp-bridge/code-generation/code-summary.md > 第四節第 33 列 | 新引入。第 33 列寫「DEPLOY.md :1336、:1913、:1914 不動」，這是改動前的行號：改動後「其餘六個 brain-infra 變數不是 secret」在 1915 行，而 1914 行本來就不是這句（HEAD 版只有 1336 與 1913 兩處）。引用的內容正確、定位錯誤，照行號去讀的人會讀到別的內容。 | 把行號改為現況（1336 與 1915），或改以句子引用，不寫行號。 | Resolved (reviewer) |
+| R-09 | Minor | backend/tests/test_mcp_bridge_deploy.py > DeployWorkflowTest.test_blocking_once_a_real_client_exists；.github/workflows/deploy.yml > Record mcp-bridge health (non-blocking) | 新設計問題。把健康步驟改為阻擋的觸發條件只靠字面比對 backend 目錄下 .py 檔案內的 mcp-bridge:8080。client 若用組合字串、設定檔、或放在 backend/scripts 以外的位置（例如 frontend 或 TypeScript）就不會觸發，非阻擋狀態會悄悄延續。 | 放寬為比對 mcp-bridge（任何埠）與 8080 的組合並涵蓋 frontend、scripts 與 deploy 目錄；或在 DEPLOY.md §5.12 與 PR 範本明寫人工檢查項。 | Resolved (reviewer) |
+| R-10 | Minor | backend/mcp_bridge/generator.py > validate_tool_specs（447-484 行）；backend/tests/test_mcp_bridge_startup.py | 既存漏審。functional-design R-12 擇 (a) 的本意是以 allowlist.json 作為獨立參考重驗產物，但 validate_tool_specs 只比對工具集合、method、path、屬性名集合與綁定名集合；binding 內各映射的 API 名稱（body_params、path_params、query_params 的值）、inject 內容與屬性 pattern 沒有和 allowlist 比對。手改的產物若移除 inject，寫入會缺少 on_behalf_of（溯源遺失）；若把 body_params 的某個值改成 on_behalf_of，呼叫端可指定溯源標示。CI 漂移閘門會擋下已提交的手改，所以這是縱深防禦缺口，不是目前可利用的洞。 | 讓 validate_tool_specs 比對 binding 的映射與 inject 與 allowlist 推導值一致（可直接重算 allowlist 對應的預期 binding），並在 T-8 補兩案（inject 被移除、body_params 值被改成 on_behalf_of）。 | Resolved (reviewer) |
+| R-11 | Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/mcp-bridge/nfr-design/security-design.md > 第八節「讀取稽核」與第九節 Audit logging 列 | 兩處仍寫「成功讀取不新增帶使用者身分的紀錄」「讀取面依 `[MBN1]`=A」，與現在 `requirement_field_facade.py` 的 `requirement_field.read` 行為相反。code-summary 第十四節已宣告「取代、不回改」，但開發者只讀 NFR 設計時會以為讀取面不應有 log。 | 在 security-design.md 第八節與第九節 Audit 列各加一句指向 code-summary 第十四節的取代註記；或在下一輪修訂時改寫該兩處。 | Unresolved |
+| R-12 | Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/functional-design/merge-blockers.md > 第 7 列「殘餘風險」；code-summary.md 第十四節「第 7 項」 | 殘餘風險只寫「`mcp` 網段內被入侵的容器」可竊聽 token。`deploy/docker-compose.deploy.yml` 約 477–483 行的註解自己寫明：主機上的行程（含自架 runner）是否能連到 `mcp-bridge:8080` 取決於 Docker 引擎版本，要部署後才量測（DEPLOY.md §5.12）。例外紀錄比 compose 的說法樂觀。結論（記為對 `requirements.md:618` 的例外而非符合）是誠實的，只有範圍描述偏窄。 | 在第 7 列補一句「主機本機行程是否可達待部署後量測（DEPLOY.md §5.12）」；同時說明 security-design.md:83-84 所稱的「`internal` 網段」已被專屬 `mcp` 網段取代，網段是收窄的，不是原樣沿用。 | Resolved (reviewer) |
+| R-13 | Minor | backend/tests/test_requirement_field_facade.py > 約 323 行 not-found 讀取案（R3 旁） | R3 只證明「被拒（forbidden）」不記 `.read`。系統不存在或專案不可見（`RequirementFieldNotFound`）的讀取沒有「不記 `.read`」的斷言。實作上 `_authorize` 會在 `_log_read` 之前拋出，行為正確，但屬未鎖定的路徑。 | 在既有 not-found 案加 `assertLogs` 或 `assertNoLogs`，斷言 `requirement_field.read` 為 0 筆。 | Resolved (reviewer) |
+| R-14 | Minor | backend/mcp_bridge/guards.py > build_guarded_app（`PathRouter(MethodGuard(gate))`）；backend/tests/test_mcp_bridge_guards.py > MethodAndPathTest.test_get_sse_is_405_without_slot；code-generation-plan.md 計畫 #22 | 獨立複驗重做段的說法成立：計畫 #22 要求「405 在並行閘門之前」並列入 Major 項需要突變轉紅，但沒有任何測試鎖住這個順序。我在 scratchpad 副本把 `MethodGuard` 移到 `ConcurrencyGate` 之內（`gate = ConcurrencyGate(MethodGuard(chain), …)`、`PathRouter(gate)`），guards、app、e2e、topology 共 42 案全綠。該測試只在回應結束後斷言 `in_flight == 0`，名額於 `finally` 歸還，順序對調後仍成立。判定為 Minor 而非 Major 的理由：GET 在兩種順序下都被 `MethodGuard` 擋在 SDK 之外，名額只被占用到 405 送出為止，K-8 要防的永不結束 SSE 串流不會重現；實際差異只在閘門飽和時 GET 會得到 503 與 `over_concurrency`，而不是 405 與 `method_not_allowed`。但計畫明文要求這一項的突變轉紅，目前沒有達成。 | 補一案：先把閘門占滿（`in_flight == limit`），再送 GET `/mcp`，斷言回 405 與 `method_not_allowed`（不是 503）；把「MethodGuard 移到閘門之內」記為新的突變列，確認轉紅後還原。 | Unresolved |
+| R-15 | Minor | aidlc/spaces/default/intents/260920-orchestration-brain/construction/mcp-bridge/code-generation/code-summary.md > 共用檔異動後的重新驗證 第 1 小節與第 4 小節 | facade 新增的 NUL 檢查使 bridge 寫入路徑多一個 500 變 422 的分支，bridge 依 outcomes.py:176 對應 invalid_argument，這個對應只有 HTTP 層 H10 鎖住，bridge 端 e2e 沒有 NUL 案例。本輪已在觀察中如實記載，不構成缺陷，但跨單元行為變更沒有 bridge 端的回歸護欄。 | 於下次修訂本單元測試時補一案：含 NUL 的寫入經 bridge 得到 invalid_argument；或在 merge-blockers 登錄為可接受不補。 | New |
+
+> R-07 Not re-checked this round
+
+> R-11 Not re-checked this round
+
+> R-14 Not re-checked this round
+
+> R-15 Not re-checked this round

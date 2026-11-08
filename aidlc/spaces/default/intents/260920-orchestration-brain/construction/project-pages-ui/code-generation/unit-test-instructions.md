@@ -61,6 +61,8 @@ python3 scripts/validate_repo_contract.py
 python3 scripts/validate_env_contract.py
 ```
 
+> 現況註記（2026-10-31，共用檔異動後的重新驗證）：系統 `python3` 的套件版本與 `requirements.txt` 不一致，後端一律改用 `backend/.venv/bin/python`，旗標同上（`-B`，並設 `PYTHONDONTWRITEBYTECODE=1`）。重新驗證時在 repo 副本上執行：副本須以**實體複製**（不得以 symlink 指回 repo）含 `backend/` 全部（含 `tests_redis/`），以及測試讀取的 repo 根檔如 `schema_rbac.sql`、`openapi.json`、`deploy/`；以副本的 `backend` 為工作目錄，加 `-P` 並設 `PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本，避免在 repo 內留下 `.pyc`／`.hypothesis/`。前端檢查只跑不寫檔者（`npx eslint`、型別比對腳本）；`tsc -b`、`vite build` 與 Playwright 實跑會寫出產物，僅在實體複製的副本內執行，否則略過並寫明理由（e2e 全以 `page.route()` 攔截，不受後端改動影響）。
+
 **跨單元測試檔的說明**：`test_hierarchy_service`（`U7`）、`test_work_orchestrator_store`（`U12`）、`test_requirement_field_facade`（`U20`）、`test_mcp_bridge_e2e`（`U21`）出現在本單元的指令中，是因為本單元在其中共 15 處補了 `project_visible=ALWAYS_VISIBLE`；它們的斷言不屬本單元、也不被本單元修改。`test_membership_facade`／`test_membership_endpoints`（`U19`）是 `MembershipFacade` 新增方法的回歸面。
 
 ## 三、測試清單與數量（standard：每元件 5–8 案）

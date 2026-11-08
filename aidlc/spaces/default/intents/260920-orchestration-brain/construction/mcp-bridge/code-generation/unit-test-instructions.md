@@ -58,6 +58,8 @@ python3 scripts/validate_repo_contract.py
 python3 scripts/validate_env_contract.py
 ```
 
+> 現況註記（2026-10-31，共用檔異動後的重新驗證）：系統 `python3` 的套件版本與 `requirements.txt` 不一致（`mcp` 套件版本亦可能與釘選不符），後端一律改用 `backend/.venv/bin/python`，旗標同上（`-B`，並設 `PYTHONDONTWRITEBYTECODE=1`）；先以該直譯器確認 `mcp` 版本與釘選一致，不一致時記為未驗證並寫明，不在 repo 內安裝套件。重新驗證時在 repo 副本上執行：副本須含 `backend/` 全部（含 `tests_redis/`）、`scripts/`、`deploy/`，以及測試讀取的 repo 根檔如 `schema_rbac.sql`、`openapi.json`、`DEPLOY.md`、`.github/workflows/deploy.yml`；以副本的 `backend` 為工作目錄，加 `-P` 並設 `PYTHONPATH=<副本>/backend`，`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本，避免在 repo 內留下 `.pyc`／`.hypothesis/`。
+
 **只在路線 C**，跑上面任一指令之前，先在 repo 根目錄建 `.mcp-venv/`：`python3 -m venv .mcp-venv && .mcp-venv/bin/pip install -r backend/requirements-mcp.txt`。這個目錄由 `.gitignore:38` 的 `*venv/` 排除，也不在 backend 映像的 build context 內。
 
 ## 三、測試清單與數量（standard：每元件 5–8 案；純函式含 PBT）

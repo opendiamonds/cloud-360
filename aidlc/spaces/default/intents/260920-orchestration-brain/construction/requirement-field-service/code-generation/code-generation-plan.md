@@ -61,7 +61,7 @@
 - [x] **Step 8 — 業務邏輯：測試**：`backend/tests/test_requirement_field_facade.py`：三態推導（含第四種列回 null 溯源）、計數同源、定義外保留列不顯示不計數、空值寫入即清空、代寫路徑空值被拒、代寫標示不授權、同進程（`U13` 路徑）的待核准與全域層拒絕、拒絕 log 欄位與「log 不含值」、no-op 不記 INFO、依賴非預期例外不放行、回滾後值不變。
 - [x] **Step 9 — API：實作**：`requirement_field_router.py`（GET／PUT／DELETE；原始本體授權後解析；固定字串 `detail`；三路由宣告 403／404／422）；`main.py` 掛 `/api/requirements`；重新產生 `openapi.json`（`backend/scripts/dump_openapi.py`）與 `frontend/src/types/api.d.ts`（前端 `gen:types`）。
 - [x] **Step 10 — API：測試**：`backend/tests/test_requirement_field_http.py`（`TestClient`）：十二列 allow／deny 矩陣、回應欄位集合（`team.md` 規則 B）、四類 422（錯綁別組、超長值、未宣告代寫組、本體帶 `updated_by`）不回顯唯一標記字串、非整數 `system_id` → 404、`raise_server_exceptions=False` 下的 500 案例；突變驗證（拿掉成員判定 → 「非成員有 `K4.edit`」列紅；拿掉全域 `edit` → 只有 view 的寫入列紅；拿掉待核准檢查 → 待核准列紅），結果記入 `code-summary.md`。`dump_openapi.py --check` 通過。
-- [x] **Step 11 — 環境／建置設定**：零新環境變數；`python3 scripts/validate_env_contract.py`、`python3 scripts/validate_repo_contract.py` 通過；前端 `npm run check:types` 通過。
+- [ ] **Step 11 — 環境／建置設定**：零新環境變數；`python3 scripts/validate_env_contract.py`、`python3 scripts/validate_repo_contract.py` 通過；前端 `npm run check:types` 通過。
 - [x] **Step 12 — 文件與追溯**：`DEPLOY.md` 2.2.9（欄位說明、收斂敘述的重跑行為、部署順序與 `create_all` 的實際行為、上線確認改查 `information_schema`）；`code-summary.md`（§二 的交接與揭露）；`source-manifest.json`；`traceability.json`。
 
 ## 四、步驟 ↔ 故事追溯
@@ -96,8 +96,27 @@ Testing Contract 的 14 步基線中，**Frontend** 層本單元無程式（畫�
 - [x] **Step 14 — 測試**：`test_requirement_field_http.py`（`TestClient`＋SQLite）新增 NUL 值 → 422 且 `detail` 為該固定訊息的案例；`tests_pg/test_requirement_field_pg.py` 新增真實 PostgreSQL 上 NUL 值不再拋 `DataError`／回 500 的案例。
 - [x] **Step 15 — 突變驗證**（只在暫存區副本做）：拿掉 NUL 檢查 → Step 14 兩案皆紅。結果記入 `code-summary.md`。
 - [x] **Step 16 — 文件**：把 `DEPLOY.md` 約第 730–732 行改成與同檔 U20 小節（約第 842 行：`create_all` 建表、只缺 COMMENT 與收斂）一致，只改該段。
-- [x] **Step 17 — 回歸與收尾**：完整後端套件、`tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py` 全綠；`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 24 項處置段。
+- [ ] **Step 17 — 回歸與收尾**：完整後端套件、`tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py` 全綠；`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 24 項處置段。
 - 追溯：`merge-blockers.md` #24；review-03 R-01；`BR41`–`BR46` 的輸入驗證。
+
+## 八、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：先重開本單元試試）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`，未指名單元）。研判原因：本單元 review-04 之後，合併前必修第 26 項（`entry-page-ui`）改了本單元 `source-manifest.json` 所列的 `DEPLOY.md`，使本單元的審查收據對不上現況。本節**不改程式**，只重新驗證並補審。
+
+- [x] **Step 18 — 重新驗證**：以 `git diff` 確認本單元自 review-04 以來，清單內檔案的變動只有第 26 項對 `DEPLOY.md` §5.13 的改寫，且未觸及本單元的段落（2.2.9、約第 730–738 行的 U20 說明）；本單元程式碼與測試無變動。
+- [x] **Step 19 — 回歸**：本單元 SQLite 測試、`validate_repo_contract.py`、`validate_env_contract.py` 綠（在暫存區副本跑，不在工作樹產生快取）；`code-summary.md` 末尾追加「共用檔異動後重新驗證」一段（`date -u` 時間戳、上述 diff 結論、測試結果）。
+- 追溯：`merge-blockers.md` #24、#26；review-04。
+
+## 九、合併前必修共用檔修正後的回歸驗證（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。逐列對照該表「單元」欄：**這些列沒有一列劃給 `requirement-field-service`**。本單元在該表的唯一一列（第 24 列）已標**已修正**（2026-10-26T23:10:12Z，review-04 READY），且使用者未將其列入本輪。本輪其他單元與 `brain-infra`（第 41 列）的共用檔修正可能改動了本單元 `source-manifest.json` 所列的檔（`DEPLOY.md`、`main.py`、`openapi.json`、`schema_rbac.sql`、`rbac.py`／`rbac_seed_data.py` 等），故**本單元預設不改程式**，本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。若重驗發現本單元的程式或測試已被共用檔改動弄壞，停止並回報 conductor，不得自行擴大範圍。
+
+- [x] **Step 20 — 共用檔重驗**：以本單元最新的審查收據（`reviewed-source-*.tsv`，取 review-05 對應者）逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分（`requirement_field_*.py` 各模組、`main.py` 的 `/api/requirement-fields` 掛載、`openapi.json` 三路由的 403／404／422 宣告、`schema_rbac.sql` `J)` 區、`DEPLOY.md` 2.2.9 與約第 730–738 行的 U20 說明、`hierarchy_service` 與 `membership_facade` 中本單元依賴的授權入口），結論附行號。
+- [x] **Step 21 — 回歸**：本單元 SQLite 測試（`test_requirement_field_data`／`_service`／`_facade`／`_http`）、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py`；後端測試只在 scratchpad 實體副本跑（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad），repo 內不得產生 `.pyc`／`.hypothesis`。`tests_pg` 只在本機一次性 PostgreSQL（綁 127.0.0.1，用完即刪）跑；不能起時據實記為未驗，不得宣稱通過。不得連 staging 或共用 DB／Redis。
+- [x] **Step 22 — 前輪審查的 Minor**：`reviews/review-05.md` 與 `review-04.md` 的未結 Minor（含 router `ERROR_RESPONSES` 的 422 說明未列 NUL、`G4` 未經審查員在真 PostgreSQL 重跑）逐項以 `grep -n`／讀檔附行號確認現況。只需改紀錄者在 `code-summary.md` 就地補記；需改程式者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **Step 23 — 勾選重設**：對本計畫既有各格（Step 1–19）逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者維持勾選；不成立者改為未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（以 `date -u` 取時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`source-manifest.json` 不因本輪無程式變更而改動。
+- 追溯：`merge-blockers.md` #24、#41；review-04、review-05。
 
 ## Testing Contract
 

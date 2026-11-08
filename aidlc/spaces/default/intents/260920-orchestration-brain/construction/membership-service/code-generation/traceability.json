@@ -289,7 +289,7 @@
       "id": "NFR12.5",
       "status": "OK",
       "target": "backend/models.py",
-      "note": "`git diff --stat -- backend/database.py` 為**空**（實跑，無輸出）。未改 `create_engine`／`sessionmaker`、未新增 `_ensure_*` 補丁。代價如實記載：兩個新 model 進入 `Base` 使 `create_all` 成為第二條建表路徑（`OPEN-ID19-1`），該路徑建出的表無 COMMENT；影響限本機，已寫進 `LOCAL-DEV.md`。"
+      "note": "`git diff --stat -- backend/database.py` 為**空**（實跑，無輸出）。未改 `create_engine`／`sessionmaker`、未新增 `_ensure_*` 補丁。代價如實記載：兩個新 model 進入 `Base` 使 `create_all` 成為第二條建表路徑（`OPEN-ID19-1`），該路徑建出的表無 COMMENT；影響限本機，已寫進 `LOCAL-DEV.md`。（2026-11-07 更正，`date -u` 見 `code-summary.md` 末節：此句描述的是本單元的改動，**至今仍成立**——本單元的 `source-manifest.json` 不含 `backend/database.py`；但該檔的工作樹 diff **已不為空**：`brain-infra` 於 2026-10-31 依合併前必修第 20／29 列新增記憶專用連線（`git diff --stat` 為 72 行插入，`SessionLocal`／`engine` 兩行未動）。計畫 Step 5 第五格的字面判準「該檔 diff 為空」因此不再成立，該格本輪留空待 conductor 判定。）"
     },
     {
       "id": "NFR12.6",
@@ -688,6 +688,12 @@
       "status": "OK",
       "target": "backend/services/membership_backfill.py",
       "note": "2026-10-21（合併前必修第 15 項）：成員補齊的單一實作；`backend/main.py` 的 startup 與 `backend/scripts/backfill_project_members.py` 共用。追溯至 `MB-15`、`NFR12.24`、`NFR12.25`。`backend/tests/test_brain_gateway_startup.py` 隨之把新步驟納入啟動順序斷言與替身。"
+    },
+    {
+      "id": "CG-MB31-B",
+      "status": "OK",
+      "target": "backend/tests/test_membership_backfill_docstring.py",
+      "note": "2026-11-07（合併前必修第 31 列 (b)，`brain-infra` 交接的唯一非共用檔項目）：`backend/services/membership_backfill.py` 模組 docstring 第 28–37 行不再以「`owner_user_id` 指向不存在的使用者」作為持續性失敗的例子（`projects.owner_user_id` 有外鍵，該情形不可能存在），改為與 `run_backfill` 的終檢訊息及 `DEPLOY.md` §2.2.10 一致的兩類原因（終檢剩餘數不為 0、`INSERT` 本身拋例外）；只改 docstring，除模組 docstring 外的 AST 與 HEAD 相同。新測試 `B1`（模組 docstring）、`B2`（終檢的執行期訊息）鎖住本單元擁有的兩個載體；`DEPLOY.md` 為共用檔，不在本測試射程內。突變：還原舊句 → `B1` 紅；執行期訊息的「不會是孤兒擁有者」改為「可能是孤兒擁有者」→ `B2` 紅；兩者還原後 `cmp` 與 repo 相同、綠。第 31 列 (b) 在本單元的部分就此關閉，故不另立 open item。"
     }
   ],
   "open_items": [

@@ -480,3 +480,133 @@
   3. ADR-0021 未列入 `source-manifest.json`（record 內檔案，manifest 只收工作區程式）。
   4. D-7 寫「未安裝到本機全域 python3」，第十四節前置卻寫已 `pip install -r requirements.txt`；實查本機全域 `python3` 的 `mcp` 現為 2.3.0，與 repo 外工具 `claude-agent-sdk` 要求的 `mcp<2.0.0` 衝突。
   5. `backend/.venv` 為 Python 3.13.7，Dockerfile 與 CI 為 3.12。
+
+## 共用檔異動後的重新驗證（計畫 §八之二，2026-10-31T03:46:41Z）
+
+本輪不改任何程式碼、測試或共用文件；只寫本節與計畫的勾選格。比對基準為最新收據 `reviewed-source-3e19d1bf1c07.tsv`（檔案 mtime 2026-10-26 09:32 +0800）。
+
+### 1. 共用檔重驗
+
+收據 41 列逐檔以 sha256 比對（scratchpad 腳本 `u19r/hashcheck.py`，變動的 3 檔另以 `shasum -a 256` 複核）：**38 列逐位元相同、3 列變動、0 列缺檔**。變動檔皆無未提交改動（`git status --short` 為空），三者的現況都等於 HEAD `7a50a40`。
+
+收據版本**不在 git 歷史中**（三檔各自最近 12 個 commit 的版本 sha256 皆不等於收據值），故改以重建證明：把 `7a50a40^`→工作樹的 diff 拆成 hunk，窮舉 hunk 子集套到 `7a50a40^` 版上求 sha256（scratchpad 腳本 `u19r/recon.py`、`u19r/recon_facade.py`）。三檔都找到**唯一能逐位元重現收據值的子集**，所以收據之後的改動已被精確界定，不需以「無法證明為子集」處理：
+
+| 檔 | 收據 → 現況 sha256 | 收據之後的改動（現況行號，`sed -n` 核對） | 是否碰到本單元負責或引用的部分 |
+|---|---|---|---|
+| `backend/services/requirement_field_facade.py` | `0d7e4f37…` → `29f97566…` | 只有 `:374-380` 一段：`_write_authorized` 內、`strip()` 之前擋 NUL，拋 `RequirementFieldValidationError("value", "nul_char")`（合併前必修第 24 項）。把現況刪去這 7 行即逐位元等於收據 | **未碰到**成功讀取稽核：`read_fields`（`:314-320`，`_log_read` 在 `:319`）與 `_log_read`（`:465-484`）不在改動內。本單元經 HTTP 呼叫的寫入路徑（`write_field_from_body` `:341` → `_write_authorized` `:358`）多了一條 422 分支：含 NUL 的值由原本的 500 改為 422，bridge 依 `outcomes.py:176` 對應為 `invalid_argument`。這是對 bridge 有利的行為改變，bridge 程式不需改；本單元測試沒有 NUL 案例（見第 4 小節觀察） |
+| `.github/workflows/deploy.yml` | `e121cf70…` → `3b6d08cd…` | 7 個 hunk（皆屬合併前必修第 26 項，6a 失敗不開 revert PR）：`:35-43` deploy job output `brain_ws_probe_failed`、`:596` 6a 步驟加 `id: brain_ws_probe`、`:656-657` 註解、`:798-802` 與 `:805` revert 步驟的註解與 `if:`、`:889` Slack env、`:944-947` Slack 文字。收據版＝`7a50a40^` ＋ `:520` 那一處行號註解更正 | **未碰到**：MCP bridge 的註解與步驟在 `:381-455`（步驟名 `Record mcp-bridge health (non-blocking)` 於 `:397`），前後步驟仍為 `:367` `Wait for the public hostname…` 與 `:456` `Verify sessions survive a Redis restart…`（`test_position` 斷言的對象）；七個 hunk 都不在該範圍、未增刪步驟。`:35-43` 的插入使其後行號整體下移 9 行，`test_mcp_bridge_deploy` 不依行號斷言 |
+| `DEPLOY.md` | `2608a131…` → `d9b0571c…` | 3 個 hunk：`:730-738`（§2.2.9，第 24 項 (d) 的 `create_all` 說法更正，3 行改 9 行）、`:2229` 與 `:2239`（§5.13 U14，第 26 項的「6a 失敗不開 revert PR」） | **未碰到**：本單元段落為 §5.6 表的 `mcp-bridge` 列（`:1742`）、日誌上限句（`:1938`）、§5.9.1 健康紀錄列（`:2069`）、§5.11（`:2128-2157`，網段與 `/healthz` 不證明什麼）、§5.12（`:2158-2222`，服務、網段、健康檢查、改阻擋的觸發條件與人工檢查項）；三個 hunk 都在範圍外。`:730-738` 之後行號整體下移 6 行。`:735-736` 新寫「缺收斂只在帶代寫標示的寫入時以 500 出現」——bridge 的寫入工具一律帶代寫標示，所以未跑 `U20` 欄位收斂的環境經 bridge 寫入會得到 backend 5xx；這是 `U20` 部署面的既有前提，不是本單元段落的改動，記於此供部署時對照 |
+
+`test_mcp_bridge_deploy` 的 `DeployMdTest`／`DeployWorkflowTest` 在下一小節的回歸中全綠，與上述判定一致。
+
+### 2. 回歸（scratchpad 副本）
+
+- 副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/u19r/copy/`，含 `backend/` 全部（含 `tests_redis/`、`tests_pg/`；排除 `.venv`、`__pycache__`、`.hypothesis`）、`scripts/`、`deploy/`、`.github/`、repo 根 `schema_rbac.sql`、`schema.sql`、`openapi.json`、`DEPLOY.md`、`LOCAL-DEV.md`。`find -type l` 為空（無指回 repo 的 symlink）。第一次執行即未因缺檔報錯，未補檔。
+- `mcp` 版本：`backend/.venv/bin/python` 回報 `2.3.0`，與 `backend/requirements.txt:71` 的 `mcp==2.3.0` 一致，**已驗證**（非未驗證）。直譯器為 `.venv` 的 Python 3.13.7（Dockerfile／CI 為 3.12，同上第 5 點）。
+- 執行方式：`PYTHONDONTWRITEBYTECODE=1`、`HYPOTHESIS_STORAGE_DIRECTORY=<副本>/.hypothesis`、`PYTHONPATH=<副本>/backend`，`python -B -P`；因不能 `cd`，以 scratchpad 腳本 `u19r/run_tests.py` 在直譯器內 `os.chdir(<副本>/backend)` 後載入同一組 13 個模組並以 `unittest` 執行。
+- 結果：**`Ran 169 tests`、`OK`，failures 0、errors 0、skipped 0**。逐模組（由載入的 suite 計數）：generator 11、pure 25、guards 12、dispatch 13、app 10、startup 19、topology 5、artifacts 8、e2e 15、static 17、deploy 12（本單元 147，與重做段相同）；`test_requirement_field_http` 10、`test_requirement_field_facade` 12（合計 22，比重做段的 21 多 1，即第 24 項新增的 HTTP 案 `H10`）。
+- `gen_mcp_tools.py --check`（副本）：「MCP 工具宣告與輸入一致。」、結束碼 0。`dump_openapi.py --check`（副本）：「規格檔與後端程式碼一致。」、結束碼 0。
+- 本輪未在 repo 內執行任何測試；`git status --short --untracked-files=all -- backend scripts deploy` 為空。
+
+### 3. `reviews/review-03.md` 的 Unresolved／New 逐項現況
+
+| 項 | 狀態 | 現況（附行號） | 處置 |
+|---|---|---|---|
+| R-07（Minor，Unresolved） | **仍成立** | `backend/requirements.txt:71` 只精確釘 `mcp==2.3.0`；`sse-starlette`、`mcp-types` 在 `requirements.txt`、`backend/Dockerfile`、`.github/workflows/ci.yml` 皆 0 命中，無 constraints 檔 | 需改依賴檔或 CI → **已知限制**。目前只由本檔第七節第 6 點交給 build-and-test 核對映像內 `pip freeze`；`merge-blockers.md` 第 1–35 列**無一列涵蓋**（`grep -n` `sse-starlette`／`constraints`／`R-07` 對 mcp-bridge 皆無） |
+| R-08（Minor，Unresolved） | **仍成立（只涉紀錄）** | 第十三節 R-08 列（本檔第 385 行）寫「現況兩句位於 `DEPLOY.md:1336` 與 `:1915`」。`grep -n -F` 實測現況：「其餘六個 brain-infra 變數不要加成 secret」在 `DEPLOY.md:1481`、「其餘六個 brain-infra 變數不是 secret」在 `:2123`；收據版因 `:730-738` 少 6 行，兩句應在 1475 與 2117（與審查註記一致） | **就地補記於本節，原文不回改**：第 385 行的兩個行號作廢，以句子引用為準（現況 `:1481`、`:2123`，行號會隨 `DEPLOY.md` 增刪而移動）。`test_mcp_bridge_deploy.test_unrelated_six_untouched` 以句子斷言，不受影響 |
+| R-11（Minor，Unresolved） | **仍成立** | `nfr-design/security-design.md:89-91`（§八「成功讀取不新增帶使用者身分的紀錄」）與 `:104`（§九 Audit 列「讀取面依 `[MBN1]`=A」）、`:83`／`:102`（「`internal` 網段」）原文未變，也沒有取代註記 | 需改設計檔（已凍結，且不在本輪可寫範圍）→ **已知限制**。`merge-blockers.md` 第 8 列 (1) 已登錄「這兩處已被本列與 code-summary 第十四節取代、讀者以本列為準」，第 7 列已登錄 `internal`→專屬 `mcp` 網段的收窄；審查要求的「在設計檔加取代註記」本身未做，是否需另列由 conductor 判定 |
+| R-14（Minor，New） | **仍成立** | `backend/tests/test_mcp_bridge_guards.py:186-195` 的 `test_get_sse_is_405_without_slot` 仍只在回應後斷言 `(inner.calls, guarded.gate.in_flight) == (0, 0)`；全檔沒有「閘門占滿後送 GET 應得 405 而非 503」的案例（`grep -n` `method_not_allowed` 只命中 `:195`），突變表也沒有「MethodGuard 移入閘門」列 | 需改測試 → **已知限制**。`merge-blockers.md` 第 1–35 列**無一列涵蓋**（`MethodGuard`／`R-14` 對 mcp-bridge 皆無；第 23 列提到的 R-14 屬 `member-pages-ui`） |
+
+**需 conductor 併入 `merge-blockers.md` 的已知限制**：
+1. R-07：傳遞依賴（`sse-starlette`、`mcp-types` 等）未釘選、無 constraints；至少在 build-and-test 以實際映像核對 `pip freeze`。無既有列涵蓋。
+2. R-14：補「閘門飽和下 GET `/mcp` 回 405 與 `method_not_allowed`（非 503）」測試，並把「MethodGuard 移入閘門」記為突變列、確認轉紅。無既有列涵蓋。
+3. R-11：在 `security-design.md` §八、§九 加取代註記（或決定以第 8 列 (1) 的登錄為足）。第 8 列 (1) 已涵蓋取代事實，未涵蓋審查要求的設計檔註記。
+
+R-08 只需改紀錄，已由本節處理，不需併入。
+
+### 4. 觀察（不列為已知限制）
+
+- 第 24 項的 NUL 檢查讓「含 NUL 的寫入」經 bridge 得到 `invalid_argument`（422）而非 backend 5xx；本單元 e2e 沒有 NUL 案例，`test_requirement_field_http` 的 `H10` 已在 HTTP 層鎖住 422。bridge 端不需新增行為。
+
+### 5. 勾選重設
+
+- 本計畫全檔只有 §八之二 的 5 個勾選格（`grep -c -E "\[[ xX]\]"` 為 5）；其餘步驟為 `### Step N` 標題、無勾選框，故沒有「前一輪已勾、需逐格重驗」的格子。
+- 本節各格依完成順序勾選：「共用檔重驗」「回歸（副本）」「前輪審查」「勾選重設」4 格證據已在本節第 1–3 小節取得而勾選；寫入本小節時以 `grep -c -E "^\s*- \[x\]"` 實算**已勾 4**、`grep -c -E "^\s*- \[ \]"` 實算**未勾 1**（「收尾」，待兩支 validator 跑完才勾）。最終計數見下一小節。
+
+### 6. 收尾
+
+- `traceability.json`：本輪未更新——收據後的改動不改變本單元任何需求／故事的落點或狀態（NUL 檢查屬 `U20` 的 `FR` 範圍，第 24 項已在該單元追溯）。`python3 -I` 以 `json.load` 確認仍為合法 JSON。
+- `python3 scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」；`python3 scripts/validate_env_contract.py`：「Cloud-360 environment configuration contract validation passed.」。`scripts/__pycache__/` 內三個 `.pyc` 的 mtime 為 2026-09-06／09-29／10-20，皆早於本輪，非本輪產生。
+- 兩支 validator 通過後勾選「收尾」。最終以 `grep -c -E "^\s*- \[x\]"` 實算計畫全檔**已勾 5**、`grep -c -E "^\s*- \[ \]"` 實算**未勾 0**。本節寫入後再跑一次兩支 validator，結果記於本輪回報。
+
+## 合併前必修第 38 列（計畫 §八之三 Step 18–24，2026-11-08T02:27:25Z）
+
+來源：`construction/functional-design/merge-blockers.md` 第 38 列（review-03 R-07、R-11、R-14；review-04 R-15，皆 Minor）。只修 (a)–(d)，不擴大範圍。本輪**未改** `unit-test-instructions.md`、`code-generation-questions.md`，也未改任何產品程式（`backend/mcp_bridge/`、`backend/services/` 零變動）。
+
+### Step 18 — (a) R-07 現況確認（不改檔）
+
+- `grep -n` 實測 `backend/requirements.txt`：`:71` `mcp==2.3.0`、`:72-77` 理由註解（「合併前必修第 38 列 (a)（2026-10-31 裁決）」）、`:78` `sse-starlette==3.0.3`、`:79` `mcp-types==2.3.0`。三行皆為**工作樹未提交**的改動（`git diff HEAD` 為 `+8 −0`，HEAD 與收據 `reviewed-source-11286bfe5152.tsv` 的 sha256 同為 `d423e40a…`）。**由誰落地**：git 無提交可證；audit shard 記有 2026-10-31T15:57:01Z 的使用者裁決「直接寫進 requirements.txt (Recommended)」，落地者為該裁決之後的 conductor／前一輪，**非本輪寫入**。
+- 同批未提交的配套：`backend/tests/test_mcp_bridge_static.py:160-162` 的 `test_route_a_single_exact_pin` 把 `^mcp\b` 改為 `^mcp(?![-\w])`（否則 `mcp-types` 會被算成第二行 `mcp`）；本輪回歸中該案綠。
+- `backend/.venv` 唯讀查詢（`PIP_NO_INDEX=1`，`python -B -m pip show`，不安裝、不升級、不連網）：`mcp 2.3.0`（Requires 含 `mcp-types`、`sse-starlette`）、`sse-starlette 3.0.3`、`mcp-types 2.3.0`——與三行釘選**一致**。
+- 安裝路徑：`backend/Dockerfile:16-17`（`COPY requirements.txt .`、`RUN pip install --no-cache-dir -r requirements.txt`）；`.github/workflows/ci.yml:264`、`:446`、`:632` 皆 `pip install -r …requirements.txt`。全部 workflow 中不經 `requirements.txt` 的 `pip install` 只有 `aidlc-sync-selftest.yml:196`（`pyyaml`）與 `ui-regression.lock.yml:568`（`kiwitcms-junit.xml-plugin`），都不裝 `mcp` 或其傳遞依賴。`backend/constraints*` 不存在，**不新增**。
+- 結論：R-07 已由上述工作樹改動涵蓋；殘餘只剩「其他傳遞依賴（`anyio`、`httpx2`、`jsonschema` 等）仍未釘選」，那是 `team.md` 已記的全 backend 既成事實（「其餘 10 個套件仍未 pin、無 lockfile」），不屬本列。
+
+### Step 19 — (b) R-11 設計檔取代註記
+
+- 先量測慣例：本 record 沒有「在設計檔內就地標取代」的先例句型可直接沿用（`logical-components.md` §六 是**表格式取代對照**，不在被取代段落旁）；在檔內追加說明的既有慣例是**區塊級 blockquote addendum**——`> **<標籤>（<誰>，<日期>）**：…`（如 `hierarchy-service/functional-design/reviews/review-02.md:9` 的「格式更正（conductor，2026-10-06）」、`progress-channel/infrastructure-design/cicd-pipeline.md:27` 的「更正一個已凍結的假宣告」）。本輪照此形狀。
+- `nfr-design/security-design.md` 加三則 `> **取代註記（code-generation，2026-11-08，合併前必修第 38 列 (b)）**`，`git diff --numstat` 為 `19 0`（**只增不刪**）：
+  1. §七 第一段（原 `:83-84`）之後：「`internal` 網段」→ 專屬網段 `mcp`（`deploy/docker-compose.deploy.yml:452` `networks: [mcp]`、`:491-492` `mcp:`／`internal: true`）；裁決不變。
+  2. §八（原 `:89-93`）之後：「`[MBN1]`=A」「成功讀取不新增帶使用者身分的紀錄」→ `requirement_field_facade.py:319`（`read_fields` 呼叫 `_log_read`）與 `:465-483`（`_log_read`）。
+  3. §九 表（原 `:102`、`:104` 兩格）之後：兩格的對應改讀，判定不變。
+- 行號皆為工作樹現值並以 `sed -n` 核對。**注意**：`docker-compose.deploy.yml` 有他單元未提交的 `+6` 行（第 20／29 列的 `MEMORY_DB_PASSWORD`，`:125-130`），故 `:452`／`:491-492` 在 HEAD 為 `:446`／`:485-486`（與第十四節引用的 HEAD 行號一致）；該檔再增刪時行號會移動，以句子引用為準。
+
+### Step 20 — (c) R-14 測試
+
+`backend/tests/test_mcp_bridge_guards.py` 的 `MethodAndPathTest` 新增 `test_get_is_405_when_gate_saturated`（緊接既有 `test_get_sse_is_405_without_slot` 之後；既有案名未改）：`max_concurrency=1`、內層扣住一個 POST 占滿名額 → `GET /mcp` 與 `DELETE /mcp` 皆 405、`Allow: POST`；`request_rejected` 恰兩筆 `method_not_allowed`、無 `over_concurrency`；占滿期間 `(inner.calls, in_flight) == (1, 1)`；放行後先前 POST 200、新 POST 200、名額歸零。docstring 含 `@purpose`／`@given`／`@step`／`@pass`／`@story US11.4`（無端點與 UI，不寫 `@api`／`@ui`）。
+
+### Step 21 — (d) R-15 測試
+
+`backend/tests/test_mcp_bridge_e2e.py` 的 `NoLeakTest` 新增 `test_nul_value_write_is_invalid_argument_without_echo`（真實 SDK client → bridge → 真實 `main.app`、in-memory SQLite，不連外部服務）：值為 `uuid4()` 標記夾一個 NUL；`legacy`、`auto` 兩種協定版本各一次 `write_requirement_field` → `error=invalid_argument`、`retryable=false`；backend 恰收一個 `PUT`（證明 422 來自 backend，不是 bridge 自擋——bridge 的 `calls.py:84-88` 只檢查空白，不檢查 NUL）；`tool_call` log 為 `(invalid_argument, 422)`；標記不出現在工具結果與 bridge log；資料庫無 `cost`／`sla` 列。docstring 含 `@purpose`／`@given`／`@step`／`@pass`／`@story US11.4`／`@api PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}`。檔頭新增 `import uuid`。
+
+### Step 22 — 突變驗證（scratchpad 副本 `mcp-copy/`，腳本 `mb38_mutate.py`；repo 內被測檔未動）
+
+| # | 突變（副本） | 套用後 | 還原後 sha256 等於基線 | 還原後 |
+|---|---|---|---|---|
+| M38-c | `guards.py` `build_guarded_app`：`MethodGuard` 移入閘門之內（`ConcurrencyGate(MethodGuard(chain))`，外層只剩 `PathRouter(gate)`） | **紅**：`test_get_is_405_when_gate_saturated` 失敗；既有 `test_get_sse_is_405_without_slot` 仍綠（證實 R-14：舊案抓不到排列順序） | 是 | 綠（2 案） |
+| M38-d | `outcomes.py:176` 的 `422` 對應改為 `ErrorCode.INTERNAL_ERROR` | **紅**：`test_nul_value_write_is_invalid_argument_without_echo` 兩個 subTest（`legacy`、`auto`）皆失敗 | 是 | 綠（1 案） |
+
+**本單元突變表補列**（append，不改第五節原表）：「M38-c `MethodGuard` 移入閘門 → `test_get_is_405_when_gate_saturated` 紅」即 review-03 R-14 要求的那一列；M38-d 為本輪新增。
+
+### Step 23 — 回歸
+
+- 副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/mcp-copy/`（`backend/` 排除 `.venv`／`__pycache__`／`.hypothesis`，加 `scripts/`、`deploy/`、`.github/`、根目錄 `schema_rbac.sql`、`schema.sql`、`openapi.json`、`DEPLOY.md`、`LOCAL-DEV.md`；無 symlink）。
+- 直譯器 `backend/.venv/bin/python`（Python 3.13.7；`mcp 2.3.0`、`sse-starlette 3.0.3`、`mcp-types 2.3.0`，與釘選一致，**已驗證**）；`PYTHONDONTWRITEBYTECODE=1`、`-B -P`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY=<副本>/.hypothesis`；腳本 `mb38_run.py` 在直譯器內 `chdir` 到副本 `backend/`。
+- 結果：**`Ran 171 tests`、`OK`**（failures 0、errors 0、skipped 0）。逐模組：generator 11、pure 25、guards **13**、dispatch 13、app 10、startup 19、topology 5、artifacts 8、e2e **16**、static 17、deploy 12（本單元 149＝前輪 147＋本輪 2）；`test_requirement_field_http` 10、`test_requirement_field_facade` 12。
+- 副本 `gen_mcp_tools.py --check`：「MCP 工具宣告與輸入一致。」、結束碼 0；`dump_openapi.py --check`：「規格檔與後端程式碼一致。」、結束碼 0。
+- repo 內 `python3 -B`：`validate_repo_contract.py`「Cloud-360 repository contract validation passed.」、`validate_env_contract.py`「Cloud-360 environment configuration contract validation passed.」。
+
+### 計畫 §八之二 五格的重判（被 Request Changes 重設為未勾）
+
+基準改為最新收據 `reviewed-source-11286bfe5152.tsv`（mtime 2026-10-31 11:52 +0800，41 列）。逐檔 `shasum -a 256`：**34 列相同、7 列變動、0 列缺檔**。7 檔的 HEAD 版 sha256 皆等於收據值，變動全部是**工作樹未提交**的改動（他單元的合併前必修＋本列 (a)），故收據之後的改動即 `git diff HEAD`，精確界定：
+
+| 檔 | 收據 → 現況 | 改動（`git diff -U0 HEAD`） | 是否碰到本單元負責或引用的部分 |
+|---|---|---|---|
+| `backend/requirements.txt` | `d423e40a…` → `a9354122…` | `:72-79` 新增 8 行（本列 (a)） | **是，屬本列**：見 Step 18 |
+| `backend/tests/test_mcp_bridge_static.py` | `2837e588…` → `b8785bbb…` | `:160-162` regex 收窄（本列 (a) 的配套） | **是，屬本列**：回歸中綠 |
+| `deploy/docker-compose.deploy.yml` | `3445e3a3…` → `52d94bc8…` | `:125-130` backend 的 `MEMORY_DB_PASSWORD`（第 20／29 列） | **未碰到** `mcp-bridge` 服務區塊（`:419-461`）與 `mcp` 網段（`:491-492`）；只使其後行號 +6 |
+| `.github/workflows/deploy.yml` | `3b6d08cd…` → `daa226c7…` | 13 個 hunk；含 `mcp-bridge` 字樣的唯一一行是 Redis 重啟步驟註解（第 34 列 (d)），只敘述先後 | **未碰到**：`Wait for the public hostname…`（`:408`）→ `Record mcp-bridge health (non-blocking)`（`:438`）→ `Verify sessions survive a Redis restart…`（`:500`）順序不變；`test_mcp_bridge_deploy` 綠 |
+| `DEPLOY.md` | `d9b0571c…` → `8bb9f107…` | 14 個 hunk；變更行含 `mcp`／`bridge` 者 0（`:2340` hunk 只更正 `U13` 的節次引用，第 37 列 (c)） | **未碰到** §5.6 `mcp-bridge` 列（`:1838`）、§5.9.1 健康紀錄列（`:2170`）、§5.11／§5.12（`:2236-2320`） |
+| `.github/workflows/ci.yml` | `a854442a…` → `3a9ec220…` | 7 個 hunk；變更行含 `mcp`／`bridge` 者 0 | **未碰到** S-1／S-2（`gen_mcp_tools --check` 等）；`:264`／`:446`／`:632` 的安裝指令未變 |
+| `LOCAL-DEV.md` | `0f8c56a0…` → `dbbddd89…` | `:273-301` 新增 29 行（`backfill_project_members.py` 相關） | **未碰到** |
+
+`review-04.md` 的 Unresolved／New 恰為 R-07、R-11、R-14（Unresolved）與 R-15（New），即本列 (a)–(d)；其餘 11 項為 `Resolved (reviewer)`。四項現況：R-07 已涵蓋（Step 18）、R-11 已加註記（Step 19）、R-14 已補案且突變紅（Step 20、22）、R-15 已補案且突變紅（Step 21、22）——皆待重審。前輪第 3 小節列的「需 conductor 併入 merge-blockers 的已知限制」三項已由第 38 列登錄並於本輪處置。
+
+重判結果：「共用檔重驗」「回歸（副本）」「前輪審查的 Unresolved／New 發現」三格證據本輪重新取得（上表、Step 23、上段）→ 勾；「勾選重設」本小節即其執行 → 勾；「收尾」待本節寫入後兩支 validator 再跑一次 → 勾。§八之三 七格依完成順序勾。全檔只有這 12 格（`grep -c -E "^\s*- \[[ xX]\]"` 為 12）；寫入本節時 `grep -c -E "^\s*- \[x\]"` 實算**已勾 10**、`grep -c -E "^\s*- \[ \]"` **未勾 2**（§八之二「收尾」與 Step 24），兩格在 validator 重跑通過後勾選，最終計數記於本輪回報。勾選前計畫已存副本於 scratchpad `mb38-plan-before.md`，勾後以 `diff` 確認只有勾選字元變動。
+
+### Step 24 — 收尾
+
+- `traceability.json`：`reverse` 新增 `MB-38`（`json.load` 確認合法，`reverse` 由 11 列為 12 列）。
+- `source-manifest.json`：未改——本輪寫入的 `backend/tests/test_mcp_bridge_guards.py`、`backend/tests/test_mcp_bridge_e2e.py` 已在 `writes`；`security-design.md` 為 record 內檔案，manifest 只收工作區程式（同重做段第 3 點）。
+- `merge-blockers.md` 第 38 列：處置欄原文末尾就地補記本輪結論，結論為「待重審 mcp-bridge」。
+- 已知限制（需 conductor 併入 merge-blockers 者）：**無新增**。觀察：`security-design.md` 的取代註記引用 `docker-compose.deploy.yml` 工作樹行號，該檔若在提交前再變動，行號需重核（以句子引用為準）。
+

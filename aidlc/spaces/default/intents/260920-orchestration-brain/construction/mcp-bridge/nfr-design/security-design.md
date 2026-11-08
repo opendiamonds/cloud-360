@@ -83,6 +83,12 @@ bridge 不做任何授權判定：`dispatch` 與純函式模組只決定「要�
 **已由使用者確認**：2026-10-14T23:02:07Z，使用者經選單確認**接受**以明文在 `internal` 網段攜帶使用者 JWT，沿用 `[G2]`=A 的信任邊界
 （殘留：同主機任一容器被攻破即可竊聽 token）。`OPEN-MB21-13` 依此結案（`../carried-review-items.md:25`）。本站不新增傳輸加密。
 
+> **取代註記（code-generation，2026-11-08，合併前必修第 38 列 (b)）**：本段的「`internal` 網段」已被實作取代：bridge 只在專屬網段 `mcp`
+> （`deploy/docker-compose.deploy.yml:452` 的 `networks: [mcp]`；`:491-492` 的 `mcp:`／`internal: true`），成員只有 `backend` 與
+> `mcp-bridge`、無 `ports:`，不在 `internal` 網段。「接受明文、不新增傳輸加密」的裁決不變，由使用者 2026-10-24 沿用結案，殘餘風險改寫為
+> `mcp` 網段內被入侵的容器（見 `../code-generation/code-summary.md`「十四、合併前必修第 7、8 項」節的第 7 項、
+> `../../functional-design/merge-blockers.md` 第 7 列）。上文原文保留不改。
+
 靜態：bridge 不落地任何 token、工具參數或結果（`security-requirements.md` 第一節）；`BridgeFormatter` 與 log 禁令使 token 不進 stderr。
 不可逆面（token 進 LLM context）由 `NFR21.4`、`NFR21.6`、`NFR21.8` 承擔，與傳輸形式無關。
 
@@ -91,6 +97,13 @@ bridge 不做任何授權判定：`dispatch` 與純函式模組只決定「要�
 沿用 nfr-requirements 第五節：成功讀取不新增帶使用者身分的紀錄，bridge 不解碼 JWT（`NFR21.18`：`jwt`、`jose`、`base64` 的 import 為 0）。
 本站另確認：第二退路下 `mcp` 會傳遞帶入 `pyjwt`（靜讀其 `METADATA`），但 bridge 模組**不 import** 它——`NFR21.18` 的 grep 對象是 import
 陳述，不受依賴樹影響。
+
+> **取代註記（code-generation，2026-11-08，合併前必修第 38 列 (b)）**：本節標題的「`[MBN1]`=A」與第一句「成功讀取不新增帶使用者身分的
+> 紀錄」已被實作取代：使用者 2026-10-24 推翻 `[MBN1]`=A，成功讀取由 backend 記一行帶讀取者身分的 INFO——
+> `backend/services/requirement_field_facade.py:319`（`read_fields` 在授權通過後呼叫 `_log_read`）與 `:465-483`（`_log_read`，訊息
+> `requirement_field.read system_id=%s user_id=%s on_behalf=%s`，不記欄位值）；見 `../code-generation/code-summary.md`「十四、合併前必修
+> 第 7、8 項」節的第 8 項與 Step 15–16、`../../functional-design/merge-blockers.md` 第 8 列。「bridge 不解碼 JWT」與 `NFR21.18` 的 import
+> 檢查不受影響（稽核行記在 backend，不在 bridge）。上文原文保留不改。
 
 ## 九、ADR-0006 四面向（逐格對照上游，無一格相反）
 
@@ -102,6 +115,12 @@ bridge 不做任何授權判定：`dispatch` 與純函式模組只決定「要�
 | **Encryption** | **適用** | 傳輸：明文於 `internal` 網段，使用者已確認接受（§七，`R-03`）。不可逆面：schema 白名單與底線、手改產物不得啟動、結果與 log 不外洩、SDK 預先驗證的回顯路徑關閉（§三、§五）。靜態：無落地 |
 | **Network exposure** | **適用** | **對外**（`edge`、host）零新增；`internal` 網段內新增一個任意同網段容器可達的 `/mcp`（§二，`R-04` 措辭更正）；`--host` 預設迴環、Host 允許清單隨埠推導；並行閘與本體上限、`/healthz` 不受閘門影響（`scalability-design.md` §一、§二） |
 | **Audit logging** | **適用** | 寫入與清空的主體為使用者本人（`BR77.3`，`NFR21.12` ①）；每次工具呼叫恰一行、HTTP 層拒絕亦留一行、全部單行防注入（`observability-design.md`）；讀取面依 `[MBN1]`=A（§八）；關聯鍵本版不設、後果揭露（`observability-design.md` §六） |
+
+> **取代註記（code-generation，2026-11-08，合併前必修第 38 列 (b)）**：上表兩格的部分文字已被實作取代，判定（四格皆「適用」）不變：
+> (1) **Encryption** 格的「明文於 `internal` 網段」改讀為「明文於專屬網段 `mcp`」（`deploy/docker-compose.deploy.yml:452`、`:491-492`；
+> 同 §七 的取代註記）；(2) **Audit logging** 格的「讀取面依 `[MBN1]`=A（§八）」改讀為「成功讀取由 backend 記一行帶讀取者身分的
+> `requirement_field.read`」（`backend/services/requirement_field_facade.py:319`、`:465-483`；同 §八 的取代註記）。兩項依據皆見
+> `../code-generation/code-summary.md`「十四、合併前必修第 7、8 項」節。表格原文保留不改。
 
 **PBT hard constraint**：`project.md` 點名的三個落點不含本單元，但產生器是 `functional-spec.md` §六 判定的**必須**標的；本站把閘門定為
 決定性（`R-14` 擇 (a)，`logical-components.md` §四），突變表七列仍為必做。不以 N/A 處理。

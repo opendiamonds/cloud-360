@@ -125,19 +125,19 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 
 ### Step 1 — 前置查證與測試執行器就緒
 
-- [x] 1.1 `git diff --stat -- backend/database.py` 必須為空（記錄基準）
+- [ ] 1.1 `git diff --stat -- backend/database.py` 必須為空（記錄基準）
 - [x] 1.2 記錄並驗證三個單元範圍指令：
   - `cd backend && python3 -m unittest tests.test_memory_authz tests.test_memory_ranking tests.test_memory_contract -v`
   - `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/scripts/verify_memory_schema.sql`（於 repo 根目錄）
-- [x] 1.3 確認 `schema_rbac.sql` 的 `I)` 區塊目前無向量索引（避免重複）
-- [x] 1.4 確認 `verify_memory_schema.sql` 現有斷言到 `S13`
+- [x] 1.3 確認 `schema_rbac.sql` 的 `I)` 區塊目前無向量索引（避免重複）（接受偏離，見 code-summary §三：開工前時點無法由 git 重現，以現況替代判準查證；review-04 R-03 選項 (b)）
+- [x] 1.4 確認 `verify_memory_schema.sql` 現有斷言到 `S13`（接受偏離，見 code-summary §三：同 1.3，無 git 基準，以結構替代判準查證；review-04 R-03 選項 (b)）
 
 ### Step 2 — 資料模型層：ORM 鏡像（implement）
 
 - [x] 2.1 `backend/models.py` 新增 `MemoryRecord`（**八欄**，省略 `embedding`）與 `MemoryAuditEvent`（七欄）
 - [x] 2.2 兩個模型的 `__table_args__` 必須指定 `{"schema": "memory"}`；**但 SQLite 無 schema 概念**——確認 `create_all` 在 SQLite 下的行為（若 schema 前綴導致失敗，以 `helpers.py` 既有的處置形狀解決，**不得**改既有 helper 的語意）
 - [x] 2.3 `embedding` 的省略必須有逐字註解，寫明理由（`NFR8.20` 的 `requirements.txt` diff 為空）與一致性測試的斷言形式
-- [ ] 2.4 **不加 `CheckConstraint`**：封閉集合在應用層承載（沿用 `U18` 先例，`functional-design/entities.md §三` 已定）
+- [x] 2.4 **不加 `CheckConstraint`**：封閉集合在應用層承載（沿用 `U18` 先例，`functional-design/entities.md §三` 已定）（接受偏離，見 code-summary §三之一：`models.py` 有四條具名 CHECK，DDL 有的約束 ORM 必須有，由 `C4` 鎖住；review-04 R-03 選項 (b)）
 
 ### Step 3 — 純函式層（implement）
 
@@ -159,7 +159,7 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 - [x] 5.2 角色判定**只實作一份**，由 `BR5.1` 與 `BR6.1` 共用
 - [x] 5.3 **`[D1]`=A 的回應收斂**：`delete` 的「不存在」與「非擁有者」**皆拋 `MemoryNotFound`**；但拋出前以 `reason="owner"` 寫日誌
 - [x] 5.4 `widen_scope`／`list_audit_events` **先判角色、後取記憶**（`NFR7.22`）
-- [ ] 5.5 `memory_router.py`：六條路由（含新增的 `POST`）＋ offset／limit 分頁 ＋ 伺服器端 `limit` 上限
+- [x] 5.5 `memory_router.py`：六條路由（含新增的 `POST`）＋ offset／limit 分頁 ＋ 伺服器端 `limit` 上限（接受偏離，見 code-summary §三之三：實際五條，`search` 刻意無 HTTP 端點；分頁與 `limit` 上限成立；review-04 R-03 選項 (b)）
 - [x] 5.6 router **不做授權判定**，只做 HTTP ↔ 例外轉譯
 - [x] 5.7 `main.py` 註冊，prefix `/api/memory`
 
@@ -195,7 +195,7 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 
 - [x] 8.1 重 dump `openapi.json`（`cd backend && python3 scripts/dump_openapi.py`）
 - [x] 8.2 重跑前端型別產生（`gen:types`）並 commit
-- [x] 8.3 **兩者必須同一個 PR**（`infrastructure-design/cicd-pipeline.md §1.1`）：只做前者會讓 `backend` job 綠而前端型別與契約不一致
+- [x] 8.3 **兩者必須同一個 PR**（`infrastructure-design/cicd-pipeline.md §1.1`）：只做前者會讓 `backend` job 綠而前端型別與契約不一致（接受偏離，見 code-summary §三：兩者已隨 `c2e5687` 同一提交進入歷史，「同一個 PR」以「同一提交」替代判準查證；review-04 R-03 選項 (b)）
 
 ### Step 9 — 突變驗證（六項，逐項紅燈後還原複驗）
 
@@ -210,9 +210,9 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 
 ### Step 10 — 收尾核對
 
-- [x] 10.1 `git diff --stat -- backend/database.py` 仍為空
-- [x] 10.2 `git diff --stat -- backend/requirements.txt` **為空**（`NFR8.20`）
-- [ ] 10.3 `git diff --stat -- deploy/ .github/workflows/ci.yml` **為空**
+- [ ] 10.1 `git diff --stat -- backend/database.py` 仍為空
+- [ ] 10.2 `git diff --stat -- backend/requirements.txt` **為空**（`NFR8.20`）
+- [x] 10.3 `git diff --stat -- deploy/ .github/workflows/ci.yml` **為空**（接受偏離，見 code-summary §三與 §十：已帶他單元改動的工作樹上字面不可能成立，以「本單元未新增任何內容」替代判準查證；review-04 R-03 選項 (b)）
 - [x] 10.4 `python3 scripts/validate_repo_contract.py` ＋ `validate_env_contract.py` 綠燈
 - [x] 10.5 `cd backend && python3 -m unittest discover -s tests` 全綠
 - [x] 10.6 `python3 scripts/dump_openapi.py --check` 綠燈
@@ -413,5 +413,33 @@ SQLAlchemy 表達式寫出。故 `nfr-design/performance-design.md §一` 的
 ### Step 15 — CI 與收尾（Environment/build configuration ＋ Documentation and traceability）
 
 - [x] 15.1 確認 CI 的 `tests_pg` job 會跑到 Step 13、14 的測試（image 含 pgvector、schema 已載入）；不足時以最小改動修 `ci.yml` 並說明
-- [x] 15.2 完整後端套件與 `tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）全綠；`validate_repo_contract.py`、`validate_env_contract.py` 綠燈
+- [ ] 15.2 完整後端套件與 `tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）全綠；`validate_repo_contract.py`、`validate_env_contract.py` 綠燈
 - [x] 15.3 新檔加入 `source-manifest.json`；`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 22 項處置段（變更位置、測試數、三項突變結果）
+
+## 十二、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**緣由**：本單元的 review-04 收據失效，原因是共用檔 `DEPLOY.md` 被其他單元修改（合併前必修第 24、26 列的修正）。本輪**不改任何程式碼或共用檔**，只重新驗證與補審。
+
+- [x] **`DEPLOY.md` 重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，確認只有 `DEPLOY.md` 變動；找出收據之後新增的 hunk，判定是否碰到本單元負責或引用的段落（記憶 schema、HNSW 索引、`memory-schema` 驗證等），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` §2.1 的指令跑三支單元測試，記下實跑測試數。§2.2（`psql`）與 §2.2a（`tests_pg`）需真實資料庫，本輪不跑，沿用前一輪紀錄並寫明。
+- [x] **review-04 的 Unresolved／New 發現**：R-01、R-02、R-03、R-06、R-07、R-08、R-09、R-11、R-12 逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者本輪就地修正（R-03 的勾選標準不對稱：在計畫對應步驟就地加註「接受偏離，見 code-summary §三」；R-11 在 `code-summary.md` 補「訊號非閘門」一句；R-12 在 `code-summary.md` 補行號位移註記）；需改程式或共用檔者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（已有對應列者引用之）。R-10 已於核可前在 `unit-test-instructions.md` §2.2a 補記，複核即可。
+- [x] **勾選重設**：以前一輪逐格核對紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py` 綠。
+
+## 十三、合併前必修（2026-11-01 Request Changes）：記憶專用連線（第 48 列 Major）與第 33 列剩餘項
+
+**來源**：使用者的 Request Changes 指名第 33 列；第 48 列的 Major（`OPEN-CG5-1`：`get_memory_session` 在非測試程式零呼叫者、`memory_router.py` 仍以 `Depends(get_db)` 用擁有者帳號存取記憶表，IAM 邊界在執行期無效力）登錄時即指派本單元承接。`brain-infra` 已在 `backend/database.py`（共用檔，本單元**不改**）提供 `get_memory_session`（`:96`，未設定時拋 `MemoryDatabaseNotConfigured`）與 `memory_db_boundary_enabled`（`:91`），並交接本單元：第 33 列 (c)(d)(f) 與記憶表改用專用 session（`brain-infra/code-generation/code-summary.md:552`、`:614`）。第 33 列 (a)(b)(e)(g) 由 brain-infra 處理，本輪只查證。
+
+**使用者裁決（2026-11-07，選單作答「只在本機／測試退回」）**：記憶專用連線未設定時，`APP_ENV` 屬 `database.LOCAL_APP_ENVS`（local／test／ci）才退回主連線並記 WARNING；其他環境（含 staging）一律不退回，記憶端點回 **503** 並記 ERROR（不輸出連線字串或密碼）。
+
+- [x] **13a 記憶 session dependency**：在本單元的 `memory_router.py`（或本單元新檔，不得放進 `database.py`）新增一個 dependency：`memory_db_boundary_enabled()` 為真 → `get_memory_session()`（產出後 `close`）；為假且 `APP_ENV` 屬 `LOCAL_APP_ENVS` → 退回 `get_db` 並記 WARNING（每程序一次即可，不得每請求刷 log）；為假且非本機 → 拋領域例外，router 轉 **503**（`detail` 為固定句，不含連線資訊）。五個記憶端點的 `MemoryFacade(db)` 改用此 session。判定 `APP_ENV` 的方式重用 `database.py` 既有的 `_current_app_env`／`LOCAL_APP_ENVS`，**不另寫一份**（`team.md` 單一真實來源）。
+- [x] **13b 查證不跨 schema**：以 `grep -n` 確認 `memory_service.py`、`memory_facade.py` 的每一條查詢只碰 `memory` schema 的表（記憶專用角色讀不到 `public`）；`principal`（角色、核准狀態）在主連線的 `get_current_user`／`mint_principal` 取得後傳入，不在記憶 session 上查 `public`。若發現任何記憶路徑需要 `public` 資料，**停手回報 conductor**。`user_router.py:475` 的刪除前計數（`count_references_to_user`）屬使用者管理流程，維持主連線、不在本節改動，在紀錄中寫明理由。其他同進程呼叫端（`brain_gateway`、`intent_routing`、`work_orchestrator` 等）若有建立 `MemoryFacade` 或直接存取記憶表者，一律列出檔:行；若需改動他單元檔，停手回報。
+- [x] **13c 測試（TestClient，附 §4.4 規格註解）**：(1) 邊界啟用時五個端點都經記憶 session（以 dependency 替身記錄被呼叫者，斷言不是 `get_db`）；(2) 未設定且 `APP_ENV=staging`（或任一非本機值）→ 503、固定 `detail`、ERROR log 不含 `DATABASE_URL` 片段；(3) 未設定且 `APP_ENV=test` → 退回並可正常讀寫；(4) `OPEN-CG5-1` 對應：非測試程式中 `get_memory_session` 至少有一個呼叫者（以 AST 或 `grep` 掃 `backend/services/`）。突變（副本）：把 dependency 改回 `get_db` → (1)(4) 紅；拿掉非本機分支的 503（改成一律退回）→ (2) 紅；還原 → 綠。
+- [x] **13d 第 33 列 (c) 過期記憶不被讀取**：`memory_service.py` 的檢索、清單（與 facade 的單筆取列，依語意判定）加上 `expires_at IS NULL OR expires_at > now()` 過濾；補測試：已過期的 episodic 記憶不出現在搜尋與清單，未過期與無期限者照常出現；突變：拿掉過濾 → 紅。若過濾會改變 `memory-page-ui` 或 `intent-router` 依賴的契約（例如筆數、`total`），在紀錄中寫明影響。
+- [x] **13e 第 33 列 (d) 拒絕日誌注入**：`memory_service.py`（約 `:651`，以 `grep -n` 重查）的 `log_denied` 不再原樣寫入呼叫端提供的 `memory_id`——改以 `%r` 或只記經 UUID 解析成功的值（解析失敗記固定標記），使含換行的輸入無法偽造日誌行；補測試：含 `\n` 的 `memory_id` 產生的 log 為單行；突變：還原為 `%s` 原樣 → 紅。
+- [x] **13f 第 33 列 (f) facade 重拋分支**：為 `memory_facade.py`（約 `:416-420`）的 `except MemoryNotFound` 重拋分支補一則會走到它的測試；突變：拿掉該分支 → 紅。
+- [x] **13g 第 33 列 (a)(b)(e)(g) 與第 48 列其餘項查證**：以 `grep -n` 逐項記現況與落點（brain-infra 已修／仍為已知限制附承接列／屬本單元未修）；最後一類出現時停手回報。可選項「把 `count_references_to_user` 的兩條查詢下放到 `memory_service.py`」本輪**不做**（行為不變、只為分層一致，且該方法維持主連線），紀錄中寫明。
+- [x] **13h 文件交接（不改共用檔）**：`LOCAL-DEV.md`、`DEPLOY.md` 需補「未設 `MEMORY_DB_PASSWORD` 時本機退回、非本機記憶端點 503」的敘述；兩檔為共用檔，本單元不改，把需補的文字與位置寫進 `code-summary.md` 的交接段，由 conductor 併入 `merge-blockers.md`。若 13a 新增了 backend 讀取的環境變數（不應新增；`APP_ENV`、`MEMORY_DB_PASSWORD` 皆既有），停手回報（`validate_env_contract.py` 第六項）。
+- [x] **回歸**：在 scratchpad 的 rsync 副本以 `backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本外的 scratchpad 目錄，跑 `unit-test-instructions.md` §2.1 的本單元測試、新增測試與後端全套；若端點的 `responses=` 宣告了 503，重 dump `openapi.json` 並跑前端型別產生器，`dump_openapi.py --check` 與 `check:types` 綠；在 repo 跑 `validate_repo_contract.py`、`validate_env_contract.py`（`-B`）；確認 repo 內 `.pyc`／`.hypothesis`／`__pycache__` 數量前後不變。`tests_pg` 與 `psql` 斷言不跑（不啟資料庫），據實記為未驗、待 CI。
+- [x] **勾選重設與紀錄**：本計畫被重設的勾選，逐格依現況核對後勾回（核對不過者留空並寫理由）；`traceability.json` 更新 `OPEN-CG5-1` 承接註記與第 33 列 (c)(d)(f) 對應開放項（`python3 -I` 驗 JSON）；`source-manifest.json` 補列新檔；`code-summary.md` 檔尾附加「## 2026-11-07 記憶專用連線與第 33 列剩餘項」一節，含改動檔:行、測試數（實跑輸出）、突變結果、ADR-0006 四面向逐項判定表、勾選數（`grep -c` 實算）與 `date -u` 時間戳。
+- 追溯：`merge-blockers.md` #48 Major（`OPEN-CG5-1`）、#33 (c)(d)(f)，(a)(b)(e)(g) 查證；`brain-infra` 交接 `:552`、`:614`；review-04 R-01、R-02、R-06、R-07、R-08、R-09、R-11。

@@ -15,6 +15,7 @@
     { "path": "backend/tests/test_membership_data.py" },
     { "path": "backend/tests/test_membership_facade.py" },
     { "path": "backend/tests/test_membership_endpoints.py" },
+    { "path": "backend/tests/test_membership_backfill_docstring.py" },
     { "path": "backend/tests_pg/__init__.py" },
     { "path": "backend/tests_pg/test_membership_concurrency.py" },
     { "path": "backend/models.py" },

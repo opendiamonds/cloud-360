@@ -607,3 +607,62 @@ Step 1–12 全部符合，計畫 69 個核取方塊已勾。Step 4、6、9 與 
 - `frontend/src/pages/BrainPage.tsx` 已由 `U13 brain-gateway`（commit `fa8ce42`）刪除；subprotocol 的消費端改為 `frontend/src/brain/brainProtocol.ts:40-45`，由 `useBrainConnection.ts:150` 呼叫。`source-manifest.json` 因此移除該路徑（15 → 14 條）；本檔 §一 的「14 個應用程式來源路徑」與 Step 8 的敘述保留為當時紀錄。
 - `WsSubprotocol` 多了 `protocolName`（`U13`，ADR-0020 C-1）；ESLint subprotocol 規則擴為三條選擇器。
 - 上節「交接」兩項皆已由後續單元完成：`U13` 的 `_send_single_error` 不再捏造 turnId、`U14` 的 null 錯誤呈現改走系統提示（見 `construction/functional-design/merge-blockers.md` 第 2 項）。`useBrainConnection.ts` 留在清單內，因本單元 Step 12 曾修改它；其現行內容主要屬 `U14`。`brainTranscript.ts`、`testing/wsFrames.ts` 的改動屬 `U14`，不列入本單元。
+
+## 合併前必修共用檔修正後的回歸驗證（2026-11-01）
+
+<!-- 寫入時間：2026-11-01T00:02:32Z（`date -u` 取值） -->
+
+依計畫同名一節執行；**本輪未改任何程式碼、未新增測試**。測試、建置、lint 與突變全在 scratchpad 的實體副本執行（`rsync -a`，排除 `.git` 與快取；`node_modules` 為實體複製），repo 內不留快取或產物。
+
+### 一、共用檔重驗（收據 `reviewed-source-bf9a271f3f02.tsv`，14 個路徑逐檔 `shasum -a 256`）
+
+| 結果 | 路徑 |
+|---|---|
+| **變動 1 個** | `.github/workflows/ci.yml` |
+| 逐位元相同 13 個 | `backend/scripts/dump_ws_contract.py`、`backend/services/brain_ws_contract.py`、`backend/tests/test_dump_ws_contract.py`、`backend/tests/test_ws_contract.py`、`frontend/eslint.config.js`、`frontend/package-lock.json`、`frontend/package.json`、`frontend/scripts/check-api-types.mjs`、`frontend/scripts/check-ws-types.mjs`、`frontend/src/brain/useBrainConnection.ts`、`frontend/src/types/ws-contract.d.ts`、`scripts/validate_repo_contract.py`、`ws-contract.json` |
+
+- 收據中 `ci.yml` 的雜湊（`a854442a…`）即 HEAD `7a50a40` 的版本；變動為**工作樹未 commit 的改動**（`brain-infra` 的共用檔修正，`git diff HEAD` 共 +31 −8），七個 hunk 的新版起始行為 `:328`、`:383`（新增 `Verify the memory-only role boundary (R0-R3)` 步驟）、`:410`、`:428`、`:431`、`:547`、`:647`，全部落在記憶／meta schema 的 PostgreSQL job 與 `tests_pg` 步驟名稱。
+- **未碰本單元的閘門**：`npm run check:ws-types` 仍在 `ci.yml:219`、`python scripts/dump_ws_contract.py --check` 仍在 `ci.yml:305`（其上 `:297-304` 的註解未動）；diff 內容行的 `ws` 字樣 0 次（只出現在 diff 標頭的檔名）。契約模型、dump 腳本、`ws-contract.json`、`ws-contract.d.ts`、ESLint 規則五者逐位元未變。
+- 收據外、與本單元證據相關的檔：`frontend/src/brain/brainProtocol.ts`（subprotocol 現行消費端，`:40-47`）自 HEAD 未變；`frontend/src/types/api.d.ts`、`openapi.json` 有工作樹改動（屬其他單元），本輪以 `check:types` 重驗一致。工作樹其他改動的檔案中，無一引用 `brain_ws_contract` 或 `ws-contract`（`grep -l` 只命中 `ci.yml` 本身既有的閘門行）。
+
+### 二、回歸（副本實跑）
+
+| 指令 | 結果 |
+|---|---|
+| `python -B -m unittest tests.test_ws_contract tests.test_dump_ws_contract`（`backend/`） | `Ran 23 tests`、`OK`（17 ＋ 6，`grep -c "def test_"` 實算） |
+| `python -B -m unittest discover -s tests`（`backend/`） | `Ran 1368 tests`、`OK (skipped=3)` |
+| `python -B scripts/dump_ws_contract.py --check` | 一致，exit 0 |
+| `npm run check:ws-types`／`npm run check:types` | 皆一致，exit 0 |
+| `npm run lint` | `0 errors, 2 warnings`（既存 `exhaustive-deps`） |
+| `npm run build` | exit 0（僅 chunk 大小提示） |
+
+**本輪重跑的突變**（因 `ci.yml` 變動、且原 `BrainPage.tsx` 已不存在，改在現行落點重驗；每項還原後與 repo 檔 `cmp` 相同）：
+
+| 編號 | 突變 | 結果 |
+|---|---|---|
+| S9-1 | `ws-contract.d.ts` 首行加一個空白 | `check:ws-types` exit 1；還原後 exit 0 |
+| S9-2 | 移除 `WorkItem.sideEffect` 的 `description=` → 重 dump → 重產型別 | `check-ws-types.mjs` exit 1，訊息「BR4.4 違反：…sideEffect JSDoc 沒有 @description 段」；還原後 exit 0 |
+| S9-3 | `useBrainConnection.ts:150` 改為 ``[`bearer.${accessToken}`]`` | ESLint `150:55 error subprotocol 必須由 ws-contract.d.ts 的 WsSubprotocol 取值…（ADR-0019 §5／NFR5.4）`；還原後 0 error |
+| S9-4 | `WsSubprotocol.scheme` 改 `Literal["brain"]` → 重 dump → 重產型別 → `tsc -b` | `src/brain/brainProtocol.ts(41,7): error TS2322: Type '"bearer"' is not assignable to type '"brain"'`；還原後 exit 0 |
+| CI 閘門 | 自 `ci.yml` 刪除 `run: npm run check:ws-types` 行，跑 `validate_repo_contract.py`（副本內 `git init` 供 `ls-files`） | exit 1，`Required contract text missing: .github/workflows/ci.yml missing 'npm run check:ws-types'`；還原後 passed |
+
+M1–M7 的證據檔（契約模組與兩支測試）自收據逐位元相同，沿用 §三 與「合併前必修第 2 項」節的紀錄，本輪未重跑。
+
+### 三、`reviews/review-04.md` 各項現況（8 項皆為 `Resolved`）
+
+| ID | 現況（本輪查證） |
+|---|---|
+| R-01 | 仍成立：`traceability.json` 的 `BR2.13` 為 `Deferred`。現行分佈 `OK` 31／`Deferred` 16（R-04 的 `NFR5.7` 改標後由 15 增為 16）。 |
+| R-02 | 內容檢查已補，**機制缺口仍在**：`required-sections` sensor 未對本單元文件觸發的原因未查明，屬框架層，不改 `.claude/`；維持記錄、不列合併前必修。 |
+| R-03 | 計畫品質紀錄，無程式缺陷，現況不變。 |
+| R-04 | 仍成立：`NFR5.7` 為 `Deferred`；`brain_ws_contract.py:793` 的 `WsClientEnvelope` 欄位只有 `v`／`type`／`payload`（`:811-813`），`model_config = _CONTRACT_CONFIG`（`:809`，定義於 `:64` 為 `extra="forbid"`）。 |
+| R-05 | 仍成立：`brain_gateway.py:1188` 的 `_send_single_error` 送 envelope 與 payload 皆 `turnId=None`；`_mint_turn_id()` 呼叫只剩 `:558`、`:1308`（定義在 `:519`）；`merge-blockers.md` 第 2 列狀態為「已修正」。 |
+| R-06 | 規則表屬 `brain-gateway`，本單元契約層（三集合）現況不變。 |
+| R-07 | 仍成立：`useBrainConnection.ts:238` 以 `turnId == null` 分支處理，error 路徑已無 `?? ''`（`:204` 的 `?? ''` 是 token 文字累加，與 R-07 無關）。 |
+| R-08 | **補記精確度**：審查備註稱「done 為 null 的子案例已存在」，但 R-08 原要求的寫法（envelope `null`、payload 帶值）**並未落地**——`test_ws_contract.py:333-340` 的 done 子案例仍是兩者皆 `null`，擋下它的仍是 `DonePayload.turnId: str`。不過 R-08 擔心的突變（把 `DONE` 誤移進 `_EITHER_SCOPED_TYPES`）已由 `:359` 的 `assertEqual(_EITHER_SCOPED_TYPES, frozenset({ERROR}))` 抓到，保護實際成立；缺鍵案例由 `:147` 的 error 子案例涵蓋。判定為紀錄層更正，不需改測試，不列合併前必修。 |
+
+### 四、勾選重設
+
+全部 74 格依下列依據重勾：Step 1–12 的證據檔除 `ci.yml` 外自收據逐位元相同；`ci.yml` 相關的 Step 10 五格由本輪的閘門行定位、CI 閘門突變與兩支 validator 重驗；Step 1 的 `api.d.ts` 一格由本輪 `check:types` 重驗；Step 8／9 中指名 `BrainPage.tsx` 的格子，其標的已由 `U13`（`fa8ce42`）移到 `brainProtocol.ts`／`useBrainConnection.ts:150`，由本輪 S9-3／S9-4 在現行落點重驗（計畫內文保留為當時紀錄，不改）；Step 12 的完整後端套件一格由本輪 `Ran 1368 tests OK` 重驗；本節五格為本輪工作。
+
+勾選後 `grep -c` 實算：已勾 74、未勾 0（`grep -c '^- \[x\]'`／`grep -c '^- \[ \]'`，於勾選完成後執行）。`validate_repo_contract.py`、`validate_env_contract.py` 皆 passed；`traceability.json` 本輪無需更新。

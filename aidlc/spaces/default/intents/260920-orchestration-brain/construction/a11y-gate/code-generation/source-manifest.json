@@ -26,6 +26,9 @@
     },
     {
       "path": "frontend/src/components/Sidebar.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ConversationView.tsx"
     }
   ]
 }

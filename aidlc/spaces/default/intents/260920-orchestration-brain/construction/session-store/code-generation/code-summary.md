@@ -638,3 +638,232 @@ Redis 8.8.0（`/opt/homebrew/bin/redis-server`，未安裝新套件）、redis-p
 已核可計畫／測試說明與程式的落差（不回改計畫）：交付物表 #11 寫 `BRAIN_SESSION_HISTORY_MAX`「無值」而 Step 11.1 寫「值 200」，程式照 11.1；Step 14 的「≈340 個 session」現行文件已為 308.8（U12 計入工作項，每 session 695,400 B，餘裕約 2.9%）；`unit-test-instructions.md` 的指令未帶 `-B` 與 `HYPOTHESIS_STORAGE_DIRECTORY`，照字面跑會留快取。
 
 候選問題（未修，交審查與使用者判定）：(1) 308.8 以序列化位元組計，本機 `MEMORY USAGE` 多約 1.8%，staging 映像預設 jemalloc 依級距推算可能多約 14%（推算、未量測），「300 session 在 80% 以內」可能不成立；(2) 還原驗證 `hgetall | sort`（`deploy.yml:499/544`）抓不到兩欄位值互換；(3) 即上表 9.3 的順序；(4) `redis-cli --pass` 使密碼出現在 runner 程序清單；(5) `_ensure_meta` 的 `EXISTS` 與後續寫入間 key 到期，可重建出缺 `seg:shared` 或 `meta` 的 key（TTL 仍在）。
+
+## 共用檔異動後的重新驗證與補審（計畫第十一節）
+
+<!-- 寫入時間：2026-10-30T23:02:58Z（`date -u`；本地 +0800 為 2026-10-31 07:02） -->
+
+本輪只查驗與補記，**未改任何程式、測試、`deploy.yml`、`DEPLOY.md`、`merge-blockers.md`**；計畫只把 `- [ ]` 改為 `- [x]`。所有命令單獨執行、未連任何 DB／Redis／網路。
+
+### 一、共用檔重驗
+
+**收據**：取 mtime 最新者 `reviewed-source-77379083964b.tsv`（2026-10-25 21:28 +0800），19 個路徑逐一 `shasum -a 256` 比對現況：
+
+| 結果 | 檔案 |
+|---|---|
+| **變動（2 個）** | `.github/workflows/deploy.yml`（收據 `e121cf70…` → 現況 `3b6d08cd…`）、`DEPLOY.md`（收據 `2608a131…` → 現況 `d9b0571c…`） |
+| 逐位元相同（17 個） | `LOCAL-DEV.md`、`backend/.env.example`、`backend/main.py`、`backend/requirements.txt`、`backend/services/{redis_gateway,session_errors,session_store,session_types}.py`、兩支 Lua、三支 `test_session_*.py`、`deploy/.env.example`、`deploy/docker-compose.deploy.yml`、`deploy/docker-compose.test.yml`、`deploy/render-env.sh` |
+
+與較舊收據對照：`b9eaeeda1544`（10-10）的 `deploy.yml` 雜湊與最新收據相同（`e121cf70…`）；`4bdad74fd3da`（10-23）的 `deploy.yml` 為 `029f5a86…`，等於 commit `c2e5687` 的內容。
+
+**收據當下的前像無法逐位元重建**（如實記載）：收據的兩個雜湊不等於 git 中任何一個版本——`624c170`（`deploy.yml` `e7a2c510…`、`DEPLOY.md` `d499fb48…`，亦即 `7a50a40^`）、`763a45a`、`fa8ce42`、`c2e5687`、`7ce1bee` 皆不符；`7a50a40`（10-27）與現況相同。收據當下的內容是 `624c170` 與 `7a50a40` 之間未 commit 的工作樹，引擎的 `.aidlc-engine/source-review/` 只存雜湊不存內容。故本輪以**超集**判定：檢查 `git diff 624c170 7a50a40` 的**全部** hunk（收據之後的改動必為其子集），再以既有紀錄區分哪些 hunk 在收據之前就存在。
+
+**`deploy.yml`（現況行號；本單元負責的段落為 Redis 重啟還原驗證 `:430-584`，引用的 `acl whoami` 步驟為 `:209-258`）**：
+
+| hunk（現況行號） | 內容 | 是否碰到本單元段落 |
+|---|---|---|
+| `:36-43` | deploy job output `brain_ws_probe_failed`（`U14`，合併前必修第 26 項） | 否 |
+| `:520` | 註解 `docker-compose.deploy.yml:258-261` → `:307-310` | **是，但屬本單元自己在收據之前的修正**（本檔第三節之後「順帶修正一個本單元自己的過期引用」那段，寫於 10-25、早於收據）。**本輪核對發現該修正本身仍差幾行**：`docker-compose.deploy.yml`（自收據後逐位元相同）的 `healthcheck:` 在 `:309`，被引用的「does NOT prove the ACL user works」在 `:311-312`，整段為 `:309-314`；`:307-308` 是 `redis_aof` volume 的註解與掛載。收據當下即已如此，非本輪新增，列入第七節 |
+| `:596` | 6a 步驟加 `id: brain_ws_probe` | 否（在本單元步驟之後） |
+| `:657-659`、`:799-805`、`:889`、`:945-948` | rollback 的 revert PR 條件排除 6a 失敗、Slack 訊息分支 | 否。本單元的 9.4（失敗即讓 deploy job 失敗、觸發既有 rollback）不受影響：本單元步驟失敗時 6a 不會執行，`steps.brain_ws_probe.outcome` 為 `skipped`，`brain_ws_probe_failed` 為 `'false'`，revert PR 照舊開出 |
+
+**結論（`deploy.yml`）**：收據之後的改動全部是 `U14` 第 26 項的 hunk，**不觸及** `:209-258`（`acl whoami`）與 `:430-584`（本單元步驟）的任何一行。唯一的副作用是行號整體下移 9 行：本檔「重做」節引用的 `deploy.yml:447`、`:586`、`:443-446`、`:499/544` 現況分別為 `:456`、`:595`、`:452-455`、`:508/553`。
+
+**`DEPLOY.md`（本單元引用的段落：`maxmemory` 容量表與 Redis 容量說明 `:1799-1881`、`noeviction` 節 `:1883-1905`、部署後還原驗證 `:1906-1948`）**：
+
+| hunk（現況行號） | 歸屬 | 是否碰到本單元段落 |
+|---|---|---|
+| `:251`、`:498-530`、`:599-603`、`:730-738`、`:953-964`、`:973`、`:986`、`:989-993`、`:1011-1012`、`:1018`、`:1032-1037`、`:1091-1097`、`:1147-1164` | `U18`／`U19`／`U20`／`U9`／系統帳號（合併前必修第 3、11、15、17 項等） | 否 |
+| `:1802-1876` | Redis 容量表與 `noeviction` 滿載說明 | **是**。內容與本檔「重做」節（寫於 10-25 13:27Z，收據 13:28Z 之前一分鐘）逐字記載的狀態一致：695,400 B、≈ 308.8 個、餘裕約 2.9%、300 個 ≈ 77.7%；`work-orchestrator` review-01 R-01 的「上一版已被取代」註記也在其中。依紀錄判斷這個 hunk **在收據之前已存在**；無法逐位元證明收據之後未再改動，故本輪逐行重讀：數字與 `session_types.DEFAULT_SEGMENT_MAX_BYTES`、`maxmemory 256mb`、`noeviction` 一致，與本單元程式無矛盾 |
+| `:2229`、`:2239` | §5.13 6a 只回滾不開 revert PR（`U14` 第 26 項，`merge-blockers.md:35` 記為 2026-10-29 修正，晚於收據） | 只**引用**本單元步驟名「Verify sessions survive a Redis restart」作為位置描述，未改本單元段落；該位置描述與現況相符 |
+
+`:1883-1948`（`noeviction` 節與部署後還原驗證節）在 `624c170..7a50a40` 中**零 hunk**。
+
+**結論（`DEPLOY.md`）**：收據之後可證實的改動（§5.13）不碰本單元段落；容量表 hunk 依紀錄早於收據，且本輪重讀內容與程式一致。
+
+### 二、回歸（scratchpad 副本，未在 repo 內執行）
+
+副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/ss-copy/`（`backend/` 全部，另含全套所需的 `schema_rbac.sql`、`schema.sql`、`DEPLOY.md`、`LOCAL-DEV.md`、`deploy/`、`.github/`、`scripts/`、`openapi.json`、`frontend/tests/`）。指令以 `unit-test-instructions.md:43` 的現況註記為準，加 `-P`、`PYTHONPATH=<副本>/backend`、`-u REDIS_URL`，cwd 為副本的 `backend/`。
+
+| 指令 | 結果 |
+|---|---|
+| 三個模組（`tests.test_session_types tests.test_session_contract tests.test_session_store_behaviour`） | **`Ran 100 tests` → `OK (skipped=3)`**，實跑 97、跳過 3 |
+| 全套 `discover -s tests`（第二次） | **`Ran 1326 tests` → `OK (skipped=3)`** |
+| `backend/scripts/dump_openapi.py --check`（副本） | 「規格檔與後端程式碼一致。」 |
+| `git status --short` 於 `backend/database.py`、`openapi.json`、`frontend/src/types/api.d.ts`、`deploy.yml`、`DEPLOY.md`、`backend/services`、`backend/tests` | 空 |
+
+跳過的 3 條皆為 `RealRedisParityTest`（`test_lua_trim_matches_the_reference_on_the_same_input`、`test_real_pipeline_error_is_classified_and_stripped_of_written_values`、`test_transaction_sets_fields_and_ttl_together`），原因逐字「REDIS_URL 未設定」——本輪不連任何 Redis，**跳過屬預期**，Lua 位元組修剪與真實交易原子性本輪未驗（見第三節 R-04）。
+
+**全套第一次執行失敗的原因（如實記載）**：第一次跑時副本缺 `openapi.json` 與 `frontend/tests/`，得 `Ran 1290`、`errors=15`，15 個錯誤全是 `FileNotFoundError`（`test_legacy_cost_retirement` 讀 `frontend/tests/e2e/regression.spec.ts`；`test_mcp_bridge_*` 讀 repo 根 `openapi.json`），與本單元無關。補齊兩者後第二次為上表結果。
+
+### 三、review-02 發現逐項現況（R-01 至 R-13）
+
+| ID | 現況（本輪 `grep -n`／讀檔） | 判定 | 處置 |
+|---|---|---|---|
+| R-01 | `session_store.py:633` 的 `EXISTS` 快速路徑仍在；`set_work_target` 的交易（`:465-478`）只寫 `tgt:<seg>`，不附 `meta`／`seg:shared` 的 `HSETNX` 預設值 | 仍成立 | **本輪補記為已知殘留（選項 2）**：見下方「開放項補記」第 1 項。程式未改 |
+| R-02 | `append_message` 對 `role` 仍只有 `if not role`（`session_store.py:309-310`）；`MESSAGE_ENVELOPE_RESERVE_BYTES = 1024`（`:155`）仍只是註解承諾。正式呼叫端仍為零（`grep -rn "append_message(" backend/services` 只命中定義 `:290` 與 docstring `:296`） | 仍成立 | **需改程式** → 已知限制，交 conductor 開 `merge-blockers.md` 新列（性質同第 18 列的容量上界，但第 18 列已記為「已修正」，此為其旁路） |
+| R-03 | `append_message.lua:71-72` 仍對全部既有訊息逐則 `cjson.encode`；本檔無任何耗時數字 | 仍成立 | **補記數字**：審查方在真實 Redis 8.8.0 實測滿段（約 193 KB）時每次 `append_message` 平均 3.25 ms（含往返）、往返基線 0.18 ms、單執行緒上限約 320 次／秒（`reviews/review-02.md:29`、`:45`）；本輪未重量（不連 Redis）。審查的條件「接近毫秒級以上即改為只編碼新訊息」已觸發 → **需改 Lua**，交 conductor 開新列 |
+| R-04 | `ci.yml` 對 `redis` 零命中；本輪副本跑三模組 `RealRedisParityTest` 3 條仍 skip | 仍成立 | **本輪補記開放項並指派承接站**：見下方第 2 項。不需新列（第 12 列已寫「CI 無 Redis，真實原子性不在 CI 閘門內」） |
+| R-05 | `redis_gateway.py:88` 只有 `POOL_MAX_SIZE = 20`；上游 `nfr-design/performance-design.md:68-69`（min 5／idle 10 分／lifetime 30 分）、`:79`（「`min 5` 的暖連線使它不在穩態路徑上」）、`infrastructure-design/infrastructure-specification.md:10`（「連線池 min 5／max 20」）仍在 | 仍成立 | **本輪補記**：見下方第 3 項。計畫 5.1 維持未勾，記為「不可實作」 |
+| R-06 | `DEPLOY.md:1823-1825` 已含工作項 81,000 B，`:1835` 明寫「本表不含 Redis 每個 hash 欄位自身的配置開銷」 | 維持 Resolved | 無 |
+| R-07 | `test_session_store_behaviour.py:1357` `prefix = f"u10-parity:{uuid.uuid4().hex}"`、`:1360` `key = f"{prefix}:{testMethodName}"`，`:1440` 的 `assertNotIn` 仍以長 key 為前提 | 仍成立 | **需改測試** → 交 conductor 開新列 |
+| R-08 | `deploy.yml:452-455` 仍寫「the step is placed LAST … never adds an outage on top of a failing deploy」；本單元步驟 `:456` 之後仍有阻擋步驟 6a `:595` | 仍成立 | **需改 `deploy.yml`** → 交 conductor 開新列；計畫 9.3 維持未勾。另注意：第 26 項之後 6a 失敗**不再開 revert PR**，但 rollback 仍會還原 last-good，Redis 已先被重啟的後果不變 |
+| R-09 | `deploy.yml:508` `BEFORE="$("${APP[@]}" hgetall "${KEY}" \| sort)"`、`:553` `AFTER=…` 同形 | 仍成立 | **需改 `deploy.yml`** → 交 conductor 開新列 |
+| R-10 | `deploy.yml:238`（`acl whoami`，`U1` 的步驟）與 `:479`（本單元 `APP=(… --pass "${REDIS_PASSWORD}" …)`）仍以命令列傳密碼；`REDISCLI_AUTH`、`add-mask` 零命中 | 仍成立 | **需改 `deploy.yml`（兩個步驟，其一屬 `brain-infra`）** → 交 conductor 開新列 |
+| R-11 | `DEPLOY.md:1824` 仍寫「**≈ 308.8** 個…（承諾 ≥ 300，餘裕約 2.9%）」，未標「序列化位元組下界、不含配置器級距與輸出緩衝」；`配置器`／`jemalloc`／`MEMORY USAGE` 在 `DEPLOY.md`、compose、`deploy/.env.example` 零命中 | 仍成立 | **需改 `DEPLOY.md`** ＋ staging 首次部署時以 app 身分對填滿的 fixture 跑 `MEMORY USAGE` → 交 conductor 開新列（與第 18 列同主題，引用之） |
+| R-12 | `session_store.py:414-419` 切回 shared 仍為 `_load_meta` → 改 → `_write_meta_and_expire` 兩次往返；`:415-416` 註解「見 `code-summary.md` 對並行寫入的記載」 | 仍成立；懸空引用**本輪補上落點** | **本輪補記（選項 2）**：見下方第 4 項。補記後該註解有實際指向；程式未改 |
+| R-13 | `session_store.py:615-621` docstring 仍寫「處置是：`set_work_target` 會把它補上」；`set_work_target`（`:465-478`）只寫 `tgt:<seg>`；`brain_gateway.py` 對 `BrainSession.user_id` 零讀取（其 `user_id` 命中皆為 `principal`／`auth`／`MemoryPrefetch`）；本檔第九節第 3 項（`:150`）寫「`userId` 為 `null` 直到第一次 `set_work_target`」 | 仍成立 | **本輪更正紀錄**：見下方第 5 項（取代第九節第 3 項的該句）。docstring 屬程式檔 → 交 conductor 開新列 |
+
+### 四、開放項補記（就地補充第九節；第九節原文不改，以本段為準）
+
+1. **（R-01）到期邊界會重建殘缺 key。** `_ensure_meta` 的 `EXISTS`（`session_store.py:633`）為真之後、`set_work_target` 的交易（`:465-478`）送出之前，若 key 恰好到期，交易會重建一個只有 `tgt:<seg>`（與 TTL）的 key；之後 `_ensure_meta` 因 `EXISTS` 為真而不補建 `meta` 與 `seg:shared`。後果：剩餘 TTL（最多 24 小時）內 `EC1`「segments 必含 shared」不成立；`load` 不報錯、`pageModes` 退回預設、`userId` 為 `None`；下一次 `append_message` 的 Lua 會建出 `seg:shared`，但 `meta` 仍缺。屬自癒、無資料毀損。第 12 項的「寫入與 TTL 同進同退」成立，「建立完整」不成立。修法（未做）：`set_work_target` 的交易內以 `only_if_absent` 附 `meta` 與 `seg:shared` 的預設值。
+2. **（R-04）CI 無 Redis，Lua 位元組修剪與交易原子性只有本機 opt-in 驗證。** `ci.yml` 的 backend job 沒有 Redis，`RealRedisParityTest` 在 CI 與本輪副本皆 skip；`append_message.lua` 的修剪迴圈在 CI 只由 `test_the_lua_script_contains_the_trim_loop` 的字串斷言覆蓋。**承接站：`build-and-test`**（或另開 CI 加 Redis service container 的工作，屬 `ci.yml` 變更，須經使用者裁決）。另：staging 首次部署時以 app 身分跑一次含長訊息的 `EVAL` 並記錄結果（第九節開放項 7 未變）。
+3. **（R-05）連線池 min／idle／lifetime 不可實作。** redis-py `ConnectionPool` 無對應參數，`redis_gateway.py:88` 只有 `max 20`。上游已核可設計中**不再成立**的行：`nfr-design/performance-design.md:68-69`（`min 5` 暖連線、`idle timeout 10 分鐘`、`max lifetime 30 分鐘`）、`:79`（「`min 5` 的暖連線使它不在穩態路徑上」）、`infrastructure-design/infrastructure-specification.md:10`（「連線池 min 5／max 20」）。後果：閒置後的第一次互動要付建立連線的成本，最多為連線逾時 2 秒。上游檔不回改（`team.md ## Corrections`）。計畫 5.1 記為「不可實作」，不勾。
+4. **（R-12）切回 shared 的讀改寫不是原子的。** `set_sharing_mode` 的 shared 分支（`session_store.py:414-419`）先 `_load_meta` 再整份 `_write_meta_and_expire`，兩次往返之間若同一 session 另一頁的 `switch_to_isolated.lua` 已把該頁設為 isolated，這次寫回會蓋掉它；該頁之後讀共享段，而它的獨立段仍在但被晾著（`EC3` 要避免的指示器與資料不一致）。需同一 session 兩頁在毫秒內分別切換。修法（未做）：做成與 `switch_to_isolated.lua` 對稱的 Lua。**`session_store.py:415-416` 註解所稱「`code-summary.md` 對並行寫入的記載」即本項。**
+5. **（R-13）更正第九節第 3 項：`meta.userId` 沒有寫入端，也沒有讀取端。** 第九節（`:150`）的「其 `userId` 為 `null` 直到第一次 `set_work_target`」與 `session_store.py:619` docstring 的「`set_work_target` 會把它補上」**皆不實**：`set_work_target` 只寫 `tgt:<seg>`，從不碰 `meta`；`_write_meta_and_expire`（`:594-607`）只回寫既有的 `userId`。全 `backend/services` 無任何程式讀 `BrainSession.user_id`。實際狀態是 `userId` **永遠為 `null`**。Owner 不變（`U13 brain-gateway`）：補上寫入端，或判定讀取端以 `sessionKey` 推導即足而自實體移除該欄。docstring 的更正屬程式檔改動，交 conductor 開新列。
+
+### 五、勾選重設
+
+基準：「重做」節（10-25）的 58／60 勾選。判準：證據相關檔案自收據後逐位元相同（第一節：17 個），或本輪已重驗（`deploy.yml`、`DEPLOY.md` 依第一節逐 hunk 判定；三模組與全套測試、`dump_openapi.py --check`、兩支 validator 依第二節與第六節實跑）。
+
+| 範圍 | 結果 |
+|---|---|
+| Step 1–8、Step 11–12、Step 13–15 | 全勾。Step 9.1／9.2／9.4／9.5 與 11.4、Step 14 容量文件格依第一節重驗後勾 |
+| **5.1 未勾** | R-05 仍成立：`max 20` 之外的三項在 redis-py 上**不可實作**（第四節第 3 項） |
+| **9.3 未勾** | R-08 仍成立：本單元步驟（`deploy.yml:456`）之後仍有 6a（`:595`），`:452-455` 的「placed LAST」與現況不符。宣告中斷 session 與 TTL 區間斷言兩項仍成立 |
+| 第十一節 5 格 | 完成即勾（「收尾」於本節寫入、validator 綠之後勾） |
+
+機械計數（`grep -c -- "- \[x\]"`／`grep -c -- "- \[ \]"`）：寫本節前為 **62 已勾／3 未勾**（未勾為 5.1、9.3、收尾）；勾「收尾」後實測 **63 已勾／2 未勾**（未勾為 5.1、9.3），全檔 65 格。
+
+### 六、收尾檢查
+
+| 項目 | 結果 |
+|---|---|
+| `python3 scripts/validate_repo_contract.py`（repo 根） | `Cloud-360 repository contract validation passed.` |
+| `python3 scripts/validate_env_contract.py`（repo 根） | `Cloud-360 environment configuration contract validation passed.` |
+| `traceability.json` | **未更新**：本輪無新 id、無狀態變更（R-01～R-13 皆為既有 id 範圍內的殘留，記在本節；新列的 `MB-*` 編號待 conductor 開列後才存在） |
+| `source-manifest.json` | 未動 |
+
+### 七、需要 conductor 在 `merge-blockers.md` 新增的列
+
+本單元無權改 `merge-blockers.md`。以下發現需要改程式、測試、`deploy.yml` 或 `DEPLOY.md`，現有第 12、18 列都已標「已修正」而未涵蓋它們，**建議各開一列**（或合併為一列「session-store review-02 殘留」並逐項列出）：
+
+| 發現 | 需改的檔 | 相關既有列 |
+|---|---|---|
+| R-02 `role` 無長度上限，可繞過每段 200 KB 上限 | `session_store.py` ＋ 拒絕測試 | 第 18 列的旁路 |
+| R-03 Lua 每次追加重編碼整段（實測約 3 ms／次） | `append_message.lua` | 第 18 列 |
+| R-07 真實 Redis 案例的去值斷言無辨識力 | `test_session_store_behaviour.py` | 第 12 列 |
+| R-08 還原驗證步驟不再是最後一步、註解失實 | `deploy.yml`（移步驟或改註解）；改後重勾計畫 9.3 | 第 26 列（6a） |
+| R-09 `hgetall \| sort` 抓不到欄位值互換 | `deploy.yml` | — |
+| R-10 Redis 密碼走命令列 | `deploy.yml` 兩個步驟（`:238` 屬 `brain-infra`、`:479` 屬本單元） | — |
+| R-11 308.8／2.9% 未標前提、staging 未量 `MEMORY USAGE` | `DEPLOY.md:1824` ＋ staging 實測 | 第 18 列 |
+| R-13 docstring 不實 | `session_store.py:615-621` | — |
+| （本輪新發現，Minor）`deploy.yml:520` 的行號引用 `docker-compose.deploy.yml:307-310` 應為 `:309-314`（見第一節） | `deploy.yml`（只改註解） | — |
+
+不需新列（本輪已以紀錄處置）：R-01、R-04、R-05、R-12（第四節）；R-06 已 Resolved。
+
+## 2026-11-07 第 34 列剩餘項
+
+<!-- 寫入時間：2026-11-07T07:02:30Z（`date -u`） -->
+
+來源：計畫第十二節（`merge-blockers.md` 第 34 列 (c)(d)(j) 交接本單元；`brain-infra` A9 已處理 (a)(h)(d)(e)(f)(i) 與 (b)(g)）。本輪未改 `deploy.yml`、`DEPLOY.md`、`LOCAL-DEV.md`、`backend/database.py` 或其他單元檔；未連 staging、共用 DB／Redis 或網路；未 commit。
+
+### 一、改動檔
+
+| 檔 | 行 | 內容 |
+|---|---|---|
+| `backend/tests/test_session_store_behaviour.py` | `:1423-1457`（`test_real_pipeline_error_is_classified_and_stripped_of_written_values`；`git diff` 為 +21／−6） | 12a：改用短 key `p:<8 個十六進位字元>`（不再用類別共用的約 112 字元 `u10-parity:<hex>:<測試名>`）；先斷言值不在 key 內、且以 redis-py 的 `truncate_text` 組出的「未去值註記」**必含**該值（前提斷言：值落在 100 字元截斷之內）；再斷言原始例外與包裝例外皆不含該值。`@given`／`@step`／`@pass` 同步改寫，`@purpose`／`@story` 保留 |
+| `traceability.json` | 新增 `MB-34c`（OK）、`MB-34j`（GAP）兩列，`upstream_ids` 同步；`python3 -I` 解析通過（135／135） | — |
+| `code-generation-plan.md` | 只改 `- [ ]` → `- [x]` | 見第七節 |
+| 本檔 | 本節（append） | — |
+
+### 二、12a 突變（副本 ＋ 暫起本機 Redis）
+
+暫起 `redis-server` 8.8.0（`--bind 127.0.0.1 --port 6399 --save '' --appendonly no`，資料目錄在 scratchpad），跑完 `shutdown nosave` 並刪除資料目錄（`2026-11-07T06:55:33Z` 確認 `Connection refused`、目錄不存在）。
+
+| 突變 | 結果 |
+|---|---|
+| 基準：`RealRedisParityTest` 三條 | `Ran 3` → `OK` |
+| M1：`redis_gateway.py:546` 的 `_strip_pipeline_annotation(exc)` 改為 `pass`（`grep -c MUTANT` = 1） | **紅在 `assertNotIn`（`:1454`）**：`'fixture-secret-value' unexpectedly found in 'Command # 1 (HSET p:… tgt:shared fixture-secret-value) of pipeline caused error: WRONGTYPE …'` |
+| 對照：同一 M1 套在 `HEAD` 版測試（長 key） | 只紅在 `startswith("WRONGTYPE")`（`:1441`），訊息為 `Command # 1 (HSET u10-...) …`——值被 redis-py 截掉，證實 review-02 R-07 |
+| 還原（`grep -c MUTANT` = 0，`cmp` 與 repo 檔相同）後 | `Ran 3` → `OK` |
+
+### 三、12d：A9 代改的本單元程式核對
+
+`session_store.py:153` `SESSION_ROLE_MAX_CHARS = 32`、`:317-321` 拒寫分支，與本單元契約一致，未停手：
+- **每段 200 KB 上限**：建構時的單則最壞算式（`:240-249`）以 `MESSAGE_ENVELOPE_RESERVE_BYTES = 1024`（`:161`）涵蓋 `role`；`role` ≤ 32 字元 × 每字元最多 6 位元組 = 192 B ≤ 1024，該預留量從「註解承諾」變成可執行保證，review-02 R-02 的旁路關閉。
+- **日誌白名單／`BR3.6`**：例外只帶長度（`role 超過 32 字元（實際 N）`），不帶值；拒絕而非截斷，與 `text` 的處置同形。
+- **`BR3.x`**：`role` 非空檢查（`:315`）保留；拒寫在 `_ensure_meta` 與 Lua 之前，無任何 Redis 寫入（`test_session_role_limit.py` 以 FakeRedis 斷言）。
+- `_ensure_meta` docstring（`:626-632`）已改為「沒有任何方法會補上 `userId`」，與 review-02 R-13 一致。
+- `git diff HEAD -- backend/services/session_store.py` 的增刪行共 18 行，全在上述兩處。
+
+### 四、12c：9.3 與 5.1 判定
+
+- **9.3 維持未勾**。`deploy.yml` 現況：本單元步驟「Verify sessions survive a Redis restart」在 `:500`，其後仍有 6a「Verify the brain WS subprotocol survives the tunnel」（`:656`），再後才是「Record this commit as the last-good deployment」（`:694`）。`brain-infra` 的 (d) 採 review-02 R-08 的**第二個選項**（維持現序、把註解改為事實：`:493-499` 逐字「It is NOT the last step … (an earlier version of this comment said "placed LAST", which was false -- merge-blockers row 34 (d))」），而 R-08 對該選項的處置是「把 9.3 改記為已知偏離」，不是重勾——重勾只對應第一個選項（移步驟）。9.3 的條件「步驟置於部署序列**最後**」字面不成立，故不勾。其餘條件現況成立：宣告中斷 session（`:483`「THIS STEP INTERRUPTS LIVE SESSIONS, and that is not mitigated」）、逐欄位比對（`snapshot()`）、TTL 區間（`:626-632`）。附帶一處字面落差：9.3 寫「< 原值」，`:628` 的判斷是 `-gt`（等於原值也通過），即「≤ 原值」。`merge-blockers.md` 第 34 列 (d) 寫「修後重勾計畫 9.3」，與上述判定不一致——要勾回須由 `deploy.yml` 擁有者把步驟移到 6a 之後，或由 conductor／使用者明確接受此偏離。
+- **5.1 維持未勾**。`redis_gateway.py:88` 只有 `POOL_MAX_SIZE = 20`（`:617` 傳給 `max_connections`）；`POOL_MIN_SIZE`／`POOL_IDLE`／`POOL_MAX_LIFETIME` 在 `backend/` 零命中。redis-py `ConnectionPool` 無對應參數，「不可實作」的判定與前輪（「共用檔異動後」節第四節第 3 項）相同。
+
+### 五、12b：(2) 已做；(1) **停手回報**
+
+**(2) 更正（不改前文，以本段為準）**：「共用檔異動後的重新驗證與補審」節第一節對 `DEPLOY.md` 容量表 hunk 寫「依紀錄判斷這個 hunk **在收據之前已存在**」——**此判定無法證實**：收據只存雜湊、收據當下的工作樹無法逐位元重建（同節已記），「重做」節的文字記載只能證明某一時點的內容，不能證明收據之後沒有再改。審查（review-03）記的範圍為 `DEPLOY.md:1802-1877`；本輪 `grep -n` 重查，因其他單元增修 `DEPLOY.md`，該容量說明現位於 **`:1895-1983`**（「`maxmemory 256mb` 的暫定依據」起於 `:1895`、表格列 `:1913-1923`、`≈ 308.8` 在 `:1920`、「追加一則訊息的成本」在 `:1921`；下一小節 `noeviction` 起於 `:1984`）。內容與程式一致的那一句（數字對得上 `DEFAULT_SEGMENT_MAX_BYTES`、`maxmemory 256mb`、`noeviction`）仍成立；不成立的只是「早於收據」。
+
+**(1) 未做，需要 conductor 處置**：`unit-test-instructions.md` 在 Plan Approval 的指紋範圍內。本輪以 Edit 在 §二 現況註記後加一則補充後，下一個 shell 指令即被 `plan-approval-guard` 擋下（逐字「the plan, test instructions, or Testing Contract changed since the person approved them」），所有可變更的 shell 指令都無法執行。已以 Edit 把該段逐位元移除，guard 隨即放行（後續 `grep`／validator 皆可執行）。擬寫入的文字如下，待 conductor 決定是否重取核可後套用：
+
+> 現況註記補充（2026-11-07，合併前必修第 34 列 (j)；上一則註記不改，以本則為準）：**在 repo 副本上**執行時，副本須一併帶 `backend/tests_redis/`——`test_session_store_behaviour.py` 在模組層 `from tests_redis import redis_skip_reason`，缺它整個模組 `ModuleNotFoundError`（本輪實測）。實際用法（自副本的 `backend/`）：`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. HYPOTHESIS_STORAGE_DIRECTORY=<副本外的暫存目錄> <repo>/backend/.venv/bin/python -B -m unittest -v tests.test_session_types tests.test_session_contract tests.test_session_store_behaviour tests.test_session_role_limit`。不加 `-P` 時 `-m` 會把 cwd 放進 `sys.path`，`PYTHONPATH=.` 為冗餘但無害；**加 `-P` 時 `PYTHONPATH=.` 為必要**（本輪實測：`-P` 而無 `PYTHONPATH` → `tests.test_session_contract` 匯入錯誤；`-P` ＋ `PYTHONPATH=.` → OK）。`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本外，避免 PBT 在任何樹內建立 `.hypothesis/`。要跑 `RealRedisParityTest` 時另設 `REDIS_URL` 指向綁 `127.0.0.1` 的一次性 `redis-server`，可同時帶 `tests_redis.test_work_item_lua`；跑完 `shutdown nosave` 並刪除其資料目錄。
+
+三項實測（副本，2026-11-07）：缺 `tests_redis/` → `ModuleNotFoundError: No module named 'tests_redis'`；`-B -P` 無 `PYTHONPATH` → `FAILED (errors=1)`；`-B -P` ＋ `PYTHONPATH=.` → `OK`。
+
+### 六、回歸（scratchpad rsync 副本，排除 `.git`、`backend/.venv`、`frontend/node_modules`；`frontend/` 其餘保留）
+
+指令形狀：自副本 `backend/`，`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp-ss <repo>/backend/.venv/bin/python -B -m unittest …`。
+
+| 指令 | 結果 |
+|---|---|
+| 有 `REDIS_URL`（本機一次性）：`test_session_types`、`test_session_contract`、`test_session_store_behaviour`、`test_session_role_limit`、`tests_redis.test_work_item_lua` | `Ran 110` → `OK`（skip 0） |
+| 無 `REDIS_URL`：三個本單元模組 | `Ran 100` → `OK (skipped=3)`（3 條皆 `RealRedisParityTest`） |
+| 無 `REDIS_URL`：`test_session_role_limit` | `Ran 3` → `OK` |
+| 無 `REDIS_URL`：全套 `discover -s tests` | `Ran 1391` → `OK (skipped=3)` |
+| `scripts/dump_openapi.py --check`（副本） | 「規格檔與後端程式碼一致。」 |
+| repo：`python3 -B scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| repo：`python3 -B scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+| repo：`git status --porcelain` 過濾 `.pyc`／`.hypothesis`／`__pycache__` | 無輸出 |
+| repo 快取數（`find`，排除 `.venv`／`node_modules`／`.git`）前後 | `.pyc` 243→243、`__pycache__` 14→14、`.hypothesis` 1→1（皆為既存、git 已忽略） |
+
+副本與 Hypothesis 目錄已刪除。
+
+### 七、勾選重設
+
+引擎核可後全計畫 71 格皆為未勾（`grep -c '^- \[x\]'` = 0、`'^- \[ \]'` = 71）。判準：前輪紀錄（「共用檔異動後」節 63／65）為基準；對最新收據 `reviewed-source-e6eee87d51b2.tsv` 逐檔 `shasum -a 256`，19 檔中逐位元相同 8 檔（`main.py`、`redis_gateway.py`、`session_errors.py`、兩支 Lua、`session_types.py`、`test_session_contract.py`、`test_session_types.py`），變動 11 檔（`deploy.yml`、`DEPLOY.md`、`LOCAL-DEV.md`、`backend/.env.example`、`requirements.txt`、`session_store.py`、`test_session_store_behaviour.py`、`deploy/.env.example`、兩份 compose、`render-env.sh`）。變動檔逐格以 `grep -n` 重驗本單元條件：`BRAIN_SESSION_HISTORY_MAX=200` 在 `render-env.sh:147`、`backend/.env.example:166`、`deploy/.env.example:159`、`docker-compose.deploy.yml:136`、`docker-compose.test.yml:122`（根目錄 `docker-compose.yml` 0 命中、不起 backend，條件不觸發）；`noeviction` 在 `docker-compose.deploy.yml:279-295`；Redis 依賴與不釘選理由在 `requirements.txt:34-49`；`LOCAL-DEV.md:24-26` 的 Redis／`BRAIN_SESSION_HISTORY_MAX` 硬依賴；`DEPLOY.md:1984` 起的 `noeviction` 節與 `:2007` 起的還原驗證節；`deploy/.env.example:152-158` 的最壞值容量註解；`deploy.yml` 9.1／9.2／9.4／9.5（fixture 寫入、`restart redis` 後以 app 身分讀回的重試迴圈、失敗 `exit 1`、`del` fixture）；`hset_fields_and_expire` 仍被 `session_store.py:476`、`:606`、`:649` 使用。測試與 validator 依第六節。
+
+| 格 | 結果 |
+|---|---|
+| Step 1–4、5.2–5.5、6.1–6.4、7、8、9.1／9.2／9.4／9.5、10、11、12.1–12.3、13、14、15、第十一節 5 格 | 勾。6.4 依第六節實跑全綠而勾；Step 13／14 與第十一節的突變紅燈、真實 Redis 補驗引用既有紀錄（本輪另以 12a 實跑 `RealRedisParityTest` 3 條，含交易帶 TTL 與 Lua 位元組修剪一致性） |
+| 第十二節 12a、12c、12d、回歸 | 勾（第二～四、六節） |
+| **5.1** | 不勾：不可實作（第四節） |
+| **9.3** | 不勾：「最後」字面不成立，`brain-infra` 採 R-08 第二選項（第四節） |
+| **12.4** | 不勾：條件含「`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空」，工作樹對 `HEAD` 各有 72／17／32 行改動（`git diff --stat`），全部來自其他單元；本單元的貢獻以 `grep -icE "session_store\|redis\|brain_session\|BrainSession"` 量為 **0**，`dump_openapi.py --check` 綠、全套綠——但字面「diff 為空」不成立（前輪以帶說明方式勾，本輪依字面判定改為不勾） |
+| **12b** | 不勾：(1) 被 Plan Approval 擋下（第五節） |
+| 「勾選重設與紀錄」 | 本節寫入後勾 |
+
+機械計數（寫本節前實測）：**66 已勾／5 未勾**（未勾：5.1、9.3、12.4、12b、勾選重設與紀錄），全檔 71 格。
+
+### 八、ADR-0006 四面向（本輪改動）
+
+| 面向 | 判定 |
+|---|---|
+| IAM | 不適用：本輪只改一條 opt-in 測試的 key 與斷言，未動權限、ACL 或身分；12d 核對的 `role` 上限不是授權面 |
+| Encryption | 不適用：無傳輸或靜態加密相關改動 |
+| Network exposure | 不適用：暫起的 Redis 只綁 `127.0.0.1`、跑完即關並刪資料目錄；未連 staging 或任何共用服務 |
+| Audit logging | 適用並強化：12a 讓「被寫入的值不進例外訊息（進而不進公開日誌）」在真實 Redis 上有可失敗的斷言（突變證實） |
+
+### 九、需要 conductor 處置
+
+1. **12b (1)**：重取核可後套用第五節的擬寫文字，或改指定落點。
+2. **9.3**：`merge-blockers.md` 第 34 列 (d) 的「修後重勾 9.3」與 `brain-infra` 實際採取的 R-08 第二選項不一致；請裁決「移步驟到 6a 之後」（`deploy.yml` 擁有者）或「接受為已知偏離、9.3 不勾」。
+3. 第 34 列 (c)(j) 的處置欄回填（本單元無權改 `merge-blockers.md`）。
+
+勾「勾選重設與紀錄」後實測（`2026-11-07T07:05:02Z`）：**67 已勾／4 未勾**（5.1、9.3、12.4、12b），全檔 71 格。
+
+### 使用者裁決（`2026-11-07T07:06:23Z`，選單作答）
+
+- **12b (1)**：選「留在 code-summary 就好」。`unit-test-instructions.md` 不改；副本指令須帶 `tests_redis/`、用 `-P` 時須設 `PYTHONPATH=.` 的說明由本節第五段承接。12b 格維持未勾（字面要求改 `unit-test-instructions.md`），屬裁決後的已知偏離。
+- **9.3**：選「接受為已知偏離」。`deploy.yml` 的順序不動（步驟 6a 在 Redis 重啟存活驗證之後），註解已如實描述（`brain-infra` 採 review-02 R-08 第二選項）；9.3 維持未勾。`merge-blockers.md` 第 34 列 (d) 的「修後重勾 9.3」由 conductor 改記為已知偏離。

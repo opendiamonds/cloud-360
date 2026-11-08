@@ -15,14 +15,18 @@
 **精確的 unit-scoped 指令**（寫進本檔是 Testing Contract 的要求）：
 
 ```bash
-cd backend && python -m unittest tests.test_rbac_story_ids_seed -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest tests.test_rbac_story_ids_seed -v
 ```
 
 **全套指令**（CI 跑的那個，`ci.yml` 的 `backend` job）：
 
 ```bash
-cd backend && python -m unittest discover -s tests -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest discover -s tests -v
 ```
+
+> **直譯器與快取（2026-10-29 更正）**：本機 PATH 沒有 `python`、只有 `python3`，且系統 `python3` 的套件版本與 `requirements.txt` 不一致，一律用 `backend/.venv/bin/python`。`PYTHONDONTWRITEBYTECODE=1` 與 `-B` 避免產生 `.pyc`；在工作樹內跑測試仍會產生 `.hypothesis` 等快取並改變引擎的來源指紋，需要不影響審查時，先 rsync 到暫存目錄再執行。全套的基準數已非第四節當時的數字，以 `code-summary.md` 最新一節為準。另：`backend/tests/helpers.py` 現在 stub 的是 `psycopg`（v3），下方第 3 點的 `psycopg2` 字樣為撰寫當時的形狀，stub ＋ in-memory SQLite 的策略不變。
+
+> **現況註記（2026-11-01，合併前必修共用檔修正後的回歸）**：本輪不新增測試。上列指令一律只在 scratchpad 的實體複製副本上執行（整個 repo 複製、排除 `.git` 與快取，不得 symlink 回 repo），並帶 `PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本。不連 DB、Redis 或網路。
 
 **驗證要點**（寫第一個測試之前確認）：
 

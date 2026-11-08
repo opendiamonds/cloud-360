@@ -395,13 +395,25 @@
       "id": "CG-MB18-DISPATCH",
       "status": "OK",
       "target": "backend/tests/test_work_orchestrator_flow.py",
-      "note": "WorkCapacityFlowTest（6 案）：整批預檢（4＋2 整批拒絕且 Redis 無新欄位、3＋2 照常建立、終態不佔名額）、併發越線時同批已寫入項轉失敗（failureReason＝PHRASES[capacity_exceeded]）、轉終態 requestText 截成 200 字（停掉與逾時兩路）。實作在 work_orchestrator.dispatch／_abandon_batch／_cas。"
+      "note": "WorkCapacityFlowTest（6 案）：整批預檢（4＋2 整批拒絕且 Redis 無新欄位、3＋2 照常建立、終態不佔名額）、併發越線時同批已寫入項轉失敗（failureReason＝PHRASES[capacity_exceeded]）、轉終態 requestText 截短（停掉與逾時兩路）。實作在 work_orchestrator.dispatch／_abandon_batch／_cas。2026-10-31 更正：review-01 R-01 之後轉終態的截短為先取 200 字再以序列化後 TERMINAL_REQUEST_TEXT_MAX_BYTES=300 B 封頂（中文即前 100 字），原寫「截成 200 字」已過時；兩案方法名保留 _to_200_ 以免 TCMS 案例成為孤兒。"
     },
     {
       "id": "CG-MB18-GATEWAY",
       "status": "OK",
       "target": "backend/tests/test_brain_gateway_rules.py",
-      "note": "跨單元（U13）：brain_gateway_rules.error_for 把 WorkCapacityExceeded 對到既有 INVALID_REQUEST，訊息固定「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」（不改 WS 契約）。WorkCapacityErrorTest；端到端 backend/tests/test_brain_gateway_turn.py 的 WorkCapacityTurnTest。"
+      "note": "跨單元（U13）：brain_gateway_rules.error_for 把 WorkCapacityExceeded 對到既有 INVALID_REQUEST，訊息固定「目前進行中的工作已達 5 項，請等其中一項完成後再交辦。」（不改 WS 契約）。WorkCapacityErrorTest；端到端 backend/tests/test_brain_gateway_turn.py 的 WorkCapacityTurnTest。2026-10-31 更正：訊息已依 review-01 R-03 改為「同時進行中的工作最多 5 項，這次交辦會超過上限，請等其中一項完成後再交辦。」（brain_gateway_rules.py:282），前述舊句已過時。"
+    },
+    {
+      "id": "CG-MB18-BYTE-BOUND",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_capacity.py",
+      "note": "review-02 R-07 補登（2026-10-31）。合併前必修第 18 項的位元組上界與 NFR4.40 的 300 個 session 承諾（US1.1）。常數在 work_orchestrator_rules.py:71-87（REQUEST_TEXT_MAX_BYTES=6000、TERMINAL_REQUEST_TEXT_MAX_BYTES=300、DIAGRAM_TITLE_MAX_BYTES=300、WORK_ITEM_ACTIVE_MAX_BYTES=7800、WORK_ITEM_TERMINAL_MAX_BYTES=2100）。8 案（含 1 條 @given）：截斷落在字元邊界且不超過位元組上限、短字串原樣返回、最長前綴、最壞進行中項與最壞已結束項不超過宣告上界（6 B 控制字元、4 B emoji、2 B 斜線）、中文原句保留前 2000 字、圖名顯示名稱位元組封頂、614400＋5×7800＋20×2100 ≤ 214748364÷300。該檔已納入版控（git ls-files 可列出）。量測函式與 Lua 端 cjson.encode 同長度的等價性在 CI 只比對 Python 對 Python，真實 cjson 比對見 review-02 R-08（未修，已知限制）。（2026-11-08 更正：真實 cjson 比對已由 MB-36 補上，見該條；仍屬 opt-in、不在 CI。）"
+    },
+    {
+      "id": "MB-36",
+      "status": "OK",
+      "target": "backend/tests/test_work_orchestrator_flow.py",
+      "note": "合併前必修第 36 列（review-02 R-05、R-06、R-08；review-03 新發現 2），計畫 §六之三 Step 18–24，2026-11-08。(a) R-05：put_work_item.lua:50-62、update_work_item.lua:53-63 在 HGETALL 前補取捨註解（讀回整個 session hash、O(n)、現行量級下接受的理由、須改寫的時機與兩種改法），只增註解行、演算法／回傳值／ARGV 不變。(b) R-06：CorrectTest.test_correct_after_the_terminal_item_was_pruned_raises_not_found（本檔 :441）——先跑完 1 項、再跑完 20 項，經生產轉終態路徑修剪掉最舊項後送停掉 → WorkItemNotFound（work_orchestrator.py:340），Redis 與推送不變，brain_gateway_rules.error_for → INVALID_REQUEST＋「找不到這個工作項」（BR55、BR52.4、US1.1）。替身的修剪走 session_types.ref_update_work_item；真實 Lua 修剪與它的一致性由 tests_redis 既有 prune 案承擔。(c) R-08：backend/tests_redis/test_work_item_lua.py:252 test_cjson_encoded_size_matches_real_cjson_encode，12 組輸入以真實 Redis 的 string.len(cjson.encode(...)) 比對 cjson_encoded_size（opt-in，不在 CI；本輪對本機一次性 Redis 8.8.0 實跑通過）；DEPLOY.md:1931-1934 已有「Redis 大版本升級後必須重跑」附註，未改。(d) code-summary 兩處說法更正見該檔 2026-11-08 一節。突變 4 項皆紅、還原皆綠。"
     }
   ]
 }

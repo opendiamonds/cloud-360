@@ -39,18 +39,20 @@ import tests.helpers  # noqa: F401  必須最先匯入：處理 sys.path 與 psy
 
 ```bash
 cd backend
-python -m unittest -v \
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v \
   tests.test_membership_data \
   tests.test_membership_facade \
   tests.test_membership_endpoints
 ```
+
+> **現況註記（2026-10-30，共用檔重驗）**：直譯器一律用 `backend/.venv/bin/python -B`（系統 Python 的套件版本與 `requirements.txt` 不一致；`-B` 與 `PYTHONDONTWRITEBYTECODE=1` 避免產生 `.pyc` 改動來源指紋）。這三個模組現有測試數以實跑輸出為準（review-04 實跑為 41 個，本檔 §三 的 8／8／7 是首輪規劃數）；`psycopg` 已安裝時 `tests.helpers` 只處理 `sys.path`、不裝 stub。
 
 ### 2.2 真實 PostgreSQL 路徑（新 `concurrency` CI job）
 
 ```bash
 cd backend
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360 \
-  python -m unittest -v tests_pg.test_membership_concurrency
+  .venv/bin/python -B -m unittest -v tests_pg.test_membership_concurrency
 ```
 
 **前置條件**：一個**真實的** PostgreSQL（含 `pgvector`，因為 `schema_rbac.sql`

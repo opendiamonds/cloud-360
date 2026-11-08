@@ -356,6 +356,26 @@
       "id": "OPEN-CG18-11",
       "severity": "named-gap",
       "text": "**`schema_rbac.sql` 的檔頭涵蓋清單原本就缺 `F)`（C1 退場）、`G)`（U2 估價上傳）、`I)`（U5 記憶層）三個區塊**（實測：該清單只列 A／B／E／H／C／D／X）。本站**只加了 `J)`**——代為補齊其他單元的條目不在本單元範圍內，且會讓本站的 diff 看起來動了別人的交付。附帶發現：該檔實際只有 8 個帶字母的區塊標題（X／A／B／E／H／I／J／C），`F)`／`G)`／`D)` 的內容夾在別的區塊的範圍內而沒有自己的標題——本站的遷移腳本以字母定位區塊，故這一點對它無影響（`X`／`I`／`J` 三者的前後都是真實標題），但下一個想以同樣方式取出 `F)` 或 `G)` 的人會失敗。"
+    },
+    {
+      "id": "OPEN-CG18-12",
+      "severity": "named-gap",
+      "text": "（review-03 R-01，Minor，本輪記為已知限制）`verify_meta_schema.sql` 對 `system_requirement_fields` 沒有恰好欄數斷言（現為 9 欄）；`P1`／`P5` 對另兩張表有。多一欄不會被任何斷言抓到。修法需改共用的 `verify_meta_schema.sql`，本輪不改，交 conductor 併入 `merge-blockers.md`（2026-10-30 查無對應列）。【2026-11-01 回歸加註（計畫 §九）】已由 brain-infra A5（`merge-blockers.md` 第 30 列 (a)）修正：`verify_meta_schema.sql:279-290` 新增 `P17`（`:285` 的 `IF n <> 9`），9 欄與 §三.3、`schema_rbac.sql:752-776`（`CREATE TABLE system_requirement_fields`）的 `J)` 欄位一致。驗證強度：**本機真實 PostgreSQL 17.7 ＋ pgvector 0.8.1 實跑**（scratchpad 丟棄式叢集、127.0.0.1 隨機埠）——基準 exit 0；突變（副本刪 `updated_at`，欄數 9→8）→ exit 3、訊息 `P17 FAILED: system_requirement_fields 應有 9 欄…實際 8`；還原後新庫全綠。另 `test_meta_schema_expectations` 2 個 OK。狀態：**關閉**（本機 PG17 實跑通過；CI 的 `pgvector:pg18` 首跑待該變更 push 後確認，版本差異仍屬 `OPEN-CG18-5`）。`severity` 欄刻意保留原值不改寫。"
+    },
+    {
+      "id": "OPEN-CG18-13",
+      "severity": "named-gap",
+      "text": "（review-03 R-02，Minor，本輪記為已知限制）`run_meta_schema_migration.py:195-199` 的 `EXPECTED_FK_DELETE_ACTIONS` 只核對 3 條外鍵的 `ON DELETE`。`J)` 區塊現有外鍵為 7 條（`schema_rbac.sql:597`、`:601`、`:604`、`:650`、`:651`、`:696`、`:702`；審查寫 8 條是 U20 移除 `updated_on_behalf_of` 外鍵之前的數字）。未核對刪除行為的 4 條：`project_members.invited_by`、`reselection_events.promoted_user_id`、`reselection_events.previous_owner_user_id`、`system_requirement_fields.updated_by`（後者只由 `EXPECTED_COLUMN_FKS` 驗存在）；第 5 條 `updated_on_behalf_of` 已無外鍵、由 `COLUMNS_WITHOUT_FK` 與 `P16` 驗其缺席。另 `(project_members, users, 'a')` 以（表、被參照表）為鍵，分不出 `user_id` 與 `invited_by` 兩條。本輪不改，交 conductor 併入 `merge-blockers.md`。【2026-11-01 回歸加註（計畫 §九）】已由 brain-infra A5（第 30 列 (b)）修正：`run_meta_schema_migration.py:205-213` 擴為 7 條、以欄名為鍵，核對查詢（`:457` 起）join `pg_attribute` 比對 `conkey`；7 條與 `schema_rbac.sql:655`、`:659`、`:662`、`:708`、`:709`、`:754`、`:760` 的 `REFERENCES` 逐條相符（CASCADE 兩條：`project_id`、`system_id`；其餘 NO ACTION）。驗證強度：**本機真實 PostgreSQL 17.7 實跑**——基準 `run_meta_schema_migration.py` exit 0、輸出「外鍵刪除行為 7 條已逐條核對」；突變（副本把 `invited_by` 改為 `ON DELETE SET NULL`，`confdeltype` a→n）→ exit 1、訊息 `public.project_members.invited_by → users 的 ON DELETE 應為 confdeltype=a，實際 n`（證明同表兩條指向 users 的外鍵已可區分）；還原後新庫 exit 0。附註：同一突變庫上 `verify_meta_schema.sql` 仍 exit 0——`invited_by` 的刪除行為只由本腳本承擔，CI 經 U20 步驟 B／D 執行本腳本。狀態：**關閉**（本機 PG17 實跑通過；CI pg18 首跑待確認）。`severity` 欄刻意保留原值不改寫。"
+    },
+    {
+      "id": "OPEN-CG18-14",
+      "severity": "named-gap",
+      "text": "（review-03 R-07，Minor，本輪記為已知限制，`grep -n` 實查）`verify_meta_schema.sql:99` 註解寫「恰為 8 欄」（`:103` 實為 9）；`ci.yml:328` 寫「U18 project-meta-data 的 12 條」；`ci.yml:383` 寫「P13–P16 由 U20 加入」，而 `verify_meta_schema.sql:2-4` 寫 P13／P14 屬 U19、P15／P16 屬 U20。純註解，本輪不改共用檔，交 conductor 併入 `merge-blockers.md`。【2026-11-01 回歸加註（計畫 §九）】原列三處已由 brain-infra A5（第 30 列 (c)）更正，`grep -n` 實查：`verify_meta_schema.sql:101` 改為 9 欄、`:1-6` 檔頭補 P17 共 17 條；`ci.yml:328-329`、`:404-405`、`:410` 改為 P1-P17 並逐段歸屬（P1–P12 U18、P13／P14 U19、P15／P16 U20、P17 第 30 列）；`DEPLOY.md:767`（7 條外鍵）、`:856-860`（17 條、`P1`–`P17`）。「8 欄」「12 條」「16 條」「P1-P16」「P13–P16 由 U20」「本節的 `P1`–`P12`」「3 條外鍵」於三檔皆無殘留（`verify_meta_schema.sql:1` 的「U18 的 12 條（P1–P12）」為正確歸屬）。**新發現的殘留（A5 未涵蓋）**：`verify_meta_schema.sql:340` 結構類通過訊息仍列「P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16」，**漏 P17**（P17 在 `:279-290`，同一個 DO 區塊內，已於真實 PostgreSQL 證實會執行並會紅）。不影響閘門判定，但 CI log 會讓人以為 P17 沒跑。本站依計畫不改共用檔，已回報 conductor。驗證強度：靜態 `grep` ＋ 本機 PG17 實跑時觀察到的 NOTICE 輸出。狀態：**保持開啟**（待 `:340` 更正後再關；純文字項無 CI 首跑可依）。【2026-11-07 補修加註（計畫 §十）】已修正：`verify_meta_schema.sql:340` 的結構類通過訊息補上 `P17`（現為「P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16／P17」），只改該行文字、未動斷言邏輯。並以 `backend/tests/test_meta_schema_expectations.py:104` 的 `test_structural_block_pass_notice_lists_every_assertion_in_the_block` 鎖定：含 `'P17 FAILED` 的 DO 區塊內 `'P<n> FAILED` 編號集合必須等於同區塊通過訊息列出的編號集合。突變 M4（副本把 `P17` 從訊息拿掉）→ 該案例 FAIL；還原 → OK。驗證強度：靜態解析＋單元測試實跑（純 log 文字，無 PostgreSQL 行為可驗）。狀態：**關閉**。`severity` 欄刻意保留原值不改寫。"
+    },
+    {
+      "id": "R06-MUTATIONS-2026-10-30",
+      "severity": "resolved",
+      "text": "（review-03 R-06，Major）P13–P16 的突變已在丟棄式 PostgreSQL 17.7（127.0.0.1:47391，scratchpad）補做：(a) 拿掉 `ck_reselection_events_cause` → `P14` 紅；(b) 移除 `cause` 欄 → `P5`（9→8 欄）先紅，暫停 P5 欄數那一半的診斷副本中 `P13` 紅；(c) 只在檔案副本把 `updated_on_behalf_of` 改回 `INTEGER REFERENCES users` → 被同檔 U20 的 DO 區塊收斂回 varchar(64)、外鍵 0 條，斷言綠（突變為 no-op，符合設計）；改以套用後 `ALTER` 模擬未收斂資料庫 → `P15` 紅，暫停 P15 的診斷副本中 `P16` 紅。還原後全綠。詳見 `code-summary.md` 末節。"
     }
   ]
 }

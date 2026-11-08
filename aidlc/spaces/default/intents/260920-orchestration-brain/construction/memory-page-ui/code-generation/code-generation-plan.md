@@ -82,6 +82,30 @@
 - [x] `merge-blockers.md` 第 6 列回填處置；`code-summary.md` append 本節紀錄；`source-manifest.json`、`traceability.json`（加 `MB-6`）更新。
 - 追溯：`merge-blockers.md` #6；`BR34.5`、`US4.2`、`AC4.2.1`。
 
+## 四之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔 `backend/services/memory_facade.py`，使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對 `memory_facade.py` 找出收據之後的改動（`git diff` 或重放），判定是否碰到本單元負責或引用的部分（`_authorize_approved` 在六個方法第一行的呼叫、`reason=pending` 拒絕日誌、`delete` 先判定後取列的順序、`[D1]`=A 的 404 收斂），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的指令跑三個後端模組，記下實跑測試數；另在 repo 內跑 `frontend` 的 `npx eslint` 於本單元前端檔（唯讀、不產生檔案）。e2e 依現況註記判定是否需重跑並寫明理由。
+- [x] **review-03 的 Unresolved／New 發現**：R-01 至 R-08 逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記（例如 R-01 的陳述更正與案例編號對照、R-02 的「往後位移」風險、R-03 的「未被測試鎖住」、R-05 的過期段落指引、R-06／R-07 的已知取捨）；需改程式或測試者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（第 6 列已涵蓋者引用之）。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 四之三、合併前必修第 35 列（2026-11-07 使用者 Request Changes：各在所屬單元修正並附測試）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。第 35 列劃給本單元（review-03 R-06、R-07、R-08 與 review-04 新發現，皆前端無障礙 Minor）。開工前唯讀查證現況：(c) 已落地——`frontend/src/components/Sidebar.tsx:247-248` 已有第 35 列 (c) 註解與 `aria-label="我的記憶"`（非本單元所改）；(a) `MemoryZone.tsx:253-256` 仍在語意區與程序區刪除後無條件 `headingRef.current?.focus()`；(b) `MemoryItem.tsx:85-87` 按下確認後進入 `deleting`，確認鍵隨即卸載，焦點落到 body。偏離與理由只寫進 `code-summary.md`，不改本計畫內文（只勾選格子）。
+
+- [x] **Step 14 — (a) 刪除完成後的焦點條件化**：`MemoryZone.tsx` 的 `handleRemoved` 在非情節區（語意區、程序區）比照情節區 `:266` 的條件：只在焦點仍在被刪的那一列之內、或已落在 `document.body`（含 null）時才把焦點移到區標題；使用者已把焦點移到別處（例如另一區、另一列、Sidebar）時不搶焦點。判定所需資訊（被刪列的 DOM 範圍）以 ref 或 `data-testid` 取得，不新增依賴；沿用 `team.md` 前端 lint 約束（不在 effect 內同步 setState、不就地修改物件）。
+- [x] **Step 15 — (b) 刪除進行中的焦點落點**：`MemoryItem.tsx` 在進入 `deleting` 時讓該列 `li` 暫時可接焦點（`tabIndex={-1}`）並把焦點移到該列，使焦點不落到 body；刪除失敗時沿用既有 `restoreFocusToEntry` 把焦點還給刪除入口；刪除成功時交給 Step 14 的條件（此時焦點在被刪列內，故會移到區標題）。`aria-disabled` 與既有樣式不變。
+- [x] **Step 16 — (c) 查證**：以 `grep -n` 確認 `Sidebar.tsx` 的「我的記憶」`<nav>` 帶 `aria-label="我的記憶"`，並確認 `memory-page.spec.ts` 或 `a11y.spec.ts`／`sidebar-landmarks.spec.ts` 已有斷言鎖住；若無任何斷言，在 `memory-page.spec.ts` 補一案斷言 `getByRole('navigation', { name: '我的記憶' })` 存在。在 `code-summary.md` 記下由誰改、以哪一案鎖住。
+- [x] **Step 17 — 測試**（`tests/e2e/memory-page.spec.ts`，`page.route()` 攔截，`describe` 維持 `U15 memory page`、既有案名不改）：(a1) 語意區刪除成功且焦點仍在該列 → 焦點到區標題；(a2) 語意區刪除請求以 route 延遲，期間使用者把焦點移到另一區的元素 → 刪除完成後焦點**不**被搶走；(a3) 程序區同 (a2) 一案；(b) 按下確認後、請求完成前，`document.activeElement` 不是 body、且在該列 `li` 內。新案例附 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 規格註解。
+- [x] **Step 18 — 突變驗證**（只在 scratchpad 副本做，不改 repo）：把 Step 14 改回無條件移焦點 → (a2)／(a3) 紅；拿掉 Step 15 的列焦點 → (b) 紅；（若 Step 16 新增案例）拿掉 `aria-label` → 該案紅。各還原後複驗綠，結果記入 `code-summary.md`。
+- [x] **Step 19 — 回歸**：`npm run lint`（0 errors）、`npx tsc -b`、`npm run build`；`memory-page.spec.ts` 依本計畫 Step 10／四之一的方式（`npm run build` ＋ `vite preview` ＋ `BASE_URL`，全以 `page.route()` 攔截）在本機實跑全綠並記下案數；`a11y.spec.ts` 中記憶頁相關掃描點能跑則跑，不能跑據實記為未驗。`tsc -b` 的 `.tsbuildinfo`、`junit.xml`、`pw-report.json` 等建置／測試產物若落在 repo 內，於 `code-summary.md` 記明；後端如需跑，只在 scratchpad 實體副本（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）。
+- [x] **Step 20 — 共用檔重驗與勾選重設**：以最新收據逐檔 `shasum -a 256` 比對，列出變動檔並判定是否碰到本單元；本計畫既有各格逐格重勾（證據檔逐位元相同或本輪重驗者勾，不成立者維持未勾並寫理由），完成後以 `grep -c` 實算已勾／未勾數寫進 `code-summary.md`。
+- [x] **Step 21 — 收尾**：`code-summary.md` 以 Edit append 本節紀錄（`date -u` 取時間戳）；`source-manifest.json` 加入本輪改動的檔；`traceability.json` 加 `MB-35`（或更新既有列）並保持合法 JSON；`merge-blockers.md` 第 35 列處置欄回填（以 Edit 就地補，不刪既有文字）；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+- 追溯：`merge-blockers.md` #35；review-03 R-06、R-07、R-08；`AC-A11Y.1`、`US4.2`、`AC4.2.1`。
+
 ## 五、方法論與 contract 基線的對應
 
 Testing Contract 的 14 步基線中，**Data model** 與 **Repository** 兩層本單元無改動（零 schema、`memory_service` 不改），故省略；**Business logic**（Step 3–4）、**API**（Step 5–6）、**Frontend**（Step 7–10）三層依序「實作 → 測試」。方法論未改。

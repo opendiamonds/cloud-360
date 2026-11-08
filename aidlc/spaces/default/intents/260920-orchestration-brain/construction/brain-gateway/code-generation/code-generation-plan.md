@@ -66,7 +66,7 @@
 - [x] **Step 6 — 業務邏輯：測試**：握手（雙子協定、只回送協定名、query string 拒絕、4401／4403／4400／1011、佔位計數併發）、輪次（prompt_guard、clarify 兩種 kind、referent 解析與目錄、終止語意、EMPTY_RESPONSE）、扇出（多連線、載入中佇列順序與溢位、推播只給本人）、記憶（預取、熔斷含半開與 `BUSY_SKIPPED`、取消重拋、episodic 背景寫入）、限流與訊框上限、重驗（每則與 60 秒）、Redis 不可用（GW3）。
 - [x] **Step 7 — API（端點掛載與 DEMO 移除）：實作**：`main.py` 啟動與掛載、單行程守門；交付 #6。
 - [x] **Step 8 — API：測試**：startup 順序與缺 `REDIS_*` 時啟動失敗；`/api/brain/ws` 恰一條 WebSocket 路由；`dump_openapi.py --check` 未漂移；`test_intent_routing_structure.py` 改寫後綠。
-- [x] **Step 9 — Frontend**：本單元不新建頁面（屬 `U14`）；只做 DEMO 前端移除與兩支 e2e 落地頁改寫，以 `npm run lint`、`tsc -b` 驗證；e2e 由 CI `ui-regression` 執行。
+- [ ] **Step 9 — Frontend**：本單元不新建頁面（屬 `U14`）；只做 DEMO 前端移除與兩支 e2e 落地頁改寫，以 `npm run lint`、`tsc -b` 驗證；e2e 由 CI `ui-regression` 執行。
 - [x] **Step 10 — 突變驗證**：依 `unit-test-instructions.md §四` 逐項套用 → 紅 → 還原 → 綠，記入 code-summary。
 - [x] **Step 11 — 環境／建置設定**：交付 #7、#8、#9；`python3 scripts/validate_env_contract.py`、`python3 scripts/validate_repo_contract.py` 通過。
 - [x] **Step 12 — 文件與追溯**：`code-summary.md`（§二 處置、偏離與取代關係表、U14 交接、部署後實測清單與合併前 secret 確認、揭露事項）；`source-manifest.json`；`traceability.json`。
@@ -126,11 +126,34 @@
   - 結構測試：AST 斷言 `_mint_turn_id` 的呼叫點恰為上述兩處。
   - 既有測試中斷言非輪次錯誤帶非 null `turnId` 者，依本表改寫（方法名不改，避免 TCMS 案例成孤兒）。
   - 突變（記入 `code-summary.md`）：M1 `_send_single_error` 還原為捏造編號 → T1–T5、T7 案紅；M2 信封驗證失敗時清除 `pending_clarify` → T3 案紅；M3 T9 分支不理會開啟中的輪次 → T9 案紅；M4 在 `_on_set_work_target` 加回 `_mint_turn_id()` → 結構測試紅。
-- [x] **Step 15 — 第 19 項查證**：以 `gh api repos/opendiamonds/cloud-360/actions/secrets` 與 `.../actions/variables` 各查一次名稱（唯讀，只列名稱、不讀值），確認 `OPENROUTER_API_KEY` 在 secrets、不在 variables（`project.md ## Mandated`）。缺少或誤存為 variable → 不由我設定，記為合併前阻擋並回報使用者；若曾存為 variable，依同條規則須重新產生金鑰。
+- [ ] **Step 15 — 第 19 項查證**：以 `gh api repos/opendiamonds/cloud-360/actions/secrets` 與 `.../actions/variables` 各查一次名稱（唯讀，只列名稱、不讀值），確認 `OPENROUTER_API_KEY` 在 secrets、不在 variables（`project.md ## Mandated`）。缺少或誤存為 variable → 不由我設定，記為合併前阻擋並回報使用者；若曾存為 variable，依同條規則須重新產生金鑰。
 - [x] **Step 16 — 驗證**：本單元全部測試、`tests.test_ws_contract`、全套 `python -m unittest discover -s tests`、`dump_ws_contract.py --check`、`dump_openapi.py --check`、`validate_env_contract.py`、`validate_repo_contract.py`。
 - [x] **Step 17 — 文件與追溯**：`code-summary.md` 新增一節（規則表、取代關係、突變結果、第 19 項查證結果、交接 `entry-page-ui` 的第 2 項(b)：前端須把 `turnId=null` 的錯誤呈現為不屬於任何輪次，不得歸入或解除進行中輪次的等待）；`merge-blockers.md` 第 2、19 列以純 append 方式更新處置；`traceability.json`、`source-manifest.json` 更新。
 
 **不在本次範圍**：第 2 項(b)（`entry-page-ui` 的 `useBrainConnection.ts:173`），在該單元處理；`WsServerMessageType`／`ErrorPayload` 契約不再修改（第 2 項的契約層已完成）。
+
+## 六之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔（`deploy.yml`、`DEPLOY.md`、`frontend/tests/e2e/member-pages.spec.ts` 等），使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔找出收據之後的改動（`git diff`／`git log -p`；收據版本無法由 git 重建時，讀涵蓋它的整段 diff 並寫明無法證明為子集、以逐行重讀補強），判定是否碰到本單元負責或引用的部分（`deploy.yml` 與 `DEPLOY.md` 中閘道的設定、`OPENROUTER_API_KEY` 的傳遞、WS 路徑與啟動檢查，以及 `member-pages.spec.ts` 中本單元寫入的案例），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的方式，跑本單元模組與兄弟模組、`dump_ws_contract.py --check`、`dump_openapi.py --check`；前端 `check:ws-types`、`lint`、`tsc -b` 視是否寫出產物決定在 repo 或副本執行並寫明。記下實跑測試數。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查的每一項，逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記；需改程式、測試或共用文件者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（既有列已涵蓋者引用之）。Step 15 的 secrets 名稱查證若需重做，只以唯讀 `gh api` 列名稱、不讀值。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 六之三、合併前必修第 37 列（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。其中**第 37 列劃給本單元**（review-03 R-13 與 review-04 新發現 2，皆 Minor）；第 2 列 (a) 已由本單元、(b) 已由 `entry-page-ui` 修畢，本節只做回歸確認。2026-11-08 使用者裁決**只修第 37 列**：第 54 列記下的兩項（`MemoryWorker.run` 授權被拒記成成功、UNAUTHORIZED 前先寫對話歷史）與 `_prefetch`／`_write_episodic` 走主連線，**不在本節**，維持已知限制。偏離與理由寫進 `code-summary.md`；本節各格完成即勾，既有各格若因本輪改動或他單元共用檔改動而證據失效，改為未勾並寫明理由，其餘依收據逐檔比對結果維持或重勾。
+
+- [x] **Step 18 — (a)(c) 現況確認**：第 19 列處置欄開頭狀態字已改為「已查證」、`DEPLOY.md` 約 :2340 的「第 4.5 節」懸空引用已更正（皆由他單元落地）。以 `grep -n` 附行號確認，在 `code-summary.md` 記明由誰落地；已涵蓋則不改。
+- [x] **Step 19 — (b) 部署 secret 檢查的專屬測試**：新增一個測試（優先放進讀 `deploy.yml` 的既有模組，如 `test_brain_gateway_startup.py`，或新建 `test_deploy_required_secrets.py`），解析 `.github/workflows/deploy.yml` 的「Require the secrets that must not default」步驟（約 :85–:104），斷言 `OPENROUTER_API_KEY` 同時出現在該步驟的 `env` 與 `missing` 檢查中、且缺值時的錯誤訊息存在；只讀檔、不執行 workflow、不觸發 CI、不讀任何 secret 值。加結構化規格註解（docstring：`@purpose`／`@given`／`@step`／`@pass`／`@story`）。
+- [x] **Step 20 — (d) 紀錄更正**：`code-summary.md` 以 Edit 在本輪一節更正補審節三處引用，不刪原文：懸空引用應為現行 `DEPLOY.md` 行號（先 `grep -n` 取值，原記 2238／2239 已因他列改動位移）、T2 錯誤送出的現行 `brain_gateway.py` 行號（先 `grep -n` 取值）、`7a50a40^` 為 `fa51564`（與 `624c170` 對三檔內容相同，結論不受影響）。
+- [ ] **Step 21 — (e) 前端檢查的寫檔注意**：在 `unit-test-instructions.md` 的現況註記 append 一段：往後前端檢查改用實體 `node_modules` 副本或 `tsc -b --tsBuildInfoFile` 指向 scratchpad，避免經 symlink 改寫 repo 內 git 已忽略的 `frontend/node_modules/.tmp/*.tsbuildinfo`；只 append，不改既有內文。本輪不跑任何前端指令。
+- [x] **Step 22 — 突變驗證**（只在 scratchpad 副本做，repo 內被測檔不動）：副本中自 `deploy.yml` 該步驟拿掉 `OPENROUTER_API_KEY` 的 `missing` 檢查 → Step 19 新案紅；只拿掉 `env` 那行 → 紅；還原 → 綠。結果記入 `code-summary.md`。
+- [x] **Step 23 — 回歸**：在 scratchpad 副本跑本單元模組與兄弟模組、`tests.test_ws_contract`、`dump_ws_contract.py --check`、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.py`（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）；需要 Redis 的案例只對本機一次性 Redis（綁 127.0.0.1，用完即刪），起不來據實記為未驗。repo 內不得產生 `.pyc`／`__pycache__`／`.hypothesis`；不得連 staging 或共用 DB／Redis。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 加 `MB-37` 並保持合法 JSON；`source-manifest.json` 只在新增寫入檔時補列；`merge-blockers.md` 第 37 列處置欄就地補記結論、保留原文。
+- 追溯：`merge-blockers.md` #37、#2、#19；review-03 R-13；review-04 新發現 1、2。
 
 ## Testing Contract
 

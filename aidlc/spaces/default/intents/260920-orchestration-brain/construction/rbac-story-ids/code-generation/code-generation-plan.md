@@ -148,6 +148,10 @@ Testing Contract 的 `methodology` 為 **`test-after`**、`test_strategy` 為
       「列數對但組合有缺漏」，而 `BR3.4`′ 逐字要求同時驗兩者
 - [ ] 10c. `M3`（`U3-V1`）：把 `SRE` 的 `K3` 列改為 `(True, False, False)` → 紅
 - [ ] 10d. `M4`（`U3-V2`）：同上，改 `K4` → 紅
+
+  〔2026-10-29 註記，review-02 R-03〕**10c、10d 刻意維持未勾**：照字面執行的 `M3`、`M4` 仍為綠，原因與有效版本見 `code-summary.md` 的 `PD-2`；勾上會讓計畫宣稱字面上沒發生的事。替代步驟為下列 10c′、10d′。
+- [x] 10c′. `M3-eff`（`U3-V1` 的有效突變，內容見 `code-summary.md` `PD-2`）→ 測試 2 紅；還原後綠
+- [x] 10d′. `M4-eff`（`U3-V2` 的有效突變，內容見 `code-summary.md` `PD-2`）→ 測試 3 紅；還原後綠
 - [x] 10e. `M5`（`U3-V3`）：把 `Project_Architect` 的 `K3` 改為 `(True, False, False)` → 紅
 - [x] 10f. `M6`（`U3-V5`）：把任一列第三個旗標改為 `True` → 紅
 - [x] 10g. `M7`（`SEC-4` 的 log 斷言）：把 log 改回只記列數 → `assertLogs` 斷言紅
@@ -185,6 +189,30 @@ Testing Contract 的 `methodology` 為 **`test-after`**、`test_strategy` 為
 3. 已核可的 `rules.md` **不回改**（`team.md`：下游不回改已核可上游）；`BR7.1`–`BR7.3` 疊加帳號狀態條件一事，以本節與 `membership-service` 計畫中的對齊紀錄為準。
 
 本節同時記載一個既存狀態：Step 10 的 `10c`（`M3`）與 `10d`（`M4`）在先前輪次即為未勾。本輪不改變其狀態，交由本輪重新查驗與審查判定是否確實未做。
+
+---
+
+## 一之二、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。比對本單元最新審查收據（`reviewed-source-*.tsv`）與現況，對不上的清單內檔案為：`DEPLOY.md`。這是合併前必修第 22–26 項在其他單元所做的修正。本節**不改程式、不改共用檔**，只重新驗證、補齊前輪 Minor 的紀錄並補審。
+
+- [x] **重新驗證**：以收據比對與 `git diff` 逐 hunk 確認 `DEPLOY.md` 的變動來源（哪一項合併前必修、改了哪幾行），判定是否觸及本單元的段落（`role_permissions` seed 與 K1–K4 說明）；其餘清單內檔案與收據逐位元相同（`shasum -a 256` 逐檔比對）。
+- [x] **回歸**：在暫存區副本（`PYTHONDONTWRITEBYTECODE=1`、`-B`）跑 `tests.test_rbac_story_ids_seed` 與全套；並在副本重做 `M3-eff`、`M4-eff`，確認各致對應測試紅、還原後綠（據以勾 10c′、10d′）。`code-summary.md` 末尾追加「共用檔異動後重新驗證」一段（`date -u`、逐檔結論、測試與突變結果）。
+- [x] **R-04**：`code-summary.md` §二表格「檔頭第 12 行」與 §七「位移至第 805 行」旁就地加註現況行號（以 `grep -n` 實查），或改為不寫死行號的描述。
+- [x] **R-05**：`code-summary.md` §三 加一行指向最新一節：舊指令 `python -m unittest` 與基準數 432／439 已過時，現以 `.venv` 指令與最新全套數為準。
+- [x] **勾選重設**：若重開使本計畫既有勾選被重設，逐步核對全部步驟在 repo 現況下仍成立後勾回；**10c、10d 保持未勾**；在 `code-summary.md` 記錄勾回數與未勾數（`grep -c` 實算）及未勾理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`traceability.json` 以 `python3 -I` 的 `json.load` 驗證；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：`merge-blockers.md` #22–#26；review-02 R-03、R-04、R-05。
+
+## 一之三、合併前必修共用檔修正後的回歸驗證（2026-11-01）
+
+**來源**：2026-10-31 的 Request Changes 重開全部單元；共用檔修正已集中於 `brain-infra` 完成（`merge-blockers.md` 第 41 列），其中改到本單元收據內的 `schema_rbac.sql`（`I)` 區塊記憶專用角色）與 `DEPLOY.md`（多節）。本單元在合併前必修清單只有第 4 列，已由 `membership-service` 修畢；`brain-infra` 的交接清單亦無本單元項目，故**本單元無新修正項、不改程式**。本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-16db8e1a1fb0.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔逐 hunk 讀收據之後的改動，判定是否觸及本單元負責的部分（`role_permissions` 44 列 seed、K1–K4 說明、`STORY_FEATURE_LABELS`、`rbac.py` 的 log），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的實體複製副本上跑 `unit-test-instructions.md` 的本單元指令與後端全套須全綠，記下實跑數；若 `schema_rbac.sql` 或 `rbac_seed_data.py` 有變動觸及 seed，重做 `M3-eff`、`M4-eff` 確認仍各致紅、還原後綠。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查（`reviews/review-03.md`）的每一項，逐項以 `grep -n`／讀檔附行號確認現況。只需改紀錄者在 `code-summary.md` 就地補記；需改程式或共用文件者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **勾選重設**：對本計畫既有各格逐格重勾（10c、10d 依前輪規則保持未勾）；不成立者維持未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
 
 ---
 

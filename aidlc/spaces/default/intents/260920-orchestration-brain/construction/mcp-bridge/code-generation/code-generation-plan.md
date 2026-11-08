@@ -372,6 +372,29 @@ ADR-0020 已把 `U13` 從 `K-16` 的 `consumed_by` 移除，加上 ADR-0021，`r
 - `source-manifest.json` 加入 `backend/services/requirement_field_facade.py` 與改到的測試檔；`traceability.json` 補 `requirements.md:620` ③ 的讀取面落點。
 - 驗證：全套 `python -m unittest discover -s tests`、`validate_repo_contract.py`、`validate_env_contract.py`、`dump_openapi.py --check`（應不漂移）。
 
+## 八之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔（`.github/workflows/deploy.yml`、`DEPLOY.md`、`backend/services/requirement_field_facade.py` 等），使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔找出收據之後的改動（`git diff`／`git log -p`；收據版本無法由 git 重建時，讀涵蓋它的整段 diff 並寫明無法證明為子集、以逐行重讀補強），判定是否碰到本單元負責或引用的部分（`deploy.yml` 與 `DEPLOY.md` 的 MCP bridge 服務、網路暴露與健康檢查段落及 `test_mcp_bridge_deploy` 機械斷言的對象；`requirement_field_facade.py` 的成功讀取稽核 log 與本單元呼叫的方法），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的方式，跑本單元全部模組、`tests.test_requirement_field_http`、`tests.test_requirement_field_facade`、`gen_mcp_tools.py --check`、`dump_openapi.py --check`。記下實跑測試數；`mcp` 版本不符時記為未驗證並寫明。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查的每一項，逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記；需改程式、測試或共用文件者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（既有列已涵蓋者引用之）。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 八之三、合併前必修第 38 列（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。其中**第 38 列劃給本單元**（review-03 R-07、R-11、R-14 與 review-04 新發現 1，皆 Minor）。本節只修第 38 列 (a)–(d)，不擴大範圍。偏離與理由寫進 `code-summary.md`；本節各格完成即勾，既有各格若被 Request Changes 重設為未勾，依收據（本單元 `code-generation/` 下最新 `reviewed-source-*.tsv`）逐檔 `shasum -a 256` 比對與本輪回歸結果逐格重判，不成立者維持未勾並寫明理由。**不得改動 `unit-test-instructions.md`**（它受 Plan Approval 綁定，改了會使核可失效）。
+
+- [x] **Step 18 — (a) R-07 現況確認**：`backend/requirements.txt` 約 :73-79 已有 `sse-starlette==3.0.3`、`mcp-types==2.3.0` 與註解（工作樹未提交）。以 `grep -n` 確認，並在 scratchpad 副本的 venv 以 `pip show`（唯讀）核對與現裝版本一致；確認 `Dockerfile`、`ci.yml` 皆經 `requirements.txt` 安裝而無另一份未釘的安裝指令。已涵蓋則不改，在 `code-summary.md` 記明行號與由誰落地；不新增 constraints 檔。
+- [x] **Step 19 — (b) R-11 設計檔取代註記**：在 `construction/mcp-bridge/nfr-design/security-design.md` 約 :83、:89-91、:102、:104 各段之後就地加區塊級取代註記（「本段已被實作取代：見 `<實作檔:行>`、code-summary 第 N 節」），**原文不刪不改**；行號先 `grep -n` 取現值。沿用該 record 既有的取代註記慣例（先量測既有樣本，例如 `logical-components.md` §六 的「被取代」寫法）。
+- [x] **Step 20 — (c) R-14 閘門占滿後 GET 得 405**：在 `backend/tests/test_mcp_bridge_guards.py` 既有 `test_get_sse_is_405_without_slot`（約 :186）附近新增一案：先把並行閘門占滿，再送 `GET /mcp` → 405（`MethodGuard` 先於閘門判定，不得回 503／429）。不改既有案名；加結構化規格註解（docstring：`@purpose`／`@given`／`@step`／`@pass`／`@story`）。
+- [x] **Step 21 — (d) bridge 端 NUL 案例**：新增一案，經 bridge 寫入路徑對需求欄位送含 NUL（`\u0000`）的值 → HTTP 層 422 → bridge 依 `outcomes.py` 約 :176 對應為 `invalid_argument`，且回傳不回顯該值。放在本單元既有的 bridge 寫入／outcome 測試模組（以替身 app 或既有 e2e 形狀，不連外部服務），加規格註解。
+- [x] **Step 22 — 突變驗證**（只在 scratchpad 副本做，repo 內被測檔不動）：(c) 把 `MethodGuard` 移到閘門之後 → Step 20 新案紅；(d) 把 `outcomes.py` 的 422 對應改成別的 outcome → Step 21 新案紅；還原 → 綠。結果記入 `code-summary.md`，並在本單元突變表補上「MethodGuard 移入閘門」一列（以 append 方式寫入 code-summary）。
+- [x] **Step 23 — 回歸**：在 scratchpad 副本跑本單元全部模組、`tests.test_requirement_field_http`、`dump_openapi.py --check`（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）；`validate_repo_contract.py`、`validate_env_contract.py` 在 repo 以 `python3 -B` 跑。repo 內不得產生 `.pyc`／`__pycache__`／`.hypothesis`；不得連 staging、共用 DB／Redis 或網路；不跑前端指令。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 加 `MB-38` 並保持合法 JSON；`source-manifest.json` 只在新增寫入檔時補列；`merge-blockers.md` 第 38 列處置欄就地補記結論、保留原文。
+- 追溯：`merge-blockers.md` #38、#24；review-03 R-07、R-11、R-14；review-04 新發現 1；`NFR21.37`。
+
 ## Testing Contract
 
 ```json

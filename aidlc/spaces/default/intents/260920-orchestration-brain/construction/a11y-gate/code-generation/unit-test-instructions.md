@@ -53,6 +53,12 @@ BASE_URL=http://localhost:8090 npx playwright test tests/e2e/a11y.spec.ts --repo
 
 **不得**以 `npx playwright test`（不指定檔案）代替上述指令——那會重跑整個 e2e 套件。
 
+**現況註記（2026-10-31，共用檔重驗輪）**：上列指令會在 repo 內寫出 `frontend/dist/`、`frontend/node_modules/.tmp/*.tsbuildinfo` 與 `test-results/`。重驗輪一律改在 scratchpad 的**實體複製**副本上執行（`node_modules` 也實體複製，副本內不得有指回 repo 的 symlink），`npm run build`、`vite preview`、Playwright 都在副本內跑；repo 內只跑不寫檔的檢查。若需後端輔助檢查，用 `backend/.venv/bin/python -B` 並設 `PYTHONDONTWRITEBYTECODE=1`、`-P`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本。全程走攔截層，不連 DB、Redis 或網路。
+
+**現況註記（2026-11-08，合併前必修第 40 列 (e)）**：**綠燈不代表 `incomplete` 為空**。掃描層只以 `violations` 決定紅綠（`A11Y-S8`）；axe 回報為 `incomplete`（needs review，例如有背景圖或疊層時的 `color-contrast`）的節點只附在 Playwright attachment 上，不影響結果，且 `ui-regression` 沒有 artifact 上傳，綠燈時這些節點零留存。要看 `incomplete`，須在本機跑後讀 `test-results/` 下的附件或 `pw-report.json`。
+
+**現況註記（2026-11-08，合併前必修第 40 列 (h)）**：副本的 `node_modules` 須是依 `package-lock.json` **完整安裝**的一份——審查 review-04 R-16 曾以 repo 當時的 `node_modules` 直接複製，副本內 `npm run build` 的 `tsc` 報 `react-router-dom`、`vite` 等 TS2307。本機無網路、不得 `npm install` 時，以 `cp -cR frontend/node_modules <副本>/frontend/node_modules` 複製 repo 現有的一份並刪去其中的 `.tmp/`，**如實記錄**這份依賴不是本輪重新安裝的（其完整性只由副本內 `npm run lint`、`npm run check:types`、`npm run build` 是否通過間接證明）。2026-11-08 這一輪以此法複製後三者皆通過，TS2307 未重現。另：`npm run check:types` 讀 `../openapi.json`，副本根目錄須一併放 `openapi.json`（與 `ws-contract.json`）；`vite preview` 加 `--host 127.0.0.1`，`BASE_URL` 用同一位址。
+
 ## 四、預期結果與覆蓋目標
 
 - 21 個 `test()` 全綠。

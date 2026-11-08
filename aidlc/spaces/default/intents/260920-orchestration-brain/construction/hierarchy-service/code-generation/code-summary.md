@@ -242,3 +242,83 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 - 測試說明列 T1–T26，實際測試方法 36 個。
 
 `source-manifest.json` 的 7 條路徑全部存在且仍屬本單元（`models.py` 的 Project `:380`、System `:426`、DiagramChangeRecord `:461`、`UserDiagram.system_id` `:106`；`main.py:13` import、`:118` `include_router`）。
+
+## 2026-11-01 回歸（合併前必修共用檔修正後）
+
+developer，`2026-11-06T13:34:19Z`（`date -u`）。本輪不改任何應用程式、測試或共用檔，只做計畫 §八 的回歸驗證。開工時實測計畫勾選：`- [x]` 0 格、`- [ ]` 13 格——§六 原本已勾的 5 格在重開單元時被清空，故以下逐項重新核對後重勾。
+
+### 1. 本單元 7 個檔與審查基準的比對
+
+基準為本單元最新一份 `reviewed-source-3de30f2719de.tsv`（mtime 2026-10-25）。以 `shasum -a 256` 比對工作樹：
+
+| 檔案 | 結果 | 變動歸屬 |
+|---|---|---|
+| `backend/models.py` | 位元組相同 | — |
+| `backend/services/hierarchy_service.py` | 位元組相同 | — |
+| `backend/main.py` | 位元組相同 | — |
+| `backend/services/hierarchy_facade.py` | 有變動（`+34`） | 全部屬 brain-infra A3（第 25 列）：`:96-112` 新增 `PROJECT_ADMIN_REQUIRED_DETAIL`（`:98`）與 `HierarchyProjectAdminRequired`（`:101`）；`delete_project` 新增參數 `project_admin`（`:320`）、docstring 一段、判定 `:342-343`；`delete_system` 新增參數（`:355`）、docstring 一段、判定 `:379-380` |
+| `backend/services/hierarchy_router.py` | 有變動（`+8`） | 全部屬 A3：兩個刪除端點傳入 `project_admin=...project_admin_check(principal)`（`:295`、`:326`） |
+| `backend/tests/test_hierarchy_service.py` | 有變動（`+8 −8`） | 全部屬 A3：8 處直呼 facade 刪除方法補 `project_admin=ALWAYS_VISIBLE`（`:295`、`:297`、`:410`、`:415`、`:423`、`:438`、`:451`、`:455`），斷言未改 |
+| `openapi.json` | 有變動（`+2 −1`） | **不屬 A3**，屬 brain-infra A8（第 33 列 (e)）：記憶 `content` 的 `maxLength: 4000` 與描述（`openapi.json:1134-1135`），依據 brain-infra `code-summary.md:502` |
+
+四個有變動的檔，其基準 sha256 皆等於 `HEAD` 的內容（以 `git show <commit>:<檔>` 逐一實算），故 `git diff HEAD` 即為審查後的全部變動，上表逐 hunk 判定無遺漏。
+
+### 2. A3 與本單元已核可規則的對照：無衝突
+
+- **守門順序**：`delete_project` 為授權 `:334` → 可見性 `:335-336` → 擁有者 `:339-341` → `project_admin` `:342-343` → 刪除前置與刪除 `:344`；`delete_system` 為授權 `:370` → 取所屬專案 `:371-373` → 可見性 `:374-375` → 擁有者 `:376-378` → `project_admin` `:379-380` → `:381`。可見性守門與擁有者檢查都在 `can_administer_project` 之前，`BR6.5`（`rules.md:575-597`）的「非擁有者回查不到」不受影響。
+- **不洩漏存在性**（`BR6.1`，`rules.md:448-450`；`BR6.5`）：新的 403 只在通過可見性與擁有者檢查之後才可能出現，對這位呼叫者而言專案的存在本來就不是秘密；不存在、不可見、非擁有者三種情形仍回同一句 404。`HierarchyProjectAdminRequired` 的訊息固定、不含 id（`:98`、`:110`）。順序突變（下方 `A3-o1`／`A3-o2`）實測會讓「非擁有者成員」由 404 變 403，被 `test_project_write_guard` 的 `test_d_*` 抓到，故順序有測試鎖住。
+- **例外形狀**（K-07 `on_denied`）：`HierarchyProjectAdminRequired` 繼承 `HierarchyForbidden`、不是 `HTTPException`；router 唯一轉譯點 `hierarchy_router.py:131-132` 未改即轉 403。
+- **`Principal` sentinel**（`BR1.4`，`rules.md:83-99`）：`_MINT`（`:155`）與 `__post_init__` 的檢查（`:188`）未改；`T4` 綠，突變 `M8` 仍 RED。
+- **`BR87.3`（本模組不 import 成員關係符號）**：A3 以注入的 `Callable` 傳入判定，facade 未新增 import。
+- **409 契約（`BR6.6`）**：兩個刪除端點仍宣告 `responses=CONFLICT_RESPONSE`。新增的 403 **沒有**在 OpenAPI 宣告；`BR6.6` 只要求 409 顯式宣告，不構成衝突，記為觀察。
+- **等價條件 `can_administer_project`**（`membership_service.py:430-455`）：比本單元原規則（只認擁有者）更嚴，屬加法；其「零成員列的擁有者」分支與可見集合同一條件，已由 brain-infra A3 節揭露並交使用者知悉，本單元不另判。
+
+### 3. 測試（rsync 實體副本，未排除 `frontend`；`backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`，hypothesis 存放於 scratchpad）
+
+- `tests.test_hierarchy_service`：`Ran 36 tests` → `OK`
+- `tests.test_project_write_guard`：`Ran 22 tests` → `OK`
+- `tests.test_project_delete_requires_admin`（A3 新檔）：`Ran 4 tests` → `OK`
+- 全套 `unittest discover -s tests`：`Ran 1372 tests` → `OK (skipped=3)`
+
+### 4. validator（repo 根，`python3 -B`；drift 檢查用 `backend/.venv/bin/python -B`）
+
+`validate_repo_contract.py` 結束碼 0（passed）、`validate_env_contract.py` 結束碼 0（passed）、`backend/scripts/dump_openapi.py --check` 結束碼 0（「規格檔與後端程式碼一致」；本輪自 repo 根執行亦可）。repo 內 `__pycache__`／`.pyc`／`.hypothesis` 在跑前跑後以 `stat` 列表比對，634 筆完全相同，無新增或改寫。
+
+### 5. 突變驗證：本輪在現行程式上重跑，未沿用舊紀錄
+
+§三 的 11 項是對 2026-10 初的版本，其後多個單元改過同一批檔，故在副本內對現行程式重做。每項先確認檔案真的改變，跑完還原並比對 sha256 與 repo 相同。
+
+| # | 突變 | 應紅的測試 | 結果 |
+|---|---|---|---|
+| `M1` | 拿掉 service `list_projects` 的擁有者過濾 | `T5` | RED |
+| `M2` | 擁有者不符時改 raise `HierarchyForbidden` | `T6` | RED（error：拋出的是 `HierarchyForbidden`，不是預期的 `HierarchyNotFound`） |
+| `M3` | 拿掉 `create_system` 的擁有者檢查 | `T8` | RED |
+| `M4` | 拿掉 `delete_system` 的擁有者檢查 | `T9` | RED |
+| `M5` | `project_exists` 套上擁有者範圍 | `T10` | RED |
+| `M6` | `actor_user_id` 改取 `principal.user_id` | `T22` | RED |
+| `M7` | `HierarchyForbidden` 多繼承 `HTTPException` | `T3` | RED（第一版因 `HTTPException.__init__` 拒收字串而以 error 紅，不是斷言本身抓到；改為同時繞過其 `__init__` 後重跑，`assertNotIsInstance` 失敗，為乾淨的 RED） |
+| `M8` | `Principal.__post_init__` 檢查改為恆不成立 | `T4` | RED |
+| `M9` | 剩餘系統數訊息拿掉數字 | `T17` | RED |
+| `M10` | service 模組加模組級 dict | `T26` | RED |
+| `M11` | `System` model 加 DDL 沒有的欄位 | `T25` | RED |
+| `A3-o1` | `delete_project` 的 `project_admin` 判定移到擁有者檢查之前 | `test_project_write_guard` | RED（`test_d_delete_project_member_not_owner_404`） |
+| `A3-o2` | `delete_system` 同上 | `test_project_write_guard` | RED（`test_d_delete_system_member_not_owner_404`） |
+
+13 項全部 RED、零存活；還原後三支相關模組合跑 `Ran 62 tests` → `OK`。A3 判定本身的拿掉／放寬突變已由 brain-infra A3 節記載（M1–M4），本輪不重複。`M12`（拿掉 409 宣告並重 dump 會靜默通過）的缺口性質不變，仍為人工核對項。
+
+### 6. 計畫 §六 七項重新查驗：勾 6、留 1
+
+| # | 判準 | 判定 | 依據 |
+|---|---|---|---|
+| 1 | 全套 unittest 全綠 | 勾 | 本節 3，`Ran 1372` `OK` |
+| 2 | `validate_repo_contract.py` | 勾 | 本節 4 |
+| 3 | `validate_env_contract.py` | 勾 | 本節 4 |
+| 4 | `dump_openapi.py --check` | 勾 | 本節 4 |
+| 5 | 五個 path 存在且衝突端點含 409 | 勾 | `openapi.json` 實讀：`/api/hierarchy/projects`、`/projects/{project_id}`、`/projects/{project_id}/systems`、`/systems/{system_id}`、`/diagram-changes` 五個 path 皆在；兩個 POST 與兩個 DELETE 的 responses 皆含 `409` |
+| 6 | 突變零存活 | 勾 | 本節 5，在現行程式上重跑 |
+| 7 | 本單元變更不碰「不動的檔案」 | **未勾** | 理由同 2026-10-25 重做節：本單元沒有獨立 commit（三支新檔首見於 521 檔的批次 commit `c2e5687`），§七 指定的 `git show --stat <本單元 commit>` 無法執行。本輪旁證：本單元 7 個檔的變動全部來自 brain-infra A3／A8，manifest 的寫入路徑皆不在禁改清單內；工作樹中 `DEPLOY.md`、`LOCAL-DEV.md`、`.github/workflows/*` 的改動屬其他單元的必修項 |
+
+### 7. 偏離與觀察
+
+- `source-manifest.json` 寫的是 repo 根的 `openapi.json`，計畫 §三 第 7 列寫 `backend/openapi.json`；後者不存在。本輪以 manifest 為準，計畫文字不改。
+- 突變腳本與副本只放在 scratchpad，跑完已刪除。

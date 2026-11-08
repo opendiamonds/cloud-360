@@ -516,8 +516,19 @@
   - 以該次 `ui-regression` 結果記錄：`entry-page-live.spec.ts` 5 案、`regression.spec.ts` 13 案、`estimate-workspace.spec.ts` 2 案的結果與總執行時間（對照 15 分鐘預算）；`.stats.unexpected` 必須為 0。
   - X1／X2：以該次 CI 的綠燈為「還原後綠」的證據；「突變後紅」若無法在 CI 上安全重現，在 code-summary 如實記為未在真實 stack 驗證，不得宣稱已驗。
   - 6a 正反案（D1）在 CI 上**跑不到**（`ui-regression` 不執行 `deploy.yml`）：如實記為未驗證，交 build-and-test，第 291 行**不勾**。
-- [ ] **Step 24 — 收尾**：`unittest`（後端全套）、`validate_repo_contract.py`、`validate_env_contract.py` 綠；`code-summary.md` 追加「第 26 項處置」段（含 `date -u` 時間戳、CI run 連結與耗時、突變結果、未驗證項）；`traceability.json` 只更正不實註記；`source-manifest.json` 補新增檔。
+- [x] **Step 24 — 收尾**：`unittest`（後端全套）、`validate_repo_contract.py`、`validate_env_contract.py` 綠；`code-summary.md` 追加「第 26 項處置」段（含 `date -u` 時間戳、CI run 連結與耗時、突變結果、未驗證項）；`traceability.json` 只更正不實註記；`source-manifest.json` 補新增檔。
 - 追溯：`merge-blockers.md` #26；review-03 R-01、R-02；`[EPI1]`=A；2026-10-17 的 6a 回滾裁決。
+
+## 十一、合併前必修共用檔修正後的回歸驗證（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。逐列對照該表「單元」欄：**這些列沒有一列劃給 `entry-page-ui`**。本單元在該表的第 26 列已標**已修正**（2026-10-29T15:26:49Z，review-04 READY），第 2 列 (b) 亦已修畢，且使用者未將第 26 列列入本輪。其他單元與 `brain-infra`（第 41 列）的共用檔修正可能改動了本單元 `source-manifest.json` 所列的檔（`ws-contract.json`、`ws-contract.d.ts`、`Sidebar.tsx`、`App.tsx`、`deploy.yml`、`DEPLOY.md` 等），故**本單元預設不改程式**，本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子），亦**不得改動 `unit-test-instructions.md`、`code-generation-questions.md`**。若重驗發現本單元的程式或測試已被共用檔改動弄壞，停止並回報 conductor，不得自行擴大範圍。
+
+- [x] **Step 25 — 共用檔重驗**：以本單元最新收據（`code-generation/` 下 mtime 最新的 `reviewed-source-*.tsv`）逐檔 `shasum -a 256` 比對（以 Python `hashlib` 解析 tab 分隔欄位，不得用 `IFS` 讀以 tab 起首的列），列出變動的檔與實算的相同／變動數；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分，結論附行號。
+- [x] **Step 26 — 回歸**：後端（`test_brain_ws_deploy_probe`、`test_ws_contract`、本單元模組）在 scratchpad 副本跑（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）；`dump_ws_contract.py --check`、`dump_openapi.py --check`。前端只在 scratchpad 的實體副本（`node_modules` 以 `cp -cR` 帶入，不連網路）跑 `npm run lint`、`npm run check:types`、`npm run build` 與以 `page.route` 替身的 `entry-page.spec.ts`（`vite preview --host 127.0.0.1` ＋ `BASE_URL`）；需真實 stack 的 `entry-page-live.spec.ts`、`regression.spec.ts`、`estimate-workspace.spec.ts` 不在本機跑，據實記為交 CI `ui-regression`。repo 內不得產生 `.pyc`／`__pycache__`／`.hypothesis`／`junit.xml`／`pw-report.json`／`.tsbuildinfo` 的新寫入；不得連 staging 或共用 DB／Redis；不推送、不觸發 CI。`validate_repo_contract.py`、`validate_env_contract.py` 在 repo 以 `python3 -B` 跑。
+- [x] **Step 27 — 前輪審查的 Minor**：最新一份審查的未結項逐項以 `grep -n`／讀檔附行號確認現況；只需改紀錄者在 `code-summary.md` 補記，需改程式者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **Step 28 — 勾選重設**：對本計畫既有各格逐格重判——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者（含第 291 行）維持或改為未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **Step 29 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`source-manifest.json` 不因本輪無程式變更而改動。
+- 追溯：`merge-blockers.md` #26、#2、#41；review-04。
 
 ## Testing Contract
 

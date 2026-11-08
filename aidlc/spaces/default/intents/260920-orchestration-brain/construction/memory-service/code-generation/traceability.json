@@ -81,7 +81,9 @@
     "NFR7.33",
     "NFR7.34",
     "NFR8.10",
-    "NFR8.20"
+    "NFR8.20",
+    "MB-48",
+    "MB-33"
   ],
   "coverage": [
     {
@@ -635,6 +637,30 @@
       "status": "N/A",
       "target": "U9 memory-purge（零新部署設定）",
       "note": "本單元的 NFR8.20 與它同形。"
+    },
+    {
+      "id": "MB-48",
+      "status": "OK",
+      "target": "backend/services/memory_router.py",
+      "note": "〔2026-11-07T05:35:57Z，計畫 §十三 13a–13c〕承接 merge-blockers 第 48 列 Major（OPEN-CG5-1：get_memory_session 在非測試程式零呼叫者、記憶端點以 Depends(get_db) 用擁有者帳號存取記憶表）。memory_router.py:148-176 新增 get_memory_db：memory_db_boundary_enabled() 為真 → database.get_memory_session()（請求後 close）；未設定且 APP_ENV 屬 database.LOCAL_APP_ENVS → 退回主連線並每程序記一次 WARNING；其他環境 → MemoryStorageUnavailable → 503，detail 固定（memory_errors.py:136），ERROR 日誌只帶事件名與 app_env。五個端點（:271／:315／:352／:392／:428）改用它，responses 補 503（openapi.json、api.d.ts 重產）。測試 backend/tests/test_memory_db_session.py（5），突變 M1／M1b／M2 皆紅、還原綠。OPEN-CG5-1 的關閉條件中『執行期改用記憶專用連線』對 HTTP 路徑成立；同進程呼叫端 brain_gateway.py:1705（prefetch search）、:1746（episodic write）與 work_orchestrator.py:1081（procedure write）仍以主連線建立 MemoryFacade，屬他單元，見 open_items 的 OPEN-MS-48-CALLERS。真實 PostgreSQL 上以 cloud360_memory 走記憶端點未驗（本機不啟資料庫）。"
+    },
+    {
+      "id": "MB-33",
+      "status": "OK",
+      "target": "backend/services/memory_service.py",
+      "note": "〔2026-11-07T05:35:57Z，計畫 §十三 13d–13g〕(c) 讀取過濾保存期：SEARCH_SQL:97 與 S15（verify_memory_schema.sql:487）加 expires_at IS NULL OR expires_at > now()，list_records 與空結果計數經 _not_expired（:275），widen_scope 以 is_expired（:287）把過期列視為不存在（memory_facade.py:470-474），刪除刻意不過濾；(d) log_denied 只記 parse_memory_id 解析成功的整數鍵，否則記 <unparseable>（:695、:701-718）；(f) facade 的 except MemoryNotFound 重拋分支（memory_facade.py:437-445）補測試。測試 backend/tests/test_memory_row33_remaining.py（9）、C6 擴充（test_memory_contract.py:576-582、:636）、tests_pg V2（未跑，待 CI）；突變 M3–M7 皆紅、還原綠。(a)(b)(e)(g) 由 brain-infra 修畢（本輪 grep 查證）。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-MS-48-CALLERS",
+      "severity": "handoff",
+      "text": "〔2026-11-07T05:35:57Z〕記憶專用連線目前只涵蓋 memory_router 的五個 HTTP 端點。三個同進程呼叫端仍以主連線（擁有者帳號）建立 MemoryFacade：brain_gateway.py:1705（_prefetch 的 search）、:1746（_write_episodic 的 write）——兩者經 self.session_factory（_default_session_factory，:641-644 回 SessionLocal()）；work_orchestrator.py:1081（_write_procedure_memory 的 write）經 _facade_sync（:1096-1101，SessionLocal），且同一 session 還用來讀 users（:1104），故不能單純換成記憶 session。改動屬 brain-gateway、work-orchestrator 兩單元，本單元依計畫 13b 不改並回報 conductor。"
+    },
+    {
+      "id": "OPEN-MS-PG-UNVERIFIED",
+      "severity": "unverified",
+      "text": "〔2026-11-07T05:35:57Z〕本輪改動 SEARCH_SQL 與 S15（各加一條保存期過濾）並新增 tests_pg 的 V2；本機不啟資料庫，verify_memory_schema.sql（S1、S3–S15）與 tests_pg 皆未在現行位元組上執行，待 CI 的 memory-schema 與 concurrency job。另 ci.yml:648 的步驟名稱只列 memory V1/D1-D2，未含 V2（ci.yml 為共用檔，未改）。"
     }
   ]
 }

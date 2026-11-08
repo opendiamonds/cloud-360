@@ -93,6 +93,17 @@
 
 - [x] **Step 15 — 回歸驗證**：以 `npm run build` ＋ `vite preview` 生產建置跑 `tests/e2e/object-picker.spec.ts`（應為 32 案）與 `tests/e2e/a11y.spec.ts` 全綠；`npm run lint` 0 errors；`python3 scripts/validate_repo_contract.py` 通過。結果記入 `code-summary-corrections.md` 新增一節；`source-manifest.json`、`traceability.json` 無變更則不動。任一失敗即停下回報，不在本單元修他單元的檔。
 
+## 九、合併前必修共用檔修正後的回歸驗證（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。逐列對照該表「單元」欄：**沒有任何一列劃給 `object-picker-ui`**。本輪其他單元（`brain-infra` A10、`memory-page-ui`、`a11y-gate`、`entry-page-ui` 等）改動了本單元會碰到的共用檔（`Sidebar.tsx`、`ContextBar.tsx`、`a11y.spec.ts`、`ws-contract.*`、`api.d.ts` 等），故**本單元預設不改程式**，本節只做回歸與紀錄；偏離與理由只寫進本單元紀錄（`code-summary-corrections.md` 或 `code-summary.md`，沿用前輪落點），**不得改動本計畫的內文**（只勾選格子），亦**不得改動 `unit-test-instructions.md`、`code-generation-questions.md`**。若重驗發現本單元的程式或測試已被共用檔改動弄壞，停止並回報 conductor，不得自行擴大範圍。
+
+- [x] **Step 16 — 共用檔重驗**：以本單元最新收據（`code-generation/` 下 mtime 最新的 `reviewed-source-*.tsv`）逐檔比對（以 Python `hashlib` 解析 tab 分隔欄位，不得用 `IFS` 讀以 tab 起首的列；抽 2 檔以 `shasum -a 256` 手動複核），列出變動的檔與實算的相同／變動數；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分，結論附行號。
+- [x] **Step 17 — 回歸**：只在 scratchpad 實體副本（`node_modules` 以 `cp -cR` 帶入，不連網路、不 `npm install`）跑 `npm run lint`、`npm run check:types`、`npm run check:ws-types`、`npm run build`，並以 `vite preview --host 127.0.0.1` ＋ `BASE_URL` 跑 `tests/e2e/object-picker.spec.ts`、`tests/e2e/a11y.spec.ts`、`tests/e2e/entry-page.spec.ts`（`page.route` 替身）；跑完關閉 preview。需真實 stack 的 `entry-page-live.spec.ts` 不在本機跑，據實記為交 CI `ui-regression`。`validate_repo_contract.py`、`validate_env_contract.py` 在 repo 以 `python3 -B` 跑。repo 內不得新寫入 `junit.xml`／`pw-report.json`／`.tsbuildinfo`／`.pyc`／`.hypothesis`；不推送、不觸發 CI；不得連 staging 或共用 DB／Redis。
+- [x] **Step 18 — 前輪審查的 Minor**：最新一份審查的未結項逐項以 `grep -n`／讀檔附行號確認現況；只需改紀錄者補記，需改程式者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **Step 19 — 勾選重判**：引擎在本節加入後重新綁定核可時可能把全部格子重設為未勾；對本計畫既有各格（含 Step 10、Step 12）逐格重判——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在紀錄寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進紀錄。
+- [x] **Step 20 — 收尾**：紀錄以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`source-manifest.json` 不因本輪無程式變更而改動。
+- 追溯：`merge-blockers.md` #41、#56、#63；前輪審查。
+
 ## Testing Contract
 
 ```json

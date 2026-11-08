@@ -112,7 +112,7 @@
       在既有的「套用兩次 `schema_rbac.sql`」之後加一個步驟執行本單元的斷言檔。
       **刻意不改 job 的 `id` 與 `name:`**，理由見 §四之二（check name 風險）。
 
-- [ ] **Step 7 — 突變驗證**：逐條把 DDL 改錯、確認對應斷言紅燈、還原複驗。
+- [x] **Step 7 — 突變驗證**：逐條把 DDL 改錯、確認對應斷言紅燈、還原複驗。
       每一項突變都要先確認 **DDL 真的改變了**（`U5` 的 `M1` 踩過「突變本身是 no-op」）。
 
 - [x] **Step 8 — 文件與追溯**：`code-summary.md`、`source-manifest.json`、
@@ -234,3 +234,34 @@ Step 6 擴充既有的 `memory-schema` job（它已有 `pgvector/pgvector:pg18` 
 另記兩個自本計畫核可後已改變的事實（不改步驟）：§四之三 的 `ix_project_members_user_id` 已由 `U23` 建立；其條件 ②「使用者硬刪除行為是 `OQ-H1`、上游未決」已由 `hierarchy-data` 本輪的必修第 3 項裁決作成（空預設專案隨使用者清除、其餘參照回 409），`schema_rbac.sql` 的對應 COMMENT 已更新。
 
 因此本計畫**不新增步驟**，本輪只重新查驗八個步驟並跑測試。需要真實 PostgreSQL 的斷言（`verify_meta_schema.sql`），本機若無可用的 Docker 或 PostgreSQL，以 CI 的 `memory-schema` job 判定或據實記為本輪未驗。
+
+## 八、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。比對本單元最新審查收據（`reviewed-source-*.tsv`）與現況，對不上的清單內檔案為：`DEPLOY.md`。這是合併前必修第 22–26 項在其他單元所做的修正。**本節不改任何程式、SQL 或共用檔**（`verify_meta_schema.sql`、`run_meta_schema_migration.py`、`ci.yml`、`DEPLOY.md`、`schema_rbac.sql` 可能在其他單元的審查收據內，改動會讓它們再次失效）。突變只在暫存副本與一次性資料庫上做。
+
+- [x] **重新驗證**：以收據比對與 `git diff` 逐 hunk 確認 `DEPLOY.md` 的變動來源，判定是否觸及本單元的 2.2.9（U18）段落；其餘清單內檔案與收據逐位元相同（`shasum -a 256`）。可用 `git show 624c170:DEPLOY.md` 為基底逐段回退比對雜湊（前面單元已證得：#24 為現行 730–738 行、#26 為 2229、2239 行）——**注意 #24 那段正落在 2.2.9 內，須逐字判定它改的是 U18 還是 U20 的敘述，以及是否改變本單元段落的事實**。
+- [x] **真實 PostgreSQL 依據**：以 `gh run view` **只讀**查同一 head SHA `c6a40f9` 的 CI push run `40423375585` 的 `memory-schema` job 中「Verify meta schema assertions」步驟結論；以 `git log c6a40f9..HEAD` 確認 `schema_rbac.sql`、`verify_meta_schema.sql`、`run_meta_schema_migration.py` 之後未變，寫入 `code-summary.md`。**不得觸發任何 workflow。**
+- [x] **R-06（Major，前輪未處理）— 補做 `P13`–`P16` 的突變**：在 scratchpad 以 `initdb` 起一個**只綁 127.0.0.1、隨機埠**的一次性 PostgreSQL 叢集（需 `vector` 擴充時以本機可用者為準；做不到就據實記為未驗並停手回報），對**副本**的 `schema_rbac.sql` 做至少三項突變：(a) 拿掉 `ck_reselection_events_cause`；(b) 移除 `reselection_events.cause` 欄；(c) 把 `updated_on_behalf_of` 改回 integer 並加外鍵。每項先確認 DDL 真的改了、套用後跑副本的 `verify_meta_schema.sql`，記下哪條 P 斷言紅燈與訊息，還原後複驗全綠。結束後停止並刪除叢集與資料目錄，確認 `lsof` 無殘留監聽。結果寫入 `code-summary.md` 突變表，並據以勾 Step 7（若 (a)–(c) 中任一項未致紅，不勾 Step 7，寫明哪條斷言抓不到）。
+- [x] **R-01、R-02、R-07 — 記為已知限制**：`code-summary.md` 如實記載：`system_requirement_fields` 無恰好欄數斷言（R-01）；`EXPECTED_FK_DELETE_ACTIONS` 只檢查 8 條外鍵中的 3 條（R-02，逐條列出另 5 條）；`verify_meta_schema.sql:99` 註解、`ci.yml` 的條數與歸屬殘留（R-07，以 `grep -n` 實查行號）。三項都要改共用的 SQL／腳本／workflow，本輪不改，承接由 conductor 併入 `merge-blockers.md` 既有的文件同步列（若已有對應列則引用，不重複登錄）。
+- [x] **勾選重設**：若重開使本計畫既有勾選被重設，逐步依現況核對後勾回；在 `code-summary.md` 記錄勾回數與未勾數（`grep -c` 實算）及未勾理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`traceability.json` 以 `python3 -I` 的 `json.load` 驗證；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：`merge-blockers.md` #22–#26；review-03 R-01、R-02、R-06、R-07、R-08。
+
+## 九、合併前必修（2026-11-01 Request Changes）第 30 列落地後的回歸驗證
+
+**來源**：使用者的 Request Changes 指名第 30 列（本單元 review-03 R-01、R-02、R-07 與 review-04 新發現 1）。依共用檔集中修正的安排，該列已由 `brain-infra` 的 A5 完成（`brain-infra/code-generation/code-summary.md:481-488`）：(a) `verify_meta_schema.sql` 新增 `P17`（`system_requirement_fields` 恰為 9 欄）；(b) `run_meta_schema_migration.py` 的 `EXPECTED_FK_DELETE_ACTIONS` 擴為 `J)` 區塊全部 7 條並以欄名為鍵；(c) `verify_meta_schema.sql`、`ci.yml`、`DEPLOY.md` 的條數與歸屬殘留更正；並新增 `test_meta_schema_expectations.py`（2 個）。本節**不改應用程式與共用檔**，只驗證那次修正符合本單元的規則與 §三 的 DDL 形狀，並把本單元自己的紀錄更新為現況。
+
+- [x] **hunk 歸屬**：以本單元最新的 `reviewed-source-*.tsv` 為基準，對 `source-manifest.json` 所列各檔逐 hunk 判定來源（brain-infra A5／其他列／本單元），未變動者以 `shasum -a 256` 證明逐位元相同。
+- [x] **第 30 列 (a)(b)(c) 的完整性**：(a) `P17` 的 N 與 §三.3 的欄位清單、`J)` 區塊實際欄數三者一致；(b) `EXPECTED_FK_DELETE_ACTIONS` 的 7 條與 §三 各表外鍵（含 `ON DELETE` 行為）逐條相符，`(project_members, users)` 兩條以欄名區分；(c) 以 `grep -n` 實查 `verify_meta_schema.sql`、`ci.yml`、`DEPLOY.md` 不再殘留「8 欄」「12 條」「P13–P16 由 U20 加入」「本節的 P1–P12」等舊條數與錯誤歸屬。
+- [x] **真實 PostgreSQL 驗證**：若本機可用 `initdb`／`pg_ctl`（或 Docker），在 scratchpad 起一個**只綁 `127.0.0.1`、隨機埠**的一次性叢集（需 `vector` 擴充時以本機可用者為準），套用 `schema_rbac.sql` 兩次，跑 `verify_meta_schema.sql`（含 `P17`）與 `run_meta_schema_migration.py` 的外鍵核對；再做兩項突變：拿掉 `system_requirement_fields` 一欄（`P17` 應紅）、把一條外鍵的 `ON DELETE` 改掉（外鍵核對應紅），還原後複驗全綠。結束後停止並刪除叢集與資料目錄，以 `lsof` 確認無殘留監聽。做不到時據實記為「本輪未驗、只在 CI」，**不得觸發任何 workflow**，只可用 `gh` 唯讀查詢。
+- [x] **回歸**：在 scratchpad 副本（`backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`）跑 `test_meta_schema_expectations` 與後端全套；跑 `validate_repo_contract.py`、`validate_env_contract.py`；確認 repo 內 `.pyc`／`.hypothesis` 前後不變。
+- [x] **本單元紀錄更新**：`code-summary.md` 與 `traceability.json` 的 `OPEN-CG18-12`／`-13`／`-14`（及 R-01、R-02、R-07 的已知限制記載），依上兩步的結果更新為「已由 brain-infra A5 修正」並附行號與驗證強度（實跑／只在 CI）；只有真實 PostgreSQL 實跑通過者才可標為關閉，否則保留開啟並寫明待 CI 首跑。
+- [x] **收尾**：逐項重核 §二 實作步驟與 §八 勾選（被重設者依現況勾回，核對不過者留空並寫理由）；在 `code-summary.md` 檔尾附加「## 2026-11-01 回歸（第 30 列落地後）」一節，含勾選數（`grep -c` 實算）與 `date -u` 時間戳。
+- 追溯：`merge-blockers.md` #30；`brain-infra` A5；review-03 R-01、R-02、R-07；review-04 新發現 1。
+
+## 十、第 30 列 (c) 殘留補修（2026-11-07 使用者裁決：在本單元補修）
+
+**來源**：§九 回歸查出 `backend/scripts/verify_meta_schema.sql:340` 的通過訊息仍為「結構類斷言（P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16）全部通過」，漏列同一 DO 區塊內的 `P17`（`:279-290`）。只影響 CI log 文字、不影響閘門判定，但會讓 log 看起來像 `P17` 沒跑。使用者裁決在本單元補修（不帶到下一站）。這是對 `brain-infra` 共用檔的**單行文字**修改，不動任何斷言邏輯。
+
+- [x] **補修與鎖定**：(1) 把 `:340` 的清單補上 `P17`；(2) 在 `backend/tests/test_meta_schema_expectations.py` 新增一則案例：解析該結構類 DO 區塊內所有 `RAISE EXCEPTION 'P<n> FAILED` 的編號集合，斷言等於同一區塊通過訊息列出的編號集合（附 §4.4 規格註解）；(3) 突變驗證：把 `P17` 從訊息拿掉 → 新案例紅，還原 → 綠，結果寫進 `code-summary.md`；(4) 在 scratchpad 副本跑 `test_meta_schema_expectations` 與後端全套、兩支 contract 驗證，確認 repo 內 `.pyc`／`.hypothesis` 前後不變；(5) 補修後勾回 §九 第 2 格（(c) 完整性），把 `OPEN-CG18-14` 標為關閉並附行號；`code-summary.md` 檔尾附加「## 2026-11-07 第 30 列 (c) 殘留補修」一節（`date -u` 時間戳、`grep -c` 勾選數）。
+- 追溯：`merge-blockers.md` #30 (c)；§九 第 2 格；`OPEN-CG18-14`。

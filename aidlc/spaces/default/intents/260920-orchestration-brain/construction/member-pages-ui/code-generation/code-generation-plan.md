@@ -165,7 +165,7 @@
 - [x] **Step 17 — 兩個對話框的鍵盤行為**：邀請對話框與移出確認框加上焦點圈限（Tab／Shift+Tab 不離開對話框）、Escape 關閉、關閉後焦點回到觸發按鈕；形狀沿用 repo 內既有支援 Escape 的對話框，不新增依賴。
 - [x] **Step 18 — 測試**（`tests/e2e/member-pages.spec.ts`，`test-after`）：(a) 非數字 `projectId` → 顯示固定句、不顯示「載入中…」、有一筆失敗訊號；(b) 兩個對話框各斷言 Escape 關閉、Tab 不離開對話框、關閉後焦點回原按鈕。新案例附 `@purpose`／`@given`／`@step`／`@pass`／`@story`／`@ui` 規格註解。
 - [x] **Step 19 — 突變驗證**（只在暫存區副本做）：拿掉 Step 16 的處理 → (a) 紅；拿掉 Step 17 的焦點圈限／Escape／焦點回復 → (b) 對應斷言紅。結果記入 `code-summary.md`。
-- [x] **Step 20 — 回歸與收尾**：`npm run lint`（0 errors）、`npx tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠（對話框改動後重跑無障礙掃描點 11、12、15）；新檔加入 `source-manifest.json`，`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 23 項處置段。
+- [ ] **Step 20 — 回歸與收尾**：`npm run lint`（0 errors）、`npx tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠（對話框改動後重跑無障礙掃描點 11、12、15）；新檔加入 `source-manifest.json`，`traceability.json` 只更正變為不實的註記；`code-summary.md` 追加第 23 項處置段。
 - 追溯：`merge-blockers.md` #23；`SEC-U24-6`、`AC-A11Y.1`、`US12.1`、`US12.6`。
 
 ## 五之三、第 23 項補修：成員詳情頁（2026-10-26T14:59:26Z 使用者裁決：再開一次本單元，現在補修）
@@ -175,8 +175,18 @@
 - [x] **Step 21 — 詳情頁非數字 `projectId`**：`MemberDetailPage.tsx` 比照 Step 16 的形狀（導出值、不在 effect 內同步 setState），在 `projectId` 不是有限數字時顯示與 404 相同的固定句、經 `emitFailureSignal()` 發一筆訊號、不顯示「載入中…」。
 - [x] **Step 22 — 測試**（`member-pages.spec.ts`）：(a) `/projects/abc/members/1` → 固定句、無「載入中…」、一筆訊號；(b) 邀請送出中（以 route 延遲請求）按 Escape 對話框仍在，請求完成後才關閉並把焦點還給「邀請成員」鈕；(c) 移出確認的 409 或 403 路徑關閉後焦點回到「移出專案」鈕。附規格註解。
 - [x] **Step 23 — 突變驗證**（只在暫存區副本做）：拿掉 Step 21 → (a) 紅；把送出中的 Escape 停用條件改錯 → (b) 紅；拿掉錯誤路徑的焦點回復 → (c) 紅。結果記入 `code-summary.md`。
-- [x] **Step 24 — 回歸與收尾**：lint 0 errors、`tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠；`code-summary.md` 追加補修段，並列出本節與 §五之二 新增的全部 e2e 案例名稱，供 `tcms-test-cases` 同步（案名合併後不得再改）。
+- [ ] **Step 24 — 回歸與收尾**：lint 0 errors、`tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠；`code-summary.md` 追加補修段，並列出本節與 §五之二 新增的全部 e2e 案例名稱，供 `tcms-test-cases` 同步（案名合併後不得再改）。
 - 追溯：`merge-blockers.md` #23；review-05 R-11；`SEC-U24-6`、`US12.2`。
+
+## 五之四、合併前必修共用檔修正後的回歸驗證（2026-11-07）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。逐列對照該表「單元」欄：**這些列沒有一列劃給 `member-pages-ui`**。本單元在該表的兩列（第 9、23 列）皆已標**已修正**（第 23 列 2026-10-26T15:21:54Z，review-06 READY），且使用者未將其列入本輪。共用檔修正集中於 `brain-infra`（第 41 列）及各單元本輪修正，`Layout.tsx`、`App.tsx`、`Sidebar.tsx`、`a11y.spec.ts` 等前端共用檔可能已被他單元改動，故**本單元預設不改程式**，本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。若重驗發現本單元的程式或測試已被共用檔改動弄壞，停止並回報 conductor，不得自行擴大範圍。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-d8502568960c.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分（`failureSignal.ts`、`LiveRegion.tsx`、`membershipApi.ts`、`ReselectionBanner.tsx` 與其在 `Layout.tsx` 的掛載、`MembersListPage.tsx`、`InviteMemberDialog.tsx`、`MemberDetailPage.tsx`、`App.tsx` 兩條成員路由、`member-pages.spec.ts`，以及 `U19` 成員端點的回應形狀），結論附行號。
+- [x] **回歸**：`npm run lint`（0 errors）、`npx tsc -b`、`npm run build`、`npx playwright test tests/e2e/member-pages.spec.ts --list`（記下收集案數）。本機能起 `deploy/docker-compose.test.yml` 時實跑 `member-pages.spec.ts` 與 `a11y.spec.ts` 掃描點 11、12、15；不能時據實記為未驗（由 CI 的 `ui-regression` 承擔），不得宣稱通過。若需跑後端測試，只在 scratchpad 實體副本跑（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad），repo 內不得產生 `.pyc`／`.hypothesis`。
+- [x] **前輪審查的 Minor**：`reviews/review-06.md` 的 R-08、R-09、R-13、R-14 及「移出送出中 Escape 無案例」逐項以 `grep -n`／讀檔附行號確認現況。只需改紀錄者在 `code-summary.md` 就地補記；需改程式者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **勾選重設**：對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者（含既有未勾的 Step 9、Step 10）維持未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` 以 Edit append 本輪一節（以 `date -u` 取時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
 
 ## 六、核可關卡
 

@@ -185,7 +185,7 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 - [x] **單專案判定函式** `admin_count_after(project_id, 假設的變更) >= 1`——`BR2.1` 的唯一謂詞。
 - [ ] **聚合版** `assert_can_deactivate`：一次 `GROUP BY project_id HAVING count(*) = 1`，找出該使用者獨任管理者的全部專案（`[N3]`=C）。**不取鎖**（`NFR12.3`：它是跨專案唯讀掃描，取鎖會讓一次停用鎖住該使用者的全部專案）。
 - [x] **取鎖輔助函式**：`SELECT ... FOR UPDATE` 鎖父 `projects` 列；多專案時**一律按 `projects.id` 遞增**逐一取鎖（`security-design.md §一之二`）。**不得用 `WHERE id IN (...) FOR UPDATE`**——它的取鎖順序由執行計畫決定、不保證。
-- [x] **不改 `backend/database.py`**（`NFR12.5`；判準是該檔 diff 為空）。
+- [ ] **不改 `backend/database.py`**（`NFR12.5`；判準是該檔 diff 為空）。
 - 追溯：`NFR12.1`–`NFR12.3`、`NFR12.8`、`NFR12.10`、`NFR12.11`、`NFR12.13`、`BR2.1`、`BR2.3`。
 
 ### Step 6 — 資料存取層：測試（實作後）
@@ -338,4 +338,27 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 7. `backend/scripts/dump_openapi.py --check` 綠燈，且 `openapi.json` 含 `409` 在停用端點上；
 8. 前端型別產生器無漂移；
 9. `source-manifest.json` 涵蓋每一個變更路徑（未宣告的變更路徑會擋下 stage 完成）。
+
+## 八、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+本單元審查收據失效的唯一原因是 `DEPLOY.md` 在收據之後被其他單元改過。本節**不改任何程式碼與共用檔**，只重新驗證、處置前輪審查（review-04）的未結發現並補審。
+
+- [x] **重新驗證 `DEPLOY.md`**：以收據的 sha256 比對現行檔；不同時以 `git show 624c170:DEPLOY.md` 為基底對現行檔逐 hunk 回退比對雜湊，找出收據之後多出的 hunk（前面單元已證得：#24 為現行 730–738 行、位於 §2.2.9；#26 為 2229、2239 行、位於 §5.13）。逐一判定這些 hunk 是否落在本單元的 §2.2.10 或其他本單元負責的段落、是否改變本單元段落的事實。清單內其餘檔案與收據逐位元相同（`shasum -a 256`）。
+- [x] **回歸**：在 scratchpad 的 rsync 副本以 `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints` 實跑（`HYPOTHESIS_STORAGE_DIRECTORY` 設在副本內），以實跑輸出記測試數；`tests_pg` 本輪不跑（不啟資料庫），據實記為沿用前輪紀錄。
+- [x] **review-04 R-06（Major）**：已由使用者於 2026-10-25 裁決「獨自一人的專案不擋」並登錄為合併前必修第 21 列（待處置）。本輪不改程式，在 `code-summary.md` 記明此項由第 21 列承接、須做事項 (a)–(e) 見該列。
+- [x] **review-04 R-10（Minor，本檔可修）**：在 `code-summary.md` 以本輪實跑輸出更正測試數，並列出未重跑突變驗證的計畫格與其最近一次紀錄的位置。
+- [x] **review-04 R-01、R-03、R-04、R-05、R-07、R-08、R-09（Minor）— 記為已知限制**：七項都需改程式或共用檔（`membership_service.py`、`membership_backfill.py`、`membership_facade.py`、`schema_rbac.sql`、`DEPLOY.md`、`AdminPage.tsx`），本輪不改；在 `code-summary.md` 逐項如實記載現況（以 `grep -n` 實查行號，確認是否仍成立）與承接方向，承接由 conductor 併入 `merge-blockers.md`（若已有對應列則引用，不重複登錄）。
+- [x] **勾選重設**：重開使本計畫既有勾選被重設時，逐步依現況核對後勾回；在 `code-summary.md` 記錄勾回數與未勾數（`grep -c` 實算）及未勾理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`traceability.json` 以 `python3 -I` 的 `json.load` 驗證；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+
+## 九、合併前必修（2026-11-01 Request Changes）第 21、31 列：本單元剩餘項與回歸
+
+**來源**：使用者的 Request Changes 指名第 21、31 列。依共用檔集中修正的安排，第 21 列（獨人專案不擋停用）與第 31 列中落在共用檔的部分已由 `brain-infra` 完成（`brain-infra/code-generation/code-summary.md:433`、`:479`、`:553`；`DEPLOY.md:1018-1020` 已改為「不要預設是孤兒擁有者」；`membership_backfill.py:155` 的錯誤訊息已註明外鍵使孤兒不可能）。`brain-infra` 交接給本單元的**唯一**非共用檔項目為第 31 列 (b)：`backend/services/membership_backfill.py:28-29` 檔頭 docstring 仍以「某專案的 `owner_user_id` 指向不存在的使用者」作為持續性失敗的例子，而 `projects.owner_user_id` 有外鍵，此例在資料庫層不可能成立。第 31 列 (d)（`AdminPage.tsx:172`）屬前端 admin 頁單元，不在本節。
+
+- [x] **31 (b) docstring 更正**：把 `membership_backfill.py:28-29` 的例子改為實際可能的持續性失敗原因，與 `:155` 的執行期訊息及 `DEPLOY.md:1018-1020` 一致（依終檢訊息的剩餘數與實際 INSERT 例外判斷，不預設孤兒擁有者）。只改 docstring，零行為變更。
+- [x] **鎖住一致性的測試**：新增一則測試（`backend/tests/test_membership_data.py` 或新檔，附 §4.4 規格註解 `@purpose`／`@given`／`@step`／`@pass`／`@story`），斷言 `membership_backfill` 模組 docstring 不再以「指向不存在的使用者」或「孤兒」作為失敗原因（除非同句否定之，如「不會是孤兒擁有者」）。突變驗證：在 scratchpad 副本還原舊句 → 紅；還原 → 綠。若判定此測試只是字串比對、價值低於維護成本，改為在 `code-summary.md` 寫明理由並不新增（二擇一，須寫出判斷）。
+- [x] **第 21、31 列其餘項的歸屬查證**：以 `grep -n` 實查第 21 列 (a)–(e) 與第 31 列 (a)(c)(e)(f)(g) 的現況與落點（檔:行），逐項記為「已由 brain-infra 修正」「仍為已知限制（附承接列）」或「屬本單元而未修」——最後一類若出現，**停手回報 conductor**，不自行擴大範圍。
+- [x] **回歸**：在 scratchpad 的 rsync 副本以 `backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本外的 scratchpad 目錄，跑 `tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints` 與後端全套；在 repo 跑 `validate_repo_contract.py`、`validate_env_contract.py`（`-B`）；確認 repo 內 `.pyc`／`.hypothesis`／`__pycache__` 數量前後不變。`tests_pg` 不跑（不啟資料庫），據實記為沿用前輪紀錄。
+- [x] **勾選重設與紀錄**：本計畫被重設的勾選，逐格依現況核對後勾回（核對不過者留空並寫理由）；`traceability.json` 更新第 31 列 (b) 對應的開放項（`python3 -I` 驗 JSON）；`code-summary.md` 檔尾附加「## 2026-11-07 第 21、31 列剩餘項與回歸」一節，含改動檔:行、測試數（實跑輸出）、突變結果、勾選數（`grep -c` 實算）與 `date -u` 時間戳。
+- 追溯：`merge-blockers.md` #21、#31 (b)；`brain-infra` 交接；review-04 R-03、review-05 新發現 1。
 

@@ -653,3 +653,70 @@ TCMS 案例名為 `U24 member pages › <test>`：
 - `review-05` 的 `R-08`（分頁列 `aria-live` 與 44px）、`R-09`／`R-14`（邀請後跳頁的閉包長度與無斷言）、`R-13`（訊號種類標錯）不在 §五之三 範圍，未改。
 - (c) 只斷言 409 一條錯誤路徑；403 與「其他錯誤」兩條同樣經 `closeConfirm()`，未各自斷言。
 - `merge-blockers.md`、`unit-test-instructions.md`、問題檔依指示未動。
+
+## 合併前必修共用檔修正後的回歸驗證（2026-11-07，計畫 §五之四）
+
+<!-- 寫入時間：2026-11-07T15:34:25Z（`date -u`） -->
+
+本輪依計畫 §五之四 只做回歸與紀錄，**未改任何程式或測試檔**，計畫只勾選格子（以 `sed 's/- \[x\]/- [ ]/'` 還原後與本輪開始前的備份 `diff` 為空，證明內文未動）。
+
+### 一、共用檔重驗（收據 `reviewed-source-d8502568960c.tsv`，11 檔逐檔 `shasum -a 256`）
+
+| 結果 | 檔案 |
+|---|---|
+| 逐位元相同（10） | `App.tsx`、`Layout.tsx`、`LiveRegion.tsx`、`InviteMemberDialog.tsx`、`ReselectionBanner.tsx`、`useDialogKeyboard.ts`、`failureSignal.ts`、`membershipApi.ts`、`MembersListPage.tsx`、`member-pages.spec.ts` |
+| **變動（1）** | `frontend/src/pages/MemberDetailPage.tsx`（收據值 `0e513bb2…`＝`HEAD` 版本；變動為工作區未提交改動） |
+
+`MemberDetailPage.tsx` 的改動（`git diff`，5 增 2 刪，標註為合併前必修第 40 列 (i)）：`:284-286` 角色區塊標題 `<h2>` 加 `id="member-detail-role-heading"`；`:291-292` 角色下拉由 `aria-label="專案角色"` 改為 `aria-labelledby="member-detail-role-heading"`。**判定：不影響本單元**——可存取名稱仍為「專案角色」；`member-pages.spec.ts` 對下拉一律以 `getByTestId('member-detail-role-select')` 定位（:261、:426、:428、:430、:771、:875），無任何以標籤文字定位之處；`data-testid`、`value`／`onChange`／`disabled` 與 `canManage` 閘皆未動。Step 21 的 `invalidProjectId`（:56、:105、:128、:134-140）、移出確認框的 `escapeDisabled: removing`（:98）、`member-detail-error`（:260）皆在原位未動。
+
+收據外、本單元依賴的共用檔（工作區未提交改動）：
+
+| 檔案 | 改動 | 判定 |
+|---|---|---|
+| `frontend/src/components/Sidebar.tsx:247-248` | 「我的記憶」`<nav>` 補 `aria-label`（第 35 列 (c)） | 不涉本單元（本單元未改 `Sidebar.tsx`，見 F-1） |
+| `frontend/src/components/brain/ContextBar.tsx:109-111` | 連線骨架 `role="img"` → `role="status"`（第 40 列 (i)） | 不涉本單元 |
+| `frontend/src/types/api.d.ts` | 只動記憶端點（503 回應與 `content` 上限說明） | 成員端點型別零變動 |
+| `frontend/tests/e2e/a11y.spec.ts` | 新增第 26 掃描點 `memberDetailInvalidProject`（:732-743，ready 依賴 `member-detail-error`＋「查不到這個專案」，absent 含 `member-detail-role-select`）與對應 test（:1292）；掃描點 11、12、15 只加 `@note` 註解（:1069、:1083、:1125），`SCANS` 定義未動；過期基準檢查改為 25 檔 | 第 26 點依賴的 testid 與固定句皆存在於 `MemberDetailPage.tsx:260`、`:139`，相容；未實跑 |
+| `backend/services/membership_facade.py` | 第 31 列 (e)：升任 `project_admin` 前呼叫 `assert_can_be_promoted_to_admin`（:386-394）；第 31 列 (f)：`_authorize_global` 對待核准帳號一律拒絕（:118）、`list_my_pending_reselections`／`acknowledge_reselection` 加全域 `K3.view` 判定（:629、:639）；第 25 列新增 `project_admin_check` | **回應形狀未變**（`membership_router.py` 與 `openapi.json` 相對 `HEAD` 無 diff）。行為面新增一條 `PATCH /projects/{id}/members/{uid}` → **422**（`MissingGlobalPermission`，升任不合格者）。前端 `changeMemberRole`（`membershipApi.ts:284-296`）落入通用分支：發 `write-forbidden` 訊號並以伺服器 `detail` 字串顯示錯誤——可用但訊號種類不符（與 R-13 同形），且無 e2e 斷言，記為已知限制 |
+| `backend/services/membership_service.py` | 第 31 列 (a)：`admin_count_after` 只數合格管理者；第 21 列：獨人專案不擋停用；新增 `can_administer_project`、`assert_can_be_promoted_to_admin` | 409 `LastAdminGuardReport` 形狀未變；前端只依狀態碼與本體分流，不受影響 |
+| `backend/services/membership_backfill.py` | 只改 docstring | 不涉 |
+
+**限制**：收據時間（2026-10-26 23:14 +0800）之後的提交 `7a50a40`（2026-10-27 07:58 +0800）同時含本單元前輪工作與他單元改動；收據內 10 檔與 `HEAD` 相同，故該提交對收據內檔案無收據後改動。收據外檔案（`Sidebar.tsx`、`a11y.spec.ts`、後端成員模組）在該提交內的部分無法以時間區分落在收據前或後，本節只判定**工作區相對 `HEAD`** 的改動。
+
+### 二、回歸（本機實跑）
+
+- `npm run lint`：**0 errors**、2 warnings（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344`，既有 `exhaustive-deps`），exit 0。
+- `npx tsc -b`：exit 0。
+- `npm run build`：exit 0（既存 chunk > 500 kB 提示）。`frontend/dist` 未納入版控（`git ls-files frontend/dist` 為空）；建置前後 `git status --porcelain` 逐行 `diff` 為空，無非預期變動。
+- `npx playwright test tests/e2e/member-pages.spec.ts --list`：**`Total: 20 tests in 1 file`**。
+- `a11y.spec.ts` 掃描點 11、12、15 以 `-g` 收集：3 案（:1071、:1085、:1127）可收集。
+- **e2e 未實跑**：`docker info` 失敗（本機無 Docker daemon），`deploy/docker-compose.test.yml` 起不來；`member-pages.spec.ts` 與 `a11y.spec.ts` 掃描點 11、12、15 據實記為**未驗**，由 CI 的 `ui-regression` 承擔。本輪**不宣稱**通過。後端測試未跑（本單元無後端程式）。
+
+### 三、`review-06` 的 Minor 現況（`grep -n`／讀檔）
+
+| 項 | 現況 | 處置 |
+|---|---|---|
+| R-08 | `MembersListPage.tsx:312` 的 `member-list-page-info` 仍為一般 `<span>`，無 `aria-live`／`role="status"`；`:308`、`:320` 分頁按鈕仍為 `px-3 py-1`，無 `min-w-11 min-h-11` | 需改程式 → **已知限制**，請 conductor 併入 `merge-blockers.md` |
+| R-09 | `MembersListPage.tsx:170` 仍為 `setRequestedPage(Math.ceil((members.length + 1) / MEMBERS_PER_PAGE))`，依賴陣列 `:174` 為 `members.length`（閉包長度） | 需改程式 → **已知限制** |
+| R-13 | `failureSignal.ts:29-34` 的 `SignalKind` 仍只有 5 值；`membershipApi.ts:188`（邀請網路失敗發 `invite-validation-failed`）、`:210`、`:251`、`:281`、`:289`（網路失敗與非 403 錯誤發 `write-forbidden`）。本輪另加一條：PATCH 新增的 422 也落入 `:289` | 需改程式 → **已知限制** |
+| R-14 | spec 無「邀請後跳到新列所在頁」與「當前頁變空退回前一頁」斷言（`第 2／2 頁` 只出現在 :270、:287 的 100 位翻頁案例）；`BR21.3` 的 403 只在 :596-598 斷言 `banner-forbidden` 訊號，**未斷言**之後不再發請求（閂） | 需改測試 → **已知限制** |
+| 移出送出中 Escape（R-18） | `MemberDetailPage.tsx:98` 為 `escapeDisabled: removing`；spec 的移出相關案例只有 :987（Escape／Tab）與 :1124（409 焦點），無「DELETE 延遲中按 Escape 確認框仍在」案例 | 需改測試 → **已知限制** |
+
+另：本單元的 R-17（`merge-blockers.md` 第 23 列）現況 `:32` 已含 **已修正** 標記，屬 conductor 範圍，本輪未動。
+
+### 四、計畫勾選重設
+
+機械計數（`grep -c -- '- \[x\]'`／`'- \[ \]'`）：**全檔 34 格，已勾 30、未勾 4**。勾選依據：收據內 10 檔逐位元相同；`MemberDetailPage.tsx` 的改動已逐行判定不涉 Steps 17、21–23；lint／`tsc -b`／build／`--list` 本輪重跑；`package.json`、`package-lock.json`、`playwright.config.ts` 相對 `HEAD` 無 diff且收據後無提交；`App.tsx:176`、`:189` 兩條路由、`Layout.tsx:26` 直接渲染、`ReselectionBanner.tsx:180` 的 `can('K3', 'view')`、`LiveRegion.tsx:50-51`、`SignalEndpoint` 6 值；`merge-blockers.md:18` 第 9 列已回填。§五之四 五格於完成後勾（「收尾」格在兩支 validator 綠之後才勾）。
+
+| 未勾格 | 理由 |
+|---|---|
+| Step 9 | 同前輪：移出成功後 `navigate()` 回清單頁、重新掛載再抓一次，非就地移除（F-2） |
+| Step 10 | 同前輪：本單元未改 `Sidebar.tsx`，入口經專案頁可達（F-1）；是否改判由 conductor／使用者決定 |
+| Step 20 | 該格要求 `member-pages.spec.ts` 與 `a11y.spec.ts` **全綠**。本輪 e2e 未能實跑，且 `a11y.spec.ts`（新增第 26 點、基準檢查改 25 檔）與 `MemberDetailPage.tsx` 自前輪實跑後已變動，前輪的「47 passed」不再能代表現況 |
+| Step 24 | 同 Step 20 |
+
+### 五、追溯與偏離
+
+- `traceability.json` **未改**：逐項檢查後無因本輪變為不實的註記（PATCH 新 422 的訊號種類問題歸入 R-13 已知限制，不改既有列）；`source-manifest.json` 未改（無新增／刪除路徑）。
+- `python3 -B scripts/validate_repo_contract.py`：passed；`python3 -B scripts/validate_env_contract.py`：passed（於勾「收尾」格之前執行）。
+- 偏離：無程式改動；e2e 未實跑（環境限制，已如上記）。repo 內未產生 `.pyc`／`__pycache__`／`.hypothesis`（本輪未執行 Python 測試；validator 以 `-B` 執行）。

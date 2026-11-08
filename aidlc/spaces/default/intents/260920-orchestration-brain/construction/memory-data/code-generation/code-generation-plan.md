@@ -149,14 +149,30 @@ memory-schema:            # N-2
 
 ## 五、完成判準（二元）
 
-- [x] `N-2` job 綠燈，且**兩次**套用 `schema_rbac.sql` 皆成功（`BR1.3`）
-- [x] `verify_memory_schema.sql` 的全部斷言通過
+- [ ] `N-2` job 綠燈，且**兩次**套用 `schema_rbac.sql` 皆成功（`BR1.3`）
+- [ ] `verify_memory_schema.sql` 的全部斷言通過
 - [x] `python3 scripts/validate_repo_contract.py` 綠燈
 - [x] `python3 scripts/validate_env_contract.py` 綠燈（本單元零新變數）
 - [x] `cd backend && python3 -m unittest discover -s tests` **無迴歸**
       （基線 497；本單元不新增 Python 測試，故應維持 497）
 - [x] `DEPLOY.md` 含兩張新表、`psql` 驗證指令與主機加密狀態（`NFR6.1`）
 - [x] `git diff --stat` 不含 §二「不動的檔案」清單中的任何一項
+
+〔2026-10-29 註記，review-02 R-04／R-05〕判準 1、2 的勾選依據不是一律的「`N-2` job 綠燈」：依據以 `code-summary.md` 最新一節實際引用者為準（CI `memory-schema` job 的哪一次 run，或本機非 pg18 的實跑），兩者強度不同。判準 5 的指令現為 `backend/.venv/bin/python -B`，基線已非 497。判準 7 依**寫入範圍**判定（`source-manifest.json` 所列路徑不在「不動的檔案」清單），**未經 commit diff 驗證**，強度弱於其他各格。
+
+## 七、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。比對本單元最新審查收據（`reviewed-source-*.tsv`）與現況，對不上的清單內檔案為：`DEPLOY.md`。這是合併前必修第 22–26 項在其他單元所做的修正。本節**不改程式、不改共用檔**（`DEPLOY.md`、`schema_rbac.sql`、`ci.yml` 皆在多個單元的審查收據內，改動會讓它們再次失效）。
+
+- [x] **重新驗證**：以收據比對與 `git diff` 逐 hunk 確認 `DEPLOY.md` 的變動來源，判定是否觸及本單元的 2.2.8 記憶層段落；其餘清單內檔案與收據逐位元相同（`shasum -a 256`）。可用 `git show 624c170:DEPLOY.md` 為基底逐段回退比對雜湊（前兩個單元已證得：#24 為現行 730–738 行、#26 為 2229、2239 行）。
+- [x] **判準 1、2 的依據**：以 `gh run view` **只讀**查 CI run `40423381616`（2026-10-29 使用者裁決跑的那次）的 `memory-schema` job 結論與其 head SHA；若該 SHA 之後 `schema_rbac.sql`、`verify_memory_schema.sql` 未再變動（`git log` 實查），即以它作為判準 1、2 的依據並寫入 `code-summary.md`；否則據實記為本輪未驗。**不得觸發任何 workflow。**
+- [x] **回歸**：在暫存區副本（`PYTHONDONTWRITEBYTECODE=1`、`-B`）跑後端全套，確認無迴歸（本單元不含 Python 測試）。
+- [x] **R-03（Major，前輪未處理）**：`code-summary.md` 的 `OPEN-CG5-1` 改寫為「`BR1.2` 的邊界目前**未落地**：grant 只給 `current_user`、為空操作；無記憶專用角色、無對 `public` 的 REVOKE」，並寫明 `DEPLOY.md` 2.2.8 與 `COMMENT ON SCHEMA memory` 的「邊界已生效」語氣與現況不符、本輪因共用檔限制不改；承接以 `merge-blockers.md` 新增的一列為準（由 conductor 登錄：建立記憶專用角色、REVOKE `public` 寫入、CI 以第二角色斷言越界被拒、同步修文件語氣）。另依 ADR-0006 四面向，在該段標明此為 **IAM** 面向的缺口。
+- [x] **R-06**：`code-summary.md` 突變一節加註：`M1`–`M9` 對應交付當時的 `S1`–`S12`，之後他單元新增的斷言未重跑；以 `grep` 實數現行斷言 id 清單寫入。
+- [x] **R-07**：`code-summary.md` 記載 `ci.yml` 的 `memory-schema` 步驟名所寫斷言範圍與腳本實際不一致（以 `grep` 實查兩邊），落點為下一個動到 `ci.yml` 的工作，本輪不改。
+- [x] **勾選重設**：若重開使本計畫既有勾選被重設，逐項依現況核對後勾回；在 `code-summary.md` 記錄勾回數與未勾數（`grep -c` 實算）及未勾理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`traceability.json` 以 `python3 -I` 的 `json.load` 驗證；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：`merge-blockers.md` #22–#26；review-02 R-03～R-07。
 
 ## 六、code-generation Request Changes（2026-10-20）的對照結果
 
@@ -165,3 +181,15 @@ memory-schema:            # N-2
 - 第 6 項（`deleteMemoryRecord` 把任何 404 都當成已刪除）劃給 `memory-page-ui`，屬前端。
 
 因此本計畫**不新增步驟**，本輪只重新查驗 §五 七項判準。**解讀**：判準 5 的「基線 497」是本單元當時的數字，現況以「完整套件無迴歸、全綠」判定（本機一律以 `backend/.venv` 執行）；判準 1、2 需要真實 PostgreSQL（`N-2` job），本機若無可用的 Docker 或 PostgreSQL，以 CI 最近一次 `memory-schema` job 的結果或據實記為本輪未驗；判準 7 指本單元自己的變更，不含本輪其他單元修正必修項時對 `DEPLOY.md`、`schema_rbac.sql` 的改動。
+
+## 八、合併前必修（2026-11-01 Request Changes）第 20／29 列落地後的回歸驗證
+
+**來源**：使用者的 Request Changes 指名第 20／29 列（`BR1.2` 的記憶專用資料庫角色）。依共用檔集中修正的安排，該列已由 `brain-infra` 的 A1 完成（`brain-infra/code-generation/code-summary.md:570-595`：`schema_rbac.sql` 以 DO 區塊建 `cloud360_memory`、只授 `memory`、撤銷 `public`；`verify_memory_role.sql` 與 `ci.yml` 的 R0–R3 步驟；`DEPLOY.md` §2.2.8 更正）。本節**不改應用程式與共用檔**，只驗證那次修正符合本單元的規則，並把本單元自己的紀錄更新為現況。
+
+- [x] **hunk 歸屬**：以本單元最新的 `reviewed-source-*.tsv` 為基準，對 `source-manifest.json` 所列各檔逐 hunk 判定來源（brain-infra A1／其他單元／本單元），未變動者以 `shasum -a 256` 證明逐位元相同。
+- [x] **第 20 列 (a)(b)(c) 對本單元規則的符合性**：逐項核對 `BR1.1`（schema 名）、`BR1.2`（只授 `memory`、`REVOKE public`）、`BR1.3`（可重跑：DO 區塊判斷 `pg_roles`、無 psql 變數）；確認本單元的 `verify_memory_schema.sql` 既有斷言與新的 grant 不衝突；確認 `COMMENT ON SCHEMA memory` 與 `DEPLOY.md` §2.2.8 不再把邊界寫成「僅授 `current_user` 即已生效」。
+- [ ] **真實 PostgreSQL 驗證**：若本機可用 Docker，起一個只綁 `127.0.0.1`、隨機埠、拋棄式 volume 的 `pgvector/pgvector:pg18` 容器，套用 `schema_rbac.sql` **兩次**（`BR1.3`），再以測試密碼執行 `deploy/initdb/02-memory-role-password.sh`，跑 `verify_memory_schema.sql` 與 `verify_memory_role.sql`（後者以 `cloud360_memory` 連線），結束後刪除容器與 volume。不可用時據實記為「本輪未驗、只在 CI」，**不得觸發任何 workflow**，只可用 `gh` 唯讀查詢。
+- [x] **回歸**：在 scratchpad 副本（`backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`）跑 `test_memory_db_role` 與後端全套；跑 `validate_repo_contract.py`、`validate_env_contract.py`；確認 repo 內 `.pyc`／`.hypothesis` 前後不變。
+- [x] **本單元紀錄更新**：`code-summary.md` 的 `OPEN-CG5-1` 與 `traceability.json` 對應項，由「`BR1.2` 邊界未落地」更新為「已由 brain-infra A1 落地」並附行號與上一步的驗證強度（實跑／只在 CI）；`OPEN-MB20-SECRET`（`MEMORY_DB_PASSWORD` 尚未建立）照錄為部署前阻擋，不得寫成已解決。
+- [x] **收尾**：逐項重核 §五 七項判準與 §七 勾選；在 `code-summary.md` 檔尾附加「## 2026-11-01 回歸（第 20／29 列落地後）」一節，含勾選數（`grep -c` 實算）與 `date -u` 時間戳。
+- 追溯：`merge-blockers.md` #20、#29；`brain-infra` A1。

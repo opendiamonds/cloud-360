@@ -385,3 +385,96 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 - `LOCAL-DEV.md:675` 仍寫隱性前置條件只有兩個（`claude` CLI、n8n webhook），與 `:10`／`:30` 的「三個」不一致；該句非本單元交付，未改。
 
 `source-manifest.json` 的 10 條路徑全部存在且仍屬本單元。
+
+## 2026-11-01 回歸（合併前必修共用檔修正後）
+
+<!-- 寫入時間：2026-11-05T00:47:10Z（`date -u` 取值） -->
+
+依計畫 Step 12 執行，**程式碼改動為 0**，repo 內唯一被本輪寫入的檔是本檔與計畫的勾選格。
+
+### 一、共用檔重驗（收據 `reviewed-source-c8b1b94a746d.tsv`）
+
+依 mtime 判定最新收據為 `c8b1b94a746d`（`1792890280`，晚於 `df3ec7de0839` 的 `1792486107` 與 `a7e4632338ad` 的 `1791177684`）。逐檔 `shasum -a 256` 比對收據內 10 條路徑：
+
+| 檔 | 結果 | 收據版本所在 commit |
+|---|---|---|
+| `backend/services/embedding_port.py` | 未變 | — |
+| `backend/tests/test_embedding_port.py` | 未變 | — |
+| `backend/main.py` | 未變 | — |
+| `scripts/validate_embedding_provider_value.py` | 未變 | — |
+| `.github/workflows/ci.yml` | **變動** | `7a50a40`（工作樹 ≠ HEAD） |
+| `LOCAL-DEV.md` | **變動** | `7a50a40`（工作樹 ≠ HEAD） |
+| `backend/.env.example` | **變動** | `7a50a40`（工作樹 ≠ HEAD） |
+| `deploy/.env.example` | **變動** | `7a50a40`（工作樹 ≠ HEAD） |
+| `deploy/docker-compose.deploy.yml` | **變動** | `7a50a40`（工作樹 ≠ HEAD） |
+| `deploy/render-env.sh` | **變動** | `fa8ce42`（之後到 HEAD 無 commit 碰它；工作樹 ≠ HEAD） |
+
+收據版本的取得方式：對每支變動檔走 `git log --all -- <檔>`，逐 commit 以 `git show <c>:<檔> | shasum -a 256` 比對收據值，取第一個命中者，再 `git diff <c> -- <檔>` 讀出收據之後的全部 hunk。
+
+逐 hunk 判定（行號為現行工作樹）：
+
+- **`ci.yml`**：五個 hunk，皆在 `repo-contract` job（`:141` 起）之外的 PostgreSQL job——`@@ -325`（job 說明改為 P1-P17）、`@@ -380`（新增 `Verify the memory-only role boundary (R0-R3)` step 與 P1-P17 改名）、`@@ -403`、`@@ -522`（註解中的 P1-P16→P1-P17）、`@@ -622`（tests_pg step 改名）。本單元的 `Validate embedding provider values` step 在 `:175-176`，**未觸及**。
+- **`LOCAL-DEV.md`**：一個 hunk `@@ -270,6 +270,35`，新增 `H7：記憶專用資料庫角色 cloud360_memory` 小節（+29 行）。fastembed 小節 `:67-79` 位於其前，**未觸及**；`EMBEDDING_TIMEOUT_SEC` 由收據的 `:402` 平移為 `:431`，內容未變（`:428-431` 的註解與值逐字相同），**未觸及**。
+- **`backend/.env.example`**：一個 hunk `@@ -108,6 +108,15`，新增 `MEMORY_DB_PASSWORD=` 與註解（+9 行），位於 embedding 區塊之前。`EMBEDDING_TIMEOUT_SEC=10` 由 `:193` 平移為 `:202`，**未觸及**。
+- **`deploy/.env.example`**：一個 hunk `@@ -114,6 +114,13`，新增 `MEMORY_DB_PASSWORD=` 與註解（+7 行）。`EMBEDDING_TIMEOUT_SEC=10` 由 `:136` 平移為 `:143`，**未觸及**。
+- **`deploy/docker-compose.deploy.yml`**：一個 hunk `@@ -122,6 +122,12`，在 `EMBEDDING_TIMEOUT_SEC: ${EMBEDDING_TIMEOUT_SEC}`（`:124`，hunk 的上下文行）**之後**插入 `MEMORY_DB_PASSWORD` 與註解。該行位置與內容皆未變，仍無 fallback，**未觸及**。
+- **`deploy/render-env.sh`**：四個 hunk——`@@ -17`（檔頭說明 +1 行）、`@@ -73`（`MEMORY_DB_PASSWORD` 缺值守衛 +6 行）、`@@ -89`（含 `$` 檢查迴圈加入 `MEMORY_DB_PASSWORD`；該迴圈本來就不含 embedding 變數）、`@@ -131`（輸出加 `MEMORY_DB_PASSWORD=` 一行，位於 `REDIS_PASSWORD` 之後、`EMBEDDING_PROVIDER=ollama`（現 `:142`）之前）。`EMBEDDING_TIMEOUT_SEC=10` 由 `:138` 平移為 `:146`，**未觸及**。
+
+**結論**：6 支變動檔的全部 hunk 都屬合併前必修第 20／29 列（記憶專用角色）與第 33 列（tests_pg step 名稱）等他單元的修正，**沒有一個 hunk 觸及本單元負責的部分**。`main.py` 未變，`configure_embedding_env()` 仍在 `:65`，位於 `configure_provider_env()`（`:60`）之後、`init_db()`（`:92`）之前。
+
+### 二、回歸（副本）
+
+以 `rsync -a --exclude .git --exclude node_modules --exclude .hypothesis --exclude __pycache__` 複製到 scratchpad 的 `dev-u6/`（含 frontend），在副本的 `backend/` 以 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/dev-u6-hyp backend/.venv/bin/python -B` 執行；跑完副本與 hyp 目錄皆已刪除。
+
+| 指令 | 結果（取自命令輸出） |
+|---|---|
+| `-m unittest tests.test_embedding_port -v` | `Ran 32 tests in 1.707s`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1372 tests in 109.867s`、`OK (skipped=3)`、exit 0 |
+
+**與 1372 的比對**：完全相同，差異 0。1372 是同一棵工作樹上其他單元（`hierarchy-data`、`rbac-story-ids`、`progress-channel`）本輪記下的全套數，相同代表跑的是同一份測試集合，本輪沒有任何測試增減。與本單元上一輪（2026-10-25）自記的 `1319` 相比多 53，來源是其他單元新增的測試檔（`progress-channel` 的 code-summary 亦記同一差額）；本單元自己的測試數維持 32，`test_embedding_port.py` 位元組未變。輸出中的 `ERROR:` 行為各測試刻意觸發的失敗路徑日誌，`FAIL:`／`ERROR:` 測試結果標頭為 0。
+
+repo 根三支 validator（先 `export PYTHONDONTWRITEBYTECODE=1`，以 `python3 -B` 執行）：
+
+| 腳本 | 輸出 | exit |
+|---|---|---|
+| `scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` | 0 |
+| `scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` | 0 |
+| `scripts/validate_embedding_provider_value.py` | `Cloud-360 embedding provider value validation passed（3 份設定來源）。` | 0 |
+
+`__pycache__` 檢查：執行前後各以 `find . -name __pycache__ -type d`（排除 `.git`、`node_modules`、`backend/.venv`）列出，兩份清單 `diff` 無差異（皆為 14 個，全部早於本輪存在）；另以 `find -newer` 查無本輪新產生的 `.pyc` 或 `.hypothesis`。
+
+Step 8 的紅燈路徑另以 scratchpad 內的最小複本驗證（只複製驗證腳本、`embedding_port.py`、三份設定來源），**未改 repo 檔**：把複本的 `EMBEDDING_PROVIDER=ollama` 改成 `olama`（`grep -n` 確認複本 `:142` 已變）後，腳本以 exit 1 印出 `EMBEDDING_PROVIDER='olama' 不是合法值。 可選值：ollama｜fastembed｜fulltext｜stub。`；未改前 exit 0。複本已刪除。
+
+### 三、前輪審查的 Accepted risk（本輪不修）
+
+| ID | 現況（`grep -n`） | 判定 |
+|---|---|---|
+| R-04 | `backend/services/embedding_port.py:669`：「首次使用會從 HuggingFace 下載約 1GB 權重」 | **仍存在**，與 `LOCAL-DEV.md:76` 的「約 2.24 GB」不一致 |
+| R-05 | `LOCAL-DEV.md:704`：「這裡是唯一寫下隱性前置條件（`claude` CLI 子行程、n8n webhook）的地方」 | **仍存在**，只列兩項，與 `:10`、`:30` 的「三個」不一致。行號由審查記的 `:675` 平移為 `:704`（`H7` 小節插入 +29 行） |
+| R-06 | `grep -n fastembed .github/workflows/*.yml backend/requirements.txt` 零命中；`test_fastembed_registry_names_cover_every_legal_identity` 在 `backend/tests/test_embedding_port.py:477`，只鎖鍵集合 | **仍存在**，CI 不安裝 fastembed，登錄名無實際載入檢查 |
+
+### 四、勾選重設
+
+本輪開工時計畫的狀態與派工說明不符：派工說明寫「Step 1–11 的格子已全部勾選」，實測為**已勾 0、未勾 43**（`grep -c '^\s*- \[x\]'` 與 `'^\s*- \[ \]'`）——重開單元時被全部清空，HEAD 版本則為 Step 1–11 全勾。逐格核對後，Step 1–11 的 38 格在現行 repo 下全部成立，依據如下，故全部重勾；Step 12 的 5 格依本節一至三逐格完成後勾選：
+
+- Step 1：logger `embedding_port.py:48`；`backend/requirements.txt` 無 `fastembed`（`grep` 零命中）。該檔在收據之後被 `763a45a`（U21）與 `fa8ce42`（U13）改過，皆非本單元，本單元仍未改它。
+- Step 2：discover 撿到本模組（全套 1372 內含 32）；`unit-test-instructions.md:16` 的 unit-scoped 指令；`test_embedding_port.py:12` 的 `import tests.helpers`。
+- Step 3–4：`embedding_port.py` 與測試檔位元組與收據相同，前輪審查 READY 時查驗的條件不變；32 tests OK。
+- Step 5–6：`configure_embedding_env`（`embedding_port.py:753`）、`main.py:60`／`:65`／`:92` 的順序；直接呼叫的測試在 `test_embedding_port.py:595`、`:616`；全套綠即 TestClient 不觸發 hook 的證據。
+- Step 7：四處設定見本節一（`backend/.env.example:202`、`deploy/docker-compose.deploy.yml:124`、`deploy/render-env.sh:146`、`deploy/.env.example:143`）；驗證腳本 import 值域（`validate_embedding_provider_value.py:31-34`）；CI step `ci.yml:175-176`。
+- Step 8：三支 validator 通過與紅燈路徑見本節二。
+- Step 9：`LOCAL-DEV.md:431`（timeout）、`:72`（帶版本安裝）、`:76`（下載來源）、`:77`（快取位置）、`:79`（SEC-3）；隱性硬依賴「三個」在 `:10`、`:30`。`:704` 的殘留見 R-05，該句非本單元交付。
+- Step 10：無勾選格（突變表）。突變本輪未重跑，沿用 §三紀錄；理由是本單元的兩支程式檔與測試檔位元組未變。
+- Step 11：全套比對沿用舊基線紀錄（改動前狀態無法重建，與上一節相同）；本輪全套 1372 綠；`code-summary.md`、`source-manifest.json`（10 條路徑，合法 JSON）、`traceability.json`（合法 JSON）皆存在。
+
+完成後實算：`grep -c '^\s*- \[x\]'` = **43**、`grep -c '^\s*- \[ \]'` = **0**。`git diff HEAD` 確認計畫本文除勾選字元外無本輪改動（相對 HEAD 只多出本輪之前已寫入的 Step 12 一節）。
+
+### 五、traceability.json
+
+本輪無程式或追溯目標變動，**不更新**；`python3 -c json.load` 確認仍為合法 JSON。
+
+### 六、偏離
+
+- 派工說明稱 Step 1–11 已全勾，實際開工時為 0 勾（見本節四）。
+- R-05 的行號已由 `:675` 平移為 `:704`，審查紀錄（`reviews/review-02.md`）保留原行號，未改。
+- 計畫內文寫的 `shasum` 逐檔比對，在 zsh 下第一次執行時把迴圈變數命名為 `path`，覆寫了 `PATH` 導致指令找不到；已改名重跑，結果以第二次為準。

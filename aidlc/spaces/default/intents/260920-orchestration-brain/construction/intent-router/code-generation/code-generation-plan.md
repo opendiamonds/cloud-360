@@ -197,6 +197,16 @@ stage 檔 Critical Rules 逐字：NFR 的可量測目標與 Testing Contract 的
 - [x] `merge-blockers.md` 第 5、13 列回填處置；`code-summary.md` append 本節紀錄（改動檔:行、測試、突變、對 `K-10` 的對齊紀錄若有）；`source-manifest.json`（含 `brain_gateway.py`）、`traceability.json`（加 `MB-5`／`MB-13`）更新。
 - 追溯：`merge-blockers.md` #5／#13；`BR3.6`、`BR5.1`、`BR5.5`、`D-1`、`AC1.2.3`。
 
+## 五之二、合併前必修共用檔修正後的回歸驗證（2026-11-07）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。逐列對照該表「單元」欄：**這些列沒有一列劃給 `intent-router`**（第 2 列 `brain-ws-contract`、第 20／29 列 `memory-data`、第 33 列 `memory-service` 等）。唯一點名本單元的是第 33 列 (b)「`MemoryError` 更名需通知 `intent-router`」：已由 `memory-service` 更名完成（`backend/services/memory_errors.py:54-56`），`backend/services/intent_routing.py` 無 `MemoryError` 引用。共用檔修正集中於 `brain-infra`（第 41 列）及各單元本輪修正，其中 `brain_gateway.py`（本單元第 5、13 項的修法落點）與記憶相關檔可能已被改動，故**本單元預設不改程式**，本節只做回歸與紀錄；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。若重驗發現本單元的程式或測試已被共用檔改動弄壞，停止並回報 conductor，不得自行擴大範圍。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-8a97526105f9.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔讀收據之後的改動（`git diff`／`git log -p`），判定是否碰到本單元負責或依賴的部分（L0–L5 七個模組、`brain_gateway.py` 的 `_on_select`／`_prefetch`／`MemoryPrefetchAdapter`／`memory_forbidden` 路徑、`MemoryFacade` 與 `MemoryForbidden` 的介面），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的實體複製副本上（`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）跑 `unit-test-instructions.md` 的本單元指令、`brain-gateway` 受影響的測試與後端全套，須全綠，記下實跑測試數；L5 的七條 PBT 仍綠。repo 內不得產生 `.pyc`／`.hypothesis`。
+- [x] **前輪審查的 Unresolved／New 發現**：`reviews/review-04.md` 的 R-02、R-03、R-05、R-06、R-07、R-08 逐項以 `grep -n`／讀檔附行號確認現況。只需改紀錄者在 `code-summary.md` 就地補記；需改程式或共用文件者記為已知限制，由 conductor 併入 `merge-blockers.md`。
+- [x] **勾選重設**：對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` 以 Edit append 本輪一節（以 `date -u` 取時間戳）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
 ## 六、核可關卡
 
 本計畫與 `unit-test-instructions.md` 的核可題目在

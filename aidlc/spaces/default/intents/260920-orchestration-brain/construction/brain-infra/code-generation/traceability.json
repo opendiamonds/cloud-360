@@ -47,7 +47,23 @@
     "S-6",
     "S-8",
     "S-9",
-    "US2.1"
+    "US2.1",
+    "MB-20",
+    "MB-29",
+    "MB-21",
+    "MB-25",
+    "MB-27",
+    "MB-28",
+    "MB-30",
+    "MB-31",
+    "MB-32",
+    "MB-33",
+    "MB-34",
+    "MB-35",
+    "MB-36",
+    "MB-37",
+    "MB-38",
+    "MB-40"
   ],
   "coverage": [
     {
@@ -60,7 +76,7 @@
       "id": "AC2.1.4",
       "status": "Deferred",
       "target": "deploy/docker-compose.deploy.yml",
-      "note": "deploy/docker-compose.deploy.yml 的 redis 服務：command 的 `--appendonly yes` ＋ 具名 volume `redis_aof` 掛在 /data ＋ `--maxmemory 256mb --maxmemory-policy allkeys-lru`。**明確的界線**：AC2.1.4 的 Then 是「脈絡與作業對象完整還原」，而本單元只交付持久化能力；還原是否完整取決於 U10 寫了什麼、U14 讀了什麼。本單元的測試**不宣稱**驗證了 AC2.1.4"
+      "note": "deploy/docker-compose.deploy.yml 的 redis 服務：command 的 `--appendonly yes` ＋ 具名 volume `redis_aof` 掛在 /data ＋ `--maxmemory 256mb --maxmemory-policy allkeys-lru`。**明確的界線**：AC2.1.4 的 Then 是「脈絡與作業對象完整還原」，而本單元只交付持久化能力；還原是否完整取決於 U10 寫了什麼、U14 讀了什麼。本單元的測試**不宣稱**驗證了 AC2.1.4（截至 HEAD `c6a40f9` 實查：redis 的 `--maxmemory-policy` 為 `noeviction`（NFR4.50／`[N3]=A`，非 `allkeys-lru`；滿了之後拒絕寫入而非淘汰）；deploy compose 為 7 個服務（含 `mcp-bridge`），記憶體上限共 11 項（deploy 7 ＋ test 4）。上文為交付當時的敘述，現況見 code-summary.md 末節）"
     },
     {
       "id": "NFR4.1",
@@ -216,13 +232,13 @@
       "id": "S-8",
       "status": "OK",
       "target": "deploy/docker-compose.deploy.yml",
-      "note": "十個服務項（deploy 六 ＋ test 四）全部設 `deploy.resources.limits.memory`。值為公開基準推導的**暫定值**，compose 註解與 DEPLOY.md §5.6 皆標記為未量測並要求填複量期限與擁有者。兩份 compose 的值刻意不同（CI 走 ubuntu-latest 公開規格，不適用主機量測），就地註明這是例外不是漂移"
+      "note": "十個服務項（deploy 六 ＋ test 四）全部設 `deploy.resources.limits.memory`。值為公開基準推導的**暫定值**，compose 註解與 DEPLOY.md §5.6 皆標記為未量測並要求填複量期限與擁有者。兩份 compose 的值刻意不同（CI 走 ubuntu-latest 公開規格，不適用主機量測），就地註明這是例外不是漂移（截至 HEAD `c6a40f9` 實查：redis 的 `--maxmemory-policy` 為 `noeviction`（NFR4.50／`[N3]=A`，非 `allkeys-lru`；滿了之後拒絕寫入而非淘汰）；deploy compose 為 7 個服務（含 `mcp-bridge`），記憶體上限共 11 項（deploy 7 ＋ test 4）。上文為交付當時的敘述，現況見 code-summary.md 末節）"
     },
     {
       "id": "S-9",
       "status": "OK",
       "target": "deploy/docker-compose.deploy.yml",
-      "note": "見 NFR8.9。加在兩份 compose 的全部服務上（超出上游字面的兩個新容器），理由（backend 是最多日誌的服務，而磁碟寫滿對全碟加密主機是實際風險）已在 DEPLOY.md §5.6 記載"
+      "note": "見 NFR8.9。加在兩份 compose 的全部服務上（超出上游字面的兩個新容器），理由（backend 是最多日誌的服務，而磁碟寫滿對全碟加密主機是實際風險）已在 DEPLOY.md §5.6 記載（截至 HEAD `c6a40f9` 實查：redis 的 `--maxmemory-policy` 為 `noeviction`（NFR4.50／`[N3]=A`，非 `allkeys-lru`；滿了之後拒絕寫入而非淘汰）；deploy compose 為 7 個服務（含 `mcp-bridge`），記憶體上限共 11 項（deploy 7 ＋ test 4）。上文為交付當時的敘述，現況見 code-summary.md 末節）"
     },
     {
       "id": "S-10",
@@ -252,7 +268,7 @@
       "id": "I2",
       "status": "OK",
       "target": "deploy/docker-compose.deploy.yml",
-      "note": "六個 deploy 服務 ＋ 四個 CI test 服務全部設上限，見 S-8"
+      "note": "六個 deploy 服務 ＋ 四個 CI test 服務全部設上限，見 S-8（截至 HEAD `c6a40f9` 實查：deploy compose 為 7 個服務（含 `mcp-bridge`），記憶體上限共 11 項（deploy 7 ＋ test 4）。上文為交付當時的敘述，現況見 code-summary.md 末節）"
     },
     {
       "id": "I2b",
@@ -325,6 +341,102 @@
       "status": "N/A",
       "target": "DEPLOY.md",
       "note": "加密承載面。手段已由 nfr-design D-1 定案為主機層全碟加密（不是 compose 設定），本單元不改變它，只在 DEPLOY.md §5.1 給四個掛載點的可執行判定並讓 §5.5 的磁碟門檻沿用同一組掛載點。"
+    },
+    {
+      "id": "MB-20",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "2026-10-31T23:00:19Z 前後使用者裁決「SQL 建角色，部署另設密碼」後完成：schema_rbac.sql I) 區塊以 pg_roles 判斷冪等建立 cloud360_memory（LOGIN、無密碼、無 psql 變數），只授與 memory schema 的 USAGE／表 DML／序列與 DEFAULT PRIVILEGES，撤銷 public 的表、序列與 CREATE；密碼由 deploy/initdb/02-memory-role-password.sh（psql \\getenv）設定，deploy.yml 每次部署執行（必要 secret 檢查含 MEMORY_DB_PASSWORD、先 mask），test compose 以 initdb 第二支 script 執行；backend/database.py 的 get_memory_session 未設定時拋錯不退回；CI memory-schema job 以該角色跑 backend/scripts/verify_memory_role.sql（R0–R3）；run_meta_schema_migration.py 後條件含角色。測試 backend/tests/test_memory_db_role.py（7），突變 M1–M7 皆紅。真實 PostgreSQL 上的角色行為只在 CI 驗；記憶表改用該 session 屬 memory-service（已交接）。"
+    },
+    {
+      "id": "MB-29",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "與 MB-20 同一缺陷（第 29 列併入第 20 列），隨 MB-20 完成。"
+    },
+    {
+      "id": "MB-21",
+      "status": "OK",
+      "target": "backend/services/membership_service.py",
+      "note": "A2：projects_losing_last_admin 對除被停用者外無任何成員的專案放行，reselect_for_project 對同一情形記 no_other_members 略過；測試 backend/tests/test_membership_lone_owner.py（3），突變 M1–M3 皆紅。"
+    },
+    {
+      "id": "MB-25",
+      "status": "OK",
+      "target": "backend/services/hierarchy_facade.py",
+      "note": "A3：可達性查證為可達（membership_facade.change_role 不排除擁有者）；delete_project／delete_system 另要求 project_admin（注入 MembershipFacade.project_admin_check，判定 membership_service.can_administer_project，零成員列擁有者為等價條件）；測試 backend/tests/test_project_delete_requires_admin.py（4），突變 M1–M4 皆紅。"
+    },
+    {
+      "id": "MB-27",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "A4：_hard_delete_user 回傳 _UserPurgeSummary，兩處 _audit_append 寫入清除的專案／系統／需求欄位筆數；測試 backend/tests/test_user_delete_audit_counts.py（4），突變 M1、M2、M4 皆紅。"
+    },
+    {
+      "id": "MB-28",
+      "status": "OK",
+      "target": "backend/services/user_router.py",
+      "note": "A4：409 detail 附下一步提示（M3 紅）、docstring 與 DEPLOY.md 記載預檢到 commit 無鎖的競態、DEPLOY.md §2.2.7 補結束碼 2；(a) 腳本 docstring 與 (b) MigrationCounts docstring 屬 hierarchy-data 單檔，已交接。"
+    },
+    {
+      "id": "MB-30",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "A5：EXPECTED_FK_DELETE_ACTIONS 擴為 J) 區塊 7 條、以欄位為鍵；verify_meta_schema.sql 新增 P17；ci.yml 與 DEPLOY.md 條數歸屬更正；測試 backend/tests/test_meta_schema_expectations.py（2），突變 M1–M3 皆紅。真實 PostgreSQL 查詢只在 CI 執行，本機未驗。"
+    },
+    {
+      "id": "MB-31",
+      "status": "OK",
+      "target": "backend/services/membership_facade.py",
+      "note": "A6：(a) admin_count_after 只數合格管理者、(e) 升任 project_admin 要求合格、(f) _authorize_global 看 is_approved 且橫幅兩方法補 K3.view；(b)(c)(g) DEPLOY.md §2.2.10 與 schema_rbac.sql 註解同步；測試 backend/tests/test_membership_eligibility_guards.py（8），突變 M1–M5 皆紅。(b) membership_backfill.py docstring 與 (d) AdminPage.tsx 已交接所屬單元。"
+    },
+    {
+      "id": "MB-32",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "A7：§2.2.11 補假的「清除逾期」issue 辨識方式（(d)）與併入 main 後以 dry_run=true 為首次煙霧測試、失敗即停用排程（(f)）。其餘子項屬 memory-purge 單檔，已交接。"
+    },
+    {
+      "id": "MB-33",
+      "status": "OK",
+      "target": "backend/services/memory_facade.py",
+      "note": "A8：(a) count_references_to_user 取代 user_router 的直接 ORM 計數、(b) MemoryError 更名為 MemoryServiceError、(e) content 上限 4000（openapi.json 與 api.d.ts 重產）、(g) ci.yml 步驟名；測試 backend/tests/test_memory_input_limits.py（4）與 backend/tests/test_memory_reference_counts.py（4），突變皆紅。(e) 的 query 依 2026-10-31T23:00:19Z 前後的使用者裁決「facade 內截斷到 4000 字元」完成：MemoryFacade.search 超過 MEMORY_QUERY_MAX_CHARS 時只取前 4000 字元、不報錯；測試 backend/tests/test_memory_query_truncation.py（3），突變 M1–M3 皆紅。"
+    },
+    {
+      "id": "MB-34",
+      "status": "OK",
+      "target": "backend/services/session_store.py",
+      "note": "A9：(a) role 上限 32 字元、(h) _ensure_meta docstring 更正；(d)(e)(f)(i) deploy.yml 修正；(g)(b) DEPLOY.md 容量表（見 MB-36 同次）；測試 backend/tests/test_session_role_limit.py（3），突變 M1、M2 皆紅。(c)(j) 屬 session-store 單檔，已交接。"
+    },
+    {
+      "id": "MB-35",
+      "status": "OK",
+      "target": "frontend/src/components/Sidebar.tsx",
+      "note": "A10：「我的記憶」nav 補 aria-label；e2e frontend/tests/e2e/sidebar-landmarks.spec.ts（2），突變 M1、M2 皆紅。(a)(b) 屬 memory-page-ui 單檔，已交接。"
+    },
+    {
+      "id": "MB-36",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "A7：容量表註腳補 Redis 大版本升級後須重跑（(c) 的 DEPLOY.md 部分）。Lua 取捨註解 (a) 屬 work-orchestrator 單檔，已交接。"
+    },
+    {
+      "id": "MB-37",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "A7：懸空引用「U13 code-summary 第 4.5 節」改為第八節揭露事項 OPEN-GW13-6 列（(c)）。(a)(b)(d)(e) 不在本單元範圍。"
+    },
+    {
+      "id": "MB-38",
+      "status": "OK",
+      "target": "backend/requirements.txt",
+      "note": "A11：sse-starlette==3.0.3、mcp-types==2.3.0 精確釘選（(a)）；test_mcp_bridge_static.py 的 mcp 單行釘選正規式改為不把 mcp-types 算進來。CI 安裝未驗（本機不連網）。"
+    },
+    {
+      "id": "MB-40",
+      "status": "OK",
+      "target": "frontend/tests/e2e/a11y.spec.ts",
+      "note": "A10：(a) 缺 @note 的 12 個 test 補齊、21／22 點保留 @story US9.2；(d) 新增掃描點 26（成員詳情頁 projectId 非數字）；(i) MemberDetailPage aria-labelledby、ContextBar role=status。a11y-baseline.json 未變；副本 e2e 91 passed，突變 M3、M4 皆紅。(b)(c)(e)–(h) 屬 a11y-gate 紀錄，已交接。"
     }
   ],
   "open_items": [
@@ -382,6 +494,21 @@
       "id": "OPEN-11",
       "severity": "pre-existing-drift",
       "text": "`DEPLOY.md` 的 `#### 2.2.x` 編號序列本來就是亂的，**不是本輪造成的**（conductor 以 `git show HEAD:DEPLOY.md` 核對）：`2.2.4` 與 `2.2.5` 各出現兩次（C1 成本表退場／使用者清單分頁、U2 估價上傳表／Security_Reviewer 取得 J3a），且 `2.2.1`–`2.2.3` 排在那兩對之後。本單元新增的 `2.2.6`（pgvector 擴充）取的是第一個 `2.2.5` 之後的下一個空號，落在已經錯亂的序列中間。**本單元不重排它**——那是 repo 級的文件整理，且該檔另有英文半部漂移（見 OPEN-9）待一併決定。記在此處是為了讓下一個改該檔的人不必重新發現。"
+    },
+    {
+      "id": "OPEN-MB33-QUERY",
+      "severity": "closed",
+      "text": "merge-blockers 第 33 列 (e) 的 query 上限：memory_router.py 沒有任何帶 query 的 HTTP 端點（不為 search 開端點），query 只在同進程的 MemoryFacade.search，呼叫端為 intent_routing.py:226 與 brain_gateway.py:1707。在 facade 拒絕超長 query 會改變這兩個呼叫端對長訊息的行為，屬新設計決定（拒絕、截斷或呼叫端先截），待使用者裁決；本輪只完成 content 的 4000 字元上限。（已關閉 2026-10-31：使用者裁決 facade 內截斷到 4000 字元，見 MB-33。）"
+    },
+    {
+      "id": "OPEN-MB20-ROLE",
+      "severity": "closed",
+      "text": "merge-blockers 第 20／29 列：記憶專用資料庫角色的密碼承載方式與 schema_rbac.sql 兩條執行路徑衝突（見 code-summary A1 段的三點與選項 A／B），待使用者裁決；MEMORY_DB_PASSWORD secret 尚未建立。（已關閉 2026-10-31：使用者裁決「SQL 建角色，部署另設密碼」，已實作，見 MB-20；secret 的建立另列 OPEN-MB20-SECRET。）"
+    },
+    {
+      "id": "OPEN-MB20-SECRET",
+      "severity": "blocking-before-deploy",
+      "text": "GitHub repository secret MEMORY_DB_PASSWORD 尚不存在（2026-10-31T23:19:56Z 以 gh api …/actions/secrets 與 /variables 只列名稱查證：兩處皆無）。deploy.yml 的「Require the secrets that must not default」會因它缺值而失敗。由使用者以 openssl rand -hex 32 建立（不得含 $），建立後各查一次 secrets 與 variables 確認名稱只在 secrets。既有環境另須在含本變更的部署之前先跑 run_meta_schema_migration.py（DEPLOY.md 2.2.8）。"
     }
   ]
 }

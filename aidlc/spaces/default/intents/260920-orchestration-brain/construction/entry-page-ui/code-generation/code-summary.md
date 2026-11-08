@@ -477,7 +477,84 @@ admin（`Platform_Admin`）與 Developer 在 `rbac_seed_data.py:317`、`:325` �
 
 ### 八、CI 結果與未驗證項
 
-- **CI 結果：待 CI 實跑**（Step 23，由主對話向使用者確認 commit 範圍、目標分支與 PR 後執行）。屆時記錄：`entry-page-live.spec.ts` 5 案、`regression.spec.ts` 中受影響 13 案、`estimate-workspace.spec.ts` 2 案的結果、總執行時間（對照 `ui-regression` 的 15 分鐘 `timeout 15m npx playwright test`）、`.stats.unexpected` 是否為 0、run 連結。
-- 突變 X1／X2：未在真實 stack 執行。
+- **CI 結果（Step 23，2026-10-27T00:15:10Z 記錄，`date -u` 取得）**：使用者裁決全部提交、PR #650 先轉草稿後推送（commit `7a50a40`、`c6a40f9`，head `c6a40f91`）。`ui-regression` run：https://github.com/opendiamonds/cloud-360/actions/runs/40423381616 。
+  - 「Run the regression suite」步驟：對 `docker-compose.test.yml` 短生命週期 stack 跑 **202 案全過，3.5 分鐘**（遠低於 15 分鐘預算）；「Fail the job if any test failed」讀 `pw-report.json` 得 `unexpected=0 flaky=0`。
+  - 逐檔：`entry-page-live.spec.ts` 5／5、`regression.spec.ts` 14／14（含受影響 13 案）、`estimate-workspace.spec.ts` 2／2、`entry-page.spec.ts` 60／60。
+  - 該 run 整體標為 failure，原因**與測試無關**：gh-aw 的 Copilot 回報步驟四次嘗試皆得 `400 The requested model is not available for integrator "agentic-workflows"`（模型 `gpt-5.5` 無法解析），測試、Kiwi 上報、stack 拆除各步皆 success。這是 workflow 設定問題，屬本 intent 範圍外，另行處理。
+  - 同一 head 的 `CI` workflow：push 事件那次全綠；pull_request 事件那次後端 job 有 1 案失敗（`test_work_orchestrator_authz.RealAppAuthorizationTest.test_a1_allowed_role_reaches_request_sent_and_completes`，得 `('失敗', 'request_sent')`）。同一程式碼一綠一紅，判定為 `work-orchestrator` 既有測試的不穩定，非本項改動造成；記為交 build-and-test 的待查項。
+- 突變 X1／X2：未在真實 stack 執行（「還原後綠」由上述 CI 證實；「突變後紅」未在真實 stack 重現，不宣稱已驗）。
 - 6a 對 compose stack 的正反案（D1）與 rollback 分流的真實 Actions 行為：`ui-regression` 不執行 `deploy.yml`，CI 也跑不到，交 build-and-test；第 291 行不勾。
 - `traceability.json`：只更正兩條不實註記（`AC1.1.3`、`AC8.1.4` 原寫「交 build-and-test」，改為依 2026-10-27 裁決由 Step 23 的一次 CI 實跑承擔、跑完前不宣稱為綠；`AC8.1.4` 另補 (e) 的正向落點）。`source-manifest.json`：本輪無新增檔（五個改動檔皆已列入），未改。
+
+## 合併前必修共用檔修正後的回歸驗證（計畫 §十一 Step 25–29，2026-11-08）
+
+<!-- 寫入時間：2026-11-08T03:42:22Z（date -u） -->
+
+本輪**未改任何程式、測試、`unit-test-instructions.md`、`code-generation-questions.md`、`source-manifest.json`、`traceability.json`**；計畫只改勾選字元。merge-blockers 本輪各列（第 2 列剩餘、20／29、21、25、27、28、30–40、41）無一列劃給 `entry-page-ui`，本節只驗證其他單元的共用檔修正有沒有弄壞本單元。結論：**沒有弄壞**，未停下。
+
+### 一、Step 25：共用檔重驗
+
+- 收據：`reviewed-source-86762ca52dcc.tsv`（`code-generation/` 下 mtime 最新，2026-10-27 08:16:21 +08）。比對腳本以 Python `hashlib` 逐列 `split("\t")`，每列斷言首欄為空、共 4 欄、雜湊長 64，不經 shell `IFS`。
+- 實算：**53 檔，相同 46、變動 7、缺檔 0**。收據首列 `manifest` 的雜湊 `56c7ef94…` 與現行 `source-manifest.json` 的 `shasum -a 256` 相同（清單本身未變）。
+- 手動複核（`shasum -a 256`）：`backend/main.py` 得 `e34bf4cf…cd30`＝收據（相同）；`frontend/src/components/brain/ContextBar.tsx` 得 `53b40ca7…909e`≠收據 `926ccce9…942e`（變動）——比對腳本確實在比雜湊。
+- 7 個變動檔在 `HEAD`（`c6a40f9`）的 blob 雜湊**逐一等於收據值**，故 `git diff HEAD -- <檔>`（未提交的工作樹改動）恰為收據之後的全部改動，`git log` 自收據後對這 7 檔無新 commit。
+
+| 檔 | 收據後改動（現行行號） | 來源列 | 是否碰到本單元負責或依賴的部分 |
+|---|---|---|---|
+| `.github/workflows/deploy.yml` | 新增步驟「Set the memory-only database role password」（`:159-171`）、`MEMORY_DB_PASSWORD` 進 secret 檢查與兩個 env 區塊、Redis 兩步改 `REDISCLI_AUTH`、Redis 重啟驗證改逐欄快照、該步註解改寫「不是最後一步，6a 在其後」 | 20／29、34 (d)(e)(f) | **否**。6a（`:656-693`，`id: brain_ws_probe`）、deploy job output（`:43`）、revert 步驟的 `if`（`:867`）、notify 的 `BRAIN_WS_PROBE_FAILED`（`:951`）皆未在 diff hunk 內；6a 仍在「Verify sessions survive a Redis restart」（`:500`）之後、「Record this commit as the last-good deployment」（`:694`）之前。新步驟在 `:159`，不在兩者之間 |
+| `DEPLOY.md` | 多處 memory 角色、Redis 容量、Lua 等說明；§5.13 內只改 `:2339` 一句的交叉引用（「`U13` code-summary 第 4.5 節」→「第八節『揭露事項』`OPEN-GW13-6`」） | 37 (c) 等 | **只碰到本單元的文字一處，屬引用更正**：§5.13（`:2324` 起）「6a 失敗只回滾、不開 revert PR」的敘述（`:2330`、`:2339`）、三種失敗訊號判讀表、「不得以區網 IP 開頁驗證」皆在 |
+| `backend/services/hierarchy_facade.py` | 新增 `PROJECT_ADMIN_REQUIRED_DETAIL`／`HierarchyProjectAdminRequired`（`:96-112`）；`delete_project`／`delete_system` 加必填 `project_admin`（`:320`、`:355`）與擁有者檢查後的判定（`:342-343`、`:379-380`） | 25 | **否**。本單元的四個讀取方法 `list_projects`（`:419`）、`list_systems`（`:431`）、`resolve_work_target`（`:447`）、`describe_work_target`（`:487`）未改；import 仍無成員關係符號（`:54-63`、`:645`）；`project_visible: Callable` 仍為七個簽章（`:300`、`:319`、`:354`、`:419`、`:436`、`:451`、`:491`） |
+| `backend/services/membership_facade.py` | `_authorize_global` 拒絕待核准帳號（`:111-120`）；升任管理者的合格判定；新增 `project_admin_check`（`:570-585`）；兩個橫幅方法補全域層判定 | 31 (e)(f)、25 | **否**。本單元依賴的 `self._visible_ids`（`:97`）與 `project_visibility`（`:588-613`）內容未變（只位移）；新方法不讀 `_visible_ids`，ADR-0022 Consequences 殘留 4「實例其他方法不讀暫存」仍成立 |
+| `backend/tests/test_hierarchy_service.py` | `delete_*` 的 7 個呼叫補 `project_admin=ALWAYS_VISIBLE`（`:295-297`、`:410-455`） | 25 | **否**。本單元補的五處 `project_visible=ALWAYS_VISIBLE`（原 `:191`／`:199`／`:212`／`:214`／`:216`，現 `:249`、`:257`、`:270`、`:272`、`:275`）與 `BrainReadVisibilityTest`（`:634` 起）未改 |
+| `frontend/src/components/Sidebar.tsx` | 「我的記憶」`<nav>` 加 `aria-label="我的記憶"`（`:247-248`） | 35 (c) | **否**。本單元的「入口」`NavLink`（`sidebar-entry-link`）與其 `<nav>` 未改；`entry-page.spec.ts:379` 只斷言 `sidebar-memory-link` 可見 |
+| `frontend/src/components/brain/ContextBar.tsx` | 連線中骨架 `role="img"` → `role="status"`（`:109-111`），`aria-label="連線中"` 不變 | 40 (i) | **是，屬本單元元件，但不壞**：`entry-page.spec.ts` 無任何 `getByRole('img')`／`role` 斷言依賴該骨架（`grep` 0 命中）；`a11y.spec.ts:662` 以標籤「連線中」定位，標籤未變。攔截層 60 案全綠 |
+
+### 二、Step 26：回歸（全部實跑）
+
+環境：scratchpad 實體副本 `/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/epu-copy/`（`rsync` 排除 `.git`、`node_modules`、各類快取；`frontend/node_modules` 以 `cp -cR` 帶入；副本對收據的比對結果與 repo 相同：46／7）。後端一律 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 -B`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad。未連網路、未 `npm install`。
+
+- 後端本單元 18 模組（`unit-test-instructions.md` §二「全單元」那一行）：**Ran 333，OK (skipped=3)**；3 個 skip 皆為 `tests_redis` 的 opt-in 真實 Redis 測試（`REDIS_URL` 未設定）。其中 `test_brain_ws_deploy_probe` 8 案綠。
+- 後端全套 `unittest discover -s tests`：**Ran 1397，OK (skipped=3)**（107.3 秒）。
+- `dump_ws_contract.py --check`、`dump_openapi.py --check`：一致；`python3 -B -c "import main"`：成功。
+- 前端：`npm run lint` **0 errors、2 warnings**（既存的 `exhaustive-deps`，與上輪相同）；`npm run check:types`、`npm run check:ws-types` 一致；`npm run build`（含 `tsc -b`）通過。
+- 攔截層：`vite preview --host 127.0.0.1 --port 4791` ＋ `BASE_URL=http://127.0.0.1:4791 npx playwright test tests/e2e/entry-page.spec.ts` → **60 passed（39.3 秒）**；跑完以 `kill` 關閉 preview，複查 4791 埠無監聽。
+- `--list`：`entry-page`／`entry-page-live`／`regression`／`estimate-workspace` 四檔 **81 tests**（60＋5＋14＋2，與 CI run 40423381616 的逐檔數相同）。
+- Step 21 突變重驗（因 `deploy.yml` 收據後有改動）：在副本以檔案編輯工具施加、各跑 `tests.test_brain_ws_deploy_probe`：R1 revert 步驟 `if` 改回 `always()` → 1 紅（`test_revert_pr_step_is_skipped_when_probe_failed`）；R2 還原步驟加讀 output 的 `if` → 1 紅（`test_restore_and_doctor_still_run_when_probe_failed`）；R3 拿掉 `brain_ws_probe_failed` output → 4 紅；還原後副本與 repo 的 `deploy.yml` `cmp` 相同（`daa226c7…`），8 案綠。
+- repo 內：`python3 -B scripts/validate_repo_contract.py`、`python3 -B scripts/validate_env_contract.py` 通過。
+- **未在本機跑、交 CI `ui-regression`**：`entry-page-live.spec.ts`、`regression.spec.ts`、`estimate-workspace.spec.ts`（需真實 stack）。上次真實 stack 綠燈（run 40423381616，head `c6a40f9`）早於本輪 `Sidebar.tsx`／`ContextBar.tsx` 的改動，故不宣稱這三檔在現況下已綠。
+- 快取：開跑前記下 repo 內（排除 `node_modules`、`.git`）`.pyc`／`__pycache__`／`.hypothesis`／`junit.xml`／`pw-report.json`／`.tsbuildinfo` 共 9254 個、最新 mtime `1794066240`（`frontend/junit.xml`、`pw-report.json`）；收尾時 `find -newermt @1794107973`（本輪開跑時刻）為 **0**、總數仍 9254，`frontend/node_modules/.tmp` 下無新 `.tsbuildinfo`；`git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'` 為空。
+- 本輪未連 staging、共用 DB／Redis 或網路；未 commit、未 push、未觸發任何 workflow、未使用 `gh`。
+
+### 三、Step 27：review-04 未結項現況
+
+review-04 的 16 項中 `Resolved (reviewer)` 10 項；未結 6 項逐項確認：
+
+| 項 | 現況（逐行確認） | 處置 |
+|---|---|---|
+| R-05 | `brain_gateway.py:995` `_names_for` 仍 `await asyncio.to_thread(_run)`（`:1045`）無逾時；前端 `useBrainConnection.ts` 無 ready 逾時（`grep` 0 命中）。檔案與收據相同 | **需改程式 → 已知限制**，交 conductor 併入 merge-blockers |
+| R-06 | `test_brain_gateway_limits.py:80-82` 仍以 `while self.h.registry.total_slots and time.time() < deadline` 等待，逾時後不斷言槽位為 0 | **需改測試 → 已知限制**（該檔屬 `brain-gateway`，非本單元 manifest） |
+| R-13 | `unit-test-instructions.md` 第 23、24、28、39、46、47、192 行仍寫 `python scripts/...`，第 75、76 行為 `python3`。本 worktree 只有 `python3`；本輪實跑一律用 `python3 -B` | **紀錄補記**：該檔依 §十一 不得改，故不修正；以本列為準，讀者執行該檔指令時以 `python3` 代 `python` |
+| R-14 | 本檔 §十六之二（`:319`）、§十六之三（`:331`）、§十六之四（`:342`）標題下仍無就地註記；第 367、379 行已說明 | **紀錄補記**：§十六之二至之四描述的是 `[EP-MB2]`=A 的舊語意（null 錯誤不解除等待、E1 以送出鈕仍停用為通過條件），**已被 `[EP-R2]`=A 取代**（最後送出的是未獲回應的 `user_message` 時解除等待並標未送達；以 merge-blockers 第 2 列為準）。§十六之二的行號 `useBrainConnection.ts:169-198` 亦已過時。本檔只 append，不就地改那三節 |
+| R-15 | `deploy.yml:43` 的 output 語意仍只有官方文件與 runner 原始碼推論，無真實失敗 run 觀察 | **未驗證項**：本機與 `ui-regression` 都跑不到 `deploy.yml`，交 build-and-test（第一次 6a 真實失敗時看 notify log 與 revert 步驟是否 Skipped） |
+| R-16 | `DEPLOY.md` §5.13（`:2324-2345`）仍無「未裁決前後續合併會重複在 6a 失敗」與「環境性或程式性」的最短判準（`grep` 「後續合併」「連續」0 命中）；本輪 37 (c) 只改了 `:2339` 的交叉引用 | **需改部署文件 → 已知限制**，交 conductor 併入 merge-blockers（本節預設不改程式與部署資產） |
+
+### 四、Step 28：勾選重設
+
+計畫在本輪開始時 59 格全為未勾。逐格判定：
+- **勾（57 格）**：Step 1–22 的 52 格中除第 291 行外的 51 格、Step 24、Step 25–29。依據：證據相關檔案與收據逐位元相同（46 檔），或本輪已重驗（7 個變動檔所涉的 Step 5、7、8、11、13、14、19、20、21、22：後端 333／1397 案、攔截層 60 案、lint／build／型別一致、deploy probe 8 案與 R1–R3 突變、兩支 validator 皆綠，上表逐檔判定為未碰到或不壞）。Step 1 的唯讀複驗格以 §二的紀錄為證據（該紀錄未變；所列行號描述的是實作前狀態，本輪另以 `grep` 重驗非測試呼叫點仍為 `brain_gateway.py` 5 處、`session_store.py:465`、`hierarchy_facade.py` 對 service 層）。第 279、280 行依「交付物存在且與收據相同」勾（四個 spec 檔皆相同，`--list` 81 案），真實 stack 綠燈見上一段的交 CI 說明。第 293 行以 U14 commit `624c170` 判定（不改的檔零命中；`frontend/package.json`、`package-lock.json` 工作樹與 `HEAD` 相同）；工作樹中 `ci.yml`、`LOCAL-DEV.md`、`DEPLOY.md` 等的未提交改動來自其他單元，非本單元。Step 24 的後端全套與兩支 validator 本輪實跑綠，且其 code-summary 段（「第 26 項處置」）與追溯檔皆在。
+- **不勾（2 格）**：
+  - 第 291 行（Step 13 本機驗證）：對 `docker-compose.test.yml` stack 跑 6a 正案與突變 D1，本輪不起 Docker、不連網路，仍未執行。
+  - Step 23（第 514 行）：唯一的真實 stack 證據是 run 40423381616（head `c6a40f9`），而 `Sidebar.tsx`、`ContextBar.tsx`、`deploy.yml` 在其後已變動，本輪不推送、不觸發 CI，無法重驗；另 X1／X2 的「突變後紅」與 D1 原本即未在真實 stack 驗證。
+- 實算（Step 29 勾選後，`grep -c '^\s*- \[x\]'`／`grep -c '^\s*- \[ \]'`）：**已勾 57、未勾 2**，共 59。
+
+### 五、Step 29：收尾
+
+- `traceability.json`：不需更新（106 列，101 OK、5 N/A；`json.load` 合法；103 個路徑型 target 皆存在，其中 2 個為單元相對路徑，分別落在 `construction/hierarchy-data/functional-design/traceability.json` 與本單元 `nfr-requirements/performance-requirements.md`）。
+- `source-manifest.json`：本輪無程式變更，未改（雜湊仍等於收據首列）。
+
+### 六、需併入 merge-blockers 的已知限制（由 conductor 處理）
+
+1. review-04 R-05：`_names_for` 無逾時、前端無 ready 逾時，DB 卡住時握手無限期掛住（`brain_gateway.py:995-1045`）。
+2. review-04 R-06：`test_brain_gateway_limits.py:80-82` 逾時後不斷言槽位已清空（屬 `brain-gateway`）。
+3. review-04 R-16：`DEPLOY.md` §5.13 缺「未裁決前後續合併會重複在 6a 失敗」與環境性／程式性的最短判準。
+4. 本輪新增的未驗證項：收據後 `Sidebar.tsx`／`ContextBar.tsx`／`deploy.yml` 的改動未在真實 stack 上跑過 `entry-page-live`／`regression`／`estimate-workspace`，須由下一次 CI `ui-regression` 承擔（Step 23 因此不勾）。

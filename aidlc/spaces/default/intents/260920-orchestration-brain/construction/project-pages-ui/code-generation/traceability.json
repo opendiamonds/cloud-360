@@ -57,7 +57,9 @@
     "NFR11.101",
     "NFR11.102",
     "AC12.5.2",
-    "AC11.4.1"
+    "AC11.4.1",
+    "MB-25",
+    "MB-39"
   ],
   "coverage": [
     {
@@ -401,6 +403,18 @@
       "status": "OK",
       "target": "backend/tests/test_requirement_field_http.py",
       "note": "合併前必修第 14 項：需求欄位讀寫清三端點對非成員回與「系統不存在」逐位元相同的 404（test_H8），requirement_field.denied reason=not_member 照記（test_H9）；MCP 路徑的結果仍等於直接存取（backend/tests/test_mcp_bridge_e2e.py 的 test_ac11_4_1，形狀由 forbidden 變為 not_found）。實作在 backend/services/requirement_field_facade.py 的 _authorize。突變 M14-3、M14-4 使 H8／H9 紅。"
+    },
+    {
+      "id": "MB-25",
+      "status": "OK",
+      "target": "backend/tests/test_project_delete_requires_admin.py",
+      "note": "合併前必修第 25 列：(a)(b) 由 brain-infra A3 落地（可達性「可達」；hierarchy_facade.delete_project／delete_system 在擁有者檢查之後要求 project_admin，判定 membership_service.can_administer_project，經 membership_facade.project_admin_check 由 hierarchy_router 注入）。本單元 2026-11-08 現況確認仍在；4 案 OK；副本突變「can_administer_project 對有成員列者一律 True」使兩個降級建立者案紅、還原後綠。零成員列擁有者可刪除的等價條件依 2026-11-08 使用者裁決保留，由 backend/tests/test_project_write_guard.py 的 (c) 案例鎖住。(d) 揭露文字見本單元 code-summary.md 十二節第 1 項補記。"
+    },
+    {
+      "id": "MB-39",
+      "status": "OK",
+      "target": "backend/tests/test_project_write_guard.py",
+      "note": "合併前必修第 39 列：(a) d 組三案只斷言 404 狀態碼，依 2026-10-26T02:56:46Z 使用者裁決「只記 Minor、不列入」維持不修（本列 OK 不代表 (a) 已補 detail 斷言）；(b) 十二節第 1 項揭露文字已於 2026-11-08 以區塊級補記落地（本單元 code-summary.md）。"
     }
   ]
 }

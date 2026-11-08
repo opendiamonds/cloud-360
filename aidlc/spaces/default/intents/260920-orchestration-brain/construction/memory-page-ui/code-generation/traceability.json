@@ -43,7 +43,8 @@
     "SEC-U15-3",
     "SEC-U15-4",
     "SEC-U15-5",
-    "MB-6"
+    "MB-6",
+    "MB-35"
   ],
   "coverage": [
     {
@@ -297,6 +298,12 @@
       "status": "OK",
       "target": "frontend/tests/e2e/memory-page.spec.ts",
       "note": "合併前必修第 6 項（functional-design/merge-blockers.md #6，review-02 R-08）：404 不直接視為已刪除，重讀該區當前頁確認。實作 frontend/src/memory/memoryApi.ts（404 → not-found-unconfirmed）與 frontend/src/components/memory/MemoryZone.tsx（deleteRecord 確認重讀）。e2e MB6-E11（重讀已不含 → 移除並播報）、MB6-E12（重讀仍含 → 刪除失敗、保留）、MB6-E13（重讀 500 → 刪除失敗、保留）；突變「404 一律 already-gone」→ 三案皆紅（含 MB6-E12）。"
+    },
+    {
+      "id": "MB-35",
+      "status": "OK",
+      "target": "frontend/tests/e2e/memory-page.spec.ts",
+      "note": "合併前必修第 35 列（functional-design/merge-blockers.md #35，review-03 R-06／R-07／R-08）：(a) frontend/src/components/memory/MemoryZone.tsx 語意／程序區刪除完成後只在焦點仍在被刪列內或落在 body 時才移到區標題（focusIsOnRowOrLost）；(b) frontend/src/components/memory/MemoryItem.tsx 進入 deleting 時該列 li 暫接焦點（tabIndex -1）；(c) Sidebar.tsx 的 aria-label 由 brain-infra A10 落地、frontend/tests/e2e/sidebar-landmarks.spec.ts 鎖住，本單元不重複。e2e MB35-a1／a2／a3／b；突變 M1（無條件移焦點）→ a2、a3 紅，M2（拿掉列焦點）→ b 紅，M3（從不移焦點）→ a1、b 紅。"
     }
   ]
 }

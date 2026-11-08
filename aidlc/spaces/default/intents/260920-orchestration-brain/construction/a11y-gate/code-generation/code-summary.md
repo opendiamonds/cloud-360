@@ -41,6 +41,8 @@
 | lockfile | `node_modules/@axe-core/playwright` 與 `node_modules/axe-core` 兩個條目皆有 `integrity`（sha512）、`dev: true`；`git diff --stat` 為 `package.json +1`、`package-lock.json +24` |
 | `npm audit`（全量後過濾） | 全樹 5 筆（high 3：`brace-expansion`、`browserslist`、`source-map-js`；moderate 1：`baseline-browser-mapping`；low 1：`dompurify`）。**新套件樹 0 筆**：`axe-core` 無任何相依，新樹只有這兩個套件，故 5 筆必然是既存的 |
 
+> 現況（2026-11-08 補記，合併前必修第 40 列 (f)）：本節的 `^4.13.0` 已過時，現為精確 `"4.13.0"`；見第十七節第 5 小節現況表（第十八節更新 test 數與掃描點數）。
+
 **過程中的一次修正**：第一次以 `npm install --save-dev @axe-core/playwright@^4.13.0` 安裝時，caret 範圍被解析成 4.14.0（違反 14 天規則）。改以精確版本 `@4.13.0` 重裝，npm 仍以預設 save-prefix 寫入 `^4.13.0`，而 lockfile 鎖在 4.13.0。**後果要知道**：CI 用 `npm ci`，以 lockfile 為準，不受影響；但任何人日後以 `npm install`（非 `ci`）重解析時可能浮到 4.14.x。
 
 ## 五、Step 10 第一次實跑的完整違規清單（`A11Y-S9` 規則 3 的比對基準）
@@ -56,12 +58,15 @@
 | 3 | `color-contrast` | `[data-testid="reselection-banner-acknowledge"]`（白字 on `#e17100`，3.19:1） | 是（`[data-slot="reselection-banner"]`） | 13、14、18 | 3 | 第 1 類：新元件，修掉 |
 | 4 | `color-contrast` | Sidebar 空選單提示 `<p>`「目前角色尚未開放任何功能選單，請聯絡管理員調整權限。」（`#99a1af` on 白，2.6:1）；第一次實跑時穩定選擇器為 `null`，見下方說明 | 否 | 01–17 | 17 | 第 2 類：頁殼既有，列入基準 |
 
+> 現況（2026-11-08 補記，合併前必修第 40 列 (f)）：上表第 4 筆的「2.6:1、列入基準」已過時——`Sidebar.tsx` 該提示已改 `text-gray-600`，基準現為 0 筆（`"entries": []`）；見第十七節第 5 小節現況表。
+
 第 18 點只掃橫幅外層（`include`），所以第 4 筆沒有出現在第 18 點。第一次實跑沒有任何交界類規則（第 3 類）出現。
 
 **第 4 筆的處置**：
 - **它確實是頁殼既有節點**：`git log -S` 顯示該字串由 `af73f03f`（2026-07-11，`feat(rbac)`）引入；出現條件 `!showCoreSection && !showAdminSection`（`Sidebar.tsx:324`）只看 A1／A3／J3a／J3b，本 intent 沒有改動這個節點或其條件。它在每個掃描點都出現，是因為攔截層的 `/me` 只給各頁所需的 K 系列權限——真實上只具 K 系列權限的使用者也會看到它。
 - **第一次實跑時選擇器為 `null`**：我寫的 role 對照表漏了 `p`。`<p>` 的隱含 role 是 `paragraph`（HTML-AAM），`D-04` 定義的名稱取法是「`aria-label`、`aria-labelledby` 指向的文字或其文字內容」，依此可得 `role=paragraph[name="目前角色尚未開放任何功能選單，請聯絡管理員調整權限。"]`——不依賴位置，符合 `C-03`。把 `p: 'paragraph'` 補進對照表後，該筆以此選擇器列入基準。
 - 基準檔現為 **1 筆**（`frontend/tests/e2e/a11y-baseline.json`），附 `reason`。
+  - 現況（2026-11-08 補記，合併前必修第 40 列 (f)）：此「1 筆」已過時，基準現為 0 筆；見第十七節第 5 小節現況表。
 
 ### 修改的新元件（重開已交付單元，限無障礙屬性）
 
@@ -145,6 +150,8 @@
 | `frontend/src/pages/MemberDetailPage.tsx` | 改：1 個屬性（U24） |
 | `frontend/src/components/membership/ReselectionBanner.tsx` | 改：2 個色階 class（U24） |
 
+> 現況（2026-11-08 補記，合併前必修第 40 列 (f)）：上表「1058 行／21 個 `test()`」「1 筆基準」「`^4.13.0`」已過時——現為 28 個 `test()`、基準 0 筆、精確 `"4.13.0"`；見第十七節第 5 小節現況表與第十八節。
+
 `frontend/playwright.config.ts`、任何 workflow 檔、後端、DDL、環境變數、secret：**零變更**。
 
 **暫時被改過、已還原的檔**（不在 `source-manifest.json`）：突變 M5 改過 `frontend/src/pages/MemoryPage.tsx`、M9 改過 `frontend/src/pages/EntryPage.tsx`，皆已還原為**位元組相同**（sha256 前綴 `bef9f34086aa`、`61aa958be1ca` 套用前後一致）。內容未變，但檔案 mtime 已變；若引擎的工作區指紋把 mtime 算進去而判為「未宣告的變更」，那是這兩次突變的痕跡，不是本單元的交付。
@@ -191,6 +198,7 @@
 7. **入口頁只在「連線中」狀態被掃描**：已連線、無作業對象、獨立模式等 `ContextBar` 狀態沒有被 axe 掃過（第十一節第 7 點）。
 8. **既存 `npm audit` 5 筆**（3 high）不在本單元範圍；其中 `dompurify`（low）屬產品相依鏈，另案處理。
 9. **頁殼既有違規**：Sidebar 空選單提示的對比 2.6:1，已列入基準；修它屬頁殼改動，不在本 intent 範圍。
+   - 現況（2026-11-08 補記，合併前必修第 40 列 (f)）：本點已過時——該提示已改 `text-gray-600`、基準為 0 筆，退步會讓掃描層變紅；見第十七節第 5 小節現況表。
 10. **`team.md` 的 lint 基準數過時**（記 3 warnings，實為 2），留待下一輪 practices-discovery。
 
 ## 十五、Sensor 結果
@@ -251,3 +259,219 @@
 - **ADR-0006 四面向**：皆不適用（無權限、資料、網路或稽核變更；隔離層使測試不連外，突變 B 實證；附件只含 `violations`／`incomplete`，token 為假值）。
 - **其他合併前必修列的影響**：第 23 列 (c) 對話框焦點圈限 axe 無規則可偵測，本閘門擋不到，修完後須重跑第 11、12、15 點；(a) 非數字 `projectId` 的固定句狀態目前無掃描點覆蓋。第 26 列 R-02 的「真實 stack 從未執行」同樣適用本 spec（未在 compose stack 或 CI runner 跑過，CI 耗時未量測）。Sidebar 兩個 `<nav>`（`:162`、`:218`）缺 `aria-label` 對應 `landmark-unique`（best-practice），在本閘門規則集下不執行，只能人工驗證。
 - **本摘要與追溯文件的過時處（原文不回改）**：各處「21 test／18 點／基準 1 筆／`p→paragraph`」已過時，現為 27 test／24 點／基準 0 筆；§十六的 24 test 現為 27；`ContextBar.tsx:53` 現為 `:109`。`traceability.json` 的 A11Y-S9、A11Y-S10、N-9、D-04 note 數字同樣過時，且上游 id 未涵蓋第 21、22 點對應的 U16 項目。`source-manifest.json` 未列 review-02 時本單元改過一個 class 的 `ConversationView.tsx`（該檔歸 entry-page-ui）。計畫與 unit-test-instructions 的「讀回 18 檔」現為 24。
+
+## 十七、共用檔異動後的重新驗證與補審（計畫九之二，2026-10-31）
+
+<!-- 寫入時間：2026-10-31T14:09:40Z（date -u 取值） -->
+
+本輪**不改任何程式、測試、共用文件**。只寫本節、`traceability.json` 四則 note、計畫的勾選。
+
+> 範圍補記（2026-11-08，合併前必修第 40 列 (g)、review-04 R-15）：上句漏列一處——本輪另在 `unit-test-instructions.md` 第三節末新增「現況註記（2026-10-31，共用檔重驗輪）」一段（副本執行方式），屬計畫九之二指定引用的內容。
+
+### 1. 共用檔重驗（收據 `reviewed-source-97f17c16ecf7.tsv`，8 檔）
+
+逐檔 `shasum -a 256` 對收據：**7 檔逐位元相同**（`package-lock.json`、`package.json`、`Sidebar.tsx`、`ContextBar.tsx`、`ReselectionBanner.tsx`、`a11y-baseline.json`、`a11y.spec.ts`）；**1 檔變動**：`frontend/src/pages/MemberDetailPage.tsx`，收據 `ad267843…b7f7` → 現況 `0e513bb2…4226`。
+
+**收據版本可由 git 精確重建**：`git show e2771a0:frontend/src/pages/MemberDetailPage.tsx | shasum -a 256` 為 `ad267843…b7f7`，與收據逐位元相同；`7a50a40`（HEAD）版本為 `0e513bb2…4226`，與工作樹相同（`git status` 該檔無異動）。故收據之後的改動**恰為** `git diff e2771a0 7a50a40`，不需 hunk 子集重建、也不需「無法證明為子集」的退路。該 commit 為合併前必修第 23 列（`member-pages-ui`）：(a) 非數字 `projectId` 改顯示固定句＋訊號、(c) 移出確認框加 `useDialogKeyboard`（Escape、焦點圈限）與關閉後焦點回「移出專案」鈕。
+
+逐 hunk 判定（行號為現況檔）：
+
+| 本單元負責或依賴的部分 | 現況 | 是否被碰到 |
+|---|---|---|
+| 第四節第 1 類的屬性修正 `aria-label="專案角色"`（本單元 `e2771a0` 唯一一行） | `:289`，緊接 `data-testid="member-detail-role-select"`（`:288`） | 否：`:288-289` 不在任何 hunk 內 |
+| 掃描點 10 就緒 `member-detail-page` | `:246` | 否：`:247` 的 hunk 只把 `LiveRegion` 的 `message` 換成 `shownLiveMsg` |
+| 掃描點 10 就緒 `member-detail-role-select` | `:288` | 否 |
+| 掃描點 10 排除「載入中…」 | `:257` | **是（條件）**：渲染條件 `isLoading` → `showLoading`（`:138`＝`isLoading && !invalidProjectId`）。掃描點以數字 `PROJECT_ID` 進頁（`a11y.spec.ts:369`），`invalidProjectId` 為 false，兩者等值；文字與元素未變 |
+| 掃描點 10 排除 `member-detail-error` | `:260` | **是（條件）**：`:259`／`:261` 的 `error` → `shownError`（`:139`），數字 id 下等值；test-id 本身那一行未變 |
+| 掃描點 15 互動 `member-detail-remove` | `:378` | 否：`:377` 只新增 `ref={removeButtonRef}` |
+| 掃描點 15 就緒 `remove-confirm-dialog` | `:392`（`role="dialog"` `:393`、`aria-modal="true"` `:394`） | 否：`:391` 只新增 `ref={confirmDialogRef}`；`:406` 取消鈕 `onClick` 改呼叫 `closeConfirm` |
+| `ReselectionBanner.tsx` 的 `data-slot` | `ReselectionBanner.tsx:242`，該檔與收據逐位元相同 | 否 |
+| `a11y-baseline.json` 條目所指節點 | 基準 `"entries": []` | 不適用：無條目 |
+
+結論：沒有任何 hunk 移除或改寫本單元的屬性修正、依賴的 test-id 或文字定位器；兩處條件改寫在掃描點的數字 id 下語意等值。新增的焦點圈限只改鍵盤行為（axe 無對應規則），掃描點 15 的 DOM 只多兩個 `ref`（不輸出屬性）。以下回歸實跑作為行為面的補強。
+
+### 2. 回歸（副本）
+
+副本：`rsync -a` 實體複製 `frontend/` 至 scratchpad 的 `a11y-copy/frontend`（排除 repo 內既存的 `dist`、`test-results`、`junit.xml`、`pw-report.json`、`node_modules/.tmp`）；`find -type l -lname '/*'` 0 筆、所有 symlink 以 `realpath` 解析後落在 repo 內者 0 筆。`npm run build`、`vite preview --port 4173 --strictPort`、Playwright 皆在副本內執行，兩次 preview 用完即停（`curl` 回 `000`）。
+
+| 檢查 | 結果 |
+|---|---|
+| `npm run build`（`tsc -b && vite build`） | 成功，僅既有 chunk 大小警告 |
+| `dist/` 內 axe | 字面子字串命中 2 檔，逐筆看上下文皆為 `leading-relaxed`；與第八節判定相同 |
+| `a11y.spec.ts`（`--retries=0`） | **27 passed（18.4s）**，0 failed／flaky／skipped |
+| `a11y.spec.ts`（`CI=1`，`retries: 1` 生效） | **27 passed（18.4s）** |
+| 掃描結果檔 | 24 個；`grep -L '"entries": []'` 0 個，即 24 個掃描點全部零違規 |
+| `a11y-baseline.json` | 跑後 sha256 `7c1051f6…733f`，與收據相同，`entries` 仍為空，**未新增條目** |
+| 過期檢查（「基準清單沒有過期條目」） | 綠，未誤紅 |
+| `memory-page.spec.ts`（Step 2 執行器複驗） | 18 passed（12.1s） |
+| `eslint .` | **0 errors、2 warnings**（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，與重做段「2 個既存 warning」同數，未增） |
+| repo 內（唯讀） | `grep -rn "axe-core" frontend/src` 0；`playwright.config.ts` 仍 `fullyParallel: false`（`:14`）、`retries: CI ? 1 : 0`（`:17`）、`workers: 1`（`:18`），`e2771a0..HEAD` 無 commit 改它 |
+
+重做段第 252 行要求「第 23 列 (c) 修完後須重跑第 11、12、15 點」：本次全檔 27 案即含第 11、12、15 點，皆綠。
+
+**repo 未留產物**：`find frontend backend -newermt "2026-10-31 13:50:00"`（本機時區）排除 `node_modules` 為 0 筆；`frontend/dist`、`frontend/test-results`、`frontend/node_modules/.tmp` 亦 0 筆。repo 內既存的 `frontend/dist`（10-27）、`test-results`（10-24）、`junit.xml`、`pw-report.json`（10-27）為前輪留下的 git 忽略檔，本輪未建立也未刪除。
+
+### 3. review-03 各項現況
+
+| ID | review-03 狀態 | 現況（附定位） | 處置 |
+|---|---|---|---|
+| R-01 | Resolved | 掃描點 20 仍在（`a11y.spec.ts:1184`），本次綠 | 無 |
+| R-02 | Resolved | `Sidebar.tsx:325` 為 `text-gray-600`；基準為空 | 無 |
+| R-03 | Resolved | 基準為空，無 `role=paragraph` 鍵 | 無 |
+| R-04 | Resolved | `package.json:25` 為 `"4.13.0"`（精確） | 無。第四節第 40 行與第十節第 140 行仍寫 `^4.13.0`，為過時陳述，以本列為準 |
+| R-05 | Unresolved | `unit-test-instructions.md` 對 `incomplete` 0 命中；`ui-regression` 仍無 artifact 上傳 | **仍成立**。需改共用測試說明或 workflow → 已知限制，見第 6 小節 |
+| R-06 | Unresolved | `MemberDetailPage.tsx:289` 仍是 `aria-label` 與上方標題同字各自維護；`ContextBar.tsx:109` 仍為 `role="img" aria-label="連線中"` | **仍成立**（可選建議）。需改程式 → 已知限制 |
+| R-07 | Resolved | — | 無 |
+| R-08 | Resolved | 掃描點 23、24、25 在（`:1225`、`:1239`、`:1253`），本次綠；`ConversationView.tsx:25` 為 `text-brand-50` | 無。另：第 23 列 (a) 讓**成員詳情頁**也有非數字 `projectId` 的固定句狀態（`MemberDetailPage.tsx:44-56`、`:139`），沿用同一個 `member-detail-error` 元素；掃描點 25 只涵蓋**成員清單**的 404，詳情頁這個狀態無掃描點 → 已知限制 |
+| R-09 | Unresolved | 第四節 `:57`、`:64`，第十節 `:143`，第十四節 `:193` 仍寫基準 1 筆／2.6:1 已列入基準 | **只需改紀錄**。本輪只准 append，故以下第 5 小節的現況表**取代**這四行，原文不回改 |
+| R-10 | Unresolved | 計畫第一節、`unit-test-instructions.md:14`、`:18`、`:21`、`:60-61` 仍寫 21 test／18 點 | **只需改紀錄**，以第 5 小節現況表為準；計畫內文與測試說明本輪不得改 |
+| R-11 | New | 27 個 `test()`，`@note` 15 個（缺 12 個）；`@story US9.2` 於 `a11y.spec.ts:1195`、`:1209`（第 21、22 點），計畫要求 `N-9`；`@api` 0；`describe('U17 a11y gate')`（`:906`） | **仍成立**。補 `@note` 需改測試；改 Step 14 文字需改計畫內文（本輪禁止）→ 已知限制；Step 14 維持未勾 |
+| R-12 | New | `source-manifest.json` 的 `writes` 8 筆，仍無 `ConversationView.tsx` | **仍成立**。本輪不准寫 `source-manifest.json` → 已知限制；歸屬在此記明：該檔的 `text-brand-100 → text-brand-50`（`ConversationView.tsx:25`）為本單元於 review-02 期間所改，檔案歸 `entry-page-ui` |
+| R-13 | New | `traceability.json` 的 A11Y-S9、A11Y-S10、D-04、N-9 note 數字過時 | **本輪已更新四則 note**（基準 0 筆、24 掃描點、27 test、role 對照表無實際放行條目），`python3 -m json.tool` 驗證合法。`upstream_ids` **未**加入第 21、22 點的 `US9.2`：該 id 屬 U16，加進本單元 upstream 會改變 traceability sensor 的比對集合，留待 conductor 判定；A11Y-S10 的 note 已註明此缺 |
+
+### 4. 勾選重設
+
+依前一輪紀錄逐格判定（計畫內文未改，只改 `[ ]`→`[x]`）：
+
+| 格 | 判定 | 依據 |
+|---|---|---|
+| Step 1 | 勾 | 本輪重驗：test-id／文字定位器以 27 案就緒斷言實證；`playwright.config.ts` 三項設定見上；`ReselectionBanner.tsx:242` 的 `data-slot` 在且檔案與收據相同 |
+| Step 2 | 勾 | 本輪重驗：副本 `memory-page.spec.ts` 18 passed |
+| Step 3 | 勾 | `package.json`、`package-lock.json` 與收據逐位元相同；發布日與 `npm audit` 需連 registry，本輪未重驗（沿用第四節） |
+| Step 4–9、12 | 勾 | `a11y.spec.ts` 與收據逐位元相同，且本輪 27 案全綠 |
+| Step 10 | 勾 | `a11y-baseline.json` 相同；本單元在 `MemberDetailPage.tsx:289` 的第 1 類修正仍在（見第 1 小節） |
+| Step 11 | 勾 | 突變的證據檔（spec、基準）逐位元相同；本輪未重跑 M1–M12 |
+| Step 13 | 勾 | 本輪重驗：lint 0 errors、build 成功、src 內 axe-core 0、dist 判定同前、兩支 validator 綠、耗時 18.4s（本機 preview） |
+| Step 14 | **不勾** | 27 案中 12 案缺 `@note`，第 21、22 點 `@story` 為 `US9.2` 非 `N-9`（R-11 仍成立） |
+| Step 15 | 勾 | 三份文件皆在；`source-manifest.json` 漏列 `ConversationView.tsx`（R-12）為已知限制，不影響本格所列內容的存在 |
+| Step 16 | 勾 | 本輪以生產建置＋preview 重跑全綠、基準未增、過期檢查未誤紅 |
+| 九之二 五格 | 勾 | 本節第 1–5 小節即其結果；「收尾」於本節寫入且 validator 綠後勾 |
+
+**實算**（收尾格勾選後，`grep -c '^- \[x\]'`／`grep -c '^- \[ \]'`）：**已勾 20、未勾 1**（唯一未勾為 Step 14）。
+
+### 5. 現況表（取代第一至十六節的過時數字，R-09／R-10）
+
+| 項目 | 現況 | 過時陳述所在 |
+|---|---|---|
+| `test()` 數 | **27**＝24 掃描點（01–18、20–25）＋1 手機寬度（19）＋2 基準檢查 | 計畫第一節、第十節 `:142`、`unit-test-instructions.md:14`、`:21`；§十六的 24 |
+| 掃描結果檔數 | **24** | 第五節 `:48`、`unit-test-instructions.md` 的 18 |
+| 基準條目 | **0**（`"entries": []`） | 第五節 `:57`、`:64`，第十節 `:143`，第十四節 `:193` |
+| `@axe-core/playwright` 寫法 | 精確 `"4.13.0"`（`package.json:25`） | 第四節 `:40`、第十節 `:140` 的 `^4.13.0` |
+| 本機耗時 | 18.4s（本輪） | 第八節 `:123` 的 13.4s（當時 21 案） |
+
+### 6. 已知限制（待 conductor 併入 merge-blockers）
+
+既有列已涵蓋者：第 23 列（成員詳情的非數字 `projectId` 與對話框焦點）在程式面已修，但其**掃描覆蓋**未被該列處理；第 26 列 R-02（真實 stack）同樣適用本 spec。以下為未被任何既有列涵蓋者：
+
+1. **R-11**：`a11y.spec.ts` 12 案缺 `@note`、第 21、22 點 `@story` 為 `US9.2`；需補註解（改測試）或修訂計畫 Step 14 文字。Step 14 因此未勾，本單元無法乾淨結案。
+2. **R-12**：`source-manifest.json` 漏列 `frontend/src/components/brain/ConversationView.tsx`。
+3. **R-05**：`incomplete` 只附 Playwright attachment、`ui-regression` 無 artifact 上傳；`unit-test-instructions.md` 未註明「綠燈不代表 incomplete 為空」。
+4. **新（掃描覆蓋）**：成員詳情頁的非數字 `projectId` 固定句狀態（第 23 列 (a)，`MemberDetailPage.tsx:44-56`、`:139`、`:259-261`）無掃描點；需新增掃描點（改測試）。
+5. **R-06**（可選）：`MemberDetailPage.tsx:289` 改 `aria-labelledby`；`ContextBar.tsx:109` 骨架改 `role="status"` 的評估。
+6. **R-13 剩餘**：`traceability.json` 的 `upstream_ids` 未涵蓋第 21、22 點對應的 U16 `US9.2`。
+
+### 7. 收尾
+
+`python3 -B scripts/validate_repo_contract.py`：passed。`python3 -B scripts/validate_env_contract.py`：passed（皆於 repo 根目錄唯讀執行，本節寫入後重跑）。
+
+## 十八、合併前必修第 40 列（計畫九之三，2026-11-08）
+
+<!-- 寫入時間：本輪開工時 `date -u` 為 2026-11-08T03:56:12Z；本節寫入時 shell 已被 plan-approval guard 擋下，無法再取 `date -u`，故不寫一個未經取值的時間 -->
+
+### 0. 開工時的現況（先查再做）
+
+收據 `reviewed-source-311abd498fc2.tsv`（以 Python `hashlib` 逐列解析 tab 欄位；抽 `package.json`、`a11y.spec.ts` 以 `shasum -a 256` 手動複核一致）：9 列（1 列 manifest ＋ 8 檔）中 **4 檔相同**（`package-lock.json`、`package.json`、`ReselectionBanner.tsx`、`a11y-baseline.json`），**4 檔變動**：`Sidebar.tsx`、`brain/ContextBar.tsx`、`MemberDetailPage.tsx`、`a11y.spec.ts`。四檔的收據雜湊皆等於 `git show HEAD:<檔>` 的雜湊，故收據後的改動**恰為**工作樹對 HEAD 的未提交 diff。逐 hunk 讀過：全部標註為 brain-infra 計畫 A10（第 35 列 (c)、第 40 列 (a)(d)(i)，見 `brain-infra/code-generation/code-summary.md` A10 段），內容為 `Sidebar.tsx:248` 補 `aria-label="我的記憶"`、`ContextBar.tsx:111` 骨架 `role="img"`→`role="status"`、`MemberDetailPage.tsx:284`／`:292` 改 `aria-labelledby`、`a11y.spec.ts` 補 12 個 `@note` 與第 26 掃描點。沒有任何 hunk 移除本單元依賴的 test-id、文字定位器、`data-slot` 或基準條目。
+
+因此 Step 18 與 (i) 在本輪開工前**已由 brain-infra 落地**；本輪不重做，只驗證並補其餘項。
+
+### 1. 逐步結果
+
+| Step | 結果（附定位） |
+|---|---|
+| 17 (a) | `a11y.spec.ts`：`test(` 28、`@purpose` 28、`@given` 28、`@pass` 28、`@story` 28、`@ui` 28、`@note` 28、`@step` 60、`@api` 0（`grep -c`）。第 21、22 點 `@story US9.2` 改為 `@story N-9、US9.2`（`:1219` 附近與 `:1233` 附近兩處；`tcms_sync.py` 的 `@story` 只取最後一行，故以單行第二值保留，不另起第二行）。`parse_spec` 實讀 28 案，兩案 story 為 `N-9、US9.2`、其餘 26 案為 `N-9`。`describe('U17 a11y gate')` 與 28 個 test 名稱未動。`python3 -B scripts/tcms_validate.py --spec frontend/tests/e2e/a11y.spec.ts` → **通過 28/28、ERROR 0、WARN 0**。據此勾 Step 14（偏離：計畫 Step 14 字面寫「21 個 `test()`」，現為 28，以現況表為準） |
+| 18 (d) | 已存在：`SCANS.memberDetailInvalidProject`（`id: '26-member-detail-invalid-project'`，`/projects/not-a-number/members/${OTHER_ID}`，就緒 `member-detail-page` ＋ `member-detail-error` 含「查不到這個專案」，排除「載入中…」與 `member-detail-role-select`）與 test「26 成員詳情頁專案編號非數字」，規格註解齊全。全走 `page.route`（`login`、`reselections`）；`a11y-baseline.json` sha256 `7c1051f6…733f` 未變，**未新增豁免** |
+| 19 | `a11y.spec.ts:77` 註解改為「我的記憶的 `<nav>` 現已有 `aria-label="我的記憶"`〔`Sidebar.tsx:248`，由 `sidebar-landmarks.spec.ts` 鎖住〕，此處仍以其連結 test-id 定位」。只改註解；`NEW_SIDEBAR_MARKERS` 陣列未動 |
+| 20 (i) | 已落地，落地者 brain-infra A10：`ContextBar.tsx:111` 為 `role="status" aria-label="連線中"`；`MemberDetailPage.tsx:284` `<h2 id="member-detail-role-heading">`、`:292` `aria-labelledby="member-detail-role-heading"`。本輪未改元件程式 |
+| 21 (b) | `source-manifest.json` 補 `frontend/src/components/brain/ConversationView.tsx`（偏離：計畫字面為 `components/ConversationView.tsx`，該路徑不存在，以實際路徑為準），`writes` 現 9 筆 |
+| 21 (c) | `traceability.json` 的 `upstream_ids` 補 `US9.2`（並依 Step 24 補 `MB-40`），`coverage` 同步各加一列，N-9 note 補現況；`upstream_ids` 31、`coverage` 31、集合差為空，`python3 -B -I` 的 `json.load` 可解析 |
+| 21 (e)(h) | `unit-test-instructions.md` 第三節末 append 兩段「現況註記（2026-11-08）」：綠燈不代表 `incomplete` 為空；副本 `node_modules` 的來源限制、`cp -cR` 做法、`openapi.json` 須放副本根目錄、`--host 127.0.0.1`。原文未刪 |
+| 21 (f) | 第四節（`^4.13.0`）、第五節（表後與「基準 1 筆」條下）、第十節（檔案表後）、第十四節（第 9 點下）各加一行指向第十七節第 5 小節現況表；原文未刪。註：review-03 R-09 所稱「第四節 `:57`、`:64`」實際位於第五節，本輪依實際位置補記 |
+| 21 (g) | 第十七節開頭範圍宣稱後加一行，補記 `unit-test-instructions.md` 的 2026-10-31 現況註記為該輪新增 |
+| 22 | 副本 `MemberDetailPage.tsx` 在固定句 `<p>` 後注入 `{invalidProjectId && <button type="button" data-testid="a11y-mut-unnamed" />}` → 重建（`dist` 內命中 1）→ 跑 `a11y.spec.ts`：**27 passed、1 failed**，紅的恰為「26 成員詳情頁專案編號非數字」，訊息 `[掃描層] 26-member-detail-invalid-project 有基準以外的 WCAG 2.1 AA 違規`，條目 `rule: button-name`、`impact: critical`、`inNewRoot: true`、`selector: [data-testid="a11y-mut-unnamed"]`；其餘 27 案（含第 10 點，數字 id 不觸發注入）綠。還原（Edit 移除該行）→ `cmp` 與備份逐位元相同、sha256 `d3e02559…` 與 repo 檔相同 → 重建（`dist` 命中 0）→ 全綠。repo 內被測檔未動 |
+| 23 | 見第 2 小節。**未完成部分**：repo 內的 `validate_repo_contract.py`、`validate_env_contract.py` 未跑（見第 4 小節） |
+| 24 | 本節、`traceability.json` 的 `MB-40` 已寫；**`merge-blockers.md` 第 40 列處置欄未能補記**——該檔在 code-generation record 目錄之外，Edit 被 plan-approval guard 擋下（見第 4 小節）。擬補記的文字附於第 5 小節，供 conductor 貼入 |
+
+### 2. 回歸（Step 23，副本）
+
+副本 `scratchpad/a11y-copy/frontend`：`rsync -a` 複製 `frontend/`（排除 `node_modules`、`dist`、`test-results`、`junit.xml`、`pw-report.json`），`node_modules` 以 `cp -cR` 自 repo 複製並刪去 `.tmp/`；`openapi.json`、`ws-contract.json` 放副本根目錄。副本內絕對路徑 symlink 0、解析後落在 repo 內者 0。不連網路、未 `npm install`。
+
+| 檢查 | 結果 |
+|---|---|
+| `npm run lint` | **0 errors、2 warnings**（`AssessmentPage.tsx`、`WorkspacePage.tsx:344` 的既有 `exhaustive-deps`），未增 |
+| `npm run check:types` | 「API 型別檔與規格檔一致。」 |
+| `npm run build` | 成功（僅既有 chunk 大小警告）；review-04 R-16 的 TS2307 **未重現**——repo 現有 `node_modules` 本輪複製後可建置。這份依賴不是本輪重新安裝的，其完整性只由上述三項通過間接證明 |
+| `vite preview --host 127.0.0.1 --port 4187 --strictPort` ＋ `BASE_URL=http://127.0.0.1:4187`，`a11y.spec.ts` ＋ `sidebar-landmarks.spec.ts`，`--retries=0` | **30 passed（19.4s）**：a11y 28（25 掃描點＋手機寬度＋2 基準檢查）、sidebar-landmarks 2 |
+| 同上，`CI=1`（`retries: 1`）只跑 `a11y.spec.ts` | **28 passed（18.3s）** |
+| 突變還原後重跑（同第一列組合） | **30 passed（19.1s）** |
+| 掃描結果檔 | 25 個；`grep -L '"entries": []'` 0 個（25 點全部零違規） |
+| 基準 | sha256 `7c1051f6…733f`，`entries` 仍空，**未新增**；過期檢查綠 |
+| preview | 每次用畢 `pkill`；最後一次停止後 `curl` 回 `000` |
+
+`playwright.config.ts`（repo 唯讀）：`:14` `fullyParallel: false`、`:17` `retries: process.env.CI ? 1 : 0`、`:18` `workers: 1`，未改。
+
+### 3. 勾選重判
+
+收據 4 檔變動（第 0 小節）；本輪以副本回歸重驗。
+
+| 格 | 判定 | 依據 |
+|---|---|---|
+| Step 1 | 勾 | `playwright.config.ts` 三項設定實讀；`ReselectionBanner.tsx` 與收據相同（`data-slot` 未動）；test-id／文字定位器由 28 案就緒斷言實證 |
+| Step 2 | 勾 | 本輪以副本生產建置＋preview 跑 a11y／sidebar-landmarks 30 passed 驗證執行器。偏離：Step 2 字面點名的 `memory-page.spec.ts` 本輪未重跑（該檔屬 memory-page-ui，工作樹已有他單元改動） |
+| Step 3 | 勾 | `package.json`、`package-lock.json` 與收據逐位元相同 |
+| Step 4–9、12 | 勾 | `a11y.spec.ts` 收據後只有加法改動（掃描點 26、註解），四層函式未動；本輪 28 案全綠 |
+| Step 10 | 勾 | 基準相同；第 1 類修正在 brain-infra A10 改寫後仍成立（第 10 點、第 01／13／14 點綠） |
+| Step 11 | **不勾** | 證據檔 `a11y.spec.ts` 自收據後已變動，M1–M12 本輪未重跑；Step 22 只重驗了第 26 點的掃描層突變 |
+| Step 13 | **不勾** | lint、build、check:types 本輪已重驗；但 repo 內兩支 validator、`grep -rn "axe-core" frontend/src`、`dist/` 內 axe 檢查在 shell 被擋後未能執行 |
+| Step 14 | 勾 | Step 17 完成（見上） |
+| Step 15 | 勾 | 三份文件皆在；R-12 已補 |
+| Step 16 | 勾 | 本輪生產建置＋preview 重跑全綠、基準未增、過期檢查未誤紅 |
+| 九之二 五格 | 勾 | 該輪紀錄（第十七節）未變；本輪回歸另作補強 |
+| Step 17–22 | 勾 | 見第 1 小節 |
+| Step 23 | **不勾** | repo 內兩支 validator 未跑 |
+| Step 24 | **不勾** | `merge-blockers.md` 第 40 列未能補記 |
+
+**實算**：shell 被擋後無法跑 `grep -c`，改以 Read 工具讀全檔逐格計數：**已勾 25、未勾 4**（Step 11、13、23、24），共 29 格。
+
+### 4. 本輪的阻斷：plan-approval guard
+
+依 Step 21 (e)(h) 以 Edit 改 `unit-test-instructions.md` 之後，所有 shell 指令與 record 目錄外的 Edit 皆被 PreToolUse hook 擋下，逐字：「Code generation cannot run mutation-capable shell commands for unit a11y-gate because the plan, unit-test instructions, and current Testing Contract do not have a current matching approval.」本輪**未**繞過（未暫時還原該檔、未關閉 guard、未自行跑 `aidlc engine orchestrate next`）。受影響而未完成的項目：
+
+1. repo 內 `python3 -B scripts/validate_repo_contract.py`、`python3 -B scripts/validate_env_contract.py`。
+2. `grep -rn "axe-core" frontend/src`、副本 `dist/` 內 axe 字樣檢查（Step 13）。
+3. `merge-blockers.md` 第 40 列處置欄補記（Step 24）。
+4. 收尾的 repo 產物檢查（`junit.xml`／`pw-report.json`／`.tsbuildinfo` mtime、`git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'`）與刪除 scratchpad 副本。開工時記錄的 mtime：`frontend/junit.xml`、`pw-report.json` 為 11-07 23:44，`node_modules/.tmp/*.tsbuildinfo` 為 11-08 07:08:55，`frontend/dist` 為 11-08 07:08:56，皆早於本輪；本輪所有 build／Playwright 都在副本內執行（cwd 為副本），唯一在 repo 跑過的 Python 是 `python3 -I`（讀 `tcms_sync.parse_spec`，事後查 `scripts/__pycache__/tcms_sync.cpython-313.pyc` mtime 仍為 09-06，未改寫）與 `python3 -B`。
+
+由 conductor 重新取得核可（或依 guard 指示）後補跑上列 1、2、4，並貼入第 5 小節。
+
+### 5. 擬補記於 `merge-blockers.md` 第 40 列處置欄的文字（原文保留，接在「修後重審 a11y-gate」之後）
+
+> **2026-11-08 a11y-gate 處置**：(a) 28 個 test 註解齊全（各標籤 28、`@step` 60、`@api` 0），第 21、22 點 `@story` 改 `N-9、US9.2`，名稱未改；(d) 第 26 點（brain-infra A10 加入）副本突變注入無名稱按鈕 → 第 26 點紅（`button-name`）、還原 → 綠；(i) 已由 brain-infra A10 落地（`ContextBar.tsx:111`、`MemberDetailPage.tsx:284`／`:292`）；(b)(c)(e)–(h) 與 `a11y.spec.ts:77` 過期註解已改。副本 30 passed、`CI=1` 28 passed、基準未增、lint 0 errors。未完成：repo 內兩支 validator（plan-approval guard 擋下）、M1–M12 未重跑。結論：待重審 a11y-gate。
+
+### 6. 已知限制（待 conductor 併入 merge-blockers）
+
+1. Step 11：`a11y.spec.ts` 收據後已變動，M1–M12 未重跑（既有第 40 列可涵蓋，或另列）。
+2. 第 4 小節的四項未完成檢查。
+3. 計畫 Step 14／一、範圍仍寫「21 個 `test()`」、Step 21 (b) 的路徑少了 `brain/`——計畫內文本輪不得改，以本節與第十七節現況表為準。
+4. 第 26 列（真實 stack 從未執行）仍適用本 spec。
+
+### 7. conductor 補完第 4 小節的阻斷項（2026-11-08T04:11:30Z）
+
+本輪改 `unit-test-instructions.md` 之後 plan-approval guard 判定指紋失效；使用者已於 2026-11-08 關閉本 intent 的計畫核可關卡，conductor 重跑 `aidlc engine orchestrate next` 後重新綁定（`plan_approval.status: approved`、`skipped: true`），再補做下列檢查：
+
+- `python3 -B scripts/validate_repo_contract.py`：passed；`python3 -B scripts/validate_env_contract.py`：passed。
+- `grep -rn "axe-core" frontend/src`：0 筆；副本 `frontend/dist/` 內 `axe-core`／`axe.run`：0 筆（axe 未進生產建置）。
+- repo 測試產物 mtime：`frontend/junit.xml`、`frontend/pw-report.json` 為 2026-11-07 23:44（+08），`frontend/node_modules/.tmp/tsconfig.{app,node}.tsbuildinfo` 為 2026-11-08 07:08（+08），皆早於本輪開工；`git status --porcelain` 過濾 `.pyc`／`.hypothesis`／`__pycache__` 為空。
+- scratchpad 副本 `a11y-copy/` 已刪除。
+- `merge-blockers.md` 第 40 列處置欄已依第 5 小節文字補記（含本小節的補跑結果）。
+- 據此勾選 Step 13、Step 23、Step 24；Step 11（M1–M12 未重跑）維持未勾。
+- 重新綁定核可時引擎把計畫 29 格全部重設為未勾（非證據失效）；conductor 依第 3 小節逐格判定加上本小節補跑結果重勾，只改勾選字元：**已勾 28、未勾 1**（Step 11）。

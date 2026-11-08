@@ -15,7 +15,7 @@
     "S-5", "S-6", "S-7", "S-8", "S-9", "S-10", "S-11",
     "OQ-H1", "OQ-H2", "OQ-H3", "OQ-3",
     "DG-2", "DG-3",
-    "MB-3"
+    "MB-3", "MB-28"
   ],
   "coverage": [
     { "id": "AC9.1.1", "status": "Deferred", "target": "U7 hierarchy-service ＋ U14 entry-page-ui — 三層路徑的**顯示**不在本單元；本單元只交付它需要的資料形狀（projects → systems → user_diagrams.system_id）" },
@@ -34,20 +34,20 @@
     { "id": "BR2.1", "status": "OK", "target": "同 AC9.1.4" },
     { "id": "BR2.2", "status": "OK", "target": "hierarchy_migration.py::_assign_unassigned_diagrams（WHERE system_id IS NULL）與 _resolve_default_pair（存在就取用）＋ tests::TestHierarchyMigrationLogic::test_rerun_creates_no_second_pair_and_reassigns_nothing。真實 PG 18 上連跑兩次：第二次 default_pairs_created=0、diagrams_assigned=0" },
     { "id": "BR2.3", "status": "OK", "target": "_assign_unassigned_diagrams 刻意以 sqlalchemy.text() 而非 ORM 寫入（models.UserDiagram.updated_at 帶 onupdate=func.now()）＋ test_migration_does_not_touch_any_existing_diagram_column。突變驗證 M2（改走 ORM）被抓到" },
-    { "id": "BR2.4", "status": "OK", "target": "migrate_hierarchy(db) 為模組層函式，backend/tests/test_hierarchy_migration.py 直接匯入呼叫（14 個案例全部走它或它的私有輔助）" },
+    { "id": "BR2.4", "status": "OK", "target": "migrate_hierarchy(db) 為模組層函式，backend/tests/test_hierarchy_migration.py 直接匯入呼叫。該檔共 15 個案例（2026-10-29 以 grep -c 'def test_' 實算；review-03 R-06 更正原寫的「14 個案例全部走它或它的私有輔助」），其中 14 個走 migrate_hierarchy 或其私有輔助；test_schema_rbac_sql_matches_migration_ddl 的本體不呼叫遷移，它比對 schema_rbac.sql 與遷移模組兩處 DDL 的欄位集合（它所在的 TestHierarchySchema 的 setUp 會呼叫私有輔助 _ensure_hierarchy_schema，但那只是建表前置，不是被測對象）" },
     { "id": "BR2.5", "status": "OK", "target": "_users_holding_diagrams（join users，不持有圖者不建）＋ _resolve_default_pair（先解析預設專案、再以其 id 為範圍找系統）＋ tests::test_a_user_without_diagrams_gets_no_default_project 與 test_rerun_creates_no_second_pair_and_reassigns_nothing。突變驗證 M4（系統查詢不以 project_id 收窄）被三個案例抓到" },
-    { "id": "BR2.6", "status": "OK", "target": "MigrationCounts（users_processed／default_pairs_created／diagrams_assigned）＋ logger.info 的計數行 ＋ tests::test_counts_report_users_pairs_and_rewrites（斷言 (2,2,5) 與重跑的 (2,0,0)）" },
+    { "id": "BR2.6", "status": "OK", "target": "MigrationCounts（users_processed／default_pairs_created／diagrams_assigned）＋ logger.info 的計數行 ＋ tests::test_counts_report_users_pairs_and_rewrites（斷言 (2,2,5) 與重跑的 (2,0,0)）；2026-11-01 補 tests::test_hierarchy_migration_exit_codes::test_split_pair_backfills_the_system_but_counts_zero 鎖住「預設專案在、預設系統缺」時 default_pairs_created 低報為 0 的語意（MigrationCounts docstring 已揭露，合併前必修第 28 列 (b)）" },
     { "id": "BR3.1", "status": "Deferred", "target": "未來的 DiagramChangeRecord 讀取端（本 intent 內零讀取端）。本單元的承載是 source 封閉列舉 ＋ diagram_change_records 的 COMMENT ON TABLE／COLUMN 逐字寫明「不得被讀成完整變更歷程」" },
     { "id": "BR3.2", "status": "Deferred", "target": "U7 hierarchy-service（錯誤訊息）＋ U16 object-picker-ui（畫面）。本單元只定義約束，不定義錯誤訊息" },
     { "id": "BR3.3", "status": "Deferred", "target": "U7／U10／U14。本單元的承載是 user_diagrams.system_id 的 COMMENT ON COLUMN 逐字寫明它是 AUTHORITATIVE source of ownership 而 user_id 不是" },
     { "id": "SEC-1", "status": "OK", "target": "零 APIRouter、零 service 層讀寫函式；模組唯一公開名稱為 migrate_hierarchy／MigrationCounts／HierarchyMigrationError／CHANGE_RECORD_SOURCE_BRAIN，其餘皆底線前綴。OpenAPI drift 閘門（dump_openapi.py --check）通過，證明端點集合未變" },
     { "id": "SEC-2", "status": "OK", "target": "兩支新檔對 os.environ／getenv／API_KEY／PASSWORD／SECRET 的 grep 結果為零；遷移沿用 database.py 的既有 DATABASE_URL。validate_env_contract.py 通過" },
-    { "id": "SEC-3", "status": "OK", "target": "本單元三支 Python 檔對 ^\\s*(from|import)\\s+(httpx|requests|fastapi) 與 APIRouter(／@app.／@router.websocket 的 grep 結果皆為零（檢查對象即 source-manifest.json 所列的本單元檔案）" },
-    { "id": "SEC-4", "status": "Deferred", "target": "（原記為非法狀態值 Partial，2026-10-20 依允許的五種狀態改記 Deferred；已完成與未完成部分如下）(1) 遷移失敗大聲＝OK（AC9.1.4）；(2) 遷移留計數＝OK（BR2.6）；(3) 清除留計數＝Deferred（S-5 未落地，U4-R3 空轉）；(4) DiagramChangeRecord 自身＝結構 OK（actor_user_id NOT NULL ＋ COMMENT 寫明不得預設填工作階段擁有者），但**稽核保證仍待 OQ-H3 定案**，本單元不宣稱它已滿足" },
-    { "id": "U4-V1", "status": "Deferred", "target": "U5／N-2 擁有的共用真實 PostgreSQL CI job（尚不存在）；寫進 CI 的動作落點 ci-pipeline（CONDITIONAL）。**本站已在本機以 pgvector/pgvector:pg18 容器實際執行過該 job 的六個步驟**（見 code-summary.md §五），但那是一次人工驗證，不是 CI 閘門" },
-    { "id": "U4-V2", "status": "Deferred", "target": "同 U4-V1。本站的本機驗證已構造該前置狀態（兩位持有圖的使用者、system_id 為空的三張圖）" },
-    { "id": "U4-V3", "status": "Deferred", "target": "同 U4-V1。不變量查詢已在本機真實 PG 上執行並回 0" },
-    { "id": "U4-V4", "status": "OK", "target": "機械面：migrate_hierarchy 的 per-user except 只 rollback ＋ log 後 raise，不吞；run_hierarchy_migration.main() 以非零結束碼收場 ＋ tests::test_standalone_command_exits_non_zero_when_the_final_check_fails（斷言 0／1／2 三個結束碼）。突變驗證 M8（失敗回 0）被抓到。行為面（唯一約束拒絕的 CI 案例）仍 Deferred，理由見 nfr-design §三" },
+    { "id": "SEC-3", "status": "OK", "target": "首輪三支 Python 檔（hierarchy_migration.py、run_hierarchy_migration.py、test_hierarchy_migration.py）對 ^\\s*(from|import)\\s+(httpx|requests|fastapi) 與 APIRouter(／@app.／@router.websocket 的 grep 結果皆為零；步 10 之後新增進 source-manifest.json 的 user_router.py 是既有 router 的修改（本就有 APIRouter 與 fastapi 匯入），不在此檢查範圍；2026-11-01 新增的 test_hierarchy_migration_exit_codes.py 同樣為零（review-04 R-17 更正）" },
+    { "id": "SEC-4", "status": "Deferred", "target": "（原記為非法狀態值 Partial，2026-10-20 依允許的五種狀態改記 Deferred；已完成與未完成部分如下）(1) 遷移失敗大聲＝OK（AC9.1.4）；(2) 遷移留計數＝OK（BR2.6）；(3) 清除留計數＝Deferred（S-5 未落地，U4-R3 空轉）；(4) DiagramChangeRecord 自身＝結構 OK（actor_user_id NOT NULL ＋ COMMENT 寫明不得預設填工作階段擁有者），但**稽核保證仍待 OQ-H3 定案**，本單元不宣稱它已滿足。(5)（2026-10-29 補記，review-03 R-05）diagram_change_records.diagram_id 為 ON DELETE CASCADE：刪除一張架構圖會連帶刪除它的全部變更紀錄，不留計數也不留紀錄，是與尚未實作的 90 天清除（(3)）並列的**第二條無稽核消失路徑**。該 CASCADE 為已揭露並經人工裁決保留的取捨；接受的補救依 code-summary.md §七.2 為獨立保留表或軟刪除，**不得改回 NO ACTION**（會擋住既有的刪圖路徑、違反 AC9.1.3）" },
+    { "id": "U4-V1", "status": "Deferred", "target": "共用真實 PostgreSQL CI job **已存在**（.github/workflows/ci.yml:322 的 memory-schema，pgvector/pgvector:pg18；其 Apply／Re-apply schema_rbac.sql 兩步已把區塊 H 的 DDL 在真實 PG 上套用兩次），但 **U4 專屬步驟尚未加入**（該 job 內 hierarchy／run_hierarchy 命中 0 次）。承接動作：比照 U18（P1-P17）、U20（step 0／A–E）在該 job 加 U4 步驟；改 ci.yml 屬共用檔，記為已知限制交 conductor（review-04 R-14，2026-11-01 更正原「job 尚不存在」的說法）。**本站曾在本機以 pgvector/pgvector:pg18 容器實際執行過六個步驟**（見 code-summary.md §五），那是一次人工驗證，不是 CI 閘門" },
+    { "id": "U4-V2", "status": "Deferred", "target": "同 U4-V1（共用 job 已存在、U4 步驟未加）。本站的本機驗證已構造該前置狀態（兩位持有圖的使用者、system_id 為空的三張圖）" },
+    { "id": "U4-V3", "status": "Deferred", "target": "同 U4-V1（共用 job 已存在、U4 步驟未加）。不變量查詢已在本機真實 PG 上執行並回 0" },
+    { "id": "U4-V4", "status": "OK", "target": "機械面：migrate_hierarchy 的 per-user except 只 rollback ＋ log 後 raise，不吞；run_hierarchy_migration.main() 以非零結束碼收場 ＋ tests::test_standalone_command_exits_non_zero_when_the_final_check_fails（斷言 0／1／2 三個結束碼）。突變驗證 M8（失敗回 0）被抓到。行為面（唯一約束拒絕的 CI 案例）仍 Deferred，理由見 nfr-design §三；2026-11-01 補 test_hierarchy_migration_exit_codes::test_bad_invocation_returns_2_without_running_anything（結束碼 2 時 SessionLocal 與 migrate_hierarchy 皆 0 次呼叫），main() docstring 已寫明三個結束碼（合併前必修第 28 列 (a)）" },
     { "id": "U4-V5", "status": "Deferred", "target": "同 U4-V1（CI 層）。本單元已在 SQLite 與真實 PG 18 兩處各跑過兩次遷移並斷言無第二組、無重新指派" },
     { "id": "U4-V6", "status": "Deferred", "target": "S-9 的有序部署步驟（落點 ci-pipeline／deployment-pipeline，皆 CONDITIONAL）。**本站的承載只是 DEPLOY.md 2.2.7 的手動窗口步驟 ＋ 明寫現行 deploy.yml:121-124 做不到**，不是宣稱靜止已生效" },
     { "id": "U4-R1", "status": "OK", "target": "ix_diagram_change_records_created_at（截止欄位的索引）＋ COMMENT ON TABLE diagram_change_records 寫明 90 天與 created_at。**清除本身不實作**，見 U4-R2" },
@@ -56,7 +56,7 @@
     { "id": "U4-R4", "status": "N/A", "target": "nfr-design §一 Encryption 判定為**不做任何加密**（欄位級與傳輸皆不做）。本單元據此不引入 pgcrypto、不引入金鑰、不設 sslmode。殘餘風險（主機磁碟被取得即明文）原樣沿用該站記載" },
     { "id": "U4-D1", "status": "OK", "target": "schema_rbac.sql 區塊 H（DDL ＋ COMMENT ＋ 檔頭涵蓋清單 ＋ 驗證範例）、DEPLOY.md 2.2 物件表兩列 ＋ 2.2.7 全節 ＋ 第 4 節部署順序第 9 步、schema.sql（建議項）。validate_repo_contract.py 與 validate_env_contract.py 皆通過" },
     { "id": "S-5", "status": "Deferred", "target": "ci-pipeline（CONDITIONAL）。本站不實作清除" },
-    { "id": "S-6", "status": "Deferred", "target": "ci-pipeline（CONDITIONAL）或 U5 建立該 job 時。本站已把六個步驟的內容在本機真實 PG 上跑通，降低了它落地時的不確定性，但沒有把它寫進 CI" },
+    { "id": "S-6", "status": "Deferred", "target": "同 U4-V1：共用 memory-schema job 已存在（ci.yml:322），缺的是 U4 專屬步驟（遷移連跑兩次、不變量查詢、ON DELETE 實測、兩份 DDL 比對）；需改 ci.yml，交 conductor。本站已把六個步驟的內容在本機真實 PG 上跑通，但沒有寫進 CI" },
     { "id": "S-7", "status": "OK", "target": "tests::TestHierarchySchema::test_system_id_is_nullable_so_a_pre_migration_diagram_can_exist —— 它把 OQ-H2 的牽制固定成機械事實：日後若把 system_id 收成 NOT NULL，該案例必紅。定案本身仍屬 U7／U16" },
     { "id": "S-8", "status": "OK", "target": "migrate_hierarchy 的逐使用者 commit ＋ tests::test_rerun_after_a_failure_completes_the_remaining_work（先讓終檢失敗、斷言先前使用者已 commit、處置後重跑補完）＋ DEPLOY.md 2.2.7「中途失敗是合法且可恢復的狀態」。突變驗證 M5（改成單一交易）被兩個案例抓到" },
     { "id": "S-9", "status": "Deferred", "target": "ci-pipeline／deployment-pipeline（皆 CONDITIONAL）。本站的承載是 DEPLOY.md 2.2.7 的靜止段落，其中逐字寫明 deploy.yml:121-124 用單一 up -d --build 一次拉起整座 stack、故該有序窗口目前沒有承載者" },
@@ -68,6 +68,7 @@
     { "id": "OQ-3", "status": "N/A", "target": "本單元範圍內的那一半（S-4）已由 nfr-design 結案為不加密；OQ-3 自身主體（episodic memory）屬 U5" },
     { "id": "DG-2", "status": "Deferred", "target": "（原記為非法狀態值 Partial，2026-10-20 改記 Deferred）兩層 ON DELETE RESTRICT 關掉「刪除造成懸空」這一條路（BR1.1／BR1.2，已在真實 PG 18 實測）。**另兩條路（把已掛好的圖改回空、新插入的圖不帶值）本單元未關**，處置為 OQ-H2" },
     { "id": "DG-3", "status": "N/A", "target": "本輪 DiagramChangeRecord 只寫不讀為已接受的狀態（Q2=A）。本單元交付結構但**不交付寫入端**（寫入端是 U12），所以本 intent 結束時這張表會是空的" },
-    { "id": "MB-3", "status": "OK", "target": "backend/services/user_router.py（_empty_default_project_ids／_blocking_user_references／_purge_empty_default_projects／_hard_delete_user；DELETE /api/auth/{user_id} 與 POST /api/auth/authorization-requests/{request_id}/reject 宣告並回 409）＋ backend/tests/test_user_delete_hierarchy.py（(a)–(g) 七案，SQLite 外鍵開啟；突變 M-D1／M-D2／M-D3 各自致紅）＋ openapi.json ＋ frontend/src/types/api.d.ts ＋ schema_rbac.sql 兩處 COMMENT ＋ DEPLOY.md「刪除使用者的行為」小節" }
+    { "id": "MB-3", "status": "OK", "target": "backend/services/user_router.py（_empty_default_project_ids／_blocking_user_references／_purge_empty_default_projects／_hard_delete_user；DELETE /api/auth/{user_id} 與 POST /api/auth/authorization-requests/{request_id}/reject 宣告並回 409）＋ backend/tests/test_user_delete_hierarchy.py（(a)–(i) 九案——(h)(i) 為 review-03 R-09 補入，SQLite 外鍵開啟；突變 M-D1／M-D2／M-D3 各自致紅，2026-11-01 於副本重跑仍各自致紅）＋ openapi.json ＋ frontend/src/types/api.d.ts ＋ schema_rbac.sql 兩處 COMMENT ＋ DEPLOY.md「刪除使用者的行為」小節" },
+    { "id": "MB-28", "status": "OK", "target": "合併前必修第 28 列：(a) backend/scripts/run_hierarchy_migration.py 的 main() docstring 寫明結束碼 0／1／2（本單元 2026-11-01）＋ DEPLOY.md §2.2.7 結束碼段（brain-infra A4）；(b) backend/services/hierarchy_migration.py 的 MigrationCounts docstring 寫明 default_pairs_created 只以預設專案是否新建計數、在「預設專案在、預設系統缺」時低報（本單元 2026-11-01）；(c) user_router.py 409 detail 的下一步提示 _DELETE_BLOCKED_NEXT_STEP、(d) _hard_delete_user docstring 與 DEPLOY.md 刪除使用者小節的無鎖競態記載（brain-infra A4／A13）。測試：backend/tests/test_hierarchy_migration_exit_codes.py 4 案（結束碼 2 不執行任何事、低報行為、兩處 docstring），突變 M-X1–M-X4 各自致紅" }
   ]
 }

@@ -267,3 +267,142 @@ router 未改：`RequirementFieldValidationError` 原本就由 `_translate()` �
 - `traceability.json`：逐列檢查後**沒有**因本項變為不實的註記（各列描述的是既有 422／500 行為與 H5 的四類，修正後仍成立），依「只更正不實註記」不改動。
 - `source-manifest.json`：本項未新增檔案，改動的五支檔（facade、errors、兩支測試、`DEPLOY.md`）皆已在清單內，不改動。
 - **已知未處理（Minor，如實記載）**：router `ERROR_RESPONSES` 的 422 說明文字列舉了各種原因，未列「值含 NUL」。補上會改動 `openapi.json` 與 `frontend/src/types/api.d.ts`，超出 Step 13「router 照既有轉譯」的範圍，故未改。
+
+## 共用檔異動後重新驗證（計畫 §八）
+
+<!-- 寫入時間：2026-10-29T15:42:57Z（date -u 取值） -->
+
+來源：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。本節不改任何程式或測試。
+
+### Step 18 — 自 review-04 以來的變動（逐檔）
+
+**比對基準**：`reviewed-source-90c2466fff25.tsv`（mtime 2026-10-27T06:50:38+0800，為 review-04〔2026-10-27T07:10:04+0800〕之前最後一份收據，22 檔）。逐檔以 `shasum -a 256` 比對工作樹現況，並以 `git show HEAD:<path>` 確認工作樹相對 HEAD 無未提交變動。review-04 之後的兩個 commit：`7a50a40`（2026-10-27T07:58:35+0800）觸及清單內 12 檔，其中 11 檔的內容與收據逐位元相同（即 review-04 當時的未提交工作樹被原樣提交）；`c6a40f9` 未觸及任何清單內檔案。
+
+| 檔案 | 與 review-04 收據 | 相對 HEAD |
+|---|---|---|
+| `.github/workflows/ci.yml` | 相同 | 無變動 |
+| `DEPLOY.md` | **不同**（見下） | 無變動 |
+| `backend/main.py` | 相同 | 無變動 |
+| `backend/models.py` | 相同 | 無變動 |
+| `backend/scripts/ci/downgrade_requirement_fields.sql` | 相同 | 無變動 |
+| `backend/scripts/ci/seed_requirement_field_fixture.sql` | 相同 | 無變動 |
+| `backend/scripts/run_meta_schema_migration.py` | 相同 | 無變動 |
+| `backend/scripts/verify_meta_schema.sql` | 相同 | 無變動 |
+| `backend/services/requirement_field_definitions.py` | 相同 | 無變動 |
+| `backend/services/requirement_field_errors.py` | 相同 | 無變動 |
+| `backend/services/requirement_field_facade.py` | 相同 | 無變動 |
+| `backend/services/requirement_field_router.py` | 相同 | 無變動 |
+| `backend/services/requirement_field_service.py` | 相同 | 無變動 |
+| `backend/services/requirement_field_types.py` | 相同 | 無變動 |
+| `backend/tests/test_requirement_field_data.py` | 相同 | 無變動 |
+| `backend/tests/test_requirement_field_facade.py` | 相同 | 無變動 |
+| `backend/tests/test_requirement_field_http.py` | 相同 | 無變動 |
+| `backend/tests/test_requirement_field_service.py` | 相同 | 無變動 |
+| `backend/tests_pg/test_requirement_field_pg.py` | 相同 | 無變動 |
+| `frontend/src/types/api.d.ts` | 相同 | 無變動 |
+| `openapi.json` | 相同 | 無變動 |
+| `schema_rbac.sql` | 相同 | 無變動 |
+
+**`DEPLOY.md` 的差異內容**：review-04 當時的版本從未單獨提交（`7a50a40` 把本單元 Step 16 與第 26 項的改寫一併提交），故以重建驗證：取現行 `DEPLOY.md`，只反向套用 `git diff -U0 624c170 7a50a40 -- DEPLOY.md` 中位於 §5.13 的兩個 hunk（現行第 2229 行「…`rollback` 還原 last-good、交 Deploy Doctor，**但不開 revert PR**…」、第 2239 行「…自動流程只還原 last-good（不開 revert PR）…」），所得檔案的 sha256 為 `27898f427f650c669ca984f4bf7faf50c3a3bd86b1e2509281cf159cdae23406`，**與收據逐位元相同**。因此自 review-04 以來 `DEPLOY.md` 的全部差異恰為合併前必修第 26 項（`entry-page-ui`）對 §5.13（`#### 5.13 入口頁部署後實測`，第 2223 行起）的這兩行改寫；本單元的 2.2.9（第 617 行起）、第 730–738 行的 U20 說明與第 791 行起的驗證指令皆未被觸及。
+
+**結論**：本單元程式碼、測試、schema、CI、OpenAPI／型別檔自 review-04 以來零變動；唯一變動是第 26 項對 `DEPLOY.md` §5.13 的兩行改寫，未觸及本單元段落。
+
+### Step 19 — 回歸（在 scratchpad 副本執行，工作樹未產生任何快取）
+
+以 `rsync` 把 `backend/`（排除 `.venv`、`.hypothesis`、`__pycache__`）、`scripts/`、`schema_rbac.sql`、`openapi.json`、`frontend/src/types/api.d.ts` 複製到 scratchpad，以工作樹的 `backend/.venv`（Python 3.13.7）在副本執行，設 `PYTHONDONTWRITEBYTECODE=1` 並加 `-B`；用完即刪副本。兩支 contract 驗證腳本不寫檔，在工作樹以 `PYTHONDONTWRITEBYTECODE=1 python3 -B` 執行，前後比對 `scripts/` 下的 `__pycache__`／`.pyc` 與 ignored 檔清單，無變化。
+
+| 指令 | 結果 |
+|---|---|
+| 本單元 SQLite：`unittest tests.test_requirement_field_data tests.test_requirement_field_service tests.test_requirement_field_facade tests.test_requirement_field_http` | `Ran 35 tests` — `OK`（與第 24 項處置後相同） |
+| `python scripts/dump_openapi.py --check`（副本） | 規格檔與後端程式碼一致 |
+| `python3 scripts/validate_repo_contract.py` | passed |
+| `python3 scripts/validate_env_contract.py` | passed |
+
+本輪未重跑：`tests_pg`（程式未變，沿用第 24 項處置段的 `Ran 14 tests — OK`）、`npm run check:types`（`openapi.json` 與 `api.d.ts` 與收據逐位元相同，沿用前次結果）、突變驗證（程式未變）。未連 staging 或任何共用 DB／Redis；未觸發 CI；未 commit。
+
+## 合併前必修共用檔修正後的回歸驗證（計畫 §九，2026-11-07T23:55:00Z）
+
+本輪**未改任何程式或測試**。本單元在 `merge-blockers.md` 的唯一一列（第 24 列）已修正，本輪 Request Changes 指定的列無一劃給本單元。
+
+### Step 20 — 共用檔重驗
+
+**比對基準**：`reviewed-source-939a1074e36d.tsv`（mtime 2026-10-29T23:49:58+0800，review-05〔23:56:25+0800〕之前最後一份收據，22 檔）。註：收據放在本單元 `code-generation/` 目錄，不在 `.aidlc-engine/`。以 `sha256` 逐檔比對工作樹，並另比對 `git show HEAD:<path>`：**22 檔在 HEAD 全部與收據相同**，故本輪的差異全部是工作樹相對 HEAD 的未提交改動，以 `git diff HEAD -- <path>` 讀取。
+
+| 檔案 | 與收據 | 改動內容（他單元） | 是否碰到本單元 |
+|---|---|---|---|
+| 本單元 `requirement_field_*.py` 六支、四支 `tests/test_requirement_field_*.py`、`tests_pg/test_requirement_field_pg.py`、`main.py`、`models.py`、`scripts/ci/` 兩支 SQL | 相同（15 檔） | 無 | — |
+| `schema_rbac.sql` | 不同 | 檔頭清單加 `I)` 說明；`I)` 區塊新增記憶專用角色 `cloud360_memory`（第 592–612 行）；`J)` 區塊開頭加純註解（第 642–652 行，第 31 列 (c)(g)） | **否**。`system_requirement_fields` 的 DDL（第 752–764 行起）與其後的條件式收斂 `DO $$` 區塊無任何 hunk |
+| `backend/scripts/run_meta_schema_migration.py` | 不同 | `EXPECTED_FK_DELETE_ACTIONS` 改以欄位為鍵並列滿 `J)` 的 7 條外鍵；新增 `cloud360_memory` 後條件 | **碰到但相容**：新增的 `("public","system_requirement_fields","updated_by","users","a")` 與 DDL 第 760 行 `updated_by INTEGER NOT NULL REFERENCES users (id)`（無 `ON DELETE` → NO ACTION）一致；`system_id` CASCADE 仍在。本單元的三條欄位級後條件未動。本機實跑見 Step 21 |
+| `backend/scripts/verify_meta_schema.sql` | 不同 | 新增 `P17`：`system_requirement_fields` 恰為 9 欄 | **碰到但相容**：9 欄與 DDL 及 `DEPLOY.md` 第 686 行一致；`P15`／`P16` 未動。本機實跑通過 |
+| `.github/workflows/ci.yml` | 不同 | 新增記憶角色邊界步驟；P1-P16 → P1-P17 的名稱與註解；`tests_pg` 步驟改名（含 `requirement field G1-G4`） | **否**。`U20 step 0`／`A`–`E`（第 438–535 行）無 hunk |
+| `openapi.json` | 不同 | 記憶端點的 `maxLength 4000`、503 宣告與說明（hunk 全在第 5491 行之前，均屬 `/api/memory/*`） | **否**。`/api/requirements/…` 兩條 path（第 5505、5573 行起）的 403／404／422 宣告無 hunk |
+| `frontend/src/types/api.d.ts` | 不同 | 對應上列的記憶操作 503 與說明（hunk 全在第 4583 行之前） | **否**。三個 requirement 操作（第 4583、4632、4698 行起）無 hunk |
+| `DEPLOY.md` | 不同 | 記憶角色小節（第 613–663 行）、第 27／28／21／31／32／34／36／37 列的段落；2.2.9 內兩處計數同步（第 767–768 行「7 條外鍵」、第 856–860 行「17 條斷言」） | **2.2.9 內兩處計數改動與本單元相容**（數字逐一對過 migration 與 verify 檔）；U20 小節（第 868 行起）與原「約第 730–738 行」的 U20 說明（因上方插入已位移至第 779–797 行）**無 hunk**，內容仍為「`create_all` 建表、只缺 COMMENT 與收斂」 |
+
+**本單元依賴的授權入口**（不在收據清單內，另以 `git diff HEAD -U0` 查 hunk 位置）：`HierarchyFacade.get_project_of_system`（`hierarchy_facade.py:636`）、`HierarchyFacade._authorize`（第 219 行）、`mint_principal`（第 195 行）——hunk 只在第 96–114 行與 `delete_project`／`delete_system`（第 314、349 行起），**未觸及**；`MembershipFacade.resolve_project_role`（`membership_facade.py:209`）未觸及（hunk 在第 110–120 行 `_authorize_global`、第 386 行起 `change_role`、第 570 行起新方法、第 624 行起改選讀取）；`membership_service.resolve_project_role`（第 289 行）未觸及（hunk 自第 430 行起）；`rbac.py`／`rbac_seed_data.py`／`auth.py` 相對 HEAD 無改動。
+
+**計畫文字的一處不符（不改計畫）**：Step 20 寫「`main.py` 的 `/api/requirement-fields` 掛載」，實際掛載為 `main.py:138` 的 `prefix="/api/requirements"`（與 `openapi.json` 一致），屬計畫筆誤。
+
+### Step 21 — 回歸（scratchpad 實體副本，`backend/.venv` Python 3.13.7，`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad）
+
+| 指令 | 結果 |
+|---|---|
+| 本單元 SQLite：`unittest tests.test_requirement_field_data tests.test_requirement_field_service tests.test_requirement_field_facade tests.test_requirement_field_http` | `Ran 35 tests` — `OK` |
+| `python scripts/dump_openapi.py --check`（副本） | 結束碼 0，「規格檔與後端程式碼一致」 |
+| `python3 -B scripts/validate_repo_contract.py`（工作樹） | passed |
+| `python3 -B scripts/validate_env_contract.py`（工作樹） | passed |
+| `tests_pg.test_requirement_field_pg`（本機一次性 PostgreSQL 17 ＋ pgvector 0.8.1，`listen_addresses=127.0.0.1`、port 55437、關閉 Unix socket，套用 `schema_rbac.sql` 一次） | `Ran 4 tests` — `OK`（G1–G4 皆 ok） |
+| 同一個一次性資料庫：再套用 `schema_rbac.sql` 一次 → `verify_meta_schema.sql` | 結構類 P1…P17 與行為類 P4／P7／P10／P11 全部通過 |
+| 同一個資料庫：CI `U20 step A`（downgrade）→ `run_meta_schema_migration.py` → `step C`（fixture）→ 重跑遷移 → CASCADE 檢查（交易內刪 system 後 `ROLLBACK`） | A 結束碼 0；B 結束碼 0、輸出「U20 欄位收斂 本次**有執行**」「7 條已逐條核對」；C 結束碼 0；D 結束碼 0、「本次未執行」、代寫值仍為 `cost`；刪 system 後孤兒需求欄位列 0 |
+
+資料庫用完即停止並刪除資料目錄。此為本機、PostgreSQL 17、Python 3.13 的實跑，**不等於** CI（pg18、Python 3.12）的實跑證據。未連 staging 或任何共用 DB／Redis；未連網；未觸發 CI。
+
+**為 Step 23 的勾選判定另跑的兩項**（同一副本）：
+- 完整後端套件 `unittest discover -s tests`：`Ran 1391 tests`，1 error——`tests.test_legacy_cost_retirement` 讀 `frontend/tests/e2e/regression.spec.ts`，而副本起初未複製 `frontend/`；補複製 `frontend/`（排除 `node_modules`）後該模組 `Ran 6 tests — OK`。其餘全綠（skipped=3）。
+- 完整 `tests_pg`（同一個一次性資料庫）：`Ran 15 tests`，**1 failure**：`test_membership_concurrency.test_C3_assert_can_deactivate_takes_no_lock`（`'passed' != 'guard'`，「守門沒有判定出唯一管理者」）。研判與工作樹未提交的 `membership_service.projects_losing_last_admin` 改動（合併前必修第 21 列「獨自一人的專案不擋」，hunk 第 662–745 行）有關，屬 `membership-service` 單元；**不是本單元的程式或測試**，本單元四案皆綠。依計畫本節不擴大範圍，未處置，交 conductor。
+
+收尾：`git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'` 為空（見本節末）。
+
+### Step 22 — 前輪審查的未結 Minor（review-04／05）
+
+| ID | 現況（行號為本輪實讀） | 處置 |
+|---|---|---|
+| R-02 | 未改：`requirement_field_definitions.py:33` 仍為 `re.compile(r"^[a-z0-9_]{1,64}$")`，以 `.match` 使用於 `requirement_field_errors.py:99`、`requirement_field_definitions.py:97`、`:109`；結尾換行仍可通過 | 需改程式 → 已知限制，交 conductor |
+| R-03 | 未改：`requirement_field_router.py:173` `body: bytes = Depends(_read_raw_body)` 仍排在 `:174` `current_user` 之前 | 需改程式 → 已知限制，交 conductor |
+| R-04 | 未改：`ci.yml:445-446` 仍 `pip install -r backend/requirements.txt`；仍無 CI 實跑證據。本輪有本機等價流程實跑（Step 21 最後一列），僅能作為輔助證據 | 只記紀錄；最小安裝屬 CI 改動，若要做交 conductor |
+| R-05 | 交接仍在本檔第 135 行（`K-16` 矛盾句）與「給 `U21 mcp-bridge` 與 `U13 brain-gateway`」段（第 145–152 行）；無法由本單元確認對方已讀到 | 只記紀錄；確認傳達屬 conductor |
+| R-06 | 未改：`user_router.py:510-516` 的刪除預檢仍列 `system_requirement_fields`（`updated_by == uid` 且 `system_id` 不在清除範圍）；`tests/`、`tests_pg/` 對該類別字串 `"system_requirement_fields"` 與標籤「系統需求欄位的最後修改者紀錄」在測試中**0 個案例斷言 409 類別**（命中的三檔只是表名常數或 schema 期望）。`tests/test_user_delete_audit_counts.py:66-128` 只鎖「空預設專案連帶清除需求欄位值的筆數」，不鎖 409 預檢 | 需新增測試（落點在 `user_router` 的刪除路徑，非本單元）→ 已知限制，交 build-and-test／conductor |
+| R-09 | 未改：`requirement_field_router.py:103-110` 的 422 說明仍未列「值含 NUL」（固定訊息在 `requirement_field_errors.py:132`）；本輪 `openapi.json` 雖因他單元重 dump，但本單元未改程式，故未順手補 | 需改程式並重產 `openapi.json`／`api.d.ts` → 已知限制，交 conductor |
+| R-10 | `tests_pg/test_requirement_field_pg.py:246` G4 本輪由開發者在本機一次性 PostgreSQL 17 實跑 ok（Step 21）；**仍非審查員的獨立重跑** | 只記紀錄 |
+
+### Step 23 — 勾選重設（Step 1–19 逐格）
+
+| Step | 判定 | 依據 |
+|---|---|---|
+| 1 | 勾 | `backend/scripts/ci/` 兩支 SQL 與收據相同 |
+| 2 | 勾 | 本輪重跑 `tests.test_membership_data`：`Ran 12 tests — OK` |
+| 3 | 勾 | 四支相關檔有他單元改動，但 `J)` 中本單元 DDL 與收斂區塊無 hunk；本輪本機實跑收斂（A–D）與 P15／P16 通過；CI 步驟 0／A–E 無 hunk |
+| 4–8 | 勾 | 程式與測試與收據相同；本輪 SQLite 35 案與 PG G1–G4 綠 |
+| 9 | 勾 | router、`main.py` 相同；`dump_openapi.py --check` 綠；`openapi.json`／`api.d.ts` 中本單元的 path 與 operation 無 hunk |
+| 10 | 勾 | 測試相同且綠；`--check` 綠；突變驗證的對象程式未變 |
+| **11** | **改為未勾** | `npm run check:types` 本輪依 brief 不可執行（會改寫 gitignored 檔），而 `frontend/src/types/api.d.ts` 自收據後已被他單元改動（記憶操作的 503 與說明），故「型別檔與 `openapi.json` 同步」既非逐位元相同、也未在本輪重驗。兩支 contract 腳本本輪通過 |
+| 12 | 勾 | `DEPLOY.md` 2.2.9 內兩處計數改動已逐一對過、U20 小節無 hunk；`source-manifest.json`、`traceability.json` 未變且內容仍成立（`traceability.json` 合法 JSON，未改） |
+| 13–15 | 勾 | NUL 拒絕程式與測試未變；本輪 H10（SQLite）與 G4（PG）綠；突變對象未變 |
+| 16 | 勾 | 原約第 730–732 行的段落已因上方插入位移至第 788–797 行，內容未變，仍與 U20 小節一致 |
+| **17** | **改為未勾** | 該格宣告「完整後端套件、`tests_pg` … 全綠」。本輪重驗：完整後端套件綠（見上），但完整 `tests_pg` 有 1 failure（`test_membership_concurrency` C3，他單元）。本單元的 `tests_pg` 四案綠，`--check` 與兩支 contract 綠；失敗不在本單元，但該格的字面宣告在現行工作樹不成立 |
+| 18 | 勾 | 其結論限定在 review-04 → review-05 區間，該區間已由 review-05 獨立確認；之後的區間由本輪 Step 20 取代 |
+| 19 | 勾 | 本輪以同樣指令重跑，結果相同 |
+
+**實算**（全檔，`grep -c '^\s*- \[x\]'`／`grep -c '^\s*- \[ \]'`，於 Step 24 勾選後執行）：已勾 **22**、未勾 **2**（Step 11、Step 17）。
+
+### 需由 conductor 併入 `merge-blockers.md` 的已知限制（需改程式或測試，本輪未改）
+
+1. R-02：`KEY_PATTERN` 改 `fullmatch`（或 `\Z`），定義檔自我檢查同步。
+2. R-03：`write_requirement_field` 的 `current_user` 排在 `body` 之前，或讀取原始本體時設上限。
+3. R-06：為 `user_router` 刪除預檢的 `system_requirement_fields` 409 類別補一個 TestClient 案例。
+4. R-09：`ERROR_RESPONSES` 的 422 說明補「值含 NUL」，重產 `openapi.json`／`api.d.ts`。
+5. （他單元，觀察所得）`tests_pg/test_membership_concurrency.py` C3 在現行工作樹紅燈，研判與第 21 列的 `projects_losing_last_admin` 改動有關。
+
+### 本輪改動檔
+
+`code-generation-plan.md`（只改勾選字元，前後 diff 已確認）與本檔（append 本節）。`traceability.json`、`source-manifest.json` 未改。未 commit、未 push、未觸發 CI、未以 `gh` 寫入。

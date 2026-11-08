@@ -260,3 +260,44 @@
 **其中 `S-9` 與本站直接相關**：步 8 會把靜止前置寫進 `DEPLOY.md`，但**管線本身還做不到**
 ——`deploy.yml:121–124` 用單一 `up -d --build` 一次拉起整座 stack。實作者不得因此
 認為靜止已經生效。
+
+---
+
+## 五、共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。比對本單元最新審查收據（`reviewed-source-*.tsv`）與現況，對不上的清單內檔案為：`DEPLOY.md`。這是合併前必修第 22–26 項在其他單元所做的修正。本節**不改程式**，只重新驗證並補審。
+
+- [x] **重新驗證**：以收據比對與 `git diff` 逐 hunk 確認 `DEPLOY.md` 的變動來源（哪一項合併前必修、改了哪幾行），判定是否觸及本單元的段落（2.2.7 遷移、回復程序、刪除使用者的行為）；其餘清單內檔案與收據逐位元相同（以 `shasum -a 256` 逐檔比對）。
+- [x] **回歸**：在暫存區副本（`PYTHONDONTWRITEBYTECODE=1`、`-B`，不在工作樹產生快取）跑本單元兩支測試檔與全套；`code-summary.md` 末尾追加「共用檔異動後重新驗證」一段（`date -u` 時間戳、逐檔結論、測試結果）。
+- 追溯：`merge-blockers.md` #22–#26。
+
+## 六、前輪審查（review-03）未處理的 Minor 一併處置（2026-10-29）
+
+**來源**：`reviews/review-03.md` READY，但 R-03～R-08、R-10～R-13 共 10 項 Minor 為 Unresolved。**處置原則**：本輪**不改任何程式碼與共用檔**——`DEPLOY.md`、`user_router.py` 等檔在多個單元的審查收據內，改動會讓其他單元的審查再次失效（本次 15 個單元重開的成因）。因此需要動程式或共用文件的項目，改為在 `code-summary.md` 如實記載為已知限制並指派落點；只動本單元紀錄檔即可解決的項目直接修。
+
+- [x] **R-03**：`code-summary.md §六.3` 補「一致性測試鎖不到什麼」清單（型別與長度、`NOT NULL`、`PRIMARY KEY`、外鍵目標與 `ON DELETE`、`CHECK` 內容含 `source` 列舉、預設值、欄位順序、`uq_*` 是否仍為 `UNIQUE` 與其 `WHERE is_default` 條件），並寫明這些只由尚未存在的真實 PG CI job（`U4-V1`）承接。
+- [x] **R-04**：`code-summary.md §六.3` 標題與內文改為 DDL 存在**三處**，寫明 `schema.sql` 是刻意不加鎖的參考副本，列出它目前與 `schema_rbac.sql` 的差異（以讀檔逐項實查，不憑 review 轉述）。
+- [x] **R-05**：`traceability.json` 的 `SEC-4` 列 note 補：刪圖時 `diagram_id ON DELETE CASCADE` 會一併刪除變更紀錄，是與未實作的 90 天清除並列的第二條無稽核消失路徑；接受的補救依 `code-summary.md §七.2` 為獨立保留表或軟刪除，不得改回 `NO ACTION`。
+- [x] **R-06**：`traceability.json` 的 `BR2.4` 列改為實數（以 `grep -c 'def test_'` 計 `test_hierarchy_migration.py`，並寫明其中哪一個案例不呼叫 `migrate_hierarchy`）。
+- [x] **R-07**：`code-summary.md` 記載獨立指令的三個結束碼（0 成功、1 遷移失敗（進度保留，處理後重跑）、2 呼叫方式錯誤（未執行任何事））；並記為已知落差：`run_hierarchy_migration.py` 的 `main()` docstring 與 `DEPLOY.md` 2.2.7 尚未更新，落點為 build-and-test 前的文件同步（不在本輪改，理由見本節處置原則）。
+- [x] **R-08**：`code-summary.md` 記載 `default_pairs_created` 只以專案是否新建計數，在「預設專案在、預設系統缺」的人工介入狀態會低報；docstring 補註留待同一次文件同步。
+- [x] **R-10**：`code-summary.md` 記載刪除使用者的成功路徑稽核訊息不含被清除的專案／系統／需求欄位筆數，屬 ADR-0006 audit logging 面向的已知缺口，落點為合併前或 build-and-test（需改 `user_router.py`）；`unit-test-instructions.md` 已補註需求欄位屬清除範圍（conductor 於核可前完成，開發者核對）。
+- [x] **R-11**：`code-summary.md` 記載 409 `detail` 尚無下一步提示（`DEPLOY.md` 已列 11 類阻擋類別並建議停用），落點同 R-10。
+- [x] **R-12**：在暫存區副本做突變：把 `reject_authorization_request` 的 `requested_role` 改回 commit 後才讀，確認 `test_user_delete_hierarchy` 的 (f) 轉紅，還原後複綠；結果寫入 `code-summary.md` 突變表。**只在副本上改，不改工作樹。**
+- [x] **R-13**：`code-summary.md` 記載預檢到 commit 之間無鎖的已知競態（低頻手動動作，PostgreSQL 預設隔離層級不擋），docstring／`DEPLOY.md` 記載留待同一次文件同步。
+- [x] **勾選重設**：若重開使本計畫既有勾選被重設，逐步核對全部步驟在 repo 現況下仍成立後勾回；在 `code-summary.md` 記錄勾回數與未勾數（`grep -c` 實算）及未勾理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`traceability.json` 以 `python3 -I` 的 `json.load` 驗證；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：review-03 R-03～R-08、R-10～R-13。
+
+## 七、合併前必修第 28 列的剩餘部分（2026-11-01，2026-10-31 Request Changes）
+
+**來源**：2026-10-31 的 Request Changes 要求合併前必修清單各列在所屬單元修正並附測試。共用檔已集中於 `brain-infra` 修正（`merge-blockers.md` 第 41 列）：第 28 列 (c) 409 `detail` 下一步提示、(d) 無鎖競態的記載，以及 `DEPLOY.md` §2.2.7 的結束碼 2，皆已由 `brain-infra` A4 完成。留在本單元的只有兩處非共用檔的 docstring（`brain-infra/code-generation/code-summary.md` A13 交接清單）。本節只改 `backend/scripts/run_hierarchy_migration.py` 與新測試檔，不改其他程式或共用檔；偏離與理由只寫進 `code-summary.md`，**不得改動本計畫既有內文**（只勾選格子）。
+
+- [x] **(a) `main()` docstring 補結束碼**：寫明三個結束碼——0 成功、1 遷移失敗（進度保留，處理後重跑）、2 呼叫方式錯誤（未執行任何事）——與程式實際行為逐一核對（附行號），並與 `DEPLOY.md` §2.2.7 的現行敘述一致。
+- [x] **(b) `MigrationCounts` docstring 補低報說明**：寫明 `default_pairs_created` 只以預設專案是否新建計數，在「預設專案在、預設系統缺」時會低報（系統被補建但計數為 0）。
+- [x] **新測試（新檔 `backend/tests/test_hierarchy_migration_exit_codes.py`）**：先查既有 `test_hierarchy_migration.py` 是否已涵蓋，不重複既有案例；至少斷言 (1) 呼叫方式錯誤時 `main()` 回 2 且未呼叫 `migrate_hierarchy`；(2) 「預設專案在、預設系統缺」時補建系統但 `default_pairs_created` 為 0（把 docstring 所述的低報行為鎖住）；(3) 兩處 docstring 含上述說明（防止文件再度落後程式）。沿用 `tests/helpers.py` 的 SQLite 慣例、首行 `import tests.helpers`。
+- [x] **突變驗證**（只在副本）：把結束碼 2 改為 1、把低報改為「補建系統也計數」、刪除 docstring 的結束碼 2 說明，各自確認新測試轉紅；還原後與原檔 sha256 相同且全綠。突變內容與結果寫進 `code-summary.md`。
+- [x] **共用檔重驗與回歸（副本）**：以最新收據逐檔 `shasum -a 256` 比對，對變動檔讀收據之後的改動並判定是否觸及本單元（`schema_rbac.sql` 三表 DDL、遷移腳本、`DEPLOY.md` §2.2.7、刪除使用者路徑），結論附行號；在副本跑本單元測試檔（含新檔）與後端全套須綠，記下實跑數。
+- [x] **前輪審查**：最新一份審查（`reviews/review-04.md`）的每一項，逐項附行號確認現況；只需改紀錄者在 `code-summary.md` 就地補記，需改共用檔者記為已知限制交 conductor。
+- [x] **勾選重設與收尾**：對本計畫既有各格逐格重勾（證據不成立者維持未勾並寫明理由），以 `grep -c` 實算已勾／未勾寫進 `code-summary.md`；`traceability.json` 補第 28 列 (a)(b) 的落點並保持合法 JSON；`source-manifest.json` 補新測試檔；`validate_repo_contract.py`、`validate_env_contract.py` 綠；`code-summary.md` append 本輪一節（`date -u` 時間戳）。
+- 追溯：`merge-blockers.md` #28 (a)(b)；review-03 R-07、R-08。

@@ -415,3 +415,54 @@ ADR-0006 PBT：符合。`test_intent_routing_predicate.py` 的 P1–P7 全為 `@
 已核可計畫／測試說明與程式的落差（不回改計畫）：三個測試檔的測試數超出 Testing Contract 每元件 5–8 個的上限（predicate 約 19、port 18、structure 約 21），覆蓋未減但字面不符 `strategy_volume`；`merge-blockers.md` 第 5、13 列與本檔「重新查驗」節引用的 `brain_gateway.py` 行號已因後續單元平移約 60 行（如 `:1338`→`:1400`、`:1528`→`:1590`、`:1637`→`:1700`、`:1297`→`:1357`、`:369`→`:372`、`brain_gateway_rules.py:301`→`:306`），內容正確。
 
 候選問題（未修，交審查判定）：(1) 記憶授權被拒時，閘道仍先把使用者原文寫入 session 歷程才送出錯誤（`BR64.6` 既有順序；只在核准狀態於訊息重驗與預取之間被撤銷時可達）；(2) 選定後重建的判定只取被選候選的 `confidence`，無分數時填 `0.0`；(3) 「指涉詞未解析 → 選定 → 再問對象」這條完整路徑沒有專門測試。
+
+## 五之二：合併前必修共用檔修正後的回歸驗證（2026-11-07）
+
+<!-- 寫入時間：2026-11-07T14:22:39Z（`date -u` 取值） -->
+
+本輪**未改任何程式或測試**，只做重驗、回歸與紀錄（計畫 §五之二）。
+
+### 一、共用檔重驗（收據 `reviewed-source-8a97526105f9.tsv`，27 檔逐檔 `shasum -a 256`）
+
+- **逐位元相同（21 檔）**：`backend/main.py`、`backend/services/brain_gateway.py`、`brain_gateway_rules.py`、L0–L5 七個模組（`intent_routing.py`、`intent_routing_config.py`、`_context.py`、`_errors.py`、`_parser.py`、`_port.py`、`_predicate.py`、`_types.py`）、`langgraph_runtime.py`、`tests/brain_gateway_fakes.py`、`test_brain_gateway_{memory,rules,turn}.py`、本單元五個測試模組。
+- **變動（6 檔）**：`LOCAL-DEV.md`、`backend/.env.example`、`deploy/.env.example`、`deploy/docker-compose.deploy.yml`、`deploy/docker-compose.test.yml`、`deploy/render-env.sh`。以 `git show <commit>:<path> | shasum` 比對，六檔的收據值皆等於 `HEAD`（`c6a40f9`）的版本，**變動全部是未提交的工作樹改動**。逐檔讀 `git diff HEAD`：六檔的改動**只**新增 `MEMORY_DB_PASSWORD`（合併前必修第 20／29 列，記憶專用資料庫角色）與 `LOCAL-DEV.md` 的 H7 一節（`LOCAL-DEV.md:273` 起）、`render-env.sh` 的必填與 `$` 守衛（`:82`、`:99`），**零處觸及 `BRAIN_ROUTER_*`**。五個 `BRAIN_ROUTER_*` 仍在三處＋`backend/.env.example`＋`LOCAL-DEV.md`（`grep -c`：deploy compose 6、`render-env.sh` 6、`deploy/.env.example` 5、`backend/.env.example` 5、`LOCAL-DEV.md` 12），`render-env.sh:152` 仍為字面值 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7`。
+- **收據外、本單元依賴的介面**（`MemoryFacade`／`MemoryForbidden`，`git diff HEAD`）：
+  - `memory_errors.py`：基底由 `MemoryError` 更名為 `MemoryServiceError`（`:51`），`MemoryForbidden(MemoryServiceError)`（`:61`）的建構子與 `reason` 欄位不變；新增 `MemoryStorageUnavailable`（只由 `memory_router.py:176` 的 HTTP dependency 拋出，閘道與 L0 路徑不經過）。`intent_routing.py:93` 只 import `MemoryForbidden`，`backend/services/intent_routing*.py` 無 `MemoryError` 引用。
+  - `memory_facade.py`：`search` 簽章不變，僅在函式內把超過 `MEMORY_QUERY_MAX_CHARS`（4000）的 `query` 截斷後再檢索（第 33 列 (e)）；`_memory_notes`（`intent_routing.py:226-232`）與閘道 `_prefetch`（`brain_gateway.py:1700-1727`）的呼叫形狀與例外處理都不受影響。
+  - `database.py`：純新增 `MemorySessionLocal`／`get_memory_session` 等；閘道 `_prefetch` 仍以注入的 `session_factory`（`brain_gateway.py:1702`）建 session，未改用記憶專用連線——這是記憶單元的接線範圍，非本單元責任，記為觀察。
+- **判定**：本單元負責或依賴的部分（L0–L5、`brain_gateway.py` 的 `_on_select` `:1590`／`_prefetch` `:1700`／`MemoryPrefetchAdapter` `:361`／`memory_forbidden` `:1355-1357`、`MemoryFacade.search` 與 `MemoryForbidden` 介面）**皆未被破壞**。
+
+### 二、回歸（scratchpad 副本，`-B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向 scratchpad；`backend/.venv/bin/python`）
+
+| 指令 | 結果 |
+|---|---|
+| 本單元 scoped 五模組（`unit-test-instructions.md` §二） | **Ran 83，OK** |
+| `test_brain_gateway_{memory,rules,turn}` ＋ `test_langgraph_runtime` | **Ran 82，OK** |
+| L5 七條 PBT（`test_p1`–`test_p7`，`CanSingleOutPropertyTest`） | 全綠（含於上列 83） |
+| `-m unittest discover -s tests` | **Ran 1391，OK（skipped=3）** |
+
+**偏離（如實記載）**：依指示只 `rsync` `backend/` 的副本跑全套得 `Ran 1329，FAILED（failures=11, errors=62）`——失敗全部是 `FileNotFoundError`／`render-env.sh: No such file`，即測試讀取 repo 根目錄的 `schema_rbac.sql`、`openapi.json`、`.github/workflows/*.yml`、`deploy/`、`DEPLOY.md`、`scripts/`、`frontend/tests/e2e/` 而副本裡沒有；與本單元無關。補 `rsync` repo 根目錄（排除 `.git`、`node_modules`、`.venv`、`__pycache__`、`.hypothesis`、`aidlc/`、`.claude/`）後重跑為上表的 1391 OK。`tests_redis/` 已含於副本但需真 Redis，未跑（本輪不連 Redis）。未呼叫真實 LLM、DB、Redis，未重跑突變。
+
+### 三、`reviews/review-04.md` 的 Unresolved／New 發現現況
+
+| ID | 現況（附行號） | 處置 |
+|---|---|---|
+| R-02 | `IntentDecision.resolution` 仍為行程內欄位（`intent_routing_types.py:260`，檔案自收據後逐位元相同）；本檔「重新查驗」節 `K-10` 對齊紀錄仍只寫「下一輪契約修訂時追認」，未指名承接站 | **補記**：`K-10` 的追認屬 `contract-summary.md` 的修訂，本單元無權改上游契約；建議由 conductor 併入 `merge-blockers.md`，指名下一次觸及 `K-10` 的 `contract-design` 修訂（`CONDITIONAL`，可能被 skip；轉移目標為 `brain-gateway` 單元的下一輪 code-generation 紀錄）。行為不受影響（`ws-contract.json` 未動）。 |
+| R-03 | 輪內記憶授權拒絕經 `_fail_turn_exc` → `_fail_turn`（`brain_gateway.py:1254`、`:1241-1251`）帶該輪 `turnId`；契約字面句在 `ws-contract.json:213` 與 `frontend/src/types/ws-contract.d.ts:132`：「連線建立後的 UNAUTHORIZED（BR2.8）——為 null」 | **補記判讀**：本單元的讀法是「屬於某一輪的錯誤帶該輪 turnId」優先——記憶授權拒絕發生在輪內處理中，故帶 turnId；「連線建立後的 UNAUTHORIZED 為 null」指不屬於任何一輪的授權錯誤。契約句子的釐清需改 `ws-contract` 產生來源，屬 `brain-ws-contract`／`brain-gateway`，**記為已知限制**，由 conductor 併入 `merge-blockers.md`（與第 2 列一併處理以免互相打架）。 |
+| R-05 | `MemoryWorker.run` 於工作正常回傳時呼叫 `breaker.on_success()`（`brain_gateway.py:466`）；`_prefetch` 的授權拒絕以 `_PrefetchForbidden` 作為**正常回傳值**通過（`:1708-1710`、`:1718`） | **補記判斷**：刻意如此——授權拒絕不是依賴故障，不得計入失敗。副作用是熔斷半開時，被拒身分的探測會讓熔斷關閉，**而這次關閉沒有資料庫健康的實據**：`MemoryFacade._authorize_approved`（`memory_facade.py:200-212`）只讀 `principal.is_approved`，判定先於任何取列、不碰資料庫，所以探測成功不代表 facade 的資料庫已恢復。可達條件窄（半開期間恰由一個核准已被撤銷的身分探測），且關閉後若資料庫仍壞，下一次真實檢索失敗會再計入熔斷；後果輕微。若要讓授權結果不影響熔斷狀態，需改 `MemoryWorker`，屬 `brain-gateway`，**記為已知限制**。 |
+| R-06 | 選定後走 `_resolve_and_dispatch(..., scan=True, ...)`（`brain_gateway.py:1629`），`scan` 分支（`:1488-1501`）只做原句掃描，不讀 `decision.intents[*].referent`；唯一讀 `referent` 的是 `scan=False` 分支的 `match_referent`（`:1503-1520`）。`test_brain_gateway_turn.py:244` 只斷言 dispatch 收到的 `Intent` 含 referent，**未斷言作業對象** | **記為已知限制**：選定後 `referent` 不參與對象解析，僅靠原句掃描（`BR64.13`）；記憶解析出的 referent 不在原句時，交辦落在目前作業對象。是否對選定判定也跑 `match_referent`、以及補一條固定現行行為的測試，屬 `brain-gateway` 程式與測試，由 conductor 併入 `merge-blockers.md`。 |
+| R-07 | `_on_user_message` 在 `memory_forbidden` 記錄（`brain_gateway.py:1355-1357`）之後，先 `append_message` 寫入使用者原文（`:1360`），再 `_fail_turn_exc`（`:1364-1366`） | **記為已知縱深缺口**：`BR64.6` 既有順序；只在核准狀態於訊息重驗與預取之間被撤銷時可達。建議授權類錯誤的輪次不寫入歷程（或不寫入共享段），屬 `brain-gateway`，由 conductor 併入 `merge-blockers.md`。 |
+| R-08 | `_on_select` 重建判定為 `confidence=chosen.confidence if ... else 0.0`、`below_threshold=False`（`brain_gateway.py:1621-1622`） | **補記**：這是「使用者確認後的判定」，`confidence` 僅供觀測；全 `backend` 無程式讀 `decision.confidence` 或在 dispatch 前驗證 `below_threshold ⟺ confidence < threshold`，故不違反任何讀取端。若要維持 `K-10` 的關係字面成立（例如改填門檻值）需改 `brain_gateway.py`，**記為已知限制**。 |
+
+### 四、勾選重設
+
+計畫 48 格逐格重勾：43 格既有格的證據檔（L0–L5 七模組、五個測試模組、`brain_gateway.py`／`brain_gateway_rules.py`／`brain_gateway_fakes.py`／三個閘道測試檔）自收據後逐位元相同，且本輪重跑全綠；Step 11 的五格證據檔雖有變動，但變動只新增 `MEMORY_DB_PASSWORD`，`BRAIN_ROUTER_*` 本輪逐檔重驗仍在、兩支 validator 本輪重跑綠，故勾；Step 15 第二格的 `merge-blockers.md` 第 5、13 列在工作樹 diff 中為未變動的上下文行，`source-manifest.json`、`traceability.json` 自 `HEAD` 未變。§五之二五格由本輪完成。沿用 2026-10-25 節已記的三處「意圖成立、字面不同」判定（Step 1 為九個 dataclass、Step 4/5 讀傳入的 `BrainSession`、Step 6 的參數名），不另立偏離。
+
+機械計數（`grep -c`，計畫全檔）：`[x]` **48**、`[ ]` **0**。
+
+### 五、收尾
+
+- `traceability.json`：本輪無需更新（無新追溯項；131 列，OK 106、Deferred 14、N/A 10、GAP 1，以 `json.load` 實算，合法 JSON）。
+- `python3 -B scripts/validate_repo_contract.py`：`Cloud-360 repository contract validation passed.`
+- `python3 -B scripts/validate_env_contract.py`：`Cloud-360 environment configuration contract validation passed.`
+- repo 內未新增 `.pyc`／`__pycache__`／`.hypothesis`（`git status --porcelain` 過濾為空）；副本與 scratchpad 的 Hypothesis 目錄已刪除。

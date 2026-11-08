@@ -274,6 +274,8 @@
 ## 十二、核可關卡需揭露事項（計畫 §七，依實作結果更新）
 
 1. **級聯刪除**：刪除專案經 `ON DELETE CASCADE` 刪除**全部**成員列（含其他管理者）；刪除系統刪除其**全部**需求欄位值（含其他成員所填）。守門使**被移出的建立者**不再能觸發；**仍是成員的擁有者**觸發它們是 `U7` 既有的合法行為，未改。成功刪除只多記刪除者，不記連帶筆數。
+
+   > **補記（2026-11-08T02:48:00Z，合併前必修第 25 列 (d)／第 39 列 (b)；上句原文保留）**：上句「仍是成員的擁有者觸發它們是合法行為」在本單元交付時成立的前提是：刪除專案與系統的授權**只認 `projects.owner_user_id`、不查 per-project 角色**——`hierarchy_facade.delete_project` 在可見性守門之後只呼叫 `hierarchy_service.assert_project_owned_by`，而建立者可被另一位管理者（或在另有管理者時由自己）以 `MembershipFacade.change_role` 降為一般成員（`membership_facade.py:348` 起，`_require_project_role(..., admin=True)` 只要求呼叫者是管理者、不排除目標是擁有者），故被降級的建立者仍能刪除整個專案，連帶刪除其他管理者的成員列與全部系統的需求欄位值。此缺口已由 `brain-infra` A3 修正（`brain-infra/code-generation/code-summary.md:447` 起）：兩個刪除方法在擁有者檢查**之後**另要求呼叫者為該專案的 `project_admin`（`hierarchy_facade.py:342`、`:379`，不成立時丟 `HierarchyProjectAdminRequired` → 403，訊息 `PROJECT_ADMIN_REQUIRED_DETAIL`，`:98`）；判定為 `membership_service.can_administer_project`（`:430`），由 `membership_facade.project_admin_check`（`:570`）經 `hierarchy_router.py:295`、`:326` 注入。**例外**：該專案**零成員列且呼叫者是擁有者**時仍可刪除——只在成員回填跑完前出現，與可見集合「擁有者那一半」同一條件；**2026-11-08 使用者裁決保留**此等價條件。鎖住行為的測試：`backend/tests/test_project_delete_requires_admin.py`（降級建立者刪專案／系統 403 且資料不變、仍為管理者的建立者 204、非擁有者管理者仍 404），與 `backend/tests/test_project_write_guard.py` 的 (c) 案例 `test_c_delete_project_zero_member_owner_204`、`test_c_delete_system_zero_member_owner_204`（零成員列擁有者 204）。修正後「仍是成員的擁有者」應讀作「仍是 `project_admin` 的擁有者（或回填前零成員列的擁有者）」。
 2. **`openapi.json` 漂移**：兩支列舉 operation 的 `description`（+2／−2 行），已重 dump 並重產 `api.d.ts`。
 3. **既有 404 的 `detail` 改變**：`U7` 經 `assert_*_owned_by`／`get_project_*` 的 404 由「查不到專案 12」變為「查不到專案」（系統同形），狀態碼不變。實查 `backend/tests`、`frontend/src` 對帶 id 訊息的斷言為 0；全套測試未因此出現新失敗。
 4. **跨單元測試檔**：`U7`、`U12`、`U20`、`U21` 的四支測試檔共 15 處只補一個關鍵字參數，斷言不動。
@@ -420,4 +422,125 @@ docker exec -i <db-container> psql -U postgres -d cloud360 -c "SELECT indexname 
 - **前端結構約束**：未新增 Context；資料抓取兩層（純抓取函式＋`.then` 更新＋`cancelled` 旗標）；state 一律回傳新物件。
 - **grep 判準**：與前文一致（facade／service 不 import membership、`_visible_project_ids_select` 恰 1 處、`ix_project_members_user_id` 四處同步、前端新檔 `console.` 0、`FANOUT_CONCURRENCY` 恰 1 處）。
 - **本摘要既有文字的過時處（原文不回改）**：§一、§五 全套結果「1157 FAILED」已由 §十五 的 1319 OK 取代；§一 lint 行號 `:365`／`:302` 現為 `:395`／`:344`；static 5 案現 6（U14 加 `S3b`）、membership_data 9 案現 12；§十五 member-pages「13 passed」現 14；§十五 殘留 3「寫入端點 404 仍顯示伺服器 detail」已被 review-02 R-07 推翻（三個寫入函式改丟 `ProjectNotFoundError`），處置見 merge-blockers 第 14 列。`traceability.json` 中 `AC12.5.2` 有後端與畫面兩列，為重複列而非缺口。
+
+## 共用檔異動後的重新驗證與補審（計畫 §九之二，2026-10-31）
+
+<!-- 寫入時間：2026-10-31T13:36:47Z -->
+
+本輪未修改任何程式、測試或共用文件；只寫本節、勾選計畫格子。`traceability.json` 無需更新（本單元的追溯目標檔與 `OK` 判定均未變）。
+
+### 一、共用檔重驗（收據 `reviewed-source-6bd395cc48d7.tsv`，50 檔）
+
+以 `sha256` 逐檔比對：**44 檔逐位元相同，6 檔變動**。6 檔目前的內容皆等於 commit `7a50a40`（合併前必修修正），收據版本不等於任何 commit（`8677b7d`、`624c170`、`7a50a40~1`、`7a50a40` 的 blob 皆不符），故以 `7a50a40~1` 為底重建收據雜湊（腳本放 scratchpad，以 difflib opcode 為 hunk 枚舉子集）。
+
+| 檔案 | 收據版本重建 | 收據之後的改動（現行行號） | 是否碰到本單元負責或引用的部分 |
+|---|---|---|---|
+| `DEPLOY.md` | **成功**：19 個 hunk 取 16 個即得收據雜湊 | 3 個 hunk：`:730-738`（2.2.x 遷移腳本「忘了跑不會沒有表」說明）、`:2229`、`:2239`（`U13` 步驟 6a 失敗只回滾不開 revert PR，合併前必修第 26 項） | **否**。本單元段落 `:625`（`project_members` 索引欄）、`:712-714`（7→9 索引）、`:889-947`（「`U23` 起」小節）、`:985`（回填窗口問答）皆不在收據後的 hunk 內 |
+| `backend/services/requirement_field_errors.py` | **成功**：9 取 7 | `:15`（422 列加「值含 NUL（第 24 項）」）、`:130-132`（`nul_char` 固定訊息） | **否**。`:31-36` 的 `NOT_FOUND_DETAIL`（非成員 404 同句）與 `:44-53` 的 `RequirementFieldForbidden` docstring（review-03 R-06）在收據內、未再改 |
+| `backend/services/requirement_field_facade.py` | **成功**：8 取 7 | `:374-380`（`write` 入口擋 NUL，第 24 項） | **否**。`_authorize` 非成員改 404 並記 `not_member` WARNING 的段落未再改 |
+| `backend/tests/test_requirement_field_http.py` | **成功**（非 hunk 子集）：以現行檔移除 `H10` 方法、移除 `RequirementFieldValidationError` import、docstring 改回「`H1`–`H9`」並刪「`H10` 由…第 24 項加入」一行，即得收據雜湊 | `H10`（NUL → 固定 422）與其 import、模組 docstring 兩行 | **否**。本單元寫入的 `H8`／`H9` 與授權矩陣 ②⑩⑫ 的 404 期望值未再改 |
+| `frontend/src/pages/MembersListPage.tsx` | **失敗**：25 個 hunk 超出全枚舉上限；大小 ≤4 的子集與「`7a50a40~1` ＋ 僅本單元註解更正」皆不符。**無法證明為子集**，改讀 `7a50a40~1..7a50a40` 整段 diff 並逐行重讀 | 整段 diff 屬第 9 項（前端分頁 `MEMBERS_PER_PAGE`）與第 23 項（非數字 `projectId`、邀請框焦點）；另含本單元第 14 項的註解更正 | **否（以逐行重讀判定）**。本單元負責的是 `:117-118` 註解（「`list_members` 對非成員回 404…畫面顯示固定句」，現仍在）與 404 文案來源：抓取的 `.catch`（`:84-89`）仍以 `err.message` 顯示，`ProjectNotFoundError` 的訊息 `PROJECT_NOT_FOUND_MESSAGE = '查不到這個專案'` 在 `membershipApi.ts:91-96`（該檔自收據逐位元相同）。第 23 項新增的 `shownError` 只在 `invalidProjectId` 時換成同一個常數，不改 404／403 分支 |
+| `frontend/tests/e2e/member-pages.spec.ts` | **失敗**：11 個 hunk 全子集不符（本單元的三案與第 23 項的案例落在同一個 hunk），「`7a50a40~1` ＋ stub 兩處 ＋ 本單元三案」亦不符。**無法證明為子集**，改讀整段 diff 並逐行重讀 | 第 9 項分頁兩案（`:223` 改名改寫、`:274` 新增）、第 23 項六案（`:896`、`:932`、`:987`、`:1033`、`:1067`、`:1124`）；本單元的 stub 欄位 `membersErrorBody`（`:65-66`、`:169`）與三案 | **否（以逐行重讀＋實跑判定）**。本單元三案 `:801`（清單／詳情 404 固定句、不含專案編號）、`:838`（403 權限句）、`:855`（寫入 404 固定句，review-02 R-07）的斷言與 `describe` 名稱 `U24 member pages` 未變，本輪實跑皆通過 |
+
+`hierarchy_facade.py`、`hierarchy_service.py`、`membership_facade.py`、`membershipApi.ts`、本單元四支被補 `ALWAYS_VISIBLE` 的測試檔與 `test_project_visibility_*`、`test_project_write_guard.py` 皆在 44 個逐位元相同的檔內，故 `project_visible` 過濾、15 處補參數與階層端點 404 收斂不受影響。
+
+### 二、回歸（scratchpad 實體複製副本）
+
+副本：`rsync -a` 實體複製（排除 `.git`、`aidlc/`、`node_modules/`、`.venv/`、快取與建置產物），`frontend/node_modules` 另以 `rsync -a` 實體複製；`find -type l` 確認無任何 symlink 指回 repo。後端以 `backend/.venv/bin/python -B -P`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY=<副本>/backend/.hypothesis`，工作目錄為副本的 `backend/`。
+
+| 指令 | 結果 |
+|---|---|
+| 第二節「全單元」11 模組 | `Ran 183 tests` → `OK` |
+| 第七節六模組（含 `test_requirement_field_http`） | `Ran 82 tests` → `OK` |
+| `scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」 |
+| 第七節 `unittest discover -s tests`（全套） | `Ran 1326 tests` → `OK (skipped=3)` |
+| 前端 `npm run lint` | 0 errors、2 warnings（既存 `AssessmentPage.tsx:395`、`WorkspacePage.tsx:344`，皆 `exhaustive-deps`） |
+| 前端 `npm run check:types` | 「API 型別檔與規格檔一致。」 |
+| 前端 `npm run build`（`tsc -b && vite build`，副本內） | 通過（僅既有的 chunk 大小警告） |
+| e2e：副本的生產建置以 `vite preview --port 4719`，`BASE_URL` 指向它，跑 `project-pages.spec.ts` ＋ `member-pages.spec.ts` | `43 passed`（`U23 project pages` 23 ＋ `U24 member pages` 20；`member-pages` 的 `test(` 數：`7a50a40~1` 為 10、現行為 20，前輪紀錄為 14——收據版本無法重建，故 14 → 20 的 6 案不逐案歸屬，只確認本單元三案在其中且通過） |
+
+repo 內未留下 `__pycache__`、`.hypothesis`、`tsbuildinfo`、`dist` 或報告檔（以 `find -newer` 對照，僅引擎自身的 `aidlc/.aidlc-sessions` 與 `.aidlc-engine` 檔有更新）。preview 伺服器已關閉。
+
+### 三、前輪審查（`reviews/review-03.md`）逐項現況
+
+| ID | 前輪狀態 | 本輪查證 | 處置 |
+|---|---|---|---|
+| R-01–R-07 | Resolved (reviewer) | 相關檔（`DEPLOY.md` 的「`U23` 起」小節 `:889-947`、`RequirementsTab.tsx`、`ProjectDetailPage.tsx`、`hierarchy_facade.py`、`requirement_field_errors.py:44-53`（R-06）、`membershipApi.ts`）在收據內或經上表判定未被碰到；R-02、R-04、R-07 對應 e2e 本輪實跑通過 | 無 |
+| R-08（Minor，New） | 仍成立 | `backend/tests/test_project_write_guard.py:191-217` 的 `test_d_*` 三案仍只斷言 `status_code == 404`，未斷言 `detail`；`hierarchy_service.py:73-77` `assert_project_owned_by` 仍丟 `PROJECT_NOT_FOUND_DETAIL` | **已知限制**，需改測試。`merge-blockers.md` 第 25 列記載使用者 2026-10-26T02:56:46Z 裁決「守門後固定 404 訊息無 detail 斷言一事只記 Minor、不列入」——本輪照此維持，不另提合併前必修，交 conductor 確認 |
+| R-09（Minor，New） | 仍成立 | `hierarchy_facade.delete_project` 在守門後仍只呼叫 `assert_project_owned_by`（只認 `owner_user_id`） | 已由 `merge-blockers.md` 第 25 列涵蓋（待處置，須先查可達性），本輪不另登記 |
+
+### 四、勾選重設
+
+以前輪「47／47」為基準逐格重勾：Step 1–13、Step 15 的證據檔皆在 44 個逐位元相同的檔內，或本輪已重跑（Step 12、15 的 e2e 與全單元指令）；Step 14 的四格（`DEPLOY.md`）經 hunk 重建證明本單元段落未被碰到；§九 Step 16–17 的證據檔變動僅為第 24 項的 NUL 增補（重建證明），且 `H8`／`H9`、N1–N5 本輪重跑通過；Step 18–19 的兩檔無法證明為子集，以逐行重讀與 e2e 實跑重驗；Step 20 的閘門本輪全部重跑通過。§九之二五格隨本輪完成勾選。**無任何格子維持未勾。**
+
+`grep -c` 實算（全檔）：`- [x]` **52**、`- [ ]` **0**（47 既有 ＋ 5 本節）。勾選前後以 `git diff --stat` 對照 HEAD，計畫檔的差異只有 §九之二 的新增段落，內文未改。
+
+### 五、收尾
+
+`python3 scripts/validate_repo_contract.py`：passed；`python3 scripts/validate_env_contract.py`：passed（皆在 repo 根目錄、唯讀）。
+
+**需 conductor 處置的已知限制**：僅 R-08（測試強度，見上；使用者先前已裁決不列入合併前必修）。本輪未發現新的程式、測試或共用文件缺陷。
+
+## 合併前必修第 25、39 列（計畫 §九之三 Step 21–24，2026-11-08）
+
+<!-- 寫入時間：2026-11-08T02:53:52Z -->
+
+本輪**未修改任何產品程式或測試**；只寫十二節第 1 項補記、本節、`traceability.json`（`MB-25`、`MB-39`）、`merge-blockers.md` 第 25、39 列處置欄補記，並勾選計畫格子。`source-manifest.json` 不需更新（未新增寫入檔）。`unit-test-instructions.md`、`code-generation-questions.md` 未動。
+
+### 一、Step 21：A3 現況確認（讀碼，行號為 2026-11-08 現行檔）
+
+| 項目 | 現況 | 與 `brain-infra` 紀錄（`brain-infra/code-generation/code-summary.md:447` 起）一致？ |
+|---|---|---|
+| `PROJECT_ADMIN_REQUIRED_DETAIL` | `backend/services/hierarchy_facade.py:98`，固定句、不含 id | 一致（`:98`） |
+| `HierarchyProjectAdminRequired(HierarchyForbidden)` | `hierarchy_facade.py:101`，`action = "project_admin"`（`:112`） | 一致（`:101`） |
+| `delete_project` | `:314` 起；順序為 `_authorize` → `project_visible`（404）→ `assert_project_owned_by`（`:339`）→ `project_admin`（`:342`）→ service 刪除 | 一致（紀錄寫 `:343`，現為 `:342`，差一行，內容相同） |
+| `delete_system` | `:349` 起；`project_visible`（404，系統句）→ `assert_system_owned_by` → `project_admin`（`:379`） | 一致（`:380` → `:379`） |
+| `membership_service.can_administer_project` | `membership_service.py:430`；角色非 None 時回 `role == ROLE_PROJECT_ADMIN`（`:445-446`）；無角色時有任何成員列即 False（`:447-451`），否則看擁有者（`:452-455`） | 一致（兩支成立條件同紀錄） |
+| `membership_facade.project_admin_check` | `membership_facade.py:570`，回傳閉包 `_is_admin` 呼叫 `can_administer_project` | 一致（紀錄寫 `:552`，現為 `:570`，因 A3 之後同檔有其他列的增補；內容相同） |
+| `hierarchy_router.py` 兩個刪除端點注入 | `:295`（專案）、`:326`（系統）傳 `project_admin=MembershipFacade(db).project_admin_check(principal)` | 一致 |
+| 檔案雜湊 | `hierarchy_facade.py` `770b8034592bcfc3…`（與 A3 紀錄相同）；`membership_service.py` `a9b00ca070a510fb…`（A3 紀錄為 `7a10aaec…`，之後 A6／第 21 列等再改；`can_administer_project` 本體與紀錄所述相同） | — |
+
+**可達性結論未變**：`membership_facade.change_role`（`:348` 起）仍只以 `_require_project_role(..., admin=True)` 檢查**呼叫者**、不排除目標是擁有者；之後依序 `assert_can_be_promoted_to_admin`（只在升任時，第 31 列 (e)）、`assert_still_has_admin`（`membership_service.py:748` 起，經 `admin_count_after` 只數合格管理者，A6）、`set_member_role`。故「另一位合格管理者把建立者降級」仍成立。第 21 列的改動在 `projects_losing_last_admin`（`membership_service.py:657` 起，新增 `projects_with_others` 放行獨自一人的專案）——只被停用路徑（`assert_can_deactivate`）呼叫，不在 `change_role` 路徑上，**不改變**建立者可被降級的結論。
+
+**收據比對**：最新收據 `reviewed-source-7bd6cf134ce2.tsv` 的 50 檔以 `shasum -a 256` 逐檔比對，**50 檔逐位元相同、0 檔變動**（含 `hierarchy_facade.py`、`hierarchy_router.py`、`membership_facade.py`、`membership_service.py`、`test_hierarchy_service.py`、`test_project_write_guard.py` 與全部前端檔）。`test_project_delete_requires_admin.py` 屬 `brain-infra`，不在本單元收據內。
+
+### 二、Step 22：揭露文字同步
+
+十二節第 1 項之後已加區塊級補記（原文不刪不改）：原本只認 `owner_user_id`、建立者可被降級；A3 改為要求 `project_admin`；例外「零成員列且呼叫者是擁有者」依 2026-11-08 使用者裁決保留；鎖住行為的測試為 `test_project_delete_requires_admin.py` 四案與 `test_project_write_guard.py:134`、`:143` 的 (c) 兩案。
+
+### 三、Step 23：回歸（scratchpad 實體複製副本）
+
+副本：`rsync -a` 實體複製 repo（排除 `.git`、`node_modules`、`.venv`、`aidlc`、`__pycache__`、`.hypothesis`、`dist`、`*.tsbuildinfo`），`find -type l` 為空。指令以 repo 的 `backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp`，工作目錄為副本的 `backend/`。
+
+| 指令 | 結果 |
+|---|---|
+| 九模組合跑（`test_project_delete_requires_admin` 4、`test_project_write_guard` 22、`test_hierarchy_service` 36、`test_project_visibility_static` 6、`test_project_visibility_endpoints` 16、`test_project_visibility_queries` 9、`test_membership_data` 12、`test_membership_facade` 16、`test_membership_endpoints` 13；逐模組單跑加總亦為 134） | `Ran 134 tests` → `OK` |
+| `unit-test-instructions.md` 第二節「全單元」11 模組 | `Ran 184 tests` → `OK`（前輪 183；差的 1 案落在其他單元改過、但仍與本收據相同雜湊的檔之外——本輪不逐案歸屬） |
+| 第七節六模組 | `Ran 83 tests` → `OK`（前輪 82） |
+| 全套 `unittest discover -s tests` | `Ran 1397 tests` → `OK (skipped=3)`（前輪 1326；增加的為他單元新測試檔） |
+| `scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」 |
+| repo 根目錄 `python3 -B scripts/validate_repo_contract.py` | passed |
+| repo 根目錄 `python3 -B scripts/validate_env_contract.py` | passed |
+
+**突變（只做計畫指定的一項）**：副本的 `membership_service.can_administer_project` 把 `return role == ROLE_PROJECT_ADMIN` 改為 `return True`（有成員列者一律成立）→ `test_demoted_creator_cannot_delete_project`、`test_demoted_creator_cannot_delete_system` **兩案 FAIL**（`Ran 4`，`failures=2`）；還原後 `sha256` 為 `a9b00ca070a510fb…`（與基線相同）、`cmp` 與 repo 檔一致，再跑 4 案 OK。
+
+**前端**：未執行任何前端指令。本輪無前端改動；`find -newer` 收據對照，`frontend/` 下除 `junit.xml`、`pw-report.json`（測試報告，非原始檔）外沒有比收據新的檔，且收據內 21 個前端檔逐位元相同。e2e 由 CI 的 `ui-regression` 承擔，**本輪未驗證**。
+
+repo 內未留下 `.pyc`／`__pycache__`／`.hypothesis`（`git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'` 為空；`find backend -newer <本輪開始時建立的副本> \( -name '*.pyc' -o -name .hypothesis \)`（排除 `.venv`）為空；被 ignore 的既存快取目錄為本輪之前即存在）。副本已刪除。
+
+### 四、勾選重設
+
+計畫檔進入本輪時 56 格全為未勾（Request Changes 重設）。逐格判定依據：
+
+- Step 1–15（含 §一之一各格、`DEPLOY.md` 四格、追溯三格、全單元重跑）、§九 Step 16–20、§九之二五格：證據相關檔皆在收據 50 檔內且**逐位元相同**；後端證據本輪已重跑（上表）；前端證據（lint、`check:types`、`tsc -b`、`vite build`、e2e）本輪未重跑，但其相關檔自收據後**逐位元相同**，`frontend/` 下亦無其他比收據新的原始檔，故依「證據相同」勾選。§九之二各格是前輪紀錄（本檔「共用檔異動後的重新驗證與補審」一節），內容未變。
+- §九之三 Step 21–24：本輪完成。
+- **無任何格子維持未勾。** 勾選以 Edit 只改 `[ ]` → `[x]`，勾前副本存於 scratchpad，完成後 `diff` 確認只有勾選字元變動（實算結果見下一行）。
+- `grep -c` 實算（全檔）：`- [x]` **56**、`- [ ]` **0**（52 既有 ＋ 4 本節）。把 `- [x] ` 全部改回 `- [ ] ` 後與勾前副本 `cmp` 相同，`diff` 共 56 行變動，內文未改。
+
+### 五、收尾與需 conductor 知悉事項
+
+- `traceability.json`：`upstream_ids` 加 `MB-25`、`MB-39`，`coverage` 各加一列（`MB-39` 的 `OK` 只指 (b) 已落地；(a) 依裁決不修，已寫進 note）；`json.load` 通過，`upstream_ids` 58 個皆有 coverage 列（coverage 59 列，`AC12.5.2` 既有重複列）。
+- `merge-blockers.md` 第 25、39 列處置欄以 Edit 在原文之後補記結論（「待重審 project-pages-ui」、含 2026-11-08 使用者裁決）；與補記前副本 `diff` 只有這兩列變動，欄數仍為 8。
+- **已知限制（併入 merge-blockers，既有列已涵蓋）**：第 39 列 (a) R-08 的 `test_d_*` 三案不斷言 `detail`，依 2026-10-26T02:56:46Z 裁決維持不修；前端 e2e 本輪未驗證（無前端改動）。
+- **範圍外觀察（不處置）**：A3 紀錄的行號 `membership_facade.py:552` 現為 `:570`、`hierarchy_facade.py:343`／`:380` 現為 `:342`／`:379`——內容相同、只是定位漂移，該紀錄屬 `brain-infra`，本輪不改。`frontend/junit.xml`、`frontend/pw-report.json` 的 mtime 晚於收據，為測試報告檔，非本輪產生。
 

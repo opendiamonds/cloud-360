@@ -462,3 +462,188 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 - 測試說明 §三的測試數 8／8／7／3（合計 26）已過時，現為 data 11、facade 14、endpoints 13、pg 4。
 
 `source-manifest.json` 的 28 條路徑全部存在且含本單元內容；`membership_backfill.py` 目前為 untracked。工作樹中 `deploy/` 等其他未提交變更屬其他單元，不列入本 manifest。
+
+## 共用檔異動後的重新驗證與補審（計畫 §八，2026-10-30）
+
+<!-- 寫入時間：2026-10-30T15:21:42Z（`date -u` 取值） -->
+
+本輪**未改任何程式碼、SQL、workflow、`merge-blockers.md` 或其他共用檔**；只寫本檔、計畫勾選。工作樹 HEAD 為 `c6a40f9`。
+
+### 一、收據比對（`reviewed-source-6441893ae787.tsv`，最新一份，2026-10-25）
+
+收據列 28 個檔案。`shasum -a 256` 實算：**27 個與收據逐位元相同**（含 `schema_rbac.sql` `27e92ecdc5d0…`、`ci.yml` `a854442aae2a…`、`LOCAL-DEV.md` `0f8c56a0a937…`、`user_router.py` `a08279001a0c…`、本單元全部 `membership_*.py`、四支測試檔、`openapi.json`、`api.d.ts`），**只有 `DEPLOY.md` 不同**：收據 `2608a131203c…` → 現況 `d9b0571c5688…`。
+
+**`DEPLOY.md` 的逐 hunk 判定**（腳本 `scratchpad/ms_hunks.py`，以 `difflib` 對 `git show 624c170:DEPLOY.md` 與現況切出 19 個 hunk，窮舉 2^19 種回退組合比對收據雜湊）：**恰有一組**等於收據——回退現行 **730–738**、**2229**、**2239** 三處。故收據之後的變動只有這三處，與前面單元（`project-meta-data` 同一份收據雜湊）證得的 #24（730–738）、#26（2229、2239）一致。（`difflib` 切出 19 個 hunk、git 切出 15 個，切法不同但結論相同。）
+
+- **#26（2229、2239 行）**：位於 §5.13「入口頁部署後實測（U14 entry-page-ui）」（起於 2223 行），不在本單元段落。
+- **#24（730–738 行）**：位於 §2.2.9（U18，起於 617 行）的「前進步驟」小節（681 行起），**不在**本單元的 §2.2.10（951–1073 行）。改的是「忘了跑 U18 腳本的後果」：由「立即報 `relation does not exist`」改為「`create_all` 依 ORM 建出三張表、只缺 COMMENT；舊定義則缺 U20 收斂」。
+- **對本單元段落的影響**：§2.2.10 第 991–993 行原本就寫「否則 `projects`／`project_members` 由 `create_all` 建立而缺 COMMENT，見 2.2.9；補齊本身仍會成功」——收據當時這句與 §2.2.9 的舊敘述**互相矛盾**，#24 之後兩者一致。本單元段落的事實（回填步驟、驗證指令、`NFR12.25` 的理由、回滾不對稱、部署面零變更）**均未改變**，不需改 §2.2.10。
+
+### 二、回歸（scratchpad 副本，未寫入 repo）
+
+`rsync -a --delete`（排除 `.git`、`node_modules`、`.venv`）至 `scratchpad/ms-copy/`，以 repo 的 `backend/.venv/bin/python` 執行：
+
+```
+env PYTHONPATH=<副本>/backend PYTHONDONTWRITEBYTECODE=1 HYPOTHESIS_STORAGE_DIRECTORY=<副本>/backend/.hypothesis \
+  backend/.venv/bin/python -P -B -m unittest -v tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints
+```
+
+**與計畫指令的偏離**：計畫要求在副本的 `backend/` 下執行，但本環境每次 shell 呼叫都會重設工作目錄、且不得以 `;`／`&&` 串接 `cd`。第一次嘗試（工作目錄在 repo 根）得 `ModuleNotFoundError: No module named 'tests'`（3 個載入錯誤，非測試失敗）。改以 `PYTHONPATH` 指向副本的 `backend/`，並加 `-P` 使工作目錄不進 `sys.path`（避免載入 repo 本體）；三支測試檔的檔案存取全以 `Path(__file__)` 為基準（`grep -n "open(\|Path(\|getcwd\|chdir"` 實查），故工作目錄不影響結果。traceback 中的路徑全為 `scratchpad/ms-copy/backend/...`，證實載入的是副本。
+
+**結果：`Ran 41 tests in 1.651s` → `OK`。** 分佈（逐一數 `-v` 輸出）：`test_membership_data` **12**（M1、M2、M3、M3b、M4、M5–M8、M9–M11）、`test_membership_facade` **16**（F1、F1b、F2、F2b、F3、F4、F5、F5b、F6、F7、F8、F9、F10、F11、F12、F12b）、`test_membership_endpoints` **13**（E1–E13）。
+
+`tests_pg`（4 個本單元案例 C1–C4）**本輪不跑**（不啟資料庫）。沿用前輪紀錄：本檔「重做（2026-10-25）」節的「測試與閘門」表（`tests_pg` `Ran 10 tests`、`OK`，本機丟棄式 PostgreSQL 17.7）。收據之後 `backend/tests_pg/*`、`membership_*.py`、`schema_rbac.sql` 皆逐位元未變，故前輪紀錄的依據仍對應現行檔案。
+
+### 三、review-04 R-06（Major）
+
+由 `merge-blockers.md` **第 21 列**承接（2026-10-25T07:10:48Z 使用者裁決「**獨自一人的專案不擋**」，狀態「待處置」）。須做事項 (a)–(e) 見該列：守門對「除被停用者外沒有任何成員」的專案放行；有其他成員但皆不合格仍擋；刪除路徑由第 3 列接手；兩條端到端測試加各一次突變；同步 docstring 與 `DEPLOY.md`。本輪不改程式。現況複查：`projects_losing_last_admin` 仍在 `membership_service.py:573`，行為未變（收據後該檔逐位元相同）。
+
+### 四、review-04 R-10（Minor）— 測試數更正
+
+上節「與已核可計畫／測試說明的落差」末條寫的「data 11、facade 14、endpoints 13」**不正確**；以本輪實跑為準：**data 12、facade 16、endpoints 13，合計 41**（`tests_pg` 4 為前輪紀錄）。上節原文不回改，以本節為準。
+
+**本輪未重跑突變驗證的計畫格**（本輪只跑回歸，未做任何突變）與其最近一次紀錄：
+
+| 計畫格 | 最近一次突變紀錄的位置 |
+|---|---|
+| Step 15a（合格謂詞三條件、改選範圍） | 本檔「重新查驗與合併前必修…」節 §四 表 |
+| Step 15b（拿掉失敗回報） | 同上 §四 表；`NoQualifiedSuccessor` 分支另見「審查後補正」表的 M-R1 |
+| Step 15c（拿掉「無成員列」條件） | 同上 §四 表 |
+| Step 15d（`lock_timeout`／503；計畫框內未指定突變） | 同上 §四 表末段（`_translate` 的 503 分支無單獨突變，已記為未做） |
+| §七 判準 5（`concurrency` job 三條斷言） | 本檔 §三「突變驗證」突變 2 ＋ §十 判準 5 註記（只有 `C1` 有突變，`C2`／`C3` 無，已記為差異） |
+| §七 判準 6（`select_successor` PBT tie-break） | 本檔 §三「突變驗證」突變 1；§八 PBT 表 |
+
+### 五、review-04 其餘 Minor：現況複查（`grep -n`／`sed -n` 實查，HEAD `c6a40f9`），記為已知限制
+
+全部**仍成立**（收據後相關檔案逐位元未變）。承接由 conductor 併入 `merge-blockers.md`（若已有對應列則引用）；本輪實查 `merge-blockers.md` 第 1–30 列，**沒有**一列已承接下列七項（第 4 列僅涵蓋邀請端擋停用／待核准，與 R-07 部分相關）。
+
+| 發現 | 現況（行號證據） | 承接方向 |
+|---|---|---|
+| R-01 | `admin_count_after`（`membership_service.py:430-465`）仍以原始 `project_admin` 列數計數（`:461-465` 迴圈只比 `role`），`is_qualified_successor(` 在該檔只在 `:560` 被呼叫（`qualified_successors` 內），`assert_still_has_admin`（`:639`）的自我降級／自我移出未改用合格口徑；docstring `:444-448` 仍寫「仍以本函式擋下管理者數歸零」而未記載此殘留 | 改用 `is_qualified_successor` 計數（可與 R-07 一併解），或至少在 docstring 記載殘留。由 conductor 併入 `merge-blockers.md` |
+| R-03 | 終檢失敗訊息已修（`membership_backfill.py:155`「projects.owner_user_id 有外鍵，不會是孤兒擁有者」），但模組 docstring `:28-29` 仍寫「持續性的失敗（例如某專案的 `owner_user_id` 指向不存在的使用者）」，兩者矛盾 | 只需改 docstring。由 conductor 併入 `merge-blockers.md` |
+| R-04 | `authorization_status` 在 `schema_rbac.sql` 與 `DEPLOY.md` 皆 0 命中；`membership_service.py:540` 的 `qualified_successors` 讀 `User.authorization_status`；`tests_pg/test_membership_concurrency.py:130-146` 仍依賴 `_ensure_j5_schema()` 補欄並事後查 `information_schema` | 在 `DEPLOY.md` 記載部署前提（需後端啟動過一次），或 `schema_rbac.sql` 以 `IF NOT EXISTS` 補欄。由 conductor 併入 `merge-blockers.md` |
+| R-05 | `AdminPage.tsx:161-186` 的 `handleToggleActive` 於 `!res.ok`（`:172`）只丟 `data.detail`，不更新該列、不顯示 `failed_project_ids`（全檔 0 命中）；409 的 `LastAdminGuardReport` 無 `detail`，toast 只顯示「更新狀態失敗」（`OPEN-CG19-3`） | 單元外消費端（前端）：500／503 就地標為已停用並列出失敗專案，409 列出擋下的專案；補 e2e 或手動案例。由 conductor 併入 `merge-blockers.md` |
+| R-07 | 部分緩解：`assert_invitee_has_global_permission`（`membership_service.py:829-875`）已擋停用（`:850`）與待核准（`:857-863`），但要求的是 `K3.view`（`:76` `REQUIRED_INVITEE_ACTION = "view"`），未對 `role == project_admin` 套用 `is_qualified_successor`（要求 `K3.edit`）；`change_role`（`membership_facade.py:339-402`）升為管理者時亦不檢查合格性。只有 `K3.view` 的「名義管理者」仍可產生 | 對升為 `project_admin` 的寫入套用 `is_qualified_successor`，或令 `admin_count_after` 只計合格者（同時解 R-01）。與 `merge-blockers.md` 第 4 列相關但未被其涵蓋；由 conductor 併入 |
+| R-08 | `_authorize_global`（`membership_facade.py:101-119`）只呼叫 `user_can(self._db, principal.role, STORY_ID, action)`，不帶 `authorization_status`；`is_approved` 在該檔 0 命中；`list_my_pending_reselections`（`:581`）與 `acknowledge_reselection`（`:593`）無任何授權檢查。目前唯一呼叫端是已掛 `require_story_action` 的 router，不可被利用 | 加 `principal.is_approved` 檢查並補待核准 principal 的 deny 測試，與其他三個 facade 一致。由 conductor 併入 `merge-blockers.md` |
+| R-09 | `_BACKFILL_SQL`（`membership_backfill.py:76-82`）對零成員專案一律寫入擁有者為 `project_admin`，不看 `is_active`；`reselection_scope`（`membership_service.py:1034-1047`）只在停用動作時觸發，已停用擁有者的專案永不被改選；`DEPLOY.md` §2.2.10（951–1073）未記載此殘留 | 回填後列出「唯一管理者已停用」的專案數或對其跑一次改選；至少在 `DEPLOY.md` §2.2.10 記載。由 conductor 併入 `merge-blockers.md` |
+
+### 六、計畫勾選
+
+計畫全檔 74 格（`grep -c -- "- \[ \]"` 本輪開始時為 74，即重開後全部重設為未勾）＝ Steps 1–15 的 67 格 ＋ §八 的 7 格（Step 11 不適用、無格；§七 為編號清單、無格）。
+
+**第一階段**只勾了 §八 的 6 格，「勾選重設」那格沒勾。之後 conductor 澄清該格屬已核可計畫、在交辦範圍內，**第二階段**依下列判準補做。
+
+**判準**：以 10-25「計畫 67 格：勾 59、留 8」的逐格核對紀錄為基準；一格的證據在本輪仍成立（相關檔案自收據後逐位元相同，或本輪已重驗）才勾。收據之後唯一變動的檔案是 `DEPLOY.md`，它影響的格子逐一確認：
+- Step 3「`DEPLOY.md §2.2.9` 8→9 欄」與 Step 14a：`DEPLOY.md:626` 仍為「`reselection_events` | **9 欄**（原 8 欄；第 9 欄 `cause` 由 `U19` 依 `[FD3]`=A 回補）」，§2.2.10（951–1073）不在收據後的 3 個 hunk 內（見本節「一」）。
+- Step 15 最後一格（`DEPLOY.md`、`LOCAL-DEV.md` 同步；`merge-blockers.md` 第 1、4、10、15、16 列回填）：`LOCAL-DEV.md` 與收據相同；`merge-blockers.md` 這五列實查皆為「**已修正**（2026-10-21，…Step 15a／15b／15c／15d）」。
+
+**第二階段本輪補做的重驗**（Step 15「`openapi.json` 重 dump…完整套件全綠」那格的依據涉及其他單元的程式，不能只靠收據比對）：
+- 完整套件（scratchpad 副本，`backend/.venv`，`discover -s tests`）：`Ran 1326 tests in 97.625s` → `OK (skipped=3)`。
+- `backend/scripts/dump_openapi.py --check`（副本）：「規格檔與後端程式碼一致。」`openapi.json` 與 `frontend/src/types/api.d.ts` 皆與收據逐位元相同，故型別無漂移；`npm run check:types` 本輪未另跑。
+- `validate_env_contract.py`：passed；`validate_repo_contract.py`：passed（見「七」）。
+- Step 5「不改 `backend/database.py`」：`git status --short` 為空，最後一次 commit 為 2026-10-01 的 `369a5468`（早於本單元）。
+
+**結果**：Steps 1–15 勾 **59**、留 **8**；未勾的 8 格與 10-25 相同，沿用原理由（見「重做」節表格）：Step 5 聚合版（`:186`）、Step 6 等價測試（`:195`）、Step 7b（`:201`）、Step 7c（`:206`）、Step 12 第一格「不動啟動路徑」（`:253`）、Step 15a／15b／15c（`:308-310`，框內含突變驗證，本輪未重跑）。§八 7 格全勾（含「勾選重設」）。
+
+**全檔實算**（`grep -c -- "- \[x\]"`）：已勾 **66**；`grep -n -- "- \[ \]"` 列出的未勾 **8** 格正是上列 8 格；66 ＋ 8 ＝ 74。
+
+### 七、收尾
+
+- `python3 scripts/validate_repo_contract.py`：`Cloud-360 repository contract validation passed.`
+- `traceability.json`：本輪無應用程式碼或路徑變動，**不需更新**；以 `python3 -I` 的 `json.load` 驗證可解析（輸出 `ok dict`）。
+
+處置紀錄（2026-10-30T15:21:42Z）：§八 重新驗證完成；`DEPLOY.md` 收據後 3 個 hunk 皆不在 §2.2.10、不改變本單元段落事實；回歸 41 測試 OK；R-06 由第 21 列承接；R-10 已更正；R-01／R-03／R-04／R-05／R-07／R-08／R-09 仍成立，記為已知限制待 conductor 併入 `merge-blockers.md`。勾選重設補做後全檔已勾 66／74（Steps 1–15 勾 59、留 8；§八 7／7）。
+
+## 2026-11-07 第 21、31 列剩餘項與回歸
+
+<!-- 寫入時間：2026-11-07T00:54:21Z（`date -u` 取值） -->
+
+依計畫 §九 執行。`brain-infra` 交接給本單元的唯一非共用檔項目是第 31 列 (b)；本節只改下列三類檔：`backend/services/membership_backfill.py`（僅 docstring）、新測試檔、本單元紀錄檔。`merge-blockers.md`、`DEPLOY.md` 與其他共用檔未動。
+
+### 一、第 31 列 (b)：docstring 更正
+
+- `backend/services/membership_backfill.py:28-37`（原 `:28-30`；`git diff --stat` 為 10 行插入、3 行刪除，hunk `@@ -28,3 +28,10 @@`）：拿掉「例如某專案的 `owner_user_id` 指向不存在的使用者」這個例子，改為「失敗原因要看 log 判斷，不要預設是『擁有者指向不存在的使用者』」，說明 `projects.owner_user_id` 有外鍵指向 `users`，並列出兩類實際原因：(1) 終檢回報的剩餘零成員專案數不為 0（`BackfillVerificationError`）；(2) `INSERT` 本身拋出例外（看 `membership.backfill_failed` 之後的 traceback，例如多個 backend 行程並行補齊撞上 `uq_project_members_project_user`，重啟即冪等收斂）。措辭與 `:158-162` 的終檢訊息（行號為本輪改動後；改動前外鍵那句在 `:155`）及 `DEPLOY.md:1018-1020` 一致。
+- **零行為變更的證據**：把 HEAD 版與現行版各自解析成 AST、去掉模組 docstring 後比對 `ast.dump`，結果相同（`True`）。
+- 改動前 repo 的 sha256 `c66f16f5…bed50`；改動後 `d85a8f82…0c1aa`。
+
+### 二、鎖住一致性的測試：**新增**（判斷與理由）
+
+判斷為值得新增，而非只改文字。理由：同一個歸因有三個載體（模組 docstring、`run_backfill` 的終檢訊息、`DEPLOY.md` §2.2.10），2026-10-31 的修正改到後兩者，docstring 是事後才被審查查出的殘留——這正是「改了一處、漏了同一事實的另一種表達」的形狀，而 docstring 是維運者面對重啟迴圈時會讀的判斷依據。測試成本是兩個案例、無新依賴。
+
+新檔 `backend/tests/test_membership_backfill_docstring.py`（未放進 `test_membership_data.py`，因後者同時列在 `project-pages-ui` 的 manifest，屬共用檔），兩案皆附 §4.4 規格註解（`@purpose`／`@given`／`@step`／`@pass`／`@story`）：
+
+| 案例 | 鎖住什麼 |
+|---|---|
+| `B1` | 模組 docstring：凡提到「指向不存在的使用者」或「孤兒」的句子，同句必須帶「不要預設」「不可能」或「不會是」；且全文含「外鍵」「剩餘零成員專案數」「INSERT」 |
+| `B2` | 終檢的執行期訊息（以 `patch.object(backfill, return_value=0)` 觸發，與既有 `M11` 同法）：含「仍有 1 個零成員專案」「外鍵」，且無未被否定的孤兒歸因 |
+
+判準刻意不是「不得出現『孤兒』」：更正後的文字本身要否定地提到它，禁掉字串會逼人拿掉那句警告。否定詞清單刻意不含一般的「不是」——舊句後半有「不是讓服務在權限錯誤的狀態下運行」，含「不是」會讓舊句誤判為已否定。
+
+`DEPLOY.md` 是多單元共用檔，不在本測試射程內。
+
+### 三、突變驗證（scratchpad 副本，非 repo）
+
+| 突變 | 結果 | 還原 |
+|---|---|---|
+| M1：把副本的 `membership_backfill.py` 換回 HEAD 版（舊句「`owner_user_id` 指向不存在的使用者」在 `:29`） | `B1` 紅：`AssertionError: Lists differ`，列出未否定的那一句；`Ran 2 tests`、`FAILED (failures=1)` | 換回新版後 `cmp` 與 repo 相同（`CMP_SAME`）；`Ran 2 tests`、`OK` |
+| M2a：終檢訊息的「（projects.owner_user_id 有外鍵，不會是孤兒擁有者。）」整句改為「（可能是孤兒擁有者。）」 | `B2` 紅（紅在「外鍵」斷言） | `cmp` 相同 |
+| M2b：只把「不會是孤兒擁有者」改為「可能是孤兒擁有者」（保留「外鍵」） | `B2` 紅：`Lists differ: ['（projects.owner_user_id 有外鍵，可能是孤兒擁有者'] != []` | `cmp` 相同 |
+
+### 四、第 21、31 列其餘項的歸屬查證（`grep -n` 實查，行號為現況）
+
+**沒有「屬本單元而未修」的項目**；第 31 列 (b) 是唯一的本單元項，已於本節處理。
+
+| 列／項 | 現況與落點 | 歸類 |
+|---|---|---|
+| 21 (a) 除被停用者外無任何成員時放行 | `membership_service.py:724` `projects_with_others`，`:744` `project_id in projects_with_others and not qualified[project_id]`；改選端 `_has_other_members`（`:1054`）與 `reason=no_other_members`（`:1106`） | 已由 brain-infra 修正（A2） |
+| 21 (b) 有其他成員但皆不合格仍擋下 | 同上 `:744` 的 `not qualified[...]`；`test_membership_lone_owner.py:111` | 已由 brain-infra 修正（A2） |
+| 21 (c) 刪除時由第 3 項接手 | `user_router.py:1229`「請先停用帳號後再刪除」；空預設專案清除見 `:622`、`:575`，非預設獨人專案 `owned_projects`（`:478`） | 已由 brain-infra 修正（A2，接第 3 列既有實作） |
+| 21 (d) 端到端測試＋突變 | `test_membership_lone_owner.py:86`、`:111`、`:133`；突變 M1–M3 記於 `brain-infra` `code-summary.md:430-437` | 已由 brain-infra 修正 |
+| 21 (e) docstring 與 `DEPLOY.md` 同步 | `membership_service.py:668`「獨自一人的專案不擋」；`DEPLOY.md:519` | 已由 brain-infra 修正 |
+| 31 (a) 自我降級／移出的管理者計數套合格謂詞 | `membership_service.py:458` `admin_count_after`，`:508` `is_qualified_successor`；docstring `:471`、`:482` | 已由 brain-infra 修正（A6） |
+| 31 (c) 守門依賴 `authorization_status` 須記載 | `schema_rbac.sql:644-646` 純註解；`DEPLOY.md:1128` 「成員守門的兩個前提」 | 已由 brain-infra 修正（A6，文件化） |
+| 31 (e) 升任 `project_admin` 須合格 | `membership_service.py:519` `assert_can_be_promoted_to_admin`；`membership_facade.py:392` 在 `change_role` 內呼叫 | 已由 brain-infra 修正（A6） |
+| 31 (f) `_authorize_global` 看核准狀態、橫幅兩方法補授權 | `membership_facade.py:118` `principal.is_approved`；`:629`、`:639` `_authorize_global(principal, "view")` | 已由 brain-infra 修正（A6） |
+| 31 (g) `_BACKFILL_SQL` 不看 `is_active` | SQL 未變（`membership_backfill.py:83-90`，刻意保留，2026-10-31 裁決「只寫進文件」）；`DEPLOY.md:1128` 小節第二點記載 | 已由 brain-infra 修正（文件化；SQL 刻意不變） |
+| 31 (d)（不在本節查證範圍，附記） | `AdminPage.tsx:172` 仍只 `throw new Error(data.detail \|\| '更新狀態失敗')`，不處理 `failed_project_ids` | 仍為已知限制，承接列為第 31 列 (d)，屬前端 admin 頁所屬單元 |
+
+### 五、回歸
+
+scratchpad 副本（`rsync -a --exclude .git --exclude node_modules`，含 `frontend/`），`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.`，`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本外的 scratchpad 目錄，以 `backend/.venv/bin/python -B` 執行：
+
+| 指令 | 實跑輸出 |
+|---|---|
+| `-m unittest -v tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints` | `Ran 41 tests`、`OK` |
+| 同上加 `tests.test_membership_backfill_docstring` | `Ran 43 tests`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1375 tests in 104.263s`、`OK (skipped=3)` |
+| repo 內 `python3 -B scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| repo 內 `python3 -B scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+| repo 內 `backend/scripts/dump_openapi.py --check`（`-B`，為核對 Step 15 那一格） | `規格檔與後端程式碼一致。` |
+| repo 內 `npm --prefix frontend run check:types`（同上） | `API 型別檔與規格檔一致。` |
+
+- repo 內快取數前後不變：`.pyc` 8576 → 8576、`__pycache__` 675 → 675、`.hypothesis` 路徑 377 → 377（`find` 實算，排除 `node_modules`）。
+- `tests_pg` 本輪**未跑**（不啟資料庫），沿用前輪紀錄（「重做」節：`Ran 10 tests`、`OK`，本機丟棄式 PostgreSQL 17.7）。
+- scratchpad 副本與 hypothesis 目錄已刪除。
+
+### 六、計畫勾選
+
+引擎在重新核可時把全檔勾選重設為未勾（本輪開始時 `grep -c -- '- \[x\]'` 為 0、`'- \[ \]'` 為 79 ＝ Steps 1–15 的 67 格 ＋ §八 7 格 ＋ §九 5 格）。判準沿用 10-30 的做法：前輪證據在本輪仍成立才勾；收據之後被改過的檔（`brain-infra` 於 2026-10-31 改了 `membership_service.py`、`membership_facade.py`、`DEPLOY.md`、`openapi.json`、`frontend/src/types/api.d.ts`、`.github/workflows/ci.yml`、`backend/database.py` 等）逐一重驗相關格：
+
+- 全套 1375 測試綠、本單元 41 測試綠（見「五」），涵蓋 Steps 4、6、8、10、15 各格所指的測試；
+- Step 3／14a：`DEPLOY.md:685` 仍為「`reselection_events` | **9 欄**」，§2.2.10 在 `:1010`；
+- Step 13：`ci.yml:567` `concurrency:` job、`:593` `timeout-minutes: 15`、`:610` `pgvector/pgvector:pg18`、`:649` `discover -s tests_pg`；
+- Step 15 最後一格：`merge-blockers.md` 第 1、4、10、15、16 列仍為「**已修正**（2026-10-21，…）」；Step 15 的 openapi／型別那格：見「五」的兩條檢查；`openapi.json` 中 `"409"` 11 處；
+- Step 14c：`source-manifest.json` 加入新測試檔後 29 條，全部存在（`os.path.exists` 實查）。
+
+**結果**：`grep -c -- '- \[x\]'` 為 **70**、`grep -c -- '- \[ \]'` 為 **9**（70 ＋ 9 ＝ 79）。Steps 1–15 勾 58、留 9；§八 7／7；§九 5／5。
+
+未勾的 9 格：
+- 與 10-30 相同的 8 格，理由不變（見「重做」節表格）：Step 5 聚合版（`:186`）、Step 6 等價測試（`:195`）、Step 7b（`:201`）、Step 7c（`:206`）、Step 12 第一格「不動啟動路徑」（`:253`）、Step 15a／15b／15c（`:308-310`，框內含突變驗證，本輪未重跑）。
+- **新增 1 格：Step 5「不改 `backend/database.py`（判準是該檔 diff 為空）」（`:188`）**。10-30 時 `git status --short backend/database.py` 為空；本輪為 ` M`，`git diff --stat` 為 72 行插入——來自 `brain-infra` 依合併前必修第 20／29 列新增的記憶專用連線（該檔列在 `brain-infra` 的 manifest，不在本單元的）。本單元自身仍未改它，`SessionLocal`／`engine` 兩行也未動（`NFR12.5` 的實質「不改 `SessionLocal`」仍成立），但這一格寫明的判準是「該檔 diff 為空」，字面已不成立，故留空，待 conductor 判定是否以「本單元未改、`SessionLocal` 未動」改判。`traceability.json` 的 `NFR12.5` 附註已同步記載此事。
+
+### 七、追溯與 manifest
+
+- `traceability.json`：新增 reverse 條目 `CG-MB31-B`（target 為新測試檔），記載第 31 列 (b) 在本單元的處置與突變結果；第 31 列 (b) 已關閉，故未新增 open item。`NFR12.5` 的 note 附加 2026-11-07 更正（見上）。`python3 -I` 的 `json.load` 驗證可解析（`ok dict`，reverse 18 條、open_items 18 條）。
+- `source-manifest.json`：新增 `backend/tests/test_membership_backfill_docstring.py`（共 29 條）。
+
+處置紀錄（2026-11-07T00:54:21Z）：第 31 列 (b) docstring 已更正、新增 `B1`／`B2` 並經突變驗證；第 21 列 (a)–(e) 與第 31 列 (a)(c)(e)(f)(g) 皆已由 brain-infra 處理，無屬本單元而未修的項目；回歸 41／43／1375 測試 OK、兩支 validator passed、repo 快取數不變；勾選 70／79。

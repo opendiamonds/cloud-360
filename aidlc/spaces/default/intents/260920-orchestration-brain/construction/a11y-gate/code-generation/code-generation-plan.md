@@ -52,10 +52,10 @@
 - [x] **Step 8 — 實作基準清單的兩個檢查 test**：(a) 靜態檢查：規則 1（不得收新元件根節點）、規則 4（`reason` 非空）、規則 5（交界類規則 id 不得出現）、`M12`（每點 `ready` 至少一項）；(b) 過期檢查：檔案最末，讀回 18 個檔，檔數不足即失敗，全部掃描點都沒出現的條目判過期。
 - [x] **Step 9 — 實作手機寬度檢查（`C-06`、`AC-A11Y.2`）**：375×812，入口頁就緒後斷言 `scrollWidth <= clientWidth`。
 - [x] **Step 10 — 第一次實跑並依第四節處置結果**：以空的 `a11y-baseline.json` 跑全部 21 個 test；逐筆分類違規；修新元件（第四節第 1 類）、建立基準（第 2 類）、遇第 3 類或超量即停下回報。記下第一次實跑的**完整違規清單與筆數**（`A11Y-S9` 規則 3 的比對基準）。
-- [x] **Step 11 — 跑測試並做突變驗證（`M1`–`M12`）**：全綠後逐一套用 `security-design.md` 第八節 `M1`–`M10` 與 `D-08` 的 `M11`／`M12`，每一道：套用 → 確認紅在預期的那一層 → 還原 → 確認綠；`M10` 以環境變數注入一次性失敗並設 `CI=1` 使 `retries: 1` 生效，驗證過期檢查不誤紅——若誤紅，依 `D-03` 備案改以 project `dependencies` 拆出過期檢查（會改 `playwright.config.ts`，記入 `code-summary.md`）。
+- [ ] **Step 11 — 跑測試並做突變驗證（`M1`–`M12`）**：全綠後逐一套用 `security-design.md` 第八節 `M1`–`M10` 與 `D-08` 的 `M11`／`M12`，每一道：套用 → 確認紅在預期的那一層 → 還原 → 確認綠；`M10` 以環境變數注入一次性失敗並設 `CI=1` 使 `retries: 1` 生效，驗證過期檢查不誤紅——若誤紅，依 `D-03` 備案改以 project `dependencies` 拆出過期檢查（會改 `playwright.config.ts`，記入 `code-summary.md`）。
 - [x] **Step 12 — 規則分類實查（`D-06`）**：以 `axe.getRules(['wcag2a','wcag2aa','wcag21a','wcag21aa'])` 列出實際執行的規則，與 `C-03` 規則 5 清單交叉比對；不符時以實查為準，調整 Step 8(a) 的清單並記錄。
 - [x] **Step 13 — 環境與建置檢查**：`npm run lint`（0 errors，warning 數不增）；`npm run build`（含 `tsc -b`）；`grep -rn "axe-core" frontend/src` 為 0、`dist/` 內 `axe` 為 0（`A11Y-S1`）；`python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contract.py` 通過；實測 `a11y.spec.ts` 總耗時（`H-2`）。
-- [ ] **Step 14 — 規格註解（`test-case-authoring.md` §4.4）**：21 個 `test()` 前各加 `@purpose`／`@given`／`@step`／`@pass`／`@ui`／`@story`／`@note`；`@ui` 用 `App.tsx` 實有的路由；`@story` 寫 `N-9`（無故事單元）；**不寫 `@api`**（受測對象不打真實 API，寫了是假端點）。`describe` 名稱定為 `U17 a11y gate`，合併後不得再改。
+- [x] **Step 14 — 規格註解（`test-case-authoring.md` §4.4）**：21 個 `test()` 前各加 `@purpose`／`@given`／`@step`／`@pass`／`@ui`／`@story`／`@note`；`@ui` 用 `App.tsx` 實有的路由；`@story` 寫 `N-9`（無故事單元）；**不寫 `@api`**（受測對象不打真實 API，寫了是假端點）。`describe` 名稱定為 `U17 a11y gate`，合併後不得再改。
 - [x] **Step 15 — 文件與追溯**：`code-summary.md`（含第三節各帶入事項的結果、第四節的修改清單、Step 3 的版本資訊、Step 10 的完整初始違規清單、Step 11 的突變結果、Step 13 的耗時）、`traceability.json`、`source-manifest.json`。
 
 ## 六、交付檔案（預估）
@@ -89,6 +89,30 @@
 但其他單元本輪的修正改到了本單元掃描的畫面：`entry-page-ui` 新增對話中的系統提示列與「這句沒有送達」狀態，`member-pages-ui` 的成員頁新增「查不到這個專案」狀態。因此本輪只做回歸驗證，不改程式。
 
 - [x] **Step 16 — 回歸驗證**：以 `npm run build` ＋ `vite preview` 生產建置跑 `tests/e2e/a11y.spec.ts` 全部案例須全綠；`a11y-baseline.json` **不得新增條目**（新出現的違規屬第四節第 1 類，應修元件而非收進基準——若出現即停下回報，不在本單元擅改他單元元件）；過期檢查不得誤紅。結果記入 `code-summary.md` 新增一節；`source-manifest.json`、`traceability.json` 無變更則不動。
+
+## 九之二、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入或掃描的共用檔（收據 `reviewed-source-97f17c16ecf7.tsv` 中的 `frontend/src/pages/MemberDetailPage.tsx` 等），使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以 `reviewed-source-97f17c16ecf7.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對每個變動檔找出收據之後的改動（`git diff`／`git log -p`；收據版本無法由 git 重建時，可試以 hunk 子集重建收據雜湊，重建不了則讀涵蓋它的整段 diff 並寫明無法證明為子集、以逐行重讀補強），判定是否碰到本單元負責或依賴的部分（第四節第 1 類對他單元元件所做的無障礙屬性修改、`a11y.spec.ts` 依賴的 test-id 與文字定位器、`ReselectionBanner.tsx` 的 `data-slot`、`a11y-baseline.json` 條目所指的節點），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的實體複製副本上依 `unit-test-instructions.md` 第三節現況註記，以生產建置 ＋ `vite preview` 跑 `tests/e2e/a11y.spec.ts` 全部案例須全綠、`a11y-baseline.json` 不得新增條目、過期檢查不得誤紅；另跑 `npm run lint`（0 errors，warning 數不增）。記下實跑測試數。
+- [x] **前輪審查的 Unresolved／New 發現**：最新一份審查（`reviews/review-03.md`）的每一項，逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記；需改程式、測試或共用文件者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（既有列已涵蓋者引用之）。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者（含 Step 14 既有的未勾）維持未勾並在 `code-summary.md` 寫明理由；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 九之三、合併前必修第 40 列（2026-11-08）
+
+**來源**：使用者對整站送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。其中**第 40 列劃給本單元**（review-04 R-05、R-06、R-09、R-11、R-12、R-13 與新發現 3 項，皆 Minor）。另併入他單元已登錄、落在本單元檔案的一項：`a11y.spec.ts` 約 :77 註解仍寫「我的記憶」的 `<nav>` 無 `aria-label`（第 56、59 列記載，brain-infra A10 已加標籤）。本節只修這些，不擴大範圍；2026-11-08 使用者已關閉本 intent 的計畫核可關卡，(e)(h) 需改 `unit-test-instructions.md` 屬本節範圍。偏離與理由寫進 `code-summary.md`；本節各格完成即勾，既有各格依收據（本單元 `code-generation/` 下最新 `reviewed-source-*.tsv`，以 Python `hashlib` 解析 tab 分隔欄位）逐檔比對與本輪回歸結果逐格重判。
+
+- [x] **Step 17 — (a) R-11 規格註解補齊**：`frontend/tests/e2e/a11y.spec.ts` 每一個 `test()` 前都有完整的 `@purpose`／`@given`／`@step`／`@pass`／`@story`（`test-case-authoring.md` §4.4），`@story` 依計畫 Step 14 用 `N-9`（第 21、22 點對應的 `US9.2` 另以 `@story` 第二值或註記保留，不刪）；不改任何 `describe`／`test` 名稱。完成後實算 `test(` 數與註解數並寫入 code-summary，勾 Step 14。
+- [x] **Step 18 — (d) 成員詳情頁固定句狀態掃描點**：新增一個掃描點，覆蓋 `MemberDetailPage.tsx` 約 :44-56、:139、:259-261 的「`projectId` 非數字 → 固定句」狀態（以 `page.route` 替身，不連真實 stack），沿用既有掃描點的 `AxeBuilder` 與基準格式；不新增基準豁免。加規格註解。
+- [x] **Step 19 — 過期註解**：`a11y.spec.ts` 約 :77 的「我的記憶的 `<nav>` 無 aria-label」改為現況（`Sidebar.tsx` 約 :248 已有 `aria-label="我的記憶"`，`sidebar-landmarks.spec.ts` 鎖住），只改註解文字。
+- [x] **Step 20 — (i) R-06 現況確認（可選項）**：以 `grep -n` 確認 `ContextBar.tsx` 骨架是否已為 `role="status"`、`MemberDetailPage.tsx` 約 :289 是否已改 `aria-labelledby`（他單元可能已落地）；已落地則記明行號與落地者，未落地則記為已知限制，本節不改元件程式。
+- [x] **Step 21 — 紀錄一致性 (b)(c)(e)–(h)**：(b) `source-manifest.json` 補列 `frontend/src/components/ConversationView.tsx`；(c) `traceability.json` 的 `upstream_ids` 補 `US9.2`（保持合法 JSON）；(e) `unit-test-instructions.md` 現況註記 append「綠燈不代表 `incomplete` 為空」；(h) 同處 append「副本須用依 `package-lock.json` 完整安裝的 `node_modules`（repo 現況直接複製後 `tsc` 會報 TS2307），本機無網路時以 `cp -cR` 複製 repo 的 `node_modules` 並如實記錄限制」；(f) `code-summary.md` 第四、五、十、十四節過時的「基準 1 筆／2.6:1」各以 Edit 在原段後加一行指向第十七節現況表（原文不刪）；(g) 第十七節範圍宣稱補記漏列的 `unit-test-instructions.md` 現況註記（append 方式）。
+- [x] **Step 22 — 突變驗證**（只在 scratchpad 副本做，repo 內被測檔不動）：Step 18 新掃描點——在副本的 `MemberDetailPage.tsx` 固定句狀態注入一個 axe 會判違規的元素（例如無名稱的按鈕）→ 新掃描點紅；還原 → 綠。結果記入 `code-summary.md`。
+- [x] **Step 23 — 回歸**：在 scratchpad 實體副本（`node_modules` 以 `cp -cR` 帶入，不連網路、不 `npm install`）跑 `npm run lint`、`npm run check:types`、`npm run build`，並以 `vite preview --host 127.0.0.1` ＋ `BASE_URL` 跑 `tests/e2e/a11y.spec.ts` 全部與 `sidebar-landmarks.spec.ts`；跑完關閉 preview。基準過期檢查須綠、基準不得新增。repo 內不得新寫入 `junit.xml`／`pw-report.json`／`.tsbuildinfo`／`.pyc`／`.hypothesis`；不推送、不觸發 CI；不得連 staging 或共用 DB／Redis。`validate_repo_contract.py`、`validate_env_contract.py` 在 repo 以 `python3 -B` 跑。
+- [x] **Step 24 — 收尾**：`code-summary.md` 以 Edit append 本輪一節（`date -u` 時間戳）；`traceability.json` 加 `MB-40`；`merge-blockers.md` 第 40 列處置欄就地補記結論、保留原文。
+- 追溯：`merge-blockers.md` #40、#56、#59；review-04 R-05、R-06、R-09、R-11、R-12、R-13 與新發現 3 項；`N-9`、`US9.2`。
 
 ## Testing Contract
 

@@ -21,8 +21,21 @@
 ### 2.1 不需資料庫 ＋ SQLite 的三個測試檔
 
 ```bash
-cd backend && python3 -m unittest tests.test_memory_contract tests.test_memory_ranking tests.test_memory_authz -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests.test_memory_contract tests.test_memory_ranking tests.test_memory_authz
 ```
+
+> **現況註記（2026-10-30，共用檔重驗輪）**：一律以 `backend/.venv` 的直譯器執行並加 `-B`／`PYTHONDONTWRITEBYTECODE=1`（不在 repo 內留下 `.pyc`；本機系統 Python 的套件版本與 `requirements.txt` 不一致）。測試數以實跑為準（review-04 實跑 43）。§2.2 與 §2.2a 需真實 PostgreSQL，本輪不執行，沿用前一輪紀錄。
+
+### 2.2a 真實 PostgreSQL 的 `tests_pg`（合併前必修第 22 項新增；review-04 R-10 補記）
+
+```bash
+cd backend && DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/cloud360' \
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests_pg.test_memory_service_pg
+```
+
+- 涵蓋 `V1`（經 `create_record` 寫入後 `embedding IS NOT NULL` 且檢索順序正確）、`D1`、`D2`（同列併發刪除只寫一筆 `deleted_by_user` 稽核，第二次得到 `MemoryNotFound`）。
+- **前置條件**：資料庫含 `pgvector` 擴充且已套用 `schema_rbac.sql`；`DATABASE_URL` 缺值時 `tests_pg/__init__.py` 的 `require_pg_url` 會大聲失敗，不退回 SQLite。
+- CI 由 `concurrency` job 執行（`pgvector/pgvector:pg18` ＋ `schema_rbac.sql`，`discover -s tests_pg`），**不是** `memory-schema` job；且 `ut` 無必要狀態檢查，該 job 紅燈是訊號而非閘門。
 
 ### 2.2 真實 PostgreSQL 的斷言（**須於 repo 根目錄執行**）
 

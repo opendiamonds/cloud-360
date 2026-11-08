@@ -25,6 +25,8 @@ psql -h localhost -U postgres -d cloud360 -v ON_ERROR_STOP=1 \
 
 ## 一、斷言清單（`P1`–`P12`，全部純 SQL）
 
+> **現況註記（2026-10-30，review-03 R-08）**：本節與突變表是本單元交付當時的 `P1`–`P12`。之後 `U19`／`U20` 在 `backend/scripts/verify_meta_schema.sql` 加了 `P13`–`P16`（`reselection_events.cause` 與其 CHECK、`updated_on_behalf_of` 由 integer 收斂為 varchar(64)），`P5` 由「恰為 8 欄」改為 **9 欄**（加入 `cause`）。現行斷言清單、條數與 `P13`–`P16` 的突變結果以 `code-summary.md` 最新一節為準。
+
 每條不成立即 `RAISE EXCEPTION`，使 psql 非零碼結束、job 紅燈。
 `standard` 策略要求每個 component 5–8 個測試；本單元是三張表（三個 component），
 12 條斷言分佈為 4／4／4，落在區間內。

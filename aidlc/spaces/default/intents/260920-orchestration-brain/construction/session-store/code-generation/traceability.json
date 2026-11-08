@@ -84,6 +84,8 @@
     "FR6.1",
     "MB-12",
     "MB-18",
+    "MB-34c",
+    "MB-34j",
     "NFR1",
     "NFR2",
     "NFR2.40",
@@ -628,6 +630,18 @@
       "status": "OK",
       "target": "backend/services/session_scripts/append_message.lua",
       "note": "merge-blockers.md 第 18 項（裁決每段對話大小上限）。修剪取「BRAIN_SESSION_HISTORY_MAX 則」與「整段序列化後 ≤ DEFAULT_SEGMENT_MAX_BYTES（200 KB，backend/services/session_types.py）」較嚴者；Lua 以 string.len(cjson.encode(...)) 量位元組，參考實作 trim_history 以 cjson_encoded_size 量同一個東西。最壞 3 × 200 KB ≈ 600 KB／session；256 MB 的 80% ≈ 349 個。測試 backend/tests/test_session_types.py::TrimHistoryByteCapPropertyTest（2 條 @given ＋ 1 條 cjson 長度實測值）、backend/tests/test_session_store_behaviour.py::SegmentByteCapTest（4 案）、backend/tests/test_session_contract.py::LuaIsTheOnlyTrimCarrierTest（迴圈條件靜態斷言）、RealRedisParityTest（opt-in，真實 Redis 8.8.0 逐步一致）"
+    },
+    {
+      "id": "MB-34c",
+      "status": "OK",
+      "target": "backend/tests/test_session_store_behaviour.py",
+      "note": "merge-blockers.md 第 34 列 (c)（review-02 R-07）。RealRedisParityTest::test_real_pipeline_error_is_classified_and_stripped_of_written_values 改用短 key（p: 加 8 個十六進位字元），值與 key 不共享子字串，並以 redis-py 的 truncate_text 先斷言「未去值時值必出現在註記內」，使 assertNotIn 在真實 Redis 上有辨識力。突變（副本、暫起 127.0.0.1 redis-server 8.8.0）：拿掉 redis_gateway.py 的 _strip_pipeline_annotation 呼叫 → 紅在 assertNotIn（同一突變對舊版只紅在 startswith(WRONGTYPE)）；還原 → 綠。opt-in，需 REDIS_URL，不在 CI"
+    },
+    {
+      "id": "MB-34j",
+      "status": "GAP",
+      "target": "aidlc/spaces/default/intents/260920-orchestration-brain/construction/session-store/code-generation/unit-test-instructions.md",
+      "note": "merge-blockers.md 第 34 列 (j)。(2) code-summary 容量表 hunk「早於收據」判定的更正已 append（code-summary.md「2026-11-07 第 34 列剩餘項」節）。(1) unit-test-instructions.md §二 現況註記**未改**：該檔在 Plan Approval 的指紋內，改動即使核可失效、plan-approval-guard 擋下所有可變更的 shell 指令（本輪實測後已逐位元還原）；擬寫入的文字記於 code-summary.md 同節，待 conductor 重取核可後套用"
     },
     {
       "id": "NFR1",

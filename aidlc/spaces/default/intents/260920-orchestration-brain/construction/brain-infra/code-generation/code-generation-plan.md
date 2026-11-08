@@ -37,6 +37,59 @@ GitHub Actions workflow 與兩份部署文件。`unit-of-work.md:63` 逐字寫�
 
 ## 二、Testing Contract（由 `aidlc-testing-posture.ts render` 產生，原樣貼入）
 
+## 共用檔異動後的重新驗證與補審（2026-10-29 使用者裁決：一次重開 15 個審查失效的單元）
+
+**來源**：整站送審被擋（`REQUIRED_SOURCE_WORK_MISSING`）。比對本單元最新審查收據（`reviewed-source-*.tsv`）與現況，對不上的清單內檔案為：`.github/workflows/deploy.yml`、`DEPLOY.md`。這些是合併前必修第 22–26 項在其他單元所做的修正。本節**不改程式**，只重新驗證並補審。
+
+- [x] **重新驗證**：以收據比對與 `git diff` 逐檔確認上列檔案的變動來源（哪一項合併前必修、改了哪幾行），並判定是否觸及本單元的段落或行為；其餘清單內檔案與收據逐位元相同。
+- [x] **回歸**：在暫存區副本（設 `PYTHONDONTWRITEBYTECODE=1`，不在工作樹產生快取）跑本單元的測試；`code-summary.md` 末尾追加「共用檔異動後重新驗證」一段（`date -u` 時間戳、逐檔結論、測試結果）。
+- 追溯：`merge-blockers.md` #22–#26。
+
+## 重新驗證審查（review-03）的五項文件修正（2026-10-29：重開本單元一併處理）
+
+**來源**：review-03 判 NOT-READY，五項皆為前輪既有、文件陳述過期，**不涉及程式**。R-01 已在 Step 6 就地標註。本節**不改程式、不改部署資產**。
+
+- [x] **R-02**：`traceability.json` 的 AC2.1.4、S-8、S-9 三列 note 末尾追加「截至 HEAD：policy 為 `noeviction`；deploy 為 7 個服務、記憶體上限共 11 項（含 `mcp-bridge`）」（先實查 compose 確認數字再寫）。
+- [x] **R-03**：`unit-test-instructions.md` 本單元命令改為 `PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -B -m unittest …`，`test_vector_extension_bootstrap.py` 的測試數更正為實數（先數 `def test_`）。〔2026-10-29 更正，review-04 新發現 Major：上一輪此格被勾選，但當時該檔**並未修改**——改檔會使計畫核可失效，故改採替代做法記在 `code-summary.md`，勾選與事實不符。本輪重開時，由 conductor 在計畫修訂階段（核可之前）直接修改該檔：兩處命令改用 `.venv/bin/python -B` 並加 `PYTHONDONTWRITEBYTECODE=1`、補直譯器說明段、第四節標題改為「規劃 6／實作 7」「規劃 5／實作 9」、第五節補實作合計 16。本格由開發者以 `grep` 核對該檔現況屬實後才勾。〕
+- [x] **R-04**：`code-summary.md`「19 項合併前必修與本單元的關係」補一張「跨單元落點」表：#15、#16、#18、#19 各會改到本單元哪個檔、由哪個單元負責、改完是否需回頭重驗本單元勾選；#19 註明 `deploy.yml` 的 required-secret 檢查已存在（附實際行號）。
+- [x] **R-05**：`code-summary.md` 後續變更第 3 點補一句「`mcp` 網段的明文往返屬合併前必修 #7，本單元的網路分段不處理 encryption」。
+- [x] **收尾**：`validate_repo_contract.py` 綠；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：review-03 R-01–R-05。
+
+## 審查 review-04 的四項修正（2026-10-29：第三次重開本單元）
+
+**來源**：review-04 判 NOT-READY。R-01、R-02、R-04、R-05 已 Fixed；新發現 1 Major ＋ 3 Minor，全為文件陳述，**不涉及程式**。
+
+- [x] **Major（R-03 勾選不實）**：見上一節 R-03 格的更正註記；核對 `unit-test-instructions.md` 現況（`grep -n '.venv/bin/python -B'` 兩處、`實作 7`、`實作 9`），屬實後勾上一節 R-03 格。
+- [x] **Minor（R-03 理由不一致）**：改寫 `code-summary.md` 末節「五項文件修正的處置」的 R-03 條：說明說明檔現已直接修正，並寫明上一輪不改的真正原因——核可綁定的是計畫、測試說明與 Testing Contract 三者的內容，核可之後改其中任一份都會讓核可失效；`traceability.json` 與 `code-summary.md` 不在綁定範圍內，計畫的勾選也不計入。正確做法是在核可**之前**的計畫修訂階段改，本輪即如此。
+- [x] **Minor（I2 note 漏改）**：`traceability.json` 的 I2 列 note 末尾追加與 S-8 相同的「截至 HEAD 實查」標註（deploy 7 個服務、記憶體上限共 11 項）；之後 `grep` 全檔「六個 deploy」「6 個服務」「十個服務」等舊形式，確認無其他殘留。
+- [x] **Minor（勾選數與摘要矛盾）**：本單元重開時引擎會重設計畫的勾選。開發者逐步核對本計畫**全部**步驟仍成立後重新勾回（「本計畫刻意不做的事」等非步驟格除外），並在 `code-summary.md` 末尾記一段：重開會重設勾選、本輪勾回的數量（以 `grep -c '^- \[x\]'` 實算）、仍未勾的格與理由。
+- [x] **收尾**：`python3 scripts/validate_repo_contract.py` 綠；`code-summary.md` 末尾記一行處置紀錄（`date -u`）。
+- 追溯：review-04 新發現 1–4。
+
+## 合併前必修：共用檔集中修正（2026-10-31 Request Changes）
+
+**來源**：使用者送出 Request Changes，要求修正 `construction/functional-design/merge-blockers.md` 第 2 列剩餘部分、第 20／29、21、25、27、28、30–40 列，各在所屬單元修正並附測試。2026-10-31 使用者另裁決（`date -u` 2026-10-31T15:57:57Z 前後逐題取得）：**凡改到「出現在 ≥2 個單元審查收據」的共用檔者，集中在本單元一次改完**，只屬單一單元的程式與測試留在所屬單元；新測試**另開新檔**，不加進共用測試檔。理由：引擎依序重審 24 個單元，本單元第一個；共用檔若分散在後面的單元改，每改一次就讓前面已審完的單元收據失效。
+
+**本節做完後，後續 23 個單元一律不得再改下列共用檔**：`DEPLOY.md`、`LOCAL-DEV.md`、`schema_rbac.sql`、`.github/workflows/ci.yml`、`.github/workflows/deploy.yml`、`deploy/*`、`openapi.json`、`frontend/src/types/api.d.ts`、`backend/requirements.txt`、`backend/scripts/run_meta_schema_migration.py`、`backend/scripts/verify_meta_schema.sql`、`backend/scripts/verify_memory_schema.sql`、`backend/services/{user_router,hierarchy_facade,membership_facade,membership_service,memory_errors,memory_facade,memory_router,session_store}.py`、`backend/tests/{test_membership_endpoints,test_membership_facade,test_mcp_bridge_e2e}.py`、`frontend/src/components/Sidebar.tsx`、`frontend/src/components/brain/ContextBar.tsx`、`frontend/src/pages/MemberDetailPage.tsx`、`frontend/tests/e2e/{a11y,memory-page}.spec.ts`。若後續單元發現非改不可，停下回報 conductor。
+
+**使用者裁決（逐題，皆選建議項）**：第 25 列＝刪除專案／系統時同時要求呼叫者為該專案 `project_admin`；第 31 列 (a)(e)＝自我降級／移出的管理者計數與升任管理者都套合格判定；第 31 列 (g)＝只寫進文件、SQL 不變；第 31 列 (f)＝加固（全域檢查加看核准狀態、橫幅兩方法補授權）；第 33 列 (a)＝改走 `MemoryFacade`；(b)＝`MemoryError` 更名為 `MemoryServiceError`；(e)＝`content`、`query` 上限皆 4000 字元，超過回 422；第 34 列 (a)＝`role` 限 32 字元；(b)＝記進文件不優化；第 36 列 (a)＝補取捨註解（Lua 檔歸 work-orchestrator，本節只改 `DEPLOY.md` 部分）；第 38 列 (a)＝`sse-starlette`、`mcp-types` 精確釘進 `requirements.txt`（版本取 `.venv` 現裝）；第 40 列 (a)＝補齊 `@note`、第 21／22 點保留 `US9.2`；(i)＝做；測試落點＝新檔；第 20 列記憶角色預設名 `cloud360_memory`、密碼變數 `MEMORY_DB_PASSWORD`（GitHub secret，由使用者新增；本單元只核對名稱落在 secrets，不讀值）。
+
+- [x] **A1 第 20／29 列（記憶專用資料庫角色）**：`schema_rbac.sql` 建立登入角色 `cloud360_memory`（密碼以 `psql -v` 變數由部署端帶入，不寫進 SQL），只授與 `memory` schema 的 USAGE 與所需表權限，`REVOKE` 其對 `public` schema 的權限；`backend/database.py` 新增記憶專用 engine／session（由新變數組成；未設定時的本機與 SQLite 測試行為須寫明，不得靜默退回擁有者帳號而宣稱邊界生效）；`deploy/render-env.sh` 寫入、`deploy/.env.example` 列出、`deploy/docker-compose.deploy.yml` 消費、`deploy/docker-compose.test.yml` 給測試值；`deploy.yml` 的必要 secret 檢查加入 `MEMORY_DB_PASSWORD`；`backend/.env.example`、`LOCAL-DEV.md`、`DEPLOY.md:535` 與 `schema_rbac.sql` 說明同步、改成與實際一致；CI `memory-schema` job 以該角色連線，斷言讀不到 `public` 任一表、寫得進 `memory` 的表。記憶表的實際存取改用新 session 屬 memory-service 單元（`memory_service.py`），本格只提供連線並在 `code-summary.md` 寫明交接點。設計卡住（例如角色建立與既有 `schema_rbac.sql` 重跑語意衝突）即停下回報。
+- [x] **A2 第 21 列**：`membership_service.py:573-636` `projects_losing_last_admin`：除被停用者外沒有任何成員時放行，有其他成員但都不合格時照舊擋；docstring 與 `DEPLOY.md` 刪除使用者小節同步；既有 `test_membership_endpoints.py` `test_E6` 前半段依新規則修改；新增 `backend/tests/test_membership_lone_owner.py`：停用 200 再刪除 200、另有一位不合格成員時仍 409，各做一次突變。
+- [x] **A3 第 25 列**：先查證建立者能否被降為一般成員（`membership_facade.change_role`、自動改選、邀請等所有改寫建立者成員列的入口），結論附檔名行號寫進 `code-summary.md`；`hierarchy_facade.py:295-321` 刪除專案與系統改為同時要求呼叫者為該專案 `project_admin`；新增 `backend/tests/test_project_delete_requires_admin.py`：被降級的建立者 → 拒絕且資料不變、仍為管理者的建立者 → 成功，附突變。
+- [x] **A4 第 27、28 列（`user_router.py` 與 `DEPLOY.md` 部分）**：`_hard_delete_user`（`:581`）回傳清除摘要，兩處 `_audit_append`（`:992`、`:1206`）寫入清除的專案／系統／需求欄位筆數；409 `detail` 加下一步提示；docstring 與 `DEPLOY.md` 記載「預檢到 commit 之間無鎖」的競態；`DEPLOY.md` §2.2.7 補結束碼 2。新增 `backend/tests/test_user_delete_audit_counts.py` 斷言稽核內容含筆數與 409 `detail`，附突變。
+- [x] **A5 第 30 列**：`system_requirement_fields` 恰為 9 欄的斷言；`run_meta_schema_migration.py:195-199` 7 條外鍵全核、鍵值帶欄名（分得出 `user_id` 與 `invited_by`）；`verify_meta_schema.sql:99`、`ci.yml:328`、`:383`、`DEPLOY.md:801` 的條數與歸屬更正。
+- [x] **A6 第 31 列（共用檔部分）**：(a) `admin_count_after`（`membership_service.py:430-465`）只數合格管理者並更新 docstring；(e) `change_role`（`membership_facade.py:339-402`）升為 `project_admin` 時要求對象合格；(f) `_authorize_global`（`:101-119`）加看 `authorization_status`，重選橫幅兩方法補授權檢查；(b)(c)(g) `DEPLOY.md` §2.2.10 拿掉「孤兒擁有者」歸因、記載守門依賴後端至少啟動一次與回填不看 `is_active`，`schema_rbac.sql` 說明同步。新增 `backend/tests/test_membership_eligibility_guards.py` 涵蓋 (a)(e)(f) allow／deny，附突變。
+- [x] **A7 第 32 列 (d)(f)、第 34 列 (b)(g)、第 36 列 (c)、第 37 列 (c)（`DEPLOY.md` 文字）**：§2.2.11 寫明假的「清除逾期」issue 的辨識方式與併入後以 `dry_run=true` 首次煙霧測試、失敗即停用排程；`:1824` 標明序列化位元組下界與配置器前提、staging 首次部署量一次 `MEMORY USAGE`；容量表記追加時重新編碼整段的成本（每次最多約 200 KB）；`:1829`、`:1833` 註明 Redis 大版本升級後須重跑；`:2239` 懸空引用改掉。
+- [x] **A8 第 33 列（共用檔部分）**：(a) `MemoryFacade` 新增計數方法，`user_router.py:29-30`、`:512`、`:517` 改呼叫它；(b) `MemoryError` 更名為 `MemoryServiceError`（`memory_errors.py:51`、`memory_facade.py:88`、`:508` 及全 repo 引用，含 intent-router 與 memory-page-ui 所屬檔），以既有測試鎖住；(e) `memory_router.py` 的 `content`、`query` 上限 4000 字元、超過 422，重 dump `openapi.json` 並重產 `frontend/src/types/api.d.ts`；(g) `ci.yml:625` 步驟名改成與實際測試一致。新增 `backend/tests/test_memory_input_limits.py`（4000 過、4001 回 422）與計數走門面的測試，附突變。
+- [x] **A9 第 34 列（共用檔部分）**：(a) `session_store.py:309` `role` 超過 32 字元拒寫；(h) `:619` docstring 改正（不會補 `userId`）；(d)(e)(f)(i) `deploy.yml:452-455` 「placed LAST」說法改正、`:508`／`:553` 的 `hgetall | sort` 改成能抓到欄位值互換的比對、`:238`／`:479` 的 `--pass` 改用 `REDISCLI_AUTH` 並 mask、`:520` 引用行號改為 `:309-314`。新增 `backend/tests/test_session_role_limit.py`，附突變。
+- [x] **A10 第 35 列 (c)、第 40 列 (a)(d)(i)（前端共用檔）**：`Sidebar.tsx:247` `<nav>` 補 `aria-label="我的記憶"`；`MemberDetailPage.tsx:289` 改 `aria-labelledby` 指向標題、`ContextBar.tsx:109` 骨架改 `role="status"`；`a11y.spec.ts` 為 27 個 test 補齊 `@note`（第 21／22 點保留 `@story US9.2`）、新增成員詳情頁 `projectId` 非數字固定句的掃描點；第 35 列 (c) 的 e2e 斷言放新檔 `frontend/tests/e2e/sidebar-landmarks.spec.ts`。`a11y-baseline.json` 不得新增條目。
+- [ ] **A11 第 38 列 (a)**：`backend/requirements.txt` 精確釘選 `sse-starlette`、`mcp-types`（版本以 `backend/.venv/bin/pip show` 取得），CI 安裝驗證。
+- [x] **A12 驗證（實體副本）**：依 `unit-test-instructions.md` 現況註記，在 scratchpad 實體副本跑後端全套 `unittest discover`、`dump_openapi.py --check`、`npm run lint`、`npm run check:types`、`npm run build`，以及受影響 e2e（`a11y`、`memory-page`、`member-pages`、`project-pages`、新 `sidebar-landmarks`）；本單元自身測試；`validate_repo_contract.py`、`validate_env_contract.py`。CI 的 PostgreSQL job（`memory-schema` 等）本機無法跑者寫明，不宣稱已驗。各格突變結果與實跑數寫進 `code-summary.md`。
+- [x] **A13 收尾**：`code-summary.md` append 本節一段（`date -u`）：逐格改動檔與行號、查證結論（A3）、交接給各所屬單元的事項（memory-service 改用記憶 session、各單元自己的單檔修正）；`source-manifest.json` 加入本節新寫的檔；`traceability.json` 補列號追溯並保持合法 JSON。
+- 追溯：`merge-blockers.md` 第 20、21、25、27、28、29、30–38、40 列的共用檔部分。第 2 列 (b) 已由 entry-page-ui 修畢、第 17 列已以期限處置，兩列只由 conductor 更正狀態字。
+
 ## Testing Contract
 
 ```json
@@ -171,6 +224,7 @@ vector extension 時，`DEPLOY.md` 也必須提到（把 `project.md ## Mandated
 - [x] 兩者的 `restart: unless-stopped` ＋ 兩條 `depends_on`（清單第 16a 項）
 - [x] `redis` 的 `command:`：`--appendonly yes` ＋ `--maxmemory <值>` ＋
       `--maxmemory-policy allkeys-lru`（清單第 17a 項）
+      **〔2026-10-29 就地標註，review-03 R-01〕** policy 值已依 NFR4.50／`[N3]=A` 由後續單元改為 `noeviction`（`deploy/docker-compose.deploy.yml` 約 :273-274，提交 `c2e5687a`）；本格的勾選只代表 `--appendonly yes`、`--maxmemory` 與 policy 旗標存在，**不代表** `allkeys-lru` 仍成立。
 - [x] `redis` 的 ACL 設定資產，deploy 側那一份（清單第 17b 項）
 - [x] **`cloudflared` 必須排除在 `internal` 之外**（D-3 的核心理由）
 

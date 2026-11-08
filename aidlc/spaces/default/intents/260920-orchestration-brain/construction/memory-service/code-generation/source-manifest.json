@@ -56,6 +56,12 @@
     },
     {
       "path": "frontend/src/types/api.d.ts"
+    },
+    {
+      "path": "backend/tests/test_memory_db_session.py"
+    },
+    {
+      "path": "backend/tests/test_memory_row33_remaining.py"
     }
   ]
 }

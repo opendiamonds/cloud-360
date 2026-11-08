@@ -33,6 +33,8 @@ cd backend && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_ws_contra
 - **不得**寫成 `python -m unittest discover -s tests`——那是全專案指令。
   `build-and-test` 會逐單元執行這裡的指令，未 scope 的指令會讓整套測試被重跑 N 次。
 
+> **現況註記（2026-11-01，合併前必修共用檔修正後的回歸）**：本輪不新增測試。上列指令一律只在 scratchpad 的實體複製副本上執行（不得 symlink 回 repo），直譯器用 `backend/.venv/bin/python -B`，並帶 `PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY` 指進副本；前端 `check:ws-types`／`lint` 用依 `package-lock.json` 完整安裝的 `node_modules`。不連 DB、Redis 或網路。
+
 ### 執行前提（brownfield，本站已驗）
 
 1. 測試 runner 已存在，無需 bootstrap：CI 以 `python -m unittest discover -s tests -v` 執行。

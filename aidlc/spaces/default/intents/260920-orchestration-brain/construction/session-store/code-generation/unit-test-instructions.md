@@ -38,7 +38,9 @@ python -m unittest discover -s tests -v
 ```
 
 **本機執行一律用 `backend/.venv`**（系統 Python 的套件版本與 `requirements.txt` 不一致）：
-`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest <上述模組>`。
+`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest <上述模組>`。
+
+> 現況註記（2026-10-31，共用檔異動後的重新驗證）：三個模組合為一次執行即可——`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests.test_session_types tests.test_session_contract tests.test_session_store_behaviour`。`-B` 與 `PYTHONDONTWRITEBYTECODE=1` 避免在 repo 內留下 `.pyc`；`test_session_types` 的 PBT 會建立 `backend/.hypothesis/`，重新驗證時應在 repo 副本上執行。`RealRedisParityTest` 需 `REDIS_URL` 指向本機一次性 Redis，未設時跳過。
 
 ### 2.1 合併前必修第 12、18 項（Request Changes 修訂，計畫第十節）
 

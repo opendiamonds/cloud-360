@@ -435,6 +435,12 @@
       "status": "OK",
       "target": ".github/workflows/deploy.yml",
       "note": "合併前必修第 19 項：2026-10-24 以 gh api repos/opendiamonds/cloud-360/actions/secrets 與 .../actions/variables 唯讀列名稱——OPENROUTER_API_KEY 在 secrets（13 個名稱之一）、不在 variables（2 個名稱：APP_ID、GH_AW_DEFAULT_MODEL_COPILOT）。只能證明現況，無法證明它過去從未存為 variable（API 無歷史）。詳見 code-summary 第十三節。"
+    },
+    {
+      "id": "MB-37",
+      "status": "OK",
+      "target": "backend/tests/test_deploy_required_secrets.py",
+      "note": "合併前必修第 37 列 (b)（review-03 R-13／L2）：DeployRequiredSecretsTest 三案以 yaml.safe_load 靜態讀 .github/workflows/deploy.yml 的「Require the secrets that must not default」步驟，鎖住 OPENROUTER_API_KEY 的 env 來源為 secrets、缺值判斷恰一行且在 missing 判斷之前、缺值分支有指名說明；不執行 workflow、不讀 secret 值。突變 D1–D5 皆紅、還原後綠（code-summary「合併前必修第 37 列」節）。(a) 第 19 列狀態字未落地（交 conductor）；(c) DEPLOY.md:2340 已由 brain-infra A7 更正；(d) 引用更正記於 code-summary；(e) 前端寫檔注意未能寫入 unit-test-instructions.md（改動會使 Plan Approval 綁定失效），文字暫記於 code-summary。"
     }
   ]
 }

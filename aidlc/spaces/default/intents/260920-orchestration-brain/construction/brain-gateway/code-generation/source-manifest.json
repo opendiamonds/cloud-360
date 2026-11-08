@@ -95,6 +95,9 @@
     },
     {
       "path": "backend/tests/test_brain_gateway_startup.py"
+    },
+    {
+      "path": "backend/tests/test_deploy_required_secrets.py"
     }
   ]
 }

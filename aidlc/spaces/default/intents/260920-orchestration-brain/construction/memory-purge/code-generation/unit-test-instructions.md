@@ -22,8 +22,10 @@
 ### 2.1 靜態契約斷言（不需資料庫）
 
 ```bash
-cd backend && python3 -m unittest tests.test_retention_purge_contract -v
+cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests.test_retention_purge_contract tests.test_system_account_protection
 ```
+
+> **現況註記（2026-10-30，共用檔重驗輪）**：一律以 `backend/.venv` 的直譯器執行並加 `-B`／`PYTHONDONTWRITEBYTECODE=1`（不在 repo 內留下 `.pyc`；本機系統 Python 的套件版本與 `requirements.txt` 不一致）。合併前必修第 11 項新增的 `test_system_account_protection` 一併列入本單元範圍指令。測試數以實跑為準（review-04 實跑兩檔共 17）。§2.2、§2.3 需真實 PostgreSQL，本輪不執行，沿用前一輪紀錄。
 
 ### 2.2 原子性測試（需真實 PostgreSQL）
 

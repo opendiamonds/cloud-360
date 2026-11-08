@@ -10,6 +10,8 @@
 
 ## 一、斷言清單（`S1`–`S12`，全部為純 SQL）
 
+> **現況註記（2026-10-29，review-02 R-06／R-07）**：本節與第三節的突變表是本單元交付當時的 `S1`–`S12`。之後其他單元在 `backend/scripts/verify_memory_schema.sql` 新增了 `S13` 以後的斷言，本單元的 `M1`–`M9` 突變**未對擴充後的檔重跑**；CI 步驟名寫的斷言範圍也與實際不一致。現況與落差以 `code-summary.md` 最新一節為準。
+
 每一條都以「不成立即 `RAISE EXCEPTION`」的形式撰寫，使 job 直接紅燈。
 
 ### A 群——schema 隔離與可重跑（`BR1.1`／`BR1.3`）
@@ -58,6 +60,7 @@
   並以該角色連線嘗試越界操作，而 `N-2` 的 service container 只有 superuser。
   做得到但需要在 job 內建角色與切換連線——**本輪不做**，記為 `OPEN-CG5-1`。
   **這是本單元最大的驗證缺口**：`BR1.2` 是資料庫層的唯一邊界，而它沒有被驗證。
+  〔2026-10-29 更正，review-02 R-03〕實況比「未驗證」更嚴重：現行 grant 只授予 `current_user`（執行 DDL 的擁有者角色），對它是空操作，沒有記憶專用角色、也沒有對 `public` 的 REVOKE——**`BR1.2` 的邊界目前未落地**，不只是沒有斷言。處置與承接見 `code-summary.md` 最新一節與 `merge-blockers.md`。
 - **不為 `BR3.1`（檢索只比對同一 `embeddingModel`）寫斷言。** 它約束的是**查詢**
   而非 schema，而本單元不交付任何查詢——落點 `U8`。
   但 `S5` 已確保 `embeddingModel` 為 NOT NULL，即該過濾所需的資料前提存在。

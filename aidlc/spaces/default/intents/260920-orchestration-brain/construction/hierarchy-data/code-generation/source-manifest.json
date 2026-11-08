@@ -11,6 +11,7 @@
     { "path": "backend/tests/test_hierarchy_migration.py" },
     { "path": "backend/services/user_router.py" },
     { "path": "backend/tests/test_user_delete_hierarchy.py" },
+    { "path": "backend/tests/test_hierarchy_migration_exit_codes.py" },
     { "path": "openapi.json" },
     { "path": "frontend/src/types/api.d.ts" }
   ]

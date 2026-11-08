@@ -33,6 +33,8 @@ REDIS_URL=redis://localhost:6379/15 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unit
 python3 scripts/dump_openapi.py --check
 ```
 
+> 現況註記（2026-10-31，共用檔異動後的重新驗證）：系統 `python3` 的套件版本與 `requirements.txt` 不一致，後端一律改用 `backend/.venv/bin/python`，旗標同上（`-B`，並設 `PYTHONDONTWRITEBYTECODE=1`）。重新驗證時在 repo 副本上執行：副本須含 `backend/` 全部（含 `tests_redis/`），以及測試讀取的 repo 根檔如 `schema_rbac.sql`、`openapi.json`；以副本的 `backend` 為工作目錄，加 `-P` 並設 `PYTHONPATH=<副本>/backend`，避免在 repo 內留下 `.pyc`／`.hypothesis/`。Lua 真實原子性案例需要 Redis，重新驗證時不執行（不得連任何共用或 staging 的 Redis），以替身與參考實作的案例代之並寫明。
+
 ## 三、測試清單與數量（standard：每元件 5–8 個；PBT 依 ADR-0006）
 
 | 檔案 | 元件 | 案例 |

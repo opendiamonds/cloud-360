@@ -1,23 +1,21 @@
 # Code Generation Plan Approval
 
-AI-DLC writes this file when it asks you to approve the plan. To answer here
-instead of in chat, write your answer after `[Answer]:` and say done.
+AI-DLC built this plan without asking because plan approval is off for this
+piece of work. This file is the record and asks nothing; to look at a plan
+before it is built, ask in chat.
 
 ## Plan Approval
 
-Approve the code plan for object-picker-ui?
+Built without asking: plan approval is off for this piece of work (set by you).
 
-- 15 plan steps
+- 20 plan steps
 - Tests: see unit-test-instructions.md
 
 Full plan: aidlc/spaces/default/intents/260920-orchestration-brain/construction/object-picker-ui/code-generation/code-generation-plan.md
 Test instructions: aidlc/spaces/default/intents/260920-orchestration-brain/construction/object-picker-ui/code-generation/unit-test-instructions.md
 
-[Approval Fingerprint]: sha256:v3:fe61462444ae8c95ad433b51555921d7852efbbfd9041e036a555210c34d253d
-[Planned Source]: 8d82421178b655aee842b3e1a5d19481604ae5c0c6fd0159635367ce9ee266bf
+[Approval Fingerprint]: sha256:v3:6a1520e912955b4fc84b501a65e18722d5796975a3cdc12c90cca6a4cd66d002
+[Planned Source]: cb6500e55cdf00e0bf641fce5831da8786ef525c026b0e912833a44ca235aa0c
 
-- A. Approve Plan
-- B. Request Changes
-- C. I'll edit the files
 
-[Answer]: A. Approve Plan
+[Answer]: Plan approval off

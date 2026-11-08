@@ -202,6 +202,16 @@ runner 就緒排在第一個可執行測試步驟之前。
 - [x] 寫 `source-manifest.json`（嚴格 schema，列出全部 10 個應用程式檔）
 - [x] 寫 `traceability.json`
 
+### Step 12 — 合併前必修共用檔修正後的回歸驗證（2026-11-01）
+
+**來源**：2026-10-31 的 Request Changes 重開全部單元。共用檔的修正已集中在 `brain-infra` 完成（`merge-blockers.md` 第 41 列），可能改到本單元收據內的 `ci.yml`、`LOCAL-DEV.md`、`main.py`、`deploy/render-env.sh`、`deploy/.env.example`、`backend/.env.example`、`deploy/docker-compose.deploy.yml`。本單元在 `merge-blockers.md` 沒有任何一列，`brain-infra` 的交接清單也沒有本單元的項目，所以**本單元沒有新的修正項，不改程式**。本步只做回歸與紀錄，偏離與理由只寫進 `code-summary.md`，**不改本計畫內文**，只勾格子。
+
+- [x] **共用檔重驗**：拿最新一份收據 `reviewed-source-*.tsv`（依 mtime 判定）逐檔用 `shasum -a 256` 比對，列出有變動的檔。每個變動檔都逐 hunk 讀收據之後的改動，判定有沒有觸及本單元負責的部分（`embedding_port.py`、`main.py` 的 `configure_embedding_env()` 呼叫位置、`EMBEDDING_TIMEOUT_SEC` 的四處設定、`ci.yml` 的 `validate_embedding_provider_value.py` step、`LOCAL-DEV.md` 的 fastembed 小節與 timeout 變數），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的實體複製副本上跑 `tests.test_embedding_port` 和後端全套，兩者都要全綠，並記下實跑數。在 repo 根跑 `validate_repo_contract.py`、`validate_env_contract.py`、`validate_embedding_provider_value.py`，三支都要通過。
+- [x] **前輪審查的 Accepted risk**：`reviews/review-02.md` 的 R-04（docstring 仍寫約 1GB）、R-05（`LOCAL-DEV.md` 仍寫隱性前置條件只有兩個）、R-06（fastembed 登錄名沒有 CI 覆蓋），逐項用 `grep -n` 加行號確認現況，寫進 `code-summary.md`。**本輪不修**，因為不在使用者指定的合併前必修範圍內。
+- [x] **勾選重設**：本計畫既有各格逐格重勾，不成立的維持未勾，並在 `code-summary.md` 寫明理由。完成後用 `grep -c` 實算全檔已勾／未勾數，寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` 末尾附加本輪一節，時間戳用 `date -u` 取。`traceability.json` 只在需要時更新，並保持合法 JSON。
+
 ## 三、故事 ↔ 步驟追溯
 
 | 上游 | 步驟 | 備註 |

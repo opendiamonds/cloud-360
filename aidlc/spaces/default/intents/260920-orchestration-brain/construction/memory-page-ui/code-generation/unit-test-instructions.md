@@ -49,6 +49,8 @@ cd frontend && npx playwright test tests/e2e/memory-page.spec.ts --list
 
 前者應全綠；後者在檔案尚不存在時應回報 0 個測試而非設定錯誤。
 
+> 現況註記（2026-10-31，共用檔異動後的重新驗證）：系統 `python3` 的套件版本與 `requirements.txt` 不一致，後端一律改用 `backend/.venv`，三個模組可合為一次執行：`cd backend && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m unittest -v tests.test_memory_pending_authz tests.test_memory_authz tests.test_memory_contract`。重新驗證時在 repo 副本上執行（副本須含 `backend/` 全部，以及測試讀取的 repo 根檔如 `schema_rbac.sql`、`openapi.json`），以 `-P` 與 `PYTHONPATH=<副本>/backend` 執行，避免在 repo 內留下 `.pyc`／`.hypothesis/`。前端 e2e 全以 `page.route()` 攔截，未受後端改動影響。
+
 ## 三、覆蓋目標
 
 | 目標 | 立場 |

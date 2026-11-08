@@ -7,14 +7,14 @@ instead of in chat, write your answer after `[Answer]:` and say done.
 
 Approve the code plan for brain-gateway?
 
-- 17 plan steps
+- 29 plan steps
 - Tests: see unit-test-instructions.md
 
 Full plan: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-gateway/code-generation/code-generation-plan.md
 Test instructions: aidlc/spaces/default/intents/260920-orchestration-brain/construction/brain-gateway/code-generation/unit-test-instructions.md
 
-[Approval Fingerprint]: sha256:v3:efc9674546a8c6cb8df1c304f25423424b33e4ddb644275c1098dfc76b91580e
-[Planned Source]: 8d82421178b655aee842b3e1a5d19481604ae5c0c6fd0159635367ce9ee266bf
+[Approval Fingerprint]: sha256:v3:41c7f18eae768f84e81917e2c786ffca41a7309be6bd9592b7966a12b5393948
+[Planned Source]: c88a567301785ae91faa80ad408aca39a2802aeac017da0b395d85c856fca45c
 
 - A. Approve Plan
 - B. Request Changes

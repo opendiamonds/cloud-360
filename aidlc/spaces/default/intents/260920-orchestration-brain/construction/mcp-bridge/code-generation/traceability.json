@@ -701,6 +701,12 @@
       "status": "OK",
       "target": "backend/services/requirement_field_facade.py",
       "note": "跨單元落點（U20 已交付檔）：read_fields 末尾呼叫 _log_read；只加 log，不改回傳、不改授權、零 DDL、零新環境變數。對應 FR11.6／requirements.md:620 ③ 的讀取面。"
+    },
+    {
+      "id": "MB-38",
+      "status": "OK",
+      "target": "backend/tests/test_mcp_bridge_guards.py",
+      "note": "合併前必修第 38 列（review-03 R-07、R-11、R-14；review-04 R-15，皆 Minor；計畫 §八之三 Step 18–24）。(a) backend/requirements.txt:78-79 已釘 sse-starlette==3.0.3、mcp-types==2.3.0（工作樹，非本輪寫入；本輪只確認與 backend/.venv 現裝一致、Dockerfile 與 ci.yml 皆經 requirements.txt 安裝）；(b) nfr-design/security-design.md §七、§八、§九 表後各加一則區塊級取代註記，原文不改；(c) test_mcp_bridge_guards.MethodAndPathTest.test_get_is_405_when_gate_saturated；(d) test_mcp_bridge_e2e.NoLeakTest.test_nul_value_write_is_invalid_argument_without_echo（backend 422 → invalid_argument、不回顯）。突變 M38-c、M38-d 皆紅（code-summary「合併前必修第 38 列」節）。NFR21.37 的依賴釘選面隨 (a) 收斂。"
     }
   ]
 }

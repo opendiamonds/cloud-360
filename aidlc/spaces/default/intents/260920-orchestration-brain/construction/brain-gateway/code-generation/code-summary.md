@@ -388,3 +388,168 @@ rm -f "$hdr"
 - **ADR-0006 四面向**：與 §八 一致（認證先於 accept＋逐則重驗＋60 秒背景重驗；token 只在 subprotocol 標頭；連線、訊框、頻率、握手上限皆有測試；握手與每則訊息記稽核）。
 - **grep 判準**：時間原語只在 `GatewayTiming` 預設值；logger 僅 `"cloud360.brain_gateway"`；`_mint_turn_id` 兩個呼叫點；`_send_single_error(conn` 13 處、`turnId` 皆 `None`。`brain_gateway_rules.py` 無 httpx／sqlalchemy／DB session，但匯入 `work_orchestrator`、`session_store` 的例外與常數，並非完全零依賴（不違反計畫判準）。
 - **與本摘要既有文字不符處**：§13.1 寫 T9 以 `ledger.is_terminal` 判斷，現行程式為 `turn.terminal_sent`（review-02 R-08 的修正，處置見 merge-blockers 第 2 列）；計畫 §六規則表行號為修改前的值。
+
+## 共用檔異動後的重新驗證與補審（計畫 §六之二；2026-10-31T03:00:03Z，`date -u`）
+
+本輪未修改任何程式碼、測試或共用檔；只寫本節與計畫的勾選格。`traceability.json` 未更新（無新程式或測試，無追溯變動）。
+
+### 一、共用檔重驗（收據 `reviewed-source-9c426874efea.tsv`，2026-10-26 09:10）
+
+逐列 `shasum -a 256`（腳本讀收據每列與工作樹比對）：29 檔中 **26 檔逐位元相同、3 檔變動、0 檔缺失**。本單元的程式與測試（`brain_gateway.py`、`brain_gateway_rules.py`、`brain_ws_contract.py`、`main.py`、全部 `test_brain_gateway_*.py`、`brain_gateway_fakes.py`、`test_ws_contract.py`、`dump_ws_contract.py`、`ws-contract.json`、`ws-contract.d.ts`、`deploy/render-env.sh`、`deploy/.env.example`、`LOCAL-DEV.md` 等）全在相同的 26 檔內。
+
+| 變動檔 | 收據 sha256 前 12 碼 | 現行 | 收據之後的改動來源 |
+|---|---|---|---|
+| `.github/workflows/deploy.yml` | `e121cf70c0da` | `3b6d08cd508b` | `7a50a40`（2026-10-27，合併前必修清單各單元修正；本檔改動屬第 26 列 `entry-page-ui`） |
+| `DEPLOY.md` | `2608a131203c` | `d9b0571c5688` | 同上（第 26 列 ＋ 其他單元的修正，例如第 3 列「刪除使用者的行為」新段、U20 欄位轉型說明；未逐列歸因） |
+| `frontend/tests/e2e/member-pages.spec.ts` | `1fe3a86b7e08` | `444d668dbd19` | 同上（`member-pages-ui` 第 9、14、23 列） |
+
+**收據版本無法由 git 重建**：三檔的收據 sha256 不等於 `7a50a40^`（＝`624c170`，2026-10-19）、`7a50a40`、`HEAD`，也不等於往前的 `8677b7d`、`763a45a`、`fa8ce42`、`6dff4d4`、`2852790` 任一版本（逐一以 `git show <rev>:<path>` 算 sha256 比對）。收據當時的內容是未提交的工作樹狀態，故**無法證明收據之後的改動是 `7a50a40^..7a50a40` 這段 diff 的子集**；以下改為讀完涵蓋它的整段 diff，並對本單元負責或引用的部分逐行重讀現行檔補強。
+
+**判定：三檔的改動皆未碰到本單元負責或引用的部分。**
+
+- `deploy.yml`（diff 共 7 個 hunk：`@@ -32`、`-508`、`-584`、`-643`、`-784`、`-870`、`-924`）：全部是第 26 列的 6a「只回滾、不開 revert PR」（`:43` 新 output `brain_ws_probe_failed`、`:596` 6a 加 `id: brain_ws_probe`、`:805` revert 步驟的 `if`、`:889`／Slack 文字）與一處註解行號更新（`:517` 段）。逐行重讀現行檔：必要 secret 檢查 `OPENROUTER_API_KEY` 仍在 `:85`（env）、`:92`（缺值判斷）、`:100`（錯誤說明），render 步驟傳遞在 `:123`，rollback job 傳遞在 `:695`；內容與收據時相同，只因 `:32` hunk 新增 9 行而整體下移（review-03 R-07 引用的 `:76-83`、`:91-93` 現為 `:85-92`、`:100` 附近）。6a 的 `BRAIN_WS_URL: https://cloud360.danniel.cc/api/brain/ws`（`:599`）與探測內容未變；WS 路徑與啟動檢查未被改動。
+- `DEPLOY.md`：本單元引用的 `OPENROUTER_API_KEY` 必要性在 `:24`，未在 diff 範圍（第一個 hunk 起於 `:248`）。§5.13 的 6a 段（現行 `:2229`、`:2238`）改為「自動流程只還原 last-good、不開 revert PR」；`/api/brain/ws`、協定名 `cloud360.brain.v1`、4401 原理（`:2230`）、本機驗證（`:2240`）與 U13 三層實測引用（`:2244`，指向本摘要 §6.2）皆未改。附帶觀察（**既存、非本次改動引入**）：`:2238` 前後兩版都寫「`U13` code-summary 第 4.5 節」，本摘要沒有 4.5 節（§四 是帶入項落點、4.4／4.5 是 `infrastructure-specification.md` 的節號），屬懸空引用；本單元不改共用檔，記為已知限制 L3。本摘要 §6.2 第 5 項「修好前以 revert PR 回滾」是**手動** L2 處置，與 6a 自動流程不開 revert PR 不衝突，`DEPLOY.md:2238` 也寫明人工 revert 屬使用者裁決。
+- `member-pages.spec.ts`：本單元寫入的部分是 `NEUTRAL_LANDING = '/memory'`（現行 `:92`，說明註解 `:88-89`）、`setupApp` 內 `/api/memory/**` 空清單攔截（`:134`）、8 處 `goto(NEUTRAL_LANDING)`（`:323`、`:337`、`:597`、`:604`、`:663`、`:681`、`:726`、`:741`）與 3 處 `@ui /memory`（`:295`、`:650`、`:701`）。diff（`-U0`）的 hunk 在舊檔 `:64`、`:167`、`:210-241`、`:741` 之後新增，內容是 `membersErrorBody`、成員分頁、404／403 固定句、非數字專案編號、對話框焦點等 U24 案例，**沒有一行涉及上列任何一處**；現行檔 `'/brain'` 零命中。
+
+### 二、回歸（副本）
+
+副本：`/private/tmp/claude-501/-Users-jiangzhengdao-orca-workspaces-cloud-360-chiton/fbf7495c-cf60-4d5a-a3fe-9200f9902279/scratchpad/u13-reverify-20261031T025253Z/`（以 `rsync` 複製整個 repo，排除 `.git`、`node_modules`、`.venv`、`__pycache__`、`.hypothesis`、`aidlc`、`.claude`、`dist`、`*.tsbuildinfo`；`frontend/node_modules` 以 symlink 指向 repo）。複製後再以同一支比對腳本確認副本與 repo 現況一致（同樣 26 同、3 變動）。後端一律 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<副本>/backend backend/.venv/bin/python -B -P`，由一支小腳本在直譯器內 `os.chdir(<副本>/backend)` 後執行 unittest。
+
+| 指令 | 結果 |
+|---|---|
+| 計畫指定的 12 支模組（本單元 8 支 ＋ `test_dump_ws_contract`、`test_intent_routing_structure`、`test_work_orchestrator_flow`、`test_session_store_behaviour`） | **Ran 270，OK（skipped=3）** |
+| 其中本單元 8 支單獨跑 | **Ran 143，OK（skipped=0）**；與重做段的 143 案相同，故兄弟 4 支為 127 案（skip 3），與 §13.2 第二列相同 |
+| 全套 `unittest discover -s tests`（副本，計畫 Step 16 的範圍） | **Ran 1326，OK（skipped=3）**（重做段為 1319，增量來自其他單元，未逐一歸因） |
+| `backend/scripts/dump_ws_contract.py --check`（副本） | 「WS 契約規格檔與後端程式碼一致。」 |
+| `backend/scripts/dump_openapi.py --check`（副本） | 「規格檔與後端程式碼一致。」 |
+| `npm --prefix <副本>/frontend run check:ws-types` | 一致（含 BR4.4 哨兵說明檢查） |
+| `npm --prefix <副本>/frontend run lint` | 0 errors、2 warnings（`AssessmentPage.tsx:395`、`WorkspacePage.tsx:344` 的 `exhaustive-deps`，既存） |
+| `tsc -b <副本>/frontend/tsconfig.json`（以 repo 的 `node_modules/.bin/tsc` 執行） | exit 0 |
+
+**偏離（如實記載）**：`tsc -b` 的 `tsBuildInfoFile` 設為 `./node_modules/.tmp/*.tsbuildinfo`，而副本的 `node_modules` 是指向 repo 的 symlink，所以 `tsc -b` **改寫了 repo 內既有的** `frontend/node_modules/.tmp/tsconfig.app.tsbuildinfo` 與 `tsconfig.node.tsbuildinfo`（兩檔建立於 2026-09-30，本輪只更新 mtime 與內容，未新增檔案）。兩檔在 `node_modules` 之下、為 git 忽略的建置快取，不影響任何受版控檔；但與「不在 repo 內留下建置產物」的要求不符。之後重跑時應把 `node_modules` 改為實體複製，或以 `--tsBuildInfoFile` 指到副本。另以 `find -newer` 確認：`backend/`、`frontend/`（不含 `node_modules`）、`scripts/` 內本輪沒有任何新寫入的檔（無 `.pyc`、無 `.hypothesis/`）。未連任何 DB、Redis 或網路（唯讀 `gh api` 列名除外）。突變未重跑：相關程式與測試自收據後逐位元相同，沿用重做段與 §13.3 的紀錄。
+
+### 三、review-03 逐項現況（R-01–R-09 為 Resolved，R-10–R-12 Unresolved，R-13 New）
+
+R-01–R-09：其修正點所在的 `brain_gateway.py`、`brain_gateway_rules.py`、`test_brain_gateway_*.py`、`deploy/render-env.sh` 自收據後逐位元相同，審查員的複驗結論沿用；抽查 R-08 判準 `terminal_sent` 仍在 `brain_gateway.py:506`（欄位）、`:1238`（送達後設定）、`:1158`（`_on_unexpected` 判斷）。
+
+| ID | 現況 | 處置 |
+|---|---|---|
+| R-10 計畫 §六 規則表行號過期 | **仍成立**：計畫 T1–T9 仍是修改前行號（計畫第 105–113 行）。**另查出本摘要 §13.1 的行號也已過期**（審查員 10-26 核對時正確，其後 R-01–R-08 修正改動行數）：現行 T2 的錯誤送出在 `:1116`（§13.1 寫 `:1113`，該行現為 `try:`）、T3 的信封驗證在 `:1131`／送出在 `:1135`、`open_turn` 清空在 `:1137` 與 `:1144`（§13.1 寫 `:1133`、`:1140`）、`open_turn` 設定在 `:1309`（`_on_user_message`）與 `:1597`（`_on_select`）（§13.1 寫 `:1276`、`:1562`）；`:233`（欄位）、`:1142`（`_on_unexpected` 呼叫）仍正確。`_on_unexpected` 定義在 `:1146`、`_send_single_error` 定義在 `:1188`、`_on_select` 在 `:1590` | 只需改紀錄：以本列為準；計畫凍結不改。merge-blockers 第 2 列「發現 3」已記計畫行號過期 |
+| R-11 T6 與 T3 的結局不同 | **行為仍成立**：T6 在 `_on_select` 先清 `pending_clarify`（`:1595`）再於 id 不在候選內時 `_fail_turn_exc`（`:1603-1605`），使用者不能重選；T3 在 `:1133-1136` 不碰 `pending_clarify`。**是刻意的**：使用者已於 2026-10-24 裁決「維持行為、記理由」，理由已寫在 merge-blockers 第 2 列「發現 4」——差在「能否判讀出選擇」（T6 選了一個可判定的值，該輪據此終止；T3 的壞訊框無法判讀，不算輪內）。本摘要 §13.1 先前只寫「現行不變」，以本列補記 | 只需改紀錄（本列即補記） |
+| R-12 前端 (b) 的同批合併約束 | **已不成立**：merge-blockers 第 2 列「發現 5」與「(b) 已修正」段已寫明 (a)(b) 必須同批合併並說明兩個方向的過渡行為；(b) 已由 `entry-page-ui` 完成 | 無需處置 |
+| R-13 第 19 列狀態矛盾、`deploy.yml` 必要 secret 檢查無測試 | **兩點皆仍成立**：(1) merge-blockers 第 19 列（第 28 行）處置欄開頭仍為「待處置」，其後為「已查證…不構成合併前阻擋」；(2) `backend/tests`、`scripts` 中提到 `OPENROUTER_API_KEY` 的 8 個檔都不斷言 `deploy.yml` 的必要檢查含該名稱（`test_render_env_redis.py:81` 只是清除環境變數；讀 `deploy.yml` 的 `test_brain_ws_deploy_probe.py`、`test_mcp_bridge_deploy.py` 檢查的是 6a 與 mcp-bridge）。**更精確地說**：不是「完全沒有部署相關測試」，而是缺「必要 secret 檢查含 `OPENROUTER_API_KEY`」這一情境的專屬案例 | 需改共用文件與新增測試 → 已知限制 L1、L2 |
+
+**Step 15 名稱查證（本輪重做，唯讀、只列名稱、未讀值）**：`gh api repos/opendiamonds/cloud-360/actions/secrets --jq '.secrets[].name'` → 13 個，含 `OPENROUTER_API_KEY`；`.../actions/variables --jq '.variables[].name'` → 2 個（`APP_ID`、`GH_AW_DEFAULT_MODEL_COPILOT`），不含。與 §13.4 相同；限制不變（API 只證明現況）。
+
+### 四、已知限制（需 conductor 併入 `merge-blockers.md`）
+
+| # | 限制 | 需改的是 | 既有列是否涵蓋 |
+|---|---|---|---|
+| L1 | merge-blockers 第 19 列處置欄開頭「待處置」與其後「已查證、不構成阻擋」矛盾（review-03 R-13 (1)） | `merge-blockers.md` 本身 | 第 19 列就是該處，但未有處置；需 conductor 更正狀態字 |
+| L2 | 沒有測試鎖住 `deploy.yml` 必要 secret 檢查（`:85`、`:92`）含 `OPENROUTER_API_KEY`；刪掉該行不會紅燈，而後果是缺金鑰時大腦每輪內部錯誤卻不擋部署（review-03 R-13 (2)） | 新增測試（例如讀 `deploy.yml` 斷言 `Require the secrets that must not default` 步驟同時有 env 與缺值判斷兩處） | **無既有列涵蓋**（第 19 列只涵蓋 secret 是否存在；第 26 列的 `test_brain_ws_deploy_probe.py` 只鎖 6a） |
+| L3 | `DEPLOY.md:2238` 引用「`U13` code-summary 第 4.5 節」，本摘要無此節（既存懸空引用，非本次改動引入） | `DEPLOY.md` | 無既有列涵蓋；第 26 列改過該段落但未涉及此引用 |
+
+### 五、勾選重設
+
+以重做段（17／17）為基準逐格判定：Step 1–8、10、12–14、17 的證據檔自收據後逐位元相同（ADR-0020 檔仍在 `inception/decisions/0020-brain-ws-contract-page-scope-fields.md`）且本輪已重跑相關測試；Step 9（e2e 落地頁改寫）與 Step 11（環境與部署設定）的證據檔有變動，本輪已依第一節逐行重驗並重跑 lint、`tsc -b`、兩支 validator；Step 15 本輪重做；Step 16 本輪在副本重跑全套與兩道 drift 檢查。§六之二 五格依本節完成。Step 10 的突變本輪未重跑，以「被突變的程式與測試逐位元相同」為勾選依據，不是本輪重驗。
+
+實算（收尾格勾選後，`grep -c -E "^\s*- \[x\]"` 與 `grep -c -E "^\s*- \[ \]"` 於計畫檔）：**已勾 22、未勾 0**（Step 1–17 共 17 格 ＋ §六之二 5 格）。
+
+### 六、收尾
+
+- `python3 scripts/validate_repo_contract.py`：passed；`python3 scripts/validate_env_contract.py`：passed（皆於寫入本節後執行）。
+- `traceability.json`：未改動，以 `json.load` 確認仍為合法 JSON。
+
+## 合併前必修第 37 列（計畫 §六之三 Step 18–24；2026-11-08T01:21:18Z，`date -u`）
+
+範圍依使用者 2026-11-08 裁決：**只修第 37 列**。第 54 列兩項（`MemoryWorker.run` 授權被拒記成成功、UNAUTHORIZED 前寫歷史）與 `_prefetch`／`_write_episodic` 走主連線未動，維持已知限制。本輪新增一支測試、改本單元紀錄檔與 merge-blockers 第 37 列；**未改任何程式碼**，`brain_gateway.py` 等本單元程式與既有測試皆與收據逐位元相同（見第三點）。
+
+### 一、Step 18 — (a)(c) 現況確認
+
+| 項 | 現況（`grep -n`） | 落地者 |
+|---|---|---|
+| (a) 第 19 列狀態字 | **未落地**：`merge-blockers.md:28`（第 19 列）處置欄開頭仍為「待處置。**已查證**（2026-10-24…）…不構成合併前阻擋」，矛盾仍在 | 無。`brain-infra` code-summary :560 寫「brain-gateway：第 37 列 (a) merge-blockers 第 19 列狀態字（conductor）」——指派給 conductor；計畫 Step 18 假設「皆由他單元落地」對 (a) 不成立。本單元依「不擴大範圍」不改第 19 列，交 conductor |
+| (c) `DEPLOY.md` 懸空引用 | **已更正**：現行 `DEPLOY.md:2340`「…交使用者裁決（`U13 brain-gateway` 的 code-summary 第八節「揭露事項」`OPEN-GW13-6` 那一列；先前寫的「第 4.5 節」不存在，合併前必修第 37 列 (c)）」；`HEAD` 版為 `:2239`「第 4.5 節」。被指向的落點確實存在：本摘要第八節表列 `Cloudflare 透傳未實測（OPEN-GW13-6）`（:252） | `brain-infra` A7（其計畫 :84 已勾、code-summary :490「A7…完成」）；變更尚未 commit（工作樹相對 `HEAD` 的 diff） |
+
+### 二、Step 19 — (b) 部署 secret 檢查的專屬測試
+
+新增 `backend/tests/test_deploy_required_secrets.py`（新建而非併入 `test_brain_gateway_startup.py`：後者在收據內且會匯入 `main` 觸發大量依賴，新建可讓收據內檔案逐位元不變；形狀比照 `test_brain_ws_deploy_probe.py`）。`DeployRequiredSecretsTest` 以 `yaml.safe_load` 讀 `deploy.yml` 的 deploy job，`setUp` 斷言「Require the secrets that must not default」步驟恰一個：
+
+| 案 | 鎖住 | 現行落點 |
+|---|---|---|
+| `test_env_injects_openrouter_key_from_a_secret` | `env.OPENROUTER_API_KEY` 逐字為 `${{ secrets.OPENROUTER_API_KEY }}`（不是 `vars.`） | `deploy.yml:86` |
+| `test_run_counts_an_empty_openrouter_key_as_missing_before_the_guard` | 缺值判斷恰一行、行序在 `if [ -n "${missing}" ]; then` 之前、其後有 `exit 1`、腳本有 `set -euo pipefail` | `:94`、`:95`、`:108` 附近 |
+| `test_missing_branch_explains_what_an_absent_openrouter_key_breaks` | 缺值分支有 `echo "OPENROUTER_API_KEY: …" >&2` 且說明含 `INTERNAL_ERROR` | `:104`–`:105` |
+
+三案皆有 `@purpose`／`@given`／`@step`／`@pass`／`@story US8.1` docstring；受測對象是 workflow 檔、無 HTTP 端點，故不寫 `@api`。只讀檔：不執行 workflow、不觸發 CI、未讀任何 secret 值、未用 `gh`。
+
+### 三、Step 20 — (d) 補審節三處引用更正（不刪原文）
+
+以下更正上方「共用檔異動後的重新驗證與補審」節（review-04 R-14），原文保留：
+
+1. **懸空引用的行號**：該節第一點 `DEPLOY.md` 段與第四節 L3 寫 `DEPLOY.md:2238`——應為 **`:2239`**（`git show HEAD:DEPLOY.md | grep -n "第 4.5 節"` → 2239；`:2238` 是表格之後的空行）。該引用現已由 brain-infra 更正並位移至現行 **`:2340`**（見本節第一點）。
+2. **T2 錯誤送出的行號**：該節 R-10 列寫「現行 T2 的錯誤送出在 `:1116`」——應為 **`brain_gateway.py:1117`**（`grep -n '"revalidate_failed"' -A1` → `:1116` 是 `_log(...revalidate_failed...)`、`:1117` 是 `await self._send_single_error(conn, *rules.error_for(exc))`）。`brain_gateway.py` 自收據後逐位元相同，此值現行有效。
+3. **`7a50a40^` 的身分**：該節寫「`7a50a40^`（＝`624c170`，2026-10-19）」——`git rev-parse --short 7a50a40^` 為 **`fa51564`**。逐一以 `git show <rev>:<path> | shasum -a 256` 比對，`fa51564` 與 `624c170` 對 `deploy.yml`（`e7a2c51099a2`）、`DEPLOY.md`（`d499fb4824a1`）、`member-pages.spec.ts`（`eee56d09903e`）三檔內容相同，故該節「收據版本不等於 `7a50a40^`」的結論不受影響。
+
+### 四、Step 21 — (e) 前端檢查的寫檔注意（**未完成，偏離**）
+
+依計畫把下段 append 進 `unit-test-instructions.md` 第二節現況註記之後，下一個 Bash 指令即被 plan-approval guard 擋下（逐字：「Code generation cannot modify workspace paths for unit brain-gateway because the plan, unit-test instructions, and current Testing Contract do not have a current matching approval」）——該檔屬 Plan Approval 綁定的內容，改它等於使核可失效，之後連寫 scratchpad 都被擋。我以 Edit 把該段**逐位元還原**（還原後 guard 立即放行，證明位元組與核可時相同），其餘 Step 照常完成。**待 conductor 決定**：重錄 Plan Approval 後寫入，或改以本節為落點。原擬 append 的全文：
+
+> 現況註記（2026-11-08，合併前必修第 37 列 (e)；review-04 R-15）：前端檢查在副本執行時，**副本的 `frontend/node_modules` 不得是指回 repo 的 symlink**。`tsconfig` 的 `tsBuildInfoFile` 寫在 `./node_modules/.tmp/*.tsbuildinfo`，經 symlink 執行 `tsc -b` 會改寫 repo 內 git 已忽略的 `frontend/node_modules/.tmp/tsconfig.{app,node}.tsbuildinfo`（2026-10-31 重驗時發生過一次，不觸及版控檔）。二擇一：(1) 副本的 `node_modules` 以實體複製（`cp -R` 或在副本 `npm ci`）；(2) 保留 symlink 時一律以 `tsc -b --tsBuildInfoFile <scratchpad 路徑>`（或 `tsc -p <tsconfig> --noEmit --incremental false`）把建置資訊導到副本外的 scratchpad——**本輪依指示未跑任何前端指令，未實測 build 模式（`-b`）是否接受 `--tsBuildInfoFile`**；若不接受，改用 (1) 或 `-p … --noEmit --incremental false`，不得退回經 symlink 的 `tsc -b`。執行後以 `find frontend/node_modules/.tmp -newer <開工前建立的標記檔>` 確認 repo 內無新寫入。另：本單元測試清單新增 `tests.test_deploy_required_secrets`（第 37 列 (b)，靜態讀 `.github/workflows/deploy.yml`，不需 Redis／DB），跑本單元模組時一併列入。
+
+### 五、Step 22 — 突變驗證（只在 scratchpad 副本 `…/scratchpad/bg-copy/`；repo 內 `deploy.yml` 未動）
+
+副本 `deploy.yml` 與 repo 同為 `daa226c7cb49…`；每項自備份還原後套用一處字串替換（`replaced 1`），跑 `tests.test_deploy_required_secrets`：
+
+| 突變 | 結果 |
+|---|---|
+| D1 刪缺值判斷行（`[ -n "${OPENROUTER_API_KEY}" ] \|\| missing=…`） | **紅**：`test_run_counts_…` FAIL |
+| D2 只刪 `env` 的 `OPENROUTER_API_KEY:` 行 | **紅**：`test_env_injects_…` FAIL |
+| D3 `env` 改為 `${{ vars.OPENROUTER_API_KEY }}` | **紅**：`test_env_injects_…` FAIL |
+| D4 缺值判斷移到 `if [ -n "${missing}" ]` 之後 | **紅**：`test_run_counts_…` FAIL |
+| D5 刪 `echo "OPENROUTER_API_KEY: without it …"` 說明行 | **紅**：`test_missing_branch_…` FAIL |
+| 還原（sha256 回到 `daa226c7cb49`） | **綠**：Ran 3，OK |
+
+計畫要求的兩項為 D1、D2；D3–D5 為附加。副本已於收尾刪除。
+
+### 六、Step 23 — 回歸
+
+副本：`rsync` 整個 repo 至 `…/scratchpad/bg-copy/`（排除 `.git`、`node_modules`、`.venv`、`__pycache__`、`.hypothesis`、`aidlc`、`.claude`、`dist`、`*.tsbuildinfo`）；後端一律 `cd <副本>/backend && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. HYPOTHESIS_STORAGE_DIRECTORY=<scratchpad>/hyp <repo>/backend/.venv/bin/python -B -m unittest …`，`REDIS_URL` 先 unset。
+
+| 指令 | 結果 |
+|---|---|
+| 本單元 8 支（含 `tests.test_ws_contract`） | **Ran 143，OK** |
+| 本單元 8 支 ＋ `test_deploy_required_secrets` ＋ 兄弟 4 支 | **Ran 274，OK（skipped=3）**——143 ＋ 3 ＋ 128；兄弟 4 支由 127 增為 128，增量來自其他單元對 `test_session_store_behaviour.py`／`test_work_orchestrator_flow.py` 的未提交修改，未逐一歸因 |
+| 三個 skip 以一次性 Redis 補跑：`redis-server --bind 127.0.0.1 --port 56391 --save '' --appendonly no`，`REDIS_URL=redis://127.0.0.1:56391/15` 跑 `test_session_store_behaviour.RealRedisParityTest` | **Ran 3，OK**；另順跑 `tests_redis.test_work_item_lua` **Ran 8，OK**（計畫未要求）。之後 `shutdown nosave` 並刪除其工作目錄，`ping` 確認已拒連 |
+| 全套 `unittest discover -s tests`（計畫 Step 16 範圍） | **Ran 1395，OK（skipped=3）**（10-31 為 1326；增量來自其他單元） |
+| `dump_ws_contract.py --check`（副本） | 「WS 契約規格檔與後端程式碼一致。」 |
+| `dump_openapi.py --check`（副本） | 「規格檔與後端程式碼一致。」 |
+| `validate_repo_contract.py`、`validate_env_contract.py` | passed／passed——**在 repo 以 `python3 -B` 執行**（偏離：副本不含 `.git` 與 `aidlc/`，`git ls-files` 掃描與 record 必要檔檢查無法在副本進行；兩支皆唯讀） |
+
+本輪未跑任何前端指令。未連 staging、共用 DB／Redis 或網路；未用 `gh`。
+
+**收據重驗（最新收據 `reviewed-source-e58f40332768.tsv`，29 檔）**：21 檔逐位元相同（本單元全部程式、測試、契約產物、`main.py`、`App.tsx`、`member-pages.spec.ts` 等），8 檔變動。8 檔的收據版本皆等於 `HEAD`（`git show HEAD:<path>` 的 sha256 與收據相同），故收據後改動恰為工作樹相對 `HEAD` 的未提交 diff，逐檔讀完：
+
+| 變動檔 | 改動內容（他單元） | 是否碰到本單元負責或引用的部分 |
+|---|---|---|
+| `.github/workflows/deploy.yml` | `MEMORY_DB_PASSWORD` 加入必要檢查與 render／rollback 傳遞、新步驟「Set the memory-only database role password」、Redis 密碼改走 `REDISCLI_AUTH`、快照逐欄比對、6a 位置註解更正 | 否：`OPENROUTER_API_KEY` 三處（`:86`、`:94`、`:104`）與 render（`:128`）、rollback（`:757`）傳遞內容未變，只因上方插行而位移；6a 步驟內容未變 |
+| `DEPLOY.md` | 記憶角色小節、多列合併前必修文字、`:2340` 懸空引用更正 | 只有 `:2340`（即第 37 列 (c)，指向本摘要，正確）；`:24` 的 `OPENROUTER_API_KEY` 必要性未在 diff 內 |
+| `LOCAL-DEV.md` | `:273` 起新增 29 行（成員回填 dry-run） | 否（diff 內 `brain`／`OPENROUTER`／`REDIS` 0 命中） |
+| `backend/requirements.txt` | 新增 `sse-starlette==3.0.3`、`mcp-types==2.3.0`（第 38 列 (a)） | 否：本單元的 `websockets`（`:56`）仍在 |
+| `deploy/.env.example`、`deploy/render-env.sh` | `MEMORY_DB_PASSWORD` | 否 |
+| `frontend/src/components/Sidebar.tsx` | 記憶 `<nav>` 加 `aria-label`（第 35 列 (c)） | 否：`/brain`、`大腦（示範）` 0 命中，DEMO 移除仍成立 |
+| `frontend/tests/e2e/memory-page.spec.ts` | 檔尾新增 136 行 U15 案例、0 行刪除 | 否：本單元改寫的 `/memory` 落地頁（`:232`、`:283`）未動 |
+
+### 七、Step 24 — 收尾與勾選重判
+
+- `traceability.json`：`reverse` 加 `MB-37`；`source-manifest.json`：補列 `backend/tests/test_deploy_required_secrets.py`；兩檔 `json.load` 通過。
+- `merge-blockers.md` 第 37 列處置欄：就地 append 本輪結論（原文保留），結論為「待重審 brain-gateway」。
+- **勾選重判**（以收據比對與本輪回歸為準；只改勾選字元，改前存副本、改後 diff 確認）：
+  - 勾：Step 1–8、10–14、16、17；§六之二 五格；§六之三 Step 18、19、20、22、23、24。
+  - **不勾 Step 9**（DEMO 前端移除，以 `lint`／`tsc -b` 驗證）：其證據檔 `Sidebar.tsx`、`memory-page.spec.ts` 自收據後已變動，而本輪依指示不跑前端指令，`lint`／`tsc -b` 未重驗；DEMO 移除的內容以 grep 確認仍成立，但計畫的驗證手段未重跑。
+  - **不勾 Step 15**（secrets／variables 名稱查證）：證據是 GitHub 的外部狀態，不是可逐位元比對的檔；本輪指示 `gh` 一律不用，無法重驗。10-31 的結果（secrets 含、variables 不含）仍是最近一次紀錄。
+  - **不勾 Step 21**：見本節第四點。
+  - Step 10：被突變的程式與測試自收據後逐位元相同，沿用先前紀錄（非本輪重跑）；Step 11：變動的部署／環境檔已逐檔判定未碰本單元部分，兩支 validator 本輪通過；§六之二 五格：該輪紀錄仍在（上方一節，未改），其引用誤差已由本節第三點更正。
+  - 實算見本節末行。
+- 勾選前存副本（scratchpad `bg-plan-before-mb37.md`），勾選後以「把 `[x]` 換回 `[ ]` 再 diff 副本」確認**只有勾選字元變動**（26 行）；實算（`grep -c -E "^\s*- \[x\]"`／`"^\s*- \[ \]"` 於計畫檔）：**已勾 26、未勾 3**（Step 9、15、21；全檔 29 格＝Step 1–17 共 17 ＋ §六之二 5 ＋ §六之三 7）。
+- `validate_repo_contract.py`、`validate_env_contract.py`：寫入本節前執行皆 passed，寫入本節後重跑見回報。

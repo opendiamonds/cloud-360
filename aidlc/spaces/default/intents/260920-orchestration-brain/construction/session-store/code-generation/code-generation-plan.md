@@ -153,7 +153,7 @@
 - [x] 12.1 `traceability.json`：id 來源為上游 `traceability.json` **∪** markdown（審查 `R-03`）
 - [x] 12.2 `code-summary.md`：交付物、刻意不動的四項與其驗證、承接未關的項目
 - [x] 12.3 `source-manifest.json`：**只含** `stage`／`unit`／`version`／`writes` 四個欄位（多一個欄位會讓 `REVIEW_REQUESTED` 被拒）
-- [x] 12.4 全套回歸：`python -m unittest discover -s tests -v` 綠燈；`dump_openapi.py --check` 通過；`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空
+- [ ] 12.4 全套回歸：`python -m unittest discover -s tests -v` 綠燈；`dump_openapi.py --check` 通過；`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空
 
 ## 五、突變驗證（六項，每項須實際看到紅燈再還原）
 
@@ -335,5 +335,27 @@
 - [x] 本單元三個測試模組與完整套件（`backend/.venv`）全綠。
 - [x] `merge-blockers.md` 第 12、18 列回填處置；`code-summary.md` append 本節紀錄（改動檔:行、測試、突變、容量重算、未驗項）；`source-manifest.json`、`traceability.json`（加 `MB-12`／`MB-18`）更新。`brain-infra` 的 `traceability.json`／計畫 Step 6 仍寫 `allkeys-lru` 的過期敘述，不屬本單元，於 `code-summary.md` 註明由 `brain-infra` 的記錄承接（該處已記載）。
 - 追溯：`merge-blockers.md` #12／#18；`BR3.4`、`BR3.5`、`NFR4.40`、`NFR4.41`、`NFR4.50`。
+
+## 十一、共用檔異動後的重新驗證與補審（2026-10-31）
+
+**來源**：本單元送審收據之後，其他單元修合併前必修時改動了本單元也寫入的共用檔 `.github/workflows/deploy.yml` 與 `DEPLOY.md`，使收據失效。本節不改程式；所有偏離與理由只寫進 `code-summary.md`，**不得改動本計畫的內文**（只勾選格子）。
+
+- [x] **共用檔重驗**：以最新收據 `reviewed-source-*.tsv` 逐檔 `shasum -a 256` 比對，列出變動的檔；對 `deploy.yml` 與 `DEPLOY.md` 找出收據之後新增的 hunk（`git diff` 或重放），判定是否碰到本單元負責或引用的段落（Redis 重啟存活驗證步驟、`acl whoami`、`maxmemory` 容量表、Redis 容量說明），結論附行號。
+- [x] **回歸（副本）**：在 scratchpad 的 repo 副本上以 `unit-test-instructions.md` 第二節現況註記的指令跑三個模組，記下實跑測試數與跳過數；`RealRedisParityTest` 不連任何 Redis，跳過屬預期並寫明。
+- [x] **review-02 的 Unresolved／New 發現**：R-01 至 R-13（R-06 已 Resolved，複核即可）逐項以 `grep -n`／讀檔附行號確認現況是否仍成立。只需改紀錄者在 `code-summary.md` 就地補記（例如 R-12 的懸空引用、R-13 的 `userId` 不實陳述、R-05 的上游設計不再成立行號、R-04 的 CI 缺口開放項）；需改程式、`deploy.yml` 或 `DEPLOY.md` 者一律記為已知限制，由 conductor 併入 `merge-blockers.md`（已有對應列者引用之）。
+- [x] **勾選重設**：以前一輪紀錄為基準，對本計畫既有各格逐格重勾——證據相關檔案自收據後逐位元相同，或本輪已重驗者勾；不成立者維持未勾並在 `code-summary.md` 寫明理由（5.1、9.3 依 review-02 R-05、R-08 判定）；本節各格完成即勾。完成後以 `grep -c` 實算全檔已勾／未勾數寫進 `code-summary.md`。
+- [x] **收尾**：`code-summary.md` append 本輪一節（以 `date -u` 取時間戳，含上列各項結果）；`traceability.json` 僅於需要時更新並保持合法 JSON；`validate_repo_contract.py`、`validate_env_contract.py` 綠。
+
+## 十二、合併前必修第 34 列剩餘項（2026-11-01 Request Changes）
+
+**來源**：使用者的 Request Changes 指名第 34 列。共用檔與程式部分已由 `brain-infra` A9 處理（`brain-infra/code-generation/code-summary.md:508-516`）：(a) `SESSION_ROLE_MAX_CHARS`、(h) `_ensure_meta` docstring、(d)(e)(f)(i) `deploy.yml`，(b)(g) 由 `DEPLOY.md` 容量表承接（同檔 `:493`）。本節只做交接給本單元的三項：(c)、(j)、(d) 修後重勾 9.3；並對 A9 已改的本單元程式做回歸。本節不改 `deploy.yml`、`DEPLOY.md` 或其他共用檔。
+
+- [x] **12a 第 34 列 (c) 真實 Redis 案例的去值斷言**：`test_session_store_behaviour.py`（`RealRedisParityTest`，約 `:1357`、`:1360`，以 `grep -n` 重查）的 key 由長前綴＋方法名組成，使「日誌／例外不含被寫入的值」一類斷言無辨識力（審查 review-02 R-07 原文）。改為讓被斷言的值與 key 不共享子字串（例如 key 改短、值改用不出現在 key 中的獨特標記），使斷言在值真的外洩時會紅。突變（副本）：讓被測路徑把值寫進例外或日誌 → 紅；還原 → 綠。此類案例需真實 Redis，CI 與本輪皆 skip；若需本機驗證，只可在 scratchpad 暫起綁 `127.0.0.1` 的一次性 Redis，跑完即停並刪資料目錄，否則據實記為未驗、待有 Redis 的環境。
+- [ ] **12b 第 34 列 (j) 單元紀錄改寫**：(1) `unit-test-instructions.md` §二 現況註記補上副本指令實際需要的 `python -B`／`-P`（依實際用法）、`PYTHONPATH=.`，並寫明須一併帶 `tests_redis/`；(2) `code-summary.md` 對容量表 hunk「早於收據」的判定，改為 append 一段更正：該判定無法證實，引用 `DEPLOY.md` 實際行號範圍（以 `grep -n` 重查，審查記為 1802-1877）。既有段落不刪不改，只 append 更正。
+- [x] **12c 9.3（與 5.1）重勾判定**：`deploy.yml` 已由 `brain-infra` 改為如實描述步驟順序（第 34 列 (d)）。以 `grep -n` 核對 9.3 的勾選條件現況成立與否，成立即勾回並在 `code-summary.md` 記證據行號；5.1（review-02 R-05）同法判定，不成立者留空並寫理由。
+- [x] **12d A9 改動的回歸**：`session_store.py` 的 `SESSION_ROLE_MAX_CHARS`（`:153`）與 `append_message` 拒寫分支（`:317`）是 `brain-infra` 代改的本單元檔。核對其與本單元契約（`BR3.x`、每段 200 KB 上限、日誌白名單）一致，無則停手回報；跑 `test_session_role_limit.py` 與本單元三個測試模組。
+- [x] **回歸**：在 scratchpad 的 rsync 副本以 `backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=.`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本外的 scratchpad 目錄，跑本單元測試與後端全套；在 repo 跑 `validate_repo_contract.py`、`validate_env_contract.py`（`-B`）；確認 repo 內 `.pyc`／`.hypothesis`／`__pycache__` 數量前後不變。不連任何共用 Redis、資料庫或 staging。
+- [x] **勾選重設與紀錄**：本計畫被重設的勾選，逐格依現況核對後勾回（核對不過者留空並寫理由）；`traceability.json` 補第 34 列 (c)(j) 對應列（`python3 -I` 驗 JSON）；`code-summary.md` 檔尾 append「## 2026-11-07 第 34 列剩餘項」一節，含改動檔:行、實跑測試數、突變結果、ADR-0006 四面向判定、勾選數（`grep -c` 實算）與 `date -u` 時間戳。
+- 追溯：`merge-blockers.md` #34 (c)(d)(j)；`brain-infra` A9 交接 `code-summary.md:516`、`:558`；review-02 R-05、R-07、R-08。
 
 ## Plan Approval

@@ -24,7 +24,7 @@
 | `backend/services/rbac_seed_data.py` | `DEFAULT_ROLE_PERMISSIONS` 末端插入 44 列（`K1`→`K2`→`K3`→`K4`，角色序沿用 `CANONICAL_ROLES`） | `+44 −0` |
 | `backend/services/rbac.py` | `ensure_missing_role_permissions` 的 `inserted` 計數改為 `inserted_pairs: List[str]`，log 擴充為一行彙總含 `role/story_id` 配對；層級維持 `INFO`；docstring 補 `SEC-4` 的理由 | `+15 −5` |
 | `backend/services/user_router.py` | `STORY_FEATURE_LABELS` 新增 `K1`–`K4` 四個鍵，附註明其經公開 `/roles/catalog` 揭露的既定後果 | `+9 −0` |
-| `schema_rbac.sql` | `INSERT INTO role_permissions` 區塊加同樣 44 列（原最後一列補結尾逗號）；檔頭第 12 行「預設矩陣（308 列）」→ 352 | `+46 −2` |
+| `schema_rbac.sql` | `INSERT INTO role_permissions` 區塊加同樣 44 列（原最後一列補結尾逗號）；檔頭第 12 行「預設矩陣（308 列）」→ 352〔行號已位移：2026-10-29 以 `grep -n '352' schema_rbac.sql` 實查，現為第 16 行〕 | `+46 −2` |
 | `DEPLOY.md` | 五處列數（`:577`、`:591`、`:596` 中文段；`:1259`、`:1270` 英文段）308 → 352 | `+5 −5` |
 | `backend/tests/test_rbac_story_ids_seed.py` | **新檔**，7 個測試案例 | 新增 |
 
@@ -64,6 +64,8 @@ K1–K4 的 can_review 全為 false = True
 ```
 
 ## 三、七個測試與全套前後比對
+
+> 〔2026-10-29 註記，review-02 R-05〕本節的指令（`python -m unittest …`）與基準數 432／439 已過時：現以 `backend/.venv/bin/python -B` 加 `PYTHONDONTWRITEBYTECODE=1` 執行（見 `unit-test-instructions.md §一`），最新全套數以本檔最後一節「共用檔異動後重新驗證」為準。
 
 **單元指令**：`cd backend && python -m unittest tests.test_rbac_story_ids_seed -v` → `Ran 7 tests … OK`
 **全套指令**：`cd backend && python -m unittest discover -s tests -v`
@@ -262,7 +264,7 @@ SQL 側 308 列（1 個 INSERT 區塊錨點）、Python 側 352 列。
   `Platform_Owner` 四個角色持有 `K3.view` 而無 `K3.edit`（施工後複算確認仍為這 4 個），
   即該窄化的實際影響範圍。
 
-另外，`schema_rbac.sql` 的驗證註解（施工前第 **761** 行、施工後位移至第 **805** 行）
+另外，`schema_rbac.sql` 的驗證註解（施工前第 **761** 行、施工後位移至第 **805** 行；〔行號已再位移：2026-10-29 以 `grep -n '352' schema_rbac.sql` 實查，現為第 1248 行，內容 `-- SELECT count(*) FROM role_permissions;           -- 352` 未變〕）
 **全程未被編輯**：它本來就寫 `-- 352`，而該檔區塊實算為 308，屬 `6f9227d` 的既存
 漂移（`RR-4`）；本單元加完 44 列後它**碰巧變成正確**。腳本對它只做斷言不做替換，
 `git diff` 對該行為空可證。這一行的正確性是本單元的副作用，不是任何人修過它。
@@ -305,7 +307,7 @@ SQL 側 308 列（1 個 INSERT 區塊錨點）、Python 側 352 列。
 | Step 2／3／5／6（矩陣 352 列、組合完整、三條可達性與蘊含、log 列出 `K1`–`K4`、SQL／Python 兩份逐列等值） | `tests.test_rbac_story_ids_seed` 7 個測試全綠，各案即為該步的斷言 |
 | Step 4 | `rbac.py` `ensure_missing_role_permissions` 以 `inserted_pairs` 記錄 `(role, story_id)`，未記使用者身分 |
 | Step 7 | `schema_rbac.sql:16` 為「預設矩陣（352 列）」、`:1248` 為 `-- 352` |
-| Step 8 | `DEPLOY.md:1347`／`:1361`／`:1366`（中文）與 `:2198`／`:2209`（英文）皆為 352（行號已因後續單元位移，五處數量不變） |
+| Step 8 | `DEPLOY.md:1347`／`:1361`／`:1366`（中文）與 `:2198`／`:2209`（英文）皆為 352（行號已因後續單元位移，五處數量不變）〔review-03 R-07：之後又再後移，2026-11-01 現況為 `:1488`／`:1502`／`:1507`／`:2407`／`:2418`，見文末「2026-11-01 回歸」一節〕 |
 | Step 9 | `user_router.py:118-121` 有 `K1`–`K4` 四個標籤；`CATALOG_EXCLUDED_STORIES`（`:124`）仍只含 `J1` |
 | Step 11 | 完整套件綠（見下表） |
 | Step 1／12 | runner 可用；`code-summary.md`／`source-manifest.json`／`traceability.json` 存在 |
@@ -330,7 +332,7 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 
 - Step 2–3：`rbac_seed_data.py:316-359` 有 K1–K4 共 44 列；ast 解析全矩陣 352 列 ＝ 11 角色 × 32 story id，每組合恰一列；K3 view 8 角色、edit 4 角色。`test_rbac_story_ids_seed.py` 7 個測試涵蓋 U3-V1～V5。
 - Step 4–6：`rbac.py:84-121` 的 `ensure_missing_role_permissions` 只輸出一行 INFO 彙總（角色／story_id，無使用者身分）；測試 6 斷言 log、測試 7 比對 Python 與 SQL 兩份 seed 逐列一致。
-- Step 7–9：`schema_rbac.sql:16`、`:1248` 為 352；`DEPLOY.md` `:1386`、`:1400`、`:1405`、`:2300`、`:2311` 為 352；`user_router.py:124-127` 有四個 K 標籤，`CATALOG_EXCLUDED_STORIES`（`:130`）仍只有 J1，`/roles/catalog` 在 `:640`。
+- Step 7–9：`schema_rbac.sql:16`、`:1248` 為 352；`DEPLOY.md` `:1386`、`:1400`、`:1405`、`:2300`、`:2311` 為 352〔review-03 R-07：之後又再後移，2026-11-01 現況為 `:1488`／`:1502`／`:1507`／`:2407`／`:2418`，見文末「2026-11-01 回歸」一節〕；`user_router.py:124-127` 有四個 K 標籤，`CATALOG_EXCLUDED_STORIES`（`:130`）仍只有 J1，`/roles/catalog` 在 `:640`。
 - 合併前必修第 4 項：帳號狀態檢查落在 `membership_service.py:471-501`，本單元的 seed、log、標籤不涉及邀請或改選流程，無矛盾。
 
 ### 測試與閘門（本輪實跑，`backend/.venv`，快取導向 scratchpad，未寫入 repo）
@@ -346,8 +348,133 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 ### 與已核可計畫／測試說明的落差（凍結文件不改，以本節為準）
 
 - 全套基準數：§三寫 432、上節寫 1219，現為 1319（後續單元新增測試）。
-- 行號：計畫 Step 7 的 `:12`／`:761` 現為 `:16`／`:1248`；Step 8 的 577/591/596/1259/1270（及本檔 §八 的 1347/1361/1366/2198/2209）現為 1386/1400/1405/2300/2311；Step 9 的 `:60`／`:90`／`:310`（及本檔的 `:118-121`／`:124`）現為 `:91`、`:124-127`、`:130`、`:640`；Step 4 的「`rbac.py:110` 附近」現為 `:84-121`。
+- 行號：計畫 Step 7 的 `:12`／`:761` 現為 `:16`／`:1248`；Step 8 的 577/591/596/1259/1270（及本檔 §八 的 1347/1361/1366/2198/2209）現為 1386/1400/1405/2300/2311〔review-03 R-07：之後又再後移，2026-11-01 現況為 1488/1502/1507/2407/2418，見文末「2026-11-01 回歸」一節〕；Step 9 的 `:60`／`:90`／`:310`（及本檔的 `:118-121`／`:124`）現為 `:91`、`:124-127`、`:130`、`:640`；Step 4 的「`rbac.py:110` 附近」現為 `:84-121`。
 - `unit-test-instructions.md` 的 `cd backend && python -m unittest …` 實際須用 `backend/.venv/bin/python`，並加 `-B` 與 `PYTHONDONTWRITEBYTECODE=1` 以免在 repo 內寫出快取。
 - 突變表 M3／M4 仍是 PD-2 的缺陷寫法，有效寫法見 §五。
 
 `source-manifest.json` 的 6 條路徑全部存在且仍屬本單元。
+
+## 共用檔異動後重新驗證（計畫 §一之二，2026-10-29 使用者裁決重開）
+
+<!-- 寫入時間：2026-10-30T00:07:43Z（`date -u` 取值）；作業開始 2026-10-29T23:59:34Z -->
+
+**本輪程式碼改動為 0、共用檔改動為 0。** 只重新驗證、補 review-02 的 Minor 紀錄，並重新勾選計畫。
+
+### 逐檔比對（收據 `reviewed-source-8b850f80c737.tsv` vs 現況，`shasum -a 256`）
+
+| 檔 | 結論 |
+|---|---|
+| `source-manifest.json` | 逐位元相同（`aaec3f81…`） |
+| `backend/services/rbac.py` | 逐位元相同（`838b5dfd…`） |
+| `backend/services/rbac_seed_data.py` | 逐位元相同（`6861c343…`） |
+| `backend/services/user_router.py` | 逐位元相同（`a0827900…`） |
+| `backend/tests/test_rbac_story_ids_seed.py` | 逐位元相同（`5a5b8858…`） |
+| `schema_rbac.sql` | 逐位元相同（`27e92ecd…`） |
+| `DEPLOY.md` | **不同**：收據 `2608a131…`，現況 `d9b0571c…`（＝ commit `7a50a40` 的版本） |
+
+### `DEPLOY.md` 的 hunk 來源判定
+
+收據版本不在 git 歷史中（`624c170` 為 `d499fb48…`、`7a50a40` 為 `d9b0571c…`，皆不等於 `2608a131…`）。以 `git show 624c170:DEPLOY.md` 為基底，對 `624c170` → 現況的 19 個 hunk 逐一組合回退並比對雜湊（腳本 `scratchpad/u3_hunks.py`，`difflib.SequenceMatcher`）：**恰好回退 3 個 hunk 時重現收據雜湊 `2608a131…`**，即收據之後的變動只有這三處：
+
+| hunk（現況行號） | 內容 | 來源 |
+|---|---|---|
+| 730–738 | §2.2.9 U18 遷移「誠實的代價」：忘了跑遷移時由 `create_all` 建表、只缺 COMMENT 與 U20 收斂，取代原「報 `relation "project_members" does not exist`」 | 合併前必修 **#24**（`requirement-field-service`，`merge-blockers.md:33` 的 (d)） |
+| 2229 | §5.13 步驟 6a 失敗只回滾、不開 revert PR 的機制說明 | 合併前必修 **#26**（`entry-page-ui`，`merge-blockers.md:35` 的 (b)） |
+| 2239 | §5.13 Cloudflare 剝除子協定時的處置改為「自動流程只還原 last-good」 | 合併前必修 **#26** |
+
+與前一單元的判定一致。#22、#23、#25 未觸及 `DEPLOY.md`。
+
+**是否觸及本單元段落：否。** 本單元在 `DEPLOY.md` 的五處列數現為 `:1392`（約 **352** 列）、`:1406`（列數約 352）、`:1411`（`-- 預期約 352`）、`:2306`（Seeds ~**352**）、`:2317`（confirm ~352 rows），以 `grep -n '352'` 實查；五處內容不變，行號較重做節的 1386/1400/1405/2300/2311 各後移 6 行，正是 #24 的 hunk（原 3 行 → 9 行）落在它們之前所致。三個變動 hunk 皆不含 `role_permissions`、`K1`–`K4` 或列數字樣。
+
+### 回歸與突變（`rsync` 至 scratchpad 副本執行，`backend/.venv/bin/python -B`、`PYTHONDONTWRITEBYTECODE=1`、`HYPOTHESIS_STORAGE_DIRECTORY` 指向副本內；跑完已刪副本）
+
+| 項目 | 結果 |
+|---|---|
+| `tests.test_rbac_story_ids_seed` | `Ran 7 tests`、`OK` |
+| `tests.test_rbac`、`tests.test_collab` | `Ran 26 tests`、`OK` |
+| 全套 `discover -s tests` | `Ran 1326 tests`、`OK (skipped=3)`（重做節為 1319；+7 為其他單元後續新增，既有項零失敗） |
+| `M3-eff`：`SRE`／`Ops_Lead`／`Platform_Engineer` 三列 `K3` 改為 `(True, False, False)`（`grep` 確認三列已變） | 測試 2 `test_a_role_with_a1_view_does_not_hold_k3` **紅**（`AssertionError: [] is not true : 沒有任何角色同時「持有 A1 view」且「完全不持有 K3」——BR5.3 的可達性保證被破壞。…`）；測試 7 一併紅（`PD-3` 預期的交互作用）；其餘 5 個綠 |
+| 還原 `M3-eff` | `shasum` 回到 `6861c343…`；7 個測試 `OK` |
+| `M4-eff`：同三角色的 `K4` 改為 `(True, False, False)`（`grep` 確認三列已變） | 測試 3 `test_at_least_one_role_does_not_hold_k4` **紅**（`AssertionError: [] is not true : 沒有任何角色完全不持有 K4——BR6.5 的可達性保證被破壞。…`）；測試 7 一併紅（`PD-3`）；其餘 5 個綠 |
+| 還原 `M4-eff` | `shasum` 回到 `6861c343…`；7 個測試 `OK` |
+| 工作樹快取檢查 | `find <worktree> -newer <marker> -type f`：只有 `aidlc/` 下的引擎 session／audit／hooks-health 檔，**無任何 `.pyc` 或 `.hypothesis`** |
+
+據此勾選計畫 10c′、10d′。
+
+### review-02 Minor 的處置
+
+- **R-03**：計畫 10c、10d 旁的指向註記與 10c′、10d′ 已於本輪核可前的計畫內，本輪依實跑結果勾 10c′、10d′。
+- **R-04**：§二表格「檔頭第 12 行」與 §七「位移至第 805 行」旁已就地加註現況行號（`schema_rbac.sql:16`、`:1248`，`grep -n '352' schema_rbac.sql` 實查）。
+- **R-05**：§三 開頭已加一行，指明舊指令與基準數 432／439 過時、以本節為準。
+
+### 計畫勾選
+
+重開使計畫勾選全數重設（57 格皆未勾）。逐步以 repo 現況核對後勾回：Step 2 `rbac_seed_data.py:316-359` 的 44 列；Step 4 `rbac.py:84-121` 的 `inserted_pairs`；Step 7 `schema_rbac.sql:16`／`:1248` 為 352；Step 8 `DEPLOY.md` 五處（見上）；Step 9 `user_router.py:124-127` 四個標籤、`CATALOG_EXCLUDED_STORIES`（`:130`）仍只含 `J1`、`/roles/catalog` 在 `:640`；Step 3／5／6／11 由上表測試承載；Step 10a／10b／10e–10i 沿用 §四 紀錄（被測檔與收據逐位元相同，結論不變）；Step 12 的 `traceability.json` 以 `python3 -I` `json.load` 驗證，62 個 `OK` 列的 target 全部存在。
+
+**勾回 55 格、未勾 2 格**（`grep -c` 實算於勾選完成後）。未勾的是 **10c、10d**：照計畫字面只改 `SRE` 一列時測試 2／3 仍綠（`PD-2`；三個維運角色的 `K3`／`K4` 三旗標現況仍全為 false，推理成立），勾上會讓計畫宣稱字面上未成立的事；有效版本 10c′、10d′ 已勾。
+
+### 收尾
+
+- `python3 scripts/validate_repo_contract.py`：見下行處置紀錄。
+- `traceability.json`：`python3 -I` `json.load` 成功；本輪未改動。
+
+處置紀錄（`2026-10-30T00:09:02Z`）：`python3 scripts/validate_repo_contract.py` → `Cloud-360 repository contract validation passed.`；`traceability.json` `json.load` 成功（coverage 104 列、reverse 3 列）；計畫 §一之二 六項全部完成，程式碼與共用檔零改動。
+
+## 2026-11-01 回歸（計畫 §一之三：合併前必修共用檔修正後）
+
+<!-- 寫入時間：2026-11-03T16:54:20Z（`date -u` 取值）；作業開始 2026-11-03T16:44:22Z -->
+
+**本輪程式碼改動為 0、共用檔改動為 0。** 本單元在合併前必修清單只有第 4 列（已由 `membership-service` 修好），本輪只做回歸驗證並補記錄。
+
+### 共用檔重驗（收據 `reviewed-source-16db8e1a1fb0.tsv` vs 工作樹，`shasum -a 256`）
+
+收據裡的 `DEPLOY.md`（`d9b0571c…`）與 `schema_rbac.sql`（`27e92ecd…`）正好是 HEAD `c6a40f9` 的版本（`git show c6a40f9:<檔> | shasum -a 256` 實查）。下表的變動都還沒 commit，是 `git diff HEAD` 的內容。
+
+| 檔 | 結論 |
+|---|---|
+| `source-manifest.json`、`backend/services/rbac.py`、`backend/services/rbac_seed_data.py`、`backend/tests/test_rbac_story_ids_seed.py` | 跟收據逐位元相同 |
+| `schema_rbac.sql` | **不同**（`7d9bb5d3…`），共 4 個 hunk：檔頭涵蓋清單新增 `I)` 說明（`@@ -18,0 +19,5`）；memory grant 註解改寫（`@@ -550,4 +555,24`）；新增 `cloud360_memory` 角色的 DO 區塊、GRANT／REVOKE／COMMENT（`@@ -566,0 +592,22`）；`J)` 區塊前第 31 列 (c)(g) 的純註解（`@@ -594,0 +642,11`） |
+| `DEPLOY.md` | **不同**（`8bb9f107…`），共 13 個 hunk，都是記憶角色、hierarchy 遷移、成員守門前提、Redis 容量等章節 |
+| `backend/services/user_router.py` | **不同**（`2f68a1a6…`；派工說明沒提到這支，實查才發現）。hunk 全在刪除使用者的路徑：改經 `MemoryFacade` 計數、新增 `_UserPurgeSummary`、409 下一步提示、稽核訊息加上連帶清除筆數 |
+
+**有沒有碰到本單元負責的部分：沒有。** 證據：
+- **44 列權限種子**：分別從 HEAD 與工作樹的 `schema_rbac.sql` 擷取 `INSERT INTO role_permissions` 區塊，兩邊的 sha256 都是 `96dd4eef…`，逐位元相同。區塊起點由第 888 行移到第 946 行，原因是前方插入了 58 行（`I)` 說明與 memory 角色區段）。Python 那份 `rbac_seed_data.py` 跟收據相同。
+- **對 diff 掃關鍵字**：對三支檔的 `+`／`-` 行 grep `role_permissions|352|K[1-4]|STORY_FEATURE|CATALOG_EXCLUDED|INSERT INTO`，只命中 `DEPLOY.md` 新段「成員守門的兩個前提」的一句「全域 `K3.edit`」。這句說明的是 U19 怎麼判斷成員合格，**只引用種子、沒改種子**，不屬於本單元的段落。另外 `DEPLOY.md:1920` 原本就有一處「≈ 308.8」（Redis 同時存活的 session 數），本輪只在同一列加了註，跟 `role_permissions` 列數無關。
+- **現況行號**（`grep -n` 實查）：`schema_rbac.sql:16`「預設矩陣（352 列）」、`:1306` `-- 352`；`DEPLOY.md` `:1488`／`:1502`／`:1507`（中文）、`:2407`／`:2418`（英文），五處都是 352；`user_router.py:126-129` K1–K4 四個標籤，`CATALOG_EXCLUDED_STORIES`（`:132`）仍只有 `J1`，`/roles/catalog` 在 `:690`；`rbac.py:84-121` 的 `inserted_pairs` 沒變。
+
+**`M3-eff`／`M4-eff` 不重做**：兩份種子的位元組都沒變（見上），2026-10-29 那一節的紅綠結果仍然適用。
+
+### 回歸（scratchpad 實體副本，跑完已刪）
+
+做法：用 `rsync -a` 複製到 scratchpad，排除 `.git`、`.hypothesis`、`__pycache__`、`node_modules`。副本裡只有兩個 symlink：`.venv/bin/python*` 指向系統直譯器，`codekb/chiton` 是相對連結 `cloud`；兩者都沒有指回 repo。測試一律用 repo 的 `backend/.venv/bin/python -B` 執行，並設 `PYTHONDONTWRITEBYTECODE=1`；`PYTHONPATH` 與 `HYPOTHESIS_STORAGE_DIRECTORY` 都指向副本，cwd 是副本的 `backend`。
+
+| 指令 | 結果 |
+|---|---|
+| `-m unittest tests.test_rbac_story_ids_seed` | `Ran 7 tests`、`OK` |
+| `-m unittest tests.test_rbac tests.test_collab` | `Ran 26 tests`、`OK` |
+| `-m unittest discover -s tests` | `Ran 1372 tests`、`OK (skipped=3)` |
+
+**跟基準數比對**：
+- 跟本單元上一輪（2026-10-29）的 1326 比，**多 46 個**。工作樹有 11 支未追蹤的新測試檔（`test_hierarchy_migration_exit_codes`、`test_membership_eligibility_guards`、`test_membership_lone_owner`、`test_memory_db_role`、`test_memory_input_limits`、`test_memory_query_truncation`、`test_memory_reference_counts`、`test_meta_schema_expectations`、`test_project_delete_requires_admin`、`test_session_role_limit`、`test_user_delete_audit_counts`），用 `grep -cE '^\s+def test_'` 數出合計 46 個方法，與差額相同。另有 6 支已修改的測試檔，HEAD 與工作樹的 `def test_` 數都一樣，沒有增減。所以差額來自其他單元在合併前必修輪新增的測試；本單元的 7 個測試數量不變，既有項零失敗。（這個對應是用方法數推算的，沒有逐一核對 test id。）
+- 跟 hierarchy-data 最近一次全套的 1372 比：**完全相同**，表示跑的是同一棵工作樹，沒有額外差異。
+
+**repo 沒留產物**：建副本前先建 marker 檔，跑完後在 repo 內 `find -newer <marker> -type f`。排除 `aidlc/` 底下的引擎 session、hooks-health 檔之後是空的；`*.pyc` 與 `.hypothesis` 命中 0。
+
+### review-03 各項現況
+
+- **R-01–R-05**：審查員標為 Resolved，現況仍成立。R-04 的就地註記在本檔第 267 行，R-05 的在第 68 行，都用 `grep -n` 實查過。
+- **R-06**（`traceability.json` coverage 第 23、24 筆的 note 是施工當時的行號）：**依派工指示 `traceability.json` 不改，改在這裡補記**。那兩筆 note 寫的 `schema_rbac.sql` 檔頭第 12 行，現為 `:16`；`DEPLOY.md` 的 `:577`／`:591`／`:596`／`:1259`／`:1270`，現為 `:1488`／`:1502`／`:1507`／`:2407`／`:2418`。note 裡「施工後 `grep -c 308` 回 0」那句，請限定成「**跟 `role_permissions` 列數有關的** 308 回 0」，因為 `DEPLOY.md:1920` 有一處無關的「≈ 308.8」。
+- **R-07**：本檔「重新查驗」節 Step 8 那列與「重做」節的兩處 `DEPLOY.md` 行號旁，都已就地加上現況行號，並指向本節。
+- **R-08**（`unit-test-instructions.md` §三 的 M3、M4 兩列沒有指向 `PD-2`）：**沒辦法就地加註，改記在這裡**。實測：在那兩列旁加註之後，plan-approval guard 立刻擋下後續所有會寫入的 shell 指令（原話：「the plan, test instructions, or Testing Contract changed since the person approved them」），因為測試說明本身就在核可指紋裡。已把該檔逐字還原，guard 隨即解除。要就地加註得先重新取得計畫核可，交給 conductor 決定。在那之前，照 `unit-test-instructions.md` 執行的人要知道：**M3／M4 照字面做仍會是綠燈**，有效版本 `M3-eff`／`M4-eff` 見本檔 §五 `PD-2`（`SRE`、`Ops_Lead`、`Platform_Engineer` 三列一起改）。
+
+### 計畫勾選
+
+勾選全部被重設（62 格全未勾，舊的 57 格加上 §一之三 新增的 5 格）。逐格核對後勾回：
+- Step 2、4、7、8、9：用上面列的現況行號確認仍成立。
+- Step 3、5、6、11：由上表的測試結果支撐。
+- Step 10a／10b／10e–10i 與 10c′／10d′：沿用 §四 與 2026-10-29 節的紀錄（被測檔與兩份種子跟收據逐位元相同）。
+- Step 1、12：runner 可用；三份紀錄檔都在。
+- §一之二 六格：它們的產出（R-04／R-05 註記、10-29 節）仍在本檔。
+- §一之三 五格：即本節。
+
+**勾回 60 格、未勾 2 格**（勾選完成後用 `grep -c` 實算）。未勾的是 **10c、10d**：照計畫字面只改 `SRE` 一列時，測試 2、3 仍是綠的（`PD-2`）；勾上會讓計畫宣稱一件字面上沒發生的事。有效版本 10c′、10d′ 已勾。

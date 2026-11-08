@@ -205,7 +205,7 @@ Python 沒有真正的封裝。`BR1.4` 的 `violation_behaviour` 已如實記載
 - [x] `python3 scripts/validate_env_contract.py` 綠燈（`NFR8.1`）
 - [x] `python3 backend/scripts/dump_openapi.py --check` 綠燈（`NFR5.1`）
 - [x] `openapi.json` 中五個 path 皆存在，且衝突端點的 responses 含 `409`（`NFR5.2`）
-- [ ] 突變驗證逐項 RED，零存活
+- [x] 突變驗證逐項 RED，零存活
 - [ ] `git diff --stat` 不含 §三「不動的檔案」清單中的任何一項（`NFR8.1`）
 
 ## 七、code-generation Request Changes（2026-10-20）的對照結果
@@ -215,3 +215,14 @@ Python 沒有真正的封裝。`BR1.4` 的 `violation_behaviour` 已如實記載
 - 第 3 項已在 `hierarchy-data` 修正，改的是 `user_router.py`，不觸及本單元檔案。
 
 因此本計畫**不新增步驟**，本輪只重新查驗 §六 的七項完成判準並跑測試。**判準第 7 項的解讀**：它指的是本單元**自己的變更**（原 commit）不碰「不動的檔案」，以 `git show --stat <本單元 commit>` 判定；本輪工作樹另含其他單元修正必修項時對 `schema_rbac.sql`、`DEPLOY.md`、`LOCAL-DEV.md` 的改動，那些不屬本單元的 diff。完整套件一律以 `backend/.venv` 執行（本機系統 Python 的套件版本與 `requirements.txt` 不一致）。
+
+## 八、合併前必修（2026-11-01 Request Changes）共用檔修正後的回歸驗證
+
+本輪 Request Changes 點名的各列中，**沒有一列劃給 `hierarchy-service`**。但第 25 列（刪除專案／系統要求 `project_admin`）的修法由 `brain-infra` 統一施作（其 `code-summary.md` 的 A3 節），**動到本單元擁有的 `backend/services/hierarchy_facade.py`**。因此本輪不新增功能、不改本單元程式，只做下列回歸驗證：
+
+- [x] 1. 以最新一份 `reviewed-source-*.tsv`（依 mtime）為基準，逐檔比對本單元 `source-manifest.json` 的 7 個檔：位元組相同者列出；有變動者逐 hunk 判定歸屬（A3 或其他單元），結論附檔名與行號
+- [x] 2. 核對 A3 改動與本單元已核可規則不衝突：`delete_project`／刪除系統的守門順序（可見性守門在前、`can_administer_project` 在後）、不存在與無權限的回應是否仍不洩漏存在性（`BR` 對應條款），`Principal` sentinel 仍不可偽造；結論逐項附行號
+- [x] 3. 在 scratchpad 的 rsync 實體副本（不排除 `frontend`）以 `backend/.venv/bin/python -B` 跑 `tests.test_hierarchy_service`、`tests.test_project_write_guard` 與全套，記下數字
+- [x] 4. 於 repo 根以 `python3 -B` 跑 `validate_repo_contract.py`、`validate_env_contract.py`、`backend/scripts/dump_openapi.py --check`；確認跑完 repo 無新增 `.pyc`／`.hypothesis`
+- [x] 5. 重新查驗 §六 七項完成判準並勾選；突變驗證若沿用原紀錄，在 code-summary 寫明理由
+- [x] 6. 收尾：在 `code-summary.md` 末尾附加「## 2026-11-01 回歸（合併前必修共用檔修正後）」一節，含上列結論與測試數字；以 `grep -c` 實算本計畫勾選數

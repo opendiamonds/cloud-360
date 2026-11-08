@@ -450,7 +450,7 @@ generator、cost calculator、agent routing）皆不在本單元。
 | 6 | `design_agent.py` 已無 `_progress_queue`／`_last_xml`；錯誤改為固定字串「產圖發生錯誤」（:119）；`MemorySaver()` 保留 1 處 |
 | 7 | 三個呼叫點（`agent_router.py:131-162`、`wa_collab_orchestrator.py:87-122`、`test_agent.py:45-70`）皆以 `secrets.token_urlsafe(32)` 鑄鍵、`try/except DuplicateChannelKey`、`finally` 中 `close` |
 | 8 | `wa_collab_orchestrator.py:73` 的 `_remap_design_events` 仍以 `"xml"` 等既有 type 分派（:107） |
-| 2、9、10 | 見下方命令結果 |
+| 2、9、10 | 見下方命令結果（**本列已由下方「重做（2026-10-25）」與「合併前必修共用檔修正後的回歸驗證（2026-11-01）」兩節取代**，後者逐步對應各命令；本表 Step 6 的 `:119` 現為 `:121`，請引用新節） |
 | 11、12 | `code-summary.md`、`traceability.json` 存在 |
 
 | 命令（`backend/`） | 結果 |
@@ -490,3 +490,50 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 4. 計畫中 `design_agent.py:31`、`:32`、`:103`、`:160`、`:169`、`:214`、`:216`、`:218` 與 `agent_router.py:124-128` 為改動前行號，現行位置見上方 Step 6–7。
 
 `source-manifest.json` 的 7 條路徑全部存在且仍屬本單元。
+
+## 合併前必修共用檔修正後的回歸驗證（2026-11-01）
+
+<!-- 寫入時間：2026-11-01T01:20:22Z（`date -u` 取值） -->
+
+**觸發**：2026-10-31 的 Request Changes 重開全部單元；共用檔修正集中在 `brain-infra`（`merge-blockers.md` 第 41 列）。計畫 §四之二。**程式碼改動為 0、測試新增為 0。**
+
+### 1. 共用檔重驗（收據 `reviewed-source-4d5e2ac3a2e1.tsv`）
+
+以 `shasum -a 256` 逐檔比對收據的 7 個路徑：**7／7 位元相同、0 個變動**（`agent_router.py`、`design_agent.py`、`progress_channel.py`、`wa_collab_orchestrator.py`、`test_agent.py`、`tests/test_progress_channel.py`、`tests/test_progress_channel_contract.py`）。`git status` 對這 7 條路徑為乾淨；`git log` 最新一筆仍是 `c2e5687`（2026-10-11，早於收據）。
+
+依賴面的反查：在 `backend/` 以 `grep -rnE 'progress_channel|DuplicateChannelKey|ProgressChannelRegistry|run_design_agent\('` 枚舉全部消費端，命中的檔為上述 7 條之內，另加 `tests/test_brain_gateway_limits.py:446`（只把模組名列入禁止 import 清單）——**皆不在工作樹的未 commit 改動清單內**。工作樹改動的 37 個既有檔與 14 個新檔中，以同一 pattern 逐檔 grep 為 **0 命中**。`backend/requirements.txt` 的改動只新增 `sse-starlette==3.0.3`、`mcp-types==2.3.0` 兩行釘選，本單元零新依賴、不受影響。
+
+結論：本單元負責與依賴的部分**未被碰到**。接住點現況：`DuplicateChannelKey` 定義 `progress_channel.py:116`；接住點 `agent_router.py:139`、`wa_collab_orchestrator.py:90`、`test_agent.py:48`；三處鑄鍵 `secrets.token_urlsafe(32)`（`agent_router.py:131`、`wa_collab_orchestrator.py:87`、`test_agent.py:45`）；`open` 於 `:138`／`:89`／`:47`，`close` 於 `finally`（`:158→162`／`:119→122`／`:68→70`）。
+
+### 2. 回歸（scratchpad 實體副本，`rsync -a` 排除 `.git`／`.venv`／`node_modules`／`__pycache__`／`.hypothesis`；副本內唯一 symlink 為相對路徑 `codekb/chiton → cloud`，未指回 repo）
+
+直譯器 `backend/.venv/bin/python -B`，`PYTHONDONTWRITEBYTECODE=1`、`PYTHONPATH=<副本>/backend`、`HYPOTHESIS_STORAGE_DIRECTORY=<副本>/backend/.hypothesis`；未連 DB／Redis／網路。
+
+| 計畫步驟 | 指令（副本 `backend/`） | 結果 |
+|---|---|---|
+| Step 2／9（基準與全套） | `python -B -m unittest discover -s tests` | `Ran 1372 tests`、`OK (skipped=3)`（較 10-25 的 1319 多 53 個，來自其他單元新增的測試檔） |
+| §一 unit-scoped 指令 | `python -B -m unittest tests.test_progress_channel -v` | `Ran 8 tests`、`OK` |
+| Step 10（兩支測試檔） | `python -B -m unittest tests.test_progress_channel tests.test_progress_channel_contract` | `Ran 13 tests`、`OK` |
+| OpenAPI drift | `python -B scripts/dump_openapi.py --check` | 「規格檔與後端程式碼一致。」 |
+
+突變 M1–M7b 本輪**未重跑**：被測程式與兩支測試檔皆與收據位元相同，`review-02` R-03 的重跑條件（「後續單元再動 `progress_channel.py` 或三個呼叫點」）未觸發；沿用 §四的紀錄。
+
+### 3. `review-02` 各項現況
+
+| ID | 原 Status | 現況（附位置） |
+|---|---|---|
+| R-01 | Resolved (reviewer) | 維持。 |
+| R-02 | New | 本輪就地補記：「重新查驗（2026-10-20）」表的「2、9、10」列（本檔 :453）已加註「已由重做與本節取代」，並註明該表 Step 6 的 `:119` 現為 `:121`。另記：該表 Step 6 稱固定字串為「產圖發生錯誤」，實際為 `design_agent.py:121`「產圖失敗，請稍後再試或調整需求描述。」與 `:283`「發生未預期錯誤，請稍後再試。」——舊表屬已取代紀錄，不再改寫。 |
+| R-03 | New | 本輪實跑取代採信：全套 1372／OK、兩支檔 13／OK、`dump_openapi --check` 一致、兩支 validator passed（見下）。突變未重跑，理由見上節。 |
+
+無需改程式或共用文件的項目；**無須併入 `merge-blockers.md` 的新項**。
+
+### 4. 勾選重設
+
+計畫既有 12 格（Step 1–12）的證據檔自收據後 7／7 位元相同，且 Step 2／9／10 本輪重跑；§四之二 五格本輪執行完畢。`grep -c '^- \[x\]'` = **17**、`grep -c '^- \[ \]'` = **0**。未勾格：無。
+
+### 5. 收尾
+
+- `traceability.json`：不需更新（無程式與測試變動），`json.load` 驗證為合法 JSON。
+- `python3 -B scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」
+- `python3 -B scripts/validate_env_contract.py`：「Cloud-360 environment configuration contract validation passed.」
