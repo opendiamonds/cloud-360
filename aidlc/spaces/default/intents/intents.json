@@ -53,5 +53,12 @@
     "dirName": "261001-a2-langgraph",
     "scope": "refactor",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a1abd8-6489-72aa-8a5b-14d862ec1f1e",
+    "slug": "d-iac-generation",
+    "dirName": "261105-d-iac-generation",
+    "scope": "feature",
+    "status": "in-flight"
   }
 ]

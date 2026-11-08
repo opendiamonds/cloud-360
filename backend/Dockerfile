@@ -14,6 +14,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt .
+# Checkov CLI (checkov==3.4.3 in requirements.txt) is on PATH for D2.
+# No separate scan image and no CI scan stage.
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

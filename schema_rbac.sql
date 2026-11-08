@@ -5,6 +5,7 @@
 -- 單一腳本涵蓋：
 --   A) 核心：users / user_diagrams / diagram_shares（架構圖儲存與分享）
 --   B) A4：user_diagram_chats（聊天持久化）+ users.last_opened_diagram_id
+--      另含 iac_saved_drafts（使用者按儲存留下的 IaC 草稿）
 --      另含 users.last_activity_at（最後活動時間欄位）
 --   E) A3：architecture_reviews（評核結果）+ wa_lenses（Offline Lens 現行標準）
 --   C) RBAC：role_permissions + 預設矩陣（308 列）
@@ -92,6 +93,20 @@ CREATE TABLE IF NOT EXISTS user_diagram_chats (
 );
 
 COMMENT ON TABLE user_diagram_chats IS 'A4: chat messages keyed by user × diagram';
+
+CREATE TABLE IF NOT EXISTS iac_saved_drafts (
+  user_id INTEGER NOT NULL REFERENCES users (id),
+  diagram_id INTEGER NOT NULL REFERENCES user_diagrams (id) ON DELETE CASCADE,
+  draft_id VARCHAR(64) NOT NULL,
+  files_json TEXT NOT NULL,
+  advice_text TEXT,
+  scan_advice_text TEXT,
+  scan_json TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (user_id, diagram_id)
+);
+
+COMMENT ON TABLE iac_saved_drafts IS 'IaC draft saved by the user, keyed by user × diagram';
 
 -- ###########################################################################
 -- E) A3: Well-Architected review persistence

@@ -198,6 +198,7 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | B | `users.last_opened_diagram_id` | 上次開啟的圖 |
 | B | `users.last_activity_at` | **最後活動時間**（UTC，可為 NULL＝從未活動）。見 2.2.3 |
 | B | `user_diagram_chats` | 使用者×圖 的聊天紀錄（A4） |
+| B | `iac_saved_drafts` | 使用者按儲存留下的 IaC 草稿（使用者×圖），含產出建議 `advice_text`、掃描建議 `scan_advice_text`，以及當時的掃描報告 `scan_json`。重啟後 `GET /api/iac/session` 會讀回草稿、兩段建議與掃描結果。既有環境由後端 `_ensure_iac_draft_schema()` 補表與欄位，也可重跑 `schema_rbac.sql`。 |
 | E | `architecture_reviews` | **A3** Well-Architected 評核結果（分數／發現／建議） |
 | E | `wa_lenses` | **A3** Offline Custom Lens 現行標準（具 A3 **審核** 者可編輯） |
 | C | `role_permissions` | 角色 × Story 的檢視／編輯／審核 |
@@ -509,7 +510,7 @@ No new SQL is required for the A1↔A3 optimize feature; schema remains `schema_
 psql "$DATABASE_URL" -f schema_rbac.sql
 ```
 
-Creates: `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`, **`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`, plus `last_opened_diagram_id`.  
+Creates: `users`, `user_diagrams`, `diagram_shares`, `user_diagram_chats`, `iac_saved_drafts`, **`architecture_reviews` (A3)**, **`wa_lenses` (editable offline Lens)**, `role_permissions`, plus `last_opened_diagram_id`.  
 Seeds ~**308** `role_permissions` rows. It does **not** create a fixed-password admin user.
 
 **A3** `architecture_reviews` stores review scores/findings/suggestions. **`wa_lenses`** stores the active Custom Lens JSON editable by users with **A3.review** (default: Security_Reviewer VER; reviews resolve DB-first, then file fallback). Existing DBs: re-run `schema_rbac.sql` (`IF NOT EXISTS`) or rely on backend `_ensure_a3_schema()` on startup.

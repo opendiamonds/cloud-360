@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
+import { IacEntryControl } from '../components/iac/IacEntryControl';
+import { IacWorkspace } from '../components/iac/IacWorkspace';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
 import type { DiagramSaveStatus, DrawioCanvasRef } from '../components/DrawioCanvas';
@@ -59,6 +61,7 @@ export const WorkspacePage = () => {
   const canViewOnly = canArch('view') && !canEditArch;
   const canA3Edit = can('A3', 'edit');
   const canA3View = can('A3', 'view');
+  const canViewD1 = can('D1', 'view');
   const canvasRef = useRef<DrawioCanvasRef>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -93,6 +96,7 @@ export const WorkspacePage = () => {
     }
   });
   const [canvasLayoutEpoch, setCanvasLayoutEpoch] = useState(0);
+  const [iacOpen, setIacOpen] = useState(false);
 
   const toggleChatCollapsed = useCallback(() => {
     setChatCollapsed((prev) => {
@@ -963,8 +967,13 @@ export const WorkspacePage = () => {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => showComingSoon('IaC 代碼生成')}
-                  className="flex-1 py-3 bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
+                  type="button"
+                  disabled={!canViewD1}
+                  onClick={() => {
+                    setToast(null);
+                    if (canViewD1) setIacOpen(true);
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-40"
                 >
                   生成 IaC 代碼
                 </button>
@@ -1044,6 +1053,13 @@ export const WorkspacePage = () => {
         }
         headerCenter={
           <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200/80 max-w-full overflow-x-auto">
+            <IacEntryControl
+              canView={canViewD1}
+              onOpen={() => {
+                if (canViewD1) setIacOpen(true);
+              }}
+            />
+            <div className="w-px h-4 bg-gray-200 mx-0.5 shrink-0" />
             <select
               className="bg-transparent border-none text-sm font-semibold text-gray-800 outline-none cursor-pointer focus:ring-0 w-44 shrink-0"
               value={currentDiagramId || ''}
@@ -1181,6 +1197,26 @@ export const WorkspacePage = () => {
           </div>
         }
       />
+      {iacOpen && (
+        <IacWorkspace
+          initialDiagramId={currentDiagramId}
+          diagrams={diagrams.map((item) => ({ id: item.id, title: item.title }))}
+          onClose={() => setIacOpen(false)}
+          onDiagramCreated={(created) => {
+            const now = new Date().toISOString();
+            setDiagrams((prev) => [
+              {
+                id: created.id,
+                title: created.title,
+                is_owner: true,
+                updated_at: now,
+              },
+              ...prev.filter((item) => item.id !== created.id),
+            ]);
+            setCurrentDiagramId(created.id);
+          }}
+        />
+      )}
       </div>
 
       <ShareModal

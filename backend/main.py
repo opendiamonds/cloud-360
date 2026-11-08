@@ -10,6 +10,7 @@ from services.review_router import router as review_router
 from services.lens_router import router as lens_router
 from cost.estimate_intake_router import router as estimate_intake_router
 from cost.advice_stream_router import router as advice_stream_router
+from iac.iac_router import router as iac_router
 from services.llm_provider import configure_provider_env
 from database import init_db
 
@@ -56,6 +57,7 @@ app.include_router(user_router, prefix="/api/auth")
 app.include_router(collab_router, prefix="/api/collab")
 app.include_router(estimate_intake_router, prefix="/api/cost/v1")
 app.include_router(advice_stream_router, prefix="/api/cost/v1")
+app.include_router(iac_router, prefix="/api/iac")
 
 @app.get("/")
 def read_root():

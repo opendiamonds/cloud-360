@@ -105,6 +105,21 @@ class UserDiagram(Base):
     )
 
 
+class IacSavedDraft(Base):
+    """使用者按儲存後留下的 IaC 草稿，鍵為使用者 × 架構圖。"""
+
+    __tablename__ = "iac_saved_drafts"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    diagram_id = Column(Integer, ForeignKey("user_diagrams.id", ondelete="CASCADE"), primary_key=True)
+    draft_id = Column(String(64), nullable=False)
+    files_json = Column(Text, nullable=False)
+    advice_text = Column(Text, nullable=True)
+    scan_advice_text = Column(Text, nullable=True)
+    scan_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UserDiagramChat(Base):
     """
     A4：每位使用者在每張架構圖上的獨立聊天紀錄。

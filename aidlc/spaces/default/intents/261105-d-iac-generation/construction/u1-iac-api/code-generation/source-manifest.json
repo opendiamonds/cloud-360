@@ -1,0 +1,31 @@
+{
+  "stage": "code-generation",
+  "unit": "u1-iac-api",
+  "version": 1,
+  "writes": [
+    { "path": "backend/iac/__init__.py" },
+    { "path": "backend/iac/iac_agent.py" },
+    { "path": "backend/iac/iac_diagram.py" },
+    { "path": "backend/iac/iac_generate.py" },
+    { "path": "backend/iac/iac_limits.py" },
+    { "path": "backend/iac/iac_log.py" },
+    { "path": "backend/iac/iac_redact.py" },
+    { "path": "backend/iac/iac_router.py" },
+    { "path": "backend/iac/iac_scan.py" },
+    { "path": "backend/iac/iac_schemas.py" },
+    { "path": "backend/iac/iac_session.py" },
+    { "path": "backend/iac/iac_types.py" },
+    { "path": "backend/iac/iac_zip.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/Dockerfile" },
+    { "path": "backend/tests/test_iac_generator.py" },
+    { "path": "backend/tests/test_iac_scanner.py" },
+    { "path": "backend/tests/test_iac_redactor.py" },
+    { "path": "backend/tests/test_iac_session.py" },
+    { "path": "backend/tests/test_iac_http.py" },
+    { "path": "openapi.json" },
+    { "path": "frontend/src/types/api.d.ts" },
+    { "path": "LOCAL-DEV.md" }
+  ]
+}

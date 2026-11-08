@@ -1,0 +1,1 @@
+"User story D：標準化 IaC 生成與安全交付（D1 模板化 Terraform/OpenTofu、D2 靜態掃描、D3 Secret Manager）。架構與執行框架須與 A（Design／Assessment）及 C（成本）對齊——同一套 LangGraph agent 框架；UI 風格須與現有 A／C 工作區一致（同一套 layout／元件語彙）。Brownfield，從現有架構圖產出 IaC。"

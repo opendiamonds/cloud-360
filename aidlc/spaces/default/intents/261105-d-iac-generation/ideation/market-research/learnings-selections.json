@@ -1,0 +1,15 @@
+{
+  "stage_slug": "market-research",
+  "space": "default",
+  "intent": "261105-d-iac-generation",
+  "selections": [
+    {
+      "candidate_id": "user-d1-d2-d3-agents",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Story D 若含 D1／D2／D3 三個功能，各對應一個 agent（非單一 agent 包辦三者）；後續 requirements／設計須以此為預設拆分。",
+      "source": "user_addition"
+    }
+  ]
+}

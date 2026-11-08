@@ -1,0 +1,22 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u2-iac-ui",
+  "upstream_ids": [
+    "NFR-PERF-UI-1.2",
+    "NFR-PERF-UI-1.1",
+    "NFR3.UI.1",
+    "NFR3.UI.3",
+    "NFR7",
+    "NFR1",
+    "NFR5.4"
+  ],
+  "coverage": [
+    { "id": "NFR-PERF-UI-1.2", "status": "OK", "target": "cicd-pipeline.md ui-regression／Abort 行為由 e2e 覆蓋意圖" },
+    { "id": "NFR-PERF-UI-1.1", "status": "OK", "target": "monitoring-design.md busy／error.code SLI" },
+    { "id": "NFR3.UI.1", "status": "OK", "target": "monitoring-design.md 禁 console dump" },
+    { "id": "NFR3.UI.3", "status": "OK", "target": "monitoring-design.md error.code 文案 SLI" },
+    { "id": "NFR7", "status": "OK", "target": "monitoring-design.md 無 RUM／無前端 metrics" },
+    { "id": "NFR1", "status": "OK", "target": "infrastructure-specification.md 無權 UX／無 apply；cicd 不藏 key" },
+    { "id": "NFR5.4", "status": "OK", "target": "cicd-pipeline.md Playwright test-id 案例增量" }
+  ]
+}

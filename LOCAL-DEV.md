@@ -19,6 +19,7 @@
 | **A3「優化」（Design↔Review 協作）** | 同上 | 失敗 |
 | **Offline Lens agent 填答** | 同上 | 降級為規則啟發式（會寫 WARNING log） |
 | 動態 SVG 圖示 | n8n webhook（**選填**，見下方「圖示目錄」） | 用灰底 fallback 圖示，不中斷 |
+| **D2 靜態掃描** | `requirements.txt` 的 `checkov==3.4.3`（本機 venv 與 backend image 同一支 CLI） | 只讓 D2 失敗；D1 產生與下載仍可用 |
 
 ### 兩個「不在 requirements.txt 裡」的硬依賴
 
@@ -197,6 +198,7 @@ INFO:cloud360.database:A4 schema 檢查完成
 INFO:cloud360.database:J5 schema 檢查完成
 INFO:cloud360.database:A3 schema 檢查完成
 INFO:cloud360.database:last_activity schema 檢查完成
+INFO:cloud360.database:IaC draft schema 檢查完成
 INFO:cloud360.database:資料庫已存在 1 位使用者，跳過初始化。
 INFO:cloud360.database:role_permissions 已有 308 列，略過 seed
 INFO:cloud360.database:J3a 權限套用：已跳過（...）

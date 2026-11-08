@@ -93,6 +93,14 @@
 
 ---
 
+### 本輪覆核（命名合規抽樣，非新規則）
+
+- HEAD `0bffc82` 近期 commit 多數已使用中文 type（`功能`／`修正`／`文件`／`建置`／`雜項`／`重構`／`整合`）；仍可見少數英文 type（如 `fix(env)`、`fix(ci)`）——與「規則生效後合規率留待覆核」的既有記載一致，**本輪不另立罰則**。
+- 作用中工作分支 `luojingting/feat/d-iac-generation` 符合 `<uploader>/<type>/<slug>`。
+
+
+---
+
 ## Walking Skeleton
 
 **Q3 定案：`skeleton: off`。**
@@ -105,16 +113,26 @@
 
 ---
 
+> **本輪 Q1 定案（A）— intent `261105-d-iac-generation`**：即使將引入 IaC 產碼／掃描／Secret 與三個 agent，仍維持本 intent **`skeleton: off`**。第一個 Construction Bolt 照常跑，不另開骨架儀式；不改團隊預設值。
+
+
+
+---
+
 ## Testing Posture
+
+- **Methodology**: custom
+- **Ordering**: 同一 PR 合併前必須齊備 A／B／C 變更範圍義務，以及已 Affirm 之純函式核心（IaC generator、scanner、redactor）所需的 PBT／突變測試；不得把測試留到後續 PR。
+
 
 ### 既成事實
 
-- **Backend 測試框架**為 Python 內建 `unittest` + `hypothesis` + `unittest.mock`，**未使用 pytest**。CI 以 `python -m unittest discover -s tests -v` 執行（`ci.yml`）。測試 DB 策略見 `backend/tests/helpers.py`：在任何 DB import 前 `sys.modules.setdefault("psycopg2", MagicMock())`，改走 in-memory SQLite，每 session `ensure_role_permissions_seeded(db, force=True)`。規模：`backend/tests/` 21 個測試檔（HEAD `c3de2c8`；2026-08-06 版「14 個」已過時）。
-- **Frontend e2e** 為 Playwright（chromium 單一 project），涵蓋登入與 RBAC 可視性；`ui-regression` gh-aw workflow 每 PR 對短生命週期 stack 執行並回報 Kiwi TCMS。**這是真閘門**：`post-steps` 讀 `pw-report.json` 的 `.stats.unexpected`，非 0 即 `exit 1`；容忍 `stats.flaky`，`retries: 1`。HEAD 現有 e2e 涵蓋 Admin 最後活動與分頁，**無成本頁 e2e**。
+- **Backend 測試框架**為 Python 內建 `unittest` + `hypothesis` + `unittest.mock`，**未使用 pytest**。CI 以 `python -m unittest discover -s tests -v` 執行（`ci.yml`）。測試 DB 策略見 `backend/tests/helpers.py`：在任何 DB import 前 `sys.modules.setdefault("psycopg2", MagicMock())`，改走 in-memory SQLite，每 session `ensure_role_permissions_seeded(db, force=True)`。規模：`backend/tests/` **本輪覆核（HEAD `0bffc82`）41 個 `test_*.py`**（含 cost／estimate／pricing／langgraph 等；前版「21 個／HEAD `c3de2c8`」已過時）。
+- **Frontend e2e** 為 Playwright（chromium 單一 project），涵蓋登入與 RBAC 可視性；`ui-regression` gh-aw workflow 每 PR 對短生命週期 stack 執行並回報 Kiwi TCMS。**這是真閘門**：`post-steps` 讀 `pw-report.json` 的 `.stats.unexpected`，非 0 即 `exit 1`；容忍 `stats.flaky`，`retries: 1`。HEAD 現有 e2e 涵蓋登入、RBAC 與 Admin 等；**本輪覆核：仍無 Story D／IaC 頁 e2e**（D 柱無專屬頁面，僅 Workspace Coming Soon stub）。成本頁現況留待 C 柱既有規則，不在本 intent 覆寫。
 - **Frontend 完全沒有 unit／component 測試框架**：`frontend/package.json` 的 `devDependencies` 只有 `@playwright/test`，無 vitest、無 jest、無 `@testing-library/*`；`scripts` 只有 `test:e2e`。前端的唯一自動化驗證層就是 Playwright e2e。
-- **Property-based testing**：7 個檔共 13 個 `@given`（HEAD `c3de2c8`；覆蓋 `test_design_agent`、`test_wa_rule_engine`、`test_diagram_builder`、`test_diagram_icons`、`test_collab`、`test_auth`、`test_activity`），皆落在純函式模組，屬自發良好實踐。`project.md` ADR-0006 點名的三個 hard-constraint 落點（IaC generator、cost calculator、agent routing）中，**cost calculator 在本 repo 尚無對應實作模組**，故該約束目前對 repo 現況為 N/A（非豁免、非違反）。本 intent 若新建 calculator 模組，ADR-0006 PBT 約束隨即由 N/A 轉為 blocking。
-- **HTTP 層 TestClient 現況**：`backend/tests/test_user_list_endpoint.py` 用 `starlette.testclient.TestClient` 測 `/api/auth/list` 分頁欄位（樣板在 `tests/helpers.py`）。此為現行唯一 TestClient 使用例；**無 cost router 可測**。
-- **C1 / pricing 測試完全缺席**：無 `test_cost*`；`'C1'`／`"C1"` 在 `backend/tests/` 0 命中；`test_rbac.py` 不覆蓋 C1／C2／C3。WA `COST-*` findings 連 example-based 測試都沒有。
+- **Property-based testing**：本輪覆核（HEAD `0bffc82`）至少 12 個測試檔含 `@given`（約 19 處），仍集中於純函式模組，屬自發良好實踐。`project.md` ADR-0006 點名的三個 hard-constraint 落點（**IaC generator**、cost calculator、agent routing）中，**IaC generator 在本 repo 仍無對應實作模組**，故該約束對 Story D 現況為 N/A（非豁免、非違反）。**本 intent 一旦落地 IaC generator 純函式核心，ADR-0006 PBT 約束隨即由 N/A 轉為 blocking。**本輪另 Affirm（Q5=B）：**scanner 與／或 redactor 亦列為 PBT 核心**。
+- **HTTP 層 TestClient 現況**：`backend/tests/test_user_list_endpoint.py` 用 `starlette.testclient.TestClient` 測 `/api/auth/list` 分頁欄位（樣板在 `tests/helpers.py`）。樣板仍在 `tests/helpers.py`；本輪覆核另有 `test_estimate_intake_api.py`、`test_me_endpoint.py` 等 TestClient 使用例。**無任何 D1／D2／D3／IaC router 可測**（OpenAPI 零 IaC 條目）。
+- **Story D／IaC 測試完全缺席（本輪焦點）**：無 `test_*iac*`／`test_*terraform*`；`backend/tests/` 對 D1／D2／D3 業務端點 0 命中；`test_rbac.py` 未將 D 柱 allow／deny 當 Story D 落地義務覆蓋。C 柱測試現況已由後續 intent 推進，本檔不覆寫其效力。
 - **完全沒有覆蓋率量測機制**（無 `.coveragerc`、無 `coverage`／`pytest-cov`、CI 無 coverage step）。`org.md` 宣告的「最低 80% line coverage」目前**既無法量測也無法強制，是宣告而非閘門**。
 - **既有授權測試皆在 service 層**：`test_rbac.py`、`test_j5_authz.py`、`test_review_authz.py` 皆非 HTTP 層測試。
 
@@ -135,6 +153,18 @@
 
 ---
 
+### Story D 本輪定案（`261105-d-iac-generation`，訪談 Q2–Q6／Q8）
+
+- **既有 A／B／C 對新模組的一般效力（已定案）**：改 D 種子 → A；新增／修改 `/api/iac*`（或等價）→ B；真 UI／資料形狀取代 Coming Soon → C。
+- **Q2 定案（A）— D 柱第一個 HTTP 消費者的最小授權測試**：D1／D2／D3 **任一**故事的第一個 HTTP 消費者落地時，即使 `role_permissions` seed 未改，仍強制 allow／deny 雙向 TestClient（有權 → 2xx、無權 → 403）。此為 A／B 交叉要求，對齊 C1 Q3 形狀；**codekb 若寫「D 已比照 team.md Q3」不可信——該 Q3 僅鎖定 C1。**
+- **Q3 定案（A）— D2 掃描自動化落點**：本 intent 只要求 unittest 測「編排＋報告形狀」（工具／CLI 可 stub）；**不**新增 CI IaC scan job；工具品牌不預填進 Mandated。
+- **Q4 定案（A）— D3 Secret 測試最低線**：D3 落地時強制負向測試＋redaction 突變驗證（注入明文樣式 → 輸出／log／artifact 不得出現該明文；拿掉遮罩 → 測試應紅）；contract 掃描作用域擴大另排、不阻塞本條。
+- **Q5／Q6 交叉 — 決定性核心先於 LLM**：每個故事先有可離線斷言的決定性核心（D1 generator 含 PBT；D2 報告形狀／scanner；D3 redactor）；LLM 編排進手動／TCMS「只能手動」桶。
+- **Q8 定案（A）**：Methodology＝`custom`；Ordering＝同 PR 齊備 A／B／C 與已 Affirm 核心之 PBT／突變義務（見節首）。
+
+
+---
+
 ## Deployment
 
 延伸 `org.md` 與 `project.md` 已定案的部署模型（Construction／Operations 連續、deploy-on-merge 至 `192.168.10.10`，見 ADR-0007／ADR-0008），記載團隊層級的執行細節：
@@ -150,11 +180,21 @@
 
 `project.md ## Forbidden` 現有一條規則的宣稱強度高於機制的實際強度：
 
-- **Secret 掃描**：`validate_no_obvious_secrets()`（`scripts/validate_repo_contract.py`）只讀取 `contract_files()`（12 個 repo 層必要檔 + baseline record 必要檔 + audit shard）。`backend/`、`frontend/`、`deploy/`、`schema_rbac.sql`、任何 `.env.example` 都不在其中——本 repo 唯一的 secret 掃描器結構上看不到應用程式碼。
+- **Secret 掃描（雙軌，devsecops 盲評校正）**：`validate_no_obvious_secrets()`（`scripts/validate_repo_contract.py`）現況為——(1) 字面 `FORBIDDEN_CONTENT_PATTERNS`（PEM 等）仍主要掃 `REQUIRED_FILES`／contract 必要檔；(2) `SECRET_VALUE_REGEXES`（AWS／GCP 賦值形狀）已對 `git ls-files` **全域**掃追蹤文字檔。剩餘缺口：無 gitleaks 類通用高熵規則、PEM 字面樣式仍偏 contract 檔、**執行期**回應／log／artifact 明文不在 contract 範圍（由 D3 負向＋突變測試補上，Q4=A）。
 
-這一項不是「缺工具」，是既有機制的實際作用域小於規則所宣稱——修復方式（擴大掃描器作用域至應用程式碼）列為待補承載機制（見 `discovered-rules.md`）。
 
-> 原本並列於此的第二項已解決，故從上面的清單移除：禁止 production 路徑的檢查原先以 working-tree diff 為比對基準，在 CI 的乾淨 checkout 下不會擋到任何東西。intent `260816-production-path-check`（issue #509）已把比對基準改為 `git ls-files` 全域掃描，並補上回歸測試 `backend/tests/test_repo_contract_production_paths.py`（在暫存 git repo 內以乾淨工作樹重現 CI 條件）。`discovered-rules.md` 第 4 項的對應記載屬另一個 intent 的 record，待下一輪 practices-discovery 標為已解決。
+
+> 原本並列於此的第二項已解決，故從上面的清單移除：禁止 production 路徑的檢查原先以 working-tree diff 為比對基準，在 CI 的乾淨 checkout 下不會擋到任何東西。intent `260816-production-path-check`（issue #509）已把比對基準改為 `git ls-files` 全域掃描，並補上回歸測試 `backend/tests/test_repo_contract_production_paths.py`（在暫存 git repo 內以乾淨工作樹重現 CI 條件）。`discovered-rules.md` 對應記載：**本輪標為已解決**（HEAD `0bffc82` 確認 `validate_no_production_config_added()` 以 `git ls-files` 全域掃描；回歸測試 `backend/tests/test_repo_contract_production_paths.py` 仍在）。
+
+---
+
+### Story D 部署／產品邊界（本輪定案）
+
+- **平台／產品不 apply（Q7=A）**：D 柱 API／agent **不得**代使用者對雲端執行 apply／destroy；產出與掃描報告即可。人工 high-risk gate（plan＋impact＋rollback＋核准）仍適用於任何真 apply，但**不得**被解讀成「核准後平台可代 apply」。staging 的 `deploy.yml`→`192.168.10.10` 與此正交。
+- **無 CI IaC scan job（Q3=A）**：本 intent 不新增 checkov／tfsec／gitleaks／trivy 等 CI 掃描步驟；D2 自動化落在 unittest 編排＋報告形狀。
+- **D3 與 secret 機制**：產品路徑靠負向／突變測試；contract 掃描擴大另排。
+
+
 
 ---
 
@@ -196,6 +236,15 @@
 - **Q4 定案（A）— C1 Cost 功能域的三層形狀與純函式約束**：`cost_router`（HTTP 層，FastAPI router）→ `cost_service`（業務協調，可讀 DB）→ 純函式 `cost_calculator`（計算核心，不讀 DB、不連外、不 raise `HTTPException`）+ 獨立 `pricing_client`（外部計價 Port，包裝 `httpx`）。禁止把 cost 邏輯寫入 `user_router.py` 或 `wa_rule_engine.py`；`cost_calculator` 模組內禁止 import `httpx`、任何 DB session 型別，以及 `HTTPException`——這是 ADR-0006 PBT 約束能在計算核心起作用的結構前提。**ADR-0017 §1–§2、§4＋§8 修訂**：三層形狀與純函式禁令保留，純函式層由 `cost_calculator` 改錨至估價表解析器（解析 AWS CSV／Azure XLSX／GCP CSV），PBT 約束原樣移轉。`pricing_client` 於 §1 廢止後由 §8 恢復，職責改為 agent 按需查價的 Port（只對公開免帳號端點），不再是取價主路徑。
 
 - **Q2 計價 API 規範（交叉參照 `discovered-rules.md` Forbidden）**：`pricing_client` 一律只對接公開免帳號的計價端點（如 AWS Pricing API 公開 endpoint）；禁止使用需雲端供應商帳號憑證的 Cost Explorer、Billing API 或同類 API。完整約束見 `discovered-rules.md ## Forbidden ## C1 計價 API`。**ADR-0017 §3、§4＋§8 修訂**：本條原樣有效。估價一律來自上傳的官方估價表，不得以自動取價產生估價；agent 得經 `pricing_client` 查公開免帳號端點確認現價，結果只寫入建議文字。需帳號憑證者（含走 IAM 的 boto3 Pricing Query API）仍全禁。**ADR-0018 §1＋§2 再修訂**：**目錄價類**的需憑證端點解禁——AWS Price List Query API（IAM，權限限於 `pricing:GetProducts`／`DescribeServices`／`GetAttributeValues`）、GCP Cloud Billing Catalog API（API key 須綁定該 API）；Azure 維持公開 Retail Prices 不變。**帳單與用量類**（Cost Explorer、Cost and Usage Report、Cost Management、Billing Export）**維持全面禁止**——此禁令是前者得以解禁的對價，不得一併放寬。`pricing_sdk.py` 與 `boto3` 由「確定刪除」改為保留。
+
+### Story D 結構定案（`261105-d-iac-generation`，訪談 Q5＝B、Q6＝A）
+
+- **既有規則（已定案）**：新模組／新業務邏輯一律走三層；純運算下沉到不讀 DB 的函式；純函式層禁止 `httpx`、DB session、`HTTPException`（service 層仍可 `raise HTTPException`，對齊 `backend/cost/` 先例）；新模組 logger 用 `"cloud360.<module>"`。
+- **Q5 定案（B）— 領域套件與 PBT 擴張**：D 柱採 **`backend/iac/`** 領域套件（對齊 `backend/cost/`），內含 router → service／orchestrator → 純函式核心＋三 agent；檔名用領域語彙（如 `iac_generate_*`／`iac_scan_*`／`iac_secret_*`），**禁止** `d1_*`／`d2_*`／`d3_*` story-id 檔名前綴（權限仍用 `require_story_action("D1"|"D2"|"D3", …)`）。本輪 Affirm：**generator（ADR-0006）以及 scanner 與／或 redactor 皆為 PBT 核心**——落地同一 PR 須含 Hypothesis，不得只有 example-based。
+- **Q6 定案（A）— Agent 底座**：D1／D2／D3 三 agent 一律走既有 `langgraph_runtime`＋OpenRouter，禁止再增 Claude-SDK-only／Anthropic-only 路徑；**不**要求本 intent 收斂既有 `design_agent`。agent 檔與 router 同屬 `backend/iac/`。
+- **API 掛載建議（執行慣例）**：獨立前綴（如 `/api/iac/...`），勿塞進 `agent_router`／`user_router`。
+- **UI**：沿用 Layout／Workspace 語彙與資料抓取兩層形狀；真 CTA 替換 Coming Soon 時須接 D1 權限檢查（現況 CTA 不檢查 `D1`——產品／設計待修）。
+
 ## Forbidden
 
 - ❌ **不得產生雙語分段**：文件不得保留或新增 `## 中文版` / `## English Version` 標題；文件為單一語言（繁體中文）。`scripts/validate_repo_contract.py` 會擋下 record 內殘留的 `## English Version`（CI 紅燈）。

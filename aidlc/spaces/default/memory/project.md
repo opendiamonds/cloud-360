@@ -84,6 +84,24 @@
 - **NEVER** 把 RBAC 種子或權限頁的 C1 欄當成已有 cost router／Cost 頁 (affirmed 2026-08-19)
 - **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`；**ADR-0018 §1**：`pricing_client` 可對接的端點集合擴大至目錄價類的需憑證端點，httpx 不得直打的規定不變)
 - NEVER 以 repo 內新增的實作程式（例如 `scripts/` 下的 Python）承載**無人值守的**流程自動化與外部系統同步；此類機制一律以 gh-aw 或 GitHub Actions workflow 承載。**邊界以觸發來源判定**：由事件或排程觸發、無人在迴圈內的（`on: push`／`pull_request`／`schedule`／`workflow_dispatch` 等）屬本條禁止範圍；由 stage 檔或 slash command 觸發、須有人執行才會跑的工具**不在此限**——既有先例為 `tcms` plugin 的 `scripts/tcms_validate.py` 與 `scripts/tcms_sync.py`，兩者只被 `.claude/aidlc-common/stages/construction/tcms-test-cases.md` 呼叫，`.github/` 下無任何 workflow 呼叫它們。注意 gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo 三塊結構性盲區的「所有 LLM 路徑」那一塊，決定性的映射邏輯應優先放在純 Actions 步驟，判斷性的工作才交給 gh-aw (learned 2026-08-23；2026-08-24 收窄為「無人值守」並寫明觸發來源判準——原文的「與外部系統同步」會讓 `## Mandated` 強制要求的 tcms 流程技術性違反本條，該矛盾由使用者裁決收窄規則文字而非增列例外) <!-- cid:intent-capture:260822-c1 -->
+- **NEVER**（本輪 Affirm，Q7=A）D 柱 API／agent 不得代使用者對雲端執行 apply／destroy；產品能力以產生 IaC 與掃描報告為界。人工 high-risk 核准閘不得被解讀為授權平台代 apply。 (affirmed 2026-11-05)
+
+- **NEVER** 讓版控中存在 path parts 含 `prod`、`production`、`secrets` 的檔案（`git ls-files` 全域掃描；issue #509 已修復機制）。D3 模組／產物路徑亦不得使用完整 path part 名為 `secrets` 的目錄或檔名。 (affirmed 2026-11-05)
+
+- **NEVER** commit 私鑰或 AWS／Azure／GCP credential 字串（樣式見 `validate_repo_contract.py`；不要把樣式字面複製進 contract 檔）。 (affirmed 2026-11-05)
+
+- **NEVER** 在未取得 human approval 的情況下執行 production write、IaC apply 或 IAM 變更。 (affirmed 2026-11-05)
+
+- **NEVER** 直接編輯 `.claude/` 下的 upstream 框架檔來表達專案規則——規則寫入 `aidlc/spaces/<space>/memory/{team,project}.md`。 (affirmed 2026-11-05)
+
+- **NEVER** 把敏感資料寫進任何 log 或決議紀錄（遮罩為 `[REDACTED]`）。 (affirmed 2026-11-05)
+
+- **NEVER** 產生雙語分段（`## English Version` 等）。 (affirmed 2026-11-05)
+
+- **NEVER** 以 repo 內新增的實作程式承載無人值守的流程自動化與外部系統同步（觸發來源判準見 `project.md`）；人在迴圈內的 stage／slash 工具不在此限。 (affirmed 2026-11-05)
+
+- **NEVER** 把雲端供應商 production、environment-specific secrets、direct production IaC、destructive cloud operations 納入本 repo 範圍（除非新 ADR）（`project.md ## Scope Overrides`）。 (affirmed 2026-11-05)
+
 ## Mandated
 
 - ALWAYS 在 commit 前執行 `python3 scripts/validate_repo_contract.py`。違反 repo contract = CI 紅燈。contract 涵蓋 repo 層必要文件（`REQUIRED_FILES`／`REQUIRED_TEXT`）、record 層 baseline artifacts（`REQUIRED_RECORD_FILES`／`REQUIRED_RECORD_TEXT`，執行時動態解析 record 目錄）、文件語言（record 內不得有 `## English Version`）、禁止路徑與禁止內容。
@@ -131,6 +149,38 @@
 - ALWAYS codekb 以 kind: full 發布時，須在產出內明寫深度分佈（哪些路徑深讀、哪些僅盤點），不得讓 full 被下游讀成「處處都讀過」；深度切分跨越元件邊界時，拆分元件而非放寬覆蓋宣稱 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:2608f768557e75d3aab19caf5ce98b809e44c34be808f4f35f663e6bb62de474 -->
 - NEVER 對已有 reviewer 或其他 subagent 寫入內容的 artifact 做附加時，使用 index 字串切片截尾（如 s[:s.index("## Review")]）——會把下游寫入的整段內容刪掉，且 artifact 多半尚未進版控無法還原。一律以純 append 或錨定自己寫入的標記進行 (learned 2026-09-16；實例：requirements-analysis 誤刪 product-lead 的 ## Review 區段，需 resume reviewer 重寫) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:204c7209210b6fb6ccf8348a2f9af1e49cddf79d3a192473f555618f8c7a9f67 -->
 - ALWAYS requirements 或後續階段新增／推翻了已核可 scope-document 的項目時，須在產出文件內逐處明標「本階段新增或推翻、scope 尚未涵蓋」並要求回補，不得當作既有 CAP 的自然延伸吸收；標記須在提問當下即向使用者揭露後果，非事後補記 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:ed182d6322d3545d0af1f58229ee65ae34e61f2255d2afaeb1770a47d0f8005e -->
+- **ALWAYS** 在 commit 前執行 `python3 scripts/validate_repo_contract.py`（違反 = CI 紅燈）。 (affirmed 2026-11-05)
+
+- **ALWAYS** 在變更資料庫結構或部署必知的 schema／seed 行為時同步更新 `schema_rbac.sql` 與 `DEPLOY.md`（blocking）。Story D 若改動 D1／D2／D3 的 `role_permissions` 預設值或新增 DDL，即觸發本條。 (affirmed 2026-11-05)
+
+- **ALWAYS** 讓三個環境設定分離且完整，並在 commit 前執行 `python3 scripts/validate_env_contract.py`；部署 `.env` 唯一產生點為 `deploy/render-env.sh`。 (affirmed 2026-11-05)
+
+- **ALWAYS** 在異動 `backend/database.py` schema 補丁、`deploy/nginx.conf`、任一 `.env.example` 或 `render-env.sh` 時同步更新 `LOCAL-DEV.md`。 (affirmed 2026-11-05)
+
+- **ALWAYS** 在任何 high-risk action（production write、**IaC apply**、IAM 變更）前先給 plan＋impact＋rollback，並通過 human approval gate。 (affirmed 2026-11-05)
+
+- **ALWAYS** 對每一項變更檢查 ADR-0006 security baseline 四面向（IAM、encryption、network exposure、audit logging）。 (affirmed 2026-11-05)
+
+- **ALWAYS** 在每個 intent 的 construction 執行 `tcms-test-cases`（含覆蓋盤點、手動／自動化、突變驗證、`/tcms-verify`）——blocking。 (affirmed 2026-11-05)
+
+- **ALWAYS** 對 ADR-0006 點名的 **IaC generator** 核心模組納入 property-based testing（不得只有 example-based）。模組尚未存在時為 N/A；落地即 blocking（`project.md ## Testing Posture`）。 (affirmed 2026-11-05)
+
+- **ALWAYS**（本輪 Affirm，Q5=B）本專案 IaC 柱純函式核心——**generator、scanner 與／或 redactor**——測試必須含 property-based testing（Hypothesis），不得只有 example-based；落點於 `backend/iac/` 領域套件的純函式層（對齊 C1 `backend/cost/` 形狀）。此條擴大 ADR-0006 對 generator 的既有約束，將 scanner／redactor 升格為同級 PBT 核心；後續宜開 ADR 追認。 (affirmed 2026-11-05)
+
+- **ALWAYS**（本輪 Affirm，Q2=A）D1／D2／D3 **任一**故事的第一個 HTTP 消費者落地時，即使 `role_permissions` seed 未改，仍須 allow／deny 雙向 TestClient：有權 → 2xx，無權 → 403（不得只測 happy path）。 (affirmed 2026-11-05)
+
+- **ALWAYS**（本輪 Affirm，Q4=A）D3 Secret 處理落地時，必須有負向測試＋redaction 突變驗證：注入明文樣式後，回應／log／artifact 不得出現該明文；拿掉遮罩後測試應紅、還原後應綠。contract 掃描作用域擴大不阻塞本條。 (affirmed 2026-11-05)
+
+- **ALWAYS**（本輪 Affirm，Q6=A）每個 D 故事先交付可離線斷言的決定性核心（generator／scanner 報告形狀／redactor），再接 LLM 編排；D1／D2／D3 agents 一律走 `langgraph_runtime`＋OpenRouter，禁止再增 Claude-SDK-only／Anthropic-only 路徑。 (affirmed 2026-11-05)
+
+- **ALWAYS** 新模組／新業務邏輯採三層形狀，純運算下沉到不讀 DB 的函式；不得在 `user_router.py`／`collab_router.py` 之外新建「router 直寫商業邏輯」模組；D 柱實作為 `backend/iac/` 領域套件（Q5=B）。 (affirmed 2026-11-05)
+
+- **ALWAYS** 授權矩陣變更需 allow／deny 雙向測試；新增／修改 HTTP 端點需 TestClient；前端資料形狀變更需 Playwright e2e（`team.md` A／B／C）。 (affirmed 2026-11-05)
+
+- **ALWAYS** 文件語言為繁體中文（ADR-0009）；使用者未明確要求時不得自動寫 `decisions-log.md`。 (affirmed 2026-11-05)
+
+- **ALWAYS** 權限種子或權限頁欄名可先於產品面存在時，codekb／設計必須標明「矩陣領先實作」，不得把 D1／D2／D3 種子或 Coming Soon stub 當成已有 router／頁／表／掃描能力（`project.md` Corrections `reverse-engineering:c9`）。 (affirmed 2026-11-05)
+
 ## Corrections
 
 <!-- Project-specific corrections from human feedback. -->
@@ -260,3 +310,4 @@
 - Q11 定案為 B（空殼要能正確回「尚未提供」）而非 C（實作最小成本能力）。取捨是：保住「成本關注者」這個角色在第一版有可驗證的行為（路由正確、回覆明確），同時不把成本資料來源這個獨立子系統拉進本 intent——而本 intent 已因 Q5=B 承擔了新資料模型。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:intent-capture:63b0f3e4722dfa83d4d96a3b9978ce3e04f1ce5b2f2f2b3942def064da62f5f9 -->
 - 提問時把某題的選項順序重排（為了讓建議項排前面），寫回問題檔時卻依**位置**而非依**內容**對應，把 F11 使用者實選的 A 誤記為 C。此即 `requirements-analysis:260822-ra-c2` 警告的形狀，但該規則談的是「選項數超過上限時先收斂」，未涵蓋「順序重排後的回寫對應」。已在問題檔就地記錄更正與原因。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:feasibility:7e354cfdf52d22ea0f79d38813303a79ef9c6307e99264d0830292629f092965 -->
 - 抽象的衝突清單不足以讓人察覺答案讀反；**具體呈現「照此執行下一步會產出什麼」才有效**。本站先以矛盾偵測列出 S9 結果與 [Q1]／[Q3]／[Q5] 的三處衝突並明示「方向可能讀反」，使用者回覆「沒反，就是這樣」；直到 S10 把後果具體化為「兩項 Must 各自依賴一項 Should，故 Must 集合無法獨立交付」，使用者才主動更正為 8 Must／2 Should。下次遇到「答案與多處上游定案衝突且疑似讀反」時，直接推導到下一步的具體產出，不要停在衝突清單。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:scope-definition:5016d9d84951a6438e6965d693e3350ff564d4439eeeb17f37daee3162571973 -->
+- Story D 若含 D1／D2／D3 三個功能，各對應一個 agent（非單一 agent 包辦三者）；後續 requirements／設計須以此為預設拆分。 (learned 2026-11-05) <!-- cid:261105-d-iac-generation:market-research:f4aeb99b0395bfca8b64460a0eb9aebc8403a44880fcc058d0e8235716161b59 -->

@@ -23,3 +23,6 @@ hypothesis
 openpyxl==3.1.5
 PyYAML>=6.0
 boto3
+# D2 shells out to this CLI. Pin the image and the local venv to the same
+# release. This is not a CI scan job; missing the binary fails D2 only.
+checkov==3.4.3

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
+import { IAC_GROUP_LABEL, IAC_NAV_ITEMS } from '../iac/iacNav';
 import { useLayoutNav } from './NavChromeContext';
 
 export const Sidebar: React.FC = () => {
@@ -17,6 +18,8 @@ export const Sidebar: React.FC = () => {
   const showArchWorkspace = canArch('view');
   const showAssessment = can('A3', 'view');
   const showCost = can('C1', 'view');
+  const iacItems = IAC_NAV_ITEMS.filter((item) => can(item.storyId, 'view'));
+  const showIac = iacItems.length > 0;
   const showUsersAdmin = can('J3a', 'view');
   const showMatrixAdmin = can('J3b', 'view');
   const showCoreSection = showArchWorkspace || showAssessment;
@@ -25,6 +28,7 @@ export const Sidebar: React.FC = () => {
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
   const [costOpen, setCostOpen] = useState(true);
+  const [iacOpen, setIacOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -206,8 +210,49 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
+        {showIac && (
+          <div className="mt-4 mb-2">
+            <button
+              type="button"
+              className={groupHeaderClass}
+              onClick={() => setIacOpen((open) => !open)}
+              aria-expanded={iacOpen}
+              data-testid="nav-iac"
+            >
+              <span>{IAC_GROUP_LABEL}</span>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${iacOpen ? 'rotate-90' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+            {iacOpen && (
+              <nav className="space-y-1 px-2 mt-1" aria-label={IAC_GROUP_LABEL}>
+                {iacItems.map((item) => (
+                  <NavLink
+                    key={item.storyId}
+                    to={item.path}
+                    className={linkClass}
+                    data-testid={`nav-iac-${item.step}`}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            )}
+          </div>
+        )}
+
         {showAdminSection && (
-          <div className={showCoreSection || showCost ? 'mt-4' : ''}>
+          <div className={showCoreSection || showCost || showIac ? 'mt-4' : ''}>
             <button
               type="button"
               className={groupHeaderClass}
@@ -275,7 +320,7 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {!showCoreSection && !showAdminSection && (
+        {!showCoreSection && !showCost && !showIac && !showAdminSection && (
           <p className="px-4 text-xs text-gray-400 leading-relaxed">
             目前角色尚未開放任何功能選單，請聯絡管理員調整權限。
           </p>

@@ -1,0 +1,20 @@
+{
+  "stage": "code-generation",
+  "unit": "u2-iac-ui",
+  "version": 1,
+  "writes": [
+    { "path": "frontend/src/App.tsx" },
+    { "path": "frontend/src/components/Sidebar.tsx" },
+    { "path": "frontend/src/pages/WorkspacePage.tsx" },
+    { "path": "frontend/src/pages/IacPage.tsx" },
+    { "path": "frontend/src/iac/iacNav.ts" },
+    { "path": "frontend/src/components/iac/IacEntryControl.tsx" },
+    { "path": "frontend/src/components/iac/IacWorkspace.tsx" },
+    { "path": "frontend/src/components/iac/IacDownloadConfirm.tsx" },
+    { "path": "frontend/src/iac/iacTypes.ts" },
+    { "path": "frontend/src/iac/iacApi.ts" },
+    { "path": "frontend/src/iac/mapIacErrorCode.ts" },
+    { "path": "frontend/src/iac/diagramUpload.ts" },
+    { "path": "frontend/tests/e2e/iac-workspace.spec.ts" }
+  ]
+}

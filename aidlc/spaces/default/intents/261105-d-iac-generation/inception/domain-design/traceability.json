@@ -1,0 +1,30 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "US1.1", "US1.2", "US1.3", "US1.4",
+    "US2.1", "US2.2", "US2.3",
+    "US3.1", "US3.2",
+    "US4.1", "US4.2",
+    "US5.1", "US5.2",
+    "US6.1", "US6.2",
+    "US7.1"
+  ],
+  "coverage": [
+    { "id": "US1.1", "status": "OK", "target": "IacWorkspaceUi, IacWorkspaceSession" },
+    { "id": "US1.2", "status": "OK", "target": "IacWorkspaceUi, IacWorkspaceSession" },
+    { "id": "US1.3", "status": "OK", "target": "IacWorkspaceSession, IacWorkspaceUi" },
+    { "id": "US1.4", "status": "OK", "target": "IacWorkspaceUi, IacWorkspaceSession" },
+    { "id": "US2.1", "status": "OK", "target": "IacModuleGenerator, IacWorkspaceSession, IacWorkspaceUi" },
+    { "id": "US2.2", "status": "OK", "target": "IacModuleGenerator" },
+    { "id": "US2.3", "status": "OK", "target": "IacWorkspaceSession, IacModuleGenerator, IacWorkspaceUi" },
+    { "id": "US3.1", "status": "OK", "target": "IacStaticScanner, IacWorkspaceSession, IacWorkspaceUi" },
+    { "id": "US3.2", "status": "OK", "target": "IacWorkspaceUi, IacScanReport" },
+    { "id": "US4.1", "status": "OK", "target": "IacWorkspaceSession, IacSecretRedactor" },
+    { "id": "US4.2", "status": "OK", "target": "IacWorkspaceUi, IacWorkspaceSession" },
+    { "id": "US5.1", "status": "OK", "target": "IacWorkspaceSession, IacWorkspaceUi, IacDraft" },
+    { "id": "US5.2", "status": "OK", "target": "IacSecretRedactor, IacWorkspaceSession, IacRewriteResult" },
+    { "id": "US6.1", "status": "OK", "target": "IacWorkspaceSession" },
+    { "id": "US6.2", "status": "OK", "target": "IacWorkspaceUi, IacWorkspaceSession, IacModuleGenerator, IacStaticScanner, IacSecretRedactor" },
+    { "id": "US7.1", "status": "Deferred", "target": "future-intent" }
+  ]
+}
