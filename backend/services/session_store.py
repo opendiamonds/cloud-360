@@ -146,6 +146,12 @@ HISTORY_MAX_ENV = "BRAIN_SESSION_HISTORY_MAX"
 #: 新環境變數，而把產品面的輸入長度限制偷偷變成運維設定會讓它更難被看見。
 DEFAULT_MESSAGE_MAX_CHARS = 4000
 
+#: 合併前必修第 34 列 (a)（2026-10-31 裁決）：`role` 的上限 32 字元。`role` 原本只檢查
+#: 非空，而每段 200 KB 上限的前提算式只計入 `text`——超長 `role` 是那個上限的旁路
+#: （審查實測 300,000 字元的 `role` 被接受、段達 300,086 B）。合法值是 `user`／
+#: `assistant` 這類短識別字，32 字元遠大於任何合法值。以字元計。
+SESSION_ROLE_MAX_CHARS = 32
+
 #: 單則訊息序列化後每個字元**最多**佔的位元組數。UTF-8 一個碼點最多 4 位元組，
 #: 但 cjson 對控制字元與 `0x7f` 輸出 `\u00XX`（6 位元組），故取 6。
 MAX_ENCODED_BYTES_PER_CHAR = 6
@@ -308,6 +314,11 @@ class SessionStore:
         require_segment_id(segment_id)
         if not role:
             raise ValueError("role 不得為空（SessionMessage.role required）")
+        if len(role) > SESSION_ROLE_MAX_CHARS:
+            # 拒絕而非截斷（同 `text` 的處置）；例外只帶長度，不帶被拒的值。
+            raise ValueError(
+                f"role 超過 {SESSION_ROLE_MAX_CHARS} 字元（實際 {len(role)}）"
+            )
         if text is None:
             raise ValueError("text 不得為 None（SessionMessage.text required）")
         if len(text) > self._message_max_chars:
@@ -616,9 +627,12 @@ class SessionStore:
         方法是 `set_work_target`（它有 `principal`），而 `append_message`／
         `set_sharing_mode`／`touch` 都沒有。`entities.md` 宣告 `userId`
         `required: true`，但契約**沒有給它寫入端**。這個缺口如實記在
-        `code-summary.md`，處置是：`set_work_target` 會把它補上，而
+        `code-summary.md`。**目前沒有任何方法會補上它**——`set_work_target` 雖然
+        帶 `principal`，也**不寫** `userId`（合併前必修第 34 列 (h) 更正：先前此處
+        寫「`set_work_target` 會把它補上」不實）；本模組改寫 `meta` 時只把它原樣
+        帶過（`_write_meta_and_expire`），沒有任何寫入端會給它非 `null` 的值。
         `sessionKey` 本身就是由使用者 id 推導的（`x-session-key-derivation`），
-        故讀取端在它為 `null` 時仍可自行解析。**不自行從任何地方猜它。**
+        需要身分的呼叫端應自行由它解析。**不自行從任何地方猜它。**
 
         **建立與 TTL 同一個交易**（`merge-blockers.md` 第 12 項，裁決 MULTI／EXEC）：
         原本是兩次獨立 `HSET`、TTL 要等呼叫端下一個指令才設；兩者之間行程中止就

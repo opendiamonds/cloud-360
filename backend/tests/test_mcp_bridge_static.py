@@ -157,7 +157,9 @@ class DependencyRouteTest(unittest.TestCase):  # NFR21.37、NFR21.38
     def test_route_a_single_exact_pin(self):
         self.assertEqual(MCP_ROUTE, "same-interpreter")
         lines = self.non_comment_lines(BACKEND_DIR / "requirements.txt")
-        mcp_lines = [l for l in lines if re.match(r"^mcp\b", l)]
+        # 只取 `mcp` 這個套件本身的行：`\b` 會把 `mcp-types`（合併前必修第 38 列 (a) 起與
+        # `sse-starlette` 一併精確釘選的傳遞依賴）也算進來，而本案驗的是「mcp 只釘一行」。
+        mcp_lines = [l for l in lines if re.match(r"^mcp(?![-\w])", l)]
         self.assertEqual(mcp_lines, [f"mcp=={PINNED_MCP_VERSION}"])
         self.assertIn("fastapi==0.111.0", lines)
         self.assertIn("pydantic==2.13.4", lines)

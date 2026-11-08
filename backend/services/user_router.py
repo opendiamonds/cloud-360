@@ -4,6 +4,7 @@ user_router — 登入／註冊／使用者角色／角色權限矩陣／J5 授�
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Union
 
@@ -26,8 +27,6 @@ from models import (
     ArchitectureReview,
     DiagramChangeRecord,
     EstimateAuditEvent,
-    MemoryAuditEvent,
-    MemoryRecord,
     Project,
     ProjectMember,
     ReselectionEvent,
@@ -48,6 +47,9 @@ from services.activity import as_aware_utc, is_overdue, record_activity
 from services.membership_errors import LastAdminGuard
 from services.membership_facade import MembershipFacade, guard_report, mint_principal
 from services.membership_types import LastAdminGuardReport, ReselectionFailureReport
+# 合併前必修第 33 列 (a)：記憶表的筆數經 `MemoryFacade`（記憶表的唯一入口）取得，
+# 本檔不 import 記憶的 ORM model。
+from services.memory_facade import MemoryFacade
 from services.rbac import (
     CANONICAL_ROLES,
     STORY_IDS,
@@ -352,6 +354,11 @@ class DeleteUserConflict(BaseModel):
     blocking_references: List[DeleteUserBlockingReference] = Field(default_factory=list)
 
 
+# 合併前必修第 28 列 (c)：409 的下一步提示。稽核類紀錄刻意不刪，故刪除被擋下的帳號
+# 的正確處置是**維持停用**，而不是去清資料。
+_DELETE_BLOCKED_NEXT_STEP = "稽核類紀錄不會刪除，請維持停用帳號即可（停用後無法登入）。"
+
+
 class _UserDeleteBlocked(Exception):
     """`_hard_delete_user` 拒絕刪除；兩個呼叫端點轉成 409 的 `JSONResponse`。"""
 
@@ -464,6 +471,8 @@ def _blocking_user_references(
         if purge_project_ids
         else []
     )
+    # 記憶兩類的筆數經 facade 取得（合併前必修第 33 列 (a)），其餘為 ORM 查詢。
+    memory_counts = MemoryFacade(db).count_references_to_user(user_id=uid)
     checks = [
         (
             "owned_projects",
@@ -509,12 +518,12 @@ def _blocking_user_references(
         (
             "memory_records",
             "記憶",
-            db.query(MemoryRecord).filter(MemoryRecord.owner_user_id == uid),
+            memory_counts.records,
         ),
         (
             "memory_audit_events",
             "記憶稽核紀錄（操作者）",
-            db.query(MemoryAuditEvent).filter(MemoryAuditEvent.actor_user_id == uid),
+            memory_counts.audit_events_as_actor,
         ),
         (
             "diagram_change_records",
@@ -541,7 +550,7 @@ def _blocking_user_references(
     ]
     blocking: List[DeleteUserBlockingReference] = []
     for category, label, query in checks:
-        count = query.count()
+        count = query if isinstance(query, int) else query.count()
         if count:
             blocking.append(
                 DeleteUserBlockingReference(category=category, label=label, count=count)
@@ -549,37 +558,64 @@ def _blocking_user_references(
     return blocking
 
 
-def _purge_empty_default_projects(db: Session, project_ids: List[int]) -> None:
-    """OQ-H1 規則 1 的清除（與刪除使用者同一交易）。
+@dataclass(frozen=True)
+class _UserPurgeSummary:
+    """規則 1 在同一交易內清除的筆數（合併前必修第 27 列：寫進稽核訊息）。
+
+    刪除使用者是不可復原的動作；只寫「刪了哪個帳號」會讓連帶清除的專案、系統與
+    需求欄位值在稽核上沒有痕跡（ADR-0006 audit logging）。
+    """
+
+    projects: int = 0
+    systems: int = 0
+    requirement_fields: int = 0
+
+    def audit_text(self) -> str:
+        return (
+            f"連帶清除空預設專案 {self.projects} 筆、系統 {self.systems} 筆、"
+            f"需求欄位值 {self.requirement_fields} 筆"
+        )
+
+
+def _purge_empty_default_projects(db: Session, project_ids: List[int]) -> _UserPurgeSummary:
+    """OQ-H1 規則 1 的清除（與刪除使用者同一交易）。回傳實際刪除的筆數。
 
     子列以明確刪除處理，而非只依賴資料庫的 `ON DELETE CASCADE`：
     `project_members`／`system_requirement_fields` 的 CASCADE 在 PostgreSQL 生效，
     但 bulk `query.delete()` 不走 ORM cascade，而 SQLite 未開外鍵時也不會連帶刪除。
-    明確刪除讓兩種方言結果一致。
+    明確刪除讓兩種方言結果一致，也讓回傳的筆數就是實際刪除數（不含 CASCADE 的
+    隱性刪除）。
     """
     if not project_ids:
-        return
+        return _UserPurgeSummary()
     system_ids = [
         sid
         for (sid,) in db.query(System.id).filter(System.project_id.in_(project_ids)).all()
     ]
+    fields = 0
     if system_ids:
-        db.query(SystemRequirementField).filter(
+        fields = db.query(SystemRequirementField).filter(
             SystemRequirementField.system_id.in_(system_ids)
         ).delete(synchronize_session=False)
-    db.query(System).filter(System.project_id.in_(project_ids)).delete(
+    systems = db.query(System).filter(System.project_id.in_(project_ids)).delete(
         synchronize_session=False
     )
     db.query(ProjectMember).filter(ProjectMember.project_id.in_(project_ids)).delete(
         synchronize_session=False
     )
-    db.query(Project).filter(Project.id.in_(project_ids)).delete(
+    projects = db.query(Project).filter(Project.id.in_(project_ids)).delete(
         synchronize_session=False
+    )
+    return _UserPurgeSummary(
+        projects=int(projects), systems=int(systems), requirement_fields=int(fields)
     )
 
 
-def _hard_delete_user(db: Session, user: User) -> None:
+def _hard_delete_user(db: Session, user: User) -> _UserPurgeSummary:
     """硬刪除使用者。被拒時 raise `_UserDeleteBlocked`（409）或既有的 403。
+
+    成功時回傳規則 1 連帶清除的筆數（`_UserPurgeSummary`），由兩個呼叫端點寫進
+    稽核訊息（合併前必修第 27 列）。
 
     OQ-H1 裁決（2026-10-20，合併前必修第 3 項）：空的預設專案一併清掉，其餘改回
     409，**不回 500**：
@@ -588,6 +624,16 @@ def _hard_delete_user(db: Session, user: User) -> None:
       3. 規則 3：commit 時仍拋 `IntegrityError`（預檢漏列的新外鍵）→ rollback、
          記 log、回通用 409；
       4. 既有「仍擁有架構圖 → 403」維持不變。
+
+    **預檢到 commit 之間無鎖（已知競態，合併前必修第 28 列 (d)）**：
+    `_empty_default_project_ids` 與 `_blocking_user_references` 是普通 SELECT，
+    不取列鎖。預檢之後、commit 之前若另一個交易（例如有人把該使用者邀進專案、
+    或在其空預設專案建了圖）新增了指向他的參照，結果取決於該參照的外鍵：
+    無 `ON DELETE` 者在 commit 被資料庫拒絕 → 落到規則 3 的通用 409（不會 500、
+    不會刪錯）；有 `ON DELETE CASCADE` 者會被一併刪除而不出現在 409 清單。
+    兩個入口的目標帳號都無法自己製造參照（`DELETE /{user_id}` 要求先停用；
+    拒絕申請的目標是尚未核准、無任何權限的帳號），能製造參照的只有其他使用者，
+    且窗口只有一次請求的長度，故不另取鎖；此取捨記於 `DEPLOY.md` 刪除使用者小節。
     """
     uid = user.id
     db.query(UserDiagramChat).filter(UserDiagramChat.user_id == uid).delete(
@@ -608,7 +654,10 @@ def _hard_delete_user(db: Session, user: User) -> None:
         summary = "、".join(f"{ref.label} {ref.count} 筆" for ref in blocking)
         raise _UserDeleteBlocked(
             DeleteUserConflict(
-                detail=f"無法刪除：仍有資料指向此使用者——{summary}",
+                detail=(
+                    f"無法刪除：仍有資料指向此使用者——{summary}。"
+                    f"{_DELETE_BLOCKED_NEXT_STEP}"
+                ),
                 blocking_references=blocking,
             )
         )
@@ -616,7 +665,7 @@ def _hard_delete_user(db: Session, user: User) -> None:
     db.query(RoleAuthorizationRequest).filter(
         RoleAuthorizationRequest.user_id == uid
     ).delete(synchronize_session=False)
-    _purge_empty_default_projects(db, purge_project_ids)
+    purge_summary = _purge_empty_default_projects(db, purge_project_ids)
     db.delete(user)
     try:
         db.commit()
@@ -635,6 +684,7 @@ def _hard_delete_user(db: Session, user: User) -> None:
                 blocking_references=[],
             )
         ) from exc
+    return purge_summary
 
 
 @router.get("/roles/catalog")
@@ -984,7 +1034,7 @@ def reject_authorization_request(
     req.decided_at = datetime.now(timezone.utc)
     db.flush()
     try:
-        _hard_delete_user(db, target)
+        purge_summary = _hard_delete_user(db, target)
     except _UserDeleteBlocked as exc:
         # 已 rollback：申請維持 pending，帳號不動。
         return _delete_blocked_response(exc)
@@ -992,7 +1042,8 @@ def reject_authorization_request(
     _audit_append(
         "Authorization Request Rejected",
         f"拒絕並刪除 {username}（申請 {requested_role}）",
-        f"管理員 {admin_user.username} 拒絕申請 #{request_id} 並刪除帳號。",
+        f"管理員 {admin_user.username} 拒絕申請 #{request_id} 並刪除帳號；"
+        f"{purge_summary.audit_text()}。",
         admin_user.username,
     )
     return {"ok": True, "deleted_username": username}
@@ -1200,13 +1251,14 @@ def delete_user(
 
     username = target_user.username
     try:
-        _hard_delete_user(db, target_user)
+        purge_summary = _hard_delete_user(db, target_user)
     except _UserDeleteBlocked as exc:
         return _delete_blocked_response(exc)
     _audit_append(
         "User Deleted",
         f"刪除使用者 {username}",
-        f"管理員 {admin_user.username} 已刪除帳號 {username}。",
+        f"管理員 {admin_user.username} 已刪除帳號 {username}；"
+        f"{purge_summary.audit_text()}。",
         admin_user.username,
     )
     return {"ok": True, "deleted_username": username}

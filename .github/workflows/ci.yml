@@ -325,8 +325,8 @@ jobs:
     # （契約 K-05 的 why_not_existing_tests 逐字）。故記憶 schema 的驗證只能在
     # 真實 PostgreSQL 上做，而這個 job 就是那個載體。
     #
-    # **這個 job 的 id 與 name 現在都比它的內容窄**：U18 project-meta-data 的 12 條
-    # 斷言（P1-P16）也跑在這裡，因為它需要的前置條件（真實 PostgreSQL ＋ 已套用兩次
+    # **這個 job 的 id 與 name 現在都比它的內容窄**：project-meta-data 的 17 條
+    # 斷言（P1-P17）也跑在這裡，因為它需要的前置條件（真實 PostgreSQL ＋ 已套用兩次
     # 的 schema_rbac.sql）與記憶 schema 完全相同，另開一個 job 等於把同一座 service
     # container 建第二次。**刻意不改 id 也不改 name**：GitHub 的 check name 取自
     # job 的 name，改它會改掉 check 名稱，而 branch protection 的必要檢查若引用舊名
@@ -380,12 +380,34 @@ jobs:
           psql -h localhost -U postgres -d cloud360 \
             -v ON_ERROR_STOP=1 -f backend/scripts/verify_memory_schema.sql
 
-      # U18 project-meta-data 的斷言（P1-P16；P13–P16 由 U20 加入）。驗的是三張表的約束、
+      # 合併前必修第 20／29 列 (b)：記憶專用角色 cloud360_memory 的資料庫層邊界。
+      # schema_rbac.sql 只建角色、不設密碼（2026-10-31 裁決「SQL 建角色，部署另設
+      # 密碼」），故先以部署用的同一支 script 設定測試密碼（值只存在於本 job），
+      # 再**以該角色本身連線**跑 verify_memory_role.sql：讀不到 public 任一表、
+      # 寫得進 memory 兩表、不能在 public 建表。以 superuser 跑會讓「讀不到」恆真，
+      # 該檔的 R0 會先擋下。uid 由擁有者帳號查出（該角色自己讀不到 users）。
+      - name: Verify the memory-only role boundary (R0-R3)
+        env:
+          PGHOST: localhost
+          PGPASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cloud360
+          MEMORY_DB_PASSWORD: ci_memory_db_password_not_for_production
+        run: |
+          set -euo pipefail
+          bash deploy/initdb/02-memory-role-password.sh
+          UID_FIXTURE="$(psql -U postgres -d cloud360 -Atc 'SELECT id FROM users ORDER BY id LIMIT 1')"
+          [ -n "${UID_FIXTURE}" ] || { echo "::error::no users row to reference" >&2; exit 1; }
+          PGPASSWORD="${MEMORY_DB_PASSWORD}" psql -U cloud360_memory -d cloud360 \
+            -v ON_ERROR_STOP=1 -v uid="${UID_FIXTURE}" -f backend/scripts/verify_memory_role.sql
+
+      # project-meta-data 的斷言（P1-P17：P1–P12 為 U18、P13／P14 為 U19 回補的 cause 欄、
+      # P15／P16 為 U20 的 updated_on_behalf_of、P17 為合併前必修第 30 列的欄位數）。驗的是三張表的約束、
       # **外鍵缺席**（reselection_events 對 projects 沒有外鍵）、partial index 與
       # CASCADE 行為——SQLite 對這四件事的語意都不同（外鍵預設關閉、ON DELETE 需
       # PRAGMA、無 partial index 的同等查詢計畫），所以在既有的 unit suite 裡
       # 「通過」不構成任何保證。
-      - name: Verify project-meta schema assertions (P1-P16)
+      - name: Verify project-meta schema assertions (P1-P17)
         env:
           PGPASSWORD: postgres
         run: |
@@ -403,10 +425,10 @@ jobs:
       # 的原因之一是 pip install 會串行地拖慢它」。這裡仍然加進來，理由是步驟 B／D
       # 驗的是 run_meta_schema_migration.py 的後條件與它經 psycopg 執行 DO 區塊的
       # 行為——那只存在於那支腳本，而它需要的前置條件（已套用 schema_rbac.sql 並
-      # 跑過 P1-P16 的真實 PostgreSQL）就在本 job；搬到 concurrency job 等於在那裡
+      # 跑過 P1-P17 的真實 PostgreSQL）就在本 job；搬到 concurrency job 等於在那裡
       # 重做一次本 job 的前半段。增量約一分鐘（setup-python 有 pip cache）。
       #
-      # 位置：P1-P16 之後（verify_meta_schema.sql 以 ROLLBACK 結尾，表是空的，
+      # 位置：P1-P17 之後（verify_meta_schema.sql 以 ROLLBACK 結尾，表是空的，
       # 步驟 A 的前置守衛依賴這一點）、R1-R10 之前（步驟 E 把 fixture 清乾淨，
       # 後面的 purge 斷言不需要知道它存在）。
       #
@@ -522,7 +544,7 @@ jobs:
       #
       # **刻意不新增 job**：這個 job 的前置條件（真實 PostgreSQL ＋ 已套用的
       # schema_rbac.sql）與本斷言完全相同，另開一個等於把同一座 service container
-      # 建第二次——與上方 P1-P16 併進來的同一個理由。
+      # 建第二次——與上方 P1-P17 併進來的同一個理由。
       #
       # **工作目錄必須是 repo 根目錄**：該檔以
       # `\i backend/scripts/purge_expired_memory.sql` 引入**生產用的那一份**清除
@@ -622,7 +644,8 @@ jobs:
       # 結構性隔離：backend job 的 `discover -s tests` 看不到 tests_pg，故這裡
       # 不需要任何 env guard，也沒有東西可以忘記設。理由全文見
       # backend/tests_pg/__init__.py 的 docstring。
-      - name: Run real-PostgreSQL concurrency tests (C1-C3)
+      # 合併前必修第 33 列 (g)：步驟名稱與 tests_pg 的實際內容一致（四支檔）。
+      - name: Run real-PostgreSQL tests (membership C1-C4, memory V1/D1-D2, purge atomicity, requirement field G1-G4)
         run: python -m unittest discover -s tests_pg -v
 
   docker-build:

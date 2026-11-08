@@ -484,6 +484,7 @@ BEGIN
      AND embedding_model = 'bge-m3'
      AND embedding IS NOT NULL
      AND kind = ANY(ARRAY['semantic', 'procedure', 'episodic']::varchar[])
+     AND (expires_at IS NULL OR expires_at > now())
    ORDER BY embedding <=> vec::vector(1024)
    LIMIT limit_n;
   -- <<< S15_SEARCH_QUERY_END

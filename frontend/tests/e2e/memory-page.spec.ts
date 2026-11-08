@@ -983,4 +983,140 @@ test.describe('U15 memory page', () => {
     await expect(page.getByTestId('memory-zone-semantic-error')).toHaveCount(0);
     await expect(page.getByTestId('memory-zone-semantic-count')).toHaveText('2 則');
   });
+
+  // -------------------------------------------------------------------------
+  // 合併前必修第 35 列（計畫 §四之三）：刪除前後的焦點落點（review-03 R-06、R-07）。
+  // 註解以 `MB35-a1`…`MB35-b` 標示，對應計畫 Step 17 的 (a1)(a2)(a3)(b)。
+  // -------------------------------------------------------------------------
+
+  /**
+   * @purpose 語意區刪除成功、焦點一直留在被刪的那一列時，刪除完成後焦點移到該區標題，不落到 body（合併前必修第 35 列 MB35-a1）。
+   * @given 已登入；語意區兩則自己的記憶
+   * @step 對第 1 則點「刪除」並點確認，期間不移動焦點 | 伺服器收到 1 個 DELETE 並回 204
+   * @step 觀察焦點 | 第 1 則消失；焦點在語意區的區標題（`h2`）上
+   * @pass 第 1 則被移除，且語意區的 `h2` 取得焦點
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 204 | 刪除自己的記憶
+   * @ui /memory | 語意記憶區的區標題、條目與刪除鍵
+   * @note 防的是「條件化之後反而從不移焦點」：被刪的列卸載後焦點會落到 body。
+   */
+  test('after a semantic delete with focus left on the row, focus moves to the zone heading', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}focus-a`),
+      memory('semantic', `${CONTENT_PREFIX}focus-b`),
+    ]);
+    await openMemoryPage(page);
+
+    await deleteViaUi(page, '1');
+    await expect(item(page, '1')).toHaveCount(0);
+    expect(stub.deletes).toEqual(['1']);
+    await expect(zone(page, 'semantic').getByRole('heading', { level: 2 })).toBeFocused();
+  });
+
+  /**
+   * @purpose 語意區 DELETE 在途時使用者把焦點移到另一區，刪除完成後焦點不被搶回語意區標題（合併前必修第 35 列 MB35-a2，review-03 R-06）。
+   * @given 已登入；語意區兩則、程序區一則自己的記憶；語意區第 1 則的 DELETE 由測試的閘門延遲
+   * @step 對語意區第 1 則確認刪除 | 伺服器收到 DELETE，尚未回應
+   * @step 把焦點移到程序區那一則的「刪除」鍵 | 焦點在程序區的刪除鍵
+   * @step 放行 DELETE | 語意區第 1 則消失；焦點仍在程序區的刪除鍵，語意區標題未取得焦點
+   * @pass 刪除完成後 `memory-item-3-delete` 仍是焦點、語意區 `h2` 不是焦點
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 204 | 被延遲的刪除
+   * @ui /memory | 語意與程序記憶區的區標題、條目與刪除鍵
+   * @note 突變「語意／程序區刪除後無條件移焦點到區標題」→ 本案紅。
+   */
+  test('a semantic delete that completes after focus moved elsewhere does not steal focus', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}sem-a`),
+      memory('semantic', `${CONTENT_PREFIX}sem-b`),
+      memory('procedure', `${CONTENT_PREFIX}proc-a`),
+    ]);
+    const hold = gate();
+    stub.deleteHook = () => hold.wait;
+    await openMemoryPage(page);
+
+    await deleteViaUi(page, '1');
+    await expect.poll(() => stub.deletes).toEqual(['1']);
+    const elsewhere = page.getByTestId('memory-item-3-delete');
+    await elsewhere.focus();
+    await expect(elsewhere).toBeFocused();
+
+    hold.open();
+    await expect(item(page, '1')).toHaveCount(0);
+    await expect(elsewhere).toBeFocused();
+    await expect(zone(page, 'semantic').getByRole('heading', { level: 2 })).not.toBeFocused();
+  });
+
+  /**
+   * @purpose 程序區 DELETE 在途時使用者把焦點移到另一區，刪除完成後焦點不被搶回程序區標題（合併前必修第 35 列 MB35-a3，review-03 R-06）。
+   * @given 已登入；語意區一則、程序區兩則自己的記憶；程序區第 2 則的 DELETE 由測試的閘門延遲
+   * @step 對程序區第 2 則確認刪除 | 伺服器收到 DELETE，尚未回應
+   * @step 把焦點移到語意區那一則的「刪除」鍵 | 焦點在語意區的刪除鍵
+   * @step 放行 DELETE | 程序區第 2 則消失；焦點仍在語意區的刪除鍵，程序區標題未取得焦點
+   * @pass 刪除完成後 `memory-item-1-delete` 仍是焦點、程序區 `h2` 不是焦點
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 204 | 被延遲的刪除
+   * @ui /memory | 語意與程序記憶區的區標題、條目與刪除鍵
+   * @note 突變「語意／程序區刪除後無條件移焦點到區標題」→ 本案紅。
+   */
+  test('a procedural delete that completes after focus moved elsewhere does not steal focus', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}sem-a`),
+      memory('procedure', `${CONTENT_PREFIX}proc-a`),
+      memory('procedure', `${CONTENT_PREFIX}proc-b`),
+    ]);
+    const hold = gate();
+    stub.deleteHook = () => hold.wait;
+    await openMemoryPage(page);
+
+    await deleteViaUi(page, '2');
+    await expect.poll(() => stub.deletes).toEqual(['2']);
+    const elsewhere = page.getByTestId('memory-item-1-delete');
+    await elsewhere.focus();
+    await expect(elsewhere).toBeFocused();
+
+    hold.open();
+    await expect(item(page, '2')).toHaveCount(0);
+    await expect(elsewhere).toBeFocused();
+    await expect(zone(page, 'procedural').getByRole('heading', { level: 2 })).not.toBeFocused();
+  });
+
+  /**
+   * @purpose 按下確認後、DELETE 完成前，焦點停在被刪的那一列上，而不是落到 body（合併前必修第 35 列 MB35-b，review-03 R-07）。
+   * @given 已登入；語意區兩則自己的記憶；第 1 則的 DELETE 由測試的閘門延遲
+   * @step 對第 1 則點「刪除」並點確認 | 確認列收起、刪除鍵停用，伺服器收到 DELETE 尚未回應
+   * @step 讀取目前焦點 | 焦點不是 body，且在第 1 則的列（`memory-item-1`）之內
+   * @step 放行 DELETE | 第 1 則消失；焦點移到語意區標題
+   * @pass 刪除進行中焦點在 `memory-item-1` 內；完成後語意區 `h2` 取得焦點
+   * @story US4.2
+   * @api DELETE /api/memory/records/{memory_id} -> 204 | 被延遲的刪除
+   * @ui /memory | 語意記憶區的條目、就地確認列與區標題
+   * @note 突變「拿掉 deleting 期間的列焦點」→ 第二步焦點為 body，本案紅。
+   */
+  test('while a delete is in flight, focus stays on the deleting row instead of the body', async ({ page }) => {
+    const stub = await setup(page, [
+      memory('semantic', `${CONTENT_PREFIX}inflight-a`),
+      memory('semantic', `${CONTENT_PREFIX}inflight-b`),
+    ]);
+    const hold = gate();
+    stub.deleteHook = () => hold.wait;
+    await openMemoryPage(page);
+
+    await deleteViaUi(page, '1');
+    await expect.poll(() => stub.deletes).toEqual(['1']);
+    await expect(page.getByTestId('memory-item-1-delete')).toBeDisabled();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const active = document.activeElement;
+          if (!active || active === document.body) return 'body';
+          return active.closest('li')?.getAttribute('data-testid') ?? 'outside-row';
+        })
+      )
+      .toBe('memory-item-1');
+
+    hold.open();
+    await expect(item(page, '1')).toHaveCount(0);
+    await expect(zone(page, 'semantic').getByRole('heading', { level: 2 })).toBeFocused();
+  });
 });

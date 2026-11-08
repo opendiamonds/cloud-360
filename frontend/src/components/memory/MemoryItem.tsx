@@ -74,6 +74,19 @@ export const MemoryItem: React.FC<MemoryItemProps> = ({
     }
   }, [itemState]);
 
+  // 合併前必修第 35 列 (b)：按下確認後確認列卸載、刪除入口 `disabled`，焦點原本會落到
+  // body。進入 `deleting` 時讓本列 `li` 暫接焦點（`tabIndex={-1}`，見下方 JSX）。只在焦點
+  // 已遺失或仍在本列之內時才移，不搶使用者已移到別處的焦點。成功後由區塊依焦點仍在本列
+  // 而移到區標題；失敗時由上方 effect 經 `restoreFocusToEntry` 還給刪除入口。
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (itemState !== 'deleting') return;
+    const row = rowRef.current;
+    if (!row) return;
+    const active = document.activeElement;
+    if (!active || active === document.body || row.contains(active)) row.focus();
+  }, [itemState]);
+
   const id = record.memory_id;
   const summary = summarize(record.content);
 
@@ -103,8 +116,10 @@ export const MemoryItem: React.FC<MemoryItemProps> = ({
 
   return (
     <li
+      ref={rowRef}
       data-testid={`memory-item-${id}`}
       aria-disabled={isDeleting || undefined}
+      tabIndex={isDeleting ? -1 : undefined}
       className={`rounded-lg border border-gray-200 bg-white px-4 py-3 ${isDeleting ? 'opacity-50' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">

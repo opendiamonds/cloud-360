@@ -194,6 +194,37 @@ class MethodAndPathTest(GuardTestBase):
         self.assertEqual([r.fields["reason"] for r in self.collector.events("request_rejected")],
                          ["method_not_allowed", "method_not_allowed"])
 
+    async def test_get_is_405_when_gate_saturated(self):
+        """合併前必修第 38 列 (c)（review-03／review-04 R-14）：閘門占滿時 GET 仍得 405。
+
+        @purpose `MethodGuard` 必須排在並行閘門之外：方法不對的請求不佔名額，也不會因為
+                 名額用盡而被誤回 503。上一案在閘門空著時送 GET，`MethodGuard` 移進閘門內
+                 也一樣回 405、名額歸零，抓不到排列順序被改。
+        @given   `max_concurrency=1`，內層扣住請求；先以一個 POST `/mcp` 把唯一名額占滿。
+        @step    名額占滿後送 `GET /mcp`（`Accept: text/event-stream`）與 `DELETE /mcp`；
+                 之後放行被扣住的 POST，再送一次 POST。
+        @pass    GET 與 DELETE 皆 405、`Allow: POST`；`request_rejected` 只有兩筆
+                 `method_not_allowed`、沒有 `over_concurrency`；占滿期間 `in_flight` 維持 1、
+                 內層只被呼叫 1 次；放行後先前的 POST 為 200、新 POST 為 200、名額歸零。
+                 突變（`MethodGuard` 移到閘門之內）時 GET 得 503，本案紅。
+        @story   US11.4
+        """
+        inner = FakeInner(hold=True)
+        guarded, client = self.make(inner, max_concurrency=1)
+        held = asyncio.create_task(client.post("/mcp", content=b"{}", headers=JSON_HDR))
+        await self.wait_in_flight(guarded, 1)
+        get = await client.get("/mcp", headers={"accept": "text/event-stream"})
+        self.assertEqual((get.status_code, get.headers.get("allow")), (405, "POST"))
+        delete = await client.delete("/mcp")
+        self.assertEqual((delete.status_code, delete.headers.get("allow")), (405, "POST"))
+        self.assertEqual((inner.calls, guarded.gate.in_flight), (1, 1))
+        self.assertEqual([r.fields["reason"] for r in self.collector.events("request_rejected")],
+                         ["method_not_allowed", "method_not_allowed"])
+        inner.release.set()
+        self.assertEqual((await held).status_code, 200)
+        self.assertEqual((await client.post("/mcp", content=b"{}", headers=JSON_HDR)).status_code, 200)
+        self.assertEqual(guarded.gate.in_flight, 0)
+
     async def test_mcp_subpaths_are_404_and_never_reach_inner(self):
         inner = FakeInner()
         _, client = self.make(inner)

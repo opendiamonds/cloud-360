@@ -107,8 +107,17 @@ class MembershipFacade:
         `HTTPException`，而本層的拒絕必須是 `MembershipForbidden`（`BR1.5`），
         且同進程呼叫端根本沒有 dependency 鏈。評估的謂詞與它完全相同
         （`user_can`），權限矩陣只有一份。
+
+        **待核准帳號一律拒絕**（合併前必修第 31 列 (f)）：`require_story_action`
+        以 `user_can(..., authorization_status=...)` 擋下待核准帳號，而本層原本呼叫
+        `user_can` 時不帶該參數（預設視為已核准）——同進程呼叫端（大腦閘道）因此能以
+        待核准帳號的 principal 通過全域層。判定沿用 `Principal.is_approved`
+        （`mint_principal` 以 `user_is_approved` 填入），與 `HierarchyFacade._authorize`
+        同一個來源。
         """
-        if not user_can(self._db, principal.role, STORY_ID, action):
+        if not principal.is_approved or not user_can(
+            self._db, principal.role, STORY_ID, action
+        ):
             membership_service.log_denied(
                 action=action,
                 project_id=project_id,
@@ -374,6 +383,15 @@ class MembershipFacade:
                 raise MembershipNotFound(
                     f"使用者 {user_id} 不是專案 {project_id} 的成員"
                 )
+            if (
+                target_role == ProjectRole.PROJECT_ADMIN.value
+                and previous_role != ProjectRole.PROJECT_ADMIN.value
+            ):
+                # 合併前必修第 31 列 (e)：升任管理者套與改選相同的合格判定
+                # （停用、待核准、無 `K3.edit` 者升了也執行不了任何管理動作）。
+                membership_service.assert_can_be_promoted_to_admin(
+                    self._db, user_id=user_id
+                )
             membership_service.assert_still_has_admin(
                 self._db,
                 project_id=project_id,
@@ -549,6 +567,24 @@ class MembershipFacade:
             raise MembershipNotFound(PROJECT_NOT_FOUND_DETAIL)
         return hierarchy.list_systems_unscoped(principal, project_id=project_id)
 
+    def project_admin_check(self, principal: Principal) -> Callable[[int], bool]:
+        """`HierarchyFacade.delete_project`／`delete_system` 的 per-project 管理者判定（注入用）。
+
+        合併前必修第 25 列：刪除專案與系統原本只認 `projects.owner_user_id`，而建立者
+        可被降為一般成員（`change_role` 不排除擁有者）。判定定義在
+        `membership_service.can_administer_project`；回傳閉包讓 `HierarchyFacade`
+        照舊不 import 成員關係符號（`BR87.3`）。每次判定一到三條 SQL，只在刪除路徑
+        呼叫一次，不做批次暫存。
+        """
+        user_id = principal.user_id
+
+        def _is_admin(project_id: int) -> bool:
+            return membership_service.can_administer_project(
+                self._db, project_id=int(project_id), user_id=user_id
+            )
+
+        return _is_admin
+
     def project_visibility(self, principal: Principal) -> Callable[[int], bool]:
         """`HierarchyFacade` 三條寫入路徑的守門判定（注入用，`security-design.md` §二之一）。
 
@@ -585,13 +621,22 @@ class MembershipFacade:
 
         **刻意只問自己的**：以 `principal.user_id` 為條件，故不需要
         per-project 判定——一個人永遠有權知道自己被改選了。
+
+        **全域層 `K3.view` 仍要判**（合併前必修第 31 列 (f)）：唯一的 HTTP 呼叫端
+        已有 `require_story_action("K3", "view")`，但本層是 `BR1.1` 宣告的唯一入口，
+        不得依賴呼叫端代為判定。
         """
+        self._authorize_global(principal, "view")
         return membership_service.list_unacknowledged_reselections(
             self._db, user_id=principal.user_id
         )
 
     def acknowledge_reselection(self, principal: Principal, *, event_id: int) -> bool:
-        """把該**事件列**標為已讀（`BR5.6`）。以事件為鍵，不是 per-user 布林值。"""
+        """把該**事件列**標為已讀（`BR5.6`）。以事件為鍵，不是 per-user 布林值。
+
+        全域層 `K3.view` 的理由同 `list_my_pending_reselections`（合併前必修第 31 列 (f)）。
+        """
+        self._authorize_global(principal, "view")
         try:
             changed = membership_service.acknowledge_reselection(
                 self._db, event_id=event_id, user_id=principal.user_id

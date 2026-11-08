@@ -74,9 +74,11 @@ memory_facade.py — `U8 memory-service` 的授權門面
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence, Tuple
+from typing import List, NamedTuple, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
+
+from models import MemoryAuditEvent, MemoryRecord
 
 from services.embedding_port import (
     EmbeddingPort,
@@ -85,10 +87,10 @@ from services.embedding_port import (
 )
 from services.hierarchy_facade import Principal, mint_principal
 from services.memory_errors import (
-    MemoryError,
     MemoryForbidden,
     MemoryInvalidInput,
     MemoryNotFound,
+    MemoryServiceError,
 )
 from services.memory_ranking import rank_candidates
 import services.memory_service as memory_service
@@ -102,6 +104,20 @@ from services.memory_types import (
 )
 
 logger = logging.getLogger("cloud360.memory_facade")
+
+
+#: 合併前必修第 33 列 (e) 的 `query` 半部（2026-10-31 使用者裁決：facade 內截斷到 4000 字元）。
+#: 與 `memory_router.MEMORY_CONTENT_MAX_CHARS` 同值；以字元（code point）計。
+MEMORY_QUERY_MAX_CHARS = 4000
+
+
+class MemoryUserReferenceCounts(NamedTuple):
+    """`MemoryFacade.count_references_to_user` 的回傳（合併前必修第 33 列 (a)）。"""
+
+    #: 該使用者擁有的記憶列數（`memory.memory_records.owner_user_id`）。
+    records: int
+    #: 以該使用者為操作者的記憶稽核列數（`memory.memory_audit_events.actor_user_id`）。
+    audit_events_as_actor: int
 
 REASON_OWNER = "owner"
 REASON_SCOPE = "scope"
@@ -311,8 +327,17 @@ class MemoryFacade:
         排序：SQL 已依距離遞增回傳，`rank_candidates` 再施加同分時的決定性
         次級鍵（`NFR3.24`）。**那一步刻意在純函式層**，因為純函式才寫得出
         property-based 測試。
+
+        **`query` 超過 `MEMORY_QUERY_MAX_CHARS`（4000 字元）時只取前 4000 字元**去做
+        embedding 與搜尋，**不報錯**（合併前必修第 33 列 (e)，2026-10-31 裁決）。
+        **超出的部分不參與比對**——長訊息的後段不會影響檢索結果。選截斷而非拒絕：
+        兩個同進程呼叫端（`intent_routing`、`brain_gateway` 的預取）傳入的是使用者
+        原句，拒絕會讓一則長訊息的記憶檢索整個失效，而截斷只讓後段不參與；
+        沒有 HTTP 端點收 `query`，故也沒有可回 422 的地方。
         """
         self._authorize_approved(principal)
+        if query is not None and len(query) > MEMORY_QUERY_MAX_CHARS:
+            query = query[:MEMORY_QUERY_MAX_CHARS]
         port = self._require_port()
         embedding_model = port.model_id()
         vectors = port.embed([query])
@@ -442,7 +467,10 @@ class MemoryFacade:
         record = (
             memory_service.get_record(self._db, parsed) if parsed is not None else None
         )
-        if record is None:
+        # 合併前必修第 33 列 (c)：已過保存期的列對讀取路徑不存在，放寬它也一樣——
+        # 成功的放寬會在回應裡帶回該列的 `content`，等於繞過讀取路徑的保存期過濾。
+        # 刪除路徑刻意**不**比照（擁有者仍可刪自己已過期、尚未清除的記憶）。
+        if record is None or memory_service.is_expired(record):
             raise MemoryNotFound(memory_id)
 
         current = record.visibility_scope
@@ -503,13 +531,43 @@ class MemoryFacade:
         )
         return [_as_audit_view(event, exists) for event, exists in pairs]
 
+    # -- 刪除使用者前的參照計數（合併前必修第 33 列 (a)）-------------------
+
+    def count_references_to_user(self, *, user_id: int) -> MemoryUserReferenceCounts:
+        """回傳指向該使用者的記憶列與記憶稽核列**筆數**，供刪除使用者的預檢使用。
+
+        **為什麼經本 facade 而不是讓 `user_router` 直接以 ORM 計數**：本 facade 是
+        記憶表的唯一入口（`K-08` 的 `sole_entry`）。`user_router._blocking_user_references`
+        原本直接 `import MemoryRecord, MemoryAuditEvent` 計數，是一條沒有宣告的旁路——
+        記憶表的存取日後改走記憶專用的資料庫 session（合併前必修第 20 列）時，那條旁路
+        會被漏改而無人察覺。
+
+        **不做 principal 授權判定**：只回筆數、不回任何內容或 id；唯一呼叫端是已由
+        `require_story_action("J3a", "edit")` 把關的兩個刪除使用者端點。
+        """
+        records = (
+            self._db.query(MemoryRecord)
+            .filter(MemoryRecord.owner_user_id == user_id)
+            .count()
+        )
+        audit_events = (
+            self._db.query(MemoryAuditEvent)
+            .filter(MemoryAuditEvent.actor_user_id == user_id)
+            .count()
+        )
+        return MemoryUserReferenceCounts(
+            records=int(records), audit_events_as_actor=int(audit_events)
+        )
+
 
 __all__ = [
-    "MemoryError",
     "MemoryFacade",
     "MemoryForbidden",
     "MemoryInvalidInput",
     "MemoryNotFound",
+    "MEMORY_QUERY_MAX_CHARS",
+    "MemoryServiceError",
+    "MemoryUserReferenceCounts",
     "Principal",
     "REASON_OWNER",
     "REASON_PENDING",

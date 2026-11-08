@@ -48,8 +48,11 @@
 
 from __future__ import annotations
 
+import ast
+import os
 import re
 import unittest
+import warnings
 from pathlib import Path
 
 # `tests.helpers` 的 import 只為它的**副作用**：把 `backend/` 與 `backend/services/`
@@ -135,6 +138,51 @@ K_BLOCK_INSERT = re.compile(
 )
 
 BCRYPT_PREFIX = re.compile(r"^\$2[aby]\$")
+
+# 合併前必修第 32 列 (a)：哨符 username 在全 repo 的 `.py` 中**只准**以字面字串
+# 出現在下列檔案（相對 repo 根）。其餘 Python 一律 import 正本常數。
+#   - `services/system_accounts.py`：應用程式的正本（`RETENTION_SYSTEM_ACTOR_USERNAME`）。
+#   - `scripts/seed_retention_system_actor.py`：刻意不 import 應用模組（見其檔內
+#     說明），故是無法避免的副本；它與 `K)` 區塊的一致性由本檔
+#     `test_sentinel_username_has_one_source` 鎖住，與正本的一致性由
+#     `test_system_account_protection.py` 的 A5 鎖住。
+SENTINEL_LITERAL_ALLOWLIST = frozenset(
+    {
+        "backend/services/system_accounts.py",
+        "backend/scripts/seed_retention_system_actor.py",
+    }
+)
+
+# 全 repo 掃描時略過的目錄：第三方套件、快取與版控內部，皆非本 repo 的原始碼。
+_PY_SCAN_SKIP_DIRS = frozenset(
+    {".git", "node_modules", ".venv", "venv", "__pycache__", ".hypothesis"}
+)
+
+
+def py_string_constant_hits(root: Path, value: str) -> list[tuple[str, int]]:
+    """回傳 `root` 之下所有 `.py` 中**整個字串字面值**等於 `value` 的位置。
+
+    以 AST 比對而非子字串搜尋：docstring 或註解**提到**該名稱不算物化（它不會
+    被程式當成值使用），只有一個獨立的字串常數才是可被拼錯的副本。不跟隨
+    symlink（`os.walk` 預設），故 codekb 之類的目錄連結不會造成重複或迴圈。
+    任一檔解析失敗即大聲失敗——跳過它等於讓掃描在那一檔靜默失效。
+    """
+    hits: list[tuple[str, int]] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in _PY_SCAN_SKIP_DIRS)
+        for name in sorted(filenames):
+            if not name.endswith(".py"):
+                continue
+            path = Path(dirpath) / name
+            with warnings.catch_warnings():
+                # 他檔的無效跳脫序列等警告與本檢查無關，不讓它污染測試輸出。
+                warnings.simplefilter("ignore", SyntaxWarning)
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            rel = path.relative_to(root).as_posix()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Constant) and node.value == value:
+                    hits.append((rel, node.lineno))
+    return hits
 
 
 class RetentionPurgeContractTest(unittest.TestCase):
@@ -356,7 +404,7 @@ class RetentionPurgeContractTest(unittest.TestCase):
     # -- 6 --------------------------------------------------------------
 
     def test_sentinel_username_has_one_source(self) -> None:
-        """哨符 username 的三處物化必須逐字相同。
+        """哨符 username 的三處物化必須逐字相同，且 Python 端不得再多出副本。
 
         跨語言邊界使副本無法避免（`.sql` 檔不能 import Python 常數），故依
         `team.md` 的單一真實來源規則，這個測試就是那個「鎖住兩者一致的測試」。
@@ -364,6 +412,17 @@ class RetentionPurgeContractTest(unittest.TestCase):
         **三個值都是從被測檔案本身解析出來的**，測試檔內不重新手寫哨符值——
         手寫會讓測試與被測內容變成同一個人的記憶（`project.md` 逐字：
         「腳本必須從產出檔本身解析輸入，不得在腳本裡重新列舉」）。
+
+        合併前必修第 32 列 (a) 擴充：原本只比對 `K)`、清除 SQL、seed 腳本三處，
+        而 `backend/tests_pg/test_purge_atomicity.py` 曾手寫第四份副本、本測試看
+        不到它。現改為對**全 repo 的 `.py`** 掃描字面字串，只准出現在
+        `SENTINEL_LITERAL_ALLOWLIST`。
+
+        @purpose 哨符 username 若在任何 Python 檔被重新手寫，日後改名時那份副本會無聲落後：tests_pg 的原子性測試查不到保留帳號而以前置條件失敗，應用程式的保留帳號保護則整個失效；本測試鎖住「只有正本與 seed 腳本兩處可寫字面字串，且三處 SQL／Python 物化逐字相同」。
+        @given 讀取 schema_rbac.sql 的 K) 區塊、backend/scripts/purge_expired_memory.sql、backend/scripts/seed_retention_system_actor.py 原始碼，並以 AST 走訪 repo 內所有 .py（略過 .git、node_modules、.venv、__pycache__、.hypothesis）
+        @step 從 K) 區塊 INSERT 解析出哨符 username，與清除 SQL 子查詢、seed 腳本 SENTINEL_USERNAME 比對；再找出所有「整個字串字面值等於它」的位置，與允許清單比對
+        @pass 三處逐字相同且含大寫字母；字面字串出現的檔案集合恰等於允許清單（backend/services/system_accounts.py、backend/scripts/seed_retention_system_actor.py），任何其他檔一出現即紅燈並列出檔:行
+        @story MB-32 NFR7.11 FR4.5
         """
         from_purge = re.findall(
             r"FROM\s+users\s+WHERE\s+username\s*=\s*'([^']+)'", self.purge_exec
@@ -391,6 +450,27 @@ class RetentionPurgeContractTest(unittest.TestCase):
             f"seed 腳本={from_seed[0]!r}。"
             "清除 SQL 內拼錯 → 子查詢回 NULL → actor_user_id 的 NOT NULL 違反；"
             "seed 腳本拼錯 → 後條件查不到那一列。兩者都是大聲失敗，但都在上線後才發生",
+        )
+
+        # 全 repo `.py` 掃描（第 32 列 (a)）：值取自 `K)` 區塊，不在本檔手寫。
+        hits = py_string_constant_hits(REPO_ROOT, self.seed_username)
+        stray = sorted(f"{rel}:{line}" for rel, line in hits
+                       if rel not in SENTINEL_LITERAL_ALLOWLIST)
+        self.assertEqual(
+            stray,
+            [],
+            f"哨符 username {self.seed_username!r} 在允許清單之外被手寫成字面字串："
+            f"{stray}。請改為 `from services.system_accounts import "
+            "RETENTION_SYSTEM_ACTOR_USERNAME`；確實無法 import 者（如刻意不載入應用"
+            "模組的腳本）須加入 SENTINEL_LITERAL_ALLOWLIST 並附一致性測試",
+        )
+        # 允許清單本身不得過期：清單內每一檔都必須真的還持有那份字面字串，
+        # 否則清單會默默擴大成「任何同名路徑都放行」。
+        self.assertEqual(
+            {rel for rel, _ in hits},
+            set(SENTINEL_LITERAL_ALLOWLIST),
+            "SENTINEL_LITERAL_ALLOWLIST 與實際持有哨符字面字串的檔案不一致；"
+            f"實際為 {sorted({rel for rel, _ in hits})}",
         )
 
         # 第一道鎖：username **含大寫字母**，故 user_router.py 登入查詢的

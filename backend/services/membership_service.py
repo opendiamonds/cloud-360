@@ -427,6 +427,34 @@ def is_project_visible(db: Session, *, project_id: int, user_id: int) -> bool:
     return row is not None
 
 
+def can_administer_project(db: Session, *, project_id: int, user_id: int) -> bool:
+    """刪除專案／系統的 per-project 授權判定（合併前必修第 25 列）。
+
+    成立條件（擇一）：
+
+    1. 呼叫者在該專案的成員列角色為 `project_admin`；
+    2. 該專案**沒有任何成員列**，且呼叫者是它的擁有者——與可見集合的「擁有者那一半」
+       （`_visible_project_ids_select`）同一個條件。零成員列只出現在回填
+       （`membership_backfill`，後端啟動時自動執行）之前；回填會把擁有者寫成
+       `project_admin`，故這一支只是讓回填前的擁有者與回填後得到同一個結果，
+       不是另開一條例外（`test_project_write_guard.py` 的 (c) 案例鎖住此行為）。
+
+    被降為一般成員的建立者兩條都不成立：他有成員列（故不走 2），角色是 `member`。
+    """
+    role = resolve_project_role(db, project_id=project_id, user_id=user_id)
+    if role is not None:
+        return role == ROLE_PROJECT_ADMIN
+    has_members = db.execute(
+        select(ProjectMember.id).where(ProjectMember.project_id == project_id)
+    ).first()
+    if has_members is not None:
+        return False
+    owner = db.execute(
+        select(Project.owner_user_id).where(Project.id == project_id)
+    ).scalar_one_or_none()
+    return owner is not None and int(owner) == int(user_id)
+
+
 def admin_count_after(
     db: Session,
     *,
@@ -437,7 +465,15 @@ def admin_count_after(
     """**單專案判定函式**——`BR2.1` 的唯一謂詞（`NFR12.11`）。
 
     回傳「假設把 `changing_user_id` 的角色改成 `new_role` 之後」該專案的
-    `project_admin` 數。`new_role=None` 表示把他**移出**專案。
+    **合格** `project_admin` 數。`new_role=None` 表示把他**移出**專案。
+
+    **只數合格管理者**（合併前必修第 31 列 (a)）：管理者必須同時通過
+    `is_qualified_successor`（啟用中、J5 已核准、全域 `K3.edit`）才計入——與停用守門
+    和改選的冪等判定共用同一個謂詞。在此之前本函式按原始管理者列數計算，於是「另一位
+    管理者已停用或待核准」時，最後一位合格管理者仍能自我降級或自我移出，留下一個實際
+    上無人能管的專案；停用路徑早已只算合格者，兩邊判準因此不一致。
+    **查詢次數**：一次 join 取得成員與帳號狀態，`user_can` 以 `_cache` 收斂為
+    「不同角色數」次。
 
     `remove_member` 與 `change_role` 都呼叫**這一個**函式。
 
@@ -453,16 +489,64 @@ def admin_count_after(
     謂詞會是一段永不獨立命中的死碼。
     """
     rows = db.execute(
-        select(ProjectMember.user_id, ProjectMember.role).where(
-            ProjectMember.project_id == project_id
+        select(
+            ProjectMember.user_id,
+            ProjectMember.role,
+            User.is_active,
+            User.authorization_status,
+            User.role,
         )
+        .join(User, User.id == ProjectMember.user_id)
+        .where(ProjectMember.project_id == project_id)
     ).all()
+    cache: Dict[tuple, bool] = {}
     count = 0
-    for user_id, role in rows:
+    for user_id, role, is_active, authorization_status, global_role in rows:
         effective = new_role if user_id == changing_user_id else role
-        if effective == ROLE_PROJECT_ADMIN:
+        if effective != ROLE_PROJECT_ADMIN:
+            continue
+        if is_qualified_successor(
+            db,
+            is_active=bool(is_active),
+            authorization_status=authorization_status,
+            global_role=global_role,
+            _cache=cache,
+        ):
             count += 1
     return count
+
+
+def assert_can_be_promoted_to_admin(db: Session, *, user_id: int) -> None:
+    """升任 `project_admin` 的前置檢查（合併前必修第 31 列 (e)）。
+
+    與改選共用 `is_qualified_successor` 這一個謂詞：停用、待核准、無全域 `K3.edit`
+    者升為管理者後，每個管理動作都會被擋下，`admin_count_after` 也不會把他算進去
+    ——升他只會製造一個名義上的管理者。拒絕回 `MissingGlobalPermission`（422），
+    主詞是被升任者，訊息說明是帳號狀態還是角色。
+    """
+    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    if user is None:
+        raise MembershipNotFound(f"查不到使用者 {user_id}")
+    status_value = getattr(user, "authorization_status", "approved")
+    if is_qualified_successor(
+        db,
+        is_active=bool(user.is_active),
+        authorization_status=status_value,
+        global_role=user.role,
+    ):
+        return
+    if not user.is_active:
+        reason: Optional[str] = "帳號已停用"
+    elif status_value not in (None, "approved"):
+        reason = "帳號尚未通過授權核准"
+    else:
+        reason = None
+    raise MissingGlobalPermission(
+        user_id=user_id,
+        story_id=SUCCESSOR_STORY_ID,
+        action=SUCCESSOR_ACTION,
+        reason=reason,
+    )
 
 
 def is_qualified_successor(
@@ -578,7 +662,15 @@ def projects_losing_last_admin(
     **只回報沒有合格接手人的專案**（使用者 2026-10-20 裁決：有合格接手人就改選，
     沒有才擋；`BR7.3` 的第三種結果）。判準是：
 
-        該使用者是此專案的 `project_admin`，且此專案除他以外**沒有任何合格成員**
+        該使用者是此專案的 `project_admin`，此專案除他以外**還有其他成員**，
+        且其中**沒有任何合格成員**
+
+    **獨自一人的專案不擋**（合併前必修第 21 列，2026-10-25 裁決）：除被停用者之外
+    沒有任何成員（不論合格與否）時放行。只有自己一位成員的專案——建立專案或回填
+    後擁有者即唯一 `project_admin`，**包含每位持圖使用者的預設專案**——在此之前
+    會讓擁有者停用不了，而刪除端點要求先停用，於是這類使用者既停用不了也刪除不了。
+    停用之後的刪除由 `user_router._hard_delete_user` 的「空預設專案隨使用者清除」
+    接手；非預設或有圖的獨人專案仍在刪除時回 409。
 
     「沒有任何合格成員」同時涵蓋兩件事：沒有其他**合格的**管理者（否則改選冪等
     略過、專案仍有人管），也沒有可被升任的合格接手人。其他管理者若**不合格**
@@ -590,8 +682,8 @@ def projects_losing_last_admin(
     其他管理者」時執行——兩者互斥，`AC12.4.1` 的自動改選因此不可達
     （merge-blockers 第 1 項）。
 
-    **查詢次數**：一次取得該使用者為管理者的專案（含名稱），一次 join 取得這些
-    專案的其他成員與帳號狀態，再加上至多「不同全域角色數」次的權限列讀取
+    **查詢次數**：一次取得該使用者為管理者的專案（含名稱），一次取得其中「還有
+    其他成員」的專案 id，一次 join 取得這些專案的其他成員與帳號狀態，再加上至多「不同全域角色數」次的權限列讀取
     （`user_can`，見 `is_qualified_successor` 的 `_cache`）。**與該使用者的專案數
     及成員數無關**——原本的單次 `GROUP BY ... HAVING count(*) = 1` 擴成這個形狀，
     是因為合格判定需要 `user_can`，而權限矩陣只有一份（在 `role_permissions`，
@@ -624,15 +716,32 @@ def projects_losing_last_admin(
     ).all()
     if not admin_rows:
         return []
+    admin_project_ids = [project_id for project_id, _ in admin_rows]
+    # 合併前必修第 21 列（2026-10-25 裁決「獨自一人的專案不擋」）：除被停用者之外
+    # **沒有任何成員**（不論合格與否）的專案放行——停用後沒有人會被留在無人管理的
+    # 專案裡。只看「有沒有其他成員」，不看合格：有其他成員但皆不合格者仍由下方的
+    # 合格判定擋下（第 1 列的判準不變）。
+    projects_with_others = set(
+        db.execute(
+            select(ProjectMember.project_id)
+            .where(
+                ProjectMember.project_id.in_(admin_project_ids),
+                ProjectMember.user_id != target_user_id,
+            )
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
     qualified = qualified_successors(
         db,
-        project_ids=[project_id for project_id, _ in admin_rows],
+        project_ids=admin_project_ids,
         excluding_user_id=target_user_id,
     )
     return [
         GuardedProjectRef(project_id=project_id, name=name)
         for project_id, name in admin_rows
-        if not qualified[project_id]
+        if project_id in projects_with_others and not qualified[project_id]
     ]
 
 
@@ -942,6 +1051,17 @@ def project_ids_owned_by(db: Session, *, owner_user_id: int) -> List[int]:
     )
 
 
+def _has_other_members(db: Session, *, project_id: int, excluding_user_id: int) -> bool:
+    """該專案除 `excluding_user_id` 之外是否還有任何成員（不論合格與否）。"""
+    row = db.execute(
+        select(ProjectMember.id).where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id != excluding_user_id,
+        )
+    ).first()
+    return row is not None
+
+
 def reselect_for_project(
     db: Session, *, project_id: int, deactivated_user_id: int
 ) -> Optional[ReselectionEvent]:
@@ -973,6 +1093,19 @@ def reselect_for_project(
             EVENT_RESELECT_SKIPPED,
             project_id,
             existing_admin.user_id,
+        )
+        return None
+    if not candidates and not _has_other_members(
+        db, project_id=project_id, excluding_user_id=deactivated_user_id
+    ):
+        # 合併前必修第 21 列：除被停用者之外**沒有任何成員**的專案——停用守門已
+        # 依「獨自一人的專案不擋」放行它。沒有任何人會被留在無人管理的專案裡，
+        # 改選無對象可選；不是失敗，不得計入 `failed_project_ids`（否則停用端點
+        # 會對一個已正確停用的帳號回 500）。記 log 讓「沒跑」可觀察（`NFR12.29`）。
+        logger.info(
+            "%s project_id=%s reason=no_other_members",
+            EVENT_RESELECT_SKIPPED,
+            project_id,
         )
         return None
     if not candidates:

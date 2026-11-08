@@ -145,7 +145,12 @@ class LastAdminGuardTest(MembershipFacadeTestBase):
         所以三條路徑在**同一個狀態**下都該命中——這正是「共同上游」的意思：
         不是三處各寫一次，而是同一個不變量的三個入口
         （`functional-design:c34`：修在單一入口會把違規挪位置而不是消除它）。
+
+        合併前必修第 21 列（獨自一人的專案不擋停用）起，停用路徑需要「另有成員但
+        皆不合格」才命中，故先加入只有 `K3.view` 的 carol；自我降級與自我移出不受
+        影響（它們不看其他成員）。獨人專案的放行由 `test_membership_lone_owner.py` 鎖住。
         """
+        self._add(self.carol, ProjectRole.MEMBER)
         # --- deny 側（三條路徑都命中）---
         with self.assertRaises(LastAdminGuard) as ctx:
             self.facade.assert_can_deactivate(
@@ -336,11 +341,16 @@ class MembershipLifecycleTest(MembershipFacadeTestBase):
             user_id=self.carol.id,
             role=ProjectRole.MEMBER.value,
         )
-        self.facade.change_role(
-            self.p_alice,
-            project_id=self.project.id,
-            user_id=self.carol.id,
-            role=ProjectRole.PROJECT_ADMIN.value,
+        # 合併前必修第 31 列 (e) 起，只有 `K3.view` 的 carol 不能被升為管理者，故 alice
+        # 的管理動作改為移出 carol（原本是把她升為管理者）——驗的仍是「alice 未被
+        # bob 的升任覆寫、仍能執行管理動作」。
+        self.facade.remove_member(
+            self.p_alice, project_id=self.project.id, user_id=self.carol.id
+        )
+        self.assertIsNone(
+            membership_service.resolve_project_role(
+                self.db, project_id=self.project.id, user_id=self.carol.id
+            )
         )
 
     def test_F5b_both_layers_must_pass(self):
@@ -393,6 +403,10 @@ class MembershipAuditTest(MembershipFacadeTestBase):
             role=ProjectRole.MEMBER.value,
         )
         self.assertEqual(self._events(), [])  # 邀請本身不是角色變更，不留稽核
+        # 合併前必修第 31 列 (e)：升任管理者要求對象合格，故先讓 carol 的全域角色持有
+        # `K3.edit`（principal `p_carol` 於 setUp 鑄造，其全域角色不受影響）。
+        self.carol.role = ROLE_ADMIN
+        self.db.commit()
         self.facade.change_role(
             self.p_alice,
             project_id=self.project.id,
@@ -501,6 +515,10 @@ class MembershipAuditTest(MembershipFacadeTestBase):
             user_id=self.carol.id,
             role=ProjectRole.MEMBER.value,
         )
+        # 合併前必修第 31 列 (e)：升任管理者要求對象合格，故先讓 carol 的全域角色持有
+        # `K3.edit`（principal `p_carol` 於 setUp 鑄造，其全域角色不受影響）。
+        self.carol.role = ROLE_ADMIN
+        self.db.commit()
         self.facade.change_role(
             self.p_alice,
             project_id=self.project.id,

@@ -438,6 +438,52 @@ class CorrectTest(unittest.TestCase):
         self.assertEqual(again.status, "完成")
         self.assertEqual(before, after)
 
+    def test_correct_after_the_terminal_item_was_pruned_raises_not_found(self):
+        """
+        @purpose 已結束項被保留數修剪掉之後再送停掉，回「找不到這個工作項」而不是 no-op 或成功——鎖住 review-02 R-06 揭露的現行行為（合併前必修第 36 列 (b)）
+        @given 同一工作階段先交辦 1 項並跑完（最舊的已結束項），之後每隔 1 秒再交辦並跑完 20 項
+        @step 第 21 項跑完、轉為完成 | 生產的轉終態路徑把最舊的那一項修剪掉，已結束項剩 20 筆
+        @step 對被修剪的那一項送停掉 | 丟 WorkItemNotFound，Redis 內的工作項與推送都不變
+        @step 把該例外交給閘道的錯誤對應 | 回 INVALID_REQUEST 與「找不到這個工作項」
+        @pass 修剪後送停掉得到查無錯誤，且沒有任何寫入
+        @story US1.1
+        """
+        from services import brain_gateway_rules as G
+        from services import work_orchestrator_rules as R
+
+        async def scenario():
+            h = Harness()
+            first = await h.dispatch(ARCH)
+            await drain(h.orchestrator)
+            pruned_id = first[0].workItemId
+            kept_after_first = None
+            for index in range(R.MAX_TERMINAL_WORK_ITEMS):
+                h.clock.advance(1)
+                await h.dispatch(ARCH)
+                await drain(h.orchestrator)
+                if index == R.MAX_TERMINAL_WORK_ITEMS - 2:
+                    # 第 20 項跑完時已結束項恰為 20 筆，最舊那一項仍在。
+                    kept_after_first = pruned_id in h.items()
+            items_before = copy.deepcopy(h.items())
+            pushes_before = len(h.sink.session)
+            with self.assertRaises(WorkItemNotFound) as caught:
+                await h.correct(pruned_id)
+            snapshot = (
+                kept_after_first, pruned_id, items_before, h.items(),
+                pushes_before, len(h.sink.session), caught.exception,
+            )
+            await h.stop_all()
+            return snapshot
+
+        kept, pruned_id, before, after, pushes_before, pushes_after, exc = run(scenario())
+        self.assertTrue(kept)
+        self.assertNotIn(pruned_id, before)
+        self.assertEqual(len(before), R.MAX_TERMINAL_WORK_ITEMS)
+        self.assertTrue(all(i["status"] in R.TERMINAL_STATUSES for i in before.values()))
+        self.assertEqual(after, before)
+        self.assertEqual(pushes_after, pushes_before)
+        self.assertEqual(G.error_for(exc), (G.CODE_INVALID, "找不到這個工作項"))
+
     def test_write_failure_before_request_means_nothing_is_sent(self):
         """`NFR12.21`：記 request_sent 的寫入回 False → A1 被呼叫 0 次。"""
 

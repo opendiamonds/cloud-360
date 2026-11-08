@@ -190,6 +190,14 @@ class MigrationCounts(NamedTuple):
       所以這個數字不會因冪等而歸零——歸零的是下面兩個）
     - `default_pairs_created`：本次**新建**了幾組預設專案／系統
     - `diagrams_assigned`：本次**改寫**了幾張圖的 `system_id`
+
+    **`default_pairs_created` 只以預設專案是否新建計數，會低報**：
+    `_resolve_default_pair()` 以「預設專案是否新建」判定這一組是否新建。在
+    「預設專案在、預設系統缺」的狀態（只有人工介入才可達——本模組是
+    `is_default` 的唯一寫入端，且兩者在同一交易內成對建立），本次會補建該
+    預設系統，但計數為 0（系統被補建而 `default_pairs_created` 不加一）。
+    判斷「做到哪」時，這種狀態須另以
+    `SELECT count(*) FROM systems WHERE is_default` 查證，不能只看本計數。
     """
 
     users_processed: int

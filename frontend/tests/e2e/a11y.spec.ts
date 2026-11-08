@@ -74,7 +74,7 @@ const NEW_ROOT_TESTIDS = [
   'remove-confirm-dialog',
   'reselection-banner-host',
 ];
-/** Sidebar 三個新增 <nav> 的可定位特徵（入口、專案以 aria-label；我的記憶的 <nav> 無 aria-label，以其連結 test-id）。 */
+/** Sidebar 三個新增 <nav> 的可定位特徵（入口、專案以 aria-label；我的記憶的 <nav> 現已有 aria-label="我的記憶"〔Sidebar.tsx:248，由 sidebar-landmarks.spec.ts 鎖住〕，此處仍以其連結 test-id 定位）。 */
 const NEW_SIDEBAR_MARKERS = [
   'aria-label="入口"',
   'aria-label="專案"',
@@ -457,9 +457,10 @@ const PROJECT_DETAIL_LOADING: Probe[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 24 個掃描點（C-02 表第 1–17 列 ＋ C-07 第 18 點；互動與定位器依 D-02；第 20 點為 review-01 R-01 增列的已連線入口頁；
+// 25 個掃描點（C-02 表第 1–17 列 ＋ C-07 第 18 點；互動與定位器依 D-02；第 20 點為 review-01 R-01 增列的已連線入口頁；
 // 第 21、22 點為 U16 增列的切換對象選單兩態，logical-components §二；第 23–25 點為 code-generation review-02 R-08
-// 增列的系統提示列、未送達原句與成員頁「查不到這個專案」）
+// 增列的系統提示列、未送達原句與成員頁「查不到這個專案」；第 26 點為合併前必修第 40 列 (d) 增列的成員詳情頁
+// projectId 非數字固定句。第 19 點不跑 axe，故不在本表）
 // ---------------------------------------------------------------------------
 
 const SCANS = {
@@ -728,6 +729,18 @@ const SCANS = {
     ready: ['members-list-page', { testid: 'member-list-error', hasText: '查不到這個專案' }],
     absent: ['member-list-table', { text: '載入中…' }],
   },
+  memberDetailInvalidProject: {
+    id: '26-member-detail-invalid-project',
+    // 合併前必修第 40 列 (d)：網址的 projectId 不是數字時，成員詳情頁不發請求、直接顯示固定句
+    // 「查不到這個專案」（MemberDetailPage.tsx 的 invalidProjectId）。這個狀態原本沒有掃描點。
+    stage: async (page) => {
+      await login(page, { K3: FULL });
+      await reselections(page);
+      await page.goto(`/projects/not-a-number/members/${OTHER_ID}`);
+    },
+    ready: ['member-detail-page', { testid: 'member-detail-error', hasText: '查不到這個專案' }],
+    absent: [{ text: '載入中…' }, 'member-detail-role-select'],
+  },
 } satisfies Record<string, ScanDef>;
 
 const ALL_SCANS: ScanDef[] = Object.values(SCANS);
@@ -941,6 +954,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 兩個專案是為了讓清單有多列：單列時列與列之間的重複結構（標題層級、連結名稱重複）不會被掃到。
    */
   test('03 專案清單', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.projectsList);
@@ -954,6 +968,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 以 aria-selected 斷言選取狀態，而不是看籤的樣式：樣式對了但 aria 沒同步時，掃到的是錯的籤。
    */
   test('04 專案詳情總覽籤', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.detailOverview);
@@ -981,6 +996,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 就緒條件是 memory-summary-unavailable：本點掃的是摘要不可用時的說明狀態，不是有資料的摘要。
    */
   test('06 專案詳情記憶摘要籤', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.detailMemory);
@@ -1008,6 +1024,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 視角的證據是邀請鈕存在（canManage 兩段式皆成立）；與第 09 點互為對照，兩點的差別只在 /me 的 K3 edit。
    */
   test('08 成員清單管理者視角', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.membersAdmin);
@@ -1049,6 +1066,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 排除拒絕原因節點，確保掃到的是尚未送出的初始態，而不是第 12 點的拒絕態。
    */
   test('11 邀請對話框初始狀態', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.inviteDefault);
@@ -1062,6 +1080,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 拒絕以 422 ＋ 字串 detail 造出（U24 既有 e2e 的形狀），就緒條件是拒絕原因節點出現。
    */
   test('12 邀請對話框拒絕狀態', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.inviteDenied);
@@ -1075,6 +1094,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 單筆時不應出現專案清單（absent: reselection-banner-projects），以此和第 14 點的多筆展開區分。
    */
   test('13 改選橫幅單筆', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.bannerSingle);
@@ -1088,6 +1108,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 以展開鈕的 aria-expanded=true 斷言已展開，確保清單內容在掃描範圍內。
    */
   test('14 改選橫幅多筆展開', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.bannerMulti);
@@ -1101,6 +1122,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 從成員詳情頁按下移出後掃描；對話框的焦點管理不在 axe 的檢查範圍，由 member-pages.spec.ts 的行為測試承擔。
    */
   test('15 移出確認對話框', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.removeConfirm);
@@ -1114,6 +1136,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 空清單時清單、錯誤與骨架三者皆不得出現，確保掃到的是首次使用的引導畫面。
    */
   test('16 專案清單空狀態', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.projectsEmpty);
@@ -1127,6 +1150,7 @@ test.describe('U17 a11y gate', () => {
    * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
    * @story N-9
+   * @note 錯誤以 GET 回 500 造出；排除骨架，確保錯誤區塊已取代載入中狀態。
    */
   test('17 專案清單錯誤態', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.projectsError);
@@ -1192,7 +1216,7 @@ test.describe('U17 a11y gate', () => {
    * @step 點 brain-context-switch-object | 選單內 brain-object-item-170、brain-object-not-owned-18 與「+ 新增專案」可見，專案 17 的展開鈕 aria-expanded 為 true
    * @step 以 include 限縮到選單並以 WCAG 2.1 AA 規則集掃描 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
-   * @story US9.2
+   * @story N-9、US9.2
    * @note U16 新增（OPN-23：修改已交付的 U17 檔案，只加掃描點）。include 限縮到 dialog，頁面其餘部分已由第 20 點掃過。
    */
   test('21 切換對象選單預設態', async ({ page }, testInfo) => {
@@ -1206,7 +1230,8 @@ test.describe('U17 a11y gate', () => {
    * @step 開啟選單、點「+ 新增專案」、輸入名稱並送出 | brain-object-create-error 可見，名稱欄仍在
    * @step 以 include 限縮到選單並以 WCAG 2.1 AA 規則集掃描 | 基準清單以外的違規為 0
    * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
-   * @story US9.2
+   * @story N-9、US9.2
+   * @note 建立以 409 造出錯誤；include 限縮到選單本身，頁面其餘部分已由第 20 點掃過。
    */
   test('22 切換對象選單建立錯誤態', async ({ page }, testInfo) => {
     await runScan(page, testInfo, SCANS.pickerCreateError);
@@ -1255,6 +1280,20 @@ test.describe('U17 a11y gate', () => {
   });
 
   /**
+   * @purpose 成員詳情頁在網址的專案編號不是數字時顯示的固定句畫面通過 WCAG 2.1 AA 自動掃描（合併前必修第 40 列 (d)）。
+   * @ui /projects/:projectId/members/:userId | 成員詳情頁 member-detail-page 與錯誤區塊 member-detail-error
+   * @given 攔截層：/api/auth/me 帶 K3 view+edit；網址的 projectId 為 not-a-number
+   * @step 開啟成員詳情頁 | member-detail-error 可見且含「查不到這個專案」，角色下拉與「載入中…」不存在
+   * @step 以 WCAG 2.1 AA 規則集掃描整頁 | 基準清單以外的違規為 0
+   * @pass 就緒斷言成立、基準以外違規為 0、隔離記錄為空
+   * @story N-9
+   * @note 此狀態不發任何成員 API 請求（以導出值呈現），故不需攔截成員端點；與第 25 點同一句固定訊息、不同頁面。
+   */
+  test('26 成員詳情頁專案編號非數字', async ({ page }, testInfo) => {
+    await runScan(page, testInfo, SCANS.memberDetailInvalidProject);
+  });
+
+  /**
    * @purpose 基準清單只收頁殼既有違規：不得收新元件節點、不得收交界類規則、每筆須有說明；且每個掃描點都有就緒斷言。
    * @ui / | 不開瀏覽器頁面；檢查 tests/e2e/a11y-baseline.json 與本檔的掃描點定義
    * @given a11y-baseline.json 存在
@@ -1285,11 +1324,11 @@ test.describe('U17 a11y gate', () => {
 
   /**
    * @purpose 基準清單只准縮小：任何一筆在全部掃描點都沒有出現時判為過期並讓測試失敗。
-   * @ui / | 不開瀏覽器頁面；讀回 24 個掃描點寫出的結果檔
-   * @given 本檔前 24 個掃描 test 已執行完畢（fullyParallel: false 的檔內順序；本檔必須整檔執行，不得 -g 或 shard）
-   * @step 讀回結果目錄中的掃描結果檔 | 恰為 24 檔
+   * @ui / | 不開瀏覽器頁面；讀回 25 個掃描點寫出的結果檔
+   * @given 本檔前 25 個掃描 test 已執行完畢（fullyParallel: false 的檔內順序；本檔必須整檔執行，不得 -g 或 shard）
+   * @step 讀回結果目錄中的掃描結果檔 | 恰為 25 檔
    * @step 對照 a11y-baseline.json | 每筆至少在一個掃描點出現
-   * @pass 檔數為 24，且沒有過期條目
+   * @pass 檔數為 25，且沒有過期條目
    * @story N-9
    * @note 寫檔而非記憶體集合：test 失敗後 worker 會被丟棄重啟，記憶體集合只剩後半段（security-design.md 第五節，突變 M7／M10）。
    */

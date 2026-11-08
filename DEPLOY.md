@@ -247,7 +247,7 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
 | H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
 | H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
-| I | **U5 記憶層** `memory` schema ＋ `memory.memory_records`／`memory.memory_audit_events`；**U8 新增** `ix_memory_records_embedding_hnsw` | **本 repo 的第一個獨立 schema**（在此之前全樹無 `CREATE SCHEMA`）。含 `vector(1024)` 欄位、`embedding_model`、grant 邊界。見 2.2.8；向量索引（opclass `vector_cosine_ops`）見 **2.2.12** |
+| I | **U5 記憶層** `memory` schema ＋ `memory.memory_records`／`memory.memory_audit_events`；**U8 新增** `ix_memory_records_embedding_hnsw` | **本 repo 的第一個獨立 schema**（在此之前全樹無 `CREATE SCHEMA`）。含 `vector(1024)` 欄位、`embedding_model`、grant 邊界與記憶專用登入角色 `cloud360_memory`（無密碼，密碼由部署另設）。見 2.2.8；向量索引（opclass `vector_cosine_ops`）見 **2.2.12** |
 | J | **U18 專案中繼資料** `project_members`／`reselection_events`／`system_requirement_fields` | **per-project 成員與角色、改選稽核、系統層需求欄位值**。三張表皆為全新，**無資料遷移**；唯一例外是 U20 起的條件式欄位轉型（`system_requirement_fields.updated_on_behalf_of` 由 integer 轉為 varchar(64)，只在既有表仍為舊型別時執行，見 2.2.9 之後的 U20 說明）。見 2.2.9 |
 | K | **U9 保留系統 actor** `users` 的一列（`SYSTEM.retention-purge`） | **90 天記憶清除的稽核 actor**。不是人、無法登入、零權限。**刪掉它會讓每一次清除的整個交易中止**。見 2.2.11 |
 | D | 預設使用者 `admin` | 見下方 |
@@ -358,7 +358,7 @@ hierarchy migration 完成：
 終檢通過：user_diagrams 中 system_id IS NULL 的列數為 0（AC9.1.4）。
 ```
 
-**結束碼 0 才算成功。** 非零即代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 的六支 `_ensure_*` 補丁全部 `except Exception: logger.warning`，本指令不沿用那個形狀。
+**結束碼 0 才算成功。** 結束碼 1 代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。結束碼 **2** 代表呼叫方式錯誤（帶了任何參數——本指令不接受選項），**未執行任何事**：DDL 與資料都沒有動過，修正呼叫方式後重跑即可（合併前必修第 28 列 (a)）。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 的六支 `_ensure_*` 補丁全部 `except Exception: logger.warning`，本指令不沿用那個形狀。
 
 指令**可重跑**：DDL 為 `IF NOT EXISTS` 形狀；資料面的冪等判準是 `system_id IS NOT NULL`（已掛好的圖不會被重新指派），預設專案／系統「存在就取用、不存在才建」。第二次跑的預期輸出是 `default_pairs_created = 0`、`diagrams_assigned = 0`，而 `users_processed` 仍為使用者數（它算的是走訪數，不是改動數）。
 
@@ -510,6 +510,14 @@ SQL
 | 其他任何仍指向該使用者的資料 | **409**，**不刪任何東西**（稽核類紀錄一律保留）。回應本體 `detail` 為可讀字串、`blocking_references` 逐類列出筆數 |
 | 資料庫在 commit 時仍拒絕（預檢沒涵蓋的新外鍵） | **409**（通用訊息、空清單），交易回滾，後端記一行 `ERROR` log——**不會是 500** |
 
+**稽核筆數（合併前必修第 27 列）**：兩個成功入口的權限稽核 log（`【權限稽核】User Deleted`、`Authorization Request Rejected`）的「結果」欄位逐字寫出連帶清除的筆數，形如「連帶清除空預設專案 1 筆、系統 1 筆、需求欄位值 2 筆」；沒有連帶清除時寫 0 筆而非省略。筆數是應用層明確刪除的實際列數，不含資料庫 `ON DELETE CASCADE` 的隱性刪除。
+
+**409 的下一步提示（合併前必修第 28 列 (c)）**：規則 2 的 `detail` 在列舉筆數之後附一句「稽核類紀錄不會刪除，請維持停用帳號即可（停用後無法登入）」。
+
+**預檢到 commit 之間無鎖（已知競態，合併前必修第 28 列 (d)）**：預檢（`_empty_default_project_ids`、`_blocking_user_references`）是普通 `SELECT`，不取列鎖。預檢之後、commit 之前若另一個交易新增了指向該使用者的參照：無 `ON DELETE` 的外鍵會在 commit 被資料庫拒絕，落到上表最後一列的通用 409（不會 500、不會刪錯）；有 `ON DELETE CASCADE` 的外鍵則會被一併刪除而不出現在 409 清單。兩個入口的目標帳號本身都無法製造參照（刪除端點要求先停用；拒絕申請的目標尚未核准），窗口只有一次請求的長度，故刻意不取鎖。
+
+**停用的前置條件——獨自一人的專案不擋（合併前必修第 21 列，2026-10-25 裁決）**：刪除端點要求帳號**先停用**，而停用守門（`membership_service.projects_losing_last_admin`）原本會擋下「是管理者、且除他以外沒有任何合格成員」的每一個專案——包含只有自己一位成員的專案（**每位持圖使用者的預設專案**都是這個形狀），使這類使用者既停用不了、也刪除不了。現在的規則：除被停用者之外**沒有任何成員**（不論合格與否）的專案**放行**，停用後的自動改選對它記一筆 `membership.reselect_skipped reason=no_other_members` 而非失敗；**有其他成員但皆不合格**時仍回 409（判準不變）。停用之後的刪除由上表第二列接手：空預設專案隨帳號清除；非預設的獨人專案仍回 409（`owned_projects`）；仍持有架構圖者照舊回 403。
+
 409 會列出的類別（`category`）：`owned_projects`（非空或非預設專案）、`project_memberships`（其他專案的成員資格）、`project_member_invitations`、`reselection_events`（專案角色變更稽核）、`system_requirement_fields`（最後修改者）、`memory_records`、`memory_audit_events`、`diagram_change_records`、`estimate_audit_events`、`architecture_reviews`、`wa_lenses`。
 
 **維運意涵**：
@@ -532,7 +540,7 @@ psql "$DATABASE_URL" -c "
 
 **本 repo 的第一個 `CREATE SCHEMA`。** 在此之前全樹無 `CREATE SCHEMA`、無
 `search_path`（契約 `K-05` 的 `precedent`）。兩張表**刻意不在 `public`**
-——`BR1.2` 的 grant 邊界整個作用方式就是「只開放 `memory` schema」，
+——`BR1.2` 的 grant 邊界（記憶專用角色 `cloud360_memory`，見本節「記憶專用資料庫角色」）整個作用方式就是「只開放 `memory` schema」，
 表落在 `public` 會讓該邊界**完全失效而功能上看不出來**。
 
 | 物件 | 說明 |
@@ -601,6 +609,57 @@ CI 的 `memory-schema` job（交付物 `N-2`）會對真實 PostgreSQL 執行
 `backend/scripts/run_meta_schema_migration.py` 一次建立，它的
 `BLOCKS_TO_RUN = ("X", "I", "J")` 已含本節的記憶區塊 `I`。（本段原寫「本輪未決、
 部署前須先決定」，該決定已由 U18 的遷移腳本作成，2026-10-20 更正。）
+
+##### 記憶專用資料庫角色 `cloud360_memory`（合併前必修第 20／29 列，2026-10-31 裁決「SQL 建角色，部署另設密碼」）
+
+**在此之前，`BR1.2` 的 grant 邊界並不存在**：`I)` 區塊只對 `current_user`（建表的擁有者
+帳號）授權，擁有者本來就能讀寫 `public` 的一切；本節先前的寫法讓它看起來像已生效的
+邊界，那是錯的。現在的形狀：
+
+| 物件／步驟 | 由誰執行 | 說明 |
+|---|---|---|
+| 建立 `cloud360_memory`（`LOGIN`、**無密碼**） | `schema_rbac.sql` 的 `I)` 區塊（空 volume）／`run_meta_schema_migration.py`（既有環境） | 以 `pg_roles` 判斷是否存在，可重跑。**不含任何 psql 變數**——兩條執行路徑都傳不進變數 |
+| 權限 | 同上 | 只有 `memory` schema 的 `USAGE`、兩張表的 `SELECT/INSERT/UPDATE/DELETE`、序列的 `USAGE/SELECT`，以及同範圍的 `DEFAULT PRIVILEGES`；撤銷 `public` 的表、序列與 `CREATE` |
+| 設定密碼 | `deploy/initdb/02-memory-role-password.sh`（唯一實作） | 讀 `MEMORY_DB_PASSWORD`，以 psql `\getenv` 取值，密碼不出現在容器內任何命令列。`deploy.yml` 每次部署在 `up -d` 之後執行（步驟「Set the memory-only database role password」，先 `::add-mask::`）；test compose 以 initdb 第二支 script 執行 |
+| backend 連線 | `backend/database.py` 的 `get_memory_session()` | 主連線的主機與資料庫 ＋ `cloud360_memory`／`MEMORY_DB_PASSWORD`。未設定時拋錯，**不退回**擁有者帳號 |
+
+**誠實的現況**：記憶表的實際存取（`memory_service.py`）**仍走主連線**；改用
+`get_memory_session()` 屬 `memory-service` 單元。在那之前，資料庫層邊界只對以此角色連線的
+程式成立，CI 的 `memory-schema` job 以該角色連線驗證它（`backend/scripts/verify_memory_role.sql`：
+讀不到 `public` 的任一表、寫得進 `memory` 兩表、不能在 `public` 建表）。
+
+**首次部署（空 volume）的順序**：(1) 在 GitHub 建立 repository **secret**
+`MEMORY_DB_PASSWORD`（`openssl rand -hex 32`，不得含 `$`；建立後以
+`gh api repos/<owner>/<repo>/actions/secrets` 與 `/variables` 各查一次，確認名稱只在 secrets）；
+(2) 合併 → `deploy.yml` 的必要 secret 檢查通過 → `up -d` 時 initdb 套用 `schema_rbac.sql`
+建出角色 → 「Set the memory-only database role password」設定密碼。
+
+**既有環境（例如 `192.168.10.10`）的順序**：`schema_rbac.sql` 不會再跑，角色要由
+`cd backend && python scripts/run_meta_schema_migration.py`（2.2.9）建立，**而且必須在含本變更
+的那次部署之前跑**：否則部署步驟會以「role cloud360_memory does not exist」失敗並觸發
+rollback。順序：(1) 建立 secret；(2) 在部署主機以既有的 `DATABASE_URL` 跑上述遷移指令
+（結束碼 0；它的後條件已含「角色存在、對 `memory` 有 `USAGE`、讀不到 `public.users`」）；
+(3) 合併。
+
+驗證（以擁有者帳號）：
+
+```bash
+psql "$DATABASE_URL" -c "SELECT rolname, rolcanlogin, rolsuper FROM pg_roles WHERE rolname='cloud360_memory';"   # 1 列，t，f
+psql "$DATABASE_URL" -c "SELECT has_schema_privilege('cloud360_memory','memory','USAGE'),
+  has_table_privilege('cloud360_memory','public.users','SELECT');"                                            # t | f
+# 密碼是否已設（不印出值）：
+psql "$DATABASE_URL" -c "SELECT rolpassword IS NOT NULL FROM pg_authid WHERE rolname='cloud360_memory';"    # t（需 superuser）
+```
+
+以該角色本身驗證邊界（在 db 容器內；容器內的 Unix socket 為 trust，故不需密碼）：
+
+```bash
+docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env exec -T db \
+  psql -U cloud360_memory -d cloud360 -c "SELECT 1 FROM public.users LIMIT 1;"   # 必須 permission denied
+```
+
+**輪替密碼**：更新 secret 後重新部署即可（每次部署都會重設）。**回滾**：映像回滾不會刪除
+角色，也不需要——last-good 的程式不使用它。
 
 **`NFR6.1`——episodic memory 的靜態加密由主機層承載（磁碟／LUKS），
 不在應用層或資料庫欄位層。** 不選欄位層加密的理由是它會**取消一個已核可的能力**
@@ -705,8 +764,8 @@ echo "exit=$?"    # 必須為 0
 全部 DDL 包在**一個交易**內（PostgreSQL 的 DDL 可交易），並在 COMMIT **之前**
 逐項查證後條件，所以：
 
-> **結束碼 0 ⟺ 1 個 schema ＋ 5 張表 ＋ 9 個索引 ＋ 9 條 CHECK／UNIQUE ＋ 3 條外鍵
-> 刪除行為（另驗 1 條必須不存在的外鍵）＋ 4 段表 COMMENT ＋ `memory` 的 grant
+> **結束碼 0 ⟺ 1 個 schema ＋ 5 張表 ＋ 9 個索引 ＋ 9 條 CHECK／UNIQUE ＋ 7 條外鍵
+> 刪除行為（逐欄核對；另驗 1 條必須不存在的外鍵）＋ 4 段表 COMMENT ＋ `memory` 的 grant ＋ 記憶專用角色 `cloud360_memory` 存在、對 `memory` 有 `USAGE`、讀不到 `public.users`
 > 全部存在。**
 >
 > （索引由 7 改為 9：`U23` 新增 `ix_project_members_user_id`。**改前的 7 已與腳本不符**
@@ -794,11 +853,11 @@ psql "$DATABASE_URL" -c "SELECT data_type, character_maximum_length
   AND table_name='system_requirement_fields' AND column_name='updated_on_behalf_of';"
 ```
 
-CI 的 `memory-schema` job 會對真實 PostgreSQL 執行全部 **16** 條斷言
-（`backend/scripts/verify_meta_schema.sql`，`P1`–`P12` ＋ `U19` 回補的 `P13`／`P14` ＋
-`U20` 的 `P15`／`P16`），並**套用 `schema_rbac.sql` 兩次**以驗證可重跑性；`U20` 另在
+CI 的 `memory-schema` job 會對真實 PostgreSQL 執行全部 **17** 條斷言
+（`backend/scripts/verify_meta_schema.sql`，`U18` 的 `P1`–`P12` ＋ `U19` 回補的 `P13`／`P14` ＋
+`U20` 的 `P15`／`P16` ＋ 合併前必修第 30 列的 `P17`：`system_requirement_fields` 恰為 9 欄），並**套用 `schema_rbac.sql` 兩次**以驗證可重跑性；`U20` 另在
 同一個 job 加了收斂驗證步驟 0／A–E（見下方 `U20` 小節）。**該 job 的名稱比它的內容窄**
-（它同時跑 2.2.8 的 `S1`–`S12` 與本節的 `P1`–`P12`）——刻意不改名，理由是
+（它同時跑 2.2.8 的 `S1`–`S12` 與本節的 `P1`–`P17`）——刻意不改名，理由是
 GitHub 的 check name 取自 job 的 `name:`，改它會讓 branch protection 的必要檢查
 變成「缺少必要檢查」。
 
@@ -956,8 +1015,12 @@ psql "$DATABASE_URL" -c "SELECT count(*) FROM pg_constraint con
 > `scripts/backfill_project_members.py` 是**同一份**程式（冪等、單一交易、自我終檢）。
 > **補齊失敗時後端啟動失敗**（記一筆 ERROR `membership.backfill_failed` 後拋出），
 > 不會「服務照常啟動但沒補到」；在 `restart: unless-stopped` 之下這會表現為 backend
-> **重啟迴圈**，處置是修資料（通常是某專案的 `owner_user_id` 指向不存在的使用者）
-> 而不是略過。`backend/database.py` 沒有改動（`NFR12.5`）。
+> **重啟迴圈**，處置是修資料而不是略過。**失敗原因要看 log 判斷，不要預設是「孤兒
+> 擁有者」**（合併前必修第 31 列 (b)）：`projects.owner_user_id` 有外鍵指向
+> `users`，「擁有者指向不存在的使用者」在資料庫層不可能成立。實際可能的原因只有兩類：
+> (1) 終檢訊息回報的「剩餘零成員專案數」不為 0（看 `membership.backfill_failed` 那一行
+> 的剩餘數）；(2) `INSERT` 本身拋出例外（看同一行之後的 traceback，例如多個 backend
+> 行程同時補齊而撞上唯一約束 `uq_project_members_project_user`，重啟即冪等收斂）。`backend/database.py` 沒有改動（`NFR12.5`）。
 > 下面的手動步驟因此不再是部署的必經步驟；它仍可用於事前檢查（`--dry-run`）與手動補跑。
 > 下文保留原設計的脈絡，凡與本框衝突處以本框為準。
 
@@ -1062,6 +1125,22 @@ psql "$DATABASE_URL" -c "SELECT project_id, user_id, role, invited_by
 故**不需要反向腳本**。**但這個結論只在第一次部署成立**——一旦有消費端上線，
 回滾的語意就要重新評估。
 
+##### 成員守門的兩個前提（合併前必修第 31 列 (c)(g)，2026-10-31 補記）
+
+- **守門依賴 `users.authorization_status`，而它要後端至少啟動一次才存在。**
+  停用守門、自動改選、升任管理者與自我降級／移出的管理者計數都以「合格」判定
+  （啟用中、J5 已核准、全域 `K3.edit`），合格判定讀這一欄。`schema_rbac.sql` 的
+  `users` DDL **沒有**這一欄，它由 `backend/database.py` 啟動時的補丁加上。只跑過
+  `schema_rbac.sql`、後端從未啟動的資料庫，任何成員寫入都會因缺欄失敗；正常部署
+  （compose 起 backend）不會遇到。
+- **回填不看 `is_active`。** `_BACKFILL_SQL` 只看「該專案無任何成員列」，已停用擁有者
+  的零成員專案也會被補成 `project_admin`。這是刻意保留的現況（2026-10-31 裁決：
+  只寫進文件、SQL 不變）——補出來的這一列與其他已停用管理者一樣，由停用守門與
+  自動改選的規則處理；它不會讓停用帳號重新登入。
+- 2026-10-31 起管理者計數只算**合格**管理者（合併前必修第 31 列 (a)）：另一位管理者
+  已停用或待核准時，最後一位合格管理者不能自我降級或自我移出（回 409）；升任
+  `project_admin` 也要求對象合格（不合格回 422，(e)）。
+
 ##### 本單元的其他部署面變更：零
 
 不改 `deploy.yml`、不改任一 compose、不改 `deploy/nginx.conf`、不改
@@ -1162,6 +1241,23 @@ psql "$DATABASE_URL" -c "SELECT password_hash ~ '^\$2[aby]\$' FROM users WHERE u
   ＋ `dry_run=true` 跑一次，核對計數為 0、選取邊界合理；若之前已有測試資料使計數
   不為 0，先停用排程（Actions 介面 Disable workflow）再核對。這取代下一點對
   「首次啟用前」的時序假設，`OPEN-ID9-4` 的要求不變。
+- **併入 `main` 後的首次煙霧測試就是那一次 `dry_run=true`，失敗即停用排程**（合併前
+  必修第 32 列 (f)）：清除走 `docker compose exec` 進部署 stack 的資料庫，這條路徑在
+  併入 `main` 之前**從未實跑過**。上一點那次 `workflow_dispatch` ＋ `dry_run=true` 同時
+  就是它的首次煙霧測試：job 失敗（找不到容器、連不上資料庫、SQL 錯誤）時，**先在
+  Actions 介面 Disable workflow 停用排程**，修好並再以 `dry_run=true` 跑綠之後才重新
+  啟用——不要讓失敗的排程每天自動重跑真實清除。
+- **併入 `main` 當天必有一則假的「清除逾期」issue，辨識方式如下**（合併前必修第 32 列
+  (d)）：監看者 `memory-retention-watchdog.yml`（每日 06:23 UTC）比清除本體
+  （每日 17:41 UTC）早跑，而它在「找不到任何一次成功的**排程**清除」時就判為逾期
+  （`state=never`）。所以從併入 `main` 到第一次排程清除成功之間，它必然開一則標題為
+  `[memory-retention] 90 天清除已逾期未成功執行` 的 issue，內文原因寫「找不到任何一次
+  成功的排程清除（status=success 且 event=schedule）」。辨識條件三項同時成立即為這則
+  預期中的假警報：(1) 原因是上面那句（不是「已超過 N 天的門檻」）；(2) issue 建立時間
+  早於清除 workflow 的第一次排程執行；(3) 該 workflow 的執行歷史裡還沒有任何
+  `event=schedule` 的 run（手動 `workflow_dispatch` 的 dry-run 不算）。處置：等第一次
+  排程清除成功後**手動關閉**該 issue（監看者只去重、不自動關閉）。三項任一不成立就是
+  真的逾期，照該 issue 內文處置。
 - **首次啟用前必須先驗證選取條件**：以 `workflow_dispatch` ＋ `dry_run=true`
   手動觸發一次，核對它印出的計數與**選取範圍的邊界**（最舊／最新時間戳 ＋ 最多
   10 筆 id）。理由是**已執行的清除不可回滾**（`OPEN-ID9-4`）——workflow 檔可
@@ -1821,7 +1917,8 @@ required、**無預設**）與**序列化後 200 KB** 的位元組上限（程�
 | 一筆已結束工作項的位元組上界（`WORK_ITEM_TERMINAL_MAX_BYTES`，含欄位名 39 B） | **2,100 B**（對抗字元實測 2,063 B） |
 | 單一 session 的工作項最壞上界 | `5 × 7,800 B ＋ 20 × 2,100 B = 81,000 B ≈ 79.1 KiB` |
 | 單一 session 合計最壞上界 | `614,400 B ＋ 81,000 B = 695,400 B ≈ 679.1 KiB` |
-| `maxmemory 256mb` 的 80%（214,748,364 B）÷ 695,400 B | **≈ 308.8** 個同時存活的 session（承諾 ≥ 300，餘裕約 2.9%） |
+| `maxmemory 256mb` 的 80%（214,748,364 B）÷ 695,400 B | **≈ 308.8** 個同時存活的 session（承諾 ≥ 300，餘裕約 2.9%）。⚠ 695,400 B 是**序列化位元組的下界**，不是 Redis 的實際佔用：它不含每個 key 與 hash 欄位自身的配置開銷，並假設配置器（jemalloc）的對齊與碎片開銷近乎為零——那一個前提只要多出約 3%，「≥ 300」就不成立（合併前必修第 34 列 (g)）。**staging 首次部署後量一次**：以應用 ACL 使用者對一個已填滿的 session key 執行 `MEMORY USAGE <key> SAMPLES 0`，把實測值代回本列重算 |
+| 追加一則訊息的成本 | `append_message.lua` 每次追加都**重新編碼整段**再寫回，故單次追加的編碼量上限是一整段（**最多約 200 KB**，即每段的位元組上限），滿段時審查實測約 3 ms／次；此成本**未計入 `NFR3.40`**，段越滿越貴，與訊息本身的長短無關（合併前必修第 34 列 (b)） |
 | 300 個已填滿上界的 session | `300 × 695,400 B = 208,620,000 B ≈ 199.0 MiB`，為 `maxmemory` 的 **≈ 77.7%**（不觸及 `maxmemory`） |
 | 一則 4000 個中文字的訊息（序列化後） | ≈ 12 KB，故這類訊息一段約留 16 則（位元組上限先到） |
 
@@ -1831,6 +1928,10 @@ required、**無預設**）與**序列化後 200 KB** 的位元組上限（程�
 > 進行中項與已結束項（識別碼取 int32 上限，failureReason 與 sideEffect 一律以最長句型保守代入），
 > 斷言兩者不超過上表，並斷言 `614,400 ＋ 5 × 7,800 ＋ 20 × 2,100 ≤ 214,748,364 ÷ 300`。
 > 量測函式與 Lua 端同長度（`session_types.cjson_encoded_size`）。
+> **Redis 大版本升級後必須重跑那支測試與 `tests_redis/` 的工作項 Lua 測試**（合併前必修
+> 第 36 列 (c)）：`cjson_encoded_size` 是以 Python 重現 Redis 內建 `cjson.encode` 的
+> 跳脫規則，而那份 cjson 隨 Redis 發行版內附——大版本若改了跳脫或數字格式，上表的
+> 位元組上界會無聲失準，而只比對 Python 端的測試不會變紅。
 > **調高任何一個上限（段位元組、5、20、原句或圖名的位元組上限）之前，都要先重算本表**——
 > 那支測試會先紅燈。本表不含 Redis 每個 hash 欄位自身的配置開銷（歷程那一列同樣不含）。
 >
@@ -2236,7 +2337,7 @@ host 可連 mcp-bridge:8080/healthz：是／否
 | `HTTP/1.1 101 …` | 無 | 協定名在**回應方向**被剝（瀏覽器會因此拒絕連線） | 同上 |
 | `(no status line)` | 無 | tunnel 或 DNS 問題（curl 結束碼非 0，例如 7、28） | 先看同次部署「Wait for the public hostname to answer through the tunnel」與 `cloudflared` 日誌 |
 
-  Cloudflare 剝除**沒有不改契約的修法**：自動流程只還原 last-good（不開 revert PR），由維運者依上表定位後交使用者裁決（`U13` code-summary 第 4.5 節）；是否需要人工 revert 屬該裁決的一部分，不由流程自動決定。
+  Cloudflare 剝除**沒有不改契約的修法**：自動流程只還原 last-good（不開 revert PR），由維運者依上表定位後交使用者裁決（`U13 brain-gateway` 的 code-summary 第八節「揭露事項」`OPEN-GW13-6` 那一列；先前寫的「第 4.5 節」不存在，合併前必修第 37 列 (c)）；是否需要人工 revert 屬該裁決的一部分，不由流程自動決定。
 - 本機驗證：對 `docker compose -f deploy/docker-compose.test.yml up -d` 起的 stack，以該步驟 `run` 的內容、環境變數 `BRAIN_WS_URL=http://localhost:8090/api/brain/ws` 執行一次，應以 0 結束；拿掉 `Sec-WebSocket-Protocol` 標頭後應以非 0 結束並印出上述三行。Cloudflare 那一跳只在真正部署時才被驗證。
 
 **人工（維運者，在部署主機與一台能開公開網址的瀏覽器）**——第一次部署成功後、宣告入口頁可用之前；之後每次改 `frontend/nginx.conf`、`cloudflared` 映像或 ingress 時重跑。結果記入 `build-and-test` 的產出（每步一列：操作、`date -u` 時間、觀察值、通過與否）。

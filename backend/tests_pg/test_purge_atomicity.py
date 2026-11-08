@@ -48,6 +48,16 @@ from sqlalchemy.exc import DBAPIError
 
 from tests_pg import require_pg_url
 
+# 保留系統 actor 的 username 取自正本常數，**不在本檔重新手寫**（合併前必修
+# 第 32 列 (a)）。`tests_pg/__init__.py` 已把 `backend/` 放上 `sys.path`，且
+# `services/system_accounts.py` 不 import 任何應用模組、不讀 DB，故此 import 在
+# 沒有資料庫時也成立。手寫回字面字串會被
+# `tests/test_retention_purge_contract.py` 的 `test_sentinel_username_has_one_source`
+# （全 repo `.py` 掃描）擋下。
+from services.system_accounts import (  # noqa: E402
+    RETENTION_SYSTEM_ACTOR_USERNAME as SENTINEL_USERNAME,
+)
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 PURGE_SQL = BACKEND_DIR / "scripts" / "purge_expired_memory.sql"
 
@@ -55,7 +65,6 @@ PURGE_SQL = BACKEND_DIR / "scripts" / "purge_expired_memory.sql"
 # DELETE——一個會清空整張表的清理動作，在本單元的語境下與被測的缺陷長得一樣。
 FIXTURE_PREFIX = "__u9_atomicity__"
 FIXTURE_OWNER = "__u9_atomicity_owner__"
-SENTINEL_USERNAME = "SYSTEM.retention-purge"
 
 
 def executable_statements(sql_text: str) -> list[str]:

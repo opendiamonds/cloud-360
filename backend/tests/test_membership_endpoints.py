@@ -163,7 +163,10 @@ class AuthorizationTest(MembershipEndpointTestBase):
         self.assertEqual(set(created.json()), MEMBER_FIELDS)
         self.assertEqual(created.json()["role"], "member")
 
-        # 改角色：200 ＋ MemberView
+        # 改角色：200 ＋ MemberView。合併前必修第 31 列 (e) 起升任管理者要求對象合格，
+        # 故先讓 carol 的全域角色持有 `K3.edit`（本案驗的是回應形狀，不是合格判定）。
+        self.carol.role = ROLE_K3_EDIT
+        self.db.commit()
         patched = client.patch(
             f"{self.members_url()}/{self.carol.id}", json={"role": "project_admin"}
         )
@@ -225,7 +228,16 @@ class AuthorizationTest(MembershipEndpointTestBase):
 
         三個入口都驗（停用端點、自我移出、自我降級），因為三者共用同一個不變量
         但各自有自己的回應路徑。
+
+        合併前必修第 21 列起，獨自一人的專案不再觸發停用守門，故先邀一位**不合格**
+        的一般成員（carol，只有 `K3.view`），讓 (a) 仍有東西可擋；(b)(c) 不受影響。
         """
+        self.facade.invite_member(
+            mint_principal(self.alice),
+            project_id=self.project.id,
+            user_id=self.carol.id,
+            role=ProjectRole.MEMBER.value,
+        )
         # (a) 既有停用端點（`[FD1]`=A：alice 是 P 的唯一管理者）
         res = self.client_as(self.root).put(
             f"/api/auth/{self.alice.id}/active", json={"is_active": False}
@@ -322,7 +334,18 @@ class ExistingDeactivationEndpointTest(MembershipEndpointTestBase):
         同時驗 allow 側：補上第二位管理者之後停用成功（200），且
         `is_active` 真的變成 False——沒有這一半，一個「永遠回 409」的實作
         也會通過。
+
+        合併前必修第 21 列（2026-10-25 裁決「獨自一人的專案不擋」）起，只有自己
+        一位成員的專案**不再**觸發守門，故前半段先邀一位**不合格**的一般成員
+        （carol，只有 `K3.view`）讓守門有東西可擋；獨人專案的放行路徑由
+        `test_membership_lone_owner.py` 鎖住。
         """
+        self.facade.invite_member(
+            mint_principal(self.alice),
+            project_id=self.project.id,
+            user_id=self.carol.id,
+            role=ProjectRole.MEMBER.value,
+        )
         res = self.client_as(self.root).put(
             f"/api/auth/{self.alice.id}/active", json={"is_active": False}
         )

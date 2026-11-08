@@ -57,18 +57,39 @@ dependency 上，因為 `K-16` 有「兩層串聯」且指名了第一層的承�
 
 `deploy/nginx.conf` 只反向代理 `/api/`，而本單元零新進程、零新環境變數、
 **不改 `deploy/` 任何檔案**（`NFR8.20`）。
+
+## 記憶表走記憶專用連線（合併前必修第 48 列 Major，`OPEN-CG5-1`）
+
+五個端點的 session 都來自 `get_memory_db`，**不是** `get_db`：
+
+| 條件 | session | 日誌 |
+|---|---|---|
+| `database.memory_db_boundary_enabled()` 為真 | `database.get_memory_session()`（`cloud360_memory`，讀不到 `public`） | — |
+| 未設定，且 `APP_ENV` 屬 `database.LOCAL_APP_ENVS` | 退回主連線（`get_db`） | **每程序一次** WARNING |
+| 未設定，且為其他環境（含 staging） | **不退回**：503，`detail` 固定 | 每次 ERROR，不含連線資訊 |
+
+2026-11-07 使用者裁決「只在本機／測試退回」。判定 `APP_ENV` 重用
+`database._current_app_env`／`LOCAL_APP_ENVS`，本檔不另寫一份。
+`principal`（角色、核准狀態）仍由主連線的 `get_current_user` 取得後以
+`mint_principal` 傳入——記憶 session 上**不查** `public` 的任何表。
+
+**本段只涵蓋 HTTP 路徑。** `brain_gateway`、`work_orchestrator` 以各自的
+`session_factory`（主連線）建立 `MemoryFacade`，屬那兩個單元（見本單元
+`code-summary.md` 的 2026-11-07 一節）。
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from functools import lru_cache
+from typing import Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
+import database
 from database import get_db
 from models import User
 from services.auth import get_current_user
@@ -77,6 +98,7 @@ from services.memory_errors import (
     MemoryForbidden,
     MemoryInvalidInput,
     MemoryNotFound,
+    MemoryStorageUnavailable,
 )
 from services.memory_facade import MemoryFacade, mint_principal
 from services.memory_types import MEMORY_KINDS, MemoryAuditEventView, MemoryView
@@ -90,9 +112,74 @@ NOT_FOUND_RESPONSE = {status.HTTP_404_NOT_FOUND: {"description": "找不到該�
 UNPROCESSABLE_RESPONSE = {
     status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "輸入不合封閉集合或欄位約束"}
 }
-UNAVAILABLE_RESPONSE = {
-    status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "embedding 提供者不可用"}
+#: 五個端點共有的 503：記憶專用連線未設定且所在環境不允許退回（`get_memory_db`）。
+STORAGE_UNAVAILABLE_RESPONSE = {
+    status.HTTP_503_SERVICE_UNAVAILABLE: {
+        "description": "記憶專用資料庫連線未設定（非本機環境不退回主連線）"
+    }
 }
+#: `POST` 的 503 另有 embedding 提供者不可用這個來源；同一個狀態碼只能有一則描述。
+UNAVAILABLE_RESPONSE = {
+    status.HTTP_503_SERVICE_UNAVAILABLE: {
+        "description": "embedding 提供者不可用，或記憶專用資料庫連線未設定（非本機環境）"
+    }
+}
+
+EVENT_MEMORY_DB_FALLBACK = "memory_db_local_fallback"
+EVENT_MEMORY_DB_UNAVAILABLE = "memory_db_unavailable"
+
+
+@lru_cache(maxsize=1)
+def _warn_local_fallback_once() -> None:
+    """本機退回主連線的 WARNING，**每程序只記一次**（`lru_cache` 讓第二次呼叫直接返回）。
+
+    每請求都記會把本機開發的日誌刷滿，而這件事在本機是預期中的設定，不是事故。
+    以快取函式承載「已記過」而不是模組層布林旗標：本單元不在模組層放可變狀態
+    （`NFR4.20` 的同一條紀律）。
+    """
+    logger.warning(
+        "%s app_env=%s：MEMORY_DB_PASSWORD 未設定，記憶表改走主連線；"
+        "記憶專用角色的權限邊界在此程序內不生效",
+        EVENT_MEMORY_DB_FALLBACK,
+        database._current_app_env(),
+    )
+
+
+def get_memory_db(main_db: Session = Depends(get_db)) -> Iterator[Session]:
+    """記憶端點的 session：記憶專用連線，或依環境退回／拒絕（見檔頭的表）。
+
+    `main_db` 以 `Depends(get_db)` 取得，**與 `get_current_user` 共用同一個請求內
+    快取的 session**，故不會因為宣告它而多開一條連線；邊界啟用時它不被交給 facade。
+    宣告成 dependency 而不是在函式內呼叫 `get_db()`，是為了讓既有測試以
+    `app.dependency_overrides[get_db]` 覆寫的 session 在本機退回路徑上仍然生效。
+
+    **ERROR 日誌只帶事件名與 `app_env`**：連線字串、主機、使用者、密碼一律不記
+    ——本 repo 的 Actions log 公開可讀。
+    """
+    if database.memory_db_boundary_enabled():
+        memory_db = database.get_memory_session()
+        try:
+            yield memory_db
+        finally:
+            memory_db.close()
+        return
+    app_env = database._current_app_env()
+    if app_env in database.LOCAL_APP_ENVS:
+        _warn_local_fallback_once()
+        yield main_db
+        return
+    logger.error(
+        "%s app_env=%s：記憶專用資料庫連線未設定，記憶端點回 503（非本機環境不退回主連線）",
+        EVENT_MEMORY_DB_UNAVAILABLE,
+        app_env,
+    )
+    raise _translate(MemoryStorageUnavailable())
+
+
+# 合併前必修第 33 列 (e)（2026-10-31 裁決：4000 字元，超過回 422）。內容會整段送進
+# embedding 提供者並寫入 `TEXT`，無上限時已認證使用者能以超大酬載消耗 embedding
+# 資源與儲存。以字元（code point）計，與 pydantic `max_length` 的計法一致。
+MEMORY_CONTENT_MAX_CHARS = 4000
 
 
 class MemoryCreateRequest(BaseModel):
@@ -117,7 +204,13 @@ class MemoryCreateRequest(BaseModel):
         description="三種記憶之一：" + "｜".join(MEMORY_KINDS),
         examples=[MEMORY_KINDS[0]],
     )
-    content: str = Field(description="記憶的文字內容；去除前後空白後須非空")
+    content: str = Field(
+        max_length=MEMORY_CONTENT_MAX_CHARS,
+        description=(
+            "記憶的文字內容；去除前後空白後須非空。"
+            f"上限 {MEMORY_CONTENT_MAX_CHARS} 字元，超過回 422"
+        ),
+    )
 
 
 class MemoryScopeRequest(BaseModel):
@@ -153,6 +246,11 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         )
+    if isinstance(exc, MemoryStorageUnavailable):
+        # `detail` 是例外的固定訊息（`MEMORY_STORAGE_UNAVAILABLE_DETAIL`），不含連線資訊。
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        )
     raise exc
 
 
@@ -170,7 +268,7 @@ def _translate(exc: Exception) -> HTTPException:
 def create_memory(
     payload: MemoryCreateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_memory_db),
 ):
     """手動建立一則記憶（`semantic` 的唯一來源，`BR7.3`）。
 
@@ -201,7 +299,7 @@ def create_memory(
 @router.get(
     "/records",
     response_model=List[MemoryView],
-    responses={**FORBIDDEN_RESPONSE},
+    responses={**FORBIDDEN_RESPONSE, **STORAGE_UNAVAILABLE_RESPONSE},
 )
 def list_memories(
     kind: Optional[List[str]] = Query(
@@ -214,7 +312,7 @@ def list_memories(
         description="每頁筆數。**超過伺服器上限時收斂到上限而非照辦**",
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_memory_db),
 ):
     """列出當前使用者可見的記憶（`BR2.2` 過濾）。
 
@@ -246,12 +344,12 @@ def list_memories(
 @router.delete(
     "/records/{memory_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={**FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={**FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE, **STORAGE_UNAVAILABLE_RESPONSE},
 )
 def delete_memory(
     memory_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_memory_db),
 ):
     """刪除自己的記憶（留稽核，`BR4.2`）。
 
@@ -280,13 +378,18 @@ def delete_memory(
 @router.put(
     "/records/{memory_id}/scope",
     response_model=MemoryView,
-    responses={**FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE, **UNPROCESSABLE_RESPONSE},
+    responses={
+        **FORBIDDEN_RESPONSE,
+        **NOT_FOUND_RESPONSE,
+        **UNPROCESSABLE_RESPONSE,
+        **STORAGE_UNAVAILABLE_RESPONSE,
+    },
 )
 def widen_memory_scope(
     memory_id: str,
     payload: MemoryScopeRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_memory_db),
 ):
     """放寬一則記憶的可見範圍（留稽核並帶前後值，`BR5.3`）。
 
@@ -311,7 +414,7 @@ def widen_memory_scope(
 @router.get(
     "/audit-events",
     response_model=List[MemoryAuditEventView],
-    responses={**FORBIDDEN_RESPONSE},
+    responses={**FORBIDDEN_RESPONSE, **STORAGE_UNAVAILABLE_RESPONSE},
 )
 def list_memory_audit_events(
     memory_id: Optional[str] = Query(
@@ -322,7 +425,7 @@ def list_memory_audit_events(
         default=None, ge=1, description="每頁筆數；超過伺服器上限時收斂"
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_memory_db),
 ):
     """稽核事件查詢（`AC4.3.2`／`AC4.3.3`）。
 

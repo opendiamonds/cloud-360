@@ -94,6 +94,7 @@ SELECT id,
    AND embedding_model = :embedding_model
    AND embedding IS NOT NULL
    AND kind = ANY(CAST(:kinds AS varchar[]))
+   AND (expires_at IS NULL OR expires_at > now())
  ORDER BY embedding <=> CAST(:query_vector AS vector)
  LIMIT :limit
 """
@@ -112,6 +113,9 @@ SELECT id,
   唯一完全靜默的失敗模式。
 - `embedding IS NOT NULL` 是 `BR3.3`：fulltext 模式寫入的列不被向量檢索看到，
   而**這不是錯誤**。
+- `expires_at IS NULL OR expires_at > now()` 是合併前必修第 33 列 (c)：已過保存期的
+  `episodic` 列在 `U9` 清除之前仍在表內，但**不得再被讀到**——清除排程晚跑或停擺時，
+  過期記憶照樣進入 `U11` 的提示詞，等於 90 天上限只在清除當下才成立。
 
 `ORDER BY` 的運算子 `<=>`（cosine 距離）**必須與 HNSW 索引的 opclass
 `vector_cosine_ops` 相符**（`schema_rbac.sql` 的 `I)` 區塊）。不相符時索引被
@@ -268,6 +272,32 @@ def _supports_vector(db: Session) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _not_expired(query, now: datetime):
+    """合併前必修第 33 列 (c)：只留**未過保存期**的列（`expires_at` 為空或晚於 `now`）。
+
+    `now` 由呼叫端傳入（Python 端的 UTC 時間），而不是 SQL 的 `now()`：本函式也跑在
+    測試的 SQLite 上，那裡沒有時區型別，以綁定參數比較才在兩個方言上語意相同。
+    檢索路徑的同一條過濾在 `SEARCH_SQL` 內（PostgreSQL 專用，故直接用 `now()`）。
+    """
+    return query.filter(
+        (MemoryRecord.expires_at.is_(None)) | (MemoryRecord.expires_at > now)
+    )
+
+
+def is_expired(record: MemoryRecord, now: Optional[datetime] = None) -> bool:
+    """單筆版的保存期判定，供 facade 的單筆取列使用（與 `_not_expired` 同一條規則）。
+
+    SQLite 讀回的 `expires_at` 不帶時區（`DateTime(timezone=True)` 在 SQLite 上存成
+    無時區字串），故無時區值一律視為 UTC——寫入端 `create_record` 只寫 UTC。
+    """
+    expires_at = record.expires_at
+    if expires_at is None:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at <= (now or datetime.now(timezone.utc))
+
+
 def _visible_to(query, principal_user_id: int):
     """`BR2.2` 的可見範圍過濾，**在 SQL 的 `WHERE` 內**。
 
@@ -297,12 +327,18 @@ def list_records(
     **不做相似度**，故 `embeddingModel` 不參與過濾——這是 `BR3.2` 不適用的
     唯一讀取路徑（`§1.3` 逐字寫下來以免被誤套）。
 
+    **已過保存期的列不列出**（`_not_expired`，合併前必修第 33 列 (c)）。本路徑回的是
+    一頁 `List`，沒有 `total` 欄位，故過濾只讓清單變短、不改變回應形狀。
+
     `id` 進入排序鍵是刻意的：`created_at` 的精度之下同一批寫入可能同值，
     而只以它排序時分頁會**重複或漏掉列**（相鄰頁的邊界不穩定），
     且那是靜默的。與 `NFR3.24` 的次級鍵同一個理由，不同的落點。
     """
     size = clamp_page_size(page_size)
-    query = _visible_to(db.query(MemoryRecord), principal_user_id)
+    query = _not_expired(
+        _visible_to(db.query(MemoryRecord), principal_user_id),
+        datetime.now(timezone.utc),
+    )
     kind_filter = _normalise_kinds(kinds)
     query = query.filter(MemoryRecord.kind.in_(kind_filter))
     return (
@@ -428,13 +464,15 @@ def _log_empty_search(
     不得出現在日誌中。本函式連列的 id 都不記——筆數就足以區分上表兩列。
     """
     try:
+        now = datetime.now(timezone.utc)
+        # 與 `SEARCH_SQL` 的保存期過濾對齊：數的是「本來可能被檢索到」的候選。
         visible = (
-            _visible_to(db.query(MemoryRecord), principal_user_id)
+            _not_expired(_visible_to(db.query(MemoryRecord), principal_user_id), now)
             .filter(MemoryRecord.kind.in_(list(kinds)))
             .count()
         )
         same_model = (
-            _visible_to(db.query(MemoryRecord), principal_user_id)
+            _not_expired(_visible_to(db.query(MemoryRecord), principal_user_id), now)
             .filter(MemoryRecord.kind.in_(list(kinds)))
             .filter(MemoryRecord.embedding_model == embedding_model)
             .count()
@@ -465,6 +503,9 @@ def get_record(db: Session, memory_id: int) -> Optional[MemoryRecord]:
 
     呼叫端只有 `MemoryFacade`，而它在取列**之後**判擁有者（刪除路徑）
     ——那個順序是 `[D1]`=A 存在的原因：要知道擁有者必須先取列。
+
+    **本函式不過濾保存期**（合併前必修第 33 列 (c)）：刪除路徑刻意要能刪掉自己已過期、
+    尚未被 `U9` 清除的記憶；放寬路徑由 facade 以 `is_expired` 自行判定。
     """
     return db.query(MemoryRecord).filter(MemoryRecord.id == memory_id).first()
 
@@ -651,9 +692,29 @@ def log_denied(
         "%s principal=%s memory_id=%s reason=%s",
         EVENT_DENIED,
         principal_user_id,
-        memory_id,
+        loggable_memory_id(memory_id),
         reason,
     )
+
+
+#: `loggable_memory_id` 對解析不出整數鍵的輸入所記的固定標記。
+UNPARSEABLE_MEMORY_ID = "<unparseable>"
+
+
+def loggable_memory_id(raw: object) -> str:
+    """把呼叫端送來的 `memory_id` 轉成可安全寫進日誌的字（合併前必修第 33 列 (d)）。
+
+    `memory_id` 是**呼叫端提供**的字串（路徑參數），原樣以 `%s` 寫入時，含換行的值
+    （`"5\nmemory_authz_denied principal=1 ..."`）能在日誌裡偽造一整行——而 `[D1]`=A
+    之後這條日誌是區分「誤刪」與「枚舉」的唯一手段，偽造行等於污染那個訊號。
+
+    故**只記經 `parse_memory_id` 解析成功的整數鍵**（與持久層用的是同一個解析），
+    解析不出來一律記固定標記；`None`（呼叫端沒給 id）記 `None`，與既有格式相同。
+    """
+    if raw is None:
+        return "None"
+    parsed = parse_memory_id(raw)
+    return str(parsed) if parsed is not None else UNPARSEABLE_MEMORY_ID
 
 
 __all__ = [
@@ -664,6 +725,7 @@ __all__ = [
     "MAX_LIST_PAGE_SIZE",
     "MAX_SEARCH_LIMIT",
     "SEARCH_SQL",
+    "UNPARSEABLE_MEMORY_ID",
     "clamp_page_size",
     "clamp_search_limit",
     "count_audit_events",
@@ -671,9 +733,11 @@ __all__ = [
     "delete_with_audit",
     "expiry_for",
     "get_record",
+    "is_expired",
     "list_audit_events",
     "list_records",
     "log_denied",
+    "loggable_memory_id",
     "parse_memory_id",
     "scored_candidates",
     "search_records",

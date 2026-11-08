@@ -93,6 +93,25 @@ class HierarchyForbidden(HierarchyError):
         self.action = action
 
 
+# 合併前必修第 25 列（2026-10-26 裁決，2026-10-31 定案）：刪除專案與系統除擁有者檢查外，
+# 另要求呼叫者在該專案為 `project_admin`。訊息固定、不含 id。
+PROJECT_ADMIN_REQUIRED_DETAIL = "權限不足：刪除專案或系統需要是該專案的專案管理者"
+
+
+class HierarchyProjectAdminRequired(HierarchyForbidden):
+    """呼叫者是擁有者、看得到該專案，但不是它的 `project_admin`。router 轉 403。
+
+    繼承 `HierarchyForbidden` 讓唯一轉譯點（`hierarchy_router._translate`）不必改。
+    回 403 而非 404：走到這裡的呼叫者必已通過可見性守門與擁有者檢查，專案的存在
+    對他不是秘密，回 404 只會讓錯誤訊息說謊。
+    """
+
+    def __init__(self) -> None:
+        HierarchyError.__init__(self, PROJECT_ADMIN_REQUIRED_DETAIL)
+        self.story_id = "K3"
+        self.action = "project_admin"
+
+
 class HierarchyNotFound(HierarchyError):
     """查不到。
 
@@ -298,8 +317,15 @@ class HierarchyFacade:
         *,
         project_id: int,
         project_visible: Callable[[int], bool],
+        project_admin: Callable[[int], bool],
     ) -> None:
         """`W6`（專案）。本方法不級聯刪除系統；成員列由 DDL 的 `ON DELETE CASCADE` 連帶刪除。
+
+        **擁有者之外另要求 `project_admin`**（合併前必修第 25 列）：建立者可被另一位
+        管理者降為一般成員（`MembershipFacade.change_role` 不排除擁有者），只看
+        `owner_user_id` 會讓被降級的建立者仍能刪除整個專案，連帶刪除其他管理者的成員
+        列。判定由呼叫端注入（`MembershipFacade.project_admin_check`），本模組照舊不
+        import 成員關係符號（`BR87.3`）；順序在擁有者檢查之後，故非擁有者仍得 404。
 
         成功後記一行 INFO，含刪除者 `actor_user_id`（`[PPD1]`=A）。只記 id，不記名稱；
         **不記連帶刪除的筆數**——計數需讀成員關係與需求欄位的表，那會讓本層碰
@@ -313,6 +339,8 @@ class HierarchyFacade:
         hierarchy_service.assert_project_owned_by(
             self._db, project_id=project_id, user_id=principal.user_id
         )
+        if not project_admin(project_id):
+            raise HierarchyProjectAdminRequired()
         hierarchy_service.delete_project(self._db, project_id=project_id)
         logger.info(
             "刪除專案 project_id=%s actor_user_id=%s", project_id, principal.user_id
@@ -324,8 +352,12 @@ class HierarchyFacade:
         *,
         system_id: int,
         project_visible: Callable[[int], bool],
+        project_admin: Callable[[int], bool],
     ) -> None:
         """`W6`（系統）。本方法不級聯刪除架構圖；需求欄位值由 DDL 連帶刪除。
+
+        `project_admin` 的理由同 `delete_project`（合併前必修第 25 列）：判定對象是
+        系統**所屬專案**，在擁有者檢查之後。
 
         第 2 步**只取所屬專案、不做擁有者檢查**：若沿用 `assert_system_owned_by` 來載入
         系統（它同時做擁有者檢查），守門只能排在它之後，於是非成員對既有系統會先被
@@ -344,6 +376,8 @@ class HierarchyFacade:
         hierarchy_service.assert_system_owned_by(
             self._db, system_id=system_id, user_id=principal.user_id
         )
+        if not project_admin(project_id):
+            raise HierarchyProjectAdminRequired()
         hierarchy_service.delete_system(self._db, system_id=system_id)
         logger.info(
             "刪除系統 system_id=%s actor_user_id=%s", system_id, principal.user_id

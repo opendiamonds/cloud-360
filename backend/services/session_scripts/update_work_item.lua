@@ -50,6 +50,17 @@ local key = KEYS[1]
 local field = ARGV[1]
 
 local function prune_terminal(terminal, keep)
+  -- **掃描成本的取捨**（合併前必修第 36 列 (a)；review-02 R-05）：`HGETALL` 讀回
+  -- **整個** session hash（含 `meta`、`tgt:*` 與三段對話 `seg:*`）再篩 `wi:` 前綴，
+  -- 成本隨整個 hash 的大小線性成長（O(n)）。本函式只在「非終態 → 終態」那一次
+  -- 呼叫（見 `run()`），其餘補丁只做 `HGET`／`HSET` 單一欄位。
+  --   * 現行量級下接受：掃描當下 `wi:*` 欄位最多「進行中上限＋已結束保留數」個
+  --     （本項剛轉終態、尚未修剪時終態可暫為保留數＋1，但同時進行中至少少 1），每筆
+  --     另有位元組上界；對話段各有位元組上限。整個 hash 的序列化上界見 `DEPLOY.md`
+  --     的 Redis 容量表（本檔不抄數字）。
+  --   * 須改寫的時機與改法同 `put_work_item.lua` 的同名註解（調高任何上限之前、或
+  --     staging 的 `SLOWLOG` 出現本腳本；改 `HKEYS`＋逐一 `HGET`，或維護計數欄位），
+  --     須連同 `session_types.ref_update_work_item` 與 `tests_redis/` 一起改。
   local flat = redis.call('HGETALL', key)
   local others = {}
   local count = 0

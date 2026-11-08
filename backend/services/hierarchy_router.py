@@ -291,6 +291,10 @@ def delete_project(
             project_visible=membership_facade.MembershipFacade(db).project_visibility(
                 principal
             ),
+            # 合併前必修第 25 列：擁有者之外另要求 project_admin。
+            project_admin=membership_facade.MembershipFacade(db).project_admin_check(
+                principal
+            ),
         )
     except Exception as exc:  # noqa: BLE001
         raise _translate(exc) from exc
@@ -316,6 +320,10 @@ def delete_system(
             principal,
             system_id=system_id,
             project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
+            # 合併前必修第 25 列：擁有者之外另要求 project_admin。
+            project_admin=membership_facade.MembershipFacade(db).project_admin_check(
                 principal
             ),
         )

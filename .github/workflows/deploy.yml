@@ -82,6 +82,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          MEMORY_DB_PASSWORD: ${{ secrets.MEMORY_DB_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
@@ -89,6 +90,7 @@ jobs:
           [ -n "${POSTGRES_PASSWORD}" ] || missing="${missing} POSTGRES_PASSWORD"
           [ -n "${JWT_SECRET}" ] || missing="${missing} JWT_SECRET"
           [ -n "${REDIS_PASSWORD}" ] || missing="${missing} REDIS_PASSWORD"
+          [ -n "${MEMORY_DB_PASSWORD}" ] || missing="${missing} MEMORY_DB_PASSWORD"
           [ -n "${OPENROUTER_API_KEY}" ] || missing="${missing} OPENROUTER_API_KEY"
           if [ -n "${missing}" ]; then
             echo "::error::Missing required repository secret(s):${missing}" >&2
@@ -97,6 +99,8 @@ jobs:
             echo "REDIS_PASSWORD is the password of the Redis ACL user the app" >&2
             echo "connects as; empty means an ACL user with an empty password," >&2
             echo "which Redis accepts silently." >&2
+            echo "MEMORY_DB_PASSWORD is the password of the memory-only database" >&2
+            echo "role cloud360_memory (schema_rbac.sql creates it without one)." >&2
             echo "OPENROUTER_API_KEY: without it the brain entry page (U13) fails" >&2
             echo "every turn with INTERNAL_ERROR. It is checked here only, not in" >&2
             echo "deploy/render-env.sh, so the rollback job can still render." >&2
@@ -119,6 +123,7 @@ jobs:
           # backend would refuse to start, this job would go red, and the
           # rollback job plus a revert PR would fire on a good merge.
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          MEMORY_DB_PASSWORD: ${{ secrets.MEMORY_DB_PASSWORD }}
           CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
@@ -136,6 +141,34 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env up -d --build --remove-orphans
+
+      # Merge-blockers row 20/29 (2026-10-31: "SQL creates the role, the
+      # deployment sets the password"). schema_rbac.sql creates cloud360_memory
+      # WITHOUT a password -- neither of its execution paths can receive a psql
+      # variable -- so the password is set here, after `up -d` has the db
+      # running, on EVERY deploy (ALTER ROLE is idempotent, and re-running it is
+      # how a rotated secret takes effect). The single implementation is
+      # deploy/initdb/02-memory-role-password.sh, piped in on stdin; it reads the
+      # value with psql `\getenv`, so the password is on no command line inside
+      # the container. `-e KEY=VALUE` does put it in the host-side argv of
+      # `docker compose exec` on the self-hosted runner -- the same accepted
+      # exposure as REDISCLI_AUTH in the Redis ACL step below; the value is masked first.
+      # On an EXISTING database the role only exists after
+      # `run_meta_schema_migration.py` has been run (DEPLOY.md 2.2.8); until
+      # then the script fails loudly and so does this deploy.
+      - name: Set the memory-only database role password
+        env:
+          MEMORY_DB_PASSWORD: ${{ secrets.MEMORY_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::${MEMORY_DB_PASSWORD}"
+          COMPOSE=(docker compose -f deploy/docker-compose.deploy.yml --env-file deploy/.env)
+          for _ in $(seq 1 30); do
+            if "${COMPOSE[@]}" exec -T db pg_isready -q; then break; fi
+            sleep 2
+          done
+          "${COMPOSE[@]}" exec -T -e MEMORY_DB_PASSWORD="${MEMORY_DB_PASSWORD}" db \
+            bash -s < deploy/initdb/02-memory-role-password.sh
 
       - name: Wait for the frontend to answer locally
         run: |
@@ -235,7 +268,15 @@ jobs:
           esac
 
           # 2. The app user must exist and be usable.
-          WHO="$("${COMPOSE[@]}" exec -T redis redis-cli --user "${REDIS_USER}" --pass "${REDIS_PASSWORD}" --no-auth-warning acl whoami 2>&1 || true)"
+          #    The password goes in through REDISCLI_AUTH, never `--pass`: on the
+          #    redis-cli command line it is visible to every process listing inside
+          #    the container (merge-blockers row 34 (f)). It is masked first so no
+          #    later log line can echo it. NOTE: `-e KEY=VALUE` still places the
+          #    value in the host-side `docker compose exec` argv on the self-hosted
+          #    runner; that exposure is accepted (single-tenant runner, value masked
+          #    in the public Actions log).
+          echo "::add-mask::${REDIS_PASSWORD}"
+          WHO="$("${COMPOSE[@]}" exec -T -e REDISCLI_AUTH="${REDIS_PASSWORD}" redis redis-cli --user "${REDIS_USER}" --no-auth-warning acl whoami 2>&1 || true)"
           if [ "${WHO}" = "${REDIS_USER}" ]; then
             echo "app ACL user is usable: ACL WHOAMI returned ${WHO}"
           else
@@ -449,10 +490,13 @@ jobs:
       #   its sessions are NOT already gone. An earlier draft of this design
       #   claimed otherwise; that claim was false for most deploys and has been
       #   removed rather than reworded.
-      #   What IS done about it: the step is placed LAST, after every other
-      #   health check has passed, so the interruption happens only once the
-      #   deployment is already known good -- it never adds an outage on top of
-      #   a failing deploy.
+      #   What IS done about it: the step runs only after the data-plane probe,
+      #   the public-hostname check and the mcp-bridge record have all passed,
+      #   so the interruption happens only once the deployment is already known
+      #   good -- it never adds an outage on top of a failing deploy. It is NOT
+      #   the last step: "Verify the brain WS subprotocol survives the tunnel"
+      #   (step 6a) runs after it (an earlier version of this comment said
+      #   "placed LAST", which was false -- merge-blockers row 34 (d)).
       - name: Verify sessions survive a Redis restart (NFR4.53-57)
         env:
           # A distinctive TTL, deliberately NOT the production 86400: it makes
@@ -476,7 +520,10 @@ jobs:
           # Every command in this step runs as the APP ACL user, never as
           # `default` -- `default` is narrowed to @connection and could not read
           # a hash field even if it wanted to (NFR4.44).
-          APP=("${COMPOSE[@]}" exec -T redis redis-cli --user "${REDIS_USER}" --pass "${REDIS_PASSWORD}" --no-auth-warning)
+          # Password via REDISCLI_AUTH and masked, same reasoning as the ACL step
+          # (merge-blockers row 34 (f)).
+          echo "::add-mask::${REDIS_PASSWORD}"
+          APP=("${COMPOSE[@]}" exec -T -e REDISCLI_AUTH="${REDIS_PASSWORD}" redis redis-cli --user "${REDIS_USER}" --no-auth-warning)
 
           KEY='cloud360:deploy-fixture:session'
           # Fixture text is deliberately meaningless `fixture-msg-*` strings.
@@ -492,6 +539,20 @@ jobs:
           TGT_WORKSPACE='{"projectId":4,"systemId":5,"diagramId":6}'
           TGT_ASSESSMENT='{"projectId":null,"systemId":null,"diagramId":7}'
 
+          # Field-by-field snapshot (merge-blockers row 34 (e)). `hgetall | sort`
+          # sorted field names and values as ONE list of lines, so two fields that
+          # swapped values produced the identical sorted output and passed. Each
+          # line here pairs a field with its own value, plus the field count, so
+          # a swap, a loss or an extra field all change the snapshot.
+          FIELDS=(meta 'seg:shared' 'seg:workspace' 'seg:assessment' 'tgt:shared' 'tgt:workspace' 'tgt:assessment')
+          snapshot() {
+            local F
+            for F in "${FIELDS[@]}"; do
+              printf '%s\t%s\n' "${F}" "$("${APP[@]}" hget "${KEY}" "${F}")"
+            done
+            printf 'hlen\t%s\n' "$("${APP[@]}" hlen "${KEY}")"
+          }
+
           # 1. Write the fixture session and give it the distinctive TTL.
           "${APP[@]}" del "${KEY}" > /dev/null
           "${APP[@]}" hset "${KEY}" \
@@ -505,7 +566,7 @@ jobs:
           "${APP[@]}" expire "${KEY}" "${FIXTURE_TTL}" > /dev/null
 
           # 2. Record the five baselines plus the remaining TTL.
-          BEFORE="$("${APP[@]}" hgetall "${KEY}" | sort)"
+          BEFORE="$(snapshot)"
           TTL_BEFORE="$("${APP[@]}" ttl "${KEY}")"
           if [ "${TTL_BEFORE}" -le 0 ]; then
             echo "::error::the fixture session has no TTL before the restart (TTL=${TTL_BEFORE}). EXPIRE did not take effect, so the restore check would be meaningless." >&2
@@ -517,7 +578,7 @@ jobs:
           "${COMPOSE[@]}" restart redis
 
           # 4. Wait for an ACTUAL SUCCESSFUL READ-BACK through the app ACL user.
-          #    NOT the healthcheck: deploy/docker-compose.deploy.yml:307-310
+          #    NOT the healthcheck: deploy/docker-compose.deploy.yml:309-314
           #    says in its own comment that `redis-cli ping | grep -q PONG`
           #    "does NOT prove the ACL user works (ping passes as `default`),
           #    and it passes during AOF loading". Waiting on it would let this
@@ -550,7 +611,7 @@ jobs:
           #    NFR4.55 each segment's own work target -> the tgt:* fields
           #    NFR4.56 both pageModes keys           -> inside meta
           #    NFR4.57 the REMAINING TTL             -> interval check below
-          AFTER="$("${APP[@]}" hgetall "${KEY}" | sort)"
+          AFTER="$(snapshot)"
           if [ "${BEFORE}" != "${AFTER}" ]; then
             echo "::error::session state did not survive the Redis restart (NFR4.53-NFR4.56). The most easily missed item is pageModes inside the meta field -- it is an INDICATOR, not data, and losing it shows up as 'the user comes back and the page reads the wrong segment', not as 'data is gone'." >&2
             diff <(printf '%s\n' "${BEFORE}") <(printf '%s\n' "${AFTER}") || true
@@ -691,6 +752,7 @@ jobs:
           # render-env.sh's own required-value check is the ONLY missing-value
           # guard on the rollback path.
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          MEMORY_DB_PASSWORD: ${{ secrets.MEMORY_DB_PASSWORD }}
           CLOUD360_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLOUD360_BOOTSTRAP_ADMIN_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}

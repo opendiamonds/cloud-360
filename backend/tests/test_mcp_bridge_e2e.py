@@ -15,6 +15,7 @@ import asyncio
 import json
 import threading
 import unittest
+import uuid
 from unittest import mock
 
 import httpx
@@ -347,6 +348,45 @@ class NoLeakTest(E2EBase):  # T-2、BR78.5
                     self.assert_clean(topo, result, self.owner_token)
             health = await httpx.AsyncClient().get(topo.base + "/healthz")
             self.assertEqual(health.status_code, 200)  # 進程存活
+
+    @bounded
+    async def test_nul_value_write_is_invalid_argument_without_echo(self):
+        """合併前必修第 38 列 (d)（review-04 R-15）：經 bridge 寫入含 NUL 的值。
+
+        @purpose 鎖住「backend 422 → bridge `invalid_argument`」這條對應在 bridge 端也成立：
+                 facade 的 NUL 檢查（合併前必修第 24 項）讓此路徑由 500 改為 422，原本只有
+                 HTTP 層 `H10` 鎖住 422 本身；bridge 端若把 422 對應成別的 outcome，或把被拒
+                 的值回顯進工具結果與 log，沒有任何案例會紅。
+        @given   專案 owner（具 `K4.edit`）對已存在的系統；值為 `uuid4()` 唯一標記夾一個 NUL
+                 字元（U+0000）。bridge 端的參數驗證不檢查 NUL，所以請求會抵達 backend。
+        @step    兩種協定版本各呼叫一次 `write_requirement_field`（agent `cost`、欄位 `sla`）。
+        @pass    每次：工具結果 `error` 為 `invalid_argument`、`retryable` 為 false；backend 恰收到
+                 一個 PUT；`tool_call` log 為 `outcome=invalid_argument`、`http_status=422`；
+                 唯一標記不出現在工具結果與 bridge log；資料庫無 `cost`／`sla` 列。突變（`outcomes.py`
+                 的 422 對應改為其他 outcome）時本案紅。
+        @story   US11.4
+        @api     PUT /api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}
+        """
+        marker = f"nul-marker-{uuid.uuid4()}"
+        args = {"system_id": str(self.system.id), "agent_group": "cost", "field": "sla",
+                "value": marker + "\x00" + marker}
+        async with self.topology() as topo:
+            for mode in MODES:
+                with self.subTest(mode=mode):
+                    records_before = len(topo.recorder.records)
+                    calls_before = len(topo.logs.events("tool_call"))
+                    result = await self.call(topo, mode, "write_requirement_field", args,
+                                             token=self.owner_token, agent="cost")
+                    self.assertTrue(result.is_error, result.raw)
+                    self.assertEqual((result.structured["error"], result.structured["retryable"]),
+                                     ("invalid_argument", False), result.raw)
+                    self.assertEqual([r.method for r in topo.recorder.records[records_before:]], ["PUT"])
+                    calls = topo.logs.events("tool_call")[calls_before:]
+                    self.assertEqual([(r.fields["outcome"], r.fields["http_status"]) for r in calls],
+                                     [("invalid_argument", 422)])
+                    self.assertNotIn(marker, result.raw + "\n" + topo.logs.text())
+                    self.assert_clean(topo, result, self.owner_token)
+            self.assertIsNone(self.row(self.system.id, "cost", "sla"))
 
 
 class PathInjectionTest(E2EBase):  # T-4

@@ -573,6 +573,13 @@ class SearchSqlContractTest(unittest.TestCase):
         )
         # `BR3.3`：無向量的列不被向量檢索看到，而這不是錯誤。
         self.assertIn("embedding is not null", where_clause)
+        # 合併前必修第 33 列 (c)：已過保存期的列不被讀到。必須在 WHERE 內——
+        # 放在 LIMIT 之後的應用層過濾會讓筆數錯（與可見範圍過濾同一個理由）。
+        self.assertIn(
+            "(expires_at is null or expires_at > now())",
+            where_clause,
+            "SEARCH_SQL 的 WHERE 缺保存期過濾：過期 episodic 記憶在 U9 清除前仍會被檢索",
+        )
 
     def test_C6_search_sql_operator_matches_the_index_opclass(self):
         """`ORDER BY` 的距離運算子必須與 HNSW 索引的 opclass 相符。
@@ -626,6 +633,7 @@ class SearchSqlContractTest(unittest.TestCase):
             ("visibility_scope", "可見範圍過濾（BR2.2）"),
             ("embedding_model", "向量空間分群（BR3.2）"),
             ("embedding is not null", "無向量的列（BR3.3）"),
+            ("expires_at is null or expires_at > now()", "保存期過濾（第 33 列 (c)）"),
             ("order by", "距離排序"),
             ("limit", "LIMIT"),
         ):

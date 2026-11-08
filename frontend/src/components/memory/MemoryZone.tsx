@@ -79,6 +79,17 @@ const STILL_LISTED_TEXT = '伺服器回報找不到，但清單仍列出這則�
 /** 404 之後的確認重讀本身失敗：無法判定，寧可保守視為未刪除。 */
 const UNCONFIRMED_TEXT = '無法確認是否已刪除，請稍後重試';
 
+/**
+ * 焦點是否仍在被刪的那一列（`memory-item-<id>` 的 `li`）之內，或已遺失（落在 body／null）。
+ * 只在事件回呼中呼叫（讀 DOM，不在 render 中讀）。列內可聚焦的子元素（刪除鍵、
+ * `deleting` 期間的 `li` 本身，見 `MemoryItem`）都以 `closest('li')` 歸到該列。
+ */
+function focusIsOnRowOrLost(memoryId: string): boolean {
+  const active = document.activeElement;
+  if (!active || active === document.body) return true;
+  return active.closest('li')?.getAttribute('data-testid') === `memory-item-${memoryId}`;
+}
+
 export const MemoryZone: React.FC<MemoryZoneProps> = ({
   kind,
   token,
@@ -251,8 +262,11 @@ export const MemoryZone: React.FC<MemoryZoneProps> = ({
     setItems((prev) => prev.filter((r) => r.memory_id !== memoryId));
     announce(`已刪除：${summary}`);
     if (!isEpisodic) {
-      // 原焦點目標（該則的確認鍵）已不存在，焦點移到區標題（`W4` 第 5 步）。
-      headingRef.current?.focus();
+      // 原焦點目標（該則）即將卸載，焦點移到區標題（`W4` 第 5 步）——但只在焦點仍在
+      // 被刪的那一列之內、或已落到 body 時才移；使用者在 DELETE 在途時已把焦點移到
+      // 別處（另一區、另一列、Sidebar），就不搶走它（合併前必修第 35 列 (a)）。
+      // 此刻 `setItems` 尚未 commit，被刪的列仍在 DOM 中，故能以 `closest('li')` 判定。
+      if (focusIsOnRowOrLost(memoryId)) headingRef.current?.focus();
       return;
     }
     const inFlightPage = pendingLoadPageRef.current;

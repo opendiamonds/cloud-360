@@ -249,6 +249,38 @@ class WorkItemLuaParityTest(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(sum(1 for f in self._snapshot() if f.startswith("wi:")), 21)
 
+    def test_cjson_encoded_size_matches_real_cjson_encode(self):
+        """
+        @purpose 以真實 Redis 內建的 cjson.encode 量長度，與 session_types.cjson_encoded_size 比對——後者是容量表位元組上界的量測函式，兩者一旦分歧，上界會無聲失準（合併前必修第 36 列 (c)；review-02 R-08）
+        @given 一組含控制字元、DEL、斜線、引號與反斜線、多位元組 Unicode（中文、emoji、U+2028）、整數與 null 的物件
+        @step 每個物件以 EVAL 執行 string.len(cjson.encode(cjson.decode(ARGV[1]))) | 回傳的位元組數等於 cjson_encoded_size 的結果
+        @pass 全部物件長度一致
+        @story US1.1
+
+        本案不經任何生產腳本，量的是 Redis 發行版內附的 cjson 本身；Redis 大版本升級後
+        必須重跑（`DEPLOY.md` 的 Redis 容量表附註）。不放空陣列：cjson 預設把解碼後的
+        空陣列重新編碼成 `{}`，與本函式的對象（訊息與工作項物件）無關。
+        """
+        cases = [
+            ("control", {"text": "\x00\x01\x08\x0b\x1f"}),
+            ("short_escapes", {"text": "a\nb\tc\rd\be\ff"}),
+            ("del", {"text": "x\x7fy\x7f"}),
+            ("slash", {"label": "架構設計：訂單/付款/出貨"}),
+            ("quote_backslash", {"text": 'say "hi" \\ bye'}),
+            ("cjk", {"text": "需" * 50}),
+            ("emoji", {"text": "😀🚀🧪"}),
+            ("misc_unicode", {"text": "é ß     ﻿"}),
+            ("numbers", {"a": 0, "b": 7, "c": -3, "d": 123456789, "e": 2147483647}),
+            ("null_and_bool", {"a": None, "b": True, "c": False}),
+            ("nested", {"items": [{"k": "/"}, {"k": "\x7f"}], "n": 1}),
+            ("work_item", _item(label="架構設計：架構圖 #12/草稿\x7f", requestText="需/\x01😀" * 20)),
+        ]
+        script = "return string.len(cjson.encode(cjson.decode(ARGV[1])))"
+        for name, value in cases:
+            with self.subTest(case=name):
+                actual = int(self.client.eval(script, 0, _dumps(value)))
+                self.assertEqual(actual, T.cjson_encoded_size(value))
+
 
 
 @unittest.skipIf(_SKIP is not None, _SKIP or "")

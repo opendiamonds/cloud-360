@@ -106,7 +106,9 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-semibold text-gray-500 shrink-0">作業對象</span>
         {state === 'connecting' && (
-          <span className="inline-block h-4 w-40 rounded bg-gray-100 animate-pulse motion-reduce:animate-none" role="img" aria-label="連線中" />
+          // 合併前必修第 40 列 (i)：骨架是「正在連線」的狀態訊息，不是圖片——role="status" 讓螢幕閱讀器
+          // 以禮貌模式宣告它，而不是當成一張無內容的圖。
+          <span className="inline-block h-4 w-40 rounded bg-gray-100 animate-pulse motion-reduce:animate-none" role="status" aria-label="連線中" />
         )}
         {state === 'unavailable' && <span className="text-red-600">無法載入作業對象（{unavailableText}）</span>}
         {(state === 'default' || state === 'independent' || state === 'no-object') && (

@@ -17,6 +17,7 @@
 #   POSTGRES_PASSWORD  required   database superuser password
 #   JWT_SECRET         required   signs every login token
 #   REDIS_PASSWORD     required   Redis ACL password for the REDIS_USER below
+#   MEMORY_DB_PASSWORD required   password of the memory-only DB role cloud360_memory
 #   CLOUD360_BOOTSTRAP_ADMIN_PASSWORD optional one-time admin bootstrap password
 #   OPENROUTER_API_KEY required for a staging deploy -- enforced by the deploy job
 #                      in .github/workflows/deploy.yml, NOT here: this script
@@ -73,6 +74,12 @@ missing=""
 # ONLY missing-value guard on the rollback path: that job has no equivalent of
 # the deploy job's "Require the secrets that must not default" step.
 [ -n "${REDIS_PASSWORD:-}" ] || missing="${missing} REDIS_PASSWORD"
+# MEMORY_DB_PASSWORD (merge-blockers row 20/29): the password of the memory-only
+# database role cloud360_memory. schema_rbac.sql creates that role WITHOUT a
+# password; deploy.yml sets it from this value after the stack is up. The
+# backend builds its memory-only connection from it. Empty must be refused for
+# the same reason as REDIS_PASSWORD -- and the rollback path has no other guard.
+[ -n "${MEMORY_DB_PASSWORD:-}" ] || missing="${missing} MEMORY_DB_PASSWORD"
 if [ -n "${missing}" ]; then
   echo "render-env.sh: missing required value(s):${missing}" >&2
   exit 1
@@ -89,7 +96,7 @@ fi
 # its failure is even quieter than the database one: Redis accepts the truncated
 # password as the ACL user's password, `redis-cli ping` still answers PONG, the
 # healthcheck still passes, and the session store runs on "ab".
-for name in POSTGRES_PASSWORD JWT_SECRET REDIS_PASSWORD N8N_PASSWORD GCP_BILLING_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+for name in POSTGRES_PASSWORD JWT_SECRET REDIS_PASSWORD MEMORY_DB_PASSWORD N8N_PASSWORD GCP_BILLING_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   eval "value=\${${name}:-}"
   case "${value}" in
     *'$'*)
@@ -131,6 +138,7 @@ GCP_BILLING_API_KEY=${GCP_BILLING_API_KEY:-}
 REDIS_URL=redis://redis:6379/0
 REDIS_USER=cloud360
 REDIS_PASSWORD=${REDIS_PASSWORD}
+MEMORY_DB_PASSWORD=${MEMORY_DB_PASSWORD}
 EMBEDDING_PROVIDER=ollama
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_EMBED_MODEL=bge-m3

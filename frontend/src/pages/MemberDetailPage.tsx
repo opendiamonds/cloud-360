@@ -281,12 +281,15 @@ export const MemberDetailPage: React.FC = () => {
           </p>
 
           <section className="mb-6">
-            <h2 className="mb-2 text-sm font-bold text-gray-700">專案角色</h2>
+            <h2 id="member-detail-role-heading" className="mb-2 text-sm font-bold text-gray-700">
+              專案角色
+            </h2>
             {canManage ? (
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   data-testid="member-detail-role-select"
-                  aria-label="專案角色"
+                  // 合併前必修第 40 列 (i)：名稱取自畫面上的區塊標題，而不是另寫一份同字的 aria-label。
+                  aria-labelledby="member-detail-role-heading"
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
                   disabled={saving}

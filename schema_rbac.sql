@@ -16,6 +16,11 @@
 --   C) RBAC：role_permissions + 預設矩陣（352 列）
 --   D) 不建立固定密碼管理員；bootstrap admin 由後端依環境變數建立
 --   X) 擴充：pgvector（`vector` 型別；U5 記憶表的 vector(1024) 欄位需要）
+--   I) U5：memory schema（memory_records／memory_audit_events）
+--      ＋ 記憶專用登入角色 cloud360_memory（**本檔不設密碼**；密碼由
+--      deploy/initdb/02-memory-role-password.sh 以 MEMORY_DB_PASSWORD 另設）。驗證：
+--        psql "$DATABASE_URL" -c "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname='cloud360_memory'"
+--        psql "$DATABASE_URL" -c "SELECT has_table_privilege('cloud360_memory','public.users','SELECT')"  -- 須為 f
 --
 -- 執行（新環境可只跑這支）：
 --   psql "$DATABASE_URL" -f schema_rbac.sql
@@ -547,10 +552,30 @@ COMMENT ON COLUMN memory.memory_audit_events.actor_user_id IS
 -- ---------------------------------------------------------------------------
 -- BR1.2：grant 邊界——只開放記憶 schema。
 --
--- 角色由部署環境提供（POSTGRES_USER）；此處以 DO 區塊保持可重跑且不假設角色名。
--- **本輪未被 CI 驗證**（OPEN-CG5-1）：驗它需要第二個資料庫角色並以該角色嘗試
--- 越界，而 N-2 的 service container 只有 superuser。這是資料庫層的唯一邊界，
--- 故此缺口如實記載而非以註解帶過。
+-- 下面第一段對建表的擁有者帳號（current_user，即 POSTGRES_USER）授權：它是現行
+-- 記憶表存取（memory_service.py）實際使用的帳號，**它不構成邊界**——擁有者本來就
+-- 能讀寫 public 的一切（合併前必修第 20／29 列指出的缺口）。
+--
+-- 邊界由第二段的記憶專用角色 `cloud360_memory` 承擔（2026-10-31 裁決「SQL 建角色，
+-- 部署另設密碼」）：
+--   * **本檔只建角色、不帶密碼、不含任何 psql 變數**——本檔的兩條執行路徑
+--     （空 volume 的 docker-entrypoint-initdb.d，與既有環境的
+--     backend/scripts/run_meta_schema_migration.py 以 DBAPI cursor 執行本區塊）都
+--     無法傳入 psql 變數。密碼由 deploy/initdb/02-memory-role-password.sh 在本檔之後
+--     以 MEMORY_DB_PASSWORD 設定（deploy.yml 每次部署執行；test compose 以 initdb
+--     第二支 script 執行）。沒有密碼的 LOGIN 角色無法以密碼驗證登入，故「本檔已跑、
+--     密碼尚未設定」這個中間狀態不會留下一個空密碼可登入的角色。
+--   * 只授與 memory schema 的 USAGE 與表／序列的必要權限（含之後新建物件的 DEFAULT
+--     PRIVILEGES），並撤銷它對 public schema 的表、序列與 CREATE 權限。外鍵
+--     （memory.* → public.users）的參照完整性檢查以被參照表擁有者的權限執行，
+--     不需要它能讀 public.users。
+--   * 可重跑：以 pg_roles 判斷是否已存在；GRANT／REVOKE／ALTER DEFAULT PRIVILEGES
+--     本身冪等。角色是叢集層物件，同一叢集的其他資料庫重跑本檔也只會建一次。
+--   * CI 的 memory-schema job 以這個角色連線，斷言它讀不到 public 的任一表、
+--     寫得進 memory 的表（backend/scripts/verify_memory_role.sql）。
+--   * **現況的誠實記載**：記憶表的實際存取改用這個角色屬 memory-service 單元，在那
+--     之前資料庫層的邊界只對以此角色連線的程式成立（backend/database.py 的
+--     get_memory_session）。
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -563,6 +588,28 @@ BEGIN
     'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA memory TO %I', current_user
   );
 END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cloud360_memory') THEN
+    -- 刻意不帶 PASSWORD（見上方說明）。
+    CREATE ROLE cloud360_memory LOGIN;
+  END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA memory TO cloud360_memory;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA memory TO cloud360_memory;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA memory TO cloud360_memory;
+ALTER DEFAULT PRIVILEGES IN SCHEMA memory
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cloud360_memory;
+ALTER DEFAULT PRIVILEGES IN SCHEMA memory
+  GRANT USAGE, SELECT ON SEQUENCES TO cloud360_memory;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cloud360_memory;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM cloud360_memory;
+REVOKE CREATE ON SCHEMA public FROM cloud360_memory;
+
+COMMENT ON ROLE cloud360_memory IS
+  'BR1.2 / merge-blockers row 20+29: memory-only login role. Granted ONLY the memory schema (USAGE + table/sequence DML, incl. default privileges); privileges on public tables, sequences and CREATE are revoked. Created WITHOUT a password by schema_rbac.sql; the password is set from MEMORY_DB_PASSWORD by deploy/initdb/02-memory-role-password.sh (run by deploy.yml on every deploy and by the test compose initdb). Do not grant it anything in public.';
 
 -- ###########################################################################
 -- J) U18 project-meta-data: project_members / reselection_events /
@@ -592,6 +639,17 @@ END $$;
 --    由什麼改為什麼）需要其中四個。缺口與回補指派見 OPEN-ND18-1。
 -- ###########################################################################
 
+-- 合併前必修第 31 列 (c)(g)（2026-10-31，純註解、無 DDL 變更）：
+--   (c) 成員關係的守門（停用守門、改選、升任管理者、自我降級／移出的管理者計數）以
+--       「合格」判定，而合格判定讀 users.authorization_status。**本檔的 users DDL
+--       沒有這一欄**——它由後端啟動時的 database.py `_ensure_*` 補丁以
+--       `ALTER TABLE users ADD COLUMN IF NOT EXISTS authorization_status ...` 補上。
+--       故只跑本檔、後端從未啟動過的資料庫，守門查詢會因缺欄失敗；後端至少啟動
+--       一次之後才成立。
+--   (g) 成員回填（services/membership_backfill.py 的 _BACKFILL_SQL，後端啟動時自動
+--       執行）**不看 users.is_active**：已停用擁有者的零成員專案同樣會被補成
+--       project_admin。這是刻意保留的現況（2026-10-31 裁決：只寫進文件、SQL 不變）；
+--       該專案隨後由停用守門與自動改選的規則處理。
 CREATE TABLE IF NOT EXISTS project_members (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,

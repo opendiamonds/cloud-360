@@ -108,6 +108,9 @@ BLOCK_SENTINELS = {
         "CREATE TABLE IF NOT EXISTS memory.memory_records",
         "CREATE TABLE IF NOT EXISTS memory.memory_audit_events",
         "GRANT USAGE ON SCHEMA memory",
+        # 合併前必修第 20／29 列：記憶專用角色（無密碼；密碼由部署另設）。
+        "CREATE ROLE cloud360_memory LOGIN",
+        "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM cloud360_memory",
     ),
     "J": (
         "CREATE TABLE IF NOT EXISTS project_members",
@@ -191,11 +194,22 @@ EXPECTED_CONSTRAINTS = (
     "ck_system_requirement_fields_cleared_has_null_value",
 )
 
-# (schema.table, 被參照的表, 期望的 confdeltype)：'c' = CASCADE、'a' = NO ACTION
+# (schema, table, 欄位, 被參照的表, 期望的 confdeltype)：'c' = CASCADE、'a' = NO ACTION
+#
+# **`J)` 區塊的 7 條外鍵全部列出，且以欄位為鍵**（合併前必修第 30 列 (b)，
+# OPEN-CG18-13）：原本只核 3 條，`invited_by`／`promoted_user_id`／
+# `previous_owner_user_id`／`updated_by` 的 `ON DELETE` 從未被核對；而以（表、被參照表）
+# 為鍵時 `(project_members, users)` 同時命中 `user_id` 與 `invited_by` 兩條，分不出
+# 是哪一條。`tests/test_meta_schema_expectations.py` 以解析 `schema_rbac.sql` 的
+# `J)` 區塊鎖住「本表 ＝ 該區塊的全部 REFERENCES」。
 EXPECTED_FK_DELETE_ACTIONS = (
-    ("public", "project_members", "projects", "c"),
-    ("public", "project_members", "users", "a"),
-    ("public", "system_requirement_fields", "systems", "c"),
+    ("public", "project_members", "project_id", "projects", "c"),
+    ("public", "project_members", "user_id", "users", "a"),
+    ("public", "project_members", "invited_by", "users", "a"),
+    ("public", "reselection_events", "promoted_user_id", "users", "a"),
+    ("public", "reselection_events", "previous_owner_user_id", "users", "a"),
+    ("public", "system_requirement_fields", "system_id", "systems", "c"),
+    ("public", "system_requirement_fields", "updated_by", "users", "a"),
 )
 
 # 必須**沒有**外鍵的那一對（[ND1]=A：改選稽核在專案被刪後獨立存活）。
@@ -440,22 +454,26 @@ def verify_postconditions(conn) -> list[str]:
         ):
             problems.append(f"約束 {name} 不存在")
 
-    for schema, table, referenced, expected in EXPECTED_FK_DELETE_ACTIONS:
+    for schema, table, column, referenced, expected in EXPECTED_FK_DELETE_ACTIONS:
+        # 以欄位（conkey）比對，而不是以（表、被參照表）——後者在同表兩欄指向同一張表
+        # 時（project_members 的 user_id 與 invited_by）只會取到其中一條。
         actual = _scalar(
             conn,
             "SELECT con.confdeltype::text FROM pg_constraint con "
             "JOIN pg_class t ON t.oid = con.conrelid "
             "JOIN pg_namespace ns ON ns.oid = t.relnamespace "
+            "JOIN pg_attribute a ON a.attrelid = con.conrelid "
+            "AND a.attnum = ANY (con.conkey) "
             "JOIN pg_class rt ON rt.oid = con.confrelid "
             "WHERE ns.nspname = :s AND t.relname = :t AND con.contype = 'f' "
-            "AND rt.relname = :r",
-            {"s": schema, "t": table, "r": referenced},
+            "AND a.attname = :c AND rt.relname = :r",
+            {"s": schema, "t": table, "c": column, "r": referenced},
         )
         if actual is None:
-            problems.append(f"{schema}.{table} 缺少指向 {referenced} 的外鍵")
+            problems.append(f"{schema}.{table}.{column} 缺少指向 {referenced} 的外鍵")
         elif actual != expected:
             problems.append(
-                f"{schema}.{table} → {referenced} 的 ON DELETE 應為 "
+                f"{schema}.{table}.{column} → {referenced} 的 ON DELETE 應為 "
                 f"confdeltype={expected}，實際 {actual}"
             )
 
@@ -497,6 +515,22 @@ def verify_postconditions(conn) -> list[str]:
         "SELECT has_schema_privilege(current_user, 'memory', 'USAGE')",
     ):
         problems.append("current_user 對 schema memory 沒有 USAGE 權限")
+
+    # 合併前必修第 20／29 列：記憶專用角色存在、只開 memory、讀不到 public.users。
+    # 「讀不到 public 的**任一**表」的逐表斷言在 CI（verify_memory_role.sql，以該角色
+    # 本身連線）；這裡只做擁有者帳號查得到的三件事，使本腳本「結束碼 0」涵蓋角色。
+    if not _scalar(conn, "SELECT count(*) FROM pg_roles WHERE rolname = 'cloud360_memory'"):
+        problems.append("記憶專用角色 cloud360_memory 不存在")
+    else:
+        if not _scalar(
+            conn, "SELECT has_schema_privilege('cloud360_memory', 'memory', 'USAGE')"
+        ):
+            problems.append("cloud360_memory 對 schema memory 沒有 USAGE 權限")
+        if _scalar(
+            conn,
+            "SELECT has_table_privilege('cloud360_memory', 'public.users', 'SELECT')",
+        ):
+            problems.append("cloud360_memory 讀得到 public.users（邊界未生效）")
 
     return problems
 

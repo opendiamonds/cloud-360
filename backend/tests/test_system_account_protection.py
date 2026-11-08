@@ -196,6 +196,54 @@ class SystemAccountProtectionTest(unittest.TestCase):
         self.assertIsNotNone(req_row)
         self.assertEqual(req_row.status, "pending")
 
+    def test_approve_authorization_request_cannot_promote_reserved_account(self):
+        """
+        @purpose A8：「核准授權申請」會把申請人改成 canonical 角色並標為 approved，是改角色之外第二條拆掉「零權限」那道鎖的路徑；若保留帳號帶有待審申請，核准必須回 409 且帳號角色、授權狀態與申請皆不動。
+        @api POST /api/auth/authorization-requests/{request_id}/approve → 409
+        @given 同 A1，並人工插入一筆指向保留帳號、申請角色為 Developer 的 pending 授權申請（正常流程不會產生，屬縱深防禦）；操作者為 Platform_Admin，故「可否核准此角色」的檢查會放行，請求必然走到保留帳號判定
+        @step 呼叫 POST /api/auth/authorization-requests/{id}/approve
+        @pass 狀態碼 409；回應 detail 提到「系統保留帳號」；保留帳號的 role 仍為 system、authorization_status 與核准前相同；該申請 status 仍為 pending 且 decided_by 為空
+        @story MB-32 MB-11 NFR7.11
+        """
+        before_status = self._reload_reserved().authorization_status
+        req = RoleAuthorizationRequest(
+            user_id=self.reserved.id, requested_role="Developer", status="pending"
+        )
+        self.db.add(req)
+        self.db.commit()
+        req_id = req.id
+
+        res = self.client.post(f"/api/auth/authorization-requests/{req_id}/approve")
+        self.assertEqual(res.status_code, 409, res.text)
+        self.assertIn("系統保留帳號", res.json()["detail"])
+        row = self._reload_reserved()
+        self.assertEqual(row.role, "system")
+        self.assertEqual(row.authorization_status, before_status)
+        req_row = (
+            self.db.query(RoleAuthorizationRequest)
+            .filter(RoleAuthorizationRequest.id == req_id)
+            .first()
+        )
+        self.assertIsNotNone(req_row)
+        self.assertEqual(req_row.status, "pending")
+        self.assertIsNone(req_row.decided_by)
+
+    def test_resend_deactivate_of_reserved_account_is_rejected(self):
+        """
+        @purpose A9：保留帳號的 is_active 兩個方向都不得改；重送停用（is_active=false）雖不改值，卻會觸發與它無關的最後管理者檢查與自動改選，必須同樣回 409 且仍為停用。
+        @api PUT /api/auth/{user_id}/active → 409
+        @given 同 A1（保留帳號已是停用）
+        @step 以保留帳號的 id 呼叫 PUT /api/auth/{id}/active，body {"is_active": false}
+        @pass 狀態碼 409；回應 detail 提到「系統保留帳號」；資料庫內該列 is_active 仍為 False
+        @story MB-32 MB-11 NFR7.11
+        """
+        res = self.client.put(
+            f"/api/auth/{self.reserved.id}/active", json={"is_active": False}
+        )
+        self.assertEqual(res.status_code, 409, res.text)
+        self.assertIn("系統保留帳號", res.json()["detail"])
+        self.assertFalse(self._reload_reserved().is_active)
+
     def test_ordinary_inactive_user_is_not_treated_as_reserved(self):
         """
         @purpose A7：保護只針對保留帳號——一般停用帳號（含名稱為保留名的小寫變體）仍可刪除，判定不得被放寬成「停用即保護」。

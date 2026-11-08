@@ -47,6 +47,19 @@ for _, value in ipairs(cjson.decode(ARGV[4])) do
   terminal[value] = true
 end
 
+-- **掃描成本的取捨**（合併前必修第 36 列 (a)；review-02 R-05）：下面的 `HGETALL`
+-- 讀回**整個** session hash——不只 `wi:*`，也含 `meta`、`tgt:*` 與三段對話
+-- `seg:*`——再於 Lua 內篩 `wi:` 前綴，成本隨整個 hash 的大小線性成長（O(n)），
+-- 且每一次建項都付一次。
+--   * 現行量級下接受：`wi:*` 欄位在每支腳本結束時最多「進行中上限＋已結束保留數」
+--     個（前者由本腳本擋住、後者由 `update_work_item.lua` 修剪），每筆另有位元組
+--     上界；對話段各有位元組上限。整個 hash 的序列化上界見 `DEPLOY.md` 的 Redis
+--     容量表（本檔不抄數字，理由同上：避免兩處漂移）。
+--   * 須改寫的時機：調高進行中上限、已結束保留數或段位元組上限**之前**；或
+--     staging 的 `SLOWLOG` 出現本腳本。改法二選一——以 `HKEYS` 篩出 `wi:*` 後逐一
+--     `HGET`（不再讀回對話段），或在 hash 內另存進行中筆數的計數欄位（由本腳本與
+--     `update_work_item.lua` 在同一次執行內原子維護）。兩者都改變腳本行為面，須
+--     連同 `session_types.ref_put_work_item` 與 `tests_redis/` 的一致性測試一起改。
 local flat = redis.call('HGETALL', key)
 local active = 0
 for i = 1, #flat, 2 do

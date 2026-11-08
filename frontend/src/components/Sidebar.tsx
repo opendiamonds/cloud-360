@@ -244,7 +244,8 @@ export const Sidebar: React.FC = () => {
         */}
         {showMemory && (
           <div className="mb-2">
-            <nav className="space-y-1 px-2">
+            {/* 合併前必修第 35 列 (c)：與「入口」「專案」兩個 <nav> 一致，補可存取名稱。 */}
+            <nav className="space-y-1 px-2" aria-label="我的記憶">
               <NavLink to="/memory" data-testid="sidebar-memory-link" className={linkClass}>
                 我的記憶
               </NavLink>

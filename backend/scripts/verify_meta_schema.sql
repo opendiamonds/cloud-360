@@ -2,6 +2,8 @@
 -- ＋ `U19 membership-service` 回補的 2 條（`P13`／`P14`，`[FD3]`=A 的 `cause` 欄）
 -- ＋ `U20 requirement-field-service` 的 2 條（`P15`／`P16`，`[FD1]`=A 的
 --   `updated_on_behalf_of` 欄型別與外鍵缺席，`BR47.3`）
+-- ＋ 合併前必修第 30 列 (a) 的 1 條（`P17`，`system_requirement_fields` 欄位集合恰為
+--   9 欄；OPEN-CG18-12）。共 17 條。
 --
 -- **`P15`／`P16` 在全新資料庫上必然通過**——新的 `J)` 區塊直接建出 varchar(64)。
 -- 它們真正要擋的是「舊定義資料庫的收斂沒發生」，所以 CI 的 `memory-schema` job
@@ -96,7 +98,8 @@ BEGIN
   -- B 群：reselection_events（BR1.2／[ND1]=A／FR12.4b）
   -- -------------------------------------------------------------------
 
-  -- P5：欄位集合恰為 8 欄，且 FR12.4b 的五個稽核欄位都在其中。
+  -- P5：欄位集合恰為 9 欄（原為 8 欄；第 9 欄是 U19/[FD3]=A 回補的 cause），
+  --     且 FR12.4b 的五個稽核欄位都在其中。
   --     兩半都要：只驗總數會讓「換掉一個欄位」通過；只驗具名會讓「多塞一欄」通過。
   SELECT count(*) INTO n FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'reselection_events';
@@ -273,6 +276,19 @@ BEGIN
       '欄位（CURRENTLY DECLARED）';
   END IF;
 
+  -- P17（合併前必修第 30 列 (a)／OPEN-CG18-12）：system_requirement_fields 的欄位集合
+  --      **恰為** 9 欄（id／system_id／agent_group／field_key／value／cleared_at／
+  --      updated_at／updated_by／updated_on_behalf_of）。P1、P5 已對另兩張表做同樣的
+  --      事，唯獨這張表沒有；多一欄或少一欄皆紅。
+  SELECT count(*) INTO n FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'system_requirement_fields';
+  IF n <> 9 THEN
+    RAISE EXCEPTION
+      'P17 FAILED: system_requirement_fields 應有 9 欄（id/system_id/agent_group/'
+      'field_key/value/cleared_at/updated_at/updated_by/updated_on_behalf_of），'
+      '實際 % —— 欄位集合變動須同步 run_meta_schema_migration.py 的 EXPECTED_TABLES', n;
+  END IF;
+
   -- P15（U20/[FD1]=A／BR47.1／BR47.3）：updated_on_behalf_of 是 agent 組識別字
   --      ——character varying(64)。仍為 integer 表示 J) 區塊的條件式收斂沒有發生，
   --      而那時每一筆帶代寫標示的寫入都會以型別錯誤失敗（500）。
@@ -321,7 +337,7 @@ BEGIN
       '收斂只應移除 updated_on_behalf_of 的那一條', n;
   END IF;
 
-  RAISE NOTICE '結構類斷言（P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16）全部通過';
+  RAISE NOTICE '結構類斷言（P1／P2／P3／P5／P6／P8／P9／P12／P13／P14／P15／P16／P17）全部通過';
 END $$;
 
 -- =====================================================================

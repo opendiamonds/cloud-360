@@ -3,6 +3,7 @@ import logging
 import bcrypt
 from env_bootstrap import load_backend_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from models import Base, User
 
@@ -36,6 +37,70 @@ if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# ---------------------------------------------------------------------------
+# 記憶專用的資料庫連線（合併前必修第 20／29 列，2026-10-31 裁決「SQL 建角色，部署另設密碼」）
+#
+# `schema_rbac.sql` 的 I) 區塊建立 `cloud360_memory` 角色（無密碼），只授與 `memory`
+# schema 的權限並撤銷其對 `public` 表的權限；部署流程再以 `MEMORY_DB_PASSWORD` 設定
+# 密碼。本段以「主連線的主機與資料庫 ＋ 該角色與密碼」組出第二條連線。
+#
+# **未設定 `MEMORY_DB_PASSWORD`（本機開發的預設）或主連線不是 PostgreSQL（測試的
+# SQLite）時，記憶專用連線不存在**：`memory_db_boundary_enabled()` 回 False，
+# `get_memory_session()` 直接拋 `MemoryDatabaseNotConfigured`。**不會**退回擁有者帳號
+# ——那會讓呼叫端以為邊界生效而實際上沒有。注意：截至本段落地時，記憶表的實際存取
+# （`memory_service.py`）**仍走主連線**；改用本段的 session 屬 memory-service 單元，
+# 在那之前資料庫層的邊界只對「以此角色連線的程式」成立。
+# ---------------------------------------------------------------------------
+
+MEMORY_DB_ROLE = "cloud360_memory"
+
+
+class MemoryDatabaseNotConfigured(RuntimeError):
+    """記憶專用連線未設定（`MEMORY_DB_PASSWORD` 未設，或主連線不是 PostgreSQL）。"""
+
+
+def build_memory_database_url(database_url: str, password: str | None) -> str | None:
+    """以主連線的主機、埠與資料庫 ＋ `cloud360_memory` 與密碼組出記憶專用連線字串。
+
+    回 `None` 的兩種情形：密碼為空（未設定），或主連線不是 PostgreSQL。純函式，
+    不讀環境變數、不連線（`tests/test_memory_db_role.py` 直接驗它）。
+    """
+    if not password:
+        return None
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql"):
+        return None
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg")
+    return url.set(username=MEMORY_DB_ROLE, password=password).render_as_string(
+        hide_password=False
+    )
+
+
+_memory_url = build_memory_database_url(db_url, os.environ.get("MEMORY_DB_PASSWORD", ""))
+# create_engine 不會連線；第一次取 session 才會。
+memory_engine = create_engine(_memory_url) if _memory_url else None
+MemorySessionLocal = (
+    sessionmaker(autocommit=False, autoflush=False, bind=memory_engine)
+    if memory_engine is not None
+    else None
+)
+
+
+def memory_db_boundary_enabled() -> bool:
+    """記憶專用連線是否已設定（不代表資料庫端的角色與密碼已就緒，只代表本程式會用它）。"""
+    return MemorySessionLocal is not None
+
+
+def get_memory_session():
+    """取得一個以 `cloud360_memory` 連線的 session。未設定時拋 `MemoryDatabaseNotConfigured`。"""
+    if MemorySessionLocal is None:
+        raise MemoryDatabaseNotConfigured(
+            "記憶專用資料庫連線未設定：MEMORY_DB_PASSWORD 為空或主連線不是 PostgreSQL。"
+            "不會退回擁有者帳號。"
+        )
+    return MemorySessionLocal()
 
 LOCAL_APP_ENVS = {"local", "test", "ci"}
 
@@ -84,6 +149,13 @@ def get_db():
 
 def init_db():
     logger.info("正在初始化資料庫與資料表...")
+    if not memory_db_boundary_enabled():
+        # 不是錯誤（本機開發與 SQLite 測試的預設），但必須看得見：此時沒有任何程式以
+        # 記憶專用角色連線（合併前必修第 20 列）。
+        logger.warning(
+            "記憶專用資料庫連線未設定（MEMORY_DB_PASSWORD 為空或非 PostgreSQL）——"
+            "以 cloud360_memory 角色連線的程式路徑不可用"
+        )
     # U1：**必須早於 create_all**，方向與下面六支 _ensure_* 相反。理由見該函式的
     # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
     _ensure_vector_extension()

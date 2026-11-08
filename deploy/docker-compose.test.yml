@@ -53,8 +53,15 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
       POSTGRES_DB: cloud360
+      # Read ONLY by 02-memory-role-password.sh below (merge-blockers row 20/29):
+      # schema_rbac.sql creates cloud360_memory without a password, and this
+      # stack has no deploy.yml step to set one. Inline test value, same as the
+      # other credentials in this file; must equal the backend's value below.
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD:-test_memory_db_password_not_for_production}
     volumes:
       - ../schema_rbac.sql:/docker-entrypoint-initdb.d/01-schema_rbac.sql:ro
+      # Runs AFTER 01 (the entrypoint sorts by name): the role must exist first.
+      - ./initdb/02-memory-role-password.sh:/docker-entrypoint-initdb.d/02-memory-role-password.sh:ro
     # No host port and no named volume: isolated and disposable.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d cloud360"]
@@ -93,6 +100,8 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       REDIS_USER: ${REDIS_USER:-cloud360test}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-test_redis_password_not_for_production}
+      # Memory-only DB role password; must equal the db service's value above.
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD:-test_memory_db_password_not_for_production}
       # `stub` -- see the header. Leaving this EMPTY is not an option: the
       # contract makes it required with no default and requires a loud startup
       # failure when no provider is detected, so an empty value turns every PR

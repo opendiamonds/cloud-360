@@ -48,11 +48,17 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 
-class MemoryError(Exception):
-    """本單元所有領域例外的基底。**刻意不繼承 `HTTPException`。**"""
+class MemoryServiceError(Exception):
+    """本單元所有領域例外的基底。**刻意不繼承 `HTTPException`。**
+
+    **不叫 `MemoryError`**（合併前必修第 33 列 (b)，2026-10-31 更名）：Python 內建的
+    `MemoryError` 是「記憶體不足」，同名會在任何 `from services.memory_errors import
+    MemoryError` 的模組裡遮蔽內建類別——那個模組之後的 `except MemoryError` 就再也
+    接不到真正的記憶體不足，而且不會有任何錯誤訊息。
+    """
 
 
-class MemoryForbidden(MemoryError):
+class MemoryForbidden(MemoryServiceError):
     """授權未通過。router 轉 403。
 
     `reason` 的兩個值對應 `rules.md §2.1` 的兩套授權模型，而它同時是
@@ -78,7 +84,7 @@ class MemoryForbidden(MemoryError):
         self.memory_id = memory_id
 
 
-class MemoryNotFound(MemoryError):
+class MemoryNotFound(MemoryServiceError):
     """查不到該記憶。router 轉 404。
 
     **在刪除路徑上，本例外同時涵蓋「不存在」與「非擁有者」**（`[D1]`=A）。
@@ -99,7 +105,7 @@ class MemoryNotFound(MemoryError):
         self.memory_id = memory_id
 
 
-class MemoryInvalidInput(MemoryError):
+class MemoryInvalidInput(MemoryServiceError):
     """輸入不合封閉集合或欄位約束。router 轉 422。
 
     承載 `EC2`（`content` 去除前後空白後非空）、`EC3`（`kind` 與
@@ -125,9 +131,32 @@ class MemoryInvalidInput(MemoryError):
         self.allowed = tuple(allowed) if allowed else ()
 
 
+#: `MemoryStorageUnavailable` 對外的固定訊息。**刻意是常數**：它會成為 503 的
+#: `detail`，而任何由連線設定組出的字（主機、使用者、連線字串）都不得出現在回應或日誌裡。
+MEMORY_STORAGE_UNAVAILABLE_DETAIL = "記憶儲存目前無法使用，請聯絡平台管理員。"
+
+
+class MemoryStorageUnavailable(MemoryServiceError):
+    """記憶專用資料庫連線未設定，且所在環境不允許退回主連線。router 轉 503。
+
+    合併前必修第 48 列 Major（`OPEN-CG5-1`），2026-11-07 使用者裁決「只在本機／測試
+    退回」：`MEMORY_DB_PASSWORD` 未設定時，只有 `APP_ENV` 屬
+    `database.LOCAL_APP_ENVS` 才退回主連線；其他環境（含 staging）一律不退回——
+    退回會讓記憶表以擁有者帳號存取，而呼叫端看不出邊界其實沒有生效。
+
+    **不接受任何參數**：訊息固定為 `MEMORY_STORAGE_UNAVAILABLE_DETAIL`，使連線資訊
+    在型別上就無處可放。
+    """
+
+    def __init__(self) -> None:
+        super().__init__(MEMORY_STORAGE_UNAVAILABLE_DETAIL)
+
+
 __all__ = [
-    "MemoryError",
+    "MEMORY_STORAGE_UNAVAILABLE_DETAIL",
     "MemoryForbidden",
     "MemoryInvalidInput",
     "MemoryNotFound",
+    "MemoryServiceError",
+    "MemoryStorageUnavailable",
 ]

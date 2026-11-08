@@ -77,6 +77,7 @@ def _run_renderer(env_overrides: dict[str, str | None]) -> tuple[int, str, str, 
             "POSTGRES_PASSWORD",
             "JWT_SECRET",
             "REDIS_PASSWORD",
+            "MEMORY_DB_PASSWORD",
             "CLOUD360_BOOTSTRAP_ADMIN_PASSWORD",
             "OPENROUTER_API_KEY",
             "N8N_WEBHOOK_URL",
@@ -110,6 +111,9 @@ def _happy_env(**overrides: str) -> dict[str, str | None]:
         "POSTGRES_PASSWORD": FAKE_POSTGRES_PASSWORD,
         "JWT_SECRET": FAKE_JWT_SECRET,
         "REDIS_PASSWORD": FAKE_REDIS_PASSWORD,
+        # 合併前必修第 20 列起 render-env.sh 也要求它；本檔不驗它，只讓渲染能走到底
+        # （它自己的案例在 test_memory_db_role.py）。
+        "MEMORY_DB_PASSWORD": "test-only-value-memory-db",
     }
     base.update(overrides)
     return base

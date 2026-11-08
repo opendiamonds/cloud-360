@@ -35,12 +35,15 @@ name: Memory retention purge (90d)
 # ---------------------------------------------------------------------------
 # Review R-01 asked for the compose invocation to be pinned the way deploy.yml
 # pins it (`-f deploy/docker-compose.deploy.yml --env-file deploy/.env`, see
-# deploy.yml:124/137/198/250/349/350/364/471). The `-f` half is copied
+# deploy.yml job `deploy` step "Build and start the stack" and every later
+# step that builds a COMPOSE=(...) array, plus job `rollback` step "Restore
+# the last-good deployment"). The `-f` half is copied
 # verbatim below. The `--env-file deploy/.env` half CANNOT be:
 #
-#   * deploy.yml DELETES that file at the end of every run -- step "Remove the
-#     generated env file" (deploy.yml:376-378) is `rm -f deploy/.env` with
-#     `if: always()`, and the rollback job does the same (deploy.yml:472).
+#   * deploy.yml DELETES that file at the end of every run -- job `deploy`
+#     step "Remove the generated env file" is `rm -f deploy/.env` with
+#     `if: always()`, and job `rollback` step "Restore the last-good
+#     deployment" does the same right after its `up -d`.
 #     So between deploys the file does not exist, and
 #     `docker compose --env-file <missing>` is a hard error, not a warning.
 #     A daily schedule pointed at it would fail EVERY DAY.
@@ -52,7 +55,7 @@ name: Memory retention purge (90d)
 #   * Omitting --env-file entirely does not work either: compose interpolates
 #     the project model before ANY subcommand, and
 #     `volumes: - ${CLOUDFLARED_CREDENTIALS_FILE}:/etc/cloudflared/creds.json:ro`
-#     (deploy/docker-compose.deploy.yml:345) becomes an invalid volume spec
+#     (service `cloudflared` in deploy/docker-compose.deploy.yml) becomes an invalid volume spec
 #     when that variable is empty.
 #
 # deploy/.env.example is version-controlled, contains NO secret, and
@@ -71,7 +74,7 @@ name: Memory retention purge (90d)
 # deliberately do not, and the four facts behind that are:
 #
 #   1. deploy.yml declares `group: deploy-10-10`, `cancel-in-progress: false`
-#      (deploy.yml:20-22).
+#      (its top-level `concurrency.group` / `concurrency.cancel-in-progress`).
 #   2. GitHub allows only ONE pending run per concurrency group; a newly
 #      queued run CANCELS the previously pending one.
 #   3. So a daily purge entering `deploy-10-10` would cancel a QUEUED DEPLOY.
@@ -85,7 +88,8 @@ name: Memory retention purge (90d)
 # pg_terminate_backend while the purge transaction is open and asserts that not
 # one row was deleted and not one audit row was written. That is the exact
 # shape of `docker compose up -d --build --remove-orphans` rebuilding `db`
-# mid-purge (deploy.yml:124/471).
+# mid-purge (deploy.yml job `deploy` step "Build and start the stack", and job
+# `rollback` step "Restore the last-good deployment").
 #
 # ---------------------------------------------------------------------------
 # PUBLIC REPO / PUBLIC ACTIONS LOG
@@ -163,7 +167,8 @@ jobs:
       #
       # `-T` is mandatory: this runner has no TTY and `docker compose exec`
       # without it fails with "the input device is not a TTY" (same reason as
-      # deploy.yml:149).
+      # deploy.yml job `deploy` step "Set the memory-only database role
+      # password", which runs `exec -T db`).
       #
       # Identity: PGUSER/PGDATABASE are taken from the CONTAINER's own
       # environment, which compose set from the real deploy/.env when the

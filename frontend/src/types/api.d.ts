@@ -1657,7 +1657,7 @@ export interface components {
         MemoryCreateRequest: {
             /**
              * Content
-             * @description 記憶的文字內容；去除前後空白後須非空
+             * @description 記憶的文字內容；去除前後空白後須非空。上限 4000 字元，超過回 422
              */
             content: string;
             /**
@@ -4372,6 +4372,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description 記憶專用資料庫連線未設定（非本機環境不退回主連線） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_memories_api_memory_records_get: {
@@ -4415,6 +4422,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description 記憶專用資料庫連線未設定（非本機環境不退回主連線） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     create_memory_api_memory_records_post: {
@@ -4453,7 +4467,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description embedding 提供者不可用 */
+            /** @description embedding 提供者不可用，或記憶專用資料庫連線未設定（非本機環境） */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4503,6 +4517,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description 記憶專用資料庫連線未設定（非本機環境不退回主連線） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     widen_memory_scope_api_memory_records__memory_id__scope_put: {
@@ -4545,6 +4566,13 @@ export interface operations {
             };
             /** @description 輸入不合封閉集合或欄位約束 */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 記憶專用資料庫連線未設定（非本機環境不退回主連線） */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

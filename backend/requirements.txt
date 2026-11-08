@@ -69,3 +69,11 @@ websockets
 # **在 Python >= 3.14 上 mcp 要求 `starlette>=0.48.0`，與上方 FastAPI 釘選衝突**——
 # backend 映像與 CI 目前是 3.12；日後升到 3.14 時本行與 FastAPI 釘選要一起重新判定。
 mcp==2.3.0
+#
+# 合併前必修第 38 列 (a)（2026-10-31 裁決）：`mcp` 的兩個傳遞依賴也精確釘選。只釘 `mcp`
+# 時，`pip install` 會在每次解析當下取 `sse-starlette`／`mcp-types` 的最新相容版，
+# CI、Docker build 與 staging 三處可能各拿到不同版本——而 bridge 的 SSE 行為正是由
+# `sse-starlette` 提供。版本取自 `backend/.venv` 現裝（`pip show`，2026-10-31）。
+# 升 `mcp` 時三行要一起重新判定。
+sse-starlette==3.0.3
+mcp-types==2.3.0

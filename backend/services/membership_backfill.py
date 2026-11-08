@@ -25,9 +25,16 @@ membership_backfill.py — 既有專案的擁有者成員列補齊（`U19`；合
 那裡的 `_ensure_*` 補丁家族**全部吞掉失敗**（`except Exception` ＋
 `logger.warning` 後繼續），而本補齊**必須大聲失敗**：記 ERROR 並讓啟動失敗
 ——擁有者被擋在自己專案外是無聲的權限錯誤，「服務照常啟動但沒補到」正是要防的形狀。
-代價寫明：`restart: unless-stopped` 之下，一個持續性的失敗（例如某專案的
-`owner_user_id` 指向不存在的使用者）會讓 backend 重啟迴圈；那是一個**看得見**的
-失敗，而它的處置是修資料，不是讓服務在權限錯誤的狀態下運行。
+代價寫明：`restart: unless-stopped` 之下，一個持續性的失敗會讓 backend 重啟迴圈；
+那是一個**看得見**的失敗，而它的處置是依 log 查明原因後修正，不是讓服務在權限
+錯誤的狀態下運行。**失敗原因要看 log 判斷，不要預設是「擁有者指向不存在的使用者」**
+（合併前必修第 31 列 (b)）：`projects.owner_user_id` 有外鍵指向 `users`，那種資料
+在資料庫層不可能存在。實際可能的原因只有兩類，與 `run_backfill` 的終檢訊息及
+`DEPLOY.md` §2.2.10 一致：(1) 終檢回報的「剩餘零成員專案數」不為 0
+（`BackfillVerificationError`，代表插入與計數兩個查詢的條件不一致或補齊期間有
+並行寫入）；(2) `INSERT` 本身拋出例外（看 `membership.backfill_failed` 之後的
+traceback，例如多個 backend 行程同時補齊而撞上 `uq_project_members_project_user`，
+重啟即冪等收斂）。
 
 形狀
 ----

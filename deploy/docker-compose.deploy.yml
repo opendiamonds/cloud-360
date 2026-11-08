@@ -122,6 +122,12 @@ services:
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
       FASTEMBED_MODEL: ${FASTEMBED_MODEL}
       EMBEDDING_TIMEOUT_SEC: ${EMBEDDING_TIMEOUT_SEC}
+      # --- memory-only DB role (merge-blockers row 20/29) ---------------------
+      # WITHOUT `:-`, same reason as above: no fallback is what makes
+      # validate_env_contract.py require render-env.sh to write it. The role
+      # itself is created by schema_rbac.sql without a password; deploy.yml sets
+      # the password from this same value after the stack is up.
+      MEMORY_DB_PASSWORD: ${MEMORY_DB_PASSWORD}
       # --- session-store (U10), contract K-09 ---------------------------------
       # Also WITHOUT `:-`, for the same reason as the seven above: no fallback is
       # what makes validate_env_contract.py treat it as required. The backend

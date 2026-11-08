@@ -1423,20 +1423,35 @@ class RealRedisParityTest(unittest.TestCase):
     def test_real_pipeline_error_is_classified_and_stripped_of_written_values(self):
         """
         @purpose 真實 redis-py 在 EXEC 回覆錯誤時會把指令全文加進例外訊息；gateway 必須分類為 redis_command_error 並拿掉被寫入的值。
-        @given 真實 Redis；該 key 已是字串型別（使 HSET 在 EXEC 時回 WRONGTYPE）
+        @given 真實 Redis；短 key（p: 加 8 個十六進位字元），該 key 已是字串型別（使 HSET 在 EXEC 時回 WRONGTYPE）；key 與值不共享子字串
+        @step 以 redis-py 自己的 truncate_text 組出未去值時的註記 | 含 fixture-secret-value（前提：值落在 100 字元截斷之內，否則下一步的 assertNotIn 無辨識力）
         @step 以 hset_fields_and_expire 寫值 fixture-secret-value | 拋出 SessionBackendUnavailable，原因碼 redis_command_error
         @step 檢查串接的原始例外訊息 | 不含 fixture-secret-value，以 WRONGTYPE 開頭
         @step 檢查 TTL | EXPIRE 照常生效（Redis 交易不回滾，但也不會留下無 TTL 的 key）
-        @pass 分類正確、訊息不含寫入值、TTL 存在
+        @pass 前提成立、分類正確、訊息不含寫入值、TTL 存在
         @story US2.1
         """
-        self.client.set(self.key, "x")
+        import uuid
+
+        from redis.utils import truncate_text
+
+        # 合併前必修第 34 列 (c)／review-02 R-07：類別共用的長 key（約 112 字元）會讓
+        # redis-py 把指令截在值之前，使下方的 assertNotIn 在去值失效時仍綠。改用短 key，
+        # 並先以 redis-py 的同一個截斷函式確認：若不去值，值一定會出現在訊息裡。
+        key = f"p:{uuid.uuid4().hex[:8]}"
+        value = "fixture-secret-value"
+        self.assertNotIn(value, key)
+        self.addCleanup(self.client.delete, key)
+        self.assertIn(value, truncate_text(f"HSET {key} tgt:shared {value}"))
+
+        self.client.set(key, "x")
         with self.assertRaises(SessionBackendUnavailable) as ctx:
             self.gateway.hset_fields_and_expire(
-                "test", self.key, {"tgt:shared": "fixture-secret-value"}, 4321, idempotent=False
+                "test", key, {"tgt:shared": value}, 4321, idempotent=False
             )
         self.assertEqual(ctx.exception.reason, REDIS_COMMAND_ERROR)
         cause = str(ctx.exception.__cause__)
-        self.assertNotIn("fixture-secret-value", cause)
+        self.assertNotIn(value, cause)
+        self.assertNotIn(value, str(ctx.exception))
         self.assertTrue(cause.startswith("WRONGTYPE"), cause)
-        self.assertGreater(self.client.ttl(self.key), 0)
+        self.assertGreater(self.client.ttl(key), 0)

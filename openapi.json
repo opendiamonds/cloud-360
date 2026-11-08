@@ -1131,7 +1131,8 @@
         "description": "`POST /api/memory/records` 的酬載（`BR7.3`／`[FD4]`=A）。\n\n## `model_config` 刻意**不**設 `extra=\"forbid\"`\n\n`BR1.2`／`NFR7.20` 要求酬載中任何意圖指定擁有者的欄位**被忽略且不回報\n錯誤**。`extra=\"forbid\"` 會讓它回 422，直接違反該規則；而回 422 會讓呼叫端\n以為「換個欄位名就能指定」，**忽略使該能力不存在**。\n\n同理 `visibilityScope` 也不是本模型的欄位（`NFR7.21`）：新記憶的可見範圍\n一律為最窄，放寬是獨立的、需授權的操作（`BR5.1`）。\n\n故本模型**只有兩個欄位**，而這個「少」是規則本身，不是未完成。\n`test_memory_authz` 第 11 條驗的正是帶了那兩欄仍**回成功而非 422**。",
         "properties": {
           "content": {
-            "description": "記憶的文字內容；去除前後空白後須非空",
+            "description": "記憶的文字內容；去除前後空白後須非空。上限 4000 字元，超過回 422",
+            "maxLength": 4000,
             "title": "Content",
             "type": "string"
           },
@@ -5229,6 +5230,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "記憶專用資料庫連線未設定（非本機環境不退回主連線）"
           }
         },
         "security": [
@@ -5328,6 +5332,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "記憶專用資料庫連線未設定（非本機環境不退回主連線）"
           }
         },
         "security": [
@@ -5371,7 +5378,7 @@
             "description": "輸入不合封閉集合或欄位約束"
           },
           "503": {
-            "description": "embedding 提供者不可用"
+            "description": "embedding 提供者不可用，或記憶專用資料庫連線未設定（非本機環境）"
           }
         },
         "security": [
@@ -5419,6 +5426,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "description": "記憶專用資料庫連線未設定（非本機環境不退回主連線）"
           }
         },
         "security": [
@@ -5476,6 +5486,9 @@
           },
           "422": {
             "description": "輸入不合封閉集合或欄位約束"
+          },
+          "503": {
+            "description": "記憶專用資料庫連線未設定（非本機環境不退回主連線）"
           }
         },
         "security": [

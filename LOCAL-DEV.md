@@ -270,6 +270,35 @@ python scripts/backfill_project_members.py --dry-run && echo "exit=$?"
 只有 `P12` 碰 COMMENT，且它驗的是 `system_requirement_fields`）。
 要修就是整個重來（下面那一段），或手動補 COMMENT。
 
+### ⚠️ H7：記憶專用資料庫角色 `cloud360_memory`（選用；`MEMORY_DB_PASSWORD`）
+
+合併前必修第 20／29 列（2026-10-31 裁決「SQL 建角色，部署另設密碼」）起，
+`schema_rbac.sql`（或 `run_meta_schema_migration.py`）會建立登入角色 `cloud360_memory`，
+**但不設密碼**——兩條執行路徑都無法傳入 psql 變數。它只能讀寫 `memory` schema，
+讀不到 `public` 的任何表。
+
+本機**預設不啟用**：`backend/.env` 的 `MEMORY_DB_PASSWORD` 留空時，後端不建立記憶專用
+連線，啟動時記一行 `WARNING 記憶專用資料庫連線未設定…`，且**不會**退回主連線的帳號
+假裝邊界生效（主連線為 SQLite 時也一律不建立）。截至本節寫下時，記憶表的實際存取
+仍走主連線，所以不啟用不影響任何功能。
+
+要在本機啟用（例如要驗證邊界）：
+
+```bash
+# 1) 先讓角色存在：H6 的第 2 步（run_meta_schema_migration.py）或直接 psql -f schema_rbac.sql
+# 2) 設密碼——與部署共用同一支 script；它以 psql \getenv 讀密碼，不上命令列
+export MEMORY_DB_PASSWORD="$(openssl rand -hex 16)"   # 不得含 $
+PGHOST=localhost PGPASSWORD=postgres POSTGRES_USER=postgres POSTGRES_DB=cloud360 \
+  bash deploy/initdb/02-memory-role-password.sh
+# 3) 把同一個值寫進 backend/.env 的 MEMORY_DB_PASSWORD=，重啟後端（WARNING 消失）
+# 4) 驗證邊界：以該角色連線，讀 public 必須被拒
+PGPASSWORD="$MEMORY_DB_PASSWORD" psql -h localhost -U cloud360_memory -d cloud360 \
+  -c "SELECT 1 FROM public.users LIMIT 1;"   # 預期 permission denied
+```
+
+script 找不到角色時會明說「role cloud360_memory does not exist」並以非零結束——先做第 1 步。
+`deploy/docker-compose.test.yml` 以 initdb 第二支 script 自動做第 2 步（內嵌測試值）。
+
 ### 真實 PostgreSQL 的測試（`backend/tests_pg/`）
 
 `U19` 引入**第二個測試根**。`backend/tests/` 的 51＋ 個測試檔全部走 in-memory

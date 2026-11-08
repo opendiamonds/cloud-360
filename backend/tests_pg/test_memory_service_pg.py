@@ -225,6 +225,42 @@ class MemoryServicePostgresTest(unittest.TestCase):
             "經 scored_candidates → rank_candidates 後，最近的必須排第一",
         )
 
+    # -- V2：合併前必修第 33 列 (c)，過期記憶不被檢索 -----------------------
+
+    def test_V2_search_skips_expired_rows(self):
+        """
+        @purpose 真實 PostgreSQL 上，SEARCH_SQL 不回傳已過保存期的列（第 33 列 (c)）；SQLite 編不出這條查詢，故只能在此驗
+        @given 本測試專屬 embedding_model 的兩則 semantic 記憶，向量相同；其中一則以 UPDATE 把 expires_at 設為一天前
+        @step 以擁有者呼叫 memory_service.search_records（limit 10）
+        @pass 回傳 id 恰為未過期那一則
+        @story US4.1
+        """
+        live = self._create("live", unit_vector(0))
+        expired = self._create("expired", unit_vector(0))
+        with self.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE memory.memory_records "
+                    "SET expires_at = now() - interval '1 day' WHERE id = :id"
+                ),
+                {"id": expired},
+            )
+
+        with Session(self.engine) as db:
+            pairs = memory_service.search_records(
+                db,
+                principal_user_id=self.owner_id,
+                query_vector=unit_vector(0),
+                embedding_model=self.embedding_model,
+                kinds=["semantic"],
+                limit=10,
+            )
+        self.assertEqual(
+            [record.id for record, _ in pairs],
+            [live],
+            "SEARCH_SQL 回傳了已過保存期的列——WHERE 內缺 expires_at 過濾",
+        )
+
     # -- D1／D2：Step 14，雙重刪除只寫一筆稽核（merge-blockers #22 (c)）------
 
     def test_D1_second_session_deleting_a_stale_row_gets_not_found_and_no_audit(self):

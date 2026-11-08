@@ -394,7 +394,8 @@ class MembershipDataAccessTest(unittest.TestCase):
                         global_role=user.role,
                     ):
                         has_successor = True
-                if not has_successor:
+                # 合併前必修第 21 列：除 alice 之外沒有任何成員的專案不擋。
+                if others and not has_successor:
                     blocked.add(project_id)
             return blocked
 
@@ -426,15 +427,35 @@ class MembershipDataAccessTest(unittest.TestCase):
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), set())
 
-        # (4) 第二個專案 Q：alice 獨任管理者 → 只有 Q 受阻，而且**一次查詢**就
-        #     跨專案找到它（`NFR12.10`：與該使用者的專案數無關）。
-        row = ProjectMember(
-            project_id=other.id,
-            user_id=self.alice.id,
-            role=ProjectRole.PROJECT_ADMIN.value,
-            joined_at=NOW,
+        # (4) 第二個專案 Q：alice 獨任管理者、另有一位不合格的一般成員 carol
+        #     → 只有 Q 受阻，而且**一次查詢**就跨專案找到它（`NFR12.10`：與該
+        #     使用者的專案數無關）。
+        for user_id, role in (
+            (self.alice.id, ProjectRole.PROJECT_ADMIN.value),
+            (self.carol.id, ProjectRole.MEMBER.value),
+        ):
+            self.db.add(
+                ProjectMember(
+                    project_id=other.id, user_id=user_id, role=role, joined_at=NOW
+                )
+            )
+        self.db.commit()
+        self.assertEqual(aggregate(), per_project())
+        self.assertEqual(aggregate(), {other.id})
+
+        # (5) 第三個專案 R：alice 是**唯一成員**（獨自一人的專案）→ 不擋
+        #     （合併前必修第 21 列，2026-10-25 裁決）；集合版與參照實作仍相等。
+        lone = hierarchy_service.create_project(
+            self.db, owner_user_id=self.alice.id, name="R"
         )
-        self.db.add(row)
+        self.db.add(
+            ProjectMember(
+                project_id=lone.id,
+                user_id=self.alice.id,
+                role=ProjectRole.PROJECT_ADMIN.value,
+                joined_at=NOW,
+            )
+        )
         self.db.commit()
         self.assertEqual(aggregate(), per_project())
         self.assertEqual(aggregate(), {other.id})
