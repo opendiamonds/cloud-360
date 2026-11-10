@@ -91,6 +91,99 @@ test.describe('身分驗證', () => {
     await page.getByTitle('登出系統').click();
     await expect(page.getByRole('button', { name: '登入系統' })).toBeVisible();
   });
+
+  /**
+   * @purpose 註冊表單的「申請角色」下拉必須真的有可選角色。控件呈現但**空無一物**
+   *          是它獨有的失敗形狀：畫面看起來完整，使用者卻無法完成註冊。
+   * @api GET /api/auth/roles/catalog -> 200 | 公開角色目錄，供註冊頁下拉使用
+   * @ui / | 登入頁：「立即註冊新帳號」切換、「申請角色」下拉
+   * @given ephemeral stack 啟動時已 seed role_permissions
+   * @step 開啟站台根路徑 `/` | 顯示登入頁
+   * @step 點擊「沒有帳號？立即註冊新帳號」 | 切換為註冊模式，出現「申請角色」
+   * @step 檢視下拉的選項 | 至少一個選項，且其中一個含 `Project_Architect`
+   * @step 檢視是否出現載入失敗訊息 | 不出現「無法取得可申請的角色清單」
+   * @pass option 數不為 0、含 Project_Architect，且無失敗訊息
+   * @story J1
+   * @note 斷言「option 數不為 0」而非固定的 11：角色清單來自 role_permissions
+   *       seed，會隨產品演進增減，固定數字會產生與本缺陷無關的假紅燈。
+   *       一併斷言「沒有失敗訊息」，否則一個顯示了錯誤卻仍渲染舊選項的實作會過關。
+   */
+  test('註冊表單的申請角色下拉有可選項目', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '沒有帳號？立即註冊新帳號' }).click();
+
+    const roleSelect = page.locator('select');
+    await expect(roleSelect).toBeVisible();
+    await expect(roleSelect.locator('option')).not.toHaveCount(0);
+    await expect(
+      roleSelect.locator('option', { hasText: 'Project_Architect' })
+    ).toHaveCount(1);
+    await expect(page.getByText('無法取得可申請的角色清單')).toHaveCount(0);
+  });
+});
+
+test.describe('同源 API 契約', () => {
+  /**
+   * @purpose 站台從**任何一個等價的 origin** 開啟時，API 呼叫都必須成立。
+   *          這條存在的理由是它防過一次真實缺陷，而當時六道 CI 閘門全綠：
+   *          frontend 映像把絕對 API base URL（`http://localhost:8090`）內聯進
+   *          bundle，於是從 `http://127.0.0.1:8090` 開同一個站台時，每一個 API
+   *          呼叫都變成跨來源請求並被瀏覽器擋掉——連登入都送不出去。
+   *          其餘所有 e2e 都以 `baseURL` 開站台，**恰好就是**被內聯的那個 origin，
+   *          所以沒有一條測到得。只有從第二個 origin 進入才碰得到這個失敗面。
+   * @api POST /api/auth/login -> 200 | 帳密驗證，成功時回 access_token
+   * @api GET /api/auth/roles/catalog -> 200 | 公開角色目錄，供註冊頁下拉使用
+   * @ui / | 登入頁：帳號／密碼輸入框、「登入系統」按鈕、「申請角色」下拉
+   * @ui /workspace | 工作區：側邊導覽、「架構」按鈕
+   * @given baseURL 指向 loopback（`localhost` 或 `127.0.0.1`），兩者是同一個服務
+   *        的等價位址；非 loopback 的 baseURL 無第二個等價位址，該情況跳過
+   * @step 把 baseURL 的主機名換成另一個 loopback 位址並開啟 `/` | 顯示登入頁
+   * @step 切換為註冊模式並檢視「申請角色」下拉 | 至少一個選項
+   * @step 切回登入模式，以 admin / admin123 送出登入 | 導向 `/workspace`，不出現連線錯誤
+   * @pass 從第二個 origin 角色下拉有選項，且能登入成功
+   * @story J1
+   * @note 斷言「不出現連線失敗」而不只是「URL 變成 workspace」：跨來源被擋時
+   *       fetch 丟的是 TypeError，頁面會停在登入頁並顯示連線失敗，兩者要分開看。
+   */
+  test('從等價的第二個 loopback origin 開站台，登入與角色下拉仍然成立', async ({
+    page,
+    baseURL,
+  }) => {
+    const base = new URL(baseURL ?? 'http://localhost:8090');
+    const alternateHost =
+      base.hostname === 'localhost'
+        ? '127.0.0.1'
+        : base.hostname === '127.0.0.1'
+          ? 'localhost'
+          : null;
+    test.skip(
+      alternateHost === null,
+      `baseURL 的主機名 ${base.hostname} 不是 loopback，沒有等價的第二個位址可驗`
+    );
+
+    // `?? base.hostname` 只為滿足型別：上一行為 null 時 test.skip 已中止本測試。
+    base.hostname = alternateHost ?? base.hostname;
+    const alternateOrigin = base.origin;
+
+    await page.goto(`${alternateOrigin}/`);
+    await expect(page.getByRole('button', { name: '登入系統' })).toBeVisible();
+
+    // 先驗註冊模式：登入之後 `/` 會被導向 `/workspace`，就看不到登入頁了。
+    await page.getByRole('button', { name: '沒有帳號？立即註冊新帳號' }).click();
+    const roleSelect = page.locator('select');
+    await expect(roleSelect).toBeVisible();
+    await expect(roleSelect.locator('option')).not.toHaveCount(0);
+    await page.getByRole('button', { name: '已有帳號？立即登入系統' }).click();
+
+    await page.getByPlaceholder('請輸入您的帳號').fill(ADMIN.username);
+    await page.getByPlaceholder('請輸入密碼').fill(ADMIN.password);
+    await page.getByRole('button', { name: '登入系統' }).click();
+
+    // 跨來源被擋時的實際症狀：停在登入頁並顯示連線失敗。先排除它，再驗成功路徑。
+    await expect(page.getByText('連線失敗，請檢查後端是否啟動')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/workspace/);
+    await expect(page.getByRole('button', { name: '架構', exact: true })).toBeVisible();
+  });
 });
 
 test.describe('角色權限存取控制 (RBAC)', () => {

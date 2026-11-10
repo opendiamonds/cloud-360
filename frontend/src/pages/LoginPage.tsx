@@ -12,12 +12,33 @@ interface CatalogRole {
 const SHOW_DEMO_QUICK_USERS =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_QUICK_USERS === 'true';
 
+const CATALOG_ERROR_HEADLINE = '無法取得可申請的角色清單';
+const CATALOG_ERROR_FALLBACK = '未知錯誤';
+
+// 純抓取，完全不碰 state：react-hooks/set-state-in-effect 會做過程間分析，只要
+// effect 同步呼叫的函式裡有 setState 就會被擋，因此 state 更新一律留在呼叫端的
+// .then／.catch 內（與 AdminPage 的 fetchUserPage 同一個形狀）。
+async function fetchRoleCatalog(): Promise<CatalogRole[]> {
+  // 先判 res.ok 再解析 body：這條路徑最常見的失敗是反向代理或後端回非 JSON
+  // （例如 502 的 HTML），先解析會把有診斷價值的狀態碼換成一個語意不明的
+  // parse 錯誤。跨來源被擋的情況連 Response 都拿不到，fetch 本身就丟 TypeError。
+  const res = await fetch(apiUrl('/api/auth/roles/catalog'));
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return (data?.roles ?? []) as CatalogRole[];
+}
+
 export const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [requestedRole, setRequestedRole] = useState('');
   const [catalog, setCatalog] = useState<CatalogRole[]>([]);
+  // 角色目錄抓取失敗的原因。`null` 代表「沒有失敗」，不代表「已載入」——
+  // 兩者靠 catalog.length 區分，見下方的三態渲染。
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,21 +47,52 @@ export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  // 進入註冊模式時抓一次角色目錄。
+  //
+  // deps 刻意**不含** requestedRole：把它放進 deps 會讓使用者每選一次角色就重抓
+  // 一次目錄。預設值改以 updater 形式讀舊值，effect 因此完全不需要依賴它。
+  //
+  // 失敗**必須看得到**。原本這裡是 `.catch(() => setCatalog([]))`：所有失敗都被
+  // 收斂成「空目錄」，畫面上就是一個打開來沒有選項的下拉——使用者看不出是壞了
+  // 還是清單真的是空的，也沒有任何線索指向真正的原因。
   useEffect(() => {
     if (!isRegisterMode) return;
-    fetch(apiUrl('/api/auth/roles/catalog'))
-      .then((r) => r.json())
-      .then((d) => {
-        const roles: CatalogRole[] = d.roles || [];
+    let cancelled = false;
+    fetchRoleCatalog()
+      .then((roles) => {
+        if (cancelled) return;
         setCatalog(roles);
-        if (roles.length && !requestedRole) setRequestedRole(roles[0].role);
+        setCatalogError(null);
+        if (roles.length) setRequestedRole((prev) => prev || roles[0].role);
       })
-      .catch(() => setCatalog([]));
-  }, [isRegisterMode, requestedRole]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setCatalog([]);
+        setCatalogError(err instanceof Error ? err.message : CATALOG_ERROR_FALLBACK);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRegisterMode]);
+
+  // 重試走與 effect 相同的純抓取函式；先清掉錯誤讓畫面回到「載入中」狀態。
+  const handleRetryCatalog = () => {
+    setCatalogError(null);
+    fetchRoleCatalog()
+      .then((roles) => {
+        setCatalog(roles);
+        if (roles.length) setRequestedRole((prev) => prev || roles[0].role);
+      })
+      .catch((err: unknown) => {
+        setCatalog([]);
+        setCatalogError(err instanceof Error ? err.message : CATALOG_ERROR_FALLBACK);
+      });
+  };
 
   const handleToggleMode = () => {
     setIsRegisterMode(!isRegisterMode);
     setError(null);
+    setCatalogError(null);
     setPassword('');
     setConfirmPassword('');
   };
@@ -187,17 +239,49 @@ export const LoginPage: React.FC = () => {
                 <label className="text-xs font-bold text-slate-300 tracking-wider uppercase ml-1">
                   申請角色
                 </label>
-                <select
-                  value={requestedRole}
-                  onChange={(e) => setRequestedRole(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 text-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  {catalog.map((r) => (
-                    <option key={r.role} value={r.role}>
-                      {r.display_name}（{r.role}）
-                    </option>
-                  ))}
-                </select>
+                {/*
+                  三態渲染。原本這裡只有一個 <select>，所以「抓取失敗」與「清單為空」
+                  在畫面上長得一模一樣：一個打得開、但裡面什麼都沒有的下拉。
+                */}
+                {catalogError ? (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col gap-2 text-xs text-red-300">
+                    <span className="text-sm font-semibold">{CATALOG_ERROR_HEADLINE}</span>
+                    {/* 原因照實顯示，不改寫成推測。跨來源被擋時瀏覽器給的就是
+                        `Failed to fetch`，那個字串本身就是最有用的線索。 */}
+                    <span className="text-red-300/80 break-words">
+                      原因：{catalogError}。請確認後端服務是否正常，或稍後重試。
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRetryCatalog}
+                      className="self-start px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 font-bold transition-colors cursor-pointer"
+                    >
+                      重新載入角色清單
+                    </button>
+                  </div>
+                ) : catalog.length === 0 ? (
+                  <div className="px-5 py-4 bg-slate-800/40 border border-slate-700 rounded-2xl text-sm text-slate-400">
+                    角色清單載入中…
+                  </div>
+                ) : (
+                  <select
+                    value={requestedRole}
+                    onChange={(e) => setRequestedRole(e.target.value)}
+                    // `[color-scheme:dark]` 與 option 的深色底不是這個下拉曾經空白的
+                    // 原因（那是跨來源請求被擋、目錄根本沒抓到），而是獨立的對比度
+                    // 加固：本 app 裡只有這一個 select 把 `text-white` 配上**半透明**
+                    // 底（bg-slate-800/50），原生彈出層若沿用那個半透明底就可能是淺色，
+                    // 白字會讀不到。AdminPage 與 WaitingApprovalPage 的 select 用的是
+                    // 不透明的 bg-slate-900，所以它們不需要這一組。
+                    className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 text-white [color-scheme:dark] rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    {catalog.map((r) => (
+                      <option key={r.role} value={r.role} className="bg-slate-800 text-white">
+                        {r.display_name}（{r.role}）
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {selectedCatalog && (
                   <div className="mt-2 p-3 rounded-xl bg-slate-800/40 border border-slate-700 text-xs text-slate-300">
                     <div className="font-bold text-slate-200 mb-1">可使用功能摘要</div>
