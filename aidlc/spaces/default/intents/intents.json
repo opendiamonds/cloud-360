@@ -53,5 +53,12 @@
     "dirName": "261001-a2-langgraph",
     "scope": "refactor",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a0e6ab-10df-79ff-a8dd-010ebdf2ab32",
+    "slug": "poc",
+    "dirName": "260928-poc",
+    "scope": "poc",
+    "status": "in-flight"
   }
 ]
