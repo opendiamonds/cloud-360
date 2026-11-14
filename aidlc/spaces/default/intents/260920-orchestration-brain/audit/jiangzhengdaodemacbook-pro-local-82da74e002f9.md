@@ -210288,3 +210288,305 @@
 **Stage**: ci-pipeline
 
 ---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T05:10:41Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:18:38Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:18:40Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:18:42Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:18:45Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:18:47Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Context**: construction > tcms-test-cases > manual-test-cases.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T05:21:02Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/automation-test-plan.md
+**Context**: construction > tcms-test-cases > automation-test-plan.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T05:21:24Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/tcms-sync-report.md
+**Context**: construction > tcms-test-cases > tcms-sync-report.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:21:30Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/tcms-sync-report.md
+**Context**: construction > tcms-test-cases > tcms-sync-report.md
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:21:43Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/automation-test-plan.md
+**Context**: construction > tcms-test-cases > automation-test-plan.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T05:22:15Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-quality-agent
+**Agent ID**: a0e7271ad152e9134
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T05:30:31Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-11-14T05:31:18Z
+**Event**: DECISION_RECORDED
+**Stage**: tcms-test-cases
+**Decision**: 260802-last-login-column 兩個 cli 模式手動測案因 cli 退役而失效（validator --all 的 1 個 ERROR），如何處理
+**Options**: 在該 intent 註記退役並停用 TCMS 兩案,只記錄由該 intent 自行處理
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 5659321d
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 5659321d
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/manual-test-cases.md
+**Duration ms**: 93
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: b7769df8
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/automation-test-plan.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: b7769df8
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/automation-test-plan.md
+**Duration ms**: 90
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_FIRED
+**Fire id**: 035255ef
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/tcms-sync-report.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T05:31:20Z
+**Event**: SENSOR_PASSED
+**Fire id**: 035255ef
+**Sensor ID**: required-sections
+**Stage slug**: tcms-test-cases
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/tcms-sync-report.md
+**Duration ms**: 111
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-11-14T05:31:21Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: tcms-test-cases
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T05:34:08Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["Approve","註記退役並停用 (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T05:34:09Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: TCMS Test Cases complete. How would you like to proceed?
+**Reply**: Approve
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T05:34:09Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: Intent 260802-last-login-column 有兩個手動測案在測已退役的 LLM_PROVIDER=cli（其中一個指向已刪除的測試）。要怎麼處理？
+**Reply**: 註記退役並停用 (Recommended)
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: GATE_APPROVED
+**Stage**: tcms-test-cases
+**User Input**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: STAGE_COMPLETED
+**Stage**: tcms-test-cases
+**Validation Basis**: {"graphContract":"sha256:1818fefea5574baae3a37235bd3b33d96fb48fd5a694b145f9f2af6f77498b5a","inputs":[{"artifact":"build-and-test-summary","contentHash":"sha256:e91e1f5863f2754385d7687eab032cda46b999d241812f31ac339c90c9fe2e0d","instanceCount":1,"presentCount":1,"producer":"build-and-test","required":true,"structureHash":"sha256:ae3e8ed5eba3edd2a6ba75af5a3ed391c40606a401733f00b323d34f0e5a7aba"},{"artifact":"code-summary","contentHash":"sha256:12227b9ed6c5affcbc57515378968817c3c1e43531c481ab2328410eae3d4ef8","instanceCount":24,"presentCount":24,"producer":"code-generation","required":true,"structureHash":"sha256:d09c83616ee70c945113ff5d63738494b2f143099677c1e1538c20ecc49b1233"},{"artifact":"stories","contentHash":"sha256:e503226d386a4c46dc23c3a9263c4a9653724f6594d8c4db42779334aac92f23","instanceCount":1,"presentCount":1,"producer":"user-stories","required":true,"structureHash":"sha256:76f5a676742a508a3de3abf5b74038841ed045a689bc32528aa723fe5427de97"}],"outputs":[{"artifact":"automation-test-plan","contentHash":"sha256:28c0db4daecd1287718b45424fed4a8d0a6b4dab76443d2838172111a5cd8c82","instanceCount":1,"presentCount":1,"producer":"tcms-test-cases","required":true,"structureHash":"sha256:9f8863d02ec97225a34503fb4d009cc0ccbea28f6cff4d9f5212cc97000384f1"},{"artifact":"manual-test-cases","contentHash":"sha256:0ee1920954979aae627c1be07cf4c43ff16de76bdcfeae0c19d93c330228ba83","instanceCount":1,"presentCount":1,"producer":"tcms-test-cases","required":true,"structureHash":"sha256:864cea8062e4dafbd1cfe954bbefe419135f625d98b78be6eebfc7fc12a7d3a8"},{"artifact":"tcms-sync-report","contentHash":"sha256:f38bd70889b44f453e3a112cf993cca718681b37e05857885793c466db4e8ee5","instanceCount":1,"presentCount":1,"producer":"tcms-test-cases","required":true,"structureHash":"sha256:04be418da5e54bbcab51f7cf4d11ea8f58d8a8ab34c2e7696284c29229fcc4c6"}],"projectType":"brownfield","schema":3}
+**Details**: Stage TCMS Test Cases approved by gate
+**Tokens In**: 265
+**Tokens Out**: 116779
+**Cache Read**: 50478640
+**Cache Write**: 464813
+**Cost USD**: 14.84
+**By Model**: opus-5-5=14.84
+**By Agent**: main=3.31; aidlc-quality-agent=11.53
+**Tokens By Model**: opus-5-5=265/116.8k/50.5M/464.8k
+**Tokens By Agent**: main=41/14k/14.1M/26.2k; aidlc-quality-agent=224/102.7k/36.4M/438.6k
+
+---
+
+## Phase Completion
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: PHASE_COMPLETED
+**From phase**: construction
+**To phase**: operation
+**Stages completed**: 24
+
+---
+
+## Phase Verification
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: PHASE_VERIFIED
+**Phase boundary**: construction → operation
+
+---
+
+## Phase Start
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: PHASE_STARTED
+**Phase**: operation
+**Scope**: agent-orchestration-brain
+
+---
+
+## Stage Start
+**Timestamp**: 2026-11-14T05:35:05Z
+**Event**: STAGE_STARTED
+**Stage**: deployment-pipeline
+**Agent**: aidlc-pipeline-deploy-agent
+**Answer Mode**: guide (reused from delivery-planning)
+
+---
+
+## Memory Empty
+**Timestamp**: 2026-11-14T05:35:06Z
+**Event**: MEMORY_EMPTY
+**Stage**: tcms-test-cases
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T05:38:19Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["寫入 TCMS (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T05:38:19Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: Intent 260802-last-login-column 的兩個 cli 案例已註記退役（validator 全部 27/27、0 ERROR）。同步工具會把該檔 13 個案例全部重送（含 11 個內容未變的），要實際寫入 TCMS 嗎？（工具沒有『停用』功能，狀態改停用需在 TCMS 介面手動做）
+**Reply**: 寫入 TCMS (Recommended)
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T05:38:53Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/construction/tcms-test-cases/tcms-sync-report.md
+**Context**: construction > tcms-test-cases > tcms-sync-report.md
+
+---

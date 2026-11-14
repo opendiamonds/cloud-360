@@ -193,9 +193,9 @@
     },
     {
       "id": "AC-A11Y.1",
-      "status": "Deferred",
-      "target": "交 build-and-test 與 tcms-test-cases 人工驗證（純鍵盤完成流程，axe 判不到）",
-      "note": "純鍵盤完成流程，axe 判不到，交 build-and-test 與 tcms-test-cases 人工"
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "〔2026-11-14 tcms-test-cases〕「只用鍵盤即可在入口頁輸入並送出」：以 Tab／Enter 的真實鍵盤事件走完輸入與送出，不呼叫 click()；突變 MC1（輸入框 tabIndex={-1}）與 MC2（送出鈕改 type=\"button\"）皆紅燈。原 Deferred 註記：純鍵盤完成流程，axe 判不到，交 build-and-test 與 tcms-test-cases 人工"
     },
     {
       "id": "AC-A11Y.2",
