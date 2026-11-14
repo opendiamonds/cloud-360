@@ -210590,3 +210590,339 @@
 **Context**: construction > tcms-test-cases > tcms-sync-report.md
 
 ---
+
+## Decision Recorded
+**Timestamp**: 2026-11-14T05:42:15Z
+**Event**: DECISION_RECORDED
+**Stage**: deployment-pipeline
+**Decision**: 等使用者切出 auto mode 後派 release engineer 撰寫部署文件與 runbook
+**Options**: 切出 auto mode 後說繼續
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T05:42:30Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: ab029c04c2ccfeaf9
+**Message**: 繼續
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T06:02:25Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+**Context**: operation > deployment-pipeline > deployment-pipeline-questions.md
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-11-14T06:02:27Z
+**Event**: DECISION_RECORDED
+**Stage**: deployment-pipeline
+**Decision**: PG 16→18 升版窗口內自動回滾的處置（DEPLOY.md §5.4 不變量 2）
+**Options**: A 暫時停用 rollback job,B 維持現況接受不相容並走手動回滾,C 窗口內改人工部署
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T06:04:28Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["B 維持現況，走手動回滾 (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T06:04:29Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: PG 16→18 升版窗口內，部署失敗觸發的自動回滾只還原程式碼、不還原資料，會讓 PG 16 映像對著 PG 18 的資料而起不來。窗口內要怎麼處理？（DEPLOY.md §5.4 要求記下選擇）
+**Reply**: B 維持現況，走手動回滾 (Recommended)
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-11-14T06:04:34Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+**Context**: operation > deployment-pipeline > deployment-pipeline-questions.md
+
+---
+
+## Question Answered
+**Timestamp**: 2026-11-14T06:04:37Z
+**Event**: QUESTION_ANSWERED
+**Stage**: deployment-pipeline
+**Details**: B 維持現況，走手動回滾
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T06:05:04Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/cd-config.md
+**Context**: operation > deployment-pipeline > cd-config.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T06:05:19Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-strategy.md
+**Context**: operation > deployment-pipeline > deployment-strategy.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T06:05:41Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/rollback-runbook.md
+**Context**: operation > deployment-pipeline > rollback-runbook.md
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:47Z
+**Event**: SENSOR_FIRED
+**Fire id**: 2fa4f9cd
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/cd-config.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_PASSED
+**Fire id**: 2fa4f9cd
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/cd-config.md
+**Duration ms**: 88
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_FIRED
+**Fire id**: a54beeee
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-strategy.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_PASSED
+**Fire id**: a54beeee
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-strategy.md
+**Duration ms**: 85
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_FIRED
+**Fire id**: b3ead12e
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/rollback-runbook.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_PASSED
+**Fire id**: b3ead12e
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/rollback-runbook.md
+**Duration ms**: 90
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_FIRED
+**Fire id**: 5844839e
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-11-14T06:05:48Z
+**Event**: SENSOR_PASSED
+**Fire id**: 5844839e
+**Sensor ID**: required-sections
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+**Duration ms**: 99
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:49Z
+**Event**: SENSOR_FIRED
+**Fire id**: b9841bc3
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/cd-config.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-11-14T06:05:49Z
+**Event**: SENSOR_FAILED
+**Fire id**: b9841bc3
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/cd-config.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/deployment-pipeline/upstream-coverage-b9841bc3.md
+**Findings count**: 4
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:49Z
+**Event**: SENSOR_FIRED
+**Fire id**: 6f0f1421
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-strategy.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-11-14T06:05:49Z
+**Event**: SENSOR_FAILED
+**Fire id**: 6f0f1421
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-strategy.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/deployment-pipeline/upstream-coverage-6f0f1421.md
+**Findings count**: 4
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:50Z
+**Event**: SENSOR_FIRED
+**Fire id**: bd207e47
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/rollback-runbook.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-11-14T06:05:50Z
+**Event**: SENSOR_FAILED
+**Fire id**: bd207e47
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/rollback-runbook.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/deployment-pipeline/upstream-coverage-bd207e47.md
+**Findings count**: 4
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-11-14T06:05:50Z
+**Event**: SENSOR_FIRED
+**Fire id**: cea5dedc
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+
+---
+
+## Sensor Failed
+**Timestamp**: 2026-11-14T06:05:50Z
+**Event**: SENSOR_FAILED
+**Fire id**: cea5dedc
+**Sensor ID**: upstream-coverage
+**Stage slug**: deployment-pipeline
+**Output path**: aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-pipeline/deployment-pipeline-questions.md
+**Detail path**: aidlc/spaces/default/intents/260920-orchestration-brain/.aidlc-engine/sensors/deployment-pipeline/upstream-coverage-cea5dedc.md
+**Findings count**: 4
+
+---
+
+## Stage Awaiting Approval
+**Timestamp**: 2026-11-14T06:05:50Z
+**Event**: STAGE_AWAITING_APPROVAL
+**Stage**: deployment-pipeline
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T06:08:42Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["Approve"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T06:08:43Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: Deployment Pipeline complete. How would you like to proceed?
+**Reply**: Approve
+
+---
+
+## Gate Approved
+**Timestamp**: 2026-11-14T06:08:48Z
+**Event**: GATE_APPROVED
+**Stage**: deployment-pipeline
+**User Input**: Approve
+**Person Reply**: Approve
+
+---
+
+## Stage Completion
+**Timestamp**: 2026-11-14T06:08:48Z
+**Event**: STAGE_COMPLETED
+**Stage**: deployment-pipeline
+**Validation Basis**: {"graphContract":"sha256:df6962deab365ec2f79f186c672b0f382b3fff1ebf396ae0771425695c8f11eb","inputs":[{"artifact":"ci-config","contentHash":"sha256:46a0150e78a048346eb9d93deae41f7cd97ec6aa457f4035af28138ce8186e1d","instanceCount":1,"presentCount":1,"producer":"ci-pipeline","required":true,"structureHash":"sha256:f7de7dd2aa55cb98042823338265e3dbab444ee922b8d1094a70bcc86bad4518"},{"artifact":"cicd-pipeline","contentHash":"sha256:20c75eb9f7642debaa1f824c72ca0f8f9a29502fa2052d219ced806a6cfb13cf","instanceCount":19,"presentCount":19,"producer":"infrastructure-design","required":true,"structureHash":"sha256:e407a2a30a3ca50cdc0384519083ef4c4d178de878e77aeba90550cb7b342499"},{"artifact":"infrastructure-specification","contentHash":"sha256:6b98d3a0bd7f18e84188bc4603e20635edb14dff616195623e3840f58fd6c09c","instanceCount":17,"presentCount":17,"producer":"infrastructure-design","required":true,"structureHash":"sha256:22b43671e58da497db316096e1cff9fbf7c8b07843e05038a27c57ca01f0ac64"},{"artifact":"quality-gates","contentHash":"sha256:f460f700ee92042f3d0830c15405f5606512ad49c51ef14d58e4aeb85ebe0542","instanceCount":1,"presentCount":1,"producer":"ci-pipeline","required":true,"structureHash":"sha256:ac8c4a486ff311a3ea22950760ebb5013fe94f25a54ffd18ca87273444965612"}],"outputs":[{"artifact":"cd-config","contentHash":"sha256:b86bfd4a96757f19b19c74d0242c03e3d8bffa877096a190c142d7924b606537","instanceCount":1,"presentCount":1,"producer":"deployment-pipeline","required":true,"structureHash":"sha256:de4c9a1240609044a8f80be211cadd65fe4a7ce13f44057f527447ee56213df3"},{"artifact":"deployment-pipeline-questions","contentHash":"sha256:ec4392cb72919ac4aa781adbc882894727c680f148450f36fb4678135b20b979","instanceCount":1,"presentCount":1,"producer":"deployment-pipeline","required":true,"structureHash":"sha256:da6fe8e9025da7fc184746ab6ef29093508a387949e236664574119c07a2ac47"},{"artifact":"deployment-strategy","contentHash":"sha256:dd512c95710fb463e49dbc141cd650a826ea74b7b4ee5ce3e31f7d37ea84262b","instanceCount":1,"presentCount":1,"producer":"deployment-pipeline","required":true,"structureHash":"sha256:52f82809c6512dbf126aa2bdc3b6f0214b9af5a32cf440c9e5073707c365c5a4"},{"artifact":"rollback-runbook","contentHash":"sha256:441c7466f1b747a4edc54aed108f9fda2239d45468fd456b389566b86009d9b2","instanceCount":1,"presentCount":1,"producer":"deployment-pipeline","required":true,"structureHash":"sha256:6699b9086e92d1440983b268e3f9b8f2fb1db1808d765061ddc44933d199818a"}],"projectType":"brownfield","schema":3}
+**Details**: Stage Deployment Pipeline approved by gate
+**Tokens In**: 96
+**Tokens Out**: 32153
+**Cache Read**: 34972356
+**Cache Write**: 67441
+**Cost USD**: 8.18
+**By Model**: opus-5-5=8.18
+**By Agent**: main=8.18
+**Tokens By Model**: opus-5-5=96/32.2k/35M/67.4k
+**Tokens By Agent**: main=96/32.2k/35M/67.4k
+
+---
+
+## Stage Start
+**Timestamp**: 2026-11-14T06:08:48Z
+**Event**: STAGE_STARTED
+**Stage**: deployment-execution
+**Agent**: aidlc-pipeline-deploy-agent
+**Answer Mode**: guide (reused from delivery-planning)
+
+---
+
+## Memory Empty
+**Timestamp**: 2026-11-14T06:08:49Z
+**Event**: MEMORY_EMPTY
+**Stage**: deployment-pipeline
+
+---
