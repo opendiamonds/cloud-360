@@ -1,0 +1,156 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "memory-purge",
+  "upstream_ids": [
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "security-requirements.md §二 的 NFR6.10",
+      "note": "記憶層的 schema 隔離。本單元是一個**有刪除權**的新消費者，故 NFR6.10 要求它以 POSTGRES_USER（應用程式角色）連線、不得以 superuser 繞過 grant 邊界。**殘留缺口如實記載**：該 grant 邊界本輪未被 CI 驗證（U5 的 OPEN-CG5-1，逐字理由是驗它需要第二個資料庫角色而 service container 只有 superuser），故 NFR6.10 目前無機械強制。NFR6 的另一面（schema 建立與跨 schema 查詢的 CI job）屬 U5，非本單元。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "security-requirements.md §二 的 NFR7.10–NFR7.15",
+      "note": "episodic memory 的保存與刪除稽核——**本單元的核心**。六條衍生需求：NFR7.10（清除涵蓋兩個目標：逾期記憶 ＋ 逾期稽核事件，承 U5 的 OPEN-N5-2）、NFR7.11（每列清除須留 purged_by_retention 稽核、actor 為保留的系統 actor）、NFR7.12（連線路徑：自架 runner ＋ docker compose exec -T，零暴露、零新 secret）、NFR7.13（runner 離線導致排程未執行必須可偵測——**本單元唯一需要新機制的一條**）、NFR7.14（決定性邏輯放純 Actions 步驟，不走 LLM 路徑）、NFR7.15（清除稽核本身不留稽核，承 U5 的衍生決定，理由是無終止遞迴）。NFR7 的加密面承 U5 的 NFR6.1／NFR6.2，本單元無增量但**不寫不適用**（見 §四）。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "security-requirements.md §二 的 NFR8.10",
+      "note": "新增元件的部署設定完整性。[N1]=A 使本條**自然成立**而非需要額外努力：零新環境變數、零新 secret、零新 compose 服務。二元判準為 validate_env_contract.py 綠燈 ＋ diff 不含 deploy/、render-env.sh、任一 .env.example、docker-compose.*.yml。"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "tech-stack-decisions.md §一 的承載形式列",
+      "note": "成本原則（優先便宜快速的模型、昂貴模型只用在真正需要處）。本單元**零 LLM 呼叫**，故成本為零——而這不是巧合：FR4.5a 附註要求決定性的映射邏輯放純 Actions 步驟、不交給 gh-aw 的 LLM 路徑，NFR7.14 即其二元判準。故 NFR9 在本單元是**被結構性滿足**，不是未評估。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "意圖識別準確率。本單元是 packaging，交付一個排程 workflow，**不含任何意圖識別路徑**；其落點為 U11 intent-router。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "跨頁面上下文保留率。本單元無前端面、無 session；落點為 U10 session-store 與 U14／U15 的 UI 單元。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "首字回應時間。本單元是排程批次作業，**沒有使用者在等待回應**；此指標對它無定義。produces_kinds 亦使 performance-requirements 對 packaging 不適用。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "狀態外部化與重啟還原。本單元**零進程內狀態**——它是一個執行完即結束的 workflow，沒有可重啟還原的對象；落點為 U10 session-store。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "WebSocket 契約閘門。本單元零端點、零 WebSocket；落點為 U2 brain-ws-contract 與 U13 brain-gateway。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "tech-stack-decisions.md §二 的增量表",
+      "note": "路由層模型的可替換性。本單元零 LLM 呼叫、零模型選擇（NFR7.14 明文禁止走 LLM 路徑），故無可替換的對象；落點為 U11 intent-router。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的 kind 說明",
+      "note": "跨功能任務的頁面切換次數。本單元無使用者可見面；落點為 U14 entry-page-ui 等 UI 單元。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "N9-DG1-CLOSED",
+      "status": "OK",
+      "target": "security-requirements.md §三",
+      "note": "**本站查證並關閉 DG-1。** unit-of-work.md:221 逐字寫「U9：DG-1 尚未解決」並把落點指向 functional-design（CONDITIONAL，而本單元因 kind 為 packaging 確實未執行該站）。開檔核對 schema_rbac.sql 後確認 U5 memory-data 已在 DDL 層定案：memory_audit_events 刻意不對 memory_records 設外鍵，表 COMMENT 逐字說明「With an FK both options break an approved requirement: CASCADE makes FR4.7 vacuous after 90 days, RESTRICT makes FR4.5 impossible」，代價亦明寫「memory_id has NO referential integrity」。另有 purged_by_retention 的專屬 action 值與保留的系統 actor。**這是「指派落在已被 skip 的 CONDITIONAL 站」那個失敗模式的一次良性結果**：被指派的站沒跑，但問題已在更上游被解決。"
+    },
+    {
+      "id": "N9-TWO-TARGETS",
+      "status": "OK",
+      "target": "security-requirements.md §二 的 NFR7.10 ＋ 問題檔 §〇之二",
+      "note": "**清除有兩個目標而上游只寫了一個。** 本站在讀 schema_rbac.sql 時獨立查到，隨後確認 U5 已把它記為 OPEN-N5-2（逐字：「N-6 實際上要清兩種資料（逾期記憶 ＋ 逾期稽核事件），而上游只寫了前者」）。兩者都已有專為清除查詢而建的索引（ix_memory_records_expires_at、ix_memory_audit_events_occurred_at），且後者的索引註解逐字寫明本輪該表沒有任何讀取端、「所以不會有人順手建它」。只做第一項會讓稽核表無上界成長。"
+    },
+    {
+      "id": "N9-SILENT-MISS",
+      "status": "OK",
+      "target": "security-requirements.md §二之一 ＋ tech-stack-decisions.md §三",
+      "note": "**本單元唯一需要新設計的東西，而它防的是「什麼都沒發生」。** [N1]=A 的代價是排程依賴自架 runner 在線，而 on: schedule 在 runner 離線時**不會排入、不會失敗、不會有任何 run**——Actions 清單上只是少一列，而少一列沒有顏色。後果不是晚一天清，是 FR4.5 的 90 天保存期失去合規意義（逾期未刪的 episodic memory 是使用者以為已消失的個人對話歷程）。本站固定判準（必須有一個**不依賴該 runner** 的檢查——依賴它的檢查在 runner 離線時與被偵測的失敗同時消失）但不預選機制。OPEN-N9-1。"
+    },
+    {
+      "id": "N9-NO-PRECEDENT",
+      "status": "OK",
+      "target": "tech-stack-decisions.md §三 的查證表",
+      "note": "**本單元是本 repo 第一個在自架 runner 上以 on: schedule 觸發的 workflow**，以雙向指令查證：① 7 個有 schedule: 的 workflow（agentics-maintenance、aidlc-sync-pull／reconcile／reverse／selftest、daily-digest.lock、release-watch.lock）的 runs-on 全部是 ubuntu-slim 或 ubuntu-latest；② 反向只有 ci.yml 與 deploy.yml 用 self-hosted，而兩者的 schedule: 命中數皆為 0。**反向查證是必要的**：只做第一條會漏掉「某個用自架 runner 的檔案其實也有排程」。既有自架 runner 的 job 都由事件觸發（有人在等結果），排程觸發則沒有人在等——這是 NFR7.13 的由來。"
+    },
+    {
+      "id": "N9-ID-OFFSET",
+      "status": "OK",
+      "target": "security-requirements.md §一",
+      "note": "**本單元的衍生需求編號自 NFR7.10／NFR6.10／NFR8.10 起算，不是跳號錯誤。** 實查低位號已被佔用：U5 的 NFR6.1／NFR6.2／NFR7.2，以及 embedding-port／brain-infra／hierarchy-data／hierarchy-service 各自的 NFR7.1／NFR7.3／NFR7.4。其中 **U5 的 NFR7.2 已被 schema_rbac.sql 的索引註解逐字引用**，是本 intent 唯一外溢到版控 SQL 的 NFRx.y，實質已成全域識別字。初稿曾在問題檔引用 NFR7.6（亦已被佔用），送審前自檢查出並就地更正為 NFR7.13。"
+    },
+    {
+      "id": "N9-PBT-NA",
+      "status": "N/A",
+      "target": "security-requirements.md §四 的 PBT 判定",
+      "note": "**PBT 判定為 N/A（非豁免）**：本單元交付一個 workflow 與其中的 SQL，沒有任何本單元擁有的純函式；ADR-0006 點名的三個落點（IaC generator、cost calculator、agent routing）皆不在本單元。**與 U19 的「適用且 blocking」形成對照**並寫下來，以免被讀成漏判——U19 有上游點名的 select_successor，本單元沒有對應物。"
+    },
+    {
+      "id": "N9-KIND-SCOPE",
+      "status": "N/A",
+      "target": "security-requirements.md §〇 的開頭",
+      "note": "本單元 kind 為 packaging，produces_kinds 使 performance／scalability／reliability／observability 四份產出不適用，故本站只交付 security-requirements、tech-stack-decisions、traceability 三份。**可觀測性的要求（NFR7.13）一併寫在 security-requirements.md 內**，不另立一份不在 produces 清單上的檔案——那會是一個引擎看不到、sensor 不驗、下游不會讀的孤兒檔。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-N9-1",
+      "severity": "blocking-downstream",
+      "text": "**NFR7.13 的偵測機制未定，而它是本單元唯一需要新設計的東西。** 自架 runner 離線時 on: schedule 不會排入、不會失敗、不會有任何 run。本站固定判準（必須不依賴該 runner）但不預選機制。承接 infrastructure-design（3.4，CONDITIONAL）→ 轉移目標 deployment-pipeline（4.1，亦 CONDITIONAL）；**兩者皆 skip 時須重新提交使用者**——與 OQ-13 共用同一條轉移鏈，該鏈的風險已由上游逐字揭露。"
+    },
+    {
+      "id": "OPEN-N9-2",
+      "severity": "process",
+      "text": "**unit-of-work.md:221 的「U9：DG-1 尚未解決」已過期**，DG-1 已由 U5 在 DDL 層定案（見 reverse 的 N9-DG1-CLOSED）。本站不回改已核可的上游產出，只如實記載；建議下一輪 units-generation 修訂或 practices-discovery 時更新那一行。"
+    },
+    {
+      "id": "OPEN-N9-3",
+      "severity": "carried",
+      "text": "**OQ-13 的「落點」那一半仍未定**（workflow 檔名、排程時間）。本站只固定連線路徑（有安全後果的那一半）；落點屬 infrastructure-design。"
+    },
+    {
+      "id": "OPEN-CG5-1",
+      "severity": "carried",
+      "text": "**grant 邊界未被 CI 驗證**（承 U5）。它是資料庫層的唯一防線，而本單元是一個**有刪除權**的新消費者，故這個缺口在本單元之後比之前更值得補。NFR6.10 目前只能以 workflow 的連線寫法審查，無機械強制。"
+    },
+    {
+      "id": "OPEN-N5-2",
+      "severity": "carried",
+      "text": "**上游只寫了「清逾期記憶」而實際要清兩種資料**（承 U5）。本站以 NFR7.10 把它固定為二元判準（workflow 內必須存在兩條 DELETE），故此項在本單元**已有承載**，但原始記載仍留在 U5 的 record 內。"
+    }
+  ]
+}

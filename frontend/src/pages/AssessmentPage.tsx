@@ -8,6 +8,12 @@ import { downloadReviewPdf } from '../utils/exportReviewPdf';
 import { exportDiagramToPngDataUrl } from '../utils/exportDiagramPng';
 import { buildOptimizeSuggestionsSummary, normalizeOptimizeFinding } from '../utils/optimizeSuggestions';
 import { toPlainSuggestionText } from '../lib/plainText';
+import { useBrainConnection } from '../brain/useBrainConnection';
+import { useAssessmentTargetSync } from '../brain/useAssessmentTargetSync';
+import { BrainSession } from '../components/brain/BrainSession';
+import { ContextBar } from '../components/brain/ContextBar';
+import { SyncNotice } from '../components/brain/SyncNotice';
+import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
 
 type DiagramItem = {
   id: number;
@@ -236,6 +242,20 @@ export const AssessmentPage = () => {
     return Number.isNaN(id) ? null : id;
   }, [searchParams]);
   const selectedDiagramId = diagramOverride ?? urlDiagramId;
+
+  // U14：大腦掛點只在 K1 view 時掛載；無 K1 時不開連線、同步掛點全部 no-op（nfr-design R-05）。
+  const brainEnabled = can('K1', 'view');
+  const brain = useBrainConnection('assessment', { enabled: brainEnabled });
+  const openDiagramForBrain = useCallback((id: number) => setDiagramOverride(id), []);
+  const brainSync = useAssessmentTargetSync(brain, {
+    selectedDiagramId,
+    urlDiagramId,
+    diagrams,
+    uploadedXml,
+    optimizeDraft,
+    openDiagram: openDiagramForBrain,
+  });
+  const onBrainPageReady = brainSync.onPageReady;
   const loadingList =
     selectedDiagramId !== null
       ? loadedFor !== selectedDiagramId
@@ -243,9 +263,19 @@ export const AssessmentPage = () => {
 
   useEffect(() => {
     let cancelled = false;
-    fetchDiagrams().then((data) => { if (!cancelled && data) setDiagrams(data); });
+    // U14（BR97.5）：本頁的就緒閘門＝圖清單請求已結束；在既有的 then／新增的 catch 回呼內交給同步掛點。
+    const openedBy = urlDiagramId !== null ? 'url' : null;
+    fetchDiagrams()
+      .then((data) => {
+        if (cancelled) return;
+        if (data) setDiagrams(data);
+        onBrainPageReady({ diagrams: data ?? [], listOk: data !== null, openedBy });
+      })
+      .catch(() => {
+        if (!cancelled) onBrainPageReady({ diagrams: [], listOk: false, openedBy });
+      });
     return () => { cancelled = true; };
-  }, [fetchDiagrams]);
+  }, [fetchDiagrams, onBrainPageReady, urlDiagramId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -810,6 +840,8 @@ export const AssessmentPage = () => {
         const detail = await res.text();
         throw new Error(detail || `刪除架構圖失敗（HTTP ${res.status}）`);
       }
+      // BR97.6 ③：被刪的圖等於作業對象的圖時，同步掛點送保留上兩層、diagramId 為 null 的設定。
+      if (selectedDiagramId !== null) brainSync.onDiagramDeleted(selectedDiagramId);
       setDiagramOverride(null);
       setActive(null);
       setSuggestionsLive('');
@@ -1201,6 +1233,16 @@ export const AssessmentPage = () => {
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
       <div className="max-w-5xl mx-auto space-y-6">
+        {/* U14（BR97.1、BR97.4）：脈絡列（可切換共享）、同步提示與收合的「問大腦」面板；只在 K1 view 時掛載。 */}
+        {brainEnabled && (
+          <div className="overflow-hidden rounded-2xl border border-gray-200">
+            <BrainSession connection={brain}>
+              <ContextBar sharingToggle />
+              <SyncNotice sync={brainSync} />
+              <SubpageBrainPanel />
+            </BrainSession>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">評估儀表板</h1>
@@ -1265,6 +1307,7 @@ export const AssessmentPage = () => {
                     setCollabScore(null);
                     setCollabStatus(null);
                   }
+                  brainSync.markOrigin('user');
                   setDiagramOverride(id);
                   setUploadedXml(null);
                   setUploadedFileName(null);

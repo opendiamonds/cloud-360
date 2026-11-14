@@ -1,0 +1,182 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "progress-channel",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR5", "NFR6", "NFR7", "NFR8", "NFR9", "NFR10", "NFR11"],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "本單元不做意圖識別。落點 U11 intent-router。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "本單元無跨頁面上下文；其狀態生命週期等於單一請求。落點 U10 session-store。"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "U22-V6",
+      "note": "適用且為間接但真實的影響——進度事件經 drain 流向使用者，本單元在首字路徑上，若 drain 阻塞或做 I/O 會直接計入 requirements.md:652-490 量測的那個差值（送出時刻 → 收到第一個內容 token 的時刻）。處置為 U22-V6：drain 為純同步的 deque 取出迴圈、無 I/O、無 await、複雜度 O(取出則數)。本站不自行切本單元的延遲子預算——NFR3 是端到端門檻，切子預算需要全鏈資料，本站沒有；只要求可檢查的必要條件。端到端量測的落點為 build-and-test（3.6，ALWAYS）。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "S-6（具名開放項，使用者於閘門裁決）",
+      "note": "字面上看起來相反，故判定附三層理由。NFR4 逐字『大腦的 session 與工作狀態一律放 Redis，不得放行程記憶體』，而 unit-of-work.md:310 把本單元逐字定義為『行程內狀態容器』。不適用的依據：(1) NFR4 的主詞是 session 與工作狀態，其可測不變量逐字為『重啟 backend 後，既有對話的脈絡與作業對象仍可完整還原』——本單元持有的是單一請求內的暫態進度事件，重啟會讓該請求本身消失，沒有還原的對象；(2) NFR4 自己的排除清單逐字點名三處既有行程內狀態容器不在本 intent 範圍內、維持原狀，其中包含 advice_orchestrator 的 _progress，而 K-18 的 shape_precedent 正是要本單元沿用那個形狀；(3) 把暫態進度事件寫進 Redis 會為每一則進度訊息新增一次網路往返，直接損害 NFR3。因後果大（會改寫整個單元的形狀）故具名為 S-6 而非埋在散文裡。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "本單元不擁有任何 WS 訊息型別。ProgressEvent 的四種 type 是行程內形狀，送出前由 U13 轉成 WS 訊息；WS 契約閘門屬 U2 brain-ws-contract（已交付）與 U13。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "本單元無 schema、無資料表、不碰資料庫（SEC-4）。落點 U5 memory-data。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "本單元無持久化，沒有保存期這個概念——buffer 的壽命是單一請求。落點 U5 memory-data／U9 memory-purge。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "SEC-4",
+      "note": "不適用是一個選擇的後果而非既定事實。SEC-4 禁止新增環境變數，故無部署設定同步義務。但 [Q1] 的選項 C（把 buffer 上界做成環境變數）會讓 NFR8 變成適用——它連帶觸發 project.md ## Mandated 的 render-env.sh ＋ deploy/.env.example ＋ backend/.env.example 三處同步。[Q1]=A 選了不定數值但要求先量，故維持不適用。記此以免下游實作時順手把上界做成可配置而不知道它帶著一條 blocking 義務。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "本單元不呼叫任何 LLM、不選模型。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "本單元與模型選擇無關。落點 U11 intent-router。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "本單元無 UI。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "U22-V5（本單元側）＋ S-5（鑄造端）",
+      "note": "鍵必須由密碼學安全隨機來源產生；允許 uuid.uuid4() 或 secrets.token_urlsafe()，禁止遞增計數器、時間戳、random 模組、以及任何由使用者 id／thread_id／請求內容推導的值。[Q4]=A。本單元無法驗證鑄造——鑄造端在 U13／U12（[Q1]=A）；本單元能驗的是它自己沒有鑄造函式（U22-V5 的 grep）。本站不宣稱涵蓋鑄造端。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "S-3，落點 code-generation（ALWAYS）",
+      "note": "對外錯誤不得含例外原文，且必須涵蓋 design_agent.py:216 這個既有洩漏點。本站新增的那一半就是點名該行——functional-design 的 BR3.1 只說固定訊息、BR5.1 的五項退場符號不含它，於是實作者可滿足全部 13 條規則而把它留著。該行逐字 yield 型別 error、content 為 f-string 插入例外物件。更要緊的是 BR1.2 新增的 DuplicateChannelKey 會被同一個 except Exception（:214）接住再經 :216 外洩——修法本身往那條路徑上加了新的洩漏來源。承接 functional-design 審查的 R-02（Critical），該產出已終局凍結故以具名需求承接而非回改。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "BR3.2／BR4.2 的 log 內容限制",
+      "note": "log 限於鍵、事件類別、累計丟棄數，不得記錄 ProgressEvent.content。理由：xml 類事件的 content 是使用者的架構圖內容，寫進 log 等於把本單元要修的跨帳號外洩換個出口重演（log 的讀者與該架構圖的擁有者不是同一群人）。team.md ## Forbidden 逐字要求敏感資料不得寫進任何 log。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py 通過 ＋ 三個 .env.example 的 diff 為空 ＋ compose 服務數維持 6",
+      "note": "不新增環境變數、secret、設定檔項目、socket、port 或進程。這條排除了一個真實選項：[Q1] 的選項 C 會新增環境變數並觸發 NFR8。"
+    },
+    {
+      "id": "U22-V1",
+      "status": "OK",
+      "target": "既有 backend job 的 python -m unittest discover -s tests",
+      "note": "兩個重疊請求的事件集合互斥且各自非空。IsolatedAsyncioTestCase ＋ asyncio.Event barrier 釘住交錯順序，不得以 sleep 製造（US13 DoD／[Q-07]：品質 agent 實測 sleep 版本會通過，為假綠燈）。前例 backend/tests/test_langgraph_migration.py，DoD 逐字『不需新 seam』。"
+    },
+    {
+      "id": "U22-V2",
+      "status": "OK",
+      "target": "同上",
+      "note": "被中途放棄的請求結束後鍵不殘留。模擬客戶端斷線（關閉回應 generator 而非跑完），斷言 registry 不含該鍵。[Q2]=A 逐字要求以測試承載而非以推論成立——Starlette 關閉回應 generator 使 finally 執行是推論，若 generator 被 GC 而非顯式 aclose()，finally 的執行時機不保證。"
+    },
+    {
+      "id": "U22-V3",
+      "status": "OK",
+      "target": "S-2，落點 code-generation（ALWAYS）；CI grep 步驟",
+      "note": "五個退場符號 ＋ 三個呼叫點全部處理完畢。grep 條件：design_agent.py 的 _progress_queue／_last_xml 零命中、:218 的設 None 零命中、_drain_progress 已改寫；且 run_design_agent 的三個呼叫點全部傳入新鍵。第二半是 functional-design 的 BR5.1 漏掉的——實測三處為 agent_router.py:125（使用者路徑的真實 SSE 入口）、wa_collab_orchestrator.py:79（BR5.1 唯一列到的）、backend/test_agent.py:41。承接 functional-design 審查的 R-01（Critical）。"
+    },
+    {
+      "id": "U22-V4",
+      "status": "OK",
+      "target": "S-4，人工 code review",
+      "note": "publish 的容量檢查與 buffer 變動之間無 await。[Q3]=A：以需求規定並寫進函式本體註解（不只模組 docstring）。本站如實記載它靠人遵守、無自動化會擋——這是 [Q3] 否決 asyncio.Lock 的代價，已具名為 S-4。deque 的 append／popleft 皆同步，故整段本來就不需要 await；規則是要防實作者在中間插入一個。"
+    },
+    {
+      "id": "U22-V5",
+      "status": "OK",
+      "target": "CI grep ／ 人工",
+      "note": "本單元不含任何鍵鑄造函式：progress_channel.py 內無 uuid／secrets／random 的 import，亦無任何回傳新鍵的函式。這是 SEC-1 在本單元側唯一可驗的部分。"
+    },
+    {
+      "id": "U22-V6",
+      "status": "OK",
+      "target": "NFR3（已於 coverage 列計）；人工 code review ＋ build-and-test 的端到端量測",
+      "note": "drain 不得成為首字延遲的來源。純同步 deque 取出迴圈、無 I/O、無 await、O(取出則數)。"
+    },
+    {
+      "id": "U22-D4",
+      "status": "OK",
+      "target": "S-4",
+      "note": "不加鎖。依據 contract-summary.md K-18 shape_precedent.do_not_follow：不照抄 advice_orchestrator.py:24 的 threading.Lock，因為那支檔案用 Lock 是為了它的 ThreadPoolExecutor（:21，本站已實地核對該行確為 _executor: Optional[ThreadPoolExecutor] = None），而本單元跑在單執行緒 asyncio 事件迴圈上。審查 R-07 指出此假設對 thread 安全但對 await 縫隙安靜失效，[Q3]=A 定案為以需求規定而非加 asyncio.Lock。"
+    },
+    {
+      "id": "U22-D5",
+      "status": "Deferred",
+      "target": "S-1，落點 code-generation（ALWAYS，已查 stage-graph.json，不需轉移目標）",
+      "note": "buffer 上界有、數值未定。[Q1]=A 把它由待辦升級為有驗收條件的待辦：code-generation 定值前須實跑一次典型產圖、記下 progress 事件的實際則數、上界取該數的某個倍數，且測量值與倍數都要寫進程式註解。本站不寫數字的理由是 project.md 的『可以被計算的數字先算再寫』——我沒有量過一次產圖會產生幾則 progress。"
+    },
+    {
+      "id": "U22-D6",
+      "status": "OK",
+      "target": "BR3.2 記 ERROR；BR4.2 記 WARN",
+      "note": "[Q2]=A 的分級。依據之一是本站實測 backend 完全沒有 metrics／可觀測性基礎設施——對 prometheus／statsd／opentelemetry／OTEL 全樹搜尋只命中 wa_rule_engine.py:375 與 wa_lens_engine.py:416 兩處字串常值，那是在檢查使用者的架構圖有沒有提到監控工具，不是本系統的 metrics。故 WARN 在無補償機制下實務上沒人看，而通道不存在表示清除契約被違反或鍵傳錯了——那是程式錯誤，construction.md 逐字要求 Errors must be surfaced。"
+    },
+    {
+      "id": "U22-D2",
+      "status": "OK",
+      "target": "team.md ## Code Style",
+      "note": "logger 名稱為 cloud360.progress_channel。team.md 逐字要求新模組一律 cloud360.<module> 形式；既有 design_agent.py:27 用 logging.getLogger(__name__)，而 team.md 把它列為 5 個已知不一致之一，新模組不沿用它。既有正確形狀：advice_orchestrator.py:17、wa_collab_orchestrator.py:26。"
+    },
+    {
+      "id": "U22-D3",
+      "status": "OK",
+      "target": "backend/requirements.txt 的 diff 為空",
+      "note": "零新依賴：collections.deque ＋ dict 皆標準庫。deque 的 append／popleft 皆 O(1) 且同步，這是 U22-V4（無 await）能成立的結構前提。換掉 asyncio.Queue 的三個理由見 tech-stack-decisions.md §二：Queue.put 在滿載時會 await（即 [Q4] 否決的阻塞生產者）、Queue 無法從中間選擇性移除（BR4.1 需要）、Queue 的 put_nowait 滿載時只能拋 QueueFull 而無法表達 xml／error 不准丟。"
+    },
+    {
+      "id": "FR13.4",
+      "status": "Deferred",
+      "target": "functional-design 的 OQ-P2，落點 code-generation（ALWAYS）",
+      "note": "wa_collab_orchestrator.py:79 不傳 thread_id 使所有 A4 共編使用者共用 default-thread——那是對話記憶的共用，與進度事件錯送是兩回事（US13 DoD 逐字列為第二個修復對象）。本單元的 BR5.1／U22-V3 只要求該行補傳 per-request 的進度鍵，不夾帶 thread_id 的分區決定——那牽涉 design_agent.py:169 的 MemorySaver() 模組層單例與對話記憶語意，本站無依據定案。"
+    },
+    {
+      "id": "U22-D1",
+      "status": "OK",
+      "target": "team.md ## Code Style 的既成命名慣例",
+      "note": "模組落點 backend/services/progress_channel.py。Python 檔名 snake_case.py；router 才有 *_router.py 後綴，本單元不是 router。未出成題目——有既成慣例可依。本列為送審前自檢 5 補入：該 id 原本只存在於 tech-stack-decisions.md 的散文表而不在本檔，屬 project.md 反覆記載的『id 只活在一處』缺陷。"
+    },
+    {
+      "id": "U22-D7",
+      "status": "OK",
+      "target": "SEC-1（同一個決定的兩種表達）；本單元側驗證為 U22-V5，鑄造端為 S-5",
+      "note": "鍵由密碼學安全隨機來源產生（uuid4 或 secrets.token_urlsafe）。[Q4]=A。它與 SEC-1 是同一個決定——SEC-1 是需求形式、U22-D7 是技術選擇形式。兩者都列出以免純比對兩份檔案時被讀成只有一邊有。本列為送審前自檢 5 補入。"
+    },
+    {
+      "id": "U22-D8",
+      "status": "OK",
+      "target": "U22-V1／U22-V2 的承載者：既有 backend job 的 python -m unittest discover -s tests",
+      "note": "測試框架為 Python 內建 unittest（不是 pytest），併發測試用 IsolatedAsyncioTestCase。team.md ## Testing Posture 的既成事實。前例 backend/tests/test_langgraph_migration.py，US13 DoD 逐字『不需新 seam』。本列為送審前自檢 5 補入。"
+    }
+  ],
+  "reverse_count": 19
+}

@@ -1,0 +1,46 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-page-ui",
+  "version": 1,
+  "writes": [
+    {
+      "path": "backend/services/hierarchy_facade.py"
+    },
+    {
+      "path": "backend/services/memory_errors.py"
+    },
+    {
+      "path": "backend/services/memory_facade.py"
+    },
+    {
+      "path": "backend/services/memory_router.py"
+    },
+    {
+      "path": "backend/tests/test_memory_pending_authz.py"
+    },
+    {
+      "path": "frontend/src/App.tsx"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx"
+    },
+    {
+      "path": "frontend/src/components/memory/"
+    },
+    {
+      "path": "frontend/src/memory/"
+    },
+    {
+      "path": "frontend/src/pages/MemoryPage.tsx"
+    },
+    {
+      "path": "frontend/src/types/api.d.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/memory-page.spec.ts"
+    },
+    {
+      "path": "openapi.json"
+    }
+  ]
+}

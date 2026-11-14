@@ -9,7 +9,7 @@ compiled graph.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,13 +72,32 @@ def openrouter_chat_model(
     *,
     model: str | None = None,
     timeout_seconds: float | None = None,
-    temperature: float = 0.0,
+    temperature: float | None = 0.0,
+    max_retries: int = 0,
     **kwargs: Any,
 ):
     """Build a ``ChatOpenAI`` client pointed at OpenRouter.
 
     Raises ``RuntimeAuthError`` when ``OPENROUTER_API_KEY`` is missing/empty.
     Does not mutate ``llm_provider`` environment semantics.
+
+    ``temperature=None`` omits the parameter entirely instead of sending a
+    value. Some OpenRouter-hosted models advertise an EMPTY
+    ``supported_parameters`` array (``typesafe/jev-1.13`` is one), and for those
+    an unconditional ``temperature=0.0`` is a parameter the provider may reject
+    or silently ignore -- see U11's ``tech-stack-decisions.md`` TS-3a.
+
+    ``max_retries`` is a parameter rather than a hard-coded ``0`` so that a
+    caller which owns a configurable retry budget can pass it through. U11's
+    ``BR6.3`` requires the per-turn call count, the retry count AND the usage
+    cap to each be "a mechanism that exists and is configurable"; with the
+    value frozen here, ``BRAIN_ROUTER_MAX_RETRIES`` was read, logged and then
+    ignored -- a setting that changes nothing.
+
+    Both defaults are the previous hard-coded values (``temperature=0.0``,
+    ``max_retries=0``), so every existing caller (A1 design agent, A3
+    review/lens agents, C1 cost advice) keeps its current behaviour byte for
+    byte. ``None``/a non-zero retry budget only add ways to say otherwise.
     """
     api_key = _require_openrouter_api_key()
     from langchain_openai import ChatOpenAI
@@ -87,14 +106,58 @@ def openrouter_chat_model(
         DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else float(timeout_seconds)
     )
     resolved_model = model or DEFAULT_OPENROUTER_MODEL
+    if temperature is not None:
+        kwargs["temperature"] = temperature
     return ChatOpenAI(
         model=resolved_model,
         api_key=api_key,
         base_url=DEFAULT_OPENROUTER_BASE_URL,
         timeout=resolved_timeout,
-        temperature=temperature,
-        max_retries=0,
+        max_retries=max_retries,
         **kwargs,
+    )
+
+
+def chat_model(
+    *,
+    openrouter_builder: Callable[[], Any] | None = None,
+    **kwargs: Any,
+):
+    """The single place an LLM client is chosen; all LLM call sites go through it.
+
+    On openrouter this forwards ``kwargs`` unchanged to
+    :func:`openrouter_chat_model`, or calls ``openrouter_builder`` when the
+    caller builds a different client for that path (the A1 design agent's
+    ``ChatAnthropic``). Behaviour on openrouter is therefore exactly what each
+    caller had before this function existed.
+
+    On claude-code (local development only, see ``services.llm_provider``) it
+    returns a ``ClaudeCodeChatModel``; only ``model`` and ``timeout_seconds`` apply.
+    Raises ``RuntimeAuthError`` when the ``claude`` CLI is not on PATH, the same
+    domain error a missing OpenRouter key produces, so callers need no new branch.
+    """
+    from services.llm_provider import (
+        CLAUDE_CODE,
+        auth_error_message,
+        get_provider,
+        llm_auth_ready,
+    )
+
+    if get_provider() != CLAUDE_CODE:
+        if openrouter_builder is not None:
+            return openrouter_builder()
+        return openrouter_chat_model(**kwargs)
+
+    if not llm_auth_ready():
+        raise RuntimeAuthError(auth_error_message(), code="claude_cli_not_found")
+    from services.claude_code_chat import ClaudeCodeChatModel
+
+    timeout_seconds = kwargs.get("timeout_seconds")
+    return ClaudeCodeChatModel(
+        cli_model=kwargs.get("model"),
+        timeout_seconds=(
+            DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else float(timeout_seconds)
+        ),
     )
 
 
@@ -159,6 +222,7 @@ __all__ = [
     "RuntimeAuthError",
     "StreamEvent",
     "astream_graph",
+    "chat_model",
     "invoke_graph",
     "openrouter_chat_model",
     "stream_graph",

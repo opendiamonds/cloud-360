@@ -1,0 +1,253 @@
+{
+  "stage": "nfr-design",
+  "unit": "memory-service",
+  "upstream_ids": [
+    "NFR3.20",
+    "NFR3.21",
+    "NFR3.22",
+    "NFR3.23",
+    "NFR3.24",
+    "NFR4.20",
+    "NFR4.21",
+    "NFR4.22",
+    "NFR4.23",
+    "NFR6.1",
+    "NFR6.10",
+    "NFR6.2",
+    "NFR6.20",
+    "NFR6.21",
+    "NFR7.10",
+    "NFR7.13",
+    "NFR7.15",
+    "NFR7.2",
+    "NFR7.20",
+    "NFR7.21",
+    "NFR7.22",
+    "NFR7.23",
+    "NFR7.24",
+    "NFR7.25",
+    "NFR7.26",
+    "NFR7.27",
+    "NFR7.28",
+    "NFR7.29",
+    "NFR7.30",
+    "NFR7.31",
+    "NFR7.32",
+    "NFR7.33",
+    "NFR7.34",
+    "NFR8.10",
+    "NFR8.20"
+  ],
+  "coverage": [
+    {
+      "id": "NFR3.20",
+      "status": "OK",
+      "target": "performance-design.md §一 單一 SQL ＋ §三 預算分解",
+      "note": "兩道過濾與排序在同一個查詢內——不是為了效能而是為了正確性：先查再於應用層過濾會讓 LIMIT n 在過濾前取 n 筆，過濾後剩不足 n。量測邊界為「取得查詢向量之後 → 回傳」（[N1]=A 修訂後）。150ms 仍是工程判斷，故 NFR3.21 的實測要求保留。"
+    },
+    {
+      "id": "NFR3.21",
+      "status": "OK",
+      "target": "performance-design.md §三",
+      "note": "實測須記錄 memory_records 列數。[N1] 由 B 改 A 後**不再需要記錄提供者**——向量產生已切出量測範圍，提供者不再影響被量的東西。"
+    },
+    {
+      "id": "NFR3.22",
+      "status": "OK",
+      "target": "performance-design.md §二之一 的 EXPLAIN 斷言設計",
+      "note": "承 N8-12：planner 是 cost-based 的，小表上幾乎必定選 Seq Scan 即使索引正確。設計採 SET enable_seqscan = off 隔離單一變數——它直接驗 NFR3.22 真正要防的事（opclass 不符導致索引不可用），不需要數百至數千列 fixture。"
+    },
+    {
+      "id": "NFR3.23",
+      "status": "OK",
+      "target": "scalability-design.md §一 的分頁設計",
+      "note": "列出路徑不做相似度（BR3.2 不適用），故 300ms 由分頁上限 ＋ 既有兩個索引承載。"
+    },
+    {
+      "id": "NFR3.24",
+      "status": "OK",
+      "target": "logical-components.md §一 的 memory_ranking 純函式層",
+      "note": "純函式層不讀 DB、不拋 HTTPException——這是 PBT 可寫的結構前提（D8-3）。性質為「同一輸入集合的任意排列，排序結果相同」。repo 既有先例 backend/cost/estimate_readers.py:247-251。"
+    },
+    {
+      "id": "NFR4.20",
+      "status": "OK",
+      "target": "reliability-design.md §四",
+      "note": "四個新模組不得有模組層可變容器。需明說的理由：repo 內有三處既有行程內狀態容器（collab_router／advice_orchestrator／pricing_client），而 NFR4 明確把它們排除在本 intent 外——本單元不得照抄那個形狀。"
+    },
+    {
+      "id": "NFR4.21",
+      "status": "OK",
+      "target": "reliability-design.md §一 的交易邊界表",
+      "note": "delete 與 widen_scope 各自一個交易，稽核與資料變更不可分離。以單一 SQLAlchemy 交易包住兩個敘述，不以兩次 commit() 實作。與 U9 的差異已寫明（本單元一次只處理一列、memoryId 來自請求參數，故不需走到 CTE）。"
+    },
+    {
+      "id": "NFR4.22",
+      "status": "OK",
+      "target": "reliability-design.md §二",
+      "note": "取向量在建立列之前（functional-spec.md §1.1 步 5–6 在步 7 之前），故提供者失敗不留痕跡。不得降級：靜默改用 fulltext 會讓整批記憶以錯的提供者寫入，之後因 BR3.2 的分群永久不可被檢索到。"
+    },
+    {
+      "id": "NFR4.23",
+      "status": "OK",
+      "target": "reliability-design.md §三 的逐項理由表",
+      "note": "write 非冪等（K-08 逐字），retry 會在一次網路抖動後留下兩筆一樣的記憶。本單元沒有「呼叫會失敗的外部依賴」那種對象，故 circuit breaker／bulkhead／fallback 皆不適用。"
+    },
+    {
+      "id": "NFR6.20",
+      "status": "OK",
+      "target": "security-design.md §六",
+      "note": "沿用既有 database.py 的 engine；不建第二個 engine、不帶 -U、不組連線字串。誠實限定：grant 邊界目前不構成真實邊界（U9 的 [ND2]=A 實測 POSTGRES_USER 即 superuser），本條保留的是「不要變得更糟」。"
+    },
+    {
+      "id": "NFR6.21",
+      "status": "OK",
+      "target": "security-design.md §四之二 ＋ observability-design.md §一 的欄位白名單",
+      "note": "設計為**白名單**而非黑名單。禁止整個模型物件是關鍵——logger.warning(f\"...{memory}\") 會把 content 帶進日誌而功能完全正常、測試也會綠。判準是字串比對（拿 fixture 的 content 比對日誌輸出），不是人工審查。"
+    },
+    {
+      "id": "NFR7.20",
+      "status": "OK",
+      "target": "security-design.md §四之一",
+      "note": "ownerUserId 不接受為輸入；酬載若帶則靜默忽略而非 422——回錯誤會讓呼叫端以為換個欄位名就能指定。"
+    },
+    {
+      "id": "NFR7.21",
+      "status": "OK",
+      "target": "security-design.md §四之一",
+      "note": "visibilityScope 不接受為輸入。不是驗證，是不存在該參數。"
+    },
+    {
+      "id": "NFR7.22",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "放寬路徑維持先判角色、後取記憶，故無權者在任何 id 上都得同一個 403——oracle 本來就不存在。判準的第三個案例（無權＋不存在 → 403）是這條的重點。"
+    },
+    {
+      "id": "NFR7.23",
+      "status": "OK",
+      "target": "security-design.md §一 的角色模型；§三 同形",
+      "note": "稽核查詢與放寬共用同一份角色判定（[FD2]=A 刻意對齊），第二份實作沒有存在理由。"
+    },
+    {
+      "id": "NFR7.24",
+      "status": "OK",
+      "target": "security-design.md §二之四 的改後三案例",
+      "note": "**判準已因 [D1]=A 改變**：原為「他人 → 403」，改為「他人 → 404 ＋ 日誌含 reason=owner」。② 與 ③ 的對外回應刻意相同、差異只在日誌——判準必須同時斷言「狀態碼相同」與「日誌可區分」，缺一不可。nfr-requirements 的原文不回改，以本檔為下游依據。"
+    },
+    {
+      "id": "NFR7.25",
+      "status": "OK",
+      "target": "reliability-design.md §一",
+      "note": "同交易邊界（見 NFR4.21）。[D1]=A 之後稽核的角色更重：它與日誌是區分枚舉與誤刪的唯一手段。"
+    },
+    {
+      "id": "NFR7.26",
+      "status": "OK",
+      "target": "security-design.md §八 的 Audit logging 格",
+      "note": "建立不產生稽核事件——由 ck_memory_audit_events_action 的封閉集合裁決（無建立值），嘗試產生會違反 CHECK 並讓整個寫入交易失敗。"
+    },
+    {
+      "id": "NFR7.27",
+      "status": "OK",
+      "target": "scalability-design.md §三",
+      "note": "依賴 U9 已交付的清除，本單元零增量。**新寫下的限定**：只有 episodic 受清除約束，semantic／procedure 無上界——它們只能由使用者刪除（D8-5）。"
+    },
+    {
+      "id": "NFR7.28",
+      "status": "OK",
+      "target": "scalability-design.md §一",
+      "note": "offset／limit ＋ total，照 repo 既有先例 /api/auth/list，不自創 cursor。三個 kind 各自分頁，不共用 offset（否則一區筆數會推移其他兩區的視窗）。偏離 K-08 的 OpenAPI 半邊，記 D8-4。"
+    },
+    {
+      "id": "NFR7.29",
+      "status": "OK",
+      "target": "scalability-design.md §二",
+      "note": "超過伺服器上限時收斂而非 422——search 是同進程 facade，過大的 limit 是呼叫端疏失，收斂使它降級而非失敗。無上限是一條 DoS 路徑。"
+    },
+    {
+      "id": "NFR7.30",
+      "status": "OK",
+      "target": "observability-design.md §一 ＋ §四",
+      "note": "**[D1]=A 之後由「稽核義務」升格為「唯一的偵測面」**：對外回應收斂後，日誌是區分使用者誤刪與枚舉探測的唯一手段。若日誌也收斂，枚舉行為完全不可見。"
+    },
+    {
+      "id": "NFR7.31",
+      "status": "OK",
+      "target": "observability-design.md §一 的白名單表",
+      "note": "見 NFR6.21。"
+    },
+    {
+      "id": "NFR7.32",
+      "status": "OK",
+      "target": "observability-design.md §一（provider／available_providers 欄位）＋ reliability-design.md §二",
+      "note": "錯誤必須含提供者名與可選值，否則操作者無法判斷該改哪個設定。"
+    },
+    {
+      "id": "NFR7.33",
+      "status": "OK",
+      "target": "observability-design.md §一 最後一列",
+      "note": "logging.getLogger(\"cloud360.memory_<layer>\")，不用 __name__（team.md 的既成慣例）。"
+    },
+    {
+      "id": "NFR7.34",
+      "status": "OK",
+      "target": "observability-design.md §三 的三情境判定表",
+      "note": "空結果有三種成因、畫面上完全一樣，其中一種是缺陷（換過提供者未重新 embed）。記錄兩道過濾後的筆數使三者可事後區分。筆數不是內容，故不違反 NFR6.21。這是在沒有 metrics 的情況下，讓靜默缺陷變可診斷的最低成本做法。"
+    },
+    {
+      "id": "NFR8.20",
+      "status": "OK",
+      "target": "logical-components.md §四 的對照表最後一列",
+      "note": "零新進程、零新容器、零新環境變數；requirements.txt diff 為空。**HNSW 索引刻意不列在這條之下**：它是結構變更（schema_rbac.sql ＋ DEPLOY.md）而非部署設定變更（deploy/ ＋ .env），兩者的 blocking 規則與判準不同。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "U5 memory-data（靜態加密，主機層 LUKS）",
+      "note": "本檔 §七 引用它說明本單元無加密增量。擁有者 U5，本單元不新增儲存體。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "U5 memory-data（傳輸加密，compose 內部）",
+      "note": "本檔 §七 引用它。新增的 POST 走與既有端點同一條 nginx／Tunnel 路徑，故該前提繼續成立。"
+    },
+    {
+      "id": "NFR6.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除不得以更高權限覆寫身分）",
+      "note": "本檔 §六 引用它說明 NFR6.20 與它同形。擁有者 U9（已交付）。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "U5 memory-data（稽核保存 90 天，以 occurredAt 為鍵）",
+      "note": "本檔多處引用它。它是本 intent 唯一外溢到版控 SQL（索引註解）的 NFRx.y。擁有者 U5。"
+    },
+    {
+      "id": "NFR7.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除涵蓋兩個目標）",
+      "note": "本檔 §三（scalability）引用 U9 的清除作為成長上界機制。擁有者 U9（已交付）。"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除漏跑可偵測）",
+      "note": "本檔 scalability-design §三 與 logical-components §二 引用它——它是「清除漏跑」這個跨單元失敗的唯一偵測面。擁有者 U9（已交付）。"
+    },
+    {
+      "id": "NFR7.15",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除稽核本身不留稽核）",
+      "note": "本檔引用 U9 的稽核設計作為對照。擁有者 U9（已交付）。"
+    },
+    {
+      "id": "NFR8.10",
+      "status": "N/A",
+      "target": "U9 memory-purge（零新部署設定）",
+      "note": "本檔 §四（logical-components）引用它說明 NFR8.20 與它同形。擁有者 U9（已交付）。"
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "stage": "nfr-design",
+  "unit": "object-picker-ui",
+  "upstream_ids": [
+    "NFR2.160",
+    "NFR5.160",
+    "NFR8.160",
+    "NFR11.160",
+    "OPN-01",
+    "OPN-02",
+    "OPN-03",
+    "OPN-04",
+    "OPN-05",
+    "OPN-06",
+    "OPN-07",
+    "OPN-11",
+    "OPN-12",
+    "OPN-13",
+    "OPN-14",
+    "OPN-15",
+    "OPN-16",
+    "OPN-21",
+    "OPN-22",
+    "OPN-23",
+    "OPN-24",
+    "OPN-25",
+    "OPN-26",
+    "NFR11.100",
+    "NFR11.140"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.160",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§六：選單不持有作業對象副本，脈絡列與「目前」只讀伺服器回推"
+    },
+    {
+      "id": "NFR5.160",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§一：lint 擋 new WebSocket；logical-components.md §三：ws-contract.json 前後雜湊比對"
+    },
+    {
+      "id": "NFR8.160",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/logical-components.md",
+      "note": "§一：無後端與部署元件變更；零環境變數"
+    },
+    {
+      "id": "NFR11.160",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§六：選單不導航；e2e 以 pathname 序列驗證"
+    },
+    {
+      "id": "OPN-01",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§一之二、§一之三：ensureSystems 冪等、三個觸發點與請求數（N-02）"
+    },
+    {
+      "id": "OPN-02",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§一之一：每次掛載的 cancelled 旗標；佇列 cancel()"
+    },
+    {
+      "id": "OPN-03",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§三：useRef 單發鎖"
+    },
+    {
+      "id": "OPN-04",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§四：identity 三態、refreshMe 一次並接住拋錯（N-01）"
+    },
+    {
+      "id": "OPN-05",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§五：衍生可見性、清 pickerOpen 的兩種寫法、焦點與播報"
+    },
+    {
+      "id": "OPN-06",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§二：filterGroups 純函式；首次補抓後零請求"
+    },
+    {
+      "id": "OPN-07",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/logical-components.md",
+      "note": "§二：兩個 axe 掃描點；performance-design.md §七：MutationObserver 計次"
+    },
+    {
+      "id": "OPN-11",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§一 no-restricted-imports；§二之二 渲染條件"
+    },
+    {
+      "id": "OPN-12",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§二之一：isOwnedByMe 單一定義"
+    },
+    {
+      "id": "OPN-13",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§一、§三：文字節點呈現、lint 擋 innerHTML 與 dangerouslySetInnerHTML"
+    },
+    {
+      "id": "OPN-14",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§一、§三：lint 擋 RegExp；子字串比對"
+    },
+    {
+      "id": "OPN-15",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§一、§四：lint 擋 console 與瀏覽器儲存；e2e 主控台計數以進入前為基準"
+    },
+    {
+      "id": "OPN-16",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§二之三：被移出的建立者回 404 → other 文案；關卡 G-6"
+    },
+    {
+      "id": "OPN-21",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§五：id 轉換集中於 objectPickerModel 的 rowKey／targetIds*"
+    },
+    {
+      "id": "OPN-22",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/logical-components.md",
+      "note": "§三：package.json 依賴鍵前後比對"
+    },
+    {
+      "id": "OPN-23",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/logical-components.md",
+      "note": "§一：新 spec 與 a11y.spec.ts 的修改；§二 掃描點"
+    },
+    {
+      "id": "OPN-24",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/performance-design.md",
+      "note": "§一之三：fanoutQueue 只用於搜尋補抓（N-02 更正後的 OPN-24）"
+    },
+    {
+      "id": "OPN-25",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/security-design.md",
+      "note": "§六：突變清單 M1–M11"
+    },
+    {
+      "id": "OPN-26",
+      "status": "OK",
+      "target": "construction/object-picker-ui/nfr-design/logical-components.md",
+      "note": "§一：只有前端 e2e（C 規則）；無端點、無權限矩陣變更"
+    },
+    {
+      "id": "NFR11.100",
+      "status": "N/A",
+      "target": "屬 U23 project-pages-ui 的需求；本單元 nfr-requirements 的 performance-requirements.md 僅在 NFR11.160 的繼承理由中引為處置先例，本單元不承接"
+    },
+    {
+      "id": "NFR11.140",
+      "status": "N/A",
+      "target": "屬 U14 entry-page-ui 的需求（入口頁交辦零頁面切換）；本單元 nfr-requirements 的 performance-requirements.md 僅在 NFR11.160 的繼承理由中引為處置先例，本單元不承接"
+    }
+  ]
+}

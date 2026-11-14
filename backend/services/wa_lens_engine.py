@@ -565,7 +565,7 @@ async def answer_lens_with_agent(
     Ask LLM (LangGraph + OpenRouter) to pick choices. Heuristic when auth not ready.
     POC: prefer heuristic first if no API key (fast + testable); try agent when key present.
     """
-    from services.langgraph_runtime import RuntimeAuthError, openrouter_chat_model
+    from services.langgraph_runtime import RuntimeAuthError, chat_model
     from services.llm_limits import get_xml_context_max_chars
     from services.llm_provider import (
         auth_error_message,
@@ -611,7 +611,7 @@ async def answer_lens_with_agent(
 
     try:
         try:
-            model = openrouter_chat_model(model=model_name)
+            model = chat_model(model=model_name)
         except RuntimeAuthError as exc:
             raise RuntimeError(auth_error_message()) from exc
 

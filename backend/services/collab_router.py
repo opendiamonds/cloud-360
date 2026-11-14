@@ -22,6 +22,15 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 from models import User, UserDiagram, UserDiagramChat, diagram_shares
 from services.auth import get_current_user, get_user_from_token
+from services.hierarchy_facade import (
+    HierarchyFacade,
+    HierarchyForbidden,
+    HierarchyNotFound,
+    mint_principal,
+)
+# 以模組形式匯入，理由同 `hierarchy_router.py`：`membership_facade` 匯入
+# `hierarchy_facade`，模組形式讓名稱在呼叫時才解析。
+import services.membership_facade as membership_facade
 from services.rbac import require_arch_action, user_can_arch
 
 logger = logging.getLogger(__name__)
@@ -310,6 +319,16 @@ class SaveDiagramRequest(BaseModel):
     title: str = Field("未命名架構圖", min_length=1, max_length=MAX_DIAGRAM_TITLE_CHARS)
 
 
+class CreateDiagramRequest(SaveDiagramRequest):
+    """建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；
+    **本階段新增、已核可 scope／requirements 尚未涵蓋**）。
+
+    刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應
+    順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。"""
+
+    system_id: Optional[int] = None
+
+
 class ShareDiagramRequest(BaseModel):
     user_ids: List[int]
 
@@ -334,6 +353,9 @@ def list_my_diagrams(
             "title": d.title,
             "updated_at": d.updated_at,
             "is_owner": d.user_id == current_user.id,
+            # build-and-test F1：系統頁列出「我的圖」與其目前歸屬。只對自己擁有的圖給值——
+            # 別人分享的圖的歸屬屬於別人的專案結構，不外露。
+            "system_id": d.system_id if d.user_id == current_user.id else None,
         }
         for d in all_diagrams
     ]
@@ -507,15 +529,41 @@ def get_diagram(
     }
 
 
+def _attachable_system_or_raise(db: Session, user: User, system_id: int) -> None:
+    """存檔時掛載的資格判定，**先於建立圖**：不合格就整個請求失敗，不存成未掛載的圖。
+
+    判定只有一份，在 `HierarchyFacade.assert_system_attachable`（`K2 edit` → 系統所屬專案
+    的可見性 → 擁有者）；本函式只轉譯例外，與 `hierarchy_router._translate` 同一套對應。
+    """
+    try:
+        principal = mint_principal(user)
+        HierarchyFacade(db).assert_system_attachable(
+            principal,
+            system_id=system_id,
+            project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
+        )
+    except HierarchyForbidden as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except HierarchyNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/diagrams")
 def create_diagram(
-    request: SaveDiagramRequest,
+    request: CreateDiagramRequest,
     current_user: User = Depends(require_arch_action("edit")),
     db: Session = Depends(get_db),
 ):
     _validate_diagram_payload(request.xml_data)
+    if request.system_id is not None:
+        _attachable_system_or_raise(db, current_user, request.system_id)
     diagram = UserDiagram(
-        user_id=current_user.id, title=request.title, xml_data=request.xml_data
+        user_id=current_user.id,
+        title=request.title,
+        xml_data=request.xml_data,
+        system_id=request.system_id,
     )
     db.add(diagram)
     db.commit()
@@ -524,6 +572,7 @@ def create_diagram(
     db.commit()
     return {
         "id": diagram.id,
+        "system_id": diagram.system_id,
         "status": "success",
         "message": "Diagram created successfully",
     }

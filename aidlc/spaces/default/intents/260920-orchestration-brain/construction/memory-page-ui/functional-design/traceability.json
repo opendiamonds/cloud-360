@@ -1,0 +1,142 @@
+{
+  "stage": "functional-design",
+  "unit": "memory-page-ui",
+  "upstream_ids": [
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.4.1",
+    "AC4.4.2",
+    "AC4.4.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.2.1",
+      "status": "OK",
+      "target": "BR34.1, BR34.4",
+      "note": "「要求刪除」的操作面：`W4` 的就地確認列（`BR34.1`）與成功後就地移除該列（`BR34.4`）。Then 的「不再出現在脈絡組裝中」那一半屬 `U8`／`U11`，本單元承載的是畫面上該則消失這一半。情節記憶刪空某頁時的頁次重算（`BR34.6`）是因為回應不含總筆數而必須由前端推算的後果。"
+    },
+    {
+      "id": "AC4.2.2",
+      "status": "N/A",
+      "target": "U8 memory-service（delete 寫稽核）；查詢面為上游既有回補項 N-8",
+      "note": "稽核事件的寫入在 `U8`；查詢面不在任何已列單元，沿用 `stories.md` US4.3 註的既有指派（`functional-spec.md §八` `OPEN-MP15-5`），本站不另開指派。本單元只在確認文案說明「此刪除會被記錄」（`BR34.1`）。"
+    },
+    {
+      "id": "AC4.2.3",
+      "status": "N/A",
+      "target": "U9 memory-purge（GitHub Actions workflow）",
+      "note": "90 天清除是排程行為，無畫面操作面。本單元只在情節記憶顯示保存期限列（`frontend-components.md §三之二`）。"
+    },
+    {
+      "id": "AC4.4.1",
+      "status": "OK",
+      "target": "BR35.1",
+      "note": "「檢視擁有者欄位」：每則顯示「你」或「其他使用者」，數值寫入 `data-owner-user-id`。線框的條目形狀沒有此欄位，本站以增補方式對齊（`functional-spec.md §三之一`）。`user.id` 未回來前不渲染條目，以免把自己的記憶標成「其他使用者」（`frontend-components.md §四之一`）。"
+    },
+    {
+      "id": "AC4.4.2",
+      "status": "N/A",
+      "target": "U8 memory-service（擁有者由已驗證身分決定）",
+      "note": "酬載自行指定擁有者會被忽略，是純伺服器端行為；本頁不建立記憶（`BR35.3`），e2e 無從觸及。"
+    },
+    {
+      "id": "AC4.4.3",
+      "status": "OK",
+      "target": "BR35.1, BR35.3",
+      "note": "「檢視可見範圍」：每則顯示「僅你可見」或「平台可見」（`BR35.1`）；畫面不提供任何設定或放寬控件，使新建記憶的最窄範圍不會從本頁被改寫（`BR35.3`）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR31.1",
+      "status": "N/A",
+      "target": "K-14 provides.guard",
+      "note": "路由守衛來自已核可契約，不掛在任何單一 AC 上。"
+    },
+    {
+      "id": "BR31.2",
+      "status": "N/A",
+      "target": "interaction-spec.md:33 的 INV-3；[M4]=A",
+      "note": "兩入口一個判定是畫面不變量，無對應 AC。"
+    },
+    {
+      "id": "BR31.3",
+      "status": "N/A",
+      "target": "K-14 behaviour_semantics.authorization_responsibility",
+      "note": "「前端不自行過濾」是否定性規則，授權判定的 AC 落在 `U8`。"
+    },
+    {
+      "id": "BR32.1",
+      "status": "N/A",
+      "target": "wireframes.md §9；mockups.md M6",
+      "note": "三區固定存在是已核可版面的規定。"
+    },
+    {
+      "id": "BR32.2",
+      "status": "N/A",
+      "target": "interaction-spec.md States 表；[M2]=A",
+      "note": "每區獨立三態是 States 表的要求，非 AC。"
+    },
+    {
+      "id": "BR32.3",
+      "status": "N/A",
+      "target": "interaction-spec.md:502-503",
+      "note": "empty 與 error 可區分是該檔明文定案的呈現規則。"
+    },
+    {
+      "id": "BR32.4",
+      "status": "N/A",
+      "target": "[M1]=A 的原則一致套用",
+      "note": "滿頁顯示「N+ 則」是因回應無總筆數而推導的呈現規則。"
+    },
+    {
+      "id": "BR33.1",
+      "status": "N/A",
+      "target": "[M1]=A",
+      "note": "`limit+1` 探測是分頁實作規則，無對應 AC。"
+    },
+    {
+      "id": "BR33.2",
+      "status": "N/A",
+      "target": "[M1]=A；對已核可線框 M6 的對齊修正",
+      "note": "「第 N–M 則」取代「共 N 則」，修法列 `OPEN-MP15-2`。"
+    },
+    {
+      "id": "BR33.3",
+      "status": "N/A",
+      "target": "interaction-spec.md:509-510；memory_service.py:72-73",
+      "note": "語意／程序以伺服器上限一次取得。"
+    },
+    {
+      "id": "BR34.2",
+      "status": "N/A",
+      "target": "interaction-spec.md Accessibility 表",
+      "note": "焦點與 Escape 是無障礙規格，非 AC。"
+    },
+    {
+      "id": "BR34.3",
+      "status": "N/A",
+      "target": "interaction-spec.md States 表的 deleting 列",
+      "note": "單則 deleting 而非整區 loading 是 States 表的規定。"
+    },
+    {
+      "id": "BR34.5",
+      "status": "N/A",
+      "target": "memory_facade.py:322-339 的冪等刪除；K-14 retry_and_idempotency",
+      "note": "404 視同成功是失敗路徑的處置，`AC4.2.1` 未規定部分失敗。"
+    },
+    {
+      "id": "BR34.6",
+      "status": "N/A",
+      "target": "[M3]=A 的選項本文",
+      "note": "刪空該頁退回前一頁是就地移除的推論後果。"
+    },
+    {
+      "id": "BR35.2",
+      "status": "N/A",
+      "target": "[M5]=A；U24 兩段式 canManage 的同一條理由",
+      "note": "非擁有者不渲染刪除鍵是 UI 判定而非授權；授權的 AC 落在 `U8`（非擁有者 404）。"
+    }
+  ]
+}

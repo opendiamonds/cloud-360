@@ -1,0 +1,277 @@
+{
+  "stage": "nfr-design",
+  "unit": "brain-gateway",
+  "upstream_ids": [
+    "NFR13.1",
+    "NFR13.2",
+    "NFR13.3",
+    "NFR13.4",
+    "NFR13.5",
+    "NFR13.6",
+    "NFR13.7",
+    "NFR13.8",
+    "NFR13.9",
+    "NFR13.10",
+    "NFR13.11",
+    "NFR13.12",
+    "NFR13.13",
+    "NFR13.14",
+    "NFR13.15",
+    "NFR13.16",
+    "NFR13.17",
+    "NFR13.18",
+    "NFR13.19",
+    "NFR13.20",
+    "NFR13.21",
+    "NFR13.22",
+    "NFR13.23",
+    "NFR13.24",
+    "NFR13.25",
+    "NFR13.26",
+    "NFR13.27",
+    "NFR13.28",
+    "NFR13.29",
+    "NFR13.30",
+    "NFR13.31",
+    "NFR13.32",
+    "NFR13.33",
+    "NFR13.34",
+    "NFR13.35",
+    "NFR13.36",
+    "NFR13.37",
+    "NFR13.38",
+    "NFR13.39",
+    "NFR13.40",
+    "NFR13.41",
+    "NFR13.42",
+    "NFR13.43",
+    "NFR13.44"
+  ],
+  "coverage": [
+    {
+      "id": "NFR13.1",
+      "status": "OK",
+      "target": "performance-design.md §一",
+      "note": "本站無法判定是否達成；量測落 build-and-test（帶入項 14）"
+    },
+    {
+      "id": "NFR13.2",
+      "status": "OK",
+      "target": "performance-design.md §二"
+    },
+    {
+      "id": "NFR13.3",
+      "status": "OK",
+      "target": "performance-design.md §四",
+      "note": "等待上限的實測值由 code-generation 依本節程序定值"
+    },
+    {
+      "id": "NFR13.4",
+      "status": "OK",
+      "target": "performance-design.md §三 3.1"
+    },
+    {
+      "id": "NFR13.5",
+      "status": "OK",
+      "target": "performance-design.md §三 3.2"
+    },
+    {
+      "id": "NFR13.6",
+      "status": "OK",
+      "target": "performance-design.md §五"
+    },
+    {
+      "id": "NFR13.7",
+      "status": "OK",
+      "target": "security-design.md §一"
+    },
+    {
+      "id": "NFR13.8",
+      "status": "OK",
+      "target": "security-design.md §一"
+    },
+    {
+      "id": "NFR13.9",
+      "status": "OK",
+      "target": "security-design.md §二"
+    },
+    {
+      "id": "NFR13.10",
+      "status": "OK",
+      "target": "security-design.md §二"
+    },
+    {
+      "id": "NFR13.11",
+      "status": "OK",
+      "target": "security-design.md §三"
+    },
+    {
+      "id": "NFR13.12",
+      "status": "OK",
+      "target": "security-design.md §四"
+    },
+    {
+      "id": "NFR13.13",
+      "status": "OK",
+      "target": "security-design.md §四"
+    },
+    {
+      "id": "NFR13.14",
+      "status": "OK",
+      "target": "security-design.md §五"
+    },
+    {
+      "id": "NFR13.15",
+      "status": "OK",
+      "target": "security-design.md §一"
+    },
+    {
+      "id": "NFR13.16",
+      "status": "OK",
+      "target": "security-design.md §六"
+    },
+    {
+      "id": "NFR13.17",
+      "status": "OK",
+      "target": "scalability-design.md §一"
+    },
+    {
+      "id": "NFR13.18",
+      "status": "OK",
+      "target": "scalability-design.md §一",
+      "note": "[GWND1] 待使用者裁決；本節暫依 [GWN1]=A"
+    },
+    {
+      "id": "NFR13.19",
+      "status": "OK",
+      "target": "scalability-design.md §二"
+    },
+    {
+      "id": "NFR13.20",
+      "status": "OK",
+      "target": "scalability-design.md §三"
+    },
+    {
+      "id": "NFR13.21",
+      "status": "OK",
+      "target": "reliability-design.md §七 7.5",
+      "note": "超過 50 個專案的路徑表；AC1.1.5 註記更新留 code-generation"
+    },
+    {
+      "id": "NFR13.22",
+      "status": "OK",
+      "target": "reliability-design.md §六"
+    },
+    {
+      "id": "NFR13.23",
+      "status": "OK",
+      "target": "reliability-design.md §二"
+    },
+    {
+      "id": "NFR13.24",
+      "status": "OK",
+      "target": "reliability-design.md §五"
+    },
+    {
+      "id": "NFR13.25",
+      "status": "OK",
+      "target": "reliability-design.md §三"
+    },
+    {
+      "id": "NFR13.26",
+      "status": "OK",
+      "target": "reliability-design.md §六"
+    },
+    {
+      "id": "NFR13.27",
+      "status": "OK",
+      "target": "reliability-design.md §七 7.2"
+    },
+    {
+      "id": "NFR13.28",
+      "status": "OK",
+      "target": "reliability-design.md §七 7.3、7.4"
+    },
+    {
+      "id": "NFR13.29",
+      "status": "OK",
+      "target": "reliability-design.md §八"
+    },
+    {
+      "id": "NFR13.30",
+      "status": "OK",
+      "target": "reliability-design.md §八"
+    },
+    {
+      "id": "NFR13.31",
+      "status": "OK",
+      "target": "reliability-design.md §九"
+    },
+    {
+      "id": "NFR13.32",
+      "status": "OK",
+      "target": "reliability-design.md §九"
+    },
+    {
+      "id": "NFR13.33",
+      "status": "OK",
+      "target": "reliability-design.md §九"
+    },
+    {
+      "id": "NFR13.34",
+      "status": "OK",
+      "target": "observability-design.md §一"
+    },
+    {
+      "id": "NFR13.35",
+      "status": "OK",
+      "target": "observability-design.md §二"
+    },
+    {
+      "id": "NFR13.36",
+      "status": "OK",
+      "target": "observability-design.md §三"
+    },
+    {
+      "id": "NFR13.37",
+      "status": "OK",
+      "target": "observability-design.md §三"
+    },
+    {
+      "id": "NFR13.38",
+      "status": "OK",
+      "target": "observability-design.md §四"
+    },
+    {
+      "id": "NFR13.39",
+      "status": "OK",
+      "target": "logical-components.md §四"
+    },
+    {
+      "id": "NFR13.40",
+      "status": "OK",
+      "target": "logical-components.md §四"
+    },
+    {
+      "id": "NFR13.41",
+      "status": "OK",
+      "target": "logical-components.md §四"
+    },
+    {
+      "id": "NFR13.42",
+      "status": "OK",
+      "target": "logical-components.md §四"
+    },
+    {
+      "id": "NFR13.43",
+      "status": "OK",
+      "target": "logical-components.md §四",
+      "note": "文字回補留 code-generation（帶入項 6）"
+    },
+    {
+      "id": "NFR13.44",
+      "status": "OK",
+      "target": "logical-components.md §四"
+    }
+  ]
+}

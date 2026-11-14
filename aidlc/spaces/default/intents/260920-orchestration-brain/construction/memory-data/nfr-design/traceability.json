@@ -1,0 +1,159 @@
+{
+  "stage": "nfr-design",
+  "unit": "memory-data",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "security-design.md §二、§三",
+      "note": "記憶層的 schema 隔離與其驗證。本站的 pattern 落在其**安全面**：靜態加密的三項防誤讀設計（§二）與傳輸不變量化（§三）。schema 隔離本身的設計已由 functional-design 的 BR1.1／BR1.2 承載，本站不複寫。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "episodic memory 的保存與刪除稽核。本站設計其承載形式：清除查詢形狀（不 join）、occurredAt 索引、兩個清除目標與執行順序。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "靜態加密無應用層 pattern（已定在主機層），但本站仍有設計責任：三項「讓決定不被誤讀成已滿足」——① DDL 不得出現加密痕跡（且說明那是**禁止**而非留白：對 content 加 pgcrypto 會破壞已核可的 fulltext 模式 BR3.3）；② DEPLOY.md 須載明主機磁碟加密狀態；③ 不得宣稱 episodic memory 已加密。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "把「compose 內部流量」設計成一個**不變量**（DATABASE_URL 的主機名必須是 compose 內部服務名）而非既成事實，因為它變成對外 IP 時連線照樣成功——靜默失敗。並誠實列出覆蓋範圍：validate_env_contract.py 擋得住 localhost 滲透，**擋不住對外 IP**。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "**本站唯一的實質設計產出。** ① 清除查詢形狀：以 occurred_at 為截止條件且**不 join memory_records**（join 版會讓 purged_by_retention 事件出生即逾期）；② **查出 entities.md 沒有為 occurredAt 建索引**，而清除查詢以它為截止鍵——沒有索引就是全表掃描，且本輪該表無讀取端（N-8 屬 U8）故不會有人順手建；U4 對自己的變更紀錄表有同形先例並逐字記過理由；③ 兩個清除目標與其順序（先記憶後稽核）。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U1／U10（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "U1（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14／U15（非本單元）",
+      "note": "判定與理由見 construction/memory-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ND-ENC-U5",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "「沒有 pattern」不等於「沒有設計責任」。三項設計皆為防止誤讀，其中「DDL 不得出現加密痕跡」是一條禁止——日後有人加 pgcrypto 會取消一個已核可的能力而非強化安全。"
+    },
+    {
+      "id": "ND-NET-U5",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "不變量化 ＋ 覆蓋範圍表。刻意不宣稱已完整守住。"
+    },
+    {
+      "id": "ND-AUDIT-U5",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "清除查詢形狀、occurredAt 索引、兩個清除目標與順序。索引那一項是本站從 entities.md 查出的缺口，不是承接項。"
+    },
+    {
+      "id": "ND-IDX-U5",
+      "status": "OK",
+      "target": "security-design.md §四之二",
+      "note": "**本站設計完成**：`memory.memory_audit_events` 須有 `occurredAt` 索引，以 `IF NOT EXISTS` 形狀撰寫（`BR1.3`）。原標 GAP 是誤述——設計已完成，**待落地**屬 `OPEN-ND5-1` 而非 coverage 缺口。本站查出它的方式：`entities.md` 定義了 `occurredAt` 卻未建索引，而清除查詢以它為截止鍵。**失敗模式是效能而非正確性**——清除照樣正確，只是全表掃描，故不會被任何測試抓到。`U4` 對自己的變更紀錄表有同形先例並逐字記過理由「這張表沒有任何讀取端會順手建索引」。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ND5-1",
+      "severity": "blocking-downstream",
+      "text": "**`memory.memory_audit_events` 的 `occurredAt` 索引必須在 `code-generation` 的 DDL 中落地。** 它不在 `entities.md` 裡（本站查出的缺口），且其缺失**不會被任何測試或 sensor 抓到**（失敗模式是全表掃描而非錯誤）。先例：`U4` 對自己的變更紀錄表建了同形索引並逐字記過理由「這張表沒有任何讀取端會順手建索引」——`memory_audit_events` 本輪的讀取面是 `N-8`（屬 `U8`），處境相同。"
+    },
+    {
+      "id": "OPEN-ND5-2",
+      "severity": "named-gap",
+      "text": "**`NFR6.2` 只被部分守住。** `validate_env_contract.py` 擋得住 `localhost` 滲進部署設定，但**沒有**一條「`DATABASE_URL` 的主機名必須是 compose 內部服務名」的通用規則——主機名改成對外 IP 時前提不成立而連線照樣成功。承接站：`infrastructure-design`（本單元下一站，**CONDITIONAL**）；轉移目標：`code-generation`（ALWAYS）。"
+    },
+    {
+      "id": "OPEN-N5-1",
+      "severity": "named-gap",
+      "text": "**承接：`NFR6.1`（靜態加密交主機層）無法由本 repo 驗證**，為運維承諾而非閘門。本站的處置是三項防誤讀設計（見 `security-design.md` §二），**不是**把它標為已滿足。"
+    },
+    {
+      "id": "OPEN-N5-2",
+      "severity": "named-gap",
+      "text": "**承接：`N-6` 要清兩種資料**（逾期記憶 ＋ 逾期稽核事件），而上游只定義了前者。本站補上兩者的截止鍵與執行順序（先記憶後稽核，理由見 §四之三）。承接站 `U9`。"
+    },
+    {
+      "id": "OPEN-N5-3",
+      "severity": "named-gap",
+      "text": "**承接：既有 PG image 是否含 pgvector 未查證。** 同時是 `N-2` CI job 的前提。若需換 image，屬部署層變更並觸發三環境設定分離規則。"
+    }
+  ]
+}

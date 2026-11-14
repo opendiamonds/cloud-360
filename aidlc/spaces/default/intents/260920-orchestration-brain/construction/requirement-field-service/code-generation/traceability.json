@@ -1,0 +1,566 @@
+{
+  "stage": "code-generation",
+  "unit": "requirement-field-service",
+  "upstream_ids": [
+    "AC11.2.1",
+    "AC11.2.2",
+    "AC11.2.3",
+    "AC11.3.1",
+    "AC11.3.2",
+    "AC11.3.3",
+    "BR41.1",
+    "BR41.2",
+    "BR41.3",
+    "BR41.4",
+    "BR41.5",
+    "BR41.6",
+    "BR42.1",
+    "BR42.2",
+    "BR42.3",
+    "BR42.4",
+    "BR42.5",
+    "BR43.1",
+    "BR43.2",
+    "BR43.3",
+    "BR43.4",
+    "BR43.5",
+    "BR43.6",
+    "BR43.7",
+    "BR44.1",
+    "BR44.2",
+    "BR44.3",
+    "BR44.4",
+    "BR44.5",
+    "BR44.6",
+    "BR45.1",
+    "BR45.2",
+    "BR45.3",
+    "BR45.4",
+    "BR45.5",
+    "BR46.1",
+    "BR46.2",
+    "BR46.3",
+    "BR46.4",
+    "BR47.1",
+    "BR47.2",
+    "BR47.3",
+    "BR47.4",
+    "NFR8.120",
+    "NFR20.1",
+    "NFR20.2",
+    "NFR20.3",
+    "NFR20.4",
+    "NFR20.5",
+    "NFR20.6",
+    "NFR20.7",
+    "NFR20.8",
+    "NFR20.9",
+    "NFR20.10",
+    "NFR20.11",
+    "NFR20.12",
+    "NFR20.13",
+    "NFR20.14",
+    "NFR20.15",
+    "NFR20.16",
+    "NFR20.17",
+    "NFR20.18",
+    "NFR20.19",
+    "NFR20.20",
+    "NFR20.21",
+    "NFR20.22",
+    "NFR20.23",
+    "NFR20.24",
+    "NFR20.25",
+    "NFR20.26",
+    "NFR20.27",
+    "NFR20.28",
+    "NFR20.29",
+    "NFR20.30",
+    "NFR20.31",
+    "NFR20.32"
+  ],
+  "coverage": [
+    {
+      "id": "AC11.2.1",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "**部分覆蓋（資料層）**：`F1` 斷言未填與否由資料決定（三態推導，含第四種列回 never_filled 且溯源全為 null）。『未填』的**文字**標示與不依賴顏色屬畫面，承接者 `U23`。"
+    },
+    {
+      "id": "AC11.2.2",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F2` 斷言組依宣告順序、標題為 agent 名稱、組內欄位集合等於宣告；`F6`／`H5` 斷言錯綁到別組（`architecture/sla`）即 `UnknownFieldKey`／422。畫面渲染屬 `U23`。"
+    },
+    {
+      "id": "AC11.2.3",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "**部分覆蓋（伺服器端）**：`F8`(e) 斷言 commit 失敗時已 rollback、值與 filled_state 維持呼叫前——伺服器端沒有半套寫入，畫面才能保留輸入。『畫面告知失敗且輸入不消失』屬 `U23`。"
+    },
+    {
+      "id": "AC11.3.1",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F2` 以同一個回應的明細重算 `unfilled_count`（7 欄全未填時為 7），`H3` 在 HTTP 層斷言值（1 欄已填時為 6）。總覽籤的呈現屬 `U23`。"
+    },
+    {
+      "id": "AC11.3.2",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F2`：填一欄後重讀，`unfilled_count` 減 1，且與同一回應的明細一致；寫入回應不帶計數（`NFR20.5`），`U23` 須重讀 `GET`（`OPEN-RF20-3`）。"
+    },
+    {
+      "id": "AC11.3.3",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H4` 寫滿七欄後重讀：`unfilled_count` 由同一份明細推導（明細全為 filled）；`F2` 的一致性函式對任意狀態皆斷言 `unfilled_count == Σ(total-filled)`。畫面的 0 呈現屬 `U23`。"
+    },
+    {
+      "id": "BR41.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`_authorize` 第一步檢查 `principal.is_approved`，先於任何查詢。`F7`（同進程）與 `H1` ⑥、`H2` 斷言；突變 M3（拿掉此檢查）使 `F7`／`H1` ⑥／`H2` 紅。"
+    },
+    {
+      "id": "BR41.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "全域 `K4` 在 facade 以 `user_can` 評估，router 不掛 `require_story_action`（`requirement_field_router.py` 0 命中）。突變 M2 使 `H1` ③④⑤⑧⑨ 與 `F7` 紅。"
+    },
+    {
+      "id": "BR41.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "經 `HierarchyFacade.get_project_of_system`；`HierarchyNotFound`／`HierarchyForbidden`／非整數或超出 int4 的 id → `RequirementFieldNotFound`。`F7`、`H1` ⑦、`H2` 斷言 404。"
+    },
+    {
+      "id": "BR41.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "經 `MembershipFacade.resolve_project_role`；`None` → 拒絕（reason=not_member）。`H1` ②⑩⑫、`H7`（member 與 project_admin 皆可寫）；突變 M1 使 ②⑩⑫ 與 `F7` 紅。"
+    },
+    {
+      "id": "BR41.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "四步依序、任一失敗即中止；本體在授權後才解析（`write_field_from_body`）。`H1` 每個 deny 列斷言對本表 0 條敘述；`H2` 斷言壞本體／非整數 id 在無權者手上仍是 403。"
+    },
+    {
+      "id": "BR41.6",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`_deny` 寫一行 WARNING `requirement_field.denied`，`extra` 帶 story_id／action／system_id／user_id／reason，不含值與代寫標示。`F8`(a)(b) 斷言；突變 M6 使 `F8` 紅。"
+    },
+    {
+      "id": "BR42.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`_resolve_field` 以 `requirement_field_definitions.find_group` 白名單比對。`F6`（`nope/sla`）斷言 `UnknownFieldKey`。"
+    },
+    {
+      "id": "BR42.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`group.find(field_key)` 只在**該組**內查；判定對象是程式內定義而非資料表。`F6`／`H5` 的錯綁別組（`architecture/sla`）斷言 422。"
+    },
+    {
+      "id": "BR42.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`on_behalf_of` 必須是 None 或已宣告的 group_key。`F6`／`H5` 以未宣告的唯一標記斷言 422 且不回顯。"
+    },
+    {
+      "id": "BR42.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "去空白後 > 2000 → `RequirementFieldValidationError(value, too_long)`；`F6` 另斷言恰 2000 字可寫入。"
+    },
+    {
+      "id": "BR42.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "帶 `on_behalf_of` 的空值 → `blank_on_behalf` 422，該欄不變。`F5`／`H5` 斷言。限度（省略標示仍會清值）交接 `U21`／`U13`，見 code-summary。"
+    },
+    {
+      "id": "BR43.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`stripped = value.strip()`，存入去空白後的字串。`H3` 送 ' 99.9% ' 斷言回 '99.9%'；`F6` 斷言前後空白不計入長度。"
+    },
+    {
+      "id": "BR43.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "不帶 `on_behalf_of` 的空值轉入 `_clear_authorized`。`F4`、`F2` 斷言 filled → cleared。"
+    },
+    {
+      "id": "BR43.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "條件式 `UPDATE … WHERE value IS NOT NULL` 對無列得 0 列、不建列。`S3`、`F4` 斷言。"
+    },
+    {
+      "id": "BR43.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "已清空列不符條件 → 0 列 → no-op，`cleared_at`／`updated_by` 不變。`S4`（固定時鐘）、`G2`（PostgreSQL）、`H4`、`G3`（併發）斷言。"
+    },
+    {
+      "id": "BR43.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "依方言的單一 `INSERT … ON CONFLICT (三欄) DO UPDATE … RETURNING`。`S1`、`S2`（列已存在走首寫路徑不拋 IntegrityError）、`G1`（PostgreSQL 方言）斷言。"
+    },
+    {
+      "id": "BR43.6",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "`DO UPDATE` 無條件覆寫 updated_at／updated_by／updated_on_behalf_of，同值也覆寫。`S1`、`S7`（第二次寫入仍為 1 條寫入敘述）。"
+    },
+    {
+      "id": "BR43.7",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "`clear_if_filled`：value=NULL、cleared_at=now、updated_at=now、updated_by=發起者、updated_on_behalf_of=NULL。`S4`、`G2`、`H3` 斷言。"
+    },
+    {
+      "id": "BR44.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`derive_filled_state` 對無列／第四種列回 never_filled；`build_field_view` 對 never_filled 回 null 溯源。`F1`、`S5` 斷言。"
+    },
+    {
+      "id": "BR44.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`compose_field_set` 以同一份 views 計算 `unfilled_count = Σ(total − filled)`。`F2`、`H3` 斷言。"
+    },
+    {
+      "id": "BR44.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "以定義為主迴圈，定義外的列不出現、不計數，也不被刪除。`F3` 斷言。"
+    },
+    {
+      "id": "BR44.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "`fetch_rows` 一次 SELECT 取該系統全部列；router 沒有只回計數的端點。`S6`、`F2`、`H4`（openapi 只有一個 GET）斷言。"
+    },
+    {
+      "id": "BR44.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "回應欄位集合恆等於宣告集合，無列以 never_filled 合成。`F2`、`H3`（cost 5 欄、architecture 2 欄）。"
+    },
+    {
+      "id": "BR44.6",
+      "status": "OK",
+      "target": "backend/services/requirement_field_definitions.py",
+      "note": "`FIELD_GROUPS` 依 `display_order` 排序、組內依宣告順序；每組帶 title／filled_count／total_count。`F2`、`H3` 斷言順序與標題。"
+    },
+    {
+      "id": "BR45.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`updated_by=principal.user_id`；本體帶 `updated_by` → 422（`extra=forbid`）。`F1`、`H3`、`H5` 斷言。"
+    },
+    {
+      "id": "BR45.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`updated_on_behalf_of` 只取自呼叫端的 `on_behalf_of`。`S1`、`H3`（cost）、`F1`（使用者自填為 null）斷言。"
+    },
+    {
+      "id": "BR45.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "`clear_if_filled` 把 `updated_on_behalf_of` 設 NULL。`F4`、`H3`、`G2` 斷言。"
+    },
+    {
+      "id": "BR45.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`on_behalf_of` 不參與 `_authorize` 任何分支。`H1` ⑨、`F7`（viewer 帶 cost 寫入仍 403）；突變 M2 使 ⑨ 紅。殘留見 `OPEN-RF20-1`。"
+    },
+    {
+      "id": "BR45.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "時間戳由呼叫端（facade 的 clock）傳入；no-op 不更新。`S4`、`S5` 以固定時鐘斷言 updated_at 不變。"
+    },
+    {
+      "id": "BR46.1",
+      "status": "OK",
+      "target": "backend/services/requirement_field_router.py",
+      "note": "`_translate`：Forbidden→403、NotFound→404、UnknownFieldKey／ValidationError→422；三路由 `responses` 一致宣告 403／404／422（`RequirementFieldErrorOut`）。openapi.json 已重新產生，`dump_openapi.py --check` 通過。"
+    },
+    {
+      "id": "BR46.2",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "寫入與清空各為一個交易，例外時 rollback 後重新拋出。`F8`(e) 以 mock commit 失敗斷言 rollback 被呼叫、重讀值不變。"
+    },
+    {
+      "id": "BR46.3",
+      "status": "OK",
+      "target": "backend/services/requirement_field_errors.py",
+      "note": "所有 `detail` 由固定字串集合產生，不含值與代寫標示；不合識別字形狀的路徑片段也不回顯。`F6`、`H5` 以唯一標記斷言。"
+    },
+    {
+      "id": "BR46.4",
+      "status": "OK",
+      "target": "backend/services/requirement_field_router.py",
+      "note": "框架不驗證本體與 `system_id`（皆以字串／原始位元組接收），facade 授權後以 `RequirementFieldWriteIn.model_validate_json` 解析並轉成固定文字 422。`H2`、`H5` 斷言；只有一種 422 形狀。"
+    },
+    {
+      "id": "BR47.1",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "`J)` 區塊 `updated_on_behalf_of VARCHAR(64)` 無外鍵、COMMENT 改寫；`DEPLOY.md` 2.2.9 同步（同一變更集）。`D3`、`P15`／`P16` 斷言。"
+    },
+    {
+      "id": "BR47.2",
+      "status": "OK",
+      "target": "schema_rbac.sql",
+      "note": "條件式 `DO` 區塊：只在欄位為 integer 時以 conkey 移除外鍵並 `USING NULL` 轉型，NOTICE 回報清掉筆數、設 lock_timeout。CI 步驟 A–D 驗證；本機 PostgreSQL 17 實跑，突變（無條件轉型）使步驟 D 紅。"
+    },
+    {
+      "id": "BR47.3",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "`verify_column_postconditions`：型別 character varying(64)、該欄無外鍵、`updated_by` 外鍵仍在；`verify_meta_schema.sql` 的 `P15`／`P16`。本機實測：收斂被改成 no-op 時腳本 exit 1。"
+    },
+    {
+      "id": "BR47.4",
+      "status": "OK",
+      "target": "backend/models.py",
+      "note": "新增 `SystemRequirementField` ORM 模型（唯一鍵、CHECK、兩條外鍵、String(64)、無索引、不掛 before_create 守門）；`test_requirement_field_data.py` `D1`–`D5` 鎖住與 DDL 一致。"
+    },
+    {
+      "id": "NFR8.120",
+      "status": "OK",
+      "target": "DEPLOY.md",
+      "note": "零新環境變數（`validate_env_contract.py` 通過）；`schema_rbac.sql` 的 `J)` 區塊與 `DEPLOY.md` 2.2.9 在同一變更集內一起修改（blocking 同步）。"
+    },
+    {
+      "id": "NFR20.1",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_service.py",
+      "note": "`S6`：0 列與 8 列（7 欄＋1 保留列）皆恰 1 次 SELECT；`F2`、`H4` 亦斷言 selects==1。"
+    },
+    {
+      "id": "NFR20.2",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H4`：整個 GET 的總敘述數在 0 列與 7 列兩種資料下相等。"
+    },
+    {
+      "id": "NFR20.3",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H4`：openapi 中 `/api/requirements` 下只有一個 GET 操作。"
+    },
+    {
+      "id": "NFR20.4",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_service.py",
+      "note": "`S7`：寫入對本表恰 1 條寫入敘述、0 次 SELECT（INSERT 與 DO UPDATE 兩個分支）。"
+    },
+    {
+      "id": "NFR20.5",
+      "status": "OK",
+      "target": "backend/services/requirement_field_router.py",
+      "note": "PUT／DELETE 的 response_model 為單一 `FieldView`，不含計數；`S7` 斷言寫入 0 次 SELECT，清空的 no-op 允許 1 次 fetch_row。"
+    },
+    {
+      "id": "NFR20.6",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "本單元新增檔案 `lru_cache|cache` grep 為 0（code-summary 記錄指令）；無模組層狀態。"
+    },
+    {
+      "id": "NFR20.7",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H1` 每個 403／404 列斷言對本表 0 條敘述；`F7` 同進程路徑同樣斷言。"
+    },
+    {
+      "id": "NFR20.8",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H1` 十二列矩陣（九列＋三列）；突變 M1／M2／M3 皆紅，結果記於 code-summary。"
+    },
+    {
+      "id": "NFR20.9",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H1` ⑨：Developer 帶 `on_behalf_of=cost` 寫入 → 403；`F7` 同進程同樣斷言。"
+    },
+    {
+      "id": "NFR20.10",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H5`：本體帶 `updated_by` → 422（單一分支，`extra=forbid`），不回顯；`H2`：無權者送同樣本體得 403。"
+    },
+    {
+      "id": "NFR20.11",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H6`：mock `resolve_project_role` 拋 RuntimeError → 500、無寫入；`F8`(d) 同進程傳播例外、無寫入。"
+    },
+    {
+      "id": "NFR20.12",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H5`：錯綁別組、超長值、未宣告的代寫組、本體帶 updated_by 四類 422；`F6` 同。"
+    },
+    {
+      "id": "NFR20.13",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "全部經 SQLAlchemy 建構式與綁定參數；新增檔案 `text(`／f-string SQL grep 為 0。"
+    },
+    {
+      "id": "NFR20.14",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H5`：四類 422 不含唯一標記、`detail` 為字串；`H2`：非整數 system_id 授權後為 404、授權前為 403，皆非框架 422。"
+    },
+    {
+      "id": "NFR20.15",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_service.py",
+      "note": "`S1`：同一欄位重複寫入列數為 1；`H4`：寫滿七欄後列數為 7。"
+    },
+    {
+      "id": "NFR20.16",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "`memory-schema` 步驟 E：先刪 fixture system，DO 區塊斷言其需求欄位列數為 0（ON DELETE CASCADE），再清 project／user；本機實跑通過。本單元程式無對本表的 DELETE。"
+    },
+    {
+      "id": "NFR20.17",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_service.py",
+      "note": "`S2`：列已存在時走首寫路徑不拋 IntegrityError、結果為新值；`G1` 為 PostgreSQL 方言。"
+    },
+    {
+      "id": "NFR20.18",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_data.py",
+      "note": "由 `ck_system_requirement_fields_cleared_has_null_value` 保證；`D5` 斷言 SQLite 上 CHECK 擋下「有值且已清空」，`D4` 斷言 ORM 宣告此 CHECK。"
+    },
+    {
+      "id": "NFR20.19",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F8`(e)：commit 拋錯 → rollback 被呼叫 → 同一連線重讀（即已提交狀態）值與 filled_state 不變（StaticPool 下不以「另一 session」為依據，ND R-07）。"
+    },
+    {
+      "id": "NFR20.20",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H1` deny 列對本表 0 條敘述（含寫入）。"
+    },
+    {
+      "id": "NFR20.21",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H4`：連送兩次相同 PUT 皆 200、列數 1。"
+    },
+    {
+      "id": "NFR20.22",
+      "status": "OK",
+      "target": "backend/tests_pg/test_requirement_field_pg.py",
+      "note": "`G2`、`G3`（兩個併發清空恰一次生效，barrier 釘住；突變「先讀後改」使其紅）；`S4`、`H4` 為序列版本。"
+    },
+    {
+      "id": "NFR20.23",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "`memory-schema` 步驟 C 寫入代寫值 cost 並 COMMIT、步驟 D 重跑腳本後以 DO … RAISE EXCEPTION 斷言仍為 cost；本機實跑通過，突變（無條件轉型）使其紅。"
+    },
+    {
+      "id": "NFR20.24",
+      "status": "OK",
+      "target": ".github/workflows/ci.yml",
+      "note": "步驟 A 以 `downgrade_requirement_fields.sql` 造出舊定義、步驟 B 以 `run_meta_schema_migration.py` 收斂並重跑 `verify_meta_schema.sql`（P15／P16）、步驟 D 重跑不改資料。"
+    },
+    {
+      "id": "NFR20.25",
+      "status": "OK",
+      "target": "backend/scripts/run_meta_schema_migration.py",
+      "note": "欄位級後條件不符即非零結束碼；本機實測收斂被改成 no-op 時 exit 1 並列出兩項問題。"
+    },
+    {
+      "id": "NFR20.26",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_http.py",
+      "note": "`H6`：mock `fetch_rows` 拋錯 → 500，回應本體不含 `unfilled_count`。"
+    },
+    {
+      "id": "NFR20.27",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F8`(a)：拒絕恰一行 WARNING，`extra` 的 story_id／action／system_id／user_id／reason 正確。"
+    },
+    {
+      "id": "NFR20.28",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F8`(b)：寫入與清空各一行 INFO，所有 log 的訊息與 `__dict__` 都不含唯一標記；突變 M6 使其紅。"
+    },
+    {
+      "id": "NFR20.29",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_facade.py",
+      "note": "`F8`(c)：已清空再清空 → `assertNoLogs(level=INFO)`。"
+    },
+    {
+      "id": "NFR20.30",
+      "status": "OK",
+      "target": "backend/services/requirement_field_facade.py",
+      "note": "`logging.getLogger(\"cloud360.requirement_fields\")`；新增檔案 `getLogger(__name__)` grep 為 0。"
+    },
+    {
+      "id": "NFR20.31",
+      "status": "OK",
+      "target": "backend/services/requirement_field_service.py",
+      "note": "`_INSERT_BY_DIALECT` 依 `session.get_bind().dialect.name` 選 postgresql／sqlite 的 insert；不支援的方言大聲失敗，不退回先查後寫。`S8` 斷言 SQLite ≥ 3.35、`G1` 驗 PostgreSQL 方言。"
+    },
+    {
+      "id": "NFR20.32",
+      "status": "OK",
+      "target": "backend/tests/test_requirement_field_service.py",
+      "note": "`QueryCounter` 以 `before_cursor_execute` 計數並依表名過濾，供 S6／S7／F2／F7／H1／H4 共用。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "CG-DEFINITIONS",
+      "status": "OK",
+      "target": "backend/services/requirement_field_definitions.py",
+      "note": "兩組七欄常數、白名單與 INPUT_HINT；匯入時自我檢查（重複 key、格式、display_order）。"
+    },
+    {
+      "id": "CG-TYPES",
+      "status": "OK",
+      "target": "backend/services/requirement_field_types.py",
+      "note": "FilledState、FieldView／FieldGroupView／FieldSetView（snake_case，含 `input_hint`）與 RequirementFieldWriteIn（extra=forbid、strict）。"
+    },
+    {
+      "id": "CG-CI-SCRIPTS",
+      "status": "OK",
+      "target": "backend/scripts/ci/downgrade_requirement_fields.sql",
+      "note": "步驟 A 的舊定義重建（含前後置自我確認）；`seed_requirement_field_fixture.sql` 為步驟 C 的 fixture。"
+    },
+    {
+      "id": "CG-OPENAPI",
+      "status": "OK",
+      "target": "openapi.json",
+      "note": "重新產生（+451 行，純新增）；`frontend/src/types/api.d.ts` 以 gen:types 重新產生（+288 行），check:types 通過。"
+    }
+  ]
+}

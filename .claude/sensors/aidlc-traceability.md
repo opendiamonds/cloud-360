@@ -1,7 +1,7 @@
 ---
 id: traceability
 kind: deterministic
-command: bun .claude/tools/aidlc.ts engine sensor-traceability
+command: aidlc engine sensor-traceability
 default_severity: advisory
 description: Verifies element-level upstream coverage, downstream targets, and derived orphans in traceability.json
 category: document-traceability
@@ -19,7 +19,7 @@ output_schema:
   invalid_targets: string[]
   findings_count: integer
   reason: string
-timeout_seconds: 5
+timeout_seconds: 300
 ---
 
 # traceability sensor

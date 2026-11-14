@@ -1,0 +1,282 @@
+{
+  "stage": "code-generation",
+  "unit": "progress-channel",
+  "upstream_ids": [
+    "AC13.1.1",
+    "AC13.1.2",
+    "AC13.1.3",
+    "BR1.1",
+    "BR1.2",
+    "BR1.3",
+    "BR2.1",
+    "BR2.2",
+    "BR2.3",
+    "BR2.4",
+    "BR3.1",
+    "BR3.2",
+    "BR4.1",
+    "BR4.2",
+    "BR5.1",
+    "BR5.2",
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "U22-V1",
+    "U22-V2",
+    "U22-V3",
+    "U22-V4",
+    "U22-V5",
+    "U22-V6",
+    "U22-V7",
+    "B-1",
+    "B-2",
+    "B-3",
+    "B-4",
+    "C-1",
+    "C-5",
+    "OQ-P1",
+    "OQ-P2",
+    "S-10"
+  ],
+  "coverage": [
+    {
+      "id": "AC13.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "測試 1 `test_two_overlapping_requests_get_disjoint_and_nonempty_event_sets` ＋ 整合測試 `RunDesignAgentIsolationIntegrationTest`（同檔）。實作在 backend/services/progress_channel.py 的 per-key `_channels`。互斥與**各自非空**兩半都被斷言；非空那一半不可省——壞碼上 A 的集合為空而 B 收到 A 的產出，互斥會真空成立。交錯以 asyncio.Event barrier 釘住，零 sleep。"
+    },
+    {
+      "id": "AC13.1.2",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "測試 2（另一個請求仍收到自己的事件）與測試 6（被放棄的請求不留鍵）。實作在 backend/services/progress_channel.py 的 `close()`（只 pop 自己的鍵）與 `drain()` 的空迭代器。斷言的是「A **仍收到**自己的事件」而非「沒有事件被靜默丟棄」——後者在修前修後都會通過。"
+    },
+    {
+      "id": "AC13.1.3",
+      "status": "OK",
+      "target": "backend/services/design_agent.py",
+      "note": "兩處固定字串：工具的 except 回傳值、`run_design_agent` 的 except yield。例外原文的唯一出口是 `logger.exception`。另在 backend/services/agent_router.py 與 backend/services/wa_collab_orchestrator.py 的 DuplicateChannelKey handler 同樣用固定訊息。閘門為 backend/tests/test_progress_channel_contract.py 的測試 12。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`RequestKey` 型別別名與模組 docstring 寫明「本模組不鑄造鍵」。三個呼叫點（backend/services/agent_router.py／backend/services/wa_collab_orchestrator.py／backend/test_agent.py）各自鑄造並以**必填關鍵字參數**傳入；`request_key` 刻意沒有預設值——有預設值就等於多一條「忘了傳也能跑」的路，而那條路的症狀是全部事件被記 log 丟棄、畫面上只是沒有進度訊息。"
+    },
+    {
+      "id": "BR1.2",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`ProgressChannelRegistry.open()`：鍵已存在即 raise DuplicateChannelKey，不覆寫。測試 4 另斷言原通道的事件仍可取出（證明沒被換成一個新的空通道），以及例外訊息不含鍵本身。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`_channels` per-key dict：`drain(kA)` 能取到的集合由 `_channels[kA]` 界定，跨鍵取值需要一個不存在的操作。測試 1 與整合測試。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "OK",
+      "target": "backend/services/agent_router.py",
+      "note": "`event_generator` 的 `finally: ProgressChannel.close(request_key)`。backend/services/wa_collab_orchestrator.py 的 `_remap_design_events` 與 backend/test_agent.py 同形狀。`run_design_agent` **刻意不含 finally**——它不代為 close。"
+    },
+    {
+      "id": "BR2.2",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`close()` 以 `dict.pop(key, None)` 實作，冪等。非冪等會讓 finally 在「正常已關閉 ＋ 異常再關一次」時拋出第二個例外，覆蓋原始失敗原因。測試 5。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "測試 6 以 `await gen.aclose()` 模擬客戶端斷線並斷言 registry 不含該鍵——`[Q2]`=A 逐字要求以測試承載而非以推論成立。實作為 backend/services/agent_router.py／backend/services/wa_collab_orchestrator.py／backend/test_agent.py 的 finally。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`drain()` 對不存在的鍵 `return` 出一個空 async generator，不拋例外。測試 3 另斷言**已關閉與從未存在的結果相等**，使呼叫端無法探知某個鍵曾經存在。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "OK",
+      "target": "backend/services/design_agent.py",
+      "note": "兩處對外字串皆為固定值；另見 backend/services/agent_router.py／backend/services/wa_collab_orchestrator.py 的 handler。閘門為 backend/tests/test_progress_channel_contract.py 的測試 12。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`publish()` 的 `if channel is None or not channel.is_open` 分支：記 `logger.error` 並 return。不崩潰也不靜默成功；log 含鍵與事件類別、**不含 content**（SEC-3）。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`_admit()` ＋ `_index_of_oldest_droppable()`：滿載時自最舊端丟第一則 progress；xml／error 一律寫入（必要時 buffer 暫時超過上界）；無 progress 可丟時拒絕寫入新的 progress。測試 7。**本站的一個判讀**：BR4.1 只點名 progress 可丟、xml／error 永不丟，**未交代 `message`**；本實作把 message 歸入不可丟棄（`DROPPABLE_EVENT_TYPES` 只含 progress），理由是丟掉模型對使用者的回覆與丟掉 xml 同級。現狀 message 由主迴圈直接 yield 而不經通道，故此判讀在當下不可達，但它必須有一個定義。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`_admit()` 的兩處 `logger.warning`，各含鍵、被丟棄的類別、累計丟棄數（`_Channel.dropped_count`）。測試 7 另斷言 log 不含事件 content。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "backend/services/design_agent.py",
+      "note": "兩個模組層全域已刪、把全域設回 None 那一行已刪、`_drain_progress` 已改寫為呼叫 `ProgressChannel.drain`；backend/services/wa_collab_orchestrator.py 已補傳鍵。閘門為 backend/tests/test_progress_channel_contract.py 的測試 8 與測試 9。**本站的實作紀律**：那兩個舊符號名刻意不出現在 backend/services/design_agent.py 內（連註解也不寫）——閘門是純文字 grep，在註解裡寫出它們會讓閘門永遠紅。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "全部併發測試以 asyncio.Event barrier 釘住交錯，零 sleep。整合測試的 barrier 另加 10 秒逾時——接線斷掉時測試會以一句清楚的 assertion 失敗，而不是卡住整個 CI job（實跑突變 M7 時發現的）。"
+    },
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 11 斷言 backend/services/progress_channel.py 在 AST 層不 import 也不引用 uuid／secrets／random（本單元側）；測試 10 斷言三個非夾具呼叫點皆以 `secrets.token_urlsafe(32)` 鑄造（鑄造端）。**本站把 S-5 的缺口收起來了**：原本鑄造端的驗證落在 U13／U12 兩個 CONDITIONAL 單元，而 code-generation 是 per-unit 所以到不了它們；測試 10 直接對本單元改到的入口端斷言，故不再依賴那兩個單元是否被 skip。**作用域界線**：測試 10 刻意排除 `backend/tests/` 下的夾具（夾具用固定、可讀的鍵），判別以**目錄**而非檔名前綴為準，否則會連 backend/test_agent.py 這個真實入口端一起排除。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "backend/services/design_agent.py",
+      "note": "兩個洩漏點都改了。凍結的 SEC-2 本文寫其中一處是「唯一」洩漏點（C-1），實為兩處。閘門為 backend/tests/test_progress_channel_contract.py 的測試 12，形狀級而非字面級。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "三處 log（publish 的 ERROR、_admit 的兩處 WARN）的參數清單只含鍵、事件類別、累計丟棄數。測試 7 另斷言 WARN 內容不含事件 content。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "backend/requirements.txt",
+      "note": "零新依賴（`collections.deque`／`dict`／`asyncio`／`unittest` 皆標準庫）：本檔的 git diff 為空。零環境變數、零 compose 服務、零 schema；`validate_env_contract.py` 通過、三個 `.env.example` 未改、`ci.yml` 未改。"
+    },
+    {
+      "id": "U22-V1",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "測試 1 ＋ 整合測試：互斥且各自非空，barrier 非 sleep。"
+    },
+    {
+      "id": "U22-V2",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel.py",
+      "note": "測試 6：被放棄的請求結束後鍵不殘留。"
+    },
+    {
+      "id": "U22-V3",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 8（1a–1d）與測試 9（1e）。1e **以枚舉實作而非寫死路徑清單**（B-2 的修法）：以 AST 掃全 repo 找出每一個 `run_design_agent` 呼叫點，再逐點斷言。突變 M2（只改其中一處、另兩處保持正確）驗證它不是 grep 形。"
+    },
+    {
+      "id": "U22-V4",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`_admit()` 為同步 `def`，整段無 await——語法層保證（在同步函式內寫 await 是 SyntaxError，連 import 都會失敗，而 ci.yml 的 backend job 步 4「Import FastAPI app」會先撞到它）。前提寫在**函式本體 docstring** 而非只有模組 docstring（`[Q3]`=A 的要求）。本站不另設 grep 閘門——為一個已由語言排除的問題加機制。"
+    },
+    {
+      "id": "U22-V5",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 11。**第二個子句（「無任何回傳新鍵的函式」）原本沒有可執行的 pattern**（infrastructure-design 審查 R-03）。本站給它一個：沒有隨機源可達的模組無法鑄造不可猜的鍵，故「三個模組在 AST 層皆不可達」就是它的可執行形式；另加函式名 canary（mint／new_key／make_key／create_key）。檢查刻意為 AST 層而非原始碼文字層——文字層會讓 backend/services/progress_channel.py 的說明文件不能提到自己不該 import 什麼。"
+    },
+    {
+      "id": "U22-V6",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`drain()` 是純 deque 取出迴圈，本體內零 await、零 I/O，複雜度 O(取出則數)。`form` 仍為 async（契約 K-18 的 `form: async`／`returns: AsyncIterator`）——這正是 nfr-requirements 審查 R-08 要的那個區分。NFR3 的實際量測屬 build-and-test。"
+    },
+    {
+      "id": "U22-V7",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 10：**覆蓋三個呼叫點而非原規格的兩個**（B-3 的修法），且覆蓋的檔案集合由測試 9 的枚舉導出而非寫死，所以第四個產品呼叫點也會自動被覆蓋。"
+    },
+    {
+      "id": "B-1",
+      "status": "OK",
+      "target": "backend/services/agent_router.py",
+      "note": "`event_generator` 的 `try/except DuplicateChannelKey`：yield 一個固定訊息的 error 事件後 return。backend/services/wa_collab_orchestrator.py 同形狀。**這是本計畫代做的唯一設計決定**（三個設計站都已凍結、都沒有設計這個出口）。不處理的後果：該例外不經 design_agent 的 except，而 `event_generator` 外層無 try/except 且包在 StreamingResponse 內，使用者得到一個無聲中止的 SSE 串流、連 error 事件都沒有。`open()` 刻意放在 generator **內**：鍵的壽命必須與 generator 等長，finally 才真的涵蓋它。"
+    },
+    {
+      "id": "B-2",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 9 以枚舉後逐點斷言實作，突變 M2 驗證。枚舉器隨後**真的抓到了第四個呼叫點**（本站為整合邊界新增的測試檔），見 code-summary.md。"
+    },
+    {
+      "id": "B-3",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 10 覆蓋全部三個非夾具呼叫點，集合由枚舉導出。"
+    },
+    {
+      "id": "B-4",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "`_MEASURED_MAX_PROGRESS_PER_TOOL_CALL = 18`、`_BUFFER_HEADROOM_MULTIPLIER = 8`、`MAX_BUFFERED_EVENTS = 144`（以計算式表達，使數字不可能與推導漂移）。**實測而非估計**：以 system prompt 自己的四個官方 JSON 呼叫範例走真實的 `build_mxgraph_xml` 路徑，數 `on_progress` 實際呼叫次數再加開頭那一則——AWS 11 nodes→12、Azure 17→18、GCP 15→16、Azure 16→17，最大 18。四筆原始數據與倍數都寫進程式註解。"
+    },
+    {
+      "id": "C-1",
+      "status": "OK",
+      "target": "backend/services/design_agent.py",
+      "note": "兩處固定字串（凍結的 SEC-2 只寫其中一處是「唯一」洩漏點）。"
+    },
+    {
+      "id": "C-5",
+      "status": "OK",
+      "target": "backend/tests/test_progress_channel_contract.py",
+      "note": "測試 12 第二子句 ＋ 突變 M6。**本站偏離了設計的字面值並記明理由**：設計要求「`except ... as` 綁定數等於 2 且兩者皆綁 `e`」，而本單元把例外原文的出口收斂成只有 `logger.exception` 之後，例外物件在 design_agent.py 內完全沒有使用者，兩個 handler 都成了裸 except，綁定數為 **0**。照字面釘在 2 就必須寫回 `except Exception as e:` 並讓 `e` 成為未使用的變數——把閘門要監視的那個變數當成死碼重新引入。釘在 0 保留 canary 的全部意圖且**比釘在 2 更早觸發**（第一個新綁定就紅，不是等第三個）。突變 M6 證實只有第二子句抓得到它。"
+    },
+    {
+      "id": "OQ-P1",
+      "status": "OK",
+      "target": "backend/services/progress_channel.py",
+      "note": "同 B-4：數值已定並附實測依據。"
+    },
+    {
+      "id": "OQ-P2",
+      "status": "Deferred",
+      "target": "FR13.4（thread_id 分區語意）——不在本單元，刻意",
+      "note": "`wa_collab_orchestrator` 不傳 `thread_id` 使所有 A4 共編使用者共用 \"default-thread\"，那是**對話記憶**的共用，與進度事件錯送是兩回事。本站只補進度鍵那一半，並在該呼叫點的程式註解就地寫明另一半仍未處理及其理由。`design_agent.py` 的 `memory = MemorySaver()` 未動。"
+    },
+    {
+      "id": "S-10",
+      "status": "GAP",
+      "target": "閘門 3（形狀級例外檢查）的射程限制，承 infrastructure-design 的 S-10",
+      "note": "**本列刻意保持 GAP，不以 OK 蓋過。** 測試 12 第一子句的四個樣式抓不到 `\"...\".format(e)`、`\"...\" % e`、`f\"...{e.args}\"` 與任何改名的例外變數；第二子句把綁定的名字與數量釘住，使第一子句的完整性宣稱持續成立——但它防的是「新增綁定」，不防「既有綁定被改名後仍落在覆蓋集合內」這類情形。要真正完整需 AST 層的 taint 分析，成本遠高於本單元規模，故不做。這是一個**已知會隨時間腐化**的閘門，而腐化是安靜的；本列是它在機讀檔裡的可見落點。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-B2",
+      "severity": "named-gap",
+      "text": "`U22-V3` 的 1e 未指定「從哪裡數出呼叫點」（來源：infrastructure-design 審查 R-02，Major）。**該 CI 檢查在 repo 內不存在**——`U22-V3` 在 .github/workflows/ 與 scripts/ 皆 0 命中，且 `ci.yml` 不在本單元 source-manifest.json 的 7 條路徑內，故它從來不是本單元的交付物。風險原樣成立：硬寫三個路徑時，第四個呼叫點會靜默逃掉——正是 BR5.1 只列一個呼叫點的那個失敗模式。使用者裁決（2026-10-05）：記為具名缺口、本輪不建，不把本單元的範圍悄悄擴大。它是**驗證設計**的問題（如何列舉呼叫點），不是本單元的實作缺陷。"
+    },
+    {
+      "id": "OPEN-B3",
+      "severity": "named-gap",
+      "text": "`U22-V7` 只覆蓋 2／3 呼叫點，漏 `backend/test_agent.py`（來源：infrastructure-design 審查 R-04，Major）。與 OPEN-B2 同：**該 CI 檢查在 repo 內不存在**，亦不在本單元 manifest 內。需注意的是**處理器本身三處都在**（`agent_router.py:138-139`、`wa_collab_orchestrator.py:89-90`、`test_agent.py:48`，本輪實地查證），缺的只是那道 CI 閘門。使用者裁決（2026-10-05）：記為具名缺口、本輪不建。"
+    },
+    {
+      "id": "OPEN-B1-RESOLVED",
+      "severity": "resolved",
+      "text": "**B-1（`DuplicateChannelKey` 沒有被設計的出口，原標 Critical／★最高優先）已於程式內解決**，本輪實地查證：`agent_router.py:133-148` 在 generator **內**開通道，`except DuplicateChannelKey` 記 log 後 yield 固定訊息事件 `{\"type\": \"error\", \"content\": \"系統忙碌中，請稍後再試。\"}`（不含例外原文、不含鍵；BR3.1／SEC-2／AC13.1.3）並 `return`；`close` 在 `finally`。`wa_collab_orchestrator.py:88-94` 形狀相同。gate-findings-consolidated.md 的 B-1 條文寫於修法之前，其「在最可能的接線下該例外不經 :214」是**預測**；現行接線已不成立。此條留存以免下一位讀者重新爭論一個已解決的發現。"
+    },
+    {
+      "id": "OPEN-B4-RESOLVED",
+      "severity": "resolved",
+      "text": "**B-4（`S-1` buffer 上界的數值）已於程式內解決**，本輪實地查證 `progress_channel.py:139-168`：`_MEASURED_MAX_PROGRESS_PER_TOOL_CALL = 18`（實測值，2026-10-04，附實測結果段）、倍數 8 並寫明選 8 而非無上界的理由、`MAX_BUFFERED_EVENTS` 以**計算式**表達（逐字「使數字不可能與它的推導漂移」），且標明為軟上界（xml／error／message 滿載仍寫入，BR4.1）。已核可要求的四項（實跑、記則數、取倍數、兩者寫進註解）皆到位。"
+    }
+  ]
+}

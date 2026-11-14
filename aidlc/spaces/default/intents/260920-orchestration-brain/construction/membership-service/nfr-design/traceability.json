@@ -1,0 +1,306 @@
+{
+  "stage": "nfr-design",
+  "unit": "membership-service",
+  "upstream_ids": [
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "NFR12.5",
+    "NFR12.6",
+    "NFR12.7",
+    "NFR12.8",
+    "NFR12.9",
+    "NFR12.10",
+    "NFR12.11",
+    "NFR12.12",
+    "NFR12.13",
+    "NFR12.14",
+    "NFR12.15",
+    "NFR12.16",
+    "NFR12.17",
+    "NFR12.18",
+    "NFR12.19",
+    "NFR12.20",
+    "NFR12.21",
+    "NFR12.22",
+    "NFR12.23",
+    "NFR12.24",
+    "NFR12.25",
+    "NFR12.26",
+    "NFR12.27",
+    "NFR12.28",
+    "NFR12.29"
+  ],
+  "coverage": [
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "security-design.md",
+      "note": "鎖父 projects 列。本站的設計增量是**取得順序**：上游未定，而不定會死鎖——自動改選對一位 owner 的多個專案逐一取鎖，兩個操作以相反順序取鎖即死鎖。設計為一律按 projects.id 遞增，且明寫不能靠 `IN (...) FOR UPDATE`（其取鎖順序由執行計畫決定、不保證）。"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "security-design.md",
+      "note": "鎖的對象是父列。本站補上「建立路徑不取鎖」這個易漏的細節——建立時專案尚不存在，沒有可鎖的父列，故 NFR12.1 的「任何成員關係變更」不涵蓋它。"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "security-design.md",
+      "note": "assertCanDeactivate 不取鎖。本站寫明其設計後果（TOCTOU 窗口）並承接 OPEN-N19-2，不假裝已關。"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "security-design.md",
+      "note": "併發測試以 barrier 釘住交錯。本站不預選 CI 載體（OPEN-N19-5），但 logical-components.md §四 把它列為 infrastructure-design 的唯一實質項目。"
+    },
+    {
+      "id": "NFR12.5",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "不改 SessionLocal。本站補上鎖與交易的關係：鎖在交易內取得、交易結束釋放，故持有時間＝交易長度，交易內不得有外部呼叫。本單元五條路徑皆無外部呼叫，約束自然成立；但若日後在 changeRole 加通知呼叫，鎖的持有時間會變成那個呼叫的延遲。"
+    },
+    {
+      "id": "NFR12.6",
+      "status": "OK",
+      "target": "observability-design.md",
+      "note": "拒絕的 WARN log。本站的設計增量是**穩定的事件名**（membership.denied）與 logger 名（cloud360.membership，沿用 team.md 的慣例）——repo 既有 log 是自由格式字串，沒有穩定事件名就沒有任何東西能把這類事件篩出來，而 NFR12.6 的全部價值在於事後找得到它們。"
+    },
+    {
+      "id": "NFR12.7",
+      "status": "OK",
+      "target": "observability-design.md",
+      "note": "拒絕不進稽核表。本站以「兩個載體的界線」作為整份觀測設計的組織原則（§〇）。"
+    },
+    {
+      "id": "NFR12.8",
+      "status": "OK",
+      "target": "performance-design.md",
+      "note": "resolveProjectRole 一次索引查詢。覆蓋者是 U18 已交付的 uq_project_members_project_user；本站不新增索引。"
+    },
+    {
+      "id": "NFR12.9",
+      "status": "OK",
+      "target": "performance-design.md",
+      "note": "不加快取。本站寫明其設計後果：**刻意不設計**任何快取層、失效策略或 TTL，以免被下一個人讀成待辦。"
+    },
+    {
+      "id": "NFR12.10",
+      "status": "OK",
+      "target": "performance-design.md",
+      "note": "聚合查詢。**本站查出它的索引覆蓋不完整**：該查詢以 role = 'project_admin' 過濾，而 U18 交付的索引無一含 role。決定不加索引（同 U18 的「不需要的索引有寫入成本」判準），但寫下來因為下一個人會想加 (project_id, role) 而那需要競爭資料支撐。OPEN-ND19-3。"
+    },
+    {
+      "id": "NFR12.11",
+      "status": "OK",
+      "target": "performance-design.md",
+      "note": "另兩條路徑共用單專案判定函式。本站給出兩者的關係表（單專案判定 vs 其量化形式），直接回應審查 R-03。"
+    },
+    {
+      "id": "NFR12.12",
+      "status": "OK",
+      "target": "performance-design.md",
+      "note": "等價測試。本站明寫它讓「不變量只有一個」可被驗證而非只是宣稱。"
+    },
+    {
+      "id": "NFR12.13",
+      "status": "OK",
+      "target": "scalability-design.md",
+      "note": "鎖的粒度。本站給出互相阻塞矩陣（同專案寫入互斥、不同專案不互斥、唯讀完全不受影響），並指出寫入吞吐上界是「每專案每時刻一次」——對人工驅動的子系統不是瓶頸。"
+    },
+    {
+      "id": "NFR12.14",
+      "status": "OK",
+      "target": "scalability-design.md",
+      "note": "不加保存期限。**本站補上 [FD3]=A 的讀取路徑後果**：AC12.2.2 的變更紀錄查詢形狀為 WHERE promoted_user_id = ? ORDER BY occurred_at DESC，而 U18 交付的 ix_reselection_events_unack 是 **partial**（只含未確認列），對這個查詢**無效**。決定不加索引但記為 OPEN-ND19-4，並寫明它是 [FD3]=A 的衍生後果——[FD3] 之前該表只記罕見的自動改選。"
+    },
+    {
+      "id": "NFR12.15",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "inviteMember 單一交易。本站給出四條交易邊界各自的範圍與鎖位置表。"
+    },
+    {
+      "id": "NFR12.16",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "changeRole 的角色更新與稽核同交易。"
+    },
+    {
+      "id": "NFR12.17",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "自動改選的升級與稽核同交易。**本站另設計逐專案獨立交易而非一個大交易**——一個橫跨 N 專案的交易會同時持有 N 個鎖；BR4.3 的冪等性使逐專案安全，代價是中間狀態可觀察（刻意接受）。"
+    },
+    {
+      "id": "NFR12.18",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "**本站查出一個會讓它落空的實作細節**：U7 的 hierarchy_service.create_project（:98）在函式內自己 db.commit()（:117 的 db.add 之後即 commit），故天真的 [ND1]=A 實作不是同一交易——U7 先 commit、U19 再寫成員列，兩者之間失敗就留下零成員專案，**正是 [ND1] 要修的那個狀態**。設計要求：交易邊界必須由 U19 擁有，被呼叫的 U7 路徑不得自行 commit。OPEN-ND19-5（blocking-downstream）。"
+    },
+    {
+      "id": "NFR12.19",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "三個唯讀方法冪等。"
+    },
+    {
+      "id": "NFR12.20",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "inviteMember 非冪等。"
+    },
+    {
+      "id": "NFR12.21",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "removeMember 冪等。"
+    },
+    {
+      "id": "NFR12.22",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "changeRole 非冪等（每次寫一筆稽核，而這是正確行為）。"
+    },
+    {
+      "id": "NFR12.23",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "自動改選冪等。本站把它作為「逐專案獨立交易」可行的依據（見 NFR12.17）。"
+    },
+    {
+      "id": "NFR12.24",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "回填。本站設計其形狀：沿用 U18 的 [P1]=A 先例（獨立腳本、大聲失敗、不動啟動路徑、DEPLOY.md 記步驟），以「無任何成員列」為條件故冪等，commit 前自我終檢。**仍不預選是否與 U18 的腳本合併**——合併會把 DDL 與資料動作混在一支，而 U18 那支目前純 DDL 無資料寫入，那是它能單一交易並自我終檢的前提。"
+    },
+    {
+      "id": "NFR12.25",
+      "status": "OK",
+      "target": "reliability-design.md",
+      "note": "回填先於消費端上線。本站寫明順序前置條件：在 U18 的 run_meta_schema_migration.py 之後（表要先存在）。"
+    },
+    {
+      "id": "NFR12.26",
+      "status": "OK",
+      "target": "security-design.md",
+      "note": "log 不含憑證。本站給出拒絕 log 的完整欄位表與**不含的欄位及理由**（不含 token／session／授權標頭；不含被拒的具體原因字串，避免把授權矩陣的內部結構寫進 log）。"
+    },
+    {
+      "id": "NFR12.27",
+      "status": "OK",
+      "target": "observability-design.md",
+      "note": "鎖等待的 WARN log。**本站的設計增量是量測位置**：不能用資料庫的鎖等待統計（需輪詢 pg_stat_activity，屬 metrics 而 repo 無該管線），改為應用層計時。門檻設為可設定常數**而非環境變數**——project.md 的環境設定契約要求任何 compose 消費的變數同步三處，而一個 log 門檻不值得那個成本。OPEN-ND19-6（門檻值未定）。"
+    },
+    {
+      "id": "NFR12.28",
+      "status": "OK",
+      "target": "observability-design.md",
+      "note": "自動改選執行的 INFO log。"
+    },
+    {
+      "id": "NFR12.29",
+      "status": "OK",
+      "target": "observability-design.md",
+      "note": "自動改選跳過的 INFO log。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ND19-LOCKORDER",
+      "status": "OK",
+      "target": "security-design.md §一之二",
+      "note": "**本站的主要設計產出，上游完全沒有涵蓋。** [N1]=A 定了「鎖父列」但沒定取得順序，而自動改選是多專案操作——兩個停用操作以相反順序取鎖即死鎖。PostgreSQL 會偵測並中止其中一個，故後果不是卡死而是**間歇性失敗**，而間歇失敗在容忍 flaky 的 CI（playwright.config.ts:17 的 retries: 1、ui-regression 容忍 stats.flaky）中會被當成雜訊。設計為一律按 projects.id 遞增取鎖，並明寫不能靠 `IN (...) FOR UPDATE`。"
+    },
+    {
+      "id": "ND19-COMMITBOUNDARY",
+      "status": "OK",
+      "target": "reliability-design.md §二之一",
+      "note": "**本站查出 [ND1]=A 的天真實作會產生它本要消除的狀態。** U7 的 create_project 自己 commit，故 U19 包一層若不接管交易邊界，就是兩個交易——中間失敗即零成員專案。這一項若漏掉，NFR12.18 的二元判準在部分失敗時為假。"
+    },
+    {
+      "id": "ND19-U7LOCKBLIND",
+      "status": "OK",
+      "target": "logical-components.md §三之一",
+      "note": "**跨單元影響：U7 不知道有人在鎖它的表。** 本單元對 projects 列取 FOR UPDATE，而 U7 的 delete_project 需要同一列的鎖故**會阻塞**（list_projects 唯讀不受影響、create_project 的列還不存在）。阻塞是正確行為，但 U7 沒有任何文件提到它可能等鎖——下一個人看到 delete_project 偶發變慢會從錯的方向找原因。"
+    },
+    {
+      "id": "ND19-R02FIX",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "**上一站審查 R-02（Major）的處置**：nfr-requirements 的 ADR-0006 表在 Network exposure 一格與 functional-spec.md §八 不一致而未揭露。本站以 §八 的判定（**適用，有落點**）為準，並列出三項落點——新 HTTP 端點供 U24、既有端點的回應契約擴充、**[ND1]=A 再加一項：建立專案端點的擁有者改變**。本站**不回改**上一站的產出（其收據已終結）。"
+    },
+    {
+      "id": "ND19-COSTFIX",
+      "status": "OK",
+      "target": "security-design.md §三之二 ＋ nfr-design-questions.md 的作答後更正",
+      "note": "**我把 [ND1]=A 的代價說大了，作答後查證並更正。** 提問時寫「與 BR6.4 同樣觸發不可分批部署，且須確認前端呼叫點」。實測：frontend/src 對 projects 的命中數為 **0**（寬鬆比對整個目錄），故**沒有既有前端消費端**，BR6.4 的「不可分批」對本變更**不成立**（它真正適用的是停用端點——AdminPage.tsx:163 確實在用）。而有一項我沒提到且是好消息：移動端點會改 openapi.json 的 path，而漂移閘門對 **path** 變更有效（它對 BR6.2 的新增狀態碼無效，是因為那是**狀態碼**層級的盲區）。結論不變，但 A 比我描述的便宜。"
+    },
+    {
+      "id": "ND19-NOPATTERN",
+      "status": "N/A",
+      "target": "observability-design.md §二",
+      "note": "四項觀測面（追蹤／metrics／告警／SLO）**無 pattern 可設計**，承接上游判定。本站的增量是指名承接站 observability-setup（4.4，**CONDITIONAL**）並要求：**若它被 skip，判定 skip 的執行者須把這四項重新提交使用者**——本 intent 已有三次指派落空的實例。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ND19-1",
+      "severity": "process",
+      "text": "**本站更正了自己提問時對 [ND1]=A 代價的描述**（詳見 reverse 的 ND19-COSTFIX）。記為 process 項而非缺口：結論不變，但我在選項裡寫下的代價有一半未經查證，而 project.md 已記過「提問前該算的不只是產出裡的數字，也包括選項代價裡的數字」。"
+    },
+    {
+      "id": "OPEN-ND19-2",
+      "severity": "named-gap",
+      "text": "**鎖的取得順序無機械強制。** 沒有任何工具會檢查「多專案操作是否按 projects.id 遞增取鎖」。違反的後果是間歇性死鎖，而間歇失敗在容忍 flaky 的 CI 中會被當成雜訊。可能的承載形式是一條刻意製造相反順序的測試（斷言不死鎖），但那需要兩個真實連線，屬 OPEN-N19-5 的同一個 CI 載體問題。"
+    },
+    {
+      "id": "OPEN-ND19-3",
+      "severity": "named-gap",
+      "text": "**assertCanDeactivate 的聚合查詢索引覆蓋不完整**：它以 role = 'project_admin' 過濾，而 U18 交付的索引無一含 role。本站決定**不加**索引（同 U18 的「不需要的索引有寫入成本，而『以後可能要』不是現在建的依據」判準，且每專案成員數受人工邀請速度限制），但寫下來因為下一個人會想加 (project_id, role)。加它需要競爭資料支撐。"
+    },
+    {
+      "id": "OPEN-ND19-4",
+      "severity": "named-gap",
+      "text": "**AC12.2.2 的變更紀錄查詢無可用索引，而這是 [FD3]=A 的衍生後果。** 查詢形狀為 WHERE promoted_user_id = ? ORDER BY occurred_at DESC，而 U18 交付的 ix_reselection_events_unack 是 **partial**（ON (promoted_user_id) WHERE acknowledged_at IS NULL），只含未確認列，對「看全部變更紀錄」無效。[FD3]=A 之前該表只記罕見的自動改選，查詢量與表大小都不成問題；之後它記每一次人工角色變更。本輪不加索引（表仍小、查詢頻率低），但這是本站新查出的。"
+    },
+    {
+      "id": "OPEN-ND19-5",
+      "severity": "blocking-downstream",
+      "text": "**[ND1]=A 的交易邊界必須由 U19 擁有，而 U7 的 create_project 自己 commit。** 本站開檔核對 hierarchy_service.create_project（:98）：:117 的 db.add(project) 之後即 db.commit()。天真的包一層實作會是兩個交易，中間失敗就留下零成員專案——**正是 [ND1] 要修的那個狀態**，而 NFR12.18 的二元判準（不存在零成員的專案）在部分失敗時為假。兩種可行形狀（U7 新增不 commit 的變體；或 U19 在自己交易內以 U7 的 model 建列——後者繞過 U7 的驗證邏輯，**不建議**）都需要改 U7 的介面，故本站不預選，只要求交易邊界歸 U19。"
+    },
+    {
+      "id": "OPEN-ND19-6",
+      "severity": "named-gap",
+      "text": "**鎖等待 log 的門檻值未定**（NFR12.27）。設計為可設定常數**而非環境變數**——project.md 的環境設定契約要求任何 compose 消費的變數同步 render-env.sh 與 .env.example 三處，而一個 log 門檻不值得那個成本。預設值由 code-generation 給（需要競爭資料才能定一個有意義的值，而我們沒有）。"
+    },
+    {
+      "id": "OPEN-ND19-7",
+      "severity": "named-gap",
+      "text": "**四項觀測面的承接站是 CONDITIONAL，故可能落空。** 追蹤／metrics／告警／SLO 屬 observability-setup（4.4，**CONDITIONAL**）。若它被 skip，判定 skip 的執行者須把這四項重新提交使用者——本 intent 已有三次指派落空的實例（[H6] 的目標站已完成且在游標之前；第 11 列的 Jev 無自然承接站；AC12.3.3 的措辭回補）。"
+    },
+    {
+      "id": "OPEN-ND19-8",
+      "severity": "named-gap",
+      "text": "**拒絕 log 含 project_id，而那證實了專案存在性。** 對一個非成員的拒絕，該 log 證實「存在一個 id 為 N 的專案」，而 AC12.1.3 要求未被邀請者看不到該專案。**目前不是洩漏**——只有維運者讀得到 log，而 BR1.5 的拒絕回應本身不含專案資訊。但若日後有人把這類 log 接到使用者可見的錯誤頁或支援工具，它就變成洩漏。界線是「log 不得進入使用者可見面」，而這條界線目前只由「沒有人這樣做」維持。"
+    },
+    {
+      "id": "OPEN-ND19-9",
+      "severity": "named-gap",
+      "text": "**U7 的 delete_project 會因本單元的鎖而阻塞，而 U7 沒有任何文件提到它可能等鎖。** 本單元對 projects 列取 FOR UPDATE；U7 的 list_projects（唯讀）與 create_project（列還不存在）不受影響，但 delete_project 的 db.delete(project) 需要同一列的鎖。**阻塞是正確行為**（不該在成員變更進行中刪掉專案），寫下來是因為下一個人看到 delete_project 偶發變慢會從錯的方向找原因。"
+    },
+    {
+      "id": "OPEN-N19-4",
+      "severity": "carried",
+      "text": "**回填腳本是否與 U18 的 DDL 腳本合併，仍未定。** 本站設計了回填的形狀（獨立腳本、冪等、自我終檢，沿用 U18 的 [P1]=A 先例）但不預選合併與否：合併省一個部署步驟，代價是把 DDL 與資料動作混在一支，而 U18 那支目前純 DDL 無資料寫入——那正是它能單一交易並自我終檢的前提。屬 code-generation 的決定。"
+    },
+    {
+      "id": "OPEN-N19-2",
+      "severity": "carried",
+      "text": "**assertCanDeactivate 的 TOCTOU 窗口**：它回通過之後、既有端點寫入 is_active 之前，另一個交易可能改變該使用者的管理者身分。NFR12.3 明文不取鎖（取鎖會把一個管理者動作變成廣域鎖），故本站不關閉它。關閉它要把停用端點整支納入同一鎖範圍，跨越 U19 與既有 user_router 的邊界。"
+    }
+  ]
+}

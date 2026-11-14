@@ -1,0 +1,17 @@
+{
+  "stage": "code-generation",
+  "unit": "embedding-port",
+  "version": 1,
+  "writes": [
+    { "path": "backend/services/embedding_port.py" },
+    { "path": "backend/tests/test_embedding_port.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/.env.example" },
+    { "path": "deploy/.env.example" },
+    { "path": "deploy/render-env.sh" },
+    { "path": "deploy/docker-compose.deploy.yml" },
+    { "path": "scripts/validate_embedding_provider_value.py" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "LOCAL-DEV.md" }
+  ]
+}

@@ -1,13 +1,28 @@
-"""Shared test helpers: path setup, psycopg2 mock, in-memory SQLite session."""
+"""Shared test helpers: path setup, psycopg mock, in-memory SQLite session."""
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-# Mock psycopg2 before any database import (CI / hosts without the driver).
-sys.modules.setdefault("psycopg2", MagicMock())
+# 驅動由 DATABASE_URL 的 `postgresql+psycopg://` 顯式指定，故要處理的是 `psycopg`
+# （v3，import 名為 `psycopg`；與第二代的 `psycopg2` 是兩個不同套件）。
+#
+# **只在真的沒裝時才 stub。** 無條件 `setdefault` 會在有裝驅動的環境把真模組遮掉，
+# 而 SQLAlchemy 的 psycopg dialect 在建構時會 `from psycopg.adapt import AdaptersMap`
+# ——MagicMock 不是 package，滿足不了子模組 import，於是 create_engine 直接炸。
+# 這是本次遷移實跑時抓到的（21 個 error），不是推論。
+if importlib.util.find_spec("psycopg") is None:  # pragma: no cover - 取決於環境
+    _psycopg_stub = MagicMock()
+    # dialect 建構時會對 `psycopg.__version__` 跑 re.match 取版號；MagicMock 對
+    # dunder 名一律丟 AttributeError，不給它就是 21 個 loader error。
+    _psycopg_stub.__version__ = "3.2.0"
+    sys.modules.setdefault("psycopg", _psycopg_stub)
+    # dialect 建構時會走到的子模組，需一併登錄才不會在 import 階段失敗。
+    for _sub in ("adapt", "pq", "types", "rows"):
+        sys.modules.setdefault(f"psycopg.{_sub}", getattr(_psycopg_stub, _sub))
 
 backend_dir = Path(__file__).resolve().parents[1]
 if str(backend_dir) not in sys.path:
@@ -83,3 +98,17 @@ def make_diagram(
     db.commit()
     db.refresh(diagram)
     return diagram
+
+
+def ALWAYS_VISIBLE(_project_id: int) -> bool:  # noqa: N802 - 以常數語意命名
+    """`U23`：`HierarchyFacade` 三條寫入路徑的 `project_visible` 測試替身，恆為真。
+
+    **只供「驗擁有者檢查等其他行為」的既有測試補參數用**——它們在 `U23` 之前
+    沒有可見性守門，補上恆真的判定使語意與修改前完全相同。
+    要驗守門本身的測試（`test_project_write_guard.py`）走 HTTP、由 router 注入
+    真實判定，不用本替身。
+
+    非測試程式**不得**傳這個形狀：`tests/test_project_visibility_static.py` 的第 3 條
+    斷言每個非 service 層的寫入呼叫都帶 `project_visible=<…>.project_visibility(...)`。
+    """
+    return True

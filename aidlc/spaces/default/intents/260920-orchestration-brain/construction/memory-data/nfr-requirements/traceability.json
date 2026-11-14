@@ -1,0 +1,153 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "memory-data",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "tech-stack-decisions.md §三",
+      "note": "記憶層的 schema 隔離與其驗證。本站的增量是把驗證載體的狀態講清楚：N-2 是交付物而非既有能力，且既有測試路徑（in-memory SQLite）對本契約零驗證能力（契約 K-05 的 why_not_existing_tests 逐字）。另查出 pgvector 是否存在於既有 image 為未查證前提（OPEN-N5-3）。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "security-requirements.md §一、§四",
+      "note": "episodic memory 的保存與刪除稽核。本站定案 NFR7.2（稽核保存期 90 天、以自身 occurredAt 為鍵）並一併定案兩個衍生子決定（清除稽核本身不留稽核以免無終止遞迴；清除機制同受 BR4.2 約束），關閉 OPEN-M2。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "security-requirements.md §一、§三",
+      "note": "靜態加密由主機層承載（磁碟／LUKS）。使用者裁決 [M2]=A。**不寫成已滿足**：本 repo 無任何機制能確認該主機磁碟真的加密（非 CI 可檢查、非應用層可檢查），故它是運維承諾而非閘門，記為 OPEN-N5-1。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "security-requirements.md §一、§二",
+      "note": "傳輸為 compose 內部流量、不跨主機邊界、不要求 sslmode。判準為 DATABASE_URL 的主機名須為 compose 內部服務名；validate_env_contract.py 已擋 localhost 來源滲透。查證依據：db 為內部服務名、全樹零 sslmode／pgcrypto 命中。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "security-requirements.md §一、§四",
+      "note": "稽核保存期 90 天，以 occurredAt 為鍵而**非** join 記憶的時間。**本站曾請使用者重選**：初答『與記憶同步 90 天』的一種讀法會讓 purged_by_retention 事件出生即逾期（它在記憶建立後 90 天才產生），使 FR4.7 的滿足時間為零，且會讓上一站 [M1]=A 失去意義（那時 ON DELETE CASCADE 更簡單且保有參照完整性）。澄清後採自身時鐘讀法，與 [M1]=A 相容，FR4.7 的實際滿足窗口為刪除後 90 天。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11 intent-router",
+      "note": "意圖識別準確率。本單元不做意圖識別。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10 session-store",
+      "note": "跨頁面上下文保留率。屬 session 層。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13 brain-gateway",
+      "note": "首字回應時間。屬 WebSocket 串流路徑；本單元是 DDL，不在串流路徑上。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U1 brain-infra／U10",
+      "note": "狀態外部化與重啟還原。本單元**本身就是外部化的目的地**（記憶持久化於 PG），無進程內狀態可談。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2 brain-ws-contract",
+      "note": "WebSocket 契約閘門。本單元零 WebSocket。**但它要防的失敗模式在本單元以另一種形式存在**：契約變更無機械閘門——本單元的 BR1.1／BR1.2／BR3.1 在 N-2 落地前完全無自動化驗證（OPEN-M6），形狀同源、載體不同。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "U1 brain-infra",
+      "note": "新增元件的部署設定完整性。本單元零新環境變數（REDIS_*／EMBEDDING_* 屬 U1／U6）。**但若 OPEN-N5-3 成立（PG image 需換成含 pgvector 者），本項即由不適用轉為適用**——那是部署層變更，會觸發 project.md 的三環境設定分離規則。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1 成本功能域",
+      "note": "成本原則。本單元不碰計價。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11 intent-router",
+      "note": "路由層模型的可替換性。本單元不呼叫 LLM。**相鄰但不同**：BR3.1 的 embeddingModel 過濾談的是 embedding 模型的可替換性在**資料層**的前提，不是路由層模型。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14／U15 畫面層",
+      "note": "跨功能任務的頁面切換次數。畫面層指標，本單元無使用者可見面。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR-ENC-U5",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "OQ-3 在本站關閉（靜態→主機層、傳輸→compose 內部）。**為什麼在本站而非往下推**：unit-of-work.md:248 指派 nfr-design，而該站 CONDITIONAL 且條件依賴本站，本站 ALWAYS 故為唯一攔截機會（OPEN-M4）。不選欄位層加密的理由是它會**取消一個已核可的能力**——密文無法全文檢索，而 BR3.3／ADR-008 已把 fulltext 定為支援的降級路徑。"
+    },
+    {
+      "id": "NFR-AUDIT-U5",
+      "status": "OK",
+      "target": "security-requirements.md",
+      "note": "稽核保存期 ＋ 兩個衍生決定。清除稽核不留稽核的理由是無終止遞迴，且 FR4.7 的文字約束對象是**記憶的**刪除動作而非稽核本身，故不違反。清除機制須清兩種資料（逾期記憶 ＋ 逾期稽核），而上游的 N-6 只寫了前者——記為 OPEN-N5-2。"
+    },
+    {
+      "id": "NFR-STACK-U5",
+      "status": "OK",
+      "target": "tech-stack-decisions.md",
+      "note": "唯一新技術層是 pgvector；零新 Python 套件、不引入遷移工具（無資料遷移，與 U4 的關鍵差別）、不引入 pgcrypto。**查出一個未查證前提**：既有 PG image 是否含 vector 擴充未確認，而標準 postgres:*-alpine 不含它（OPEN-N5-3）。本站刻意不猜。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-N5-1",
+      "severity": "named-gap",
+      "text": "**`NFR6.1`（靜態加密交主機層）無法由本 repo 驗證。** 不是 CI 可檢查的事實（CI 不跑在資料庫主機上），也不是應用層可檢查的事實（PG 看不到底層區塊裝置的加密狀態）。故它是**運維承諾而非閘門**，不得被讀成「已滿足」——ADR-0006 的 encryption 面對本單元是適用的，本站的處置是「指定承載層並揭露其不可驗證性」。承接站：`infrastructure-design`（**CONDITIONAL**）；轉移目標：`code-generation`（ALWAYS）。"
+    },
+    {
+      "id": "OPEN-N5-2",
+      "severity": "named-gap",
+      "text": "**`N-6` 實際上要清兩種資料，而上游只寫了一種。** 上游把 `N-6` 定義為承載 90 天記憶清除的 workflow；`NFR7.2` 定案後，它還須清除逾期的稽核事件（以 `occurredAt` 為鍵）。兩者同受 `BR4.2` 約束（不得是 `backend/` 內的排程程式，決定性映射邏輯須在純 Actions 步驟）。承接站：`U9 memory-purge`。"
+    },
+    {
+      "id": "OPEN-N5-3",
+      "severity": "named-gap",
+      "text": "**既有 PG image 是否含 pgvector 擴充未經查證。** `CREATE EXTENSION vector` 需要該擴充存在於 image 內，而標準 `postgres:*-alpine` **不含**它。本站刻意不猜、不寫成已確認。若不含，則需換 image（如 `pgvector/pgvector:pg18`）或在 image 內編譯——**這是部署層變更，會觸發 `project.md` 的三環境設定分離規則**。承接站：`infrastructure-design`（CONDITIONAL）；轉移目標：`code-generation`（ALWAYS）。同時也是 `N-2` 那個 CI job 的前提。"
+    },
+    {
+      "id": "OPEN-M4",
+      "severity": "resolved",
+      "text": "**已於本站關閉。** `OQ-3` 的風險鏈（`nfr-design` CONDITIONAL 且條件依賴本站）不再構成風險——本站已就地定案靜態與傳輸兩面（`NFR6.1`／`NFR6.2`），不依賴 `nfr-design` 是否執行。"
+    },
+    {
+      "id": "OPEN-M2",
+      "severity": "resolved",
+      "text": "**已於本站關閉。** 稽核保存期定為 90 天、以自身 `occurredAt` 為鍵（`NFR7.2`），不再是無限期累積。附帶定案兩個衍生子決定。"
+    }
+  ]
+}

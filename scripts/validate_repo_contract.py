@@ -131,6 +131,28 @@ REQUIRED_TEXT = {
         "validate_repo_contract.py",
         "Scope Overrides",
     ),
+    # The four type-contract drift gates (ADR-0019 §4 / NFR5.3). ci.yml was already
+    # in REQUIRED_FILES but had no REQUIRED_TEXT key, so deleting any one of these
+    # steps went completely undetected -- the file still existed and every other
+    # check still passed. Each term is one gate, one-to-one:
+    #   dump_openapi.py --check     spec  == backend code        (backend job)
+    #   npm run check:types         types == spec                (frontend job)
+    #   dump_ws_contract.py --check WS spec  == contract module  (backend job)
+    #   npm run check:ws-types      WS types == WS spec + BR4.4  (frontend job)
+    # Known fragility, deliberately accepted: this is string matching, so rewording
+    # a step (e.g. moving a command into a shell script) produces a FALSE RED. That
+    # trade is on purpose -- a false red gets noticed and fixed within minutes, a
+    # missed detection never does. When a gate is legitimately renamed or removed,
+    # update or delete the matching term IN THE SAME PR. Never comment the term out
+    # "for now": that switches this protection off without leaving a trace. If false
+    # reds become frequent, the upgrade path is parsing the YAML and asserting the
+    # step exists -- not deleting this key.
+    ".github/workflows/ci.yml": (
+        "scripts/dump_openapi.py --check",
+        "npm run check:types",
+        "scripts/dump_ws_contract.py --check",
+        "npm run check:ws-types",
+    ),
 }
 
 REQUIRED_RECORD_TEXT = {

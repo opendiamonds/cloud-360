@@ -1,0 +1,135 @@
+{
+  "stage": "nfr-design",
+  "unit": "rbac-story-ids",
+  "upstream_ids": [
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "SEC-5",
+    "SEC-6",
+    "U3-V1",
+    "U3-V2",
+    "U3-V3",
+    "U3-V4",
+    "U3-V5",
+    "U3-A1",
+    "U3-A2",
+    "U3-A3",
+    "U3-D1"
+  ],
+  "coverage": [
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "D-1：本單元不提供任何讀取端或判定函式；D-2：SEC-4 的 log 擴充不構成例外（改的是可觀察性，不是判定行為，不新增入口）。可驗證條件（交付檔案清單不得出現 router／service 層新檔）由 code-generation 的 source-manifest.json 驗"
+    },
+    {
+      "id": "SEC-2",
+      "status": "Deferred",
+      "target": "設計面無新決定——沿用啟動路徑既有的資料庫連線本身就是「不做任何事」。可驗證方式（validate_env_contract.py 通過、render-env.sh 與 .env.example 零新增 key）屬 code-generation 與 CI；本站不另設計機制。標 Deferred 而非 OK：本站沒有產生任何可被審查的設計決定。**審查 R-03 的註記（Minor，不需改）**：這是五個 Deferred 之中唯一一個「什麼算得上一個設計決定」的判斷題——另四個（U3-A1–U3-A3、U3-D1）都是明確的跨單元交接。審查表示它構造不出反論（既非 OK，因為真的沒有新機制可設計；亦非 GAP，因為需求是以「不作為」滿足而非留著未解），故維持 Deferred，在此留記錄供日後重新界定非交接項的 Deferred／OK 分界"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "D-16：RR-1 的承接站由泛稱的「operation 階段」收窄為 observability-setup（4.4，已查證在 Stages to Execute 內），並因其 execution 為 CONDITIONAL 而加上第二層補救（skip 時須重新提交使用者）。本站不設計 rate limiting——[Q1]=A 已定接受"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "D-6：一行彙總、INFO、含 (role, story_id) 配對；D-7：以 assertLogs 斷言四個新 story id 的字串，突變為「改回只記列數」；D-8：log 的文字格式自此成為受測契約，須明寫；D-9：不收斂 database.py:186 的既有重複 log"
+    },
+    {
+      "id": "SEC-5",
+      "status": "OK",
+      "target": "D-4：以區塊邊界限定解析範圍（不寫死行號，以 INSERT INTO role_permissions 之後、下一個裸分號之前定位；全檔掃會撿到 C1 退役表的 INSERT）；D-5：比對 tuple 集合，失敗輸出三段 diff（只在 SQL／只在 Python／旗標不同），各列前 10 筆附總數"
+    },
+    {
+      "id": "SEC-6",
+      "status": "OK",
+      "target": "D-3：加入時前置檢查（W-4）與執行期兩層串聯的主體不同（被邀請者 vs 邀請者），不得混讀——本站把它由敘述升為設計約束；D-13：授權行為的驗證以三處錨點交接 U19，本單元不自稱已驗"
+    },
+    {
+      "id": "U3-V1",
+      "status": "OK",
+      "target": "D-10：與 SEC-5、D-7 共用同一支測試檔（三者都只需要解析 DEFAULT_ROLE_PERMISSIONS，分檔會製造三份副本——而單一真實來源正是本單元在防的東西）；突變為把 SRE 的 K3 列改為 (True, False, False)；D-12：失敗訊息須說出它保護 AC12.5.1"
+    },
+    {
+      "id": "U3-V2",
+      "status": "OK",
+      "target": "同 D-10；突變為把 SRE 的 K4 列改為持有；D-12：失敗訊息須說出它保護 BR6.4"
+    },
+    {
+      "id": "U3-V3",
+      "status": "OK",
+      "target": "同 D-10；突變為把 Project_Architect 的 K3 改為 (True, False, False)；D-12：失敗訊息須說出它保護 AC12.1.2（「我建的專案，我管不動」）"
+    },
+    {
+      "id": "U3-V4",
+      "status": "OK",
+      "target": "D-11：**必須有兩個突變**——刪一列（長度紅）與把一列的 story_id 由 K4 改成 K3（長度仍 352、組合紅）。只驗長度會漏掉「列數對但組合有缺漏」，而 BR3.4′ 逐字要求同時驗總數與組合完整性"
+    },
+    {
+      "id": "U3-V5",
+      "status": "OK",
+      "target": "同 D-10；突變為把任一列的第三個旗標改為 True；防的是挪用既有審核語意"
+    },
+    {
+      "id": "U3-A1",
+      "status": "Deferred",
+      "target": "D-13：錨點一（本檔第五節的具名交接表）、錨點二（本檔 traceability 的 reverse 列）、錨點三（U3-D1 旁的指向）。**本單元交付零端點，無法自驗**（SEC-6）；D-14：不在 U3 斷言 U19 的測試存在（那會製造反向依賴邊，與 unit-of-work-dependency.md 的 DAG 矛盾）"
+    },
+    {
+      "id": "U3-A2",
+      "status": "Deferred",
+      "target": "同 D-13／D-14。deny 側的可構造性已實算：持有 K3.view 而無 K3.edit 的角色為 4 個（Developer／FinOps_Analyst／Security_Reviewer／Platform_Owner）"
+    },
+    {
+      "id": "U3-A3",
+      "status": "Deferred",
+      "target": "同 D-13／D-14，另加 D-15：BR7.4 的 PBT 義務一併交接——挑選純函式不讀 DB、K3.edit 旗標由呼叫端傳入，真正可失敗的性質是排列不變性。本單元 calculation 類規則實算為 0 故 PBT 判定 N/A，但那個 N/A 不等於整個 intent 沒有 PBT 標的"
+    },
+    {
+      "id": "U3-D1",
+      "status": "Deferred",
+      "target": "部署資產同步（blocking）本身無設計決定——它是 code-generation 的執行項。本站只在其旁加一句指向：授權行為的驗證不在本單元（錨點三）。另：RR-4 已記載 schema_rbac.sql:761 的既存漂移會因本單元而碰巧變成正確"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "RR-1",
+      "status": "N/A",
+      "target": "/roles/catalog 的 DoS 面（未驗證身分、每次 11 次查詢、零 rate limiting）。[Q1]=A 已定接受；本站的設計貢獻是 D-16——把承接站由泛稱的 operation 收窄為 observability-setup（4.4），並因其 CONDITIONAL 而加上第二層補救。不是本站新增的風險，故列 reverse 而非 coverage"
+    },
+    {
+      "id": "RR-2",
+      "status": "N/A",
+      "target": "資訊性，非 U3 的風險（nfr-requirements 依審查 R-03 標註）：project.md 與 CLAUDE.md 都引用不存在的 deploy/nginx.conf。本站無設計決定——它不在本單元的交付面上"
+    },
+    {
+      "id": "RR-3",
+      "status": "N/A",
+      "target": "兩份 seed 副本不消除（產生腳本不存在）。本站的設計是 SEC-5 的比對機制（D-4／D-5），不是消除副本——消除要先寫產生器，是獨立任務"
+    },
+    {
+      "id": "RR-4",
+      "status": "N/A",
+      "target": "schema_rbac.sql:761 的既存漂移（現寫 352、實算 308，來自 6f9227d）。本單元加完 44 列後碰巧變成正確。無設計決定——它不需要被修，只需要被寫下來，否則下一個人會以為那一行一直是對的"
+    },
+    {
+      "id": "D-16-fallback",
+      "status": "N/A",
+      "target": "**本站新增的指派風險**：observability-setup（4.4）的 execution 為 CONDITIONAL，故 RR-1 的指派仍可能落空。第二層補救：若該站被 skip，判定 skip 的執行者必須把 RR-1 重新提交給使用者裁決，不得默認已處理。本 record 已有三次指派落空的實例"
+    },
+    {
+      "id": "H-8-forward",
+      "status": "N/A",
+      "target": "前向義務，仍不在本單元：BR7.1–BR7.3 的拒絕事件是否留稽核未定，由 functional-spec.md §七′ 的 H-8 指派 U19。本站的 D-6–D-9 只處置了 seed 寫入那一面的稽核"
+    }
+  ],
+  "reverse_count": 6,
+  "review_notes": [
+    "R-01／R-02：security-design.md §二 2.1 的 D-4 已更正（RETIRED 區塊實為第 187 行非 166；限定解析範圍的理由改為前瞻性——全檔 INSERT INTO 命中數實測為 1，C1 退役表零 INSERT）",
+    "R-03：SEC-2 的 Deferred 維持不變，已在其 target 內留記錄"
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "stage": "nfr-design",
+  "unit": "memory-purge",
+  "upstream_ids": [
+    "NFR7.10",
+    "NFR7.11",
+    "NFR7.12",
+    "NFR7.13",
+    "NFR7.14",
+    "NFR7.15",
+    "NFR6.10",
+    "NFR8.10",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR7.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR7.10",
+      "status": "OK",
+      "target": "security-design.md §三之一",
+      "note": "清除涵蓋兩個目標。本站補上上一站沒有的**順序與交易邊界**：步1 寫稽核 → 步2 刪記憶（同一交易）→ 步3 刪逾期稽核（獨立交易）。並回答「清除會不會刪掉自己剛寫的稽核」：不會，且與順序無關——步1 寫的列 occurred_at = now()，不可能落在 90 天前的逾期範圍內。"
+    },
+    {
+      "id": "NFR7.11",
+      "status": "OK",
+      "target": "security-design.md §一",
+      "note": "**本站是它第一次變得可實作的地方。** 上一站之前沒有任何 SQL 能滿足它（actor_user_id 是 NOT NULL REFERENCES public.users(id)，而 schema_rbac.sql 全檔無任何 INSERT INTO users）。[ND1]=A 的系統 actor 設計：固定 username 哨符、非 bcrypt 格式的 password_hash、非 canonical role、is_active=FALSE。三道鎖全部落在**既有**程式上（auth.py:75、rbac.py:54-55、bcrypt 格式），本單元不新增任何需要被信任的驗證路徑。以 username 查 id 而非寫死整數——users.id 是 SERIAL，寫死會在某個環境指到另一個真實使用者（靜默且嚴重）。"
+    },
+    {
+      "id": "NFR7.12",
+      "status": "OK",
+      "target": "security-design.md §二之二 ＋ §四 Network exposure 格",
+      "note": "連線路徑（自架 runner ＋ exec -T）。本站的增量是把 NFR6.10 改述後**仍保留**的那一條可審查要求寫明：清除不得顯式以其他身分覆寫（workflow 的 psql 呼叫不含 -U 覆寫、不含額外連線字串）。[ND2]=A 使 Network exposure 維持零增量——選 B 會引入新憑證與顯式連線字串。"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "Deferred",
+      "target": "security-design.md §三之三 ＋ §五",
+      "note": "runner 離線的靜默失敗。**本站確認它不是重試能解的問題**：清除本身冪等且自我收斂（選取條件 expires_at < now() 使失敗後下次排程自然重試），故不設計 retry／backoff／circuit breaker——那些 pattern 是為會失敗的外部依賴而設。唯一需要被偵測的失敗是「根本沒跑」，而那需要一個不依賴該 runner 的檢查。機制仍屬 infrastructure-design（OPEN-N9-1）；本站只確認落點正確。"
+    },
+    {
+      "id": "NFR7.14",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "決定性邏輯放純 Actions 步驟。本站的設計（三個步驟、兩個交易、固定順序）全部是字面 SQL，無任何判斷性或 LLM 路徑。"
+    },
+    {
+      "id": "NFR7.15",
+      "status": "OK",
+      "target": "security-design.md §三之一 步3",
+      "note": "清除稽核本身不留稽核。本站補上它與 NFR7.11 的交互：步3 刪的是 90 天前的舊稽核，而步1 剛寫的列不在該範圍內，故兩者不衝突。"
+    },
+    {
+      "id": "NFR6.10",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "**本站更正其強度，這是與上游不一致的那一格，差異來自審查 R-01 的實測而非重新判斷。** 實測：deploy/docker-compose.deploy.yml 只設三個環境變數，官方 image 使 POSTGRES_USER 本身即 superuser，且 schema_rbac.sql:524 把 grant 授給 current_user——故本系統不存在任何非 superuser 的連線身分，NFR6.10 **恆真**而非「未驗證」。[ND2]=A 接受現況並改寫敘述；保留的實質要求是「不得顯式以更高權限覆寫」（二元可判）。為什麼差別要緊：恆真的需求**看起來在守護一道 IAM 邊界而實際沒有**，與 project.md 記過的「不可達的規則是死碼」是同一形狀的鏡像。"
+    },
+    {
+      "id": "NFR8.10",
+      "status": "OK",
+      "target": "security-design.md §二之三",
+      "note": "零新部署設定。[ND2]=A 使它**維持成立**——選 B 的受限角色需要新憑證，會觸發 render-env.sh ＋ .env.example ＋ compose 三處同步的 blocking 規則而直接打破它。寫明這是 [ND2]=A 的附帶好處，以免被讀成巧合。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：U5 memory-data 的靜態加密決定（→主機層 LUKS）。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：U5 memory-data 的傳輸決定（→compose 內部，不要求 sslmode）。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：embedding-port／brain-infra 等單元各自的衍生需求。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：U5 memory-data 的稽核保存期（90 天，以自身 occurredAt 為鍵）——本 intent 唯一外溢到版控 SQL 的 NFRx.y。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：embedding-port 等單元各自的衍生需求。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "N/A",
+      "target": "security-design.md §〇 的上游依據表",
+      "note": "**不是本單元的需求。** 它出現在上一站 security-requirements.md §一 的「編號已被佔用」對照表裡——那張表的用途是說明本單元為何自 NFR7.10／NFR6.10／NFR8.10 起算（見 reverse 的 ND9-ID-TABLE-COST）。實際擁有者：hierarchy-data 等單元各自的衍生需求。本站對它無設計責任；列在此處是為了讓 traceability sensor 的 upstream 掃描結果與本檔一致。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ND9-R02-FIXED",
+      "status": "OK",
+      "target": "security-design.md §一",
+      "note": "**審查 R-02（Major）在本站關閉。** 它查出 NFR7.11 不是「未強制」而是沒有任何 SQL 能滿足——本站複驗成立（schema_rbac.sql:484 的 NOT NULL 外鍵 ＋ 全檔零 INSERT INTO users，:15 逐字說明不建立固定密碼管理員）。[ND1]=A 的系統 actor 給了它第一個真實的 FK 目標。**此缺口同樣適用於 U5 自己**（它定義概念但未提供值），故本設計同時補上 U5 的同一個缺口。"
+    },
+    {
+      "id": "ND9-R01-CORRECTED",
+      "status": "OK",
+      "target": "security-design.md §二之一",
+      "note": "**審查 R-01（Major）在本站關閉。** 上一站把 NFR6.10 的缺口寫成「無機械強制」（聽起來像缺 CI 驗證），而實情是**恆真**。本站以三項實測更正（compose 的三個環境變數、官方 image 的 superuser 行為、grant 授給 current_user），並在 §四 的 ADR-0006 表逐格標出這是與上游不一致的那一格及其理由。"
+    },
+    {
+      "id": "ND9-R03-DESIGNED",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "**審查 R-03（Minor）在本站關閉，且不往下推。** 它指出上一站對交易邊界／順序／部分失敗完全沒涉及，連「交給下一站」都沒寫，是無聲缺口。本站就地定下：順序（稽核先於記憶消失落地——反過來若中間失敗則 FR4.7 被破壞且無法事後補救）、交易邊界（步1+2 同交易、步3 獨立）、以及為什麼不需要重試（冪等且自我收斂）。"
+    },
+    {
+      "id": "ND9-THREE-LOCKS",
+      "status": "OK",
+      "target": "security-design.md §一之三",
+      "note": "**系統 actor 的三道鎖全部落在既有程式上**，這是該設計的主要優點：它不新增任何需要被信任的驗證路徑。實測承載位置：auth.py:75 逐字 `if not user.is_active:`；rbac.py:54-55 逐字 `return normalize_role(role) in CANONICAL_ROLES`；password_hash 為非 bcrypt 格式使 checkpw 不可能回 True。任何一道被繞過都不是本單元的回歸。"
+    },
+    {
+      "id": "ND9-SERIAL-ID",
+      "status": "OK",
+      "target": "security-design.md §一之四",
+      "note": "**以 username 查 id、不寫死整數**，理由不是風格：users.id 是 SERIAL，值在本機／CI service container／staging 各不相同，寫死會在某個環境指到**另一個真實使用者**——稽核會說某個人刪了記憶，而那是靜默且嚴重的錯誤。以 username 查則在任何環境都正確，或查不到時大聲失敗（子查詢回 NULL → NOT NULL 違反 → 交易中止），而大聲失敗正是這裡要的行為。"
+    },
+    {
+      "id": "ND9-ADMIN-LIST",
+      "status": "OK",
+      "target": "security-design.md §一之五 第1項 ＋ §五",
+      "note": "**本站主動指出一項使用者可見的後果**：系統 actor 列會出現在 Admin 使用者清單上。它不是安全問題（三道鎖使它不可用），而是**可能被誤認為髒資料而刪除**的風險——刪掉之後清除的稽核 INSERT 會從那一刻起全部因外鍵違反而失敗。是否在 /api/auth/list 排除它屬既有端點範圍，非本 packaging 單元。OPEN-ND9-1。"
+    },
+    {
+      "id": "ND9-BLOCKING-SYNC",
+      "status": "OK",
+      "target": "security-design.md §一之五 第2項",
+      "note": "seed 系統 actor 是對 baseline 表的變更，觸發 project.md 的 blocking 同步（schema_rbac.sql ＋ DEPLOY.md 必須同一個 PR 更新）。寫明以免下游把它當成純應用層決定。"
+    },
+    {
+      "id": "ND9-PBT-NA",
+      "status": "N/A",
+      "target": "security-design.md §四 的 PBT 判定",
+      "note": "PBT 判定 N/A（非豁免），與上一站一致：本單元交付 workflow 與 SQL，無本單元擁有的純函式。"
+    },
+    {
+      "id": "ND9-ID-TABLE-COST",
+      "status": "OK",
+      "target": "security-design.md §〇 ＋ 本檔的六列 N/A",
+      "note": "**本站自檢查出的一項副作用，記下來而非默默吸收。** 上一站為了說明「本單元編號為何自 NFR7.10 起算」，在 security-requirements.md §一 列了一張「已被佔用」的對照表（NFR6.1／NFR6.2／NFR7.1–NFR7.4）。traceability sensor 掃描上游 artifact 取 NFRx.y 時把那六個也算進來，回報 missing_from_upstream_ids。處置是把它們以 N/A ＋ 具名擁有者列進 coverage，而不是從上一站刪掉那張表（該檔已因 READY 凍結，且那張表本身是有用的）。**代價如實記載**：為了讓 id 可唯一定位而寫的說明表，會在下游的 traceability 製造六列必須逐一交代的噪音。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ND9-1",
+      "severity": "named-gap",
+      "text": "**系統 actor 列會出現在 Admin 使用者清單上，而刪掉它會讓清除的稽核 INSERT 全部失敗。** 三道鎖使它不可登入、無權限，故不是安全問題；風險是被誤認為髒資料。是否在 /api/auth/list 排除它屬既有端點範圍。落點：U19 或後續 intent。"
+    },
+    {
+      "id": "OPEN-ND9-2",
+      "severity": "named-gap",
+      "text": "**是否為清除新增真正受限的資料庫角色。** [ND2]=A 接受現況，故 NFR6.10 目前不構成 IAM 邊界。代價：新憑證會觸發 render-env.sh ＋ .env.example ＋ compose 三處同步而打破 NFR8.10；且本 repo 為 public、Actions log 公開可讀。附帶好處：有第二個角色才能讓 U5 的 OPEN-CG5-1 變得可驗證。落點：infrastructure-design 或後續 intent。"
+    },
+    {
+      "id": "OPEN-N9-1",
+      "severity": "carried",
+      "text": "**NFR7.13 的偵測機制**（runner 離線導致排程靜默不執行）。本站確認它不是重試能解的問題（清除冪等且自我收斂），故 infrastructure-design 仍是正確落點。承接鏈兩站皆 CONDITIONAL，皆 skip 須重新提交使用者。"
+    },
+    {
+      "id": "OPEN-CG5-1",
+      "severity": "carried",
+      "text": "**grant 邊界未被 CI 驗證**（承 U5）。本站的 [ND2]=A **不改善它**，只停止假裝它已被守護。與 OPEN-ND9-2 是同一個決定。"
+    },
+    {
+      "id": "OPEN-N9-3",
+      "severity": "carried",
+      "text": "**OQ-13 的「落點」那一半仍未定**（workflow 檔名、排程時間）。屬 infrastructure-design。"
+    }
+  ]
+}

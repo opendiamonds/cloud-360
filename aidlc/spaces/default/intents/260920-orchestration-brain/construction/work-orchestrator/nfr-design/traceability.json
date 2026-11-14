@@ -1,0 +1,182 @@
+{
+  "stage": "nfr-design",
+  "unit": "work-orchestrator",
+  "upstream_ids": [
+    "NFR12.1",
+    "NFR12.2",
+    "NFR12.3",
+    "NFR12.4",
+    "NFR12.5",
+    "NFR12.6",
+    "NFR12.7",
+    "NFR12.8",
+    "NFR12.9",
+    "NFR12.10",
+    "NFR12.11",
+    "NFR12.12",
+    "NFR12.13",
+    "NFR12.14",
+    "NFR12.15",
+    "NFR12.16",
+    "NFR12.17",
+    "NFR12.18",
+    "NFR12.19",
+    "NFR12.20",
+    "NFR12.21",
+    "NFR12.22",
+    "NFR12.23",
+    "NFR12.24",
+    "NFR12.25",
+    "NFR12.26",
+    "NFR12.27",
+    "NFR12.28",
+    "NFR12.29"
+  ],
+  "coverage": [
+    {
+      "id": "NFR12.1",
+      "status": "OK",
+      "target": "performance-design.md"
+    },
+    {
+      "id": "NFR12.2",
+      "status": "OK",
+      "target": "performance-design.md"
+    },
+    {
+      "id": "NFR12.3",
+      "status": "OK",
+      "target": "performance-design.md"
+    },
+    {
+      "id": "NFR12.4",
+      "status": "OK",
+      "target": "performance-design.md"
+    },
+    {
+      "id": "NFR12.5",
+      "status": "OK",
+      "target": "performance-design.md"
+    },
+    {
+      "id": "NFR12.6",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.7",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.8",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.9",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.10",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.11",
+      "status": "OK",
+      "target": "security-design.md"
+    },
+    {
+      "id": "NFR12.12",
+      "status": "OK",
+      "target": "scalability-design.md"
+    },
+    {
+      "id": "NFR12.13",
+      "status": "OK",
+      "target": "scalability-design.md"
+    },
+    {
+      "id": "NFR12.14",
+      "status": "OK",
+      "target": "scalability-design.md"
+    },
+    {
+      "id": "NFR12.15",
+      "status": "OK",
+      "target": "scalability-design.md"
+    },
+    {
+      "id": "NFR12.16",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.17",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.18",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.19",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.20",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.21",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.22",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.23",
+      "status": "OK",
+      "target": "reliability-design.md"
+    },
+    {
+      "id": "NFR12.24",
+      "status": "OK",
+      "target": "observability-design.md"
+    },
+    {
+      "id": "NFR12.25",
+      "status": "OK",
+      "target": "observability-design.md"
+    },
+    {
+      "id": "NFR12.26",
+      "status": "OK",
+      "target": "observability-design.md"
+    },
+    {
+      "id": "NFR12.27",
+      "status": "OK",
+      "target": "logical-components.md（CapabilityClient 與 sink 訊息以 brain_ws_contract 模型建構）"
+    },
+    {
+      "id": "NFR12.28",
+      "status": "OK",
+      "target": "logical-components.md（work_orchestrator_rules 純函式）；scalability-design.md 第三節"
+    },
+    {
+      "id": "NFR12.29",
+      "status": "OK",
+      "target": "logical-components.md（CapabilityClient 以完整回應本體判定）"
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "member-pages-ui",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "inception NFR1 — 意圖識別準確率（路由層）",
+      "note": "本單元不呼叫任何模型、不做意圖識別。範圍外，非豁免。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "**母體逐字排除本單元**：`NFR2` 的量測母體逐字限定為「共享工作階段涵蓋的三處（入口頁、`/workspace`、`/assessment`，見 FR2.1）之間切換一次」。成員頁**不在那三處之內**，故本單元的頁面不產生 `NFR2` 的量測事件。這是依原文判定、不是推測。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "inception NFR3 — 首字回應時間（LLM 串流）",
+      "note": "本單元無 LLM 路徑、無串流。範圍外。"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.80",
+      "note": "父條逐字「一律放 Redis，不得放行程記憶體」。前端的同構對應是「不得放瀏覽器儲存」——`AC12.4.4` 要求橫幅已讀跨裝置一致，只有伺服器端持久化能滿足。`NFR4.80` 以三個識別字（`localStorage`／`sessionStorage`／`IndexedDB`）的掃描命中數為 0 作為可測不變量。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "inception NFR5 — WebSocket 契約閘門",
+      "note": "本單元不使用 WebSocket；六個消費點全部是 REST。範圍外。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "inception NFR6 — 記憶層 schema 隔離",
+      "note": "本單元不碰記憶層。範圍外。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "inception NFR7 — episodic memory 的保存與刪除稽核",
+      "note": "本單元不碰記憶層。`AC12.2.2` 的變更紀錄屬成員域、由 `U19` 持久化，與 episodic memory 無關。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.80",
+      "note": "父條的失敗模式逐字是「無 fallback 的變數缺值時只會變成空字串，服務照常啟動但功能降級」。本單元**零新環境變數**（`TS-U24-7`），故該失敗模式不可達——**結構性滿足**而非豁免。可測不變量：`git diff` 顯示本單元未改動 `render-env.sh` 與 `deploy/.env.example`。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "inception NFR9 — 成本原則（LLM 花費）",
+      "note": "父條逐字限定為「本平台自身的 LLM 花費」且自述「此為設計原則，非可量測的門檻」。本單元零 LLM 呼叫。**附帶**：`[N2]`=A 的每次落地一次請求是另一種成本，但它不是 `NFR9` 的標的，已改列為 `UIP-2` 的效能要求。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "父條逐字「編排層與功能 agent 得使用不同模型」。本單元不呼叫任何模型，見 `tech-stack-decisions.md` §三。"
+    },
+    {
+      "id": "NFR11",
+      "status": "OK",
+      "target": "NFR11.80, NFR11.81",
+      "note": "父條為「跨功能任務的頁面切換次數應嚴格少於基準」。本單元有兩項正向貢獻：`[F4]`=A 的就地更新使改角色的切換次數為 **0**（被否決的 `[F4]`=D 會是 1）；`BR26.2` 使彙總橫幅到達目標專案為 **1** 次。**但如實記載**：`NFR11` 的量測**母體**屬 `user-stories`（2.4）的 `M-3`（`stories.md:533`），**不是** `build-and-test`——`requirements.md:568-571` 的轉移是**條件式**的（`user-stories` skip 時才轉移），而該站並未被 skip；`build-and-test` 擁有的是量測**機制**（`:577-579`）。**審查 `R-03` 更正**，原 note 誤置。現行具名情境為跨功能任務，成員管理是單一功能，故這兩條目前**不在計分母體內**，是貢獻而非已納入；而「把成員管理類情境加進母體」**無自然承接站**（`M-3` 未列舉情境，其擁有者已完成且在游標之前），見 `construction/member-pages-ui/nfr-requirements/performance-requirements.md` §一。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "UIP-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/performance-requirements.md",
+      "note": "成員清單 100 列上限。**無 inception 父條**：11 條 inception NFR 逐條核對後沒有一條涵蓋前端渲染規模（見 `performance-requirements.md` §三 的逐條說明）。掛到任何一條都是誤繼承。數字來源為既有先例 `user_router.py:146-147` 的 `MAX_PAGE_SIZE = 100`，不是憑空。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/performance-requirements.md",
+      "note": "橫幅不快取、每次掛載一次請求。無 inception 父條（`NFR9` 只管 LLM 花費）。`[N2]`=A。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/performance-requirements.md",
+      "note": "三種操作後不得整份重抓。無 inception 父條；它是 `[F4]`=A 的可量測形式。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/performance-requirements.md",
+      "note": "首次可互動前請求數為 1。無 inception 父條；它是 `BR22.3`（`canManage` 由同一份回應推得）的可量測形式。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/performance-requirements.md",
+      "note": "變更紀錄最多 100 列、最新在前、不刪資料。**這是上游 `OPEN-MP24-3` 指派本站定案的未定參數**，不是本站自創。無 inception 父條（11 條逐條核對後無一涵蓋前端渲染規模）。附帶：本站查證發現它的前置端點不存在，列為 `OPEN-MP24-7`。"
+    },
+    {
+      "id": "SEC-U24-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "console 不得含使用者文字。父條候選 `NFR7` 是 episodic memory 稽核、不涵蓋前端 console，故宣告孤兒。實質依據是 ADR-0006 的 audit logging 面與本 repo 為 public 這個事實。"
+    },
+    {
+      "id": "SEC-U24-2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "橫幅已讀以事件為鍵、寫伺服器。與 `NFR4.80` 相鄰但不同：`NFR4.80` 禁的是「放瀏覽器儲存」，本條規定的是「鍵的形狀必須是事件而非 per-user 布林值」——後者沒有 inception 父條。"
+    },
+    {
+      "id": "SEC-U24-3",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "前端不驗全域功能權限。無 inception 父條；依據是 `FR12.6a` 把判定放在伺服器。"
+    },
+    {
+      "id": "SEC-U24-4",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "非字串 `detail` 不得當文案渲染。無 inception 父條；來自審查 `R-12` 查出的 422 雙語意。"
+    },
+    {
+      "id": "SEC-U24-5",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "四個控件在一般成員身分下全部不存在。無 inception 父條；它是已核可的 `[D9]`=A 在本單元**唯一**的可失敗落點（初版零機制，審查 `R-01`）。"
+    },
+    {
+      "id": "SEC-U24-6",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/security-requirements.md",
+      "note": "三條失敗路徑各須輸出一筆 console 訊號，內容限於型別名稱與端點標識。**這是 `[N3]`=B 的肯定義務**，由審查 `R-02` 補上——原產出只落下 `SEC-U24-1` 的禁令，而「完全不輸出」即可滿足禁令，使 `[N3]`=A 與 `[N3]`=B 在產出上無法區分。無 inception 父條（`NFR7` 是 episodic memory 稽核，不涵蓋前端 console）；實質依據是 `construction.md` phase guardrail 的「silent failures are not acceptable」與 ADR-0006 的 audit logging 面。"
+    },
+    {
+      "id": "TS-U24-1",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "零新前端依賴。無 inception 父條；依據是 `team.md` 的 Q4 定案 D 項不採用。"
+    },
+    {
+      "id": "TS-U24-2",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "驗證層只有 Playwright e2e。無 inception 父條；依據是 `team.md` 的既成事實（`frontend/package.json` 僅有 `@playwright/test`）。它的限制已如實記載：純函式層級的斷言只能透過 DOM 結果間接驗證。"
+    },
+    {
+      "id": "TS-U24-3",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "URL 組裝沿用既有 `apiUrl()`（`frontend/src/config/api.ts:25`）。無 inception 父條；依據是 `team.md` Code Style 的既有 52 處一致用法。"
+    },
+    {
+      "id": "TS-U24-4",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "兩層抓取形狀（純抓取函式 ＋ 呼叫端更新 state ＋ `cancelled` flag）。無 inception 父條；依據是 `react-hooks/set-state-in-effect` 為 error 級，違反即 CI 紅燈。"
+    },
+    {
+      "id": "TS-U24-5",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "就地更新沿用既有形狀，但先例的分頁補償兩行不適用（`list_members` 無分頁參數）。無 inception 父條；它是 `application-design:c15` 的副作用檢查結果。"
+    },
+    {
+      "id": "TS-U24-6",
+      "status": "N/A",
+      "target": "construction/member-pages-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "live region 元件**由 `U24` 自建**，`U23` 之後沿用（`[N4]`=A）。無 inception 父條。**審查 `R-01`（Critical）更正**：原 note 寫「沿用 `U23` 的」並把「`U23` 已提供該元件」寫成本單元的完成條件，而已核可的交錯順序使 `U24`@B12 早於 `U23`@B13（`bolt-plan.md:494`／`:479`／`:480`），該完成條件在施工當下不可能為真。改正後本單元在 B12 無跨單元阻塞，與 `unit-of-work.md:426` 的依賴清單（只有 `U19`／`U3`）一致。下游後果見 `tech-stack-decisions.md` §四 的 `HO-U24-1`～`-3`。"
+    }
+  ]
+}

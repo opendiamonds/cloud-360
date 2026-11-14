@@ -1,0 +1,251 @@
+{
+  "stage": "functional-design",
+  "unit": "brain-gateway",
+  "upstream_ids": [
+    "AC1.1.5",
+    "AC7.1.1",
+    "AC7.1.2",
+    "AC7.1.3",
+    "AC8.1.1",
+    "AC8.1.2",
+    "AC8.1.3",
+    "AC8.1.4"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.1.5",
+      "status": "OK",
+      "target": "BR64.9, BR64.12, BR64.11, BR63.3, BR64.6",
+      "note": "本單元承載「脈絡列更新為該系統」：脈絡列未選定時，referent 在對象目錄（擁有者可見的全部專案及其系統，BR64.12）中唯一相符即 set_work_target 並扇出 work_target（BR64.9、BR63.3），重讀後交辦（BR64.6）；「工作項針對它建立」由 U12 讀段上作業對象承載。前提與限制：referent 須為對象名稱本身（casefold 精確相符），U11 抽出的字串若不等於名稱則走 BR64.11 (b) 請使用者指定——不會對錯的對象交辦；以成員身分可見但非擁有者的專案不在目錄（OPEN-GW13-16）。測試：未選定、兩個專案、其一含「訂單系統」→ 脈絡列更新為該系統且工作項的作業對象為它"
+    },
+    {
+      "id": "AC7.1.1",
+      "status": "OK",
+      "target": "BR65.3, BR63.1, BR62.3",
+      "note": "推播＝emit_turn 對交辦者 session key 的全部存活連線；只在在線時收到，離線者於重連時由 work_items 看到終態（OPEN-GW13-11）"
+    },
+    {
+      "id": "AC7.1.2",
+      "status": "OK",
+      "target": "BR65.3, BR65.4",
+      "note": "失敗與逾時的可分辨句型由 U12 產生，本單元原樣轉送不改寫"
+    },
+    {
+      "id": "AC7.1.3",
+      "status": "OK",
+      "target": "BR65.3, BR62.3, BR63.3",
+      "note": "扇出只在 sessionKey 內；sessionKey 由 user id 單射推導（PBT 性質二）"
+    },
+    {
+      "id": "AC8.1.1",
+      "status": "Deferred",
+      "target": "BR65.2（傳輸層逐則送出的能力；不構成本 AC 的滿足）",
+      "note": "使用者裁決：本輪沒有逐字的內容來源——U12 的 [WO1]=A 不新增 LLM 呼叫、交辦當下只送一則固定句型；A1 說明文字因 ASGI 緩衝整段到達。「第一個 token 早於 done」對任何實作恆真，不構成驗證。回報上游，改寫 AC 或追加串流 LLM 回覆由使用者裁決（OPEN-GW13-15）"
+    },
+    {
+      "id": "AC8.1.2",
+      "status": "OK",
+      "target": "BR61.4, BR62.1",
+      "note": "握手與每則訊息皆 record=True；背景重驗刻意 record=False（BR62.6）"
+    },
+    {
+      "id": "AC8.1.3",
+      "status": "OK",
+      "target": "BR61.2, BR61.3, BR61.4, BR61.5",
+      "note": "token 只走子協定標頭且不被回送；token 只在 query string 時兩個案例分別斷言：(a) 帶 cloud360.brain.v1 → accept 後 4401；(b) 不帶協定名 → 未 accept 即拒絕（HTTP 403）"
+    },
+    {
+      "id": "AC8.1.4",
+      "status": "OK",
+      "target": "BR67.9, BR67.8",
+      "note": "由不改既有 SSE 端點滿足"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR61.1",
+      "status": "N/A",
+      "target": "端點路徑與 DEMO 移除：K-12 path_prefix 與 FR8.3，無對應故事 AC"
+    },
+    {
+      "id": "BR61.6",
+      "status": "N/A",
+      "target": "K1 4403：K-12 close codes，無故事 AC"
+    },
+    {
+      "id": "BR61.7",
+      "status": "N/A",
+      "target": "握手期內部錯誤 1011 與握手結束時點：[GW3]=A，無故事 AC"
+    },
+    {
+      "id": "BR61.8",
+      "status": "N/A",
+      "target": "版本協商：K-12 x-handshake，無故事 AC"
+    },
+    {
+      "id": "BR62.2",
+      "status": "N/A",
+      "target": "token 不落地：ADR-0006 IAM，無故事 AC"
+    },
+    {
+      "id": "BR62.4",
+      "status": "N/A",
+      "target": "載入不寫：session-store W1，無故事 AC"
+    },
+    {
+      "id": "BR62.5",
+      "status": "N/A",
+      "target": "段解析：session-store W2（FR3 屬 US3，非本單元故事）；依賴契約增量 C-2"
+    },
+    {
+      "id": "BR62.6",
+      "status": "N/A",
+      "target": "閒置連線背景重驗：ADR-0006 IAM（review-01 R-07），無故事 AC"
+    },
+    {
+      "id": "BR63.2",
+      "status": "N/A",
+      "target": "新連線推送當前狀態：K-12 on_connect（NFR2 屬 US2）"
+    },
+    {
+      "id": "BR63.4",
+      "status": "N/A",
+      "target": "送出序列化與失敗移除：技術約束，無故事 AC"
+    },
+    {
+      "id": "BR63.5",
+      "status": "N/A",
+      "target": "不緩衝不重播：K-12 server_side，無故事 AC"
+    },
+    {
+      "id": "BR63.6",
+      "status": "N/A",
+      "target": "載入期間暫存佇列：review-02 R-03，無故事 AC"
+    },
+    {
+      "id": "BR64.1",
+      "status": "N/A",
+      "target": "turnId 鑄造：U2 交接，無故事 AC"
+    },
+    {
+      "id": "BR64.2",
+      "status": "N/A",
+      "target": "入站兩步驗證：U2 H-3 交接，無故事 AC"
+    },
+    {
+      "id": "BR64.3",
+      "status": "N/A",
+      "target": "輸入長度上限：construction 邊界驗證，無故事 AC"
+    },
+    {
+      "id": "BR64.4",
+      "status": "N/A",
+      "target": "逐則處理：技術約束，無故事 AC"
+    },
+    {
+      "id": "BR64.5",
+      "status": "N/A",
+      "target": "prompt_guard：AC1.1.3 屬 US1（U11 承載判定，本單元承載處置），非本單元故事"
+    },
+    {
+      "id": "BR64.7",
+      "status": "N/A",
+      "target": "終止語意：K-12 x-termination-semantics；本單元故事中原欲承載 AC8.1.1，該 AC 已 Deferred"
+    },
+    {
+      "id": "BR64.8",
+      "status": "N/A",
+      "target": "反問與選擇：AC1.2.2／AC1.2.3 屬 US1（本單元承載傳輸面，非本單元故事）；選定後依 BR64.13 不帶舊對象交辦（review-02 R-02）"
+    },
+    {
+      "id": "BR64.10",
+      "status": "N/A",
+      "target": "回覆入歷程：K-12 on_user_message，無本單元故事 AC"
+    },
+    {
+      "id": "BR64.13",
+      "status": "N/A",
+      "target": "反問選定後以原句掃描對象：review-02 R-02；AC1.2.2 屬 US1，非本單元故事"
+    },
+    {
+      "id": "BR65.1",
+      "status": "N/A",
+      "target": "sink 綁 key：U12 交接，無故事 AC"
+    },
+    {
+      "id": "BR65.2",
+      "status": "N/A",
+      "target": "emit_in_turn 與逐則送出：U12 交接；AC8.1.1 已 Deferred，本規則只是傳輸能力"
+    },
+    {
+      "id": "BR65.5",
+      "status": "N/A",
+      "target": "推播內容入歷程：review-01 R-09，無故事 AC"
+    },
+    {
+      "id": "BR66.1",
+      "status": "N/A",
+      "target": "set_work_target：US2 的傳輸面，非本單元故事"
+    },
+    {
+      "id": "BR66.2",
+      "status": "N/A",
+      "target": "set_sharing_mode：US3 的傳輸面，非本單元故事"
+    },
+    {
+      "id": "BR66.3",
+      "status": "N/A",
+      "target": "correct_work_item：US1.3 的傳輸面，非本單元故事"
+    },
+    {
+      "id": "BR67.1",
+      "status": "N/A",
+      "target": "錯誤對應封閉表：U2 的規則 2.9 交接，無故事 AC"
+    },
+    {
+      "id": "BR67.2",
+      "status": "N/A",
+      "target": "握手後 Redis 失效：[GW3]=A，無故事 AC"
+    },
+    {
+      "id": "BR67.3",
+      "status": "N/A",
+      "target": "log 禁令：ADR-0006 audit／team.md Forbidden，無故事 AC"
+    },
+    {
+      "id": "BR67.4",
+      "status": "N/A",
+      "target": "關閉原因 ASCII：RFC 6455，無故事 AC"
+    },
+    {
+      "id": "BR67.5",
+      "status": "N/A",
+      "target": "同步 I/O 離開事件迴圈：US8 DoD 第 1 點（DoD 非 AC）"
+    },
+    {
+      "id": "BR67.6",
+      "status": "N/A",
+      "target": "實例數：U11／U12 交接，無故事 AC"
+    },
+    {
+      "id": "BR67.7",
+      "status": "N/A",
+      "target": "episodic 背景寫入：U8 的規則 7.1 與 [GW2]=A，US4 屬他單元"
+    },
+    {
+      "id": "BR67.10",
+      "status": "N/A",
+      "target": "記憶預取：US8 DoD 第 1 點（DoD 非 AC）；review-01 R-03"
+    },
+    {
+      "id": "BR67.11",
+      "status": "N/A",
+      "target": "啟動時建立元件：review-01 R-12，無故事 AC"
+    },
+    {
+      "id": "BR67.12",
+      "status": "N/A",
+      "target": "專用記憶執行器與熔斷：review-02 R-07；US8 DoD 第 1 點（DoD 非 AC）"
+    }
+  ]
+}

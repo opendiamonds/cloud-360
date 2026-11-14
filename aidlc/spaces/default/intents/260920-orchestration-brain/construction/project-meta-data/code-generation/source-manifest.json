@@ -1,0 +1,12 @@
+{
+  "stage": "code-generation",
+  "unit": "project-meta-data",
+  "version": 1,
+  "writes": [
+    { "path": "schema_rbac.sql" },
+    { "path": "backend/scripts/run_meta_schema_migration.py" },
+    { "path": "backend/scripts/verify_meta_schema.sql" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "DEPLOY.md" }
+  ]
+}

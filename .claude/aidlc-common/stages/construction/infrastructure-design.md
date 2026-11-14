@@ -154,7 +154,9 @@ Generate the following in `<record>/construction/{unit-name}/infrastructure-desi
 Create
 `<record>/construction/{unit-name}/infrastructure-design/traceability.json`.
 Enumerate every `NFRx.y` design decision that requires infrastructure and map
-it to the concrete resource or configuration:
+it to the concrete resource or configuration (if NFR Design did not run, take
+the `NFRx.y` IDs from NFR Requirements; if NFR Requirements did not run,
+enumerate every `NFRn` in `requirements.md` instead):
 
 ```json
 {
@@ -171,7 +173,7 @@ it to the concrete resource or configuration:
 ### Step 6: Completion Handoff
 
 Hand completion to `stage-protocol.md` via
-`bun .claude/tools/aidlc.ts engine orchestrate report --stage infrastructure-design --result <outcome>`.
+`aidlc engine orchestrate report --stage infrastructure-design --result <outcome>`.
 That `report` call owns every lifecycle transition and advancement; never perform one in prose, and never narrate this bookkeeping to the user.
 
 ### Step 7: Completion

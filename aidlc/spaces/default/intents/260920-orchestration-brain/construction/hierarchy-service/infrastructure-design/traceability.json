@@ -1,0 +1,75 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "hierarchy-service",
+  "upstream_ids": [
+    "NFR4.1",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR7.1",
+    "NFR8.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §二",
+      "note": "不得新增任何部署設定。二元判準已寫明：validate_env_contract.py 綠燈 ＋ diff 不含 deploy/、render-env.sh、任一 .env.example、docker-compose.*.yml、nginx.conf。並記明 project.md 的 blocking 規則為何對本單元不觸發，以及該宣稱需要哪兩項判準守住（失敗模式無聲：無 fallback 的變數缺值只會變空字串，服務照常啟動但功能降級）。"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §一 第 1 列",
+      "note": "第五個 path 落地後須同步重 dump openapi.json；漏 dump 即 CI 紅燈（會被抓到）。"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §一 第 1 列",
+      "note": "409 須顯式宣告 responses={409:...}。**這是本單元唯一不會被閘門抓到的遺漏**——漏宣告時 CI 保持綠燈而契約不進 spec、前端產不出型別（unit-of-work.md:447 逐字「非 2xx/422 的宣告數為 0」）。承載規則 BR6.6。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "nfr-design/observability-design.md",
+      "note": "回應的完整性宣稱屬稽核面，設計落點在 nfr-design，不在本站重複。本站只記明不新增稽核日誌輸出——本單元的稽核面是資料表而非日誌。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "N/A",
+      "target": "nfr-design/reliability-design.md",
+      "note": "不得持有進程內狀態；設計保證是三層形狀本身，落點在 nfr-design。本站無基礎設施面的對應設計。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "INFRA-U7-NONE",
+      "status": "N/A",
+      "target": "零基礎設施變更",
+      "note": "逐項對照 condition 的兩個子句皆成立：no infrastructure changes（embedded router，unit-of-work.md:43 逐字；零新服務／進程／監聽埠／環境變數／volume）＋ infrastructure already defined（U1 brain-infra 的 infrastructure-design 已交付）。對照組：真正需要本站的是 U1（Redis ＋ Ollama）與 U21 mcp-bridge（unit-of-work.md:309 逐字 standalone）。"
+    },
+    {
+      "id": "INFRA-U7-MON",
+      "status": "N/A",
+      "target": "monitoring-design.md",
+      "note": "無新增監控目標、告警或健康檢查端點。唯一沿用義務為 logger 命名 cloud360.<module>（team.md 記載 5 支既有模組用 __name__ 屬已知不一致，新模組不得沿用）。刻意不新增：稽核日誌輸出（本單元的稽核面是資料表）、授權失敗告警（拒絕是正常業務結果，接告警會製造常態噪音）。"
+    },
+    {
+      "id": "INFRA-U7-CI",
+      "status": "OK",
+      "target": "cicd-pipeline.md",
+      "note": "不新增 CI job 或 workflow，但彙整三項既有閘門的義務（OpenAPI drift、backend unittest 含 import tests.helpers 的 psycopg2 stub、repo-contract 兩支 validator）與五項測試義務，並記明採用成本為零的依據（requirements.txt 已含 fastapi[standard] ＋ httpx；get_db 與 get_current_user 可用 dependency_overrides 覆寫；TestClient(app) 不觸發 init_db()）。另記下 tcms-test-cases 的 blocking 前置。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ID7-1",
+      "severity": "process",
+      "text": "**本站刻意精簡執行（使用者 2026-10-06 核可），未派 reviewer**（review_class 為 advisory、非阻擋）。三份產出的實質內容是：零基礎設施變更的逐項判定、NFR8.1 的二元判準、以及三項既有 CI 閘門 ＋ 五項測試義務的彙整。"
+    },
+    {
+      "id": "OPEN-ID7-2",
+      "severity": "named-gap",
+      "text": "**`NFR5.2`（409 顯式宣告）是本單元唯一不會被任何閘門抓到的遺漏。** 漏宣告時 CI 全綠、契約不進 spec、前端產不出型別，而沒有任何機械檢查會發現。unit-of-work.md:447 對 U19 已記過同一形狀。處置：列為 code-generation 的必做項並寫進 cicd-pipeline.md §一 的表，但**機制上仍無閘門**——這一項只能靠人記得。"
+    }
+  ]
+}

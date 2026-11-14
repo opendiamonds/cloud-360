@@ -1,0 +1,124 @@
+{
+  "stage": "nfr-design",
+  "unit": "progress-channel",
+  "upstream_ids": ["SEC-1", "SEC-2", "SEC-3", "SEC-4", "U22-V1", "U22-V2", "U22-V3", "U22-V4", "U22-V5", "U22-V6"],
+  "coverage": [
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "security-design.md §一 的隔離結構 ＋ U22-V5 的結構保證；鑄造端見 S-5",
+      "note": "本單元側的設計為『本類別不鑄造鍵』——_channels 的鍵一律由參數傳入，模組不 import uuid／secrets／random 且無任何回傳新鍵的函式。鑄造端在 U13／U12，本站不宣稱涵蓋它。採納審查 R-06 的更正：禁止遞增計數器的理由不是『怕外部猜』（此 library 無不受信任的呼叫端，functional-design 審查 R-13 已判定），而是同一行程內兩個請求的鍵必須互不碰撞且不因重啟而重用——遞增計數器重啟後從頭開始，若有任何狀態仍帶舊鍵，重用會讓兩個不同請求在紀錄上無法區分。本檔以此理由取代 nfr-requirements §〇 的『對外安全邊界』說法。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "security-design.md §二 的單一出口設計（涵蓋 :103 與 :216 兩處）；S-7",
+      "note": "**本列更正了一個已凍結需求的範圍。** SEC-2 的需求本文寫 design_agent.py:216 是『唯一』的例外原文洩漏點，而審查 R-01（Critical）查出並經本站複驗：全檔只有兩行把例外插進字串——:103 的 return f 產圖失敗 與 :216 的 yield。:100 的 logger.exception 與 :101 的固定字串在同一個 except 區塊已是正確形狀，故 :103 是刻意的不一致。[Q2]=A 定案兩處都回固定字串、原文只進 logger.exception。**驗證方式也改了**：SEC-2 原本只 grep 一個句型，抓不到 :103；本站改為形狀級——對 {e}／{exc}／str(e)／repr(e) 的 grep 結果為零（本站實測現狀為兩處命中）。好處是它不依賴訊息文字，日後新增的第三個 except 同樣會被抓到。本站不回改已凍結的需求本文，更正記於此並具名 S-7。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "security-design.md §四 audit logging 列的反向約束",
+      "note": "三處 log（BR3.2 的 ERROR、BR4.2 的 WARN、本站新增的 logger.exception 單一出口）皆不得記錄 ProgressEvent.content——xml 是使用者的架構圖內容，寫進 log 等於把要修的跨帳號外洩換個出口重演。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "logical-components.md §四 的零部署變更；§二 失效域表",
+      "note": "不新增環境變數、secret、socket、port 或進程。compose 維持 6 個服務。本單元無獨立執行期，故 infrastructure-design 對它 kind-vacuous（其 produces_kinds 為 service／ui／packaging，本單元為 library）。"
+    },
+    {
+      "id": "U22-V1",
+      "status": "OK",
+      "target": "logical-components.md §二 的失效域對照表（現狀 vs 本設計）",
+      "note": "互斥且各自非空的斷言由 §一 的 per-key 結構承載：跨鍵取值需要一個不存在的操作。測試形狀（IsolatedAsyncioTestCase ＋ asyncio.Event barrier，不得用 sleep）由 nfr-requirements 定案，本站不改。"
+    },
+    {
+      "id": "U22-V2",
+      "status": "OK",
+      "target": "logical-components.md §二 共享資源表的『容器層失效模式只剩一種』列",
+      "note": "鍵隔離使內容不共享，但 _channels 容器仍是一個，故容器層的失效模式只剩『鍵洩漏導致無上界成長』。該模式由 BR2.1／BR2.3 的清除契約與 U22-V2 的測試承擔。本站如實記載一個未被採用的加強選項：functional-design [Q2] 的選項 D（存活通道數上界）未採用，故若清除契約被違反，成長由存活請求數而非單請求決定——這是已知且被接受的殘餘面。"
+    },
+    {
+      "id": "U22-V3",
+      "status": "OK",
+      "target": "logical-components.md §四 的改檔清單（含三個呼叫點）；S-2（承上游）",
+      "note": "元件層交接明列四支改檔：design_agent.py、wa_collab_orchestrator.py:79、agent_router.py:125、backend/test_agent.py:41。後三者即 S-2 的三個呼叫點——漏掉 agent_router.py:125 則使用者路徑未修（新參數若必填該端點直接壞，若選填則其事件全走 BR3.2 的記 log 丟棄，AC13.1.1 的各自非空必紅）。"
+    },
+    {
+      "id": "U22-V4",
+      "status": "OK",
+      "target": "security-design.md §三 的私有同步函式 _admit；S-8",
+      "note": "**驗證方式由本站升級。** nfr-requirements 把它定為『以需求規定並寫進函式本體註解』，並記為『靠人遵守、無自動化會擋』（S-4，風險中）。審查 R-05 指出那句太重：把臨界區段抽成私有同步 def，await 在其中即 SyntaxError——語言層保證，零契約成本（K-18 只規定 publish 的 form: async，沒規定它內部不能呼叫同步私有函式）、零新依賴。[Q1]=A 採納。本站因此把 S-4 的風險由中下調為低，但不回改已凍結的 nfr-requirements；下調與理由具名為 S-8。否決 [Q1] 選項 C 的 assert：python -O 下會被移除，且『其他協程有沒有改動』在單執行緒下需額外的版本號欄位才驗得出來。"
+    },
+    {
+      "id": "U22-V5",
+      "status": "OK",
+      "target": "security-design.md §一 SEC-1 落點表的『本單元的設計承擔：無』列",
+      "note": "本模組不含鍵鑄造函式——不 import uuid／secrets／random，無任何回傳新鍵的函式。這是 SEC-1 在本單元側唯一可驗的部分，且本站把它設計成結構保證而非約定。"
+    },
+    {
+      "id": "U22-V6",
+      "status": "OK",
+      "target": "logical-components.md §二 共享資源表的『單一事件迴圈』列",
+      "note": "drain 不得成為首字延遲的來源（NFR3）。設計上 drain 為純同步的 deque 取出迴圈、無 I/O、無 await；_admit 同樣是同步函式。本單元對共享事件迴圈這個資源的全部處置就是『不 await』，故不需要鎖。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "S-7",
+      "status": "OK",
+      "target": "code-generation（3.5，ALWAYS，已查 stage-graph.json）",
+      "note": "SEC-2 的範圍更正：凍結的需求本文仍寫 :216 為『唯一』，而實為兩處。本站的設計已涵蓋兩處並改用形狀級 grep，但若日後有人只讀 security-requirements.md 而不讀本檔，會漏掉 :103。具名以免該更正只活在散文裡。"
+    },
+    {
+      "id": "S-8",
+      "status": "OK",
+      "target": "閘門上揭露",
+      "note": "S-4 的風險由中下調為低（[Q1]=A 把人為規則換成語言層保證）。凍結的 nfr-requirements 仍記為中。方向是風險下降而非上升，故不需承接站，只需在閘門揭露。"
+    },
+    {
+      "id": "S-5",
+      "status": "GAP",
+      "target": "U13／U12 的 nfr-requirements（皆 CONDITIONAL）；實際可靠落點為 code-generation 實作 U22-V3 的 grep 時一併斷言",
+      "note": "**本列狀態為 GAP 而非 OK，這是刻意的。** SEC-1 的鑄造端驗證沒有有保證的落點：審查 R-02 指出 U13／U12 的 nfr-requirements 皆 CONDITIONAL，而宣告的 fallback（code-generation）是 per-unit，所以到不了那兩個單元。本站無法擴充已凍結的 U22-V3，故在 security-design.md §五 明記：code-generation 實作 U22-V3 的 grep 時應一併斷言那兩個入口端以 uuid4／secrets 鑄造，成本一條 grep。在那件事發生之前，本單元唯一的存取控制機制在驗證上是開口的。"
+    },
+    {
+      "id": "S-1",
+      "status": "Deferred",
+      "target": "code-generation（ALWAYS）",
+      "note": "承上游：buffer 上界數值未定，定值前須實跑一次典型產圖並把測量值與倍數寫進程式註解。本站的設計只定性質（有上界、丟棄有優先序、丟棄留痕）。"
+    },
+    {
+      "id": "S-2",
+      "status": "Deferred",
+      "target": "code-generation（ALWAYS）",
+      "note": "承上游：run_design_agent 的三個呼叫點全部傳入新鍵。已寫進 logical-components.md §四 的改檔清單，使元件層視圖與需求層的 U22-V3 一致。"
+    },
+    {
+      "id": "S-6",
+      "status": "Deferred",
+      "target": "使用者於閘門裁決",
+      "note": "承上游：NFR4 判定為不適用的三層理由。審查已以上游逐字證實理由 ① 決定性（requirements.md:670-508 的可測不變量為『重啟後既有對話的脈絡與作業對象仍可完整還原』，而本單元持有的是單一請求內的暫態事件，重啟摧毀的是請求本身，沒有可還原的對象）。審查同時指出理由 ③ 與 requirements.md:663 逐字的『Redis 往返約 1ms，可忽略』相反，故 S-6 交付時應把理由 ① 放最前面、②③ 降為補充。"
+    },
+    {
+      "id": "ADR-0006",
+      "status": "OK",
+      "target": "security-design.md §四 的四面向表",
+      "note": "IAM 適用（§一 的隔離結構，設計選擇是隔離而非加授權）、Encryption 不適用（無持久化、無跨進程傳輸，附理由）、Network exposure 不適用（library 無獨立執行期，附理由）、Audit logging 適用三處（其中 logger.exception 的單一出口為本站新增，既是不洩漏的設計也是稽核的設計）。四格皆有判定與理由，無空白。本表的宣告範圍是本站的三個設計結構，與 functional-design §五 與 nfr-requirements §二 的宣告範圍不同。"
+    },
+    {
+      "id": "PBT",
+      "status": "N/A",
+      "target": "requirements.md:630 逐字『FR13.2 併發事件互斥 — 不適用 PBT：它需要併發編排而非輸入空間探索』",
+      "note": "本站補設計層的理由：三個結構的正確性分別由型別（_admit 是 def，await 即 SyntaxError）、資料結構（per-key dict 使跨鍵取值需要不存在的操作）與控制流（單一出口）保證，皆非輸入值域的性質。ADR-0006 點名的三個 PBT 落點（IaC generator、cost calculator、agent routing）皆不在本單元。"
+    },
+    {
+      "id": "S-4",
+      "status": "OK",
+      "target": "security-design.md §三 的私有同步 _admit；風險下調記於 S-8",
+      "note": "承上游並由本站下調風險。nfr-requirements 把 U22-V4 的 await 禁令記為『靠人遵守、沒有自動化會擋』、風險中；[Q1]=A 的私有同步 def 使它成為語言層保證（await 在 def 內即 SyntaxError），風險降為低。本列為送審前自檢 5 補入——S-4 原本只出現在 security-design.md 的散文而不在本檔，屬 project.md 反覆記載的『id 只活在一處』缺陷。本站不回改已凍結的 nfr-requirements，故該檔仍記為中。"
+    }
+  ],
+  "reverse_count": 9
+}

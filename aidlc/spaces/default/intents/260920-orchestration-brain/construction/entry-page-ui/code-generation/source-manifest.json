@@ -1,0 +1,166 @@
+{
+  "stage": "code-generation",
+  "unit": "entry-page-ui",
+  "version": 1,
+  "writes": [
+    {
+      "path": ".github/workflows/deploy.yml"
+    },
+    {
+      "path": "DEPLOY.md"
+    },
+    {
+      "path": "backend/main.py"
+    },
+    {
+      "path": "backend/services/brain_gateway.py"
+    },
+    {
+      "path": "backend/services/brain_ws_contract.py"
+    },
+    {
+      "path": "backend/services/hierarchy_facade.py"
+    },
+    {
+      "path": "backend/services/hierarchy_service.py"
+    },
+    {
+      "path": "backend/services/membership_facade.py"
+    },
+    {
+      "path": "backend/tests/brain_gateway_fakes.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_handshake.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_startup.py"
+    },
+    {
+      "path": "backend/tests/test_brain_gateway_turn.py"
+    },
+    {
+      "path": "backend/tests/test_brain_ws_deploy_probe.py"
+    },
+    {
+      "path": "backend/tests/test_describe_work_target.py"
+    },
+    {
+      "path": "backend/tests/test_hierarchy_service.py"
+    },
+    {
+      "path": "backend/tests/test_project_visibility_static.py"
+    },
+    {
+      "path": "backend/tests/test_ws_contract.py"
+    },
+    {
+      "path": "frontend/eslint.config.js"
+    },
+    {
+      "path": "frontend/src/App.tsx"
+    },
+    {
+      "path": "frontend/src/brain/BrainTranscriptContext.tsx"
+    },
+    {
+      "path": "frontend/src/brain/brainProtocol.ts"
+    },
+    {
+      "path": "frontend/src/brain/brainSession.ts"
+    },
+    {
+      "path": "frontend/src/brain/brainTranscript.ts"
+    },
+    {
+      "path": "frontend/src/brain/testing/wsFrames.ts"
+    },
+    {
+      "path": "frontend/src/brain/useAssessmentTargetSync.ts"
+    },
+    {
+      "path": "frontend/src/brain/useBrainConnection.ts"
+    },
+    {
+      "path": "frontend/src/brain/useWorkspaceTargetSync.ts"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/BrainInput.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/BrainSession.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ClarifyCandidates.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ConnectionNotice.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ContextBar.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ConversationView.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/CostAnswerCard.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/EntryEmptyState.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/StreamingMessage.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/SubpageBrainPanel.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/SyncNotice.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/WorkItemDock.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/WorkItemList.tsx"
+    },
+    {
+      "path": "frontend/src/context/AuthContext.tsx"
+    },
+    {
+      "path": "frontend/src/context/auth-context.ts"
+    },
+    {
+      "path": "frontend/src/pages/AssessmentPage.tsx"
+    },
+    {
+      "path": "frontend/src/pages/EntryPage.tsx"
+    },
+    {
+      "path": "frontend/src/pages/WorkspacePage.tsx"
+    },
+    {
+      "path": "frontend/src/types/ws-contract.d.ts"
+    },
+    {
+      "path": "frontend/src/utils/unsavedWork.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/entry-page-live.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/entry-page.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/estimate-workspace.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/regression.spec.ts"
+    },
+    {
+      "path": "ws-contract.json"
+    }
+  ]
+}

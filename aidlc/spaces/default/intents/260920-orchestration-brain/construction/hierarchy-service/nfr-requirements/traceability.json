@@ -1,0 +1,231 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "hierarchy-service",
+  "upstream_ids": [
+    "US9.2",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3",
+    "US11.1",
+    "AC11.1.1",
+    "AC11.1.2",
+    "AC11.1.3",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR7.1",
+    "NFR8.1",
+    "NFR4.1"
+  ],
+  "coverage": [
+    {
+      "id": "US9.2",
+      "status": "N/A",
+      "target": "functional-design 的 BR1.x／BR6.x",
+      "note": "本單元的安全需求已在 functional-design 落地（12 條規則 ＋ ADR-0006 四面向判定表）；本站增量為零，不複寫以免製造第二份真實來源（team.md 的單一真實來源規則）。"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "N/A",
+      "target": "functional-design 的 BR6.1",
+      "note": "「出現在我可選的作業對象中」的列範圍由 BR6.1 規範，驗證落點為 code-generation 的列範圍斷言。"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "N/A",
+      "target": "functional-design 的 BR6.5",
+      "note": "建立系統的寫入面擁有者檢查由 BR6.5 規範。"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "N/A",
+      "target": "functional-design 的 BR1.1",
+      "note": "「拒絕經由既有路徑產生」由 BR1.1 規範（判定落在 facade、例外為 HierarchyForbidden）。"
+    },
+    {
+      "id": "US11.1",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "三條 AC 皆為畫面行為，不屬本單元（已於 functional-design/traceability.json 記為 Deferred）。"
+    },
+    {
+      "id": "AC11.1.1",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "同上。"
+    },
+    {
+      "id": "AC11.1.2",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui",
+      "note": "同上。"
+    },
+    {
+      "id": "AC11.1.3",
+      "status": "N/A",
+      "target": "functional-design 的 W2 第 8 步",
+      "note": "「0 變為 1」的資料來源為建立系統流程；畫面屬 U23。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11 intent-router",
+      "note": "意圖識別準確率。本單元不做意圖識別。門檻與校正程序屬路由層。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10 session-store",
+      "note": "跨頁面上下文保留率。上下文保留屬 session 層。本單元只提供 resolve_work_target 供其解析三層識別（BR1.2），不持有 session 狀態。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13 brain-gateway",
+      "note": "首字回應時間。首字延遲屬 WebSocket 串流路徑。本單元是同步 CRUD router，不在串流路徑上。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U8 memory-service／U1 brain-infra（Redis）",
+      "note": "狀態外部化與重啟還原。本單元完全無進程內狀態：三個實體全部持久化於 PostgreSQL（DDL 屬已交付的 U4），重啟後狀態不變。故本項對本單元自動滿足且無需設計。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2 brain-ws-contract",
+      "note": "WebSocket 契約閘門。本單元零 WebSocket。**但本單元查出一個同型缺口並已處置**：五個 HTTP path 中第五個（/api/hierarchy/diagram-changes）不在契約 K-07 的 OpenAPI 內，故在落地前不受既有兩道漂移閘門保護（OPEN-H9）；且四條衝突型規則要求的 409 **不被任何閘門涵蓋**——unit-of-work.md:447 逐字「非 2xx/422 的宣告數為 0」，故 BR6.6 要求顯式宣告 responses={409:...}。這與 NFR5 要防的失敗模式同形（契約變更無機械閘門），但載體是 HTTP 不是 WS。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "U5 memory-data",
+      "note": "記憶層的 schema 隔離與其驗證。本單元不碰記憶層 schema。三個實體（projects／systems／變更紀錄）屬階層資料模型，與記憶層無交集。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "U5／U8／U9",
+      "note": "episodic memory 的保存與刪除稽核。本單元不碰 episodic memory。**但同形的保存期問題存在於本單元並已記載**：變更紀錄保存期 90 天且清除機制不在本 repo（OPEN-H8），其稽核減損另有三項（級聯刪除、保存期、來源欄位只容納一條路徑）——見 functional-spec.md §七之三 的 Audit logging 列。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "U1 brain-infra",
+      "note": "新增元件的部署設定完整性。本單元零新部署設定：embedded router（unit-of-work.md:43 逐字），不新增 compose 服務、不新增環境變數、不新增監聽埠，故 project.md 的三環境設定分離規則與 validate_env_contract.py 對本單元無新增要求。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1 成本功能域",
+      "note": "成本原則。本單元不碰計價或成本。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11 intent-router",
+      "note": "路由層模型的可替換性。本單元不呼叫任何 LLM。"
+    },
+    {
+      "id": "NFR11",
+      "status": "Deferred",
+      "target": "U23 project-pages-ui／U16 object-picker-ui",
+      "note": "跨功能任務的頁面切換次數。切換次數是使用者可見的畫面指標。本單元提供其背後的寫入端與列舉端（W1／W2／W7），但指標本身只能在畫面層量測。requirements.md:470 逐字「NFR11 不受此限：它的判定是『每個情境的切換次數都嚴格少於基準』」。"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "code-generation 的 openapi dump",
+      "note": "第五個 path 落地後 openapi.json 必須含該 path；判準為 dump_openapi.py --check 綠燈。來源：functional-design 的 OPEN-H9（該 path 不在契約 K-07 的 OpenAPI 內，故落地前不受既有兩道漂移閘門保護）。"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "code-generation 的 responses 宣告",
+      "note": "四條衝突型規則（BR3.2／BR4.2／BR4.3／BR4.4）要求的 409 必須顯式宣告 responses={409:...}。unit-of-work.md:447 逐字：實測 openapi.json 的 55 個 operation 宣告的狀態碼只有 {200:53, 422:45, 201:1, 204:1}，非 2xx/422 的宣告數為 0——不顯式宣告則契約不進 spec、前端產不出型別，而 CI 保持綠燈。承載規則為 BR6.6。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "code-generation 的回應 schema",
+      "note": "變更紀錄查詢的回應不得被呈現為完整變更歷史；涵蓋範圍須由 source 宣告。來源：U4 的資料表註解逐字（schema_rbac.sql:416／:418）。承載規則為 BR6.3。"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "code-generation 的 diff 範圍",
+      "note": "本單元不得新增任何部署設定；判準為 validate_env_contract.py 綠燈且 diff 不含 deploy/、render-env.sh、任一 .env.example。本單元為 embedded router（unit-of-work.md:43 逐字），零新進程、零新監聽埠。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "code-generation 的程式審查",
+      "note": "本單元不得持有任何進程內狀態。自動滿足（三實體全部持久化於 PostgreSQL），但給 id 是因為它容易被無聲破壞——加一個模組級 dict 當快取就違反它且不會有錯誤訊息。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "NFR-SEC-U7",
+      "status": "N/A",
+      "target": "彙整，非新需求",
+      "note": "本站未新增任何安全需求。security-requirements.md 的作用是把 functional-design 的 12 條規則對應回 NFR 分類，並彙整五項測試義務（allow/deny 雙向 TestClient、BR6.1 列範圍斷言、BR6.5 寫入面斷言、BR6.4 最小欄位斷言、BR6.6 的 409 顯式宣告 ＋ 重 dump openapi.json），驗證落點全部在 code-generation。"
+    },
+    {
+      "id": "NFR-TECH-U7",
+      "status": "N/A",
+      "target": "沿用既有選型，非新決定",
+      "note": "技術選型增量為零：embedded FastAPI router（unit-of-work.md:43 逐字）、PostgreSQL（DDL 屬已交付的 U4）、unittest ＋ TestClient（team.md 記載未使用 pytest）、既有 require_story_action（契約 K-04）。整體選型文件在 brain-infra 的同名產出。不新增任何套件——TestClient 的前置條件已由 requirements.txt 的 fastapi[standard] ＋ httpx 滿足。"
+    },
+    {
+      "id": "NFR-PERF-U7",
+      "status": "N/A",
+      "target": "判為不適用",
+      "note": "**本站判定四個 NFR 面向不適用，逐項附理由（不留空白，依 requirements-analysis:c4 的規則）。** Performance：本單元是既有 process 內的 CRUD router，無新的延遲預算、無新的吞吐目標；唯一可量的是列舉端點的查詢成本，而其規模由使用者自有的專案數決定（個位數量級），不構成需求。"
+    },
+    {
+      "id": "NFR-SCALE-U7",
+      "status": "N/A",
+      "target": "判為不適用",
+      "note": "Scalability：不新增進程、不新增監聽埠、不新增水平擴展單位（unit-of-work.md:43 逐字 embedded）。擴展性由承載它的既有 FastAPI process 決定，屬 U1 brain-infra 的範圍。"
+    },
+    {
+      "id": "NFR-REL-U7",
+      "status": "N/A",
+      "target": "判為不適用",
+      "note": "Reliability：本單元無外部依賴邊界（不呼叫 LLM、不呼叫 webhook、不讀檔），故無重試、降級或熔斷需求。契約 K-07 的 retry_and_idempotency 已定下冪等語意（create_* 非冪等不得重試、resolve_work_target 唯讀且冪等可安全重試、record_diagram_change 非冪等不得重試），已落為 BR2.4，不需本站再開一份。"
+    },
+    {
+      "id": "NFR-OBS-U7",
+      "status": "N/A",
+      "target": "判為不適用，但有一項沿用義務",
+      "note": "Observability：不新增監控目標或告警。**沿用義務**：logger 命名須為 logging.getLogger(\"cloud360.<module>\")（team.md 已記載 5 支既有模組用 __name__ 為已知不一致，新模組不得沿用那個形狀）。整體觀測設計屬 U1 brain-infra 的 infrastructure-design（monitoring-design.md 已交付）。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-N7-1",
+      "severity": "process",
+      "text": "**本站刻意精簡執行（使用者 2026-10-06 核可降低不適用 design 階段的輪次）。** 七項 produces 中只產出 3 項（security-requirements、tech-stack-decisions、traceability），與 U1 brain-infra 的先例一致（它同樣只產出這 3 項）。未產出的四項（performance／scalability／reliability／observability）其判定理由逐項記於本檔 reverse 的 NFR-PERF-U7／NFR-SCALE-U7／NFR-REL-U7／NFR-OBS-U7,不留空白。**本站未派 reviewer**：review_class 為 advisory（非阻擋）且本站無新增需求可審，審查輪次用在有實質內容的站更有價值。 **本檔於同日修訂**：上一版寫「本站增量為零」，那句話太快了——授權的*行為*確實已在 functional-design 落地，但另有四項**非功能性**、有二元判準、且當時沒有任何規則承載的義務（NFR5.1／NFR5.2／NFR7.1／NFR8.1），加上一項容易被無聲破壞的性質（NFR4.1）。五項已給 id 並登錄，驗證落點全部在 code-generation。這是 nfr-design 的 traceability sensor 回報「no NFRx.y IDs」逼出的查證。"
+    },
+    {
+      "id": "OPEN-N7-2",
+      "severity": "named-gap",
+      "text": "**本單元的安全需求全部已在 functional-design 落地，故本站無法獨立驗證它們。** 五項測試義務（見 security-requirements.md §三）的驗證落點全部在本單元的 code-generation，與 functional-design 的 OPEN-H9（第五個 path 在落地前不受漂移閘門保護）為同一批。"
+    },
+    {
+      "id": "OPEN-N7-3",
+      "severity": "process",
+      "text": "**11 項 intent 級 NFR 中有 10 項對本單元判為 N/A、1 項判為 Deferred，逐項附理由不留空白**（依 requirements-analysis:c4 的規則：判定為不適用的項目一律附理由）。這不是省略——本單元是既有 FastAPI process 內的同步 CRUD router，而 11 項 NFR 中有 7 項（NFR1／NFR2／NFR3／NFR6／NFR9／NFR10／NFR11）的量測對象是 LLM、串流、記憶層或畫面，本單元全不涉及。**兩項 N/A 附帶了本單元查出的同形缺口**：NFR5（契約無機械閘門）→ 本單元的第五個 path 與 409 宣告同屬此形，已由 OPEN-H9 ＋ BR6.6 處置；NFR7（保存與刪除稽核）→ 本單元的變更紀錄有 90 天保存期且清除機制不在本 repo，已由 OPEN-H8 記載。這兩處是把 N/A 判定當成查證機會而非形式填空的結果。"
+    }
+  ]
+}

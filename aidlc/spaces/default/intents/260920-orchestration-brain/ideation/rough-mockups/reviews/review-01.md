@@ -1,0 +1,18 @@
+## Review
+
+**Verdict:** NOT-READY
+**Reviewer:** aidlc-product-lead-agent
+**Date:** 2026-09-22T00:49:53Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action |
+|---|---|---|---|---|
+| PL-01 | Critical | `rough-mockups-questions.md` § Consolidated Summary Confirmation（第 198–205 行） | 本站的 `[Answer]:` 欄位為空白——使用者從未對本輪產出的 Consolidated Summary 回答「Looks correct」或「Request changes」。以 audit shard 核對（`jiangzhengdaodemacbook-pro-local-82da74e002f9.md`）：rough-mockups 於 00:30:14Z 啟動，R1–R8 四輪 `QUESTION_ANSWERED` 都在 00:42:25Z 前完成，`wireframes.md`／`user-flow.md` 於 00:44:34–00:44:34Z 寫出，兩個 sensor 於 00:44:46–47Z 通過，隨後只有兩則 `SUBAGENT_COMPLETED`（00:47:25Z「Reading wireframes.md and questions.md」、00:47:58Z「Verifying ASCII box character-count consistency」，疑似一次未完成的先前審查嘗試），**全程沒有一筆 `SUMMARY_CONFIRMATION_RECORDED` 事件、也沒有 `GATE_APPROVED`／`STAGE_COMPLETED`**。對照同一 audit shard 中 intent-capture／feasibility／scope-definition 三站，每一站的定稿都留有 `Decision`＋`SUMMARY_CONFIRMATION_RECORDED` 這組收據（例如第 4295、4800、4852 行），本站完全沒有。這代表使用者從未看過彙整後的完整設計並點頭，產出就已定稿並被送審——直接違反 `team.md ## Mandated` 的「小步前進：每個 stage 完成後產出 stage-completion summary…等使用者確認再進下一階段」與本 intent 自己在 `scope-definition:e8146aa4f0578412010722b0c7cac51162c89fd2e087daced6e81ec3b1db5c2f` 記下的教訓（確認收據是任何下游動作的前提）。R1–R8 各題本身確實有 `QUESTION_ANSWERED`，但那些是逐題作答，不能取代整份 artifact 定稿後的彙整確認——尤其 R7、R8 之後 conductor 又做了多項未經使用者複核的綜合判斷（見 PL-02、PL-03）。 | 在放行本站之前，必須先把目前的 `wireframes.md`／`user-flow.md`／`rough-mockups-questions.md` 完整內容呈現給使用者做一次 Consolidated Summary Confirmation，取得 `Looks correct` 或 `Request changes` 並寫回問題檔、留下 `SUMMARY_CONFIRMATION_RECORDED` 稽核事件，才能視為本輪定稿。 |
+| PL-02 | Major | `wireframes.md` 第 233–240 行（`## Assumptions & Open Questions`）；`scope-document.md` 第 47–61 行（Must 清單） | 對照 `scope-document.md` 的 9 項 Must 能力逐一核對畫面落點：能力 4「長短期記憶（語意、程序、情節）」在 `wireframes.md` 與 `user-flow.md` **兩份檔案裡合計零次提及**——不是「判斷後合理省略」，是完全沒有出現，連 Assumptions 區塊都沒有一條記載「本站未替能力 4 畫面」或說明理由。能力 5「多意圖識別」在 `wireframes.md` 同樣零畫面，只在 `user-flow.md` 的 Mermaid 流程圖裡以一個節點帶過並在其 Assumptions 註記「未定」。對照同樣是 Must（且優先序更高）的能力 1/2/3/8/9/10 都各自有具體畫面或至少一條明確的範圍界定句，能力 4、5 的落差在文件裡沒有被同等對待地揭露——這正是 `rough-mockups:c6` 要求「先問清單再畫面」隱含的反面：沒畫的要交代理由，不能讓下游誤讀成「已考慮過、確定不需要」。 | 在 `wireframes.md` 的 Assumptions 區塊為能力 4 與能力 5 各補一條明確記載：能力 4 若判定為純後端能力、無獨立 UI 落點，需說出判斷依據（例如「跨頁保留的脈絡本身即能力 4 的使用者可見面」或類似），並排除與能力 2（跨頁脈絡）的邊界混淆；能力 5 至少需要在 `wireframes.md` 補一則畫面或明確聲明「本站不畫、留待 refined-mockups」並給出理由，不能僅靠 `user-flow.md` 一句話帶過。 |
+| PL-03 | Minor | `wireframes.md` 第 195–231 行（`## 7. 窄螢幕的響應式行為`） | R7=C 的已揭露代價第 1 項明講「頂部脈絡列（R2=C）與成本卡片（R4=B）在窄螢幕的行為都必須在線框中畫出來」，本站確實畫了第 7 節，但畫的是短名稱（「訂單系統 / 主架構圖」），沒有畫長專案名 ＋ 長系統名 ＋ 長架構圖名同時出現、且同時有成本卡片展開的最壞情境。`project.md` 的 `refined-mockups:c4` 字面上是綁在 refined-mockups 階段，本站沒有義務做到那個精度；但既然 R7 代價揭露已明文承諾「窄螢幕行為都必須畫出來」，目前只畫了單一（短名稱、無並發展開）情境，對「脈絡列展開＋成本卡片同時存在」這個真實可達的組合（Flow 2 全程不離開入口頁，脈絡列本就可展開）沒有畫出來過，屬於揭露承諾與實際產出間的小落差，不到 Critical／Major。 | 在第 7 節補一個或在文字中明講「脈絡列與成本卡片何時會在窄螢幕同時出現、如何共存」，或在 Assumptions 明白排除該組合（例如「脈絡列展開時卡片不可能同時展開」）並說明依據，把目前隱含的假設變成明講的設計決定。 |
+
+### Summary
+
+三類來源計數：新引入 0 項、既存漏審 2 項（PL-01 的確認收據缺失、PL-02 的 Must 能力覆蓋落差）、新設計問題 1 項（PL-03）。conductor 在 brief 中主動揭露的五個疑慮，逐一查證結果：(1) R7 的範圍限縮——查 audit shard 第 5180 行確認代價已在提問當下揭露並記錄，屬合理範圍界定，非事後縮小承諾，不構成發現；(2) R8「無權限入口頁不可達」——實地讀 `frontend/src/App.tsx`（`DefaultRedirect` 瀑布）與 `RouteGuard.tsx`（`CapabilityRoute` 對無權限一律導 `/403`）確認推論成立，不構成發現；(3) ASCII 字元數——以 Python 腳本重新對 7 個框逐行 `len()` 計數，全部為 72，宣稱屬實；(4) 窄螢幕最壞情境——查證後認為屬揭露承諾與產出的小落差，列為 PL-03（Minor）；(5) Must 能力覆蓋——實查後確認能力 4、5 有真實缺口，列為 PL-02（Major）。真正致命的問題是 PL-01：本站的 Consolidated Summary Confirmation 從未被使用者回答，audit shard 顯示產出已完稿並疑似已被送過一次審查，卻沒有任何確認收據——這是流程本身的缺口而非設計內容的缺口，但足以單獨構成 NOT-READY，因為在使用者點頭之前，這份設計在治理意義上根本還不是「定案」的東西，不該進入下一階段。

@@ -264,7 +264,8 @@ def emit_golden(source):
     digest = hashlib.sha256(src.read_bytes()).hexdigest()
     payload = {
         "_comment": (
-            "U-10a 的 NFR-C1 快照：四個既有 job 的 name / runs-on / steps 在變更前的樣子。"
+            "NFR-C1 基準快照：四個既有 job 的 name / runs-on / steps。"
+            "基準隨合法的 CI 演進重新產生，每次重產都要在 commit message 逐項說明差異。"
             "由 check-ci-yml.py --emit-golden 產生，不要手改。"
         ),
         # 記來源檔的 sha256 而不是它的路徑：路徑是產生它的那台機器的事，sha 才可以被

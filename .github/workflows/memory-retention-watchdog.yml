@@ -1,0 +1,254 @@
+name: Memory retention watchdog
+
+# U9 memory-purge / NFR7.13 -- the ONE thing in this unit that needed a new
+# mechanism.
+#
+# ---------------------------------------------------------------------------
+# WHAT IT DEFENDS AGAINST: NOTHING HAPPENING
+# ---------------------------------------------------------------------------
+# Memory retention purge runs on the SELF-HOSTED runner. When that machine is
+# offline, `on: schedule` does not queue, does not fail, and produces NO RUN AT
+# ALL -- the Actions list is simply missing a row, and a missing row has no
+# colour. The consequence is not "purged a day late": FR4.5's 90-day retention
+# only means anything if it actually expires, and un-purged episodic memory is
+# personal conversation history the user believes is gone.
+#
+# So this workflow runs on a GITHUB-HOSTED runner. That is its entire reason to
+# exist: a freshness check that lives on the machine being watched disappears
+# at the same moment as the failure it is supposed to report ([ID1]=A).
+#
+# ---------------------------------------------------------------------------
+# PROXY METRIC, ON PURPOSE
+# ---------------------------------------------------------------------------
+# The direct metric ("is expired data actually gone?") is strictly better, and
+# unusable here: reading it needs a database connection, and the database sits
+# behind the host that may be down. monitoring-design.md §二之一 has the full
+# comparison; the upstream criterion -- "the check must not depend on that
+# runner" -- leaves the run history as the only reachable signal.
+#
+# ---------------------------------------------------------------------------
+# NO LLM (NFR7.14)
+# ---------------------------------------------------------------------------
+# A plain .yml, not a gh-aw `.md`. The whole decision is one timestamp
+# comparison; routing it through an agent would put a binary comparison inside
+# project.md's "every LLM path" blind spot. The cost is the one permission
+# increment this unit asks for -- `issues: write`, which has NO precedent among
+# this repo's scheduled workflows (they hold `issues: read` plus gh-aw's
+# sanitised `safe-outputs`). That trade is OPEN-ID9-2, and the alternative is
+# written down in monitoring-design.md §三之三 if a maintainer prefers it.
+#
+# ---------------------------------------------------------------------------
+# NOBODY WATCHES THE WATCHDOG
+# ---------------------------------------------------------------------------
+# Stated plainly rather than left to be discovered: any monitoring chain has to
+# stop somewhere. This one stops here because its dependency surface (GitHub
+# itself) is strictly smaller than the purge's (GitHub + the host + the runner
+# service + the database container). A long GitHub Actions outage, or this
+# workflow being disabled, silences both. That is OPEN-ID9-1, an accepted
+# residual risk.
+
+on:
+  schedule:
+    # 06:23 UTC, about 12.7h after the purge's 17:41 UTC slot, so a failure the
+    # same night is seen the next morning. The 3-day threshold means the exact
+    # hour does not matter; it is pinned only to avoid the top-of-hour backlog
+    # and the other schedules in this repo.
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Reading another workflow's run history. Precedent: daily-digest.md:13.
+  actions: read
+  # Opening the alert issue. NO precedent in this repo -- OPEN-ID9-2. The scope
+  # is already minimal: `issues: write` cannot change code.
+  issues: write
+
+concurrency:
+  group: memory-retention-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: check purge freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Built-in token only -- ZERO new secrets (NFR7.12).
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      # The workflow being watched, by file name.
+      PURGE_WORKFLOW: memory-retention-purge.yml
+      # Threshold, as a workflow constant rather than a variable or secret.
+      # 3 days, not 1: a single transient failure (Actions hiccup, runner
+      # restart, maintenance window) must not open an issue, because noise
+      # trains readers to ignore the alert. Not 7 either: a week unnoticed
+      # undermines the retention period's compliance meaning.
+      # project.md's environment-config contract would make a configurable
+      # threshold a three-place sync point, and a threshold is not worth that
+      # (monitoring-design.md §二之二).
+      #
+      # Comparison is `age_days > MAX_AGE_DAYS` on whole days, i.e. the alert
+      # fires once four daily runs in a row have been missed. The design's
+      # threshold column says "逾 3 天" (exceeding three days), which is what
+      # this implements; the rationale sentence next to it says it "tolerates
+      # two consecutive failures", which would be `>=`. The two differ by one
+      # day and the THRESHOLD VALUE is taken as the governing statement -- noted
+      # here rather than resolved silently, because the gap is one missed purge.
+      MAX_AGE_DAYS: "3"
+      # Fixed prefix, used BOTH to title the issue and to find an existing one.
+      # Changing it orphans the open issue and the next run opens a second.
+      ISSUE_TITLE_PREFIX: "[memory-retention] 90 天清除已逾期未成功執行"
+    steps:
+      # Find the most recent SUCCESSFUL, SCHEDULED run of the purge.
+      #
+      # `status=success` is not optional (cicd-pipeline.md §四之一): the runs
+      # endpoint returns failures too, so taking "the newest run" would read
+      # "it fails every single day" as FRESH -- which is one of the states most
+      # in need of an alert.
+      #
+      # `event=schedule` is an addition beyond the design, and it closes a gap
+      # the design did not consider: a manual dispatch with dry_run=true
+      # succeeds while deleting NOTHING. Counting it would let one dry run
+      # reset the freshness clock and hide weeks of non-purging -- the exact
+      # failure this workflow exists to catch. The cost of the filter is that a
+      # manual REAL purge does not reset the clock either, whose worst case is
+      # one extra issue after three days. Conservative in the right direction.
+      - name: Read the purge workflow's last successful scheduled run
+        id: last
+        run: |
+          set -euo pipefail
+
+          http=0
+          body="$(gh api \
+            "repos/${GH_REPO}/actions/workflows/${PURGE_WORKFLOW}/runs?status=success&event=schedule&per_page=1" \
+            2>/tmp/gh.err)" || http=$?
+
+          if [ "${http}" -ne 0 ]; then
+            # A 404 here means the purge workflow is not registered on the
+            # default branch (bring-up), or it was deleted/renamed. Both are as
+            # bad as "it never succeeded", so this is overdue, not a skip.
+            echo "::warning::Could not read the run history of ${PURGE_WORKFLOW}." >&2
+            sed -e 's/^/gh: /' /tmp/gh.err >&2 || true
+            echo "state=unreachable" >> "$GITHUB_OUTPUT"
+            echo "age_days=" >> "$GITHUB_OUTPUT"
+            echo "last_at=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          count="$(printf '%s' "${body}" | jq -r '.workflow_runs | length')"
+          if [ "${count}" -eq 0 ]; then
+            echo "state=never" >> "$GITHUB_OUTPUT"
+            echo "age_days=" >> "$GITHUB_OUTPUT"
+            echo "last_at=" >> "$GITHUB_OUTPUT"
+            echo "no successful scheduled run found"
+            exit 0
+          fi
+
+          last_at="$(printf '%s' "${body}" | jq -r '.workflow_runs[0].created_at')"
+          age_seconds=$(( $(date -u +%s) - $(date -u -d "${last_at}" +%s) ))
+          age_days=$(( age_seconds / 86400 ))
+
+          echo "state=found" >> "$GITHUB_OUTPUT"
+          echo "age_days=${age_days}" >> "$GITHUB_OUTPUT"
+          echo "last_at=${last_at}" >> "$GITHUB_OUTPUT"
+          echo "last successful scheduled purge: ${last_at} (${age_days} day(s) ago)"
+
+      - name: Decide whether the purge is overdue
+        id: verdict
+        env:
+          STATE: ${{ steps.last.outputs.state }}
+          AGE_DAYS: ${{ steps.last.outputs.age_days }}
+        run: |
+          set -euo pipefail
+          case "${STATE}" in
+            found)
+              if [ "${AGE_DAYS}" -gt "${MAX_AGE_DAYS}" ]; then
+                echo "overdue=true" >> "$GITHUB_OUTPUT"
+                echo "reason=最近一次成功的排程清除是 ${AGE_DAYS} 天前，已超過 ${MAX_AGE_DAYS} 天的門檻。" >> "$GITHUB_OUTPUT"
+              else
+                echo "overdue=false" >> "$GITHUB_OUTPUT"
+                echo "reason=" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            never)
+              echo "overdue=true" >> "$GITHUB_OUTPUT"
+              echo "reason=找不到任何一次成功的排程清除（status=success 且 event=schedule）。" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "overdue=true" >> "$GITHUB_OUTPUT"
+              echo "reason=讀不到清除 workflow 的執行歷史——它可能尚未進入預設分支（上線期間），或已被刪除、改名、停用。" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      # Two visible surfaces, two different readers: an issue (someone has to
+      # act) and a red run (whoever scans Actions). Deduplicated so a week of
+      # non-purging does not produce seven identical issues -- that trains
+      # readers to ignore them, which is close to having no alert at all
+      # (monitoring-design.md §三之一).
+      #
+      # Dedupe uses `gh issue list` + a prefix match rather than GitHub's
+      # search index: the index lags by up to minutes, and a lagging index
+      # answers "no open issue" right after one was opened.
+      - name: Open an issue (deduplicated) and fail
+        if: steps.verdict.outputs.overdue == 'true'
+        env:
+          REASON: ${{ steps.verdict.outputs.reason }}
+          LAST_AT: ${{ steps.last.outputs.last_at }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          existing="$(gh issue list --state open --limit 100 --json number,title \
+            | jq -r --arg p "${ISSUE_TITLE_PREFIX}" \
+                '[.[] | select(.title | startswith($p))] | .[0].number // empty')"
+
+          body="$(cat <<EOF
+          ${REASON}
+
+          - 最近一次成功的排程清除：\`${LAST_AT:-（無）}\`
+          - 門檻：\`${MAX_AGE_DAYS}\` 天
+          - 本次檢查：${RUN_URL}
+
+          **為什麼這件事要緊**：\`FR4.5\` 的 90 天保存期建立在「它真的會到期」之上。
+          逾期未刪的 episodic memory 是使用者以為已經消失的個人對話歷程。
+          清除同時也是 \`memory.memory_audit_events\` **唯一**的 DELETE 端，
+          所以漏跑會讓那張表無上界成長，而沒有任何其他機制會清它。
+
+          **最可能的原因**：清除跑在自架 runner 上（\`db\` 沒有 host port，那是唯一的到達
+          方式）。runner 離線時 \`on: schedule\` **不會排入、不會失敗、不會留下任何 run**。
+
+          **處置**：
+          1. 確認 \`192.168.10.10\` 的 runner 在線、且 deploy stack 的 \`db\` 服務在跑。
+          2. 以 \`workflow_dispatch\` ＋ \`dry_run=true\` 手動觸發一次 \`${PURGE_WORKFLOW}\`，
+             核對它選到的列是否符合預期（清除**不可回滾**）。
+          3. 再以 \`dry_run=false\` 補跑一次。清除冪等且自我收斂，補跑安全。
+          4. 下一次排程成功之後，本 issue 可以關閉——**但請留著它直到那時**，
+             本 workflow 以標題前綴去重，關掉它會讓下一次檢查再開一個新的。
+          EOF
+          )"
+
+          if [ -n "${existing}" ]; then
+            echo "issue #${existing} is already open for this condition; adding a comment instead of opening a second one"
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create \
+              --title "${ISSUE_TITLE_PREFIX}" \
+              --body "${body}"
+          fi
+
+          echo "::error::${REASON} 已開啟／更新告警 issue。" >&2
+          exit 1
+
+      - name: Report freshness
+        if: steps.verdict.outputs.overdue != 'true'
+        env:
+          AGE_DAYS: ${{ steps.last.outputs.age_days }}
+          LAST_AT: ${{ steps.last.outputs.last_at }}
+        run: |
+          {
+            echo "### Memory retention purge freshness"
+            echo ""
+            echo "- last successful scheduled purge: \`${LAST_AT}\`"
+            echo "- age: \`${AGE_DAYS}\` day(s), threshold \`${MAX_AGE_DAYS}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

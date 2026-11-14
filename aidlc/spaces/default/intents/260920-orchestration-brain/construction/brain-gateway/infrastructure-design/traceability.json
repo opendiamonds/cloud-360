@@ -1,0 +1,296 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "brain-gateway",
+  "upstream_ids": [
+    "NFR13.1",
+    "NFR13.2",
+    "NFR13.3",
+    "NFR13.4",
+    "NFR13.5",
+    "NFR13.6",
+    "NFR13.7",
+    "NFR13.8",
+    "NFR13.9",
+    "NFR13.10",
+    "NFR13.11",
+    "NFR13.12",
+    "NFR13.13",
+    "NFR13.14",
+    "NFR13.15",
+    "NFR13.16",
+    "NFR13.17",
+    "NFR13.18",
+    "NFR13.19",
+    "NFR13.20",
+    "NFR13.21",
+    "NFR13.22",
+    "NFR13.23",
+    "NFR13.24",
+    "NFR13.25",
+    "NFR13.26",
+    "NFR13.27",
+    "NFR13.28",
+    "NFR13.29",
+    "NFR13.30",
+    "NFR13.31",
+    "NFR13.32",
+    "NFR13.33",
+    "NFR13.34",
+    "NFR13.35",
+    "NFR13.36",
+    "NFR13.37",
+    "NFR13.38",
+    "NFR13.39",
+    "NFR13.40",
+    "NFR13.41",
+    "NFR13.42",
+    "NFR13.43",
+    "NFR13.44"
+  ],
+  "coverage": [
+    {
+      "id": "NFR13.1",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §三 SLI／SLO",
+      "note": "量測落 build-and-test；本站只提供 log 量測來源"
+    },
+    {
+      "id": "NFR13.2",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.3",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §二 ollama 列",
+      "note": "等待上限依部署主機 Ollama 冷載實測定值，量測落 code-generation／build-and-test"
+    },
+    {
+      "id": "NFR13.4",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.5",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §三 共享執行緒池列",
+      "note": "專用 4 執行緒執行器不佔預設池；backend 記憶體上限不變"
+    },
+    {
+      "id": "NFR13.6",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.7",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §四 4.2、4.4 標頭層檢查",
+      "note": "逐跳透傳：nginx 靜態判定透傳、Cloudflare 兩跳未查證；部署後三層實測與回應不含 token 的 curl 檢查；OPEN-GW13-6 實測前不結案"
+    },
+    {
+      "id": "NFR13.8",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.9",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.10",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.11",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.12",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.13",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.14",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.15",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §十 Audit logging 列",
+      "note": "nginx 預設 access log 不含 Sec-WebSocket-Protocol（推論）；實測腳本不印 token 與內容"
+    },
+    {
+      "id": "NFR13.16",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.17",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §一 ws_refused 列",
+      "note": "上限為應用層常數；部署層無對應設定（[GWN1]=A）"
+    },
+    {
+      "id": "NFR13.18",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.19",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §九",
+      "note": "部署層無只作用於本端點的訊框控制點；uvicorn 16 MiB 緩衝殘留維持並寫明收緊前提"
+    },
+    {
+      "id": "NFR13.20",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §一 frame_rejected 列",
+      "note": "應用層限制；只提供觀測"
+    },
+    {
+      "id": "NFR13.21",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.22",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.23",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §二 入口頁全面失敗列",
+      "note": "Redis 故障表現為 1011／INTERNAL_ERROR，人工查 log"
+    },
+    {
+      "id": "NFR13.24",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §四 本機預期的雜訊",
+      "note": "episodic 失敗只記 WARNING；fulltext 本機必然產生"
+    },
+    {
+      "id": "NFR13.25",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §二 記憶熔斷開啟列",
+      "note": "熔斷事件人工監看；查 ollama 容器與模型 volume"
+    },
+    {
+      "id": "NFR13.26",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.27",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.28",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.29",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.30",
+      "status": "N/A",
+      "target": "應用層需求，無基礎設施面；設計落點見 construction/brain-gateway/nfr-design/"
+    },
+    {
+      "id": "NFR13.31",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §一 儲存列",
+      "note": "會話狀態只在既有 Redis（AOF、named volume）；部署替換時連線中斷由 U14 重連承接"
+    },
+    {
+      "id": "NFR13.32",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §六 6.1；construction/brain-gateway/infrastructure-design/cicd-pipeline.md §二 C-a、C-b",
+      "note": "三個 REDIS_* 皆既有、staging 已必要；本機語意改為啟動必要；CI 以 patch.dict 自備變數"
+    },
+    {
+      "id": "NFR13.33",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §六 6.1、§七",
+      "note": "補「backend 服務無 env_file」斷言與部署後 docker top 複核"
+    },
+    {
+      "id": "NFR13.34",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §四",
+      "note": "logger 名稱與行格式（推論為 basicConfig 預設）；查詢指令依此"
+    },
+    {
+      "id": "NFR13.35",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §一、§三",
+      "note": "turn_end 為量測來源"
+    },
+    {
+      "id": "NFR13.36",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §一",
+      "note": "ws_refused／ws_accepted／ws_ready／ws_closed／frame_rejected"
+    },
+    {
+      "id": "NFR13.37",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §一、§二",
+      "note": "熔斷與執行器滿只以計數記錄"
+    },
+    {
+      "id": "NFR13.38",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/monitoring-design.md §四",
+      "note": "turnId 為關聯鍵；無分散式追蹤"
+    },
+    {
+      "id": "NFR13.39",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §四 4.4",
+      "note": "實測腳本使用映像內既有的 websockets，不新增套件"
+    },
+    {
+      "id": "NFR13.40",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/cicd-pipeline.md §一 WS 契約漂移列"
+    },
+    {
+      "id": "NFR13.41",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/cicd-pipeline.md §三",
+      "note": "重產步驟與突變驗證；ADR-0020 前置關卡"
+    },
+    {
+      "id": "NFR13.42",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/cicd-pipeline.md §一 backend 單元測試列",
+      "note": "PBT 由既有 unittest job 執行"
+    },
+    {
+      "id": "NFR13.43",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §六 6.3",
+      "note": "LOCAL-DEV.md 六處逐行改動"
+    },
+    {
+      "id": "NFR13.44",
+      "status": "OK",
+      "target": "construction/brain-gateway/infrastructure-design/infrastructure-specification.md §六 6.2；construction/brain-gateway/infrastructure-design/cicd-pipeline.md §二 C-c",
+      "note": "validate_env_contract.py 通過但其偵測式看不到 os.environ[...]；真正閘門是 AST 測試"
+    }
+  ]
+}

@@ -96,7 +96,7 @@ Focus areas:
 - Business rules, constraints, and validation logic
 - Data flow and transformations
 - Integration points with other units or external systems
-- Error handling and edge cases
+- Error handling and edge cases (at Standard and Comprehensive depth, sweep each component against `.claude/knowledge/aidlc-product-agent/corner-checklist.md`; corners the requirements already settled carry forward, and only open corners that need the user's judgement become questions)
 - Frontend Components (component hierarchy, props/state, interaction flows, form validation)
 - Business Scenarios (end-to-end user journeys, happy/unhappy paths, concurrency edge cases)
 
@@ -143,7 +143,7 @@ unexplained rule is mechanically derived as an orphan:
 ### Step 5: Completion Handoff
 
 Hand completion to `stage-protocol.md` via
-`bun .claude/tools/aidlc.ts engine orchestrate report --stage functional-design --result <outcome>`.
+`aidlc engine orchestrate report --stage functional-design --result <outcome>`.
 That `report` call owns every lifecycle transition and advancement; never perform one in prose, and never narrate this bookkeeping to the user.
 
 ### Step 6: Completion

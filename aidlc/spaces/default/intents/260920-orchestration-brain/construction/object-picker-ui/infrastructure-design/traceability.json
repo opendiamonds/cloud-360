@@ -1,0 +1,17 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "object-picker-ui",
+  "upstream_ids": ["NFR2.160", "NFR5.160", "NFR8.160", "NFR11.160", "OPN-01", "OPN-15", "OPN-22", "OPN-23", "NFR11.100", "NFR11.140"],
+  "coverage": [
+    { "id": "NFR2.160", "status": "N/A", "target": "選單不持有作業對象副本屬前端設計，無基礎設施面" },
+    { "id": "NFR5.160", "status": "OK", "target": "cicd-pipeline.md：既有 WS 漂移閘門，本單元不改契約" },
+    { "id": "NFR8.160", "status": "OK", "target": "infrastructure-specification.md Environments 表：零新環境變數、validate_env_contract.py 不觸及" },
+    { "id": "NFR11.160", "status": "N/A", "target": "頁面切換次數屬前端行為，無基礎設施面" },
+    { "id": "OPN-01", "status": "OK", "target": "infrastructure-specification.md Shared Infrastructure 表：連線池與補抓並行上限 4" },
+    { "id": "OPN-15", "status": "OK", "target": "infrastructure-specification.md Deployment 表儲存列；monitoring-design.md：零新 log" },
+    { "id": "OPN-22", "status": "OK", "target": "infrastructure-specification.md Deployment 表：既有 SPA bundle，零新依賴" },
+    { "id": "OPN-23", "status": "OK", "target": "cicd-pipeline.md：不新增 CI job，既有 lint、typecheck、ui-regression 撿到" },
+    { "id": "NFR11.100", "status": "N/A", "target": "屬 U23 project-pages-ui 的需求，上游僅引為處置先例，本單元不承接" },
+    { "id": "NFR11.140", "status": "N/A", "target": "屬 U14 entry-page-ui 的需求，上游僅引為處置先例，本單元不承接" }
+  ]
+}

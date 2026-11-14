@@ -1,0 +1,201 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "memory-page-ui",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "inception NFR1 — 意圖識別準確率（路由層）",
+      "note": "本單元不呼叫任何模型、不做意圖識別。範圍外，非豁免。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "inception NFR2 — 跨頁面上下文保留率",
+      "note": "母體逐字限定為「共享工作階段涵蓋的三處（入口頁、`/workspace`、`/assessment`）之間切換一次」。`/memory` 不在那三處之內，故本單元不產生 NFR2 的量測事件。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "inception NFR3 — 首字回應時間（LLM 串流）",
+      "note": "本單元無 LLM 路徑、無串流。範圍外。"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.90",
+      "note": "父條「狀態一律放 Redis，不得放行程記憶體」的前端同構對應：記憶內容不得寫入瀏覽器儲存。以本單元新增檔案中三個儲存識別字的命中數為 0 作為可測不變量。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "inception NFR5 — WebSocket 契約閘門",
+      "note": "本單元只消費兩個 REST 端點，不使用 WebSocket。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "inception NFR6 — 記憶層 schema 隔離",
+      "note": "schema 隔離是持久層的要求，屬 `U5`／`U8`。本單元只經 HTTP 讀寫，碰不到 schema。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.90, NFR7.91",
+      "note": "episodic memory 的個人使用歷程在本頁被顯示與刪除。`NFR7.90`：用戶端不產生靜態儲存，使用戶端加密問題不成立（附判定失效條件）；`NFR7.91`：刪除確認文案告知會留稽核。稽核的寫入在 `U8`，90 天清除在 `U9`。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.90",
+      "note": "零新環境變數，使父條的「缺值靜默降級」失敗模式不可達——結構性滿足，非豁免。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "inception NFR9 — 成本原則（LLM 花費）",
+      "note": "父條逐字限定為「本平台自身的 LLM 花費」。本單元零 LLM 呼叫；前端請求數另以 `UIP-1`／`UIP-3`／`UIP-4` 規定。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "父條為模型可替換性。本單元不呼叫任何模型，見 `tech-stack-decisions.md` §二。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "inception NFR11 — 跨功能任務的頁面切換次數",
+      "note": "量測母體為具名的**跨功能**任務情境（由 `user-stories` 的 `M-3` 承接）。檢視與刪除記憶是單一功能操作，不在該母體內。附帶：刪除就地完成、不切換頁面，對該條無負面影響。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "UIP-1",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "開頁恰 3 個並行請求。無 inception 父條（`NFR9` 只管 LLM 花費）；來源為 `[M2]`=A。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "情節記憶每頁 20 則、請求 `limit=21`。來源為 `OPEN-MP15-3` 經本站以 `user_router.py:146-147` 先例與 `clamp_page_size` 上限收斂。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "每次刪除 1 次 DELETE ＋ 至多 1 次同 kind 同頁 GET。來源為 `[M3]`=A，並容許審查 `R-01` 的修法。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "翻頁只重抓情節記憶區。來源為 `BR32.2`。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "語意／程序以 `limit=200` 一次取得。來源為 `BR33.3` 與伺服器上限。"
+    },
+    {
+      "id": "UIP-6",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/performance-requirements.md",
+      "note": "刪除進行中不阻塞其他條目。來源為 `BR34.3`。"
+    },
+    {
+      "id": "SEC-U15-1",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "前端不過濾。來源為 `K-14` 與 `BR31.3`，屬授權責任落點，無 inception NFR 對應。"
+    },
+    {
+      "id": "SEC-U15-2",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "`canDelete` 不是存取控制；斷言擁有者為 `U8`。ADR-0006 IAM 面。"
+    },
+    {
+      "id": "SEC-U15-3",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "不提供可見範圍放寬控件。來源為 `BR35.3`、`OQ-12` 未定案。"
+    },
+    {
+      "id": "SEC-U15-4",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "可見文字不含他人數值 id。來源為 `BR35.1` 的 note。"
+    },
+    {
+      "id": "SEC-U15-5",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md",
+      "note": "console 不含記憶內容。來源為 public repo 的 Actions log 公開可讀（同 `U24` 的 `BR28.1`）。"
+    },
+    {
+      "id": "TS-U15-1",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "零新前端依賴。技術選擇非 inception 要求。"
+    },
+    {
+      "id": "TS-U15-2",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "驗證層只有 Playwright e2e。"
+    },
+    {
+      "id": "TS-U15-3",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "URL 組裝用 `apiUrl()`。"
+    },
+    {
+      "id": "TS-U15-4",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "兩層抓取形狀。"
+    },
+    {
+      "id": "TS-U15-5",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "型別取自產生的 `api.d.ts`。"
+    },
+    {
+      "id": "TS-U15-6",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "就地移除沿用 `filter`，須連同分頁補償一起考慮（`AdminPage.tsx:198-203`）。"
+    },
+    {
+      "id": "TS-U15-7",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "live region 沿用 `LiveRegion.tsx`。"
+    },
+    {
+      "id": "TS-U15-8",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/nfr-requirements/tech-stack-decisions.md",
+      "note": "不沿用 `PaginationControl`（無 `total` 可餵）。"
+    }
+  ]
+}

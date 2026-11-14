@@ -17,9 +17,20 @@ Initial Scope Signal 為範圍前提：本 intent 不改動該段已確認的產
 | C-T4 | 既有串流契約為 SSE（`text/event-stream`，`{type, content}`），共存於 3 個端點；架構圖共編另有 WebSocket | 本 intent 改用 WebSocket 後，系統內將有兩種串流機制並存；既有 SSE 端點不在本次變更範圍內 | [S3][S4][F4] |
 | C-T5 | 現用資料庫映像為官方 `postgres:16-alpine`，**不含 pgvector**，且 repo 內無任何 `CREATE EXTENSION` | 語意記憶若採向量檢索，須換映像或自建映像——屬拓樸層變更，不是加一張表 | [S9] |
 | C-T6 | `schema_rbac.sql` 為 init script，**只在空的 data volume 上執行** | 既有 staging 的 volume 非空，故新增 extension 與資料表在既有環境上需要明確的手動遷移步驟 | [S10] |
-| C-T7 | CI 的 Python 版本為 3.12 | 新引入的套件（LangGraph 等）必須相容此版本 | [S7] |
+| C-T7 | CI 的 Python 版本為 3.12 | 新引入的套件必須相容此版本。**修訂 1 更正**：LangGraph 已非「新引入」——`langgraph==1.2.11` 與 `langchain-openai==1.6.2` 已釘選並隨既有成本 agent 通過 CI 與部署 [V8]。本條對本 intent 的剩餘適用對象為 Redis 客戶端等尚未引入的套件 | [S7][V8] |
 | C-T8 | PostgreSQL 不支援跨 database 查詢（需 `postgres_fdw` / `dblink`） | 記憶層落點因此定為「同一 database、獨立 schema」，以保留原生 join 能力 | [F3] |
-| C-T9 | 既有 `llm_limits.py` 管的是**單次請求的 token 上限**（來自環境變數），非花費上限；repo 內不存在任何設定類端點 | 本系統目前沒有、本 intent 也不建立成本計量或 admin 設定機制 | [S11][S12][F13] |
+| C-T9 | 既有 `llm_limits.py` 管的是**單次請求的 token 上限**（來自環境變數），非花費上限；repo 內不存在任何設定類端點 | 本系統目前沒有、本 intent 也不建立**自身 LLM 花費**的計量或 admin 設定機制。注意這與 `backend/cost/` 無關——後者計的是使用者雲端架構的估價，不是本平台自身的花費 | [S11][S12][F13][V-F3] |
+| C-T10 | 成本 agent 的回覆為非同步 job（`ThreadPoolExecutor`），其 SSE 每秒輪詢 DB 送出狀態事件，**非 token 級串流** | 大腦不需要實作 token 級的巢狀串流轉送；上游 `intent-statement.md` 假設第 5 條所列的三種處置（逐字轉送／彙整後再送／並存）預設 token 流，該框架不成立。依 `team.md ## Corrections` 不回改上游，以 C-S6 向下游傳遞 | [V-F1][F15] |
+| **C-T11** | **能力 11 的 MCP 工具呼叫中，使用者 token 不得以工具參數（tool argument）傳遞。** 必須由 MCP 的傳輸層或 session 承載；工具的 JSON schema 內不得出現任何憑證欄位 | **若違反即為安全缺陷**：工具參數是 LLM 產生的，憑證因此會(1)進入模型輸入、(2)被 LangGraph checkpointer 寫進訊息歷史並持久化、(3)出現在任何記錄 tool_calls 的 log。三者皆無法事後撤回。附帶後果：MCP server 為獨立進程，是本 intent 的**第二個**新增進程邊界（第一個是 Redis），不得對外暴露、僅供同主機的大腦進程連接 | 修訂 2 [F16]=B 的硬約束。AI 於作答後指名此問題，使用者維持 B，故記為約束而非重選 |
+
+<!-- 修訂 1：C-T9 的「repo 內不存在任何設定類端點」原寫於成本能力不存在
+     時。本輪重新查證 `/api/cost/v1` 的 10 條端點，確認其中無設定類端點
+     （settings／config／budget 在 backend/cost/ 的 router 層 0 命中），
+     故主張仍成立，但依據已更新為 V-F3 而非沿用舊句。C-T10 為本輪新增。
+
+     修訂 1 存檔於 2026-09-21，對應 feasibility 的 Consolidated Summary
+     Confirmation 收據。本檔的修訂範圍：C-S2 改寫、新增 C-S5／C-S6／C-S7、
+     C-T7 更正、C-T9 重新查證、新增 C-T10。 -->
 
 ## 組織與流程約束
 
@@ -35,9 +46,22 @@ Initial Scope Signal 為範圍前提：本 intent 不改動該段已確認的產
 | ID | 約束 | 來源 |
 |---|---|---|
 | C-S1 | 作業對象採「專案 → 系統 → 架構圖」三層，本 intent 一併建立該階層 | [Q5] |
-| C-S2 | 成本／FinOps 只做交接介面與明確的「尚未提供」回覆，不實作成本計算 | [Q6][Q11] |
+| C-S2 | 大腦編排**既有的**成本／FinOps 能力（`backend/cost/`，`/api/cost/v1` 下 10 條端點），本 intent 不新建成本計量；答案就地在入口頁呈現，`/cost` 頁不加入共享工作階段範圍 | [Q12][Q14] |
+| C-S5 | 大腦呼叫成本能力一律走 HTTP 並帶使用者的 token，使既有的 `require_story_action("C1",…)` dependency 照常執行；不得以同進程呼叫 service 層繞過該授權，稽核的行為主體為使用者本人 | [F14] |
+| C-S6 | 大腦把成本 job 的狀態事件（`progress`／`completed`／`timeout`／`failed`／`heartbeat`）轉譯進自己的訊息流；不得等 job 完成才開始回覆（與已核可的「首字回應時間」指標矛盾） | [F15] |
+| C-S7 | 大腦自建獨立的 LangGraph 執行層，不改造既有已上線的 `services/langgraph_runtime.py`，兩者並行。**附帶義務**：系統內將並存兩份 OpenRouter 客戶端與兩套串流事件語意，依 `team.md ## Code Style` 的單一真實來源規則，必須有鎖住兩者一致性的驗證；具體手段不在本站預選 | [Q13] |
+
+<!-- 修訂 1：C-S2 原文為「成本／FinOps 只做交接介面與明確的『尚未提供』
+     回覆，不實作成本計算 [Q6][Q11]」，其前提已被推翻（成本能力已存在），
+     Q6／Q11 已由 Q12 取代。C-S5／C-S6／C-S7 為本輪新增。 -->
 | C-S3 | 共享工作階段涵蓋統一入口、架構圖工作區、評估頁三處，不含管理功能頁面 | [Q7] |
 | C-S4 | 雲端供應商 production 環境、production credentials、environment-specific secrets、direct production IaC、destructive cloud operations、native iOS/Android app 皆在範圍之外 | [memory:M2] |
+
+<!-- 修訂 2（2026-10-01）：新增 C-T11（MCP 的 token 不得進入 LLM context）
+     與 C-R3（併發危害使跨使用者取得他人產生的架構圖內容）。兩者皆由本輪的
+     出題前查證查出。C-T11 的編號在本輪連選錯兩次（先 C-S3 已被佔用，再 C-S8
+     但 C-S 是範圍約束而非技術約束），皆於寫入前自查更正——查佔用與查語意是
+     兩件不同的事。 -->
 
 ## 法規與隱私約束
 
@@ -45,6 +69,7 @@ Initial Scope Signal 為範圍前提：本 intent 不改動該段已確認的產
 |---|---|---|---|
 | C-R1 | 本 repo 只部署至自有 staging，無外部法規框架（PCI／HIPAA／SOC2／GDPR）適用 | 本 intent 不需要做法規對應或稽核證據包 | [memory:M2]、ADR-0007 |
 | C-R2 | episodic memory 保存 by-user 的對話歷程，須設保存期限且使用者可自行刪除自己的記憶 | 記憶層必須具備刪除介面與期限機制；刪除本身亦須留下稽核紀錄（見 ADR-0006 audit logging 面向） | [F5] |
+| **C-R3** | **能力 1 與能力 8 的實作不得建立在現行 `design_agent.py` 的模組層全域 `_progress_queue` 之上。** 必須先改為 per-key 狀態（沿用 `cost/advice_orchestrator.py:23-24` 的 `dict` ＋ `threading.Lock` 形狀，鍵為 session 或 thread_id） | **現狀為跨使用者資料暴露，已實測**：工具與入口都讀當下的模組全域，兩個併發請求共用最後一個被建立的佇列，使用者 A 收到使用者 B 產生的架構圖 XML，B 什麼都沒收到；另第 218 行先結束者設 `None` 後，另一請求的事件被靜默丟棄。兩個生產呼叫點皆可達（`agent_router.py:125`、`wa_collab_orchestrator.py:79`）。這是既有缺陷，但大腦的編排與串流會放大它——更多併發路徑進同一支 agent | 修訂 2 [F17]=A。本輪查證查出，非上游遺留 |
 
 ## Assumptions & Open Questions
 

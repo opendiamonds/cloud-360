@@ -11,6 +11,7 @@ A3 Assessment → LangGraph migration tests (Review + Lens).
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import inspect
 import json
@@ -27,12 +28,32 @@ class _FakeChunk:
         self.content = content
 
 
+def _called_names(source: str) -> list[str]:
+    """原始碼中每個呼叫點的被呼叫名稱（`f(...)` 取 `f`、`a.f(...)` 取 `f`）。"""
+    names = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            names.append(func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", ""))
+    return names
+
+
 class TestA3LangGraphMigration(unittest.TestCase):
+    # build-and-test 第三輪（待修 3）：原本斷言字串 "openrouter_chat_model" 出現在原始碼中，而它在
+    # 改走 provider-neutral 的 `chat_model` 之後只剩註解命中——斷言恆真。改為以 ast 斷言**呼叫點**
+    # 走 `chat_model` factory、且不直接建構 ChatOpenAI 或呼叫 openrouter_chat_model（M10：把呼叫點改回
+    # 直建 ChatOpenAI → 紅）。
+    def _assert_uses_chat_model_factory(self, source: str) -> None:
+        called = _called_names(source)
+        self.assertIn("chat_model", called, "模型應經 llm_provider 的 chat_model factory 建立")
+        self.assertNotIn("ChatOpenAI", called, "不得直接建構 ChatOpenAI（會繞過 LLM_PROVIDER）")
+        self.assertNotIn("openrouter_chat_model", called, "不得寫死 OpenRouter（會繞過 LLM_PROVIDER）")
+
     def test_review_agent_source_has_no_claude_sdk_import(self) -> None:
         source = (BACKEND_ROOT / "services" / "review_agent.py").read_text(encoding="utf-8")
         self.assertNotIn("claude_agent_sdk", source)
         self.assertNotIn("ClaudeSDKClient", source)
-        self.assertIn("openrouter_chat_model", source)
+        self._assert_uses_chat_model_factory(source)
         self.assertIn("langgraph", source.lower())
 
     def test_wa_lens_engine_source_has_no_claude_sdk_import(self) -> None:
@@ -40,7 +61,7 @@ class TestA3LangGraphMigration(unittest.TestCase):
         self.assertNotIn("claude_agent_sdk", source)
         self.assertNotIn("ClaudeSDKClient", source)
         self.assertNotIn("emit_lens_answers", source)
-        self.assertIn("openrouter_chat_model", source)
+        self._assert_uses_chat_model_factory(source)
 
     def test_run_review_agent_streams_chunks_via_openrouter(self) -> None:
         from services import review_agent as ra

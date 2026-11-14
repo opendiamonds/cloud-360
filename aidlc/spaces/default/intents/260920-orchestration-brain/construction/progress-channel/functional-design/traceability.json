@@ -1,0 +1,65 @@
+{
+  "stage": "functional-design",
+  "unit": "progress-channel",
+  "upstream_ids": ["AC13.1.1", "AC13.1.2", "AC13.1.3"],
+  "coverage": [
+    {
+      "id": "AC13.1.1",
+      "status": "OK",
+      "target": "BR1.1, BR1.2, BR1.3, BR5.2",
+      "note": "互斥不變量的資料層形式是 BR1.3；它成立的前提是 BR1.1（鍵為 per-request，否則照 FR13.1 字面以 thread_id 實作仍會紅燈——[US:V-01] 的 Critical）與 BR1.2（不靜默覆寫，否則前一請求已寫入的事件憑空消失）。BR5.2 承載 AC 的『且各自非空』那一半與 asyncio.Event barrier 的要求：開發者實跑顯示現狀下 A 的集合為空而 B 收到 A 的產出，只斷言互斥會在壞碼上真空成立。驗證形式見 functional-spec.md WF-2。"
+    },
+    {
+      "id": "AC13.1.2",
+      "status": "OK",
+      "target": "BR2.1, BR2.2, BR2.4",
+      "note": "AC 斷言『仍收到自己的事件』。BR2.4 是直接承載者——close 只移除自己的鍵，對不存在的鍵 drain 回空迭代器而非崩潰（現狀是 design_agent.py:163 對 None 呼叫 get_nowait() 拋 AttributeError）。BR2.1 保證 close 只作用於單一鍵，BR2.2 的冪等使 finally 的重複關閉不會拋出第二個例外覆蓋原始失敗。驗證形式見 functional-spec.md WF-3。注意此 AC 已更正 FR13.3 的錯誤失敗描述（原寫『靜默丟棄』，實測是崩潰）。"
+    },
+    {
+      "id": "AC13.1.3",
+      "status": "OK",
+      "target": "BR3.1, BR3.2",
+      "note": "BR3.1 是直接承載者：對外錯誤為固定訊息、不含例外原文。BR3.2 封住 publish 這一側的同一個面——到不存在的通道時記 log 並丟棄，log 不含 content（xml 可能是使用者的架構圖內容）。此 AC 為 user-stories 本輪新發現的第二個 ADR-0006 面，FR13 原稿完全沒提。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR2.3",
+      "status": "OK",
+      "target": "AC13.1.2 的異常路徑延伸；本站 [Q2]=A 新增",
+      "note": "被中途放棄的請求結束後鍵不得殘留。它不是任何 AC 的字面要求——AC13.1.2 管的是正常結束的那一個不弄壞另一個。本條管的是請求根本沒跑完的情形（客戶端斷線）。[Q2]=A 明確要求以一條測試承載它而不是靠推論：Starlette 關閉回應 generator 使 finally 執行是推論，若 generator 被 GC 而非顯式 aclose()，finally 的執行時機不保證，而洩漏是安靜的。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "OK",
+      "target": "ADR-014 的另一半；本站 [Q4]=A 新增",
+      "note": "單一通道的事件數上界與丟棄優先序。上游只談了跨請求的無上界成長（鍵不刪，ADR-014），沒談單一請求內的成長。無對應 AC——它要防的是一個尚未被觀察到的失敗模式（現狀 asyncio.Queue() 無上界）。丟棄優先序（progress 可丟、xml 與 error 永不丟）是本條的實質內容：丟掉 xml 會讓使用者看到一次成功但沒有圖的產圖，丟掉 error 會讓一次失敗無聲無息。上界的數值未定案，見 OQ-P1。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "OK",
+      "target": "functional-spec.md §五 audit logging 第 ② 項；construction.md 的 silent failures are not acceptable",
+      "note": "因容量丟棄的事件須留下 WARN log。無對應 AC。它是 BR4.1 的連帶——無聲丟棄使『使用者說少看到東西』這類回報無法被查證。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "OK",
+      "target": "contract-summary.md K-18 completion_criterion；US13 DoD；[CD4]=A",
+      "note": "被取代的五個既有符號不得以舊形式存在（design_agent.py:31 的 _progress_queue、:32 的 _last_xml、:218 設 None 三者刪除；:160 的 _drain_progress 改寫；wa_collab_orchestrator.py:79 補傳鍵）。無對應 AC，因為它不是一個外部可觀察的系統行為而是完成判準的一半——舊符號留著即等於新通道只是多了一條路徑而非取代，錯送路徑仍然可達。這是一個可 grep 的條件，不需判斷。design_agent.py:169 的 MemorySaver() 刻意保留，本單元不改它。"
+    },
+    {
+      "id": "BR1.1",
+      "status": "OK",
+      "target": "AC13.1.1（已於 coverage 列計）",
+      "note": "同時獨立承載 contract-summary.md K-18 的 key_contract：禁 thread_id（agent_router.py:125 為 per-user，且 design_agent.py:198 證實它就是 LangGraph checkpointer 的 thread 鍵——改成 per-request 等於關掉對話記憶）、禁不存在的 session 參數。新鍵與 thread_id 並存且語意分離。"
+    }
+  ],
+  "deferred": [
+    {
+      "id": "FR13.4",
+      "status": "Deferred",
+      "target": "OQ-P2，落點 code-generation（ALWAYS，已查 stage-graph.json，無需轉移目標）",
+      "note": "wa_collab_orchestrator.py:79 不傳 thread_id 使所有 A4 共編使用者共用 default-thread。上游兩位 agent 已獨立複驗為真（stories.md 逐字『[V-03]／[Q-09] 證實 FR13.4 為真』），且 user-stories 的追溯表已由 DEFERRED 更正為 OK（target US13.1）。本單元的 BR5.1 只要求該行補傳 per-request 的進度鍵，不夾帶 thread_id 的分區決定——那牽涉 design_agent.py:169 的 MemorySaver() 模組層單例與對話記憶的語意，本站無依據定案。兩個缺陷在同一行程式上，刻意分開。"
+    }
+  ]
+}

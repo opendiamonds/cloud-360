@@ -3,6 +3,7 @@ import logging
 import bcrypt
 from env_bootstrap import load_backend_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from models import Base, User
 
@@ -20,15 +21,87 @@ if app_env == "local":
 
 # Database configuration
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/cloud360"
+    "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/cloud360"
 )
 
+# 裸 `postgresql://` 的相容改寫（引入於 ut 的 4194cd2）。**目標驅動由 psycopg2
+# 改為 psycopg v3**：本 repo 的 requirements.txt 裝的是 `psycopg[binary]`，
+# psycopg2 已不在相依裡，所以原本改寫成 `postgresql+psycopg2://` 會在乾淨環境
+# 以 `ModuleNotFoundError: No module named 'psycopg2'` 失敗（已於乾淨 venv 實測）。
+# 改寫的用意——讓忘記加後綴的環境也能啟動——原樣保留，只是指向實際裝的那一個。
+# 正規寫法仍是在 DATABASE_URL 直接寫 `postgresql+psycopg://`（六處設定皆已如此），
+# 這段只是安全網，不是主路徑。
 db_url = DATABASE_URL
 if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 engine = create_engine(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# ---------------------------------------------------------------------------
+# 記憶專用的資料庫連線（合併前必修第 20／29 列，2026-10-31 裁決「SQL 建角色，部署另設密碼」）
+#
+# `schema_rbac.sql` 的 I) 區塊建立 `cloud360_memory` 角色（無密碼），只授與 `memory`
+# schema 的權限並撤銷其對 `public` 表的權限；部署流程再以 `MEMORY_DB_PASSWORD` 設定
+# 密碼。本段以「主連線的主機與資料庫 ＋ 該角色與密碼」組出第二條連線。
+#
+# **未設定 `MEMORY_DB_PASSWORD`（本機開發的預設）或主連線不是 PostgreSQL（測試的
+# SQLite）時，記憶專用連線不存在**：`memory_db_boundary_enabled()` 回 False，
+# `get_memory_session()` 直接拋 `MemoryDatabaseNotConfigured`。**本函式不會**退回擁有者
+# 帳號——那會讓呼叫端以為邊界生效而實際上沒有。記憶表的存取點一律經
+# `services/memory_router.py` 的 `memory_session_source`（HTTP：`get_memory_db`；WS 閘道、
+# 編排器、刪帳號計數：`memory_session_scope`）決定走本段的 session，或在本機
+# （`LOCAL_APP_ENVS`）明示退回主連線並 WARNING、在其他環境拒絕（合併前必修第 48／52 列）。
+# ---------------------------------------------------------------------------
+
+MEMORY_DB_ROLE = "cloud360_memory"
+
+
+class MemoryDatabaseNotConfigured(RuntimeError):
+    """記憶專用連線未設定（`MEMORY_DB_PASSWORD` 未設，或主連線不是 PostgreSQL）。"""
+
+
+def build_memory_database_url(database_url: str, password: str | None) -> str | None:
+    """以主連線的主機、埠與資料庫 ＋ `cloud360_memory` 與密碼組出記憶專用連線字串。
+
+    回 `None` 的兩種情形：密碼為空（未設定），或主連線不是 PostgreSQL。純函式，
+    不讀環境變數、不連線（`tests/test_memory_db_role.py` 直接驗它）。
+    """
+    if not password:
+        return None
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql"):
+        return None
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg")
+    return url.set(username=MEMORY_DB_ROLE, password=password).render_as_string(
+        hide_password=False
+    )
+
+
+_memory_url = build_memory_database_url(db_url, os.environ.get("MEMORY_DB_PASSWORD", ""))
+# create_engine 不會連線；第一次取 session 才會。
+memory_engine = create_engine(_memory_url) if _memory_url else None
+MemorySessionLocal = (
+    sessionmaker(autocommit=False, autoflush=False, bind=memory_engine)
+    if memory_engine is not None
+    else None
+)
+
+
+def memory_db_boundary_enabled() -> bool:
+    """記憶專用連線是否已設定（不代表資料庫端的角色與密碼已就緒，只代表本程式會用它）。"""
+    return MemorySessionLocal is not None
+
+
+def get_memory_session():
+    """取得一個以 `cloud360_memory` 連線的 session。未設定時拋 `MemoryDatabaseNotConfigured`。"""
+    if MemorySessionLocal is None:
+        raise MemoryDatabaseNotConfigured(
+            "記憶專用資料庫連線未設定：MEMORY_DB_PASSWORD 為空或主連線不是 PostgreSQL。"
+            "不會退回擁有者帳號。"
+        )
+    return MemorySessionLocal()
 
 LOCAL_APP_ENVS = {"local", "test", "ci"}
 
@@ -77,6 +150,16 @@ def get_db():
 
 def init_db():
     logger.info("正在初始化資料庫與資料表...")
+    if not memory_db_boundary_enabled():
+        # 不是錯誤（本機開發與 SQLite 測試的預設），但必須看得見：此時沒有任何程式以
+        # 記憶專用角色連線（合併前必修第 20 列）。
+        logger.warning(
+            "記憶專用資料庫連線未設定（MEMORY_DB_PASSWORD 為空或非 PostgreSQL）——"
+            "以 cloud360_memory 角色連線的程式路徑不可用"
+        )
+    # U1：**必須早於 create_all**，方向與下面六支 _ensure_* 相反。理由見該函式的
+    # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
+    _ensure_vector_extension()
     Base.metadata.create_all(bind=engine)
     # A4／J5：既有 DB 補欄位／新表（create_all 不會 ALTER 舊表）
     _ensure_a4_schema()
@@ -184,6 +267,41 @@ def init_db():
         db.rollback()
     finally:
         db.close()
+
+
+def _ensure_vector_extension():
+    """確保 pgvector 擴充存在（U1 brain-infra／`NFR6.2`、`NFR6.2a`）。
+
+    契約（缺一不可）：
+
+    1. **呼叫點必須早於 `Base.metadata.create_all()`** —— 這是本檔 `_ensure_*`
+       家族的**唯一例外**，其餘六支全在 `create_all()` 之後。它們補的是
+       `create_all` 不會做的 `ALTER`；本支補的是 `create_all` **本身的前置
+       條件**：`vector` 型別不存在時，任何宣告 `vector` 欄位的表在
+       `create_all()` 裡就會以 `type "vector" does not exist` 失敗，而
+       `init_db()` 由 `main.py` 的 startup 事件同步呼叫 —— 那是**啟動失敗**，
+       uvicorn 不會進入服務狀態，`restart: unless-stopped` 之下變成重啟迴圈。
+    2. **涵蓋的是「既有非空 data volume」那條路徑。** 空 volume 初始化與本機
+       `psql` 兩條路徑由 `schema_rbac.sql` 的同一條敘述涵蓋（它在 db 容器的
+       initdb 階段執行，必然早於 backend 啟動）。兩者互補、不是二選一。
+    3. **失敗不在此拋出。** 沒有 pgvector 的伺服器上這裡只記 warning，真正的
+       大聲失敗留給下游的 `create_all()`（等 U5 的 `vector(1024)` 欄位落地後
+       它必然失敗，且錯誤訊息直接指出缺的是什麼）。在此拋出會讓**沒有任何
+       vector 欄位**的現況也無法啟動，而那是一個今天不存在的問題。
+       測試環境（in-memory SQLite）也走這條路：`CREATE EXTENSION` 在 SQLite
+       是語法錯誤，吞掉它才讓 `init_db()` 在測試下可執行。
+    4. **冪等** —— `IF NOT EXISTS`，重跑無副作用；與 `schema_rbac.sql` 那一處
+       同時生效亦無副作用。
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    except Exception as e:
+        # 不靜默：留下可搜尋的 warning。真正的阻斷由 create_all() 承擔（見 3.）。
+        logger.warning("vector extension 補丁略過/失敗: %s", e)
+    logger.info("vector extension 檢查完成")
 
 
 def _ensure_a4_schema():
@@ -345,19 +463,25 @@ def _ensure_cost_schema():
         ("pricing_cache", "archive_pricing_cache"),
         ("cost_audit_event", "archive_cost_audit_event"),
     )
+    # 每一句各包一個 SAVEPOINT（`begin_nested`）：PostgreSQL 上任一句失敗會讓整個交易進入
+    # aborted 狀態，未隔離時後續每一句都以 InFailedSqlTransaction 失敗——全新庫上「constraint
+    # 已是 archive_* 名稱」的預期失敗曾因此讓 index rename 記一行誤導的 WARNING（build-and-test
+    # 待修 9）。savepoint 讓預期中的失敗只回滾那一句。
     with engine.begin() as conn:
         for live, archive in renames:
             try:
                 # PostgreSQL / SQLite：live 存在且 archive 不存在時才 rename
-                conn.execute(
-                    text(
-                        f"ALTER TABLE IF EXISTS {live} RENAME TO {archive}"
+                with conn.begin_nested():
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE IF EXISTS {live} RENAME TO {archive}"
+                        )
                     )
-                )
             except Exception as e:
                 # SQLite 舊版可能不支援 IF EXISTS；再試無 IF EXISTS
                 try:
-                    conn.execute(text(f"ALTER TABLE {live} RENAME TO {archive}"))
+                    with conn.begin_nested():
+                        conn.execute(text(f"ALTER TABLE {live} RENAME TO {archive}"))
                 except Exception as e2:
                     logger.warning(
                         "Cost schema rename %s→%s 略過/失敗: %s / %s",
@@ -367,21 +491,24 @@ def _ensure_cost_schema():
                         e2,
                     )
         try:
-            conn.execute(
-                text(
-                    "ALTER TABLE IF EXISTS archive_cost_audit_event "
-                    "RENAME CONSTRAINT cost_audit_event_pkey TO archive_cost_audit_event_pkey"
+            # 全新庫上 constraint 已是 archive_* 名稱，失敗是預期中的；savepoint 隔離它。
+            with conn.begin_nested():
+                conn.execute(
+                    text(
+                        "ALTER TABLE IF EXISTS archive_cost_audit_event "
+                        "RENAME CONSTRAINT cost_audit_event_pkey TO archive_cost_audit_event_pkey"
+                    )
                 )
-            )
         except Exception:
             pass
         try:
-            conn.execute(
-                text(
-                    "ALTER INDEX IF EXISTS ix_cost_audit_event_diagram_created "
-                    "RENAME TO ix_archive_cost_audit_event_diagram_created"
+            with conn.begin_nested():
+                conn.execute(
+                    text(
+                        "ALTER INDEX IF EXISTS ix_cost_audit_event_diagram_created "
+                        "RENAME TO ix_archive_cost_audit_event_diagram_created"
+                    )
                 )
-            )
         except Exception as e:
             logger.warning("Cost schema index rename 略過/失敗: %s", e)
     logger.info("Cost schema 退場 rename 檢查完成（archive_*；應用不得讀寫）")

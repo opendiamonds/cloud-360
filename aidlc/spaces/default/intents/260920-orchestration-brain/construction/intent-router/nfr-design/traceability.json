@@ -1,0 +1,297 @@
+{
+  "stage": "nfr-design",
+  "unit": "intent-router",
+  "upstream_ids": [
+    "NFR1.60",
+    "NFR3.60",
+    "NFR3.61",
+    "NFR3.62",
+    "NFR3.63",
+    "NFR3.64",
+    "NFR3.65",
+    "NFR3.66",
+    "NFR3.67",
+    "NFR3.68",
+    "NFR3.69",
+    "NFR3.70",
+    "NFR3.71",
+    "NFR3.72",
+    "NFR3.73",
+    "NFR3.74",
+    "NFR4.70",
+    "NFR6.60",
+    "NFR7.62",
+    "NFR8.60",
+    "NFR8.61",
+    "NFR9.60",
+    "NFR9.61",
+    "NFR9.62",
+    "NFR10.60",
+    "NFR10.61",
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "SEC-5",
+    "NFR4.60",
+    "NFR4.65",
+    "NFR7.60",
+    "NFR7.63"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.60",
+      "status": "OK",
+      "target": "observability-design.md §二：反問率指標 ＋「儀表板不得單獨呈現準確率」的設計約束",
+      "note": "反問率須與準確率同時呈現。設計落法不只是「算一個比率」——observability-design.md §二明訂兩者必須同一張圖、同一時間軸，因為單獨呈現準確率會讓「把門檻調到 0.99」這種改動看起來像改善。RoutingObservation 的 can_single_out 欄位是它的分子來源。"
+    },
+    {
+      "id": "NFR3.60",
+      "status": "OK",
+      "target": "performance-design.md §二 的 P-1～P-4（最少上下文／單次合併／輸出長度上界／連線重用）",
+      "note": "P50 ≤ 800 ms 的四個做法。P-4 另附一段界線說明：NFR3.67 的字面提到「連線池」，但它禁的是把行程內共享可變狀態當擴展手段；HTTP 連線重用不持有請求間語意狀態。若該界線被讀成禁止連線重用，每輪會多一次 TLS 握手，直接吃掉預算。"
+    },
+    {
+      "id": "NFR3.61",
+      "status": "OK",
+      "target": "reliability-design.md §一 的 LlmUnavailable 型別 ＋ L3 model-port 的逾時設定",
+      "note": "硬逾時 5 秒。設計面的增量是把它接到一個具名例外型別而非訊息字串，使 NFR3.74 的分型計數成立。"
+    },
+    {
+      "id": "NFR3.62",
+      "status": "OK",
+      "target": "performance-design.md §一（單一 tool call 帶回全部槽位）＋ §二 P-2",
+      "note": "每輪最多 1 次模型呼叫。這條直接決定了 [D1] 的題目本身——N 個槽位必須在同一次回應裡取得，不能一槽一呼叫。"
+    },
+    {
+      "id": "NFR3.63",
+      "status": "OK",
+      "target": "reliability-design.md §三（不設 circuit breaker 的判定）",
+      "note": "重試 0 次。設計面確認：零重試讓 circuit breaker 要防的重試風暴不存在，是不建它的三個理由之一。"
+    },
+    {
+      "id": "NFR3.64",
+      "status": "OK",
+      "target": "tech-stack-decisions.md 的 TS-4（五個環境變數）＋ reliability-design.md §四（啟動期驗設定）",
+      "note": "四個數值全部可設定。設計落法：啟動期驗設定（threshold 缺值即失敗，其餘取預設記 WARN），執行期驗流量——刻意不做中間那種會說謊的健康探測。"
+    },
+    {
+      "id": "NFR3.65",
+      "status": "OK",
+      "target": "logical-components.md §二（L5 predicate 純函式）＋ performance-design.md §三（結構性上界）",
+      "note": "述詞耗時不列入預算。設計面不設門檻，但設**結構性上界**：每槽位候選數 ≤ 8（schema maxItems）、槽位數 ≤ 4。後者是本站新定的——slot 是模型填的整數，沒有上界時一個失控回應可宣告 1000 個槽位而 U12 會照建。"
+    },
+    {
+      "id": "NFR3.66",
+      "status": "OK",
+      "target": "scalability-design.md §二（無狀態 ⇒ 不需黏著性）＋ §一 的 S-1～S-3",
+      "note": "併發下仍須滿足 NFR3.60。設計面的保證來自無狀態：兩個 backend 行程服務同一使用者的不同輪次不需要黏著性。S-3 的 AST 結構斷言是讓這個性質在第三十天還成立的機制。"
+    },
+    {
+      "id": "NFR3.67",
+      "status": "OK",
+      "target": "scalability-design.md §一（S-1 模組層只允許不可變綁定、S-2 的唯一例外、S-3 結構斷言）",
+      "note": "禁止行程內共享可變狀態。設計面把它從紀律變成可機械檢查：測試掃模組層 AST。S-2 明記唯一例外（client 連線重用）並要求在程式碼裡註記為例外，否則下一個人會以它為先例。"
+    },
+    {
+      "id": "NFR3.68",
+      "status": "OK",
+      "target": "reliability-design.md §一（四種失敗型別）＋ §五（單一降級路徑）",
+      "note": "大聲失敗，不降級猜測。設計面的關鍵是四種失敗在型別上分得開——使用者看到同一種訊息，但維運必須分得出「供應商掛了」與「我們的 prompt 壞了」。"
+    },
+    {
+      "id": "NFR3.69",
+      "status": "OK",
+      "target": "reliability-design.md §二 的 V-1（candidates 非空）",
+      "note": "空清單是失敗不是反問。"
+    },
+    {
+      "id": "NFR3.70",
+      "status": "OK",
+      "target": "reliability-design.md §二 的 V-2／V-3／V-4（capability 列舉、slot 自 0 連續且 ≤3、組內 rank 自 1 連續唯一）",
+      "note": "schema 不合即失敗。**V-3／V-4 必須是失敗而非靜默修補**——補齊或截斷正好是審查 R-01 查出的那個失敗模式（靜默丟掉意圖）。對照 V-5（分數全有全無）刻意**不是**失敗而是降級到 BR3.3 分支，那是 [IR1]=A 的設計收益。"
+    },
+    {
+      "id": "NFR3.71",
+      "status": "OK",
+      "target": "logical-components.md §二（L5 為 PBT 落點）＋ reliability-design.md §一",
+      "note": "述詞永不失敗。logical-components.md §二的五層性質表說明了為什麼 PBT 落點是 L5 而不是整個單元：它是唯一一個輸入空間可被生成、且沒有 I/O 的層。"
+    },
+    {
+      "id": "NFR3.72",
+      "status": "OK",
+      "target": "observability-design.md §一 的 RoutingObservation.elapsed_ms ＋ §二",
+      "note": "classify 耗時 P50／P95 可量測。另見 performance-design.md §四：在 classify 進出點各打一個計時標記，使交接膠水時間可從端到端耗時中減出來——預算沒分配，但可量測。"
+    },
+    {
+      "id": "NFR3.73",
+      "status": "OK",
+      "target": "observability-design.md §二（槽位數分佈）",
+      "note": "len(slots) 分佈可量測。它回答的問題是「FR5.1 的多意圖能力在線上真的被觸發過嗎」——BR4.1／BR4.4／BR4.5 整組在線上永遠是 1 個槽位時就是死碼，而沒有這個分佈沒有人會發現。與 NFR7.62 的可達性檢查是同一種警覺。"
+    },
+    {
+      "id": "NFR3.74",
+      "status": "OK",
+      "target": "observability-design.md §二（失敗率按型別分組）＋ reliability-design.md §一 的四型別",
+      "note": "分類失敗率按錯誤型別分開計數。它同時是 reliability-design.md §三 拒絕 circuit breaker 之後的替代方案：供應商系統性故障會在 LlmUnavailable 的曲線上一眼看出。"
+    },
+    {
+      "id": "NFR4.70",
+      "status": "OK",
+      "target": "scalability-design.md §一（S-1～S-3）＋ logical-components.md §三（失敗域表）",
+      "note": "本單元無狀態，重啟後無東西可還原。設計面把它寫成可檢查的性質而非現況描述——它會被日常開發自然侵蝕（加一個計數器、加一個 memo 都很合理）。"
+    },
+    {
+      "id": "NFR6.60",
+      "status": "OK",
+      "target": "security-design.md §二（只 import MemoryFacade 的結構斷言）＋ logical-components.md §四（共享資源表）",
+      "note": "不繞過 MemoryFacade。設計落法是禁 import 清單的結構斷言，與 SEC-1 同形。"
+    },
+    {
+      "id": "NFR7.62",
+      "status": "OK",
+      "target": "security-design.md §二（_REFERENT_MEMORY_KINDS 模組層常數）",
+      "note": "kinds 不得含情節記憶。**設計上的關鍵是寫成模組層常數而非預設參數值**——預設值可以被覆寫，常數不行；測試斷言 search 實際被呼叫時的 kinds 引數等於該常數。**這是現行防護**（U8 的 POST /api/memory/records 已可建 kind=episodic），code-generation 第一輪就要有這個斷言。"
+    },
+    {
+      "id": "NFR8.60",
+      "status": "OK",
+      "target": "reliability-design.md §四（啟動期驗設定）＋ tech-stack-decisions.md 的 TS-4 缺值行為表",
+      "note": "新增環境變數缺值時行為必須明確。threshold 缺值即啟動失敗（BR3.4 逐字「缺值不得以預設值靜默啟動」），其餘四個取預設並記 WARN。"
+    },
+    {
+      "id": "NFR8.61",
+      "status": "OK",
+      "target": "logical-components.md §五 第 2 項（三處同步義務與其機械檢查）",
+      "note": "三處同步（backend/.env.example、deploy/.env.example、deploy/render-env.sh），由 scripts/validate_env_contract.py 擋。"
+    },
+    {
+      "id": "NFR9.60",
+      "status": "OK",
+      "target": "security-design.md §二 的「prompt 組裝函式不接受整個 BrainSession」＋ performance-design.md §二 P-1",
+      "note": "最少上下文（同時是 ADR-0006 encryption 面的資料外送最小化）。**設計上的關鍵是用型別擋住人**：組裝函式只接受（作業對象名稱、最後 K 則歷程、能力清單、使用者文字），拿不到整個 session 就送不出去——靠「拿不到」比靠「記得不要送」可靠。"
+    },
+    {
+      "id": "NFR9.61",
+      "status": "OK",
+      "target": "performance-design.md §二 P-1／P-3 ＋ scalability-design.md §三",
+      "note": "成本與歷程長度線性相關，且 Jev context 32000 是硬上界。設計落法：只帶最後 K 則（K 遠小於 200）、對 candidates 設 maxItems、對 label 設長度上界。"
+    },
+    {
+      "id": "NFR9.62",
+      "status": "OK",
+      "target": "scalability-design.md §四（429 即 LlmUnavailable，不重試不排隊）",
+      "note": "達到供應商速率限制時大聲失敗。"
+    },
+    {
+      "id": "NFR10.60",
+      "status": "OK",
+      "target": "security-design.md §四（router_chat_model factory 讀 BRAIN_ROUTER_MODEL）＋ tech-stack-decisions.md 的 TS-2",
+      "note": "模型由獨立環境變數決定、可替換。設計面另帶出一個對共用層的要求：openrouter_chat_model 目前 temperature 預設 0.0 會被無條件傳下去，要讓它可省略需改簽章，而該改動影響既有呼叫者（A1／A3／C1），已記為交接事項。"
+    },
+    {
+      "id": "NFR10.61",
+      "status": "OK",
+      "target": "tech-stack-decisions.md 的 TS-2（換模型必須重跑標註集）",
+      "note": "流程義務，落 build-and-test 的核可關卡。本站無設計面增量，但 observability-design.md §五 補了一個排序建議：先把五個訊號接到既有 DEMO 計分器，換 Jev 那天才有對照組。"
+    },
+    {
+      "id": "SEC-1",
+      "status": "OK",
+      "target": "security-design.md §二（禁 import 清單的結構斷言）",
+      "note": "principal 由參數傳入。設計落法使它可被機械檢查，不只靠 review。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "security-design.md §二 ＋ §一 的信任邊界圖",
+      "note": "不暴露端點、出站只經 langgraph_runtime。信任邊界圖把三條邊的性質分開畫——混在一起談會漏掉第三條（出站到 OpenRouter，本 intent 唯一一條把使用者自由文字送出平台的新路徑）。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "security-design.md §二 的 RoutingObservation frozen dataclass（白名單寫成型別）",
+      "note": "日誌不得含 text／label／referent。**設計上的關鍵是白名單寫成型別而非黑名單靠紀律**：text 不在那個 dataclass 裡，就沒有一條路徑能把它記出去。referent 必須在禁止側而它最容易被漏——它看起來像識別碼，實際上是解析使用者句子得到的系統名或圖名。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "OK",
+      "target": "security-design.md §二（prompt_guard 命中事件沿用同一型別，error_kind=prompt_guard_hit）",
+      "note": "命中可觀測但紀錄不含輸入。它必須可被計數，但計數不需要知道他說了什麼。"
+    },
+    {
+      "id": "SEC-5",
+      "status": "OK",
+      "target": "security-design.md §二 的欄位白名單表 ＋ observability-design.md §一",
+      "note": "日誌欄位白名單。與 SEC-3 共用同一個型別——分成兩套會讓「日誌記了但指標沒算」成為可能。"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "N/A",
+      "target": "已於 nfr-requirements 修訂 1 改號為 NFR4.70（審查 R-01，Critical）——本單元不再擁有此 ID",
+      "note": "**它仍出現在上游檔案裡，是刻意的修訂紀錄，不是殘留。** performance-requirements.md:7/:9 與 security-requirements.md:158 以它說明碰撞的經過（session-store 已擁有 NFR4.60–.65，而我的碰撞檢查 regex 列舉分支時漏了 4）。列此 N/A 是為了讓追溯 sensor 的掃描結果與事實一致——sensor 看得到檔案裡的 ID，分不出「本單元定義的」與「修訂紀錄提到的」。"
+    },
+    {
+      "id": "NFR4.65",
+      "status": "N/A",
+      "target": "session-store 單元擁有的 ID（NFR4.60–.65 整段），非本單元",
+      "note": "出現在 performance-requirements.md:7 與 security-requirements.md:158 的碰撞說明裡（「session-store 已擁有 NFR4.60–NFR4.65」）。它從來不是本單元的 ID。"
+    },
+    {
+      "id": "NFR7.60",
+      "status": "N/A",
+      "target": "已於 nfr-requirements 修訂 1 改號為 SEC-3（審查 R-03，Major）——本單元不再擁有此 ID",
+      "note": "**同樣是刻意的修訂紀錄。** security-requirements.md:44 與 :160 以它說明為什麼日誌禁令不能掛在 NFR7 之下（NFR7 的逐字主體是 episodic memory 的保存 90 天與刪除稽核，推不出日誌內容限制）。**附帶：本站跑 sensor 時另外抓到一處真殘留**——security-requirements.md:137 的 STRIDE Spoofing 列仍寫 NFR6.61（應為 SEC-1），已就地更正。那一處不是修訂紀錄，是改號時漏掉的活引用。"
+    },
+    {
+      "id": "NFR7.63",
+      "status": "N/A",
+      "target": "已於 nfr-requirements 修訂 1 改號為 SEC-5（審查 R-03，Major）——本單元不再擁有此 ID",
+      "note": "**第四個歷史 ID，而我原本只處理了三個（審查 R-07）。** 它以完整型式出現在 observability-requirements.md:27 的改號紀錄裡（NFR7.61 只以縮寫「.61」出現，從未以完整字串單獨出現，故不會被逐字掃描當成獨立 ID）。處置形狀與 NFR4.60／NFR4.65／NFR7.60 完全相同。**漏掉它的原因與審查 R-01 同形**：我列舉了要宣告的 ID，而列舉本身不全——這是本 session 第四次同形失誤（見 nfr-design/memory.md）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "D-1",
+      "status": "N/A",
+      "target": "本站新定 → U11 的 code-generation（3.5，ALWAYS）",
+      "note": "**U8 不可用時降級而非失敗。** 這是本檔唯一一處與「一律大聲失敗」不同的判斷：記憶在本單元是**加分項**（BR5.1 逐字說指涉詞解析讀的是 SessionContext 的作業對象與該段歷程），因為拿不到術語解釋就讓整輪失敗，是用使用者體驗換一個不存在的正確性。**但降級必須被觀測**（RoutingObservation 需加 memory_degraded: bool），否則「記憶永遠取不到」會變成無聲的長期降級——正是 project.md 記過的 N8N_USER 那類失敗。上游沒有說，故寫明而非留給實作者猜。"
+    },
+    {
+      "id": "D-2",
+      "status": "N/A",
+      "target": "本站新定 → U11 的 code-generation",
+      "note": "**len(slots) 上界 4 與每槽位 candidates maxItems 8。** slot 是模型填的整數，沒有上界時一個惡意或失控的回應可宣告 1000 個槽位而 U12 會據此建 1000 個工作項。上界 4 的依據是 FR5.1 的官方例子是 2 個意圖。**超過即走 BR2.4 失敗路徑，不截斷**——截斷會靜默丟掉意圖，正是審查 R-01 查出的失敗模式。"
+    },
+    {
+      "id": "D-3",
+      "status": "N/A",
+      "target": "本站新定 → U11 的 code-generation（第一個需要它的人）；影響既有呼叫者 A1／A3／C1",
+      "note": "**openrouter_chat_model 的 temperature 需可省略。** 現行簽章 temperature: float = 0.0 會被無條件傳給 ChatOpenAI，而 Jev 的 supported_parameters 為空陣列（TS-3a）。建議改為 float | None = 0.0，None 時不放進 kwargs。**驗收條件是不改變既有呼叫者行為**（預設仍 0.0，只多一個 None 的語意）。"
+    },
+    {
+      "id": "D-4",
+      "status": "N/A",
+      "target": "本站新定 → build-and-test（3.6，ALWAYS）",
+      "note": "**本單元對 U8 產生每輪一次的 search 讀取負載**，與模型呼叫同量級，且 limit 由本單元決定（本站定 5）。本單元自己沒有擴展瓶頸，但它會對別人產生負載——不寫下來，U8 的容量規劃會少掉一個來源。U8 的 nfr-requirements 已完成，故記為 build-and-test 的交接（量測時把本單元的 search 納入 U8 的負載母體）。"
+    },
+    {
+      "id": "D-5",
+      "status": "N/A",
+      "target": "本站新定（排序建議）→ U11 的 code-generation",
+      "note": "**先有觀測、再換模型。** backend/services/brain_router.py 的 DEMO _classify 已回傳「依信心值排序的候選清單」，資料形狀與本單元設計一致。先把五個訊號接到它，換 Jev 那天才有基準可比——而 NFR1 的校正程序需要的正是對照組。"
+    },
+    {
+      "id": "D-6",
+      "status": "N/A",
+      "target": "本站新定 → Infrastructure Design（下一站）",
+      "note": "**出站連線的 egress 規則零增量需要被確認而非假設。** 既有 stack 已有對外出站（A1／A3／C1 都打 OpenRouter），故推論上零增量——但那是推論。列為下一站的查證項。"
+    },
+    {
+      "id": "D-7",
+      "status": "N/A",
+      "target": "本站暫定、待覆核 → U11 的 code-generation（實作時以真實使用型態覆核）＋ build-and-test（標註集的槽位數分佈尾端）",
+      "note": "**len(slots) 上界 4 由「已定案」降為「暫定」（審查 R-08）。**「要有上界」是確定的（沒有上界時一個失控回應可宣告 1000 個槽位而 U12 會照建）；「取 4」只是把 FR5.1 的唯一官方例子（2）乘以一個未寫明的安全係數。超界的後果是**整輪失敗**，而使用者一句話列五件事並不難想像。NFR3.73（槽位數分佈）正是覆核它的工具。"
+    }
+  ]
+}

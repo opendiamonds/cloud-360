@@ -1,0 +1,44 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "project-pages-ui",
+  "upstream_ids": [
+    "NFR8.100", "NFR11.100", "NFR11.101", "NFR11.102",
+    "PPN-01", "PPN-02", "PPN-03", "PPN-04", "PPN-05", "PPN-06", "PPN-07",
+    "PPN-11", "PPN-12", "PPN-13", "PPN-14", "PPN-14a", "PPN-14b", "PPN-14c", "PPN-15", "PPN-16", "PPN-17", "PPN-18",
+    "PPN-21", "PPN-22", "PPN-23", "PPN-24", "PPN-25"
+  ],
+  "coverage": [
+    { "id": "NFR8.100", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/infrastructure-specification.md", "note": "§一 環境變數／Secret 列：零新增，render-env.sh 與 deploy/.env.example 同步義務為空集合；§三 env contract 不觸發" },
+    { "id": "NFR11.100", "status": "N/A", "target": "應用層導覽行為，無基礎設施面；驗證載體為 ui-regression，見 construction/project-pages-ui/infrastructure-design/cicd-pipeline.md §一" },
+    { "id": "NFR11.101", "status": "N/A", "target": "同 NFR11.100；量測在 e2e，見 cicd-pipeline.md §一" },
+    { "id": "NFR11.102", "status": "N/A", "target": "同 NFR11.100；量測在 e2e，見 cicd-pipeline.md §一" },
+    { "id": "PPN-01", "status": "N/A", "target": "前端佇列常數，無基礎設施面；連線池不改的部署層判定見 construction/project-pages-ui/infrastructure-design/infrastructure-specification.md §一 資源規模列" },
+    { "id": "PPN-02", "status": "N/A", "target": "前端佇列順序，無基礎設施面；e2e 見 cicd-pipeline.md §一" },
+    { "id": "PPN-03", "status": "N/A", "target": "前端載入子狀態，無基礎設施面" },
+    { "id": "PPN-04", "status": "N/A", "target": "前端卸載行為，無基礎設施面" },
+    { "id": "PPN-05", "status": "N/A", "target": "前端切籤行為，無基礎設施面" },
+    { "id": "PPN-06", "status": "N/A", "target": "伺服器語句數由 backend unittest 驗證，無部署環境指標；CI 執行位置見 cicd-pipeline.md §一 Run unit tests 列" },
+    { "id": "PPN-07", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/infrastructure-specification.md", "note": "§二 PostgreSQL 列、§二之一 三種資料庫狀態的到達路徑與鎖／可重跑性、§二之二 索引回滾；cicd-pipeline.md §二 部署後重跑遷移腳本與 pg_indexes 驗證、§四 第 6、7、10 列" },
+    { "id": "PPN-11", "status": "N/A", "target": "應用層授權（缺 K2 → 403），無基礎設施 IAM 面；infrastructure-specification.md §五 IAM 列" },
+    { "id": "PPN-12", "status": "N/A", "target": "應用層可見性矩陣，unittest 驗證；cicd-pipeline.md §四 第 5 列" },
+    { "id": "PPN-13", "status": "N/A", "target": "應用層固定訊息，unittest 驗證；cicd-pipeline.md §四 第 4 列" },
+    { "id": "PPN-14", "status": "N/A", "target": "應用層寫入守門，unittest 驗證；回滾時守門消失的安全面代價見 infrastructure-specification.md §二之二 與 cicd-pipeline.md §五" },
+    { "id": "PPN-14a", "status": "N/A", "target": "應用層守門順序；cicd-pipeline.md §四 第 4 列" },
+    { "id": "PPN-14b", "status": "N/A", "target": "模組依賴方向（grep 檢查），無基礎設施面；infrastructure-specification.md §四 共用資源的 Access Boundary 欄" },
+    { "id": "PPN-14c", "status": "N/A", "target": "應用層 delete_system 順序；cicd-pipeline.md §四 第 4 列" },
+    { "id": "PPN-15", "status": "N/A", "target": "ast 靜態鎖，屬測試碼；CI 執行位置見 cicd-pipeline.md §四 第 3 列" },
+    { "id": "PPN-16", "status": "N/A", "target": "前端渲染條件，無基礎設施面" },
+    { "id": "PPN-17", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/infrastructure-specification.md", "note": "§一 瀏覽器儲存列：零新儲存面" },
+    { "id": "PPN-18", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/monitoring-design.md", "note": "§一 第 2 項 [PPD1]=A 的 actor log 只記整數 id、落在既有 stdout→json-file（50m×5 輪替）；第 4 項前端 console 規則；部署失敗時 logs --tail=80 進公開 Actions log 的事實" },
+    { "id": "PPN-21", "status": "N/A", "target": "前端自寫佇列，無新依賴、無建置設定改動" },
+    { "id": "PPN-22", "status": "N/A", "target": "測試用 SQLAlchemy event.listen，屬測試碼" },
+    { "id": "PPN-23", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/cicd-pipeline.md", "note": "§一 Run unit tests 列：新測試檔放進 backend/tests/ 即被 unittest discover 撿到；ui-regression 列：新 spec 由 testDir 撿到，管線零改動" },
+    { "id": "PPN-24", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/cicd-pipeline.md", "note": "§一 OpenAPI spec drift 與 API type contract drift 兩列、§一之一 dump→gen:types 的順序、§三 第 1 列同 PR 約束；MCP tool drift 不受影響的證據" },
+    { "id": "PPN-25", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/cicd-pipeline.md", "note": "§三 第 2、3 列（DDL／ORM／EXPECTED_INDEXES／BLOCK_SENTINELS／DEPLOY.md 同 PR）、§四 第 7 列無閘門與 §四之一 補強；infrastructure-specification.md §三 schema↔deploy 同步觸發判定" }
+  ],
+  "reverse": [
+    { "id": "carried:nfr-requirements:R-02", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/infrastructure-specification.md", "note": "§二之一（三種到達路徑）、§三（LOCAL-DEV.md 不觸發）；cicd-pipeline.md §二 部署後步驟與驗證指令" },
+    { "id": "carried:nfr-requirements:R-05", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/infrastructure-specification.md", "note": "§一 資源規模列：池設定不改；monitoring-design.md §二 連線池等待無量測" },
+    { "id": "carried:nfr-requirements:R-06", "status": "OK", "target": "construction/project-pages-ui/infrastructure-design/monitoring-design.md", "note": "§一 第 1–3 項、§五（[PPD1]=A：誰刪的可查；連帶筆數不可查）" }
+  ]
+}

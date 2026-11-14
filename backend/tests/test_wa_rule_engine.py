@@ -7,7 +7,7 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-import tests.helpers  # noqa: F401 — path / psycopg2 setup
+import tests.helpers  # noqa: F401 — path / psycopg stub
 from services.wa_rule_engine import (
     WEIGHTS,
     evaluate,

@@ -1,0 +1,11 @@
+{
+  "stage": "code-generation",
+  "unit": "memory-data",
+  "version": 1,
+  "writes": [
+    { "path": "schema_rbac.sql" },
+    { "path": "DEPLOY.md" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "backend/scripts/verify_memory_schema.sql" }
+  ]
+}

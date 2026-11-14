@@ -1,0 +1,127 @@
+{
+  "tools": [
+    {
+      "binding": {
+        "body_params": {},
+        "inject": {},
+        "method": "DELETE",
+        "path": "/api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}",
+        "path_params": {
+          "agent_group": "agent_group",
+          "field": "field_key",
+          "system_id": "system_id"
+        },
+        "query_params": {}
+      },
+      "description": "清空某系統的一個需求欄位（保留該列並記錄清空時間）。需在連線層宣告 agent 身分；以呼叫者本人的權限執行。",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_group": {
+            "description": "欄位所屬的 agent 組，例如 cost 或 architecture",
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "field": {
+            "description": "欄位鍵，例如 sla",
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "system_id": {
+            "description": "系統編號（十進位整數字串）",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_group",
+          "field",
+          "system_id"
+        ],
+        "type": "object"
+      },
+      "name": "clear_requirement_field",
+      "requires_agent": true
+    },
+    {
+      "binding": {
+        "body_params": {},
+        "inject": {},
+        "method": "GET",
+        "path": "/api/requirements/systems/{system_id}/fields",
+        "path_params": {
+          "system_id": "system_id"
+        },
+        "query_params": {}
+      },
+      "description": "讀取某系統的全部需求欄位（依 agent 組分組，含未填數）。以呼叫者本人的權限執行。",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "system_id": {
+            "description": "系統編號（十進位整數字串）",
+            "type": "string"
+          }
+        },
+        "required": [
+          "system_id"
+        ],
+        "type": "object"
+      },
+      "name": "read_requirement_fields",
+      "requires_agent": false
+    },
+    {
+      "binding": {
+        "body_params": {
+          "value": "value"
+        },
+        "inject": {
+          "on_behalf_of": "agent_group_of_declared_agent"
+        },
+        "method": "PUT",
+        "path": "/api/requirements/systems/{system_id}/fields/{agent_group}/{field_key}",
+        "path_params": {
+          "agent_group": "agent_group",
+          "field": "field_key",
+          "system_id": "system_id"
+        },
+        "query_params": {}
+      },
+      "description": "寫入某系統的一個需求欄位。代寫標示由轉接層依宣告的 agent 身分填入；值不得為空，清空請用 clear_requirement_field。以呼叫者本人的權限執行。",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_group": {
+            "description": "欄位所屬的 agent 組，例如 cost 或 architecture",
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "field": {
+            "description": "欄位鍵，例如 sla",
+            "pattern": "^[a-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "system_id": {
+            "description": "系統編號（十進位整數字串）",
+            "type": "string"
+          },
+          "value": {
+            "description": "欄位值（不得為空白）",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_group",
+          "field",
+          "system_id",
+          "value"
+        ],
+        "type": "object"
+      },
+      "name": "write_requirement_field",
+      "requires_agent": true
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,175 @@
+{
+  "stage": "nfr-design",
+  "unit": "hierarchy-service",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR7.1",
+    "NFR8.1",
+    "NFR4.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR1 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR2 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR3 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR4 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR5 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR6 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR7 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR8",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR8 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR9 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR10 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "上游 nfr-requirements 已判定不適用",
+      "note": "NFR11 對本單元的判定與理由見 construction/hierarchy-service/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "logical-components.md 的 hierarchy_router 列",
+      "note": "router 層負責把 facade 例外轉成 HTTP 狀態碼，第五個 path 的 handler 在此；落地時同步重 dump openapi.json。設計上無額外 pattern——它是一個普通的 GET handler，缺的只是閘門覆蓋（OPEN-H9），而閘門在落地後自動生效。"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "logical-components.md 的 hierarchy_router 列 ＋ security-design.md 的邊界圖",
+      "note": "409 的來源是 facade 拋出的 HierarchyConflictError（BR6.6），由 router 轉譯並須在 decorator 顯式宣告。邊界圖已標明「拒絕 → HierarchyForbidden（不是 HTTPException）」這條轉譯分工。"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "observability-design.md §二（稽核與觀測刻意分開）",
+      "note": "回應的完整性宣稱屬稽核面而非觀測面，故設計落在該節：本單元有稽核、無觀測，且稽核有三項減損（級聯刪除、90 天保存期且清除機制不在本 repo、來源欄位只容納一條路徑）。"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "scalability-design.md §一",
+      "note": "embedded router、進程內零狀態，故不新增部署設定；多副本部署無 session affinity 或狀態同步需求。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "reliability-design.md §一 ＋ logical-components.md 的 hierarchy_service 列",
+      "note": "無外部依賴邊界、三實體全部經 DB 讀寫。三層形狀本身就是這項的設計保證：service 層負責 DB 讀寫，facade 只做判定，router 只做轉譯——三者都沒有持有請求間狀態的位置。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ND-SEC-U7",
+      "status": "N/A",
+      "target": "呼叫邊界圖，非新設計",
+      "note": "security-design.md 的唯一增量是一張呼叫邊界圖（四個同進程呼叫端 ＋ HTTP 皆經 HierarchyFacade、facade 內完成 K2 與列範圍判定、底層 service 無第二道檢查故 BR1.5 是唯一防線），附文字 fallback。12 條安全規則的正本在 functional-design，刻意不複寫（team.md 單一真實來源）。"
+    },
+    {
+      "id": "ND-COMP-U7",
+      "status": "N/A",
+      "target": "三層形狀，沿用 team.md 對新模組的規定",
+      "note": "hierarchy_router → HierarchyFacade → hierarchy_service。router 不得自行呼叫底層 service（K-07 逐字）、不得自行做授權判定（BR1.1）；facade 不得自行從 request 取身分（K-07 identity_passing）、拒絕時不得 raise HTTPException；service 層不設第二道角色檢查（BR1.3 的誠實宣告）。無純函式計算層，故 PBT 判 N/A（見 OPEN-ND7-3）。另列出本單元不擁有的五項，含 OPEN-H11。"
+    },
+    {
+      "id": "ND-PERF-U7",
+      "status": "N/A",
+      "target": "判為無 pattern",
+      "note": "無新延遲預算或吞吐目標。唯一與效能相關的結構決定（BR6.1 的列範圍使查詢量級為個位數）是授權決定而非效能決定，已在 functional-design 完成。不另設快取、分頁或索引設計——索引屬 U4、分頁屬契約變更。"
+    },
+    {
+      "id": "ND-SCALE-U7",
+      "status": "N/A",
+      "target": "判為無 pattern",
+      "note": "embedded router，非獨立擴展單位；進程內零狀態，多副本部署無 session affinity 或狀態同步需求。"
+    },
+    {
+      "id": "ND-REL-U7",
+      "status": "N/A",
+      "target": "判為無 pattern",
+      "note": "無外部依賴邊界故無重試／降級／熔斷可設計。冪等語意已由契約 K-07 的 retry_and_idempotency 定案並落為 BR2.4，不另開一份。錯誤處理形狀沿用 team.md 既有慣例（直接 raise，不 try/except 吞掉）。"
+    },
+    {
+      "id": "ND-OBS-U7",
+      "status": "N/A",
+      "target": "判為無 pattern，含一項沿用義務",
+      "note": "不新增監控目標或告警。沿用義務：logger 須為 logging.getLogger(\"cloud360.<module>\")，不得沿用 team.md 記載的 5 支既有模組所用的 __name__ 形式。稽核與觀測刻意分開——前者本單元有（見 §七之三 的 audit logging 列與三項減損），後者無。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ND7-1",
+      "severity": "process",
+      "text": "**本站刻意精簡執行（使用者 2026-10-06 核可降低不適用 design 階段的輪次），且未派 reviewer**（`review_class` 為 advisory、非阻擋）。`nfr-design` 的 condition 逐字為「NFR Requirements was executed and **NFR patterns need design**」——前半成立（上游已執行而非 skip），**後半不成立**：上游把五個面向全判為無新增需求，故本站沒有待設計的 pattern。五份 design 檔各自寫明該面向為何無 pattern 以及判定的失效條件，不留空白。"
+    },
+    {
+      "id": "OPEN-ND7-2",
+      "severity": "named-gap",
+      "text": "**安全設計刻意不複寫**。12 條安全規則（`BR1.1`–`BR1.5`、`BR5.6`、`BR6.1`–`BR6.6`）＋ ADR-0006 四面向表的正本在 `functional-design`，本站只新增一張呼叫邊界圖（含文字 fallback）。不複寫的理由是 `team.md` 的「單一真實來源」規則：新增副本的同一個 PR 必須一併新增鎖住兩者一致的測試，而本站無法提供該測試。"
+    },
+    {
+      "id": "OPEN-ND7-3",
+      "severity": "named-gap",
+      "text": "**`logical-components.md` 明寫本單元沒有純函式計算層，故 ADR-0006 的 PBT hard constraint 判為 N/A（非豁免）。** 依據：PBT 的適用對象為 IaC generator、cost calculator（ADR-0017 已移錨至估價表解析器）、agent routing；`unit-of-work.md` 全檔對 `U7` 無 PBT 指派，而 `:448` 明確只把 PBT 指派給 `U19` 的挑選函式。**失效條件**：若日後把名稱正規化或可見範圍判定抽成不讀 DB 的純函式，PBT 即由 N/A 轉為適用。"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-09-27T00:15:00Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-51 | Major | `construction/brain-infra/nfr-requirements/security-requirements.md > §六`（現為 `:764`–`:796`） | 主旨已由「待處理的缺口轉交」反轉為「已修復的結案紀錄」。標題逐字改為「**本單元查出並已當場修復的一項工作流程缺口（結案紀錄）**」，第一段逐字為「`functional-design` 曾被整站誤標為跳過（`[S]`），影響其餘 14 個單元。缺口已於 2026-09-26 關閉，**下游不需再處置**」。失效的 `aidlc-state.md:87`／`- [S] functional-design — EXECUTE` 引用已移除，換成 `:89` 與 `:31` 兩處逐字引用（我開檔核對，兩者皆逐字命中）。原本那句唯一的行動指令「**必須在走到 `U2 brain-ws-contract` 之前處理**」已從全檔消失（`grep` 全檔零命中）。全檔對 `跳過`／`[S]`／`functional-design` 的命中全部落在 `§六` 之內，無任何他處殘留反向主張 | 無 | Resolved |
+| R-52 | Minor | `security-requirements.md > §六`「修復後的狀態（可複驗）」項（`:787`–`:789`） | 新引用 `aidlc-state.md:89` 與 `:31` 指向的是**每次 stage 推進都會被引擎重寫的檔**，行號本身不穩定——R-51 的成因正是同一類引用漂移（`:87` 當時也在範圍內、只是內容換了）。本輪引用的內容為真且已逐字核對，緩解因素是同一句已把目標行的**全文**逐字寫出（`- [-] functional-design — EXECUTE`、`- **In Progress**: functional-design`），故讀者可用字串而非行號複驗。屬本輪新引入、非阻擋 | 下次觸及此節時，考慮把 `aidlc-state.md:<行號>` 降格為輔助定位（保留逐字字串為主索引），或改引不可變的 audit shard 事件；本輪無須改動 | New |
+| R-53 | Minor | `security-requirements.md > §六`「修復的代價，已承擔完畢」項（`:790`–`:796`） | 「同一事件的 `Invalidated Downstream Artifacts` 與 `Invalidated Downstream Reviews` **兩欄逐字列出本單元三份產出**」的量詞對第二欄不成立。實查 audit shard `:20668`／`:20669`：`Invalidated Downstream Artifacts` 逐字列出三份（`security-requirements.md`／`tech-stack-decisions.md`／`traceability.json`）✓；`Invalidated Downstream Reviews` 只有**一筆**（`…/security-requirements.md#Review`）。兩欄合計四筆，不是「兩欄各三份」。屬本輪新引入的量詞誤述，方向無害（不影響任何需求或承載者判定） | 下次觸及此節時改為「`Invalidated Downstream Artifacts` 逐字列出本單元三份產出，`Invalidated Downstream Reviews` 列出其審查收據一筆」 | New |
+
+### Validation Tool Results
+
+| Tool | Result | Interpretation |
+|---|---|---|
+| `required-sections`（`security-requirements.md`） | `{"pass":true,"h2_count":9,"findings_count":0}` | 九個 H2 完整，第八個逐字為 `## 六、本單元查出並已當場修復的一項工作流程缺口（結案紀錄）`——改標題未破壞區塊結構 |
+| `required-sections`（`tech-stack-decisions.md`） | `passed` | 與前兩輪相同 |
+| `upstream-coverage` | `{"pass":true,"consumes":[],"unreferenced":[],"scanned_files":[],"reason":"no upstream","findings_count":0}` | **它這一輪同樣什麼都沒驗。** 與 review-08／review-09 逐字相同：引擎交給 sensor 的 `consumes` 與 `scanned_files` 皆為空陣列，`pass:true` 只代表「沒有可比對的上游」，**不代表上游覆蓋已被檢查**。stage 檔實際宣告五項 `consumes`（含 `functional-spec` required、`rules` required、`requirements` required） |
+| `traceability`（`traceability.json`） | `passed` | 六個陣列全空；`python3 -c "import json;json.load(...)"` 亦成功解析 |
+| `claim-sources` | `failed`（`questions file is missing ## Sources` ＋ 大量 `claim block has no source tag`） | **不列為發現。** `.claude/aidlc-common/stages/construction/nfr-requirements.md:46` 的 `sensors:` 只宣告 `required-sections`／`upstream-coverage`／`linter`／`type-check`／`traceability`，`claim-sources` 不在其中；失敗落在全部九個 H2 上，是 stage 慣例不適用而非本輪缺陷。與 review-09 的判定一致 |
+
+### Summary
+
+**1. R-51 的落地判定，以及「保留全節」這個選擇。** 已 Resolved，修法正確。標題與第一段兩道關卡都在三秒內可判定為歷史：標題帶「**已當場修復**」與「**（結案紀錄）**」，第一段第一句以粗體收「缺口已於 2026-09-26 關閉，**下游不需再處置**」。更關鍵的是**唯一那句行動指令已被刪掉**——舊版的「**必須在走到 `U2 brain-ws-contract` 之前處理**」與「記在此處而非只記日記，因為日記不會被下游讀到」兩句在現版全檔零命中，所以一個只讀 `security-requirements.md` 的下游（`nfr-design`／`infrastructure-design`／`code-generation` 三者皆以它為 `consumes`，其中 `nfr-design` 對它是 `required: true`）拿不到任何待辦。**我判斷保留全節是對的，而且比刪除好**：`§六` 的「影響範圍」項承載了一項下游仍然需要的事實——`functional-design` 對其餘 14 個單元真的會產出 `functional-spec.md`（而 `nfr-design` 把它列為 `required: true`），對 `brain-infra` 則 kind-vacuous。刪掉整節會把這個判定一併刪掉，下一個讀者只會看到一個乾淨的現況，無法知道「本單元沒有 functional-spec 上游」是設計而非遺漏。唯一殘留的讀感風險是中段「為什麼它是 Major 而不是瑕疵」用現在式寫（「一走到 3.3 就會撞到真缺口」），但它位在關閉宣告之後、且被框成回溯論證，不足以構成誤導。
+
+**2. 五個引用逐字核對（全部我自己開檔，`sed -n '<n>p'`）。** audit shard `:18550` = `**Reason**: Skipped by jump to nfr-requirements (forward)` ✓；`:20661` = `**Event**: STAGE_JUMPED` ✓；`:20662` = `**Direction**: BACKWARD` ✓；`aidlc-state.md:31` = `- **In Progress**: functional-design` ✓；`aidlc-state.md:89` = `- [-] functional-design — EXECUTE` ✓。**五／五逐字命中。** 附帶：`aidlc-state.md` 全檔對 `[S]` 的命中只有 `:60` 的 checkbox 圖例那一行，沒有任何 stage 被標 `[S]`。
+
+**3.「除 `§六` 外無其他改動」——兩種方法，以及為什麼第一種的前提不成立。** 我先驗了 `git diff` 的前提，**它不成立**：index 內的 blob 是 **Revision 2 之前**的版本（`git show :<path>` 為 799 行，`§六` 仍在 `:764`，且 `:35`／`:80` 仍是 R-50 修正前的「一份」量詞）。所以 `git diff` 的三個改動區含 Revision 2 的 R-50 修正，不是本輪的改動集合。**方法一（改良後）**：對 index 版與工作樹版做分段 `diff`——`head -762` 逐行比對，差異**只有 `:35` 與 `:80` 兩行**（即 Revision 2 記載的 R-50 三個落點，已由 review-09 判定 Resolved）；`§六` 之後的段落（index `:782–799` vs 工作樹 `:797–814`）**逐字完全相同**。**方法二（獨立）**：復驗 review-09 引用過的行號是否原位命中——review-09 把舊 `§六` 定位在 `:764`–`:781`、狀態標記在 `:769`、`aidlc-state.md:87` 引用在 `:771`，而 index blob 的 `## 六` 正在 `:764`、總行數 799，與 review-09 的定位完全吻合，證明我比對的那個 index blob 就是 review-09 審的那份（模數 R-50 的兩行）。另：`tech-stack-decisions.md` 與 `traceability.json` 的 `git status` 為 `A `（無工作樹修改），即自入 index 起一字未動。**結論：本輪唯一的實質改動是 `§六`。** 檔案由 799 → 814 行，位移量實測為 **+15 行**（brief 估「約 17 行」，實際 15）。
+
+**4. redo jump 的安全性複驗。** audit shard `:21205`–`:21213`：`**Direction**: REDO`、`Source`＝`Target`＝`functional-design`，該事件**沒有** `stages_skipped` 條目、沒有 `Changed Upstream Artifacts`／`Invalidated *` 三欄。現在的 state 檔 `functional-design` 為 `[-]`、`Current Stage` 為 `functional-design`、`Next Stage` 為 `nfr-requirements`，`[S]` 零命中。我另回讀 `.claude/tools/aidlc-jump.ts` 證實 Revision 3 對「guard 的補救是壞的」這個判斷為真：`:359`–`:372` 的 forward 分支在 `currentSlug !== targetSlug` 且 current 處於 in-flight 時**會把 current 標成 `skipped`**，而 `:245`–`:251` 的 resolve forward 分支只計算 current（exclusive）與 target（exclusive）**之間**的 stage——這正是 `affected_stages: []` 看不出風險的機制成因。我實跑 `jump resolve --stage nfr-requirements` 得 `{"direction":"forward","affected_stages":[]}`，逐字重現該盲點；`resolve --stage functional-design` 得 `{"direction":"redo","affected_stages":[]}`。`:395`–`:398` 的 redo 分支確為「只重設 target 再標回 `[-]`」。**採 redo 是正確選擇，照 guard 的建議做會重現同一個 bug。**
+
+**5. 三項可算主張，全部重算。** (a)**「14 個單元」**——`stage-graph.json` 的 `functional-design.produces_kinds` 五個 artifact 鍵的 kind 聯集為 `{service, spec, ui, library}`（與 `§六` 逐字一致）；`unit-of-work-dependency.md` 的 17 個單元中 `kind: packaging` 恰為三個（`U1 brain-infra`／`U9 memory-purge`／`U17 a11y-gate`），其餘 **14** 個落在該聯集內，且 `U2`–`U8` ＋ `U10`–`U16` 的編號寫法與 mermaid 的 `U1`…`U17` 宣告序完全對得上。(b)**「14」的獨立第二來源**——我以 `json.loads` 解析 audit shard `:20667` 的 `Changed Upstream Artifacts`，得 **53 條路徑、14 個相異單元目錄**（`brain-gateway`／`brain-ws-contract`／`embedding-port`／`entry-page-ui`／`hierarchy-data`／`hierarchy-service`／`intent-router`／`memory-data`／`memory-page-ui`／`memory-service`／`object-picker-ui`／`rbac-story-ids`／`session-store`／`work-orchestrator`），與 (a) 的集合**逐一相同**，且 `brain-infra` 不在其中。**它真的是 14，不是本檔自圓其說。** (c)**「重設兩個、其餘十個本來就是 `[ ]`」**——backward 的 `RESETTABLE` 集合為 `[x]/[-]/[?]/[R]/[S]`（`aidlc-jump.ts:374`–`:380`），而 resolve 的 backward 分支回報 target 及其後**全部** EXECUTE stage。我從 state 檔重數 `functional-design` 起的 EXECUTE stage：construction 8 項 ＋ operation 4 項（三個 SKIP 不計）＝ **12 項**；實際 `stages_reset` 為 **2**（`functional-design`、`nfr-requirements`）；**差 10**，即 `§六` 的「其餘十個」，數字成立。
+
+**6. 三支（實為五支）sensor 的實際輸出。** 見上表。要特別誠實寫下的是 **`upstream-coverage` 這一輪仍然什麼都沒驗**：`consumes:[]`、`scanned_files:[]`、`reason:"no upstream"`，它的 `pass:true` **不能被讀成「上游覆蓋已檢查」**——stage 檔實際宣告了五項 `consumes`（其中 `functional-spec` 為 `required: true`，而 `functional-design` 此刻為 `[-]`、尚未完成）。`claim-sources` 回 `failed` 但不在本 stage 的 `sensors:` 宣告內，與 review-09 同判定，不列為發現。
+
+**7. 計數、雙向差集、行號越界——位移之後。** `NFR{n}.{m}` 定義集合以 `^#{3,4}\s+`?NFR\d+\.\d+[a-z]?`` 抽出（涵蓋 `NFR6.2a` 的 `####`），得 **20 個**；引用集合掃兩份 md ＋ `traceability.json` 全文，得 **20 個**；**雙向差集皆空**，且 20 個 id 沒有任何一個只出現在自己的標題處。表列計數：`NFR8.5` 表 **8 列** ↔ `tech-stack-decisions.md` `§四` row 5 逐字「**八項**」✓；`§四`「真的有閘門的三項」**3 列** ✓；「沒有閘門的九項」**9 列** ↔ 節尾「這九項」✓；`tech-stack-decisions.md` `§四` 標題「九處」↔ 表 **9 列** ↔ `security-requirements.md:9` 的「九處」✓（`:84`–`:86` 把 6→9 的三個增項逐一指名：`NFR8.1a`、`NFR8.1b`、`S-5` 的 Redis 設定資產；`:35` 的「另兩處」是 S-5 自己那一列、`另`字正確排除自身，讀法成立）；`NFR6.1` **5 個落點** ↔ 文中「落點 1–4 image 值相同」＋「落點 5 為 volume 宣告」✓。**行號越界**：以正則抽出兩份 md 的全部 `<檔名>:<行號>` 外部引用，得 **36 個相異引用**，逐一解析目標檔（優先本單元目錄、再本 record，避免撞到別的 intent 的同名檔）並比對行數——**36／36 全部在範圍內，0 越界、0 無法解析**。關鍵一項：兩份 md 對 `security-requirements.md` **自身**的行引用為 **0 個**，所以 `§六` 的 +15 行位移**不會讓任何引用失效**；`§六` 之後唯一的內容是 `## Assumptions & Open Questions`，而它已驗為逐字未動。
+
+**8. 三類切分與該不該再跑一輪。** (a)**本輪編輯引入／傳播不完整：2 項**（R-52 行號引用的漂移體質、R-53 `Invalidated Downstream Reviews` 的量詞誤述——兩者皆 Minor，皆不影響任何需求、承載者判定或可測判準）。(b)**既存漏審：0 項**。(c)**真正的新設計問題：0 項**。R-51 的修法正確且完整，沒有連帶破壞任何計數、交叉引用、雙向差集、行號或 sensor 結果。**不該再跑一輪**：本輪的兩項新發現都是單句措辭層級、可在核可關卡就地改掉，再派一輪審查的期望產出低於成本；且本 stage 的判準應為「新缺陷從哪來」——本輪 2 項全為新引入但皆為 Minor 且非結構性，與前九輪反覆出現的「跨檔傳播失敗」不同類，迴圈已收斂。

@@ -1,0 +1,189 @@
+{
+  "stage": "functional-design",
+  "unit": "member-pages-ui",
+  "upstream_ids": [
+    "AC12.1.1",
+    "AC12.1.2",
+    "AC12.1.3",
+    "AC12.2.1",
+    "AC12.2.2",
+    "AC12.2.3",
+    "AC12.2.4",
+    "AC12.4.1",
+    "AC12.4.2",
+    "AC12.4.3",
+    "AC12.4.4",
+    "AC12.5.1",
+    "AC12.5.2",
+    "AC12.5.3",
+    "AC12.6.1",
+    "AC12.6.2",
+    "AC12.6.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC12.1.1",
+      "status": "OK",
+      "target": "BR22.3",
+      "note": "W1／W2 的清單渲染：端點 1（`GET .../members`）回傳後每列顯示 per-project 角色。剛建立的專案恰一列、即自己、角色為專案管理者。e2e 可斷言列數與角色文字。**修訂 1／審查 R-13**：target 由 `BR22.1`（控件可見性，與本 AC 的實質內容無關）改為 `BR22.3`——本 AC 的實質是「清單內容」，而 `BR22.3` 正是規定清單結果怎麼被讀的那一條。"
+    },
+    {
+      "id": "AC12.1.2",
+      "status": "OK",
+      "target": "BR22.3",
+      "note": "W3 第 1 步：管理者視角渲染 `[邀請成員]` 且可點。Then 的「不需任何額外授權步驟」= 本單元不在該動作前插入任何額外確認或申請流程。該控件的可用性依 `BR22.3` 取得的 `canManage`。"
+    },
+    {
+      "id": "AC12.1.3",
+      "status": "Deferred",
+      "target": "functional-spec.md §八 OPEN-MP24-5 → U23 project-pages-ui 的 code-generation（3.5，ALWAYS，在游標之後）",
+      "note": "Then 斷言的是**專案清單頁**上看不到該專案，那是 `U23` 的畫面；本單元只有成員頁，沒有專案清單的渲染面。**修訂 1／審查 R-05**：初版的 target 直接寫 `U23 project-pages-ui`，而已核可的 `unit-of-work-story-map.md:174-179` **從未**把 `U23` 列為 `US12.1` 的實作單元（它只承載 `US11.1`／`US11.2`／`US11.3`）——那是一個死指派。改記為具名開放項並指派一個在游標之後的 `ALWAYS` 落點。"
+    },
+    {
+      "id": "AC12.2.1",
+      "status": "OK",
+      "target": "BR24.1",
+      "note": "W4 第 4 步：`PATCH` 回 200 後以回傳的 `MemberView` **就地更新**清單與詳情兩處（`[F4]`=A）。Then 的「成員清單顯示其新角色」因此在不重抓的情況下成立。"
+    },
+    {
+      "id": "AC12.2.2",
+      "status": "OK",
+      "target": "BR24.3",
+      "note": "`<MemberChangeLog />` 渲染 `U19` 持久層提供的紀錄。**修訂 1／審查 R-13**：target 由 `BR22.1` 改為本輪新增的 `BR24.3`——初版把它掛在控件可見性那條規則上，而那條沒有一個字約束變更紀錄的欄位，於是這條 AC 在本站沒有可機械失敗的落點。`BR24.3` 規定每列須同時呈現誰／何時／原值／新值四項，刪掉任一項即紅燈。本單元**不自行記錄**稽核事件，資料來源屬 `U19`。"
+    },
+    {
+      "id": "AC12.2.3",
+      "status": "OK",
+      "target": "BR22.2",
+      "note": "`<MemberRow />` 的「不得持有」欄逐字禁止任何改角色的控件；`data-testid` 清單裡清單列只有 `member-list-row-detail-link`，沒有任何 select。e2e 可斷言清單上該控件不存在。**本群最弱的一條斷言**（會因清單頁改版以無關理由紅燈），此評價沿用 `stories.md:795-797` 的原文。"
+    },
+    {
+      "id": "AC12.2.4",
+      "status": "N/A",
+      "target": "U19 membership-service（change_role 的多管理者語意）",
+      "note": "Then 斷言「兩位都能執行管理動作」，驗的是服務側的授權判定不會被第二次指定覆寫（`K-16` 的 `change_role` note）。本單元只渲染角色文字，無從驗證它。"
+    },
+    {
+      "id": "AC12.4.1",
+      "status": "N/A",
+      "target": "U19 membership-service（select_successor 純函式）",
+      "note": "自動改選挑最早加入者，是服務側行為。本單元只顯示改選**結果**的通知。"
+    },
+    {
+      "id": "AC12.4.2",
+      "status": "N/A",
+      "target": "U19 membership-service（PBT 標的）",
+      "note": "加入時間相同時的決定性 tie-break。`stories.md:838-842` 逐字記載它**在 e2e 層不可構造**（經 UI 邀請必然產生不同時間戳），驗證層只能是 unit／property-based，故明確不在本單元。"
+    },
+    {
+      "id": "AC12.4.3",
+      "status": "OK",
+      "target": "BR21.1",
+      "note": "W6 ＋ §二之一：`<ReselectionBannerHost />` 掛在 `Layout`（`[F1]`=A），故**任何**落地頁都在初始 DOM 帶著它；宿主無條件渲染並帶 `role=\"status\"`，使內容在抓取回來後被朗讀。這同時關掉 `[D-17]` 指出的「只有 `C1 view` 的成員永遠看不到」那條路徑——而審查另已證實該路徑本就被上游關閉（`membership_service.py:71-72` 要求受邀者具 `K3 view`）。"
+    },
+    {
+      "id": "AC12.4.4",
+      "status": "OK",
+      "target": "BR26.1",
+      "note": "W6 第 6 步：「知道了」逐事件呼叫端點 6（`POST .../acknowledge`），已讀狀態以**事件**為鍵寫在伺服器。本單元**不使用** `localStorage`（§九之二 encryption 欄逐字排除），故換裝置重新登入後橫幅不再出現。配套規則 `BR26.3` 處理部分失敗（404 等價於成功）。"
+    },
+    {
+      "id": "AC12.5.1",
+      "status": "OK",
+      "target": "BR23.1",
+      "note": "W3 第 5 步：422 且 `detail` 為字串時 modal **停在 open** 並顯示 `U19` 回傳的理由；畫面不自行組字。狀態機 §六之二 把 `rejected` 與 `closed` 分開，正是為了讓這條 Then 的「畫面說明他缺少什麼」有一個可觀察的落點。"
+    },
+    {
+      "id": "AC12.5.2",
+      "status": "N/A",
+      "target": "U19 membership-service（兩層串聯的 deny 側）",
+      "note": "Then 斷言非成員讀取被拒，判定在 `MembershipFacade`。本單元不實作任何授權判定。"
+    },
+    {
+      "id": "AC12.5.3",
+      "status": "OK",
+      "target": "BR23.1",
+      "note": "W3 第 5 步 ＋ §六之二：422 時清單**不新增任何列**（就地更新只在 201 分支執行）。e2e 可斷言拒絕後列數不變。此為 `BR23.1` 的後半子句。"
+    },
+    {
+      "id": "AC12.6.1",
+      "status": "OK",
+      "target": "BR23.2",
+      "note": "W3 第 4 步：201 時以回傳的 `MemberView` 就地加一列，角色顯示為一般成員。清單**必然多一列**。"
+    },
+    {
+      "id": "AC12.6.2",
+      "status": "OK",
+      "target": "BR25.2",
+      "note": "W5：`[移出專案]` → 二次確認（`BR25.1`）→ 204 → 導回清單並以 `filter` 就地移除該列（既有先例 `AdminPage.tsx:200`；該先例的另兩行是分頁補償，而 `list_members` 無分頁參數，故不適用）。Then 的後半「他再次嘗試讀取本專案資料時被拒絕」屬 `U19` 的判定，本單元承載的是「清單少一列」這一半。"
+    },
+    {
+      "id": "AC12.6.3",
+      "status": "Deferred",
+      "target": "functional-spec.md §八 OPEN-MP24-5 → U23 project-pages-ui 的 code-generation（3.5，ALWAYS，在游標之後）",
+      "note": "Then 斷言受邀者在**專案清單**看得到該專案——兩層串聯的 allow 側。與 `AC12.1.3` 同一個畫面面，屬 `U23`。**修訂 1／審查 R-05**：同上，story map 未把 `U23` 列為 `US12.6` 的實作單元，故改記為具名開放項並指派在游標之後的 `ALWAYS` 落點。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR21.2",
+      "status": "N/A",
+      "target": "本站推導的呈現規則",
+      "note": "「載入中不渲染骨架」沒有對應 AC——它是 `BR21.1` 成立所需的補充條件（骨架會成為一則假通知），不是任何已核可 AC 的要求。"
+    },
+    {
+      "id": "BR21.3",
+      "status": "N/A",
+      "target": "本站推導的失敗處置",
+      "note": "橫幅抓取失敗的靜默處置無對應 AC；它是 `[F2]`=A 的背景抓取形狀必然要回答的問題。修訂 1 另併入審查 `R-11` 查出的事實：`SRE`／`Ops_Lead`／`Platform_Engineer` 的 `K3 view` 為 False，故 403 屬永久失敗、不重試。"
+    },
+    {
+      "id": "BR22.1",
+      "status": "N/A",
+      "target": "K-16 的 residual_gap",
+      "note": "「前端不得推導 per-project 權限」是不變量 `I-5` 的落點，不掛在任何單一 AC 上；它的可觀察形式由 `BR22.3` 的 observable 承載。"
+    },
+    {
+      "id": "BR24.2",
+      "status": "N/A",
+      "target": "U19 的 LastAdminGuard 在本單元的呈現側",
+      "note": "「409 時下拉還原原值並列出帶回的專案」沒有對應 AC：守門本身的 AC（`AC12.3.1`–`.3`）**只落在 `U19`**（守門必須位在三條路徑的共同上游，畫面不重複判定），而那三條 AC 斷言的是「被拒絕」與「列出專案」，沒有一條規定前端被拒後畫面要回到什麼狀態。修訂 1／審查 `R-14` 另補上「列出每一個專案名稱」這一半與其 `data-testid`。"
+    },
+    {
+      "id": "BR25.1",
+      "status": "N/A",
+      "target": "線框 §25 的既有規定",
+      "note": "二次確認來自已核可線框而非 AC；`AC12.6.2` 的 When 逐字含「並確認」，但確認對話框本身的形狀（預設焦點在取消）是線框的規定。"
+    },
+    {
+      "id": "BR26.2",
+      "status": "N/A",
+      "target": "[D10]=A 的彙總態",
+      "note": "「導向被點選的那個專案」是 `[D10]`=A 的可展開彙總態才存在的問題；`AC12.4.3` 只要求「看到一則橫幅」，沒有規定多筆時的導向。"
+    },
+    {
+      "id": "BR26.3",
+      "status": "N/A",
+      "target": "membership_router.py:328-358 的 404 契約",
+      "note": "「404 等價於成功」沒有對應 AC：`AC12.4.4` 只要求換裝置後不再出現，沒有規定部分失敗怎麼辦。修訂 1／審查 `R-02` 查出 acknowledge **不冪等**，初版的「任一失敗 → 顯示錯誤」會讓橫幅永遠清不掉。"
+    },
+    {
+      "id": "BR27.1",
+      "status": "N/A",
+      "target": "[US:D-08] 的跨單元約束",
+      "note": "live region 是 `U23`／`U24` 共同的硬約束，不掛在任何單一 AC 上。"
+    },
+    {
+      "id": "BR27.2",
+      "status": "N/A",
+      "target": "FR12.6a 的判定位置",
+      "note": "「前端不驗」是一條否定性規則：`AC12.5.1` 要求被拒時畫面說明理由，但沒有規定判定在哪一側；本站把它釘在伺服器側。修訂 1／審查 `R-12` 另加「僅字串 `detail` 走拒絕態」的分支。"
+    },
+    {
+      "id": "BR28.1",
+      "status": "N/A",
+      "target": "ADR-0006 audit logging 面",
+      "note": "機敏資料禁令來自 hard constraint 而非 AC。"
+    }
+  ]
+}
