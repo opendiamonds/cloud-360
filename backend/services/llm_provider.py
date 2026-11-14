@@ -4,6 +4,14 @@ Every LLM feature in Cloud-360 reaches its model through **OpenRouter over
 HTTP** (`langchain_openai` / `langchain_anthropic` clients configured from the
 environment). There is no subprocess in this path.
 
+The one exception is ``LLM_PROVIDER=claude-code``: a local-development-only
+provider (honoured only when ``APP_ENV`` is exactly ``local``) that uses the
+developer's own logged-in ``claude`` CLI as the model, through
+``services.claude_code_chat``. It is NOT the retired ``cli`` mode described
+below: it deletes no environment variable, and :func:`llm_auth_ready` checks
+the CLI actually exists. Any other ``APP_ENV`` -- including an unset one, which
+fails closed -- falls back to openrouter and logs at ERROR.
+
 That was not always true. Until the A3 migration (`ut` commit `b4f0cdc`,
 2026-10-01) the LLM features ran through `claude-agent-sdk`, which spawned the
 `claude` CLI as a subprocess, and that subprocess could authenticate itself
@@ -34,13 +42,20 @@ to boot would turn a stale config line into an outage.
 
 import logging
 import os
+import shutil
 
 from services.llm_limits import apply_agent_token_limits_to_env
 
 logger = logging.getLogger("cloud360.llm_provider")
 
 OPENROUTER = "openrouter"
-_VALID_PROVIDERS = (OPENROUTER,)
+CLAUDE_CODE = "claude-code"
+_VALID_PROVIDERS = (OPENROUTER, CLAUDE_CODE)
+
+# The only APP_ENV under which claude-code is honoured. Deliberately NOT
+# database.LOCAL_APP_ENVS: that set also holds test and ci, and neither has a
+# logged-in CLI to use.
+_CLAUDE_CODE_APP_ENV = "local"
 
 # Recognised, but no longer selectable. Kept so an existing `LLM_PROVIDER=cli`
 # gets the migration message instead of the generic "not a valid value".
@@ -55,7 +70,7 @@ _OPENROUTER_DEFAULT_DESIGN_MODEL = "google/gemini-2.5-flash"
 
 
 def get_provider() -> str:
-    """Which provider this process uses. Always openrouter.
+    """Which provider this process uses: openrouter, or claude-code on local.
 
     A retired value logs at ERROR and a typo logs at WARNING; neither raises.
     A mis-set optional variable should not stop the whole API from starting,
@@ -76,6 +91,19 @@ def get_provider() -> str:
             OPENROUTER,
         )
         return OPENROUTER
+    if raw == CLAUDE_CODE:
+        app_env = os.environ.get("APP_ENV", "").strip().lower()
+        if app_env == _CLAUDE_CODE_APP_ENV:
+            return CLAUDE_CODE
+        logger.error(
+            "LLM_PROVIDER=%s 只限本機開發（APP_ENV=%s），目前 APP_ENV=%r，改用 %s。"
+            "部署環境沒有已登入的 claude CLI；請移除這一行或改設 OPENROUTER_API_KEY。",
+            CLAUDE_CODE,
+            _CLAUDE_CODE_APP_ENV,
+            app_env,
+            OPENROUTER,
+        )
+        return OPENROUTER
     if raw not in _VALID_PROVIDERS:
         logger.warning(
             "LLM_PROVIDER=%r 不是有效值（可用：%s），退回 %s",
@@ -88,13 +116,17 @@ def get_provider() -> str:
 
 
 def configure_provider_env() -> None:
-    """Prepare the process environment for OpenRouter.
+    """Prepare the process environment for the selected provider.
 
     Safe to call repeatedly; both the startup hook and each request call it.
     Calling :func:`get_provider` here (rather than ignoring it) is what makes a
     retired or invalid setting visible in the logs at startup.
+
+    claude-code needs nothing prepared and must not write ``ANTHROPIC_*``: the
+    CLI owns its own login, and it runs with an allowlisted environment.
     """
-    get_provider()
+    if get_provider() == CLAUDE_CODE:
+        return
     _configure_openrouter_env()
 
 
@@ -121,9 +153,14 @@ def llm_auth_ready() -> bool:
     """Whether an LLM call can be attempted at all.
 
     A credential must be present in the environment, because without one the
-    request is guaranteed to fail upstream. There is no longer a mode that owns
-    its own credentials outside this process.
+    request is guaranteed to fail upstream. The one mode that owns its
+    credentials outside this process is claude-code; there the check is whether
+    the CLI is on PATH. Whether it is logged in is not checked here -- the CLI
+    reports that itself when called, and that failure is surfaced as an error
+    by ``services.claude_code_chat``.
     """
+    if get_provider() == CLAUDE_CODE:
+        return shutil.which("claude") is not None
     return bool(
         os.environ.get("OPENROUTER_API_KEY", "").strip()
         or os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
@@ -132,6 +169,12 @@ def llm_auth_ready() -> bool:
 
 def auth_error_message() -> str:
     """The message shown when :func:`llm_auth_ready` is False."""
+    if get_provider() == CLAUDE_CODE:
+        return (
+            "找不到 claude 指令（LLM_PROVIDER=claude-code）。"
+            "請安裝 Claude Code CLI 並確認它在後端行程的 PATH 上，"
+            "或把 LLM_PROVIDER 改回 openrouter。"
+        )
     return (
         "尚未設定 OPENROUTER_API_KEY（LLM 呼叫經 OpenRouter 需要此金鑰）。"
         "請在 backend/.env 設定它。"

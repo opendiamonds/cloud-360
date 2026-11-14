@@ -47,10 +47,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 #
 # **未設定 `MEMORY_DB_PASSWORD`（本機開發的預設）或主連線不是 PostgreSQL（測試的
 # SQLite）時，記憶專用連線不存在**：`memory_db_boundary_enabled()` 回 False，
-# `get_memory_session()` 直接拋 `MemoryDatabaseNotConfigured`。**不會**退回擁有者帳號
-# ——那會讓呼叫端以為邊界生效而實際上沒有。注意：截至本段落地時，記憶表的實際存取
-# （`memory_service.py`）**仍走主連線**；改用本段的 session 屬 memory-service 單元，
-# 在那之前資料庫層的邊界只對「以此角色連線的程式」成立。
+# `get_memory_session()` 直接拋 `MemoryDatabaseNotConfigured`。**本函式不會**退回擁有者
+# 帳號——那會讓呼叫端以為邊界生效而實際上沒有。記憶表的存取點一律經
+# `services/memory_router.py` 的 `memory_session_source`（HTTP：`get_memory_db`；WS 閘道、
+# 編排器、刪帳號計數：`memory_session_scope`）決定走本段的 session，或在本機
+# （`LOCAL_APP_ENVS`）明示退回主連線並 WARNING、在其他環境拒絕（合併前必修第 48／52 列）。
 # ---------------------------------------------------------------------------
 
 MEMORY_DB_ROLE = "cloud360_memory"
@@ -462,19 +463,25 @@ def _ensure_cost_schema():
         ("pricing_cache", "archive_pricing_cache"),
         ("cost_audit_event", "archive_cost_audit_event"),
     )
+    # 每一句各包一個 SAVEPOINT（`begin_nested`）：PostgreSQL 上任一句失敗會讓整個交易進入
+    # aborted 狀態，未隔離時後續每一句都以 InFailedSqlTransaction 失敗——全新庫上「constraint
+    # 已是 archive_* 名稱」的預期失敗曾因此讓 index rename 記一行誤導的 WARNING（build-and-test
+    # 待修 9）。savepoint 讓預期中的失敗只回滾那一句。
     with engine.begin() as conn:
         for live, archive in renames:
             try:
                 # PostgreSQL / SQLite：live 存在且 archive 不存在時才 rename
-                conn.execute(
-                    text(
-                        f"ALTER TABLE IF EXISTS {live} RENAME TO {archive}"
+                with conn.begin_nested():
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE IF EXISTS {live} RENAME TO {archive}"
+                        )
                     )
-                )
             except Exception as e:
                 # SQLite 舊版可能不支援 IF EXISTS；再試無 IF EXISTS
                 try:
-                    conn.execute(text(f"ALTER TABLE {live} RENAME TO {archive}"))
+                    with conn.begin_nested():
+                        conn.execute(text(f"ALTER TABLE {live} RENAME TO {archive}"))
                 except Exception as e2:
                     logger.warning(
                         "Cost schema rename %s→%s 略過/失敗: %s / %s",
@@ -484,21 +491,24 @@ def _ensure_cost_schema():
                         e2,
                     )
         try:
-            conn.execute(
-                text(
-                    "ALTER TABLE IF EXISTS archive_cost_audit_event "
-                    "RENAME CONSTRAINT cost_audit_event_pkey TO archive_cost_audit_event_pkey"
+            # 全新庫上 constraint 已是 archive_* 名稱，失敗是預期中的；savepoint 隔離它。
+            with conn.begin_nested():
+                conn.execute(
+                    text(
+                        "ALTER TABLE IF EXISTS archive_cost_audit_event "
+                        "RENAME CONSTRAINT cost_audit_event_pkey TO archive_cost_audit_event_pkey"
+                    )
                 )
-            )
         except Exception:
             pass
         try:
-            conn.execute(
-                text(
-                    "ALTER INDEX IF EXISTS ix_cost_audit_event_diagram_created "
-                    "RENAME TO ix_archive_cost_audit_event_diagram_created"
+            with conn.begin_nested():
+                conn.execute(
+                    text(
+                        "ALTER INDEX IF EXISTS ix_cost_audit_event_diagram_created "
+                        "RENAME TO ix_archive_cost_audit_event_diagram_created"
+                    )
                 )
-            )
         except Exception as e:
             logger.warning("Cost schema index rename 略過/失敗: %s", e)
     logger.info("Cost schema 退場 rename 檢查完成（archive_*；應用不得讀寫）")

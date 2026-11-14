@@ -390,8 +390,9 @@ class DependencyFailuresGetDifferentTreatmentTest(unittest.TestCase):
         )
         self.assertTrue(context.memory_degraded)
         self.assertEqual(context.memory_notes, ())
-        # 降級不是失敗：其餘上下文照常取得。
-        self.assertEqual(context.work_target_hint, "架構圖 #12")
+        # 降級不是失敗：其餘上下文照常取得。作業對象自 build-and-test F2（2026-11-12）起以名稱
+        # 呈現、不再寫 `#id`；本案未傳名稱，故寫「（名稱無法取得）」。
+        self.assertEqual(context.work_target_hint, "架構圖（名稱無法取得）")
         self.assertEqual(len(context.recent_messages), 1)
 
     def test_session_read_failure_propagates_untouched(self):

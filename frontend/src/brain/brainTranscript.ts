@@ -91,7 +91,7 @@ export interface SegmentTranscript {
   /**
    * workItemId → 錨點大腦訊息的 id（BR94.5）。首次出現時該段最後一則是大腦訊息 → 錨定它；最後一則是
    * 使用者原句（該輪的回覆尚未到——伺服器在交辦時先送 work_items 再送 token）→ 暫記 `PENDING_ANCHOR`，
-   * 由該段下一則新建的大腦訊息承接；該段沒有任何項目時為 ''（列在最後）。
+   * 由該段下一則新建的大腦訊息承接；該段沒有任何項目時為 ''（列在最前面，見 ConversationView，build-and-test F4）。
    */
   anchors: Record<string, string>;
 }

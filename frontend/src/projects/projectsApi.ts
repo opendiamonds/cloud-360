@@ -147,3 +147,46 @@ export async function listDiagramChanges(
   );
   return (body ?? []) as DiagramChangeOut[];
 }
+
+// ---------------------------------------------------------------------------
+// 架構圖掛到系統（build-and-test 本機驗證 F1，2026-11-12；**本階段新增、已核可 scope／
+// requirements 尚未涵蓋**——回補：requirements 新增「架構圖掛到系統」FR、user-stories 補 AC）
+// ---------------------------------------------------------------------------
+
+export type DiagramSystemOut = components['schemas']['DiagramSystemOut'];
+
+/**
+ * `GET /api/collab/diagrams` 的一列。該端點沒有回應模型（`openapi.json` 無 schema 可產型別），
+ * 故這裡只宣告本檔用到的欄位；`system_id` 只對自己擁有的圖有值（伺服器對分享的圖一律給 null）。
+ */
+export interface MyDiagram {
+  id: number;
+  title: string;
+  is_owner: boolean;
+  system_id: number | null;
+}
+
+/** 我看得到的架構圖（含歸屬）。只保留自己擁有的圖——掛載只能動自己的圖。 */
+export async function listMyDiagrams(token: string): Promise<MyDiagram[]> {
+  const body = await requestJson(token, '/api/collab/diagrams', { method: 'GET' }, '讀取架構圖失敗');
+  return ((body ?? []) as MyDiagram[]).filter((d) => d.is_owner);
+}
+
+/**
+ * 把自己的圖掛到系統、改掛，或以 `systemId === null` 取消掛載
+ * （`PUT /api/hierarchy/diagrams/{id}/system`）。404 代表圖或系統查不到（含不可寫），
+ * 403 代表缺 `K2 edit`；兩者都以 `ApiError` 交給呼叫端呈現。
+ */
+export async function setDiagramSystem(
+  token: string,
+  diagramId: number,
+  systemId: number | null
+): Promise<DiagramSystemOut> {
+  const body = await requestJson(
+    token,
+    `${BASE}/diagrams/${diagramId}/system`,
+    { method: 'PUT', body: JSON.stringify({ system_id: systemId }) },
+    '變更架構圖歸屬失敗'
+  );
+  return body as DiagramSystemOut;
+}

@@ -107,6 +107,18 @@ class CreateProjectIn(BaseModel):
     name: str
 
 
+class DiagramSystemIn(BaseModel):
+    """`system_id` 為 null 表示取消掛載。欄位必填（可為 null），不給預設值：
+    漏傳欄位應是 422，而不是被讀成「取消掛載」。"""
+
+    system_id: Optional[int]
+
+
+class DiagramSystemOut(BaseModel):
+    diagram_id: int
+    system_id: Optional[int] = None
+
+
 class CreateSystemIn(BaseModel):
     name: str
 
@@ -330,6 +342,45 @@ def delete_system(
     except Exception as exc:  # noqa: BLE001
         raise _translate(exc) from exc
     return None
+
+
+# ---------------------------------------------------------------------------
+# 架構圖掛到系統（build-and-test 本機驗證 F1，2026-11-12）
+#
+# **本階段新增、已核可 scope／requirements 尚未涵蓋**（FR9.1 只說系統對應架構圖檔、
+# FR9.5 只要求專案／系統的建立路徑）。回補：requirements 新增「架構圖掛到系統」FR、
+# user-stories 補 AC。授權判定在 facade（`K2 edit` ＋ 圖的擁有者 ＋ 目標系統所屬專案的
+# 可見性與擁有者），本 handler 照 `K-07` 只做「取身分 → 呼叫 facade → 轉譯例外」。
+# ---------------------------------------------------------------------------
+
+
+@router.put(
+    "/diagrams/{diagram_id}/system",
+    response_model=DiagramSystemOut,
+    responses={
+        404: {"description": "查不到架構圖或系統（含「不屬於你」與「不可見」——刻意同一種結果）"}
+    },
+)
+def set_diagram_system(
+    diagram_id: int,
+    payload: DiagramSystemIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """把自己的架構圖掛到系統、改掛到另一個系統，或以 `system_id: null` 取消掛載。"""
+    try:
+        principal = mint_principal(current_user)
+        diagram = _facade(db).set_diagram_system(
+            principal,
+            diagram_id=diagram_id,
+            system_id=payload.system_id,
+            project_visible=membership_facade.MembershipFacade(db).project_visibility(
+                principal
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise _translate(exc) from exc
+    return DiagramSystemOut(diagram_id=diagram.id, system_id=diagram.system_id)
 
 
 # ---------------------------------------------------------------------------

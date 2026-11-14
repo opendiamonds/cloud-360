@@ -19,13 +19,13 @@
 | **A3「優化」（Design↔Review 協作）** | 同上 | 失敗 |
 | **Offline Lens agent 填答** | 同上 | 降級為規則啟發式（會寫 WARNING log） |
 | 動態 SVG 圖示 | n8n webhook（**選填**，見下方「圖示目錄」） | 用灰底 fallback 圖示，不中斷 |
-| **大腦入口頁（U13 起，`/api/brain/ws`）** | PostgreSQL ＋ **Redis** ＋ **`OPENROUTER_API_KEY`**（分類走 OpenRouter） | 缺金鑰：連線照常建立，但**每一輪**都回「內部錯誤」（`error(INTERNAL_ERROR)`，不降級）；本機與 staging 同形。staging 部署時此金鑰為必要 secret（`deploy.yml` 缺它即中止） |
+| **大腦入口頁（U13 起，`/api/brain/ws`）** | PostgreSQL ＋ **Redis** ＋ **一個能認證的 LLM 供應商**：預設 `openrouter` 需要 **`OPENROUTER_API_KEY`**；本機設 `LLM_PROVIDER=claude-code`（且 `APP_ENV=local`）時分類改走已登入的 `claude` CLI，**不需要** `OPENROUTER_API_KEY`（見下方 H1） | `openrouter` 下缺金鑰：連線照常建立，但**每一輪**都回「內部錯誤」（`error(INTERNAL_ERROR)`，不降級）；本機與 staging 同形。staging 部署時此金鑰為必要 secret（`deploy.yml` 缺它即中止） |
 | **建庫本身（全部功能的前提）** | PostgreSQL ＋ **pgvector 擴充**（見第 2 節 H4） | `schema_rbac.sql` 整個交易中止，**一張表都建不出來** |
 | **後端啟動本身（U13 起）＋ 大腦入口頁** | **Redis** 的三個變數 `REDIS_URL`／`REDIS_USER`／`REDIS_PASSWORD`（見第 1 節的 `redis-cli ping`） | 三者缺任一，或 `REDIS_USER=default` → **後端拒絕啟動**。Redis 只是**暫時連不上**時後端照常啟動（client 延遲連線），入口頁的連線在握手時以 **1011** 關閉；連上之後才斷則該輪回「工作階段暫時無法存取」、連線保留 |
 | **後端啟動本身（U10 起）** | `backend/.env` 的 **`BRAIN_SESSION_HISTORY_MAX`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。這不是降級，是大聲失敗——把缺值讀成「無上限」會讓單一 Redis key 無上界成長，而那是無聲的（`BR3.5`） |
 | **後端啟動本身（U13 起）** | `backend/.env` 的 **`REDIS_URL`／`REDIS_USER`／`REDIS_PASSWORD`**（三者皆 required） | **後端直接拒絕啟動**：缺任一（`KeyError`）或 `REDIS_USER=default`（`ValueError`，`default` 已被收窄為 `+@connection`）。啟動時**不連線**，所以 Redis 暫時不可達不會擋啟動 |
 | **後端啟動本身（U11 起）** | `backend/.env` 的 **`BRAIN_ROUTER_CONFIDENCE_THRESHOLD`**（required、**無預設**） | **後端直接拒絕啟動**並列出需要的設定。同樣是大聲失敗——門檻缺值時「信心不足就先問、不要亂做」這條路徑的判定基準不存在，而把缺值讀成某個預設門檻，等於讓它由一個沒有人選過的數字決定（`BR3.4`）。另四個 `BRAIN_ROUTER_*` 缺值只會記 WARN／INFO 並取預設 |
-| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務。選 `fulltext` 時入口頁**每個有交辦的輪次**都會記一筆 `episodic_write_failed` WARNING（`fulltext` 下寫不了記憶），屬預期（`OPEN-GW13-18`） |
+| 記憶檢索的 embedding | 依 `EMBEDDING_PROVIDER` 而定（見第 3 節）。本機的向量檢索走 **`fastembed`**；**`ollama` 是部署 stack 專用**——本機設得出合法值（啟動會過）但連不上，失敗發生在第一次 embed | 選 `fulltext`／`stub` 時不需任何外部服務。選 `fulltext` 時入口頁**每個有交辦的輪次**都會記一筆 `episodic_write_failed` WARNING（`fulltext` 下寫不了記憶），屬預期（`OPEN-GW13-18`）。在入口頁說「請記住：…」並確認時，`fulltext` 下會回錯誤「目前的記憶設定（EMBEDDING_PROVIDER=fulltext）無法寫入語意記憶…」而不寫入；要實測語意記憶請改用 `stub` 或 `fastembed` |
 
 ### 三個「不在 requirements.txt 裡」的硬依賴
 
@@ -39,10 +39,11 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 
 | `LLM_PROVIDER` | 認證來源 | 適用 |
 |---|---|---|
-| `openrouter`（程式預設，**唯一可用值**） | `OPENROUTER_API_KEY` | 部署與本機皆同 |
+| `openrouter`（程式預設） | `OPENROUTER_API_KEY` | 部署與本機皆同 |
+| `claude-code` | 你已登入的 `claude` CLI | **只限本機**（`APP_ENV=local`），見下方小節 |
 | ~~`cli`~~ | **已退役（2026-10-02，RAID R-11）** | 設它會退回 `openrouter` 並記一行 ERROR。A3 遷移到 LangGraph 之後已無 `claude` CLI 子行程可認證，而該模式仍會刪除 `ANTHROPIC_AUTH_TOKEN`／`BASE_URL`，使金鑰被清空而健康檢查仍回報正常 |
 
-本機直接設 `OPENROUTER_API_KEY`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
+本機設 `OPENROUTER_API_KEY`，或改走下方的 `claude-code`。驗證：後端啟動後打 A3 評核，建議串流有文字增量（或無金鑰時走啟發式／備援，並出現 WARNING／降級）。
 
 `cli` 模式下程式仍可能**主動刪除**兩組變數（避免殘值干擾 Anthropic 相容客戶端）：
 
@@ -54,6 +55,31 @@ FastAPI → langgraph_runtime / LangChain → OpenRouter → 模型
 `openrouter` 模式下，`OPENROUTER_API_KEY` 會在啟動時被映射為 `ANTHROPIC_AUTH_TOKEN`（供仍走 Anthropic 相容客戶端的路徑），且 `ANTHROPIC_API_KEY` 必須留空。
 
 > ⚠️ **金鑰欄位留空就是留空，不要填佔位字串。** 程式判斷「有沒有設定」看的是非空，所以 `OPENROUTER_API_KEY=your_openrouter_api_key_here` 會被當成真金鑰送出去，換來一個離肇因三層遠的 401。範本現在一律出空值、範例寫在註解裡，`scripts/validate_env_contract.py` 也會擋下佔位值。同一個陷阱也適用 `N8N_WEBHOOK_URL`：留著 `your_n8n_webhook_url_here` 會讓每個節點發一次必然失敗的請求，圖照樣出來、但圖示全是灰底。
+
+#### 本機以 Claude Code 當模型（`LLM_PROVIDER=claude-code`）
+
+沒有 OpenRouter 金鑰、想在本機跑完整流程時用。**code-generation 階段新增，`scope-document.md`／`requirements.md` 尚未涵蓋**（回補項在 build-and-test）。
+
+```
+FastAPI → chat_model() → ClaudeCodeChatModel → claude -p（子行程）→ 你的 Claude 登入
+```
+
+前置條件：
+
+1. `claude` 已登入：`claude -p "回一個字：好"` 有回應。**健康檢查只確認 `claude` 在 `PATH` 上，不檢查登入**；沒登入時失敗發生在第一次呼叫，錯誤訊息會提示你先執行 `claude`。
+2. 後端必須 **bare-metal** 跑（容器內沒有 `claude`），而且啟動 uvicorn 的 shell 的 `PATH` 找得到它（常見位置 `~/.local/bin`）。
+3. `backend/.env` 同時設 `LLM_PROVIDER=claude-code` 與 `APP_ENV=local`。`APP_ENV` 是其他值或**未設定**都會退回 `openrouter` 並記一行 ERROR。`deploy/` 下的設定不得出現這個值，`scripts/validate_env_contract.py` 會擋。
+
+會與 OpenRouter 不同的地方：
+
+- **`BRAIN_ROUTER_TIMEOUT_SEC` 要調大**：預設 5 秒是為 OpenRouter 訂的。實測一次短 prompt 的路由約 4 秒（CLI 啟動＋模型回應），已貼近上限，實際路由 prompt 更長；超過會得到路由層「模型不可用」。本機建議 `60`。
+- **模型名**：含 `/` 的 OpenRouter 格式（預設值都是）CLI 不認得，會改用 CLI 的預設模型。要指定就給不含 `/` 的別名（`LLM_MODEL=sonnet`、`BRAIN_ROUTER_MODEL=sonnet`）。
+- **不串流**：A3 建議是整段一次出現。
+- `temperature`、`BRAIN_ROUTER_MAX_RETRIES` 在這條路徑不起作用。
+- 用量算在你的 Claude 帳號上。
+- 跑後端單元測試時把 `.env` 的 `LLM_PROVIDER` 改回 `openrouter`：既有測試以替身驗 OpenRouter 路徑，選到 `claude-code` 會走錯分支。
+
+安全上，子行程環境是白名單（不帶 `OPENROUTER_API_KEY`、`ANTHROPIC_*`、`JWT_SECRET`、`DATABASE_URL` 等），prompt 只走 stdin，並以 `--tools "" --safe-mode` 啟動：CLI 只當模型用，不能讀檔或跑指令，也不載入 CLAUDE.md／hook／MCP。
 
 ### 圖示目錄
 
@@ -278,9 +304,20 @@ python scripts/backfill_project_members.py --dry-run && echo "exit=$?"
 讀不到 `public` 的任何表。
 
 本機**預設不啟用**：`backend/.env` 的 `MEMORY_DB_PASSWORD` 留空時，後端不建立記憶專用
-連線，啟動時記一行 `WARNING 記憶專用資料庫連線未設定…`，且**不會**退回主連線的帳號
-假裝邊界生效（主連線為 SQLite 時也一律不建立）。截至本節寫下時，記憶表的實際存取
-仍走主連線，所以不啟用不影響任何功能。
+連線，啟動時記一行 `WARNING 記憶專用資料庫連線未設定…`（主連線為 SQLite 時也一律不建立）。
+
+記憶表的**所有**存取點都經同一套判定（`backend/services/memory_router.py` 的
+`memory_session_source`；合併前必修第 48／52 列，build-and-test 第三輪補齊 WS 與編排路徑）：
+記憶 HTTP 端點、大腦閘道的記憶預取與情節／語意記憶寫入、編排器的程序記憶寫入、
+刪除帳號前的記憶參照計數。判定結果：
+
+| `MEMORY_DB_PASSWORD` | `APP_ENV` | 記憶表走哪條連線 |
+|---|---|---|
+| 已設定 | 任何 | `cloud360_memory`（讀不到 `public`） |
+| 留空 | `local`／`test`／`ci`（本機預設 `local`） | **退回主連線**，每程序記一次 `WARNING memory_db_local_fallback`——記憶功能照常可用，但資料庫層邊界在此程序內不生效 |
+| 留空 | 其他（如 `staging`） | **不退回**：記憶端點回 503；大腦的記憶預取降級（照常分類）、語意記憶寫入回「沒有記住」類錯誤、情節／程序記憶不寫只記 WARNING；刪除帳號回 503。日誌記 `ERROR memory_db_unavailable`（不含連線資訊） |
+
+所以本機不啟用不影響任何功能；要驗證邊界本身才需要啟用。
 
 要在本機啟用（例如要驗證邊界）：
 
@@ -360,7 +397,7 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/cloud360
 JWT_SECRET=dev_only_change_me
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# LLM 供應商：openrouter 是唯一可用值。`LLM_PROVIDER=cli` 已退役（RAID R-11
+# LLM 供應商：openrouter（本機改用 claude-code 見第 0 節 H1）。`LLM_PROVIDER=cli` 已退役（RAID R-11
 # 已修）：設它會退回 openrouter 並記一行 ERROR。注意舊的 backend/.env.example
 # 預設值就是 cli，若你的 .env 是在 2026-10-01 之前複製的，把那一行改成
 # openrouter（或刪掉）。
@@ -577,7 +614,7 @@ open http://localhost:8010/docs
 
 全新資料庫只有 `admin` 一個帳號，很多畫面看不出效果（分頁、逾期標示、無紀錄態都要多筆才看得到）。
 
-`init_db()` 在 `users` 表為空時會建立 11 個 persona 帳號；但 `schema_rbac.sql` 已經插了 `admin`，所以那段**不會觸發**。要多筆資料就自己灌。
+`init_db()` 只在 `users` 表**完全為空**時建立 11 個 persona 帳號；但 `schema_rbac.sql` 一定會插入保留的系統帳號 `SYSTEM.retention-purge`（90 天記憶清除的稽核行為者，不能登入、不得刪除），所以走 `schema_rbac.sql` 建出來的全新庫**永遠不會觸發** persona 建立（`admin` 是之後由 `init_db()` 依 `CLOUD360_BOOTSTRAP_ADMIN_PASSWORD`／本機預設另外建的）。要多筆資料就自己灌。
 
 最省事的方式是用**公開註冊端點**（無需認證），它同時也是 e2e 造資料的手法：
 

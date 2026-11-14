@@ -864,17 +864,40 @@ export const WorkspacePage = () => {
       const title = window.prompt('請為這個架構圖命名：', '新架構圖');
       if (!title) return null;
       setSaveStatus('saving');
+      // build-and-test F1（2026-11-12；本階段新增、已核可 scope／requirements 尚未涵蓋）：
+      // 目前作業對象是一個系統時，新圖存檔即掛到該系統，大腦才找得到系統下的圖。
+      // 伺服器判定資格；不合格時整個請求失敗（不存成未掛載的圖），錯誤訊息照實呈現。
+      const targetSystemId = brain.target?.systemId ?? null;
+      const targetSystemName = brain.target?.systemName ?? null;
       const response = await fetch(`${API_COLLAB}/diagrams`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ xml_data: currentXml, title }),
+        body: JSON.stringify({
+          xml_data: currentXml,
+          title,
+          ...(targetSystemId !== null ? { system_id: Number(targetSystemId) } : {}),
+        }),
       });
+      if (!response.ok && targetSystemId !== null) {
+        const data = await response.json().catch(() => null);
+        const detail = data && typeof data.detail === 'string' ? data.detail : null;
+        setSaveStatus('no-file');
+        showToast('儲存架構圖失敗：無法掛到目前作業對象的系統', 'error', {
+          hint: detail ?? '請在脈絡列確認作業對象後再存一次。',
+          autoDismissMs: 6000,
+        });
+        return null;
+      }
       if (response.ok) {
         const data = await response.json();
         setCurrentDiagramId(data.id);
         currentDiagramIdRef.current = data.id;
         setSaveStatus('saved');
         showToast(opts?.successMessage || '架構圖建立成功', 'success', {
+          hint:
+            data.system_id !== null && data.system_id !== undefined
+              ? `已掛到系統「${targetSystemName || '目前作業對象'}」`
+              : undefined,
           autoDismissMs: 3000,
         });
         fetchDiagrams();

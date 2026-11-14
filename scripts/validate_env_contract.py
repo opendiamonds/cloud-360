@@ -71,6 +71,12 @@ SDK_INTERNAL_KEYS = {
     "MAX_THINKING_TOKENS",
 }
 
+# LLM_PROVIDER value that is local-development only: it needs a logged-in
+# `claude` CLI, which no deployment image has. backend/services/llm_provider.py
+# refuses it outside APP_ENV=local at runtime; this keeps it out of deploy
+# configuration altogether.
+LOCAL_ONLY_LLM_PROVIDER = "claude-code"
+
 # Loopback origins are a local-dev concept. In a deploy template they widen the
 # backend's CORS allowlist on the public host for no operational reason.
 DEV_ONLY_MARKERS = ("localhost", "127.0.0.1")
@@ -239,6 +245,28 @@ def validate_scopes_are_separated() -> int:
     return 0
 
 
+def validate_local_only_provider_stays_out_of_deploy() -> int:
+    """The local-only LLM provider must not appear in any deployment config."""
+    paths = [DEPLOY_TEMPLATE, DEPLOY_RENDERER] + sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "deploy").glob("docker-compose.*.yml")
+    )
+    violations = [
+        f"{rel}:{lineno}"
+        for rel in paths
+        for lineno, line in enumerate(read(rel).splitlines(), start=1)
+        if LOCAL_ONLY_LLM_PROVIDER in line.lower()
+    ]
+    if violations:
+        return fail(
+            f"'{LOCAL_ONLY_LLM_PROVIDER}' is a local-development LLM provider but "
+            "appears in deployment configuration:\n  - "
+            + "\n  - ".join(violations)
+            + "\nDeployed containers have no logged-in claude CLI; use openrouter."
+        )
+    return 0
+
+
 def validate_local_dev_template_is_complete() -> int:
     """Every variable the backend reads must be documented for local dev."""
     read_names: set[str] = set()
@@ -299,6 +327,7 @@ def main() -> int:
         validate_deploy_template_is_complete,
         validate_deploy_template_sets_nothing_derived,
         validate_scopes_are_separated,
+        validate_local_only_provider_stays_out_of_deploy,
         validate_local_dev_template_is_complete,
         validate_templates_ship_no_placeholder_values,
     )

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useBrainSession } from '../../brain/brainSession';
-import { useBrainTranscript, type NoticeItem, type UserItem } from '../../brain/brainTranscript';
+import { PENDING_ANCHOR, useBrainTranscript, type NoticeItem, type UserItem } from '../../brain/brainTranscript';
 import { ClarifyCandidates } from './ClarifyCandidates';
 import { StreamingMessage } from './StreamingMessage';
 import { WorkItemList } from './WorkItemList';
@@ -62,7 +62,8 @@ const SystemNotice: React.FC<{ item: NoticeItem }> = ({ item }) => (
  * ConversationView — 本頁目前讀取段的對話紀錄（`BR93.4`、`BR94.5`、`BR97.8`）
  *
  * 讀應用程式層 store 中該段的紀錄（換頁不丟、切換共享模式即改顯示另一段）。工作項清單錨定在它首次出現時
- * 該段最後一則大腦訊息之下；無大腦訊息時列在最後。超過 500 則被截斷時頂端顯示說明（`EPN-04`）。
+ * 該段最後一則大腦訊息之下；首次出現時本段尚無訊息（或錨點已被截斷）者列在最前面，尚待本輪大腦訊息
+ * 承接者列在最後（build-and-test F4）。超過 500 則被截斷時頂端顯示說明（`EPN-04`）。
  * 紀錄為空而作業對象或工作項非空 → 另顯示「先前的對話大腦仍記得…」（`BR93.4`）。
  */
 export const ConversationView: React.FC<{ emptyState?: React.ReactNode }> = ({ emptyState }) => {
@@ -74,10 +75,17 @@ export const ConversationView: React.FC<{ emptyState?: React.ReactNode }> = ({ e
       .filter(([, anchor]) => anchor === anchorId)
       .map(([workItemId]) => workItemId);
   const presentIds = new Set(seg.items.map((i) => i.id));
-  // 錨點為空、尚待下一則大腦訊息承接、或錨點已被截斷移除者：列在最後。
-  const orphanIds = Object.entries(seg.anchors)
-    .filter(([, anchor]) => !presentIds.has(anchor))
-    .map(([workItemId]) => workItemId);
+  // 錨點不在畫面上的工作項分兩種（build-and-test F4，2026-11-12 本機驗證）：
+  // - 尚待下一則大腦訊息承接（PENDING_ANCHOR）：屬於進行中的這一輪，列在最後。
+  // - 錨點為空（首次出現時本段尚無任何訊息，例如重新整理後才收到的先前工作項）或錨點已被截斷移除：
+  //   它們早於畫面上的每一則訊息，列在最前面。原本一律列在最後，使舊的失敗項在之後每一輪都釘在對話最底，
+  //   讀起來像是最新一輪的結果。
+  const leadingIds: string[] = [];
+  const pendingIds: string[] = [];
+  for (const [workItemId, anchor] of Object.entries(seg.anchors)) {
+    if (presentIds.has(anchor)) continue;
+    (anchor === PENDING_ANCHOR ? pendingIds : leadingIds).push(workItemId);
+  }
   const targetHasLevel =
     conn.target !== null &&
     (conn.target.projectId !== null || conn.target.systemId !== null || conn.target.diagramId !== null);
@@ -96,6 +104,7 @@ export const ConversationView: React.FC<{ emptyState?: React.ReactNode }> = ({ e
           先前的對話大腦仍記得，只是這裡不再顯示
         </p>
       )}
+      {leadingIds.length > 0 && <WorkItemList workItemIds={leadingIds} />}
       {seg.items.map((item) => {
         if (item.kind === 'user') return <UserMessage key={item.id} item={item} />;
         // 系統提示不當工作項錨點（anchorWorkItems 會略過它，code-generation review-02 R-10），其下不列工作項。
@@ -114,7 +123,7 @@ export const ConversationView: React.FC<{ emptyState?: React.ReactNode }> = ({ e
           </StreamingMessage>
         );
       })}
-      {orphanIds.length > 0 && <WorkItemList workItemIds={orphanIds} />}
+      {pendingIds.length > 0 && <WorkItemList workItemIds={pendingIds} />}
     </div>
   );
 };

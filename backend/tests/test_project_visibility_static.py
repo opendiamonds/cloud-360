@@ -35,7 +35,15 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 UNSCOPED_METHODS = {"list_projects_by_ids", "list_systems_unscoped"}
-WRITE_METHODS = {"create_system", "delete_project", "delete_system"}
+# build-and-test F1（2026-11-12）：架構圖掛到系統的兩個方法同受守門——存檔時掛載
+# （`collab_router.create_diagram`）與系統頁掛圖（`hierarchy_router.set_diagram_system`）。
+WRITE_METHODS = {
+    "create_system",
+    "delete_project",
+    "delete_system",
+    "assert_system_attachable",
+    "set_diagram_system",
+}
 # `U14` ADR-0022 D-8：大腦的三條讀取／設定路徑經這四個方法，同受可見性守門。
 GUARDED_READS = {"describe_work_target", "list_projects", "list_systems", "resolve_work_target"}
 GUARDED_METHODS = WRITE_METHODS | GUARDED_READS

@@ -1195,3 +1195,111 @@ test.describe('U23 project pages', () => {
     expect(rec.all.filter((r) => r.path.startsWith('/api/hierarchy/'))).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// build-and-test 本機驗證 F1（2026-11-12）：架構圖掛到系統。
+//
+// **本階段新增、已核可 scope／requirements 尚未涵蓋**（FR9.1 只說系統對應架構圖檔、FR9.5 只要求
+// 專案／系統的建立路徑）。回補：requirements 新增「架構圖掛到系統」FR、user-stories 補 AC。
+// 另開 describe，不動 `U23 project pages` 既有 21 個案例的 TCMS 名稱。伺服器的授權由
+// `backend/tests/test_diagram_system_attach.py` 的 TestClient 承擔；本檔測畫面消費與呈現。
+// ---------------------------------------------------------------------------
+
+interface MyDiagramStub {
+  id: number;
+  title: string;
+  is_owner: boolean;
+  system_id: number | null;
+  updated_at: string;
+}
+
+/** 在 setupApp 之後註冊：Playwright 以後註冊者優先，故這裡的 me／collab／掛載路由蓋過預設。 */
+async function withDiagrams(
+  page: Page,
+  diagrams: MyDiagramStub[],
+  putStatus: (diagramId: number, systemId: number | null) => number = () => 200
+) {
+  await page.route('**/api/auth/me', (route) =>
+    fulfillJson(route, 200, {
+      id: SELF_ID,
+      username: SELF_NAME,
+      role: 'Project_Architect',
+      is_active: true,
+      authorization_status: 'approved',
+      permissions: { K2: FULL, K3: FULL, K4: FULL, A1: FULL },
+      pending_request: null,
+    })
+  );
+  await page.route('**/api/collab/diagrams', (route) => fulfillJson(route, 200, diagrams));
+  await page.route('**/api/hierarchy/diagrams/*/system', async (route) => {
+    const req = route.request();
+    const diagramId = Number(/\/diagrams\/(\d+)\/system$/.exec(new URL(req.url()).pathname)?.[1]);
+    const body = JSON.parse(req.postData() ?? '{}') as { system_id: number | null };
+    const status = putStatus(diagramId, body.system_id);
+    if (status !== 200) return fulfillJson(route, status, { detail: '查不到系統' });
+    const target = diagrams.find((d) => d.id === diagramId);
+    if (target) target.system_id = body.system_id;
+    return fulfillJson(route, 200, { diagram_id: diagramId, system_id: body.system_id });
+  });
+}
+
+test.describe('Diagram attach to system', () => {
+  /**
+   * @purpose 系統頁把自己的圖掛到系統：送出後該系統列出這張圖，再取消掛載後消失。
+   * @api GET /api/collab/diagrams -> 200 | 我的圖與目前歸屬
+   * @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 200 | 掛載與取消
+   * @ui /projects/:projectId | 總覽籤「系統的架構圖」區
+   * @given 擁有者，專案 10 有系統 e2e-system-1；我有一張未掛載的圖 e2e-diagram-a
+   * @step 開啟總覽 | 系統列顯示「這個系統還沒有掛上你的架構圖」
+   * @step 在下拉選 e2e-diagram-a 並按「掛上」 | PUT 本體 system_id=100；狀態列「已掛到系統」；系統列出現 e2e-diagram-a
+   * @step 按「取消掛載「e2e-diagram-a」」 | PUT 本體 system_id=null；系統列回到空說明
+   * @pass 兩次 PUT 本體正確且畫面隨之更新
+   * @story US9.1
+   */
+  test('attaches my diagram to a system and detaches it from the overview', async ({ page }) => {
+    const state = detailWorld(1);
+    const rec = await setupApp(page, state);
+    await withDiagrams(page, [
+      { id: 7, title: 'e2e-diagram-a', is_owner: true, system_id: null, updated_at: '2026-11-01T00:00:00Z' },
+    ]);
+    await page.goto(detailUrl('overview'));
+    const row = page.getByTestId('system-diagrams-100');
+    await expect(row).toContainText('這個系統還沒有掛上你的架構圖');
+
+    await row.getByRole('combobox').selectOption('7');
+    await row.getByRole('button', { name: '掛上' }).click();
+    await expect(page.getByTestId('system-diagrams-status')).toHaveText('已掛到系統');
+    await expect(row.getByTestId('system-diagram-item')).toHaveText(/e2e-diagram-a/);
+    const puts = rec.all.filter((r) => r.method === 'PUT' && /\/diagrams\/7\/system$/.test(r.path));
+    expect(puts.map((r) => JSON.parse(r.body ?? '{}'))).toEqual([{ system_id: 100 }]);
+
+    await row.getByRole('button', { name: '取消掛載「e2e-diagram-a」' }).click();
+    await expect(page.getByTestId('system-diagrams-status')).toHaveText('已取消掛載');
+    await expect(row).toContainText('這個系統還沒有掛上你的架構圖');
+  });
+
+  /**
+   * @purpose 伺服器拒絕掛載（不可寫的系統）時照實顯示錯誤，畫面不假裝已掛上。
+   * @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 404 | 目標系統不可寫
+   * @ui /projects/:projectId | 總覽籤「系統的架構圖」區
+   * @given 同上，但伺服器對掛載一律回 404「查不到系統」
+   * @step 選圖並按「掛上」 | 狀態列顯示「查不到系統」
+   * @pass 系統列仍是空說明
+   * @story US9.1
+   */
+  test('shows the server refusal and keeps the system unattached', async ({ page }) => {
+    const state = detailWorld(1);
+    await setupApp(page, state);
+    await withDiagrams(
+      page,
+      [{ id: 7, title: 'e2e-diagram-a', is_owner: true, system_id: null, updated_at: '2026-11-01T00:00:00Z' }],
+      () => 404
+    );
+    await page.goto(detailUrl('overview'));
+    const row = page.getByTestId('system-diagrams-100');
+    await row.getByRole('combobox').selectOption('7');
+    await row.getByRole('button', { name: '掛上' }).click();
+    await expect(page.getByTestId('system-diagrams-status')).toHaveText('查不到系統');
+    await expect(row).toContainText('這個系統還沒有掛上你的架構圖');
+  });
+});

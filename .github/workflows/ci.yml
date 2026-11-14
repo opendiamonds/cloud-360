@@ -641,11 +641,28 @@ jobs:
           psql -h localhost -U postgres -d cloud360 \
             -v ON_ERROR_STOP=1 -f schema_rbac.sql
 
+      # 合併前必修第 52 列／MB-48（build-and-test 第三輪）：tests_pg 的
+      # test_memory_role_ws_pg 以 cloud360_memory 實際連線驗 WS／編排路徑的記憶存取，
+      # 需要該角色有密碼。與 memory-schema job 同一支部署用 script、同一個測試用值
+      # （只存在於本 job）；缺值時該測試大聲失敗而非跳過。
+      - name: Set the memory-only role password
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGPASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cloud360
+          MEMORY_DB_PASSWORD: ci_memory_db_password_not_for_production
+        run: bash deploy/initdb/02-memory-role-password.sh
+
       # 結構性隔離：backend job 的 `discover -s tests` 看不到 tests_pg，故這裡
       # 不需要任何 env guard，也沒有東西可以忘記設。理由全文見
       # backend/tests_pg/__init__.py 的 docstring。
-      # 合併前必修第 33 列 (g)：步驟名稱與 tests_pg 的實際內容一致（四支檔）。
-      - name: Run real-PostgreSQL tests (membership C1-C4, memory V1/D1-D2, purge atomicity, requirement field G1-G4)
+      # 合併前必修第 33 列 (g)：步驟名稱與 tests_pg 的實際內容一致（六支檔；第五支為
+      # build-and-test 第二輪新增的語意記憶寫入後預取可讀，第六支為第三輪的記憶專用角色 WS 路徑）。
+      - name: Run real-PostgreSQL tests (membership C1-C4, memory V1/D1-D2, purge atomicity, requirement field G1-G4, semantic memory prefetch, memory role WS path)
+        env:
+          MEMORY_DB_PASSWORD: ci_memory_db_password_not_for_production
         run: python -m unittest discover -s tests_pg -v
 
   docker-build:

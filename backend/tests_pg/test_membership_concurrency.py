@@ -438,16 +438,22 @@ class MembershipConcurrencyTest(unittest.TestCase):
         → barrier 破損 → 紅燈。守門不取鎖 → 它跑完、到 barrier 會合 → 成立。
 
         **同時驗它真的有在判定**（否則一個「永遠直接 return」的實作也會通過
-        本測試的第一半）：該專案只有 alice 一位管理者時守門必須 raise。
+        本測試的第一半）：該專案除 alice 外的成員皆不合格時守門必須 raise。
         """
         project = self._project_with_two_admins("c3")
-        # 讓 alice 成為唯一的成員，使守門有東西可報。合併前必修第 1 ＋ 4 項起守門
-        # 只擋「無合格接手人」：bob 是 `Project_Architect`（`K3.edit`、啟用），
-        # 把他降為一般成員仍是合格接手人、守門會放行，故這裡把他整列移出。
-        self.db.query(ProjectMember).filter(
-            ProjectMember.project_id == project.id,
-            ProjectMember.user_id == self.bob.id,
-        ).delete(synchronize_session=False)
+        # 守門要有東西可報，專案必須同時滿足兩個判準（`projects_losing_last_admin`）：
+        # - 第 21 列（2026-10-25「獨自一人的專案不擋」）：除 alice 外**還有其他成員**
+        #   ——故 bob 的成員列必須保留，不能整列移出（移出後 alice 獨自一人、守門放行）；
+        # - 第 1 ＋ 4 項（只擋「無合格接手人」）：其他成員**皆不合格**——bob 是
+        #   `Project_Architect`（`K3.edit`、啟用）本是合格接手人，故把他的帳號停用。
+        #   `is_qualified_successor` 第一個條件即 `is_active`，停用者不論專案角色
+        #   （此處仍為 `project_admin`）都不算數，同時也驗到「不合格的其他管理者不算」。
+        # 停用不影響 T2 以 `mint_principal(self.bob)` 呼叫守門：`assert_can_deactivate`
+        # 刻意不檢查 principal 的權限（見其 docstring），`_Actor` 也只帶 id 與 role。
+        self.db.execute(
+            text("UPDATE users SET is_active = false WHERE id = :uid"),
+            {"uid": self.bob.id},
+        )
         self.db.commit()
 
         barrier = threading.Barrier(2)
@@ -522,7 +528,7 @@ class MembershipConcurrencyTest(unittest.TestCase):
         )
         # 第二半：它真的在判定，不是直接 return。
         self.assertEqual(
-            results.get("T2"), "guard", self._diag("守門沒有判定出唯一管理者")
+            results.get("T2"), "guard", self._diag("守門沒有判定出無合格接手人的專案")
         )
         self.assertEqual(results.get("T2_projects"), [project.id], self._diag("守門回報的專案不對"))
 

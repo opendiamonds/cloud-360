@@ -9,7 +9,7 @@ compiled graph.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -118,6 +118,49 @@ def openrouter_chat_model(
     )
 
 
+def chat_model(
+    *,
+    openrouter_builder: Callable[[], Any] | None = None,
+    **kwargs: Any,
+):
+    """The single place an LLM client is chosen; all LLM call sites go through it.
+
+    On openrouter this forwards ``kwargs`` unchanged to
+    :func:`openrouter_chat_model`, or calls ``openrouter_builder`` when the
+    caller builds a different client for that path (the A1 design agent's
+    ``ChatAnthropic``). Behaviour on openrouter is therefore exactly what each
+    caller had before this function existed.
+
+    On claude-code (local development only, see ``services.llm_provider``) it
+    returns a ``ClaudeCodeChatModel``; only ``model`` and ``timeout_seconds`` apply.
+    Raises ``RuntimeAuthError`` when the ``claude`` CLI is not on PATH, the same
+    domain error a missing OpenRouter key produces, so callers need no new branch.
+    """
+    from services.llm_provider import (
+        CLAUDE_CODE,
+        auth_error_message,
+        get_provider,
+        llm_auth_ready,
+    )
+
+    if get_provider() != CLAUDE_CODE:
+        if openrouter_builder is not None:
+            return openrouter_builder()
+        return openrouter_chat_model(**kwargs)
+
+    if not llm_auth_ready():
+        raise RuntimeAuthError(auth_error_message(), code="claude_cli_not_found")
+    from services.claude_code_chat import ClaudeCodeChatModel
+
+    timeout_seconds = kwargs.get("timeout_seconds")
+    return ClaudeCodeChatModel(
+        cli_model=kwargs.get("model"),
+        timeout_seconds=(
+            DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else float(timeout_seconds)
+        ),
+    )
+
+
 def invoke_graph(
     graph: Any,
     state: Any,
@@ -179,6 +222,7 @@ __all__ = [
     "RuntimeAuthError",
     "StreamEvent",
     "astream_graph",
+    "chat_model",
     "invoke_graph",
     "openrouter_chat_model",
     "stream_graph",

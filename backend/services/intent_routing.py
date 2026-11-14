@@ -71,10 +71,14 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Final, Optional, Sequence, Tuple
+from typing import Any, Callable, Final, Mapping, Optional, Sequence, Tuple
 
 from services.intent_routing_config import RoutingConfig, resolve_routing_config
-from services.intent_routing_context import RoutingPrompt, build_routing_prompt
+from services.intent_routing_context import (
+    RoutingPrompt,
+    build_routing_prompt,
+    format_work_target,
+)
 from services.intent_routing_errors import PlatformSelfModificationRefused
 from services.intent_routing_parser import parse_classification
 from services.intent_routing_port import (
@@ -153,24 +157,32 @@ def guard_hits(text: str) -> bool:
     return is_platform_self_modification(text)
 
 
-def _describe_work_target(segment: Any) -> Optional[str]:
+def _describe_work_target(
+    segment: Any, names: Optional[Mapping[str, Optional[str]]] = None
+) -> Optional[str]:
     """把該段的三層作業對象寫成一行文字。
 
     `ConversationSegment` 的三個欄位**允許部分非空**（`U10` 的 `EC7`，含
     「只有 `diagramId`」這種組合），故本函式**不推導、不補齊、不拒絕**，
     只如實呈現非空的那幾層。
+
+    **以名稱呈現，不再寫 `#id` 代號**（build-and-test 本機驗證 F2，2026-11-12）：原本的
+    「專案 #1／系統 #1」是模型唯一看得到的對象描述，模型把它抄成 `referent`，閘道以名稱
+    比對比不到，回「找不到名為『系統 #1』」。`names` 由閘道以 `describe_work_target`
+    取得（鍵 `projectName`／`systemName`／`diagramName`）；名稱經 `sanitize_target_name`
+    整理後以「」包住。取不到名稱的層寫「（名稱無法取得）」——不退回 `#id`，否則同一個
+    缺陷會在名稱查詢失敗時重現。
     """
     if segment is None:
         return None
-    parts = []
-    for label, value in (
-        ("專案", getattr(segment, "project_id", None)),
-        ("系統", getattr(segment, "system_id", None)),
-        ("架構圖", getattr(segment, "diagram_id", None)),
-    ):
-        if value is not None:
-            parts.append(f"{label} #{value}")
-    return "／".join(parts) if parts else None
+    return format_work_target(
+        (
+            getattr(segment, "project_id", None),
+            getattr(segment, "system_id", None),
+            getattr(segment, "diagram_id", None),
+        ),
+        names,
+    )
 
 
 def _recent_messages(segment: Any, limit: int) -> Tuple[Tuple[str, str], ...]:
@@ -255,6 +267,7 @@ def fetch_routing_context(
     segment_id: str = SEGMENT_SHARED,
     recent_message_limit: int = _RECENT_MESSAGE_LIMIT,
     memory_limit: int = _MEMORY_SEARCH_LIMIT,
+    target_names: Optional[Mapping[str, Optional[str]]] = None,
 ) -> RoutingContext:
     """**L0**：本單元唯一的讀取 I/O 點。
 
@@ -271,7 +284,7 @@ def fetch_routing_context(
     segment = session.segment(segment_id) if session is not None else None
     notes, degraded = _memory_notes(memory_facade, principal, text, memory_limit)
     return RoutingContext(
-        work_target_hint=_describe_work_target(segment),
+        work_target_hint=_describe_work_target(segment, target_names),
         recent_messages=_recent_messages(segment, recent_message_limit),
         memory_notes=notes,
         memory_degraded=degraded,
@@ -406,6 +419,7 @@ class IntentRouter:
         text: str,
         *,
         turn_id: str = "",
+        target_names: Optional[Mapping[str, Optional[str]]] = None,
     ) -> IntentDecision:
         """`K-10`：把一句自然語言判定為 `IntentDecision`。
 
@@ -428,6 +442,11 @@ class IntentRouter:
         （`observability-design.md` §三：`turn_id` 是唯一的串接鍵）需要它。
         以 keyword-only 預設值的形式附加，不改變契約要求的那三個參數。
         省略時觀測仍會產生，只是無法與 `U13`／`U12` 的事件串起來。
+
+        `target_names` 同為關鍵字、選用（build-and-test F2，2026-11-12）：閘道已取得的作業
+        對象三層名稱，用來把 prompt 的作業對象寫成名稱而非 `#id`。本層**不自己查名稱**——
+        查名稱要 DB，而本單元的 L0 只讀傳進來的 session 與記憶 facade。省略時取不到名稱的
+        層寫「（名稱無法取得）」。
 
         **`prompt_guard` 命中為什麼拋例外而不回 `IntentDecision`**：
         固定拒絕訊息不是一個 `IntentDecision`（兩邊皆空會違反 `EC5`），
@@ -466,6 +485,7 @@ class IntentRouter:
                 text=text,
                 memory_facade=self._memory_facade,
                 segment_id=self._segment_id,
+                target_names=target_names,
             )
             payload = await arun_routing(
                 self._compiled_graph(),

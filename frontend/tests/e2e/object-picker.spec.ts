@@ -1389,3 +1389,58 @@ test.describe('U16 object picker', () => {
     expect((await since()).filter((a) => a.text.includes('已載入'))).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// build-and-test 本機驗證 F1（2026-11-12）：工作區存新圖時掛到目前作業對象的系統。
+//
+// **本階段新增、已核可 scope／requirements 尚未涵蓋**（FR9.1／FR9.5 皆無「圖掛系統」路徑）。
+// 回補：requirements 新增「架構圖掛到系統」FR、user-stories 補 AC。另開 describe，不改
+// `U16 object picker` 既有案例的 TCMS 名稱；沿用本檔的假大腦（脈絡列以它回推的作業對象為準）。
+// ---------------------------------------------------------------------------
+
+test.describe('Workspace save attaches to work target', () => {
+  /**
+   * @purpose 作業對象是系統時，工作區存新圖的請求帶該系統，成功後告知「已掛到系統」。
+   * @api POST /api/collab/diagrams -> 200 | 存檔時掛到系統
+   * @ui /workspace | 工作區脈絡列、上傳架構圖、儲存並評核
+   * @ui /assessment | 存檔後的去向
+   * @given 作業對象為專案 7／系統 70（假大腦回推，帶名稱）；有 A1 edit 與 K2 edit
+   * @step 開啟 /workspace | 脈絡列的系統 data-id 為 70
+   * @step 上傳一張 .drawio，按「儲存並評核」並命名 | POST 本體含 title 與 system_id=70
+   * @step 檢視去向 | 以新圖 id 進入 /assessment
+   * @pass 請求帶系統且存檔成功後照常前往評核
+   * @note 走「儲存並評核」而不是「儲存架構圖」：後者取 draw.io 內嵌畫布回傳的 XML，而本檔把
+   *       embed.diagrams.net 樁成空白頁、畫布永遠不會 init；前者取頁面自己的 XML，與存檔路徑同一支
+   *       `saveDiagram`。成功提示「已掛到系統「…」」因隨即換頁而不斷言，由 `saveDiagram` 的同一分支承擔。
+   * @story US9.1
+   */
+  test('saves a new diagram into the selected system and says so', async ({ page }) => {
+    const h = await setup(page, {
+      hierarchy: { projects: [proj(7, `${M}-專案七`)], systems: { 7: [sys(70, 7, `${M}-系統七十`)] } },
+    });
+    h.server.shared = { pid: '7', sid: '70', did: null };
+    h.server.names = { p7: `${M}-專案七`, s70: `${M}-系統七十` };
+    const posts: Record<string, unknown>[] = [];
+    await page.route('**/api/collab/diagrams', async (route) => {
+      if (route.request().method() !== 'POST') return json(route, 200, []);
+      const body = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>;
+      posts.push(body);
+      return json(route, 200, { id: 501, system_id: body.system_id ?? null, status: 'success', message: 'ok' });
+    });
+
+    await page.goto('/workspace');
+    await expect(page.getByTestId('brain-context-name-system')).toHaveAttribute('data-id', '70');
+    await page.locator('input[type="file"][accept*=".drawio"]').setInputFiles({
+      name: `${M}.drawio`,
+      mimeType: 'application/xml',
+      buffer: Buffer.from(`<mxGraphModel><root><mxCell id="${M}-save"/></root></mxGraphModel>`),
+    });
+    // 上傳是非同步讀檔：等提示出現再存，否則頁面的 XML 仍為空、存檔分支不會發 POST。
+    await expect(page.getByText('架構圖已上傳至畫布')).toBeVisible();
+    page.once('dialog', (dialog) => void dialog.accept(`${M}-新圖`));
+    await page.getByRole('button', { name: '儲存並評核' }).click();
+    await expect.poll(() => posts.length).toBe(1);
+    expect(posts[0]).toMatchObject({ title: `${M}-新圖`, system_id: 70 });
+    await expect(page).toHaveURL(/\/assessment\?diagramId=501$/);
+  });
+});

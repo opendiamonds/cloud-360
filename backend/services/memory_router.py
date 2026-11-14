@@ -73,17 +73,21 @@ dependency 上，因為 `K-16` 有「兩層串聯」且指名了第一層的承�
 `principal`（角色、核准狀態）仍由主連線的 `get_current_user` 取得後以
 `mint_principal` 傳入——記憶 session 上**不查** `public` 的任何表。
 
-**本段只涵蓋 HTTP 路徑。** `brain_gateway`、`work_orchestrator` 以各自的
-`session_factory`（主連線）建立 `MemoryFacade`，屬那兩個單元（見本單元
-`code-summary.md` 的 2026-11-07 一節）。
+**同一套判定也給非 HTTP 路徑用**（build-and-test 第三輪，合併前必修第 52 列／`MB-48`
+的未完成半邊）：`brain_gateway` 的預取、情節與語意記憶寫入，`work_orchestrator` 的程序
+記憶寫入，以及 `user_router` 刪帳號前的記憶參照計數，都經 `memory_session_scope`
+取 session。判定（啟用／本機退回／拒絕）只寫在 `memory_session_source` 一處，HTTP 的
+`get_memory_db` 與非 HTTP 的 `memory_session_scope` 共用它；非 HTTP 路徑在「拒絕」時
+拋 `MemoryStorageUnavailable`（不轉 503），由呼叫端沿用各自既有的降級語意。
 """
 
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Iterator, List, Optional
+from typing import Any, Callable, Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -145,6 +149,67 @@ def _warn_local_fallback_once() -> None:
     )
 
 
+#: `memory_session_source` 的兩個回傳值。
+MEMORY_SOURCE_DEDICATED = "dedicated"
+MEMORY_SOURCE_LOCAL_FALLBACK = "main_local_fallback"
+
+
+def memory_session_source() -> str:
+    """記憶表該走哪一條連線——HTTP 與非 HTTP 路徑**共用的唯一判定**（見檔頭的表）。
+
+    回 `MEMORY_SOURCE_DEDICATED`（記憶專用連線已設定）或 `MEMORY_SOURCE_LOCAL_FALLBACK`
+    （未設定且 `APP_ENV` 屬本機／測試，記一次 WARNING）；其他環境記 ERROR 並拋
+    `MemoryStorageUnavailable`——**不退回主連線**。
+
+    **ERROR 日誌只帶事件名與 `app_env`**：連線字串、主機、使用者、密碼一律不記
+    ——本 repo 的 Actions log 公開可讀。
+    """
+    if database.memory_db_boundary_enabled():
+        return MEMORY_SOURCE_DEDICATED
+    app_env = database._current_app_env()
+    if app_env in database.LOCAL_APP_ENVS:
+        _warn_local_fallback_once()
+        return MEMORY_SOURCE_LOCAL_FALLBACK
+    logger.error(
+        "%s app_env=%s：記憶專用資料庫連線未設定，記憶存取不可用（非本機環境不退回主連線）",
+        EVENT_MEMORY_DB_UNAVAILABLE,
+        app_env,
+    )
+    raise MemoryStorageUnavailable()
+
+
+@contextmanager
+def _session_for(
+    source: str, main_session_factory: Callable[[], Any], *, close_main: bool
+) -> Iterator[Any]:
+    """依判定結果給出 session。記憶專用 session 一律在此 close；主連線依 `close_main`。"""
+    if source == MEMORY_SOURCE_DEDICATED:
+        db = database.get_memory_session()
+        owned = True
+    else:
+        db = main_session_factory()
+        owned = close_main
+    try:
+        yield db
+    finally:
+        if owned:
+            db.close()
+
+
+@contextmanager
+def memory_session_scope(
+    main_session_factory: Callable[[], Any], *, close_main: bool = True
+) -> Iterator[Any]:
+    """非 HTTP 呼叫端（WS 閘道、編排器、`user_router`）取記憶 session 的唯一入口。
+
+    `main_session_factory` 只在本機退回時被呼叫；`close_main=False` 表示呼叫端借出的是
+    自己仍要用的 session（例如 `user_router` 刪帳號流程的同一個請求 session），不由本函式關閉。
+    非本機環境未設定時拋 `MemoryStorageUnavailable`，**在呼叫 `main_session_factory` 之前**。
+    """
+    with _session_for(memory_session_source(), main_session_factory, close_main=close_main) as db:
+        yield db
+
+
 def get_memory_db(main_db: Session = Depends(get_db)) -> Iterator[Session]:
     """記憶端點的 session：記憶專用連線，或依環境退回／拒絕（見檔頭的表）。
 
@@ -152,28 +217,14 @@ def get_memory_db(main_db: Session = Depends(get_db)) -> Iterator[Session]:
     快取的 session**，故不會因為宣告它而多開一條連線；邊界啟用時它不被交給 facade。
     宣告成 dependency 而不是在函式內呼叫 `get_db()`，是為了讓既有測試以
     `app.dependency_overrides[get_db]` 覆寫的 session 在本機退回路徑上仍然生效。
-
-    **ERROR 日誌只帶事件名與 `app_env`**：連線字串、主機、使用者、密碼一律不記
-    ——本 repo 的 Actions log 公開可讀。
+    判定本身在 `memory_session_source`（與非 HTTP 路徑共用）；本函式只負責把拒絕轉成 503。
     """
-    if database.memory_db_boundary_enabled():
-        memory_db = database.get_memory_session()
-        try:
-            yield memory_db
-        finally:
-            memory_db.close()
-        return
-    app_env = database._current_app_env()
-    if app_env in database.LOCAL_APP_ENVS:
-        _warn_local_fallback_once()
-        yield main_db
-        return
-    logger.error(
-        "%s app_env=%s：記憶專用資料庫連線未設定，記憶端點回 503（非本機環境不退回主連線）",
-        EVENT_MEMORY_DB_UNAVAILABLE,
-        app_env,
-    )
-    raise _translate(MemoryStorageUnavailable())
+    try:
+        source = memory_session_source()
+    except MemoryStorageUnavailable as exc:
+        raise _translate(exc) from None
+    with _session_for(source, lambda: main_db, close_main=False) as db:
+        yield db
 
 
 # 合併前必修第 33 列 (e)（2026-10-31 裁決：4000 字元，超過回 422）。內容會整段送進

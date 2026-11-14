@@ -3,6 +3,7 @@ import type { DiagramChangeOut, ProjectOut, SystemOut } from '../../projects/pro
 import type { FieldSetView } from '../../projects/requirementsApi';
 import { RecentChanges } from './RecentChanges';
 import { SystemCreateAction } from './SystemCreateAction';
+import { SystemDiagrams } from './SystemDiagrams';
 
 /**
  * OverviewTab — 專案詳情的總覽籤（`AC11.1.1`、`AC11.1.3`、`AC11.3.1`–`AC11.3.3`；
@@ -113,6 +114,8 @@ export const OverviewTab: React.FC<{
           )}
         </ul>
       </section>
+      {/* build-and-test F1：系統的架構圖（掛載／改掛／取消）。 */}
+      <SystemDiagrams systems={systems} />
       <RecentChanges systems={systems} changesBySystem={changesBySystem} />
       {canSeeFields && (
         <PendingRequirements systems={systems} fieldsBySystem={fieldsBySystem} state={state} />

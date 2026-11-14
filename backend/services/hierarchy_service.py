@@ -266,6 +266,25 @@ def list_systems(db: Session, *, project_id: int) -> List[System]:
 
 
 
+def set_diagram_system(
+    db: Session, *, diagram_id: int, system_id: Optional[int]
+) -> UserDiagram:
+    """把架構圖掛到系統、改掛，或（`system_id` 為 None）取消掛載。
+
+    build-and-test 本機驗證 F1 的修正（2026-11-12；**本階段新增、已核可 scope／
+    requirements 尚未涵蓋**）。呼叫端（`HierarchyFacade.set_diagram_system`）已完成
+    `K2 edit`、圖的擁有者檢查與目標系統的寫入資格判定；本層同 `BR1.3`，沒有第二道檢查。
+    """
+    diagram = db.query(UserDiagram).filter(UserDiagram.id == diagram_id).first()
+    if diagram is None:
+        raise HierarchyNotFound(f"查不到架構圖 {diagram_id}")
+    diagram.system_id = system_id
+    db.commit()
+    db.refresh(diagram)
+    logger.info("架構圖 %s 的系統歸屬改為 %s", diagram_id, system_id)
+    return diagram
+
+
 def list_diagrams_of_system(
     db: Session, *, system_id: int, owner_user_id: int
 ) -> List[tuple]:

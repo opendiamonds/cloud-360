@@ -623,10 +623,17 @@ CI 的 `memory-schema` job（交付物 `N-2`）會對真實 PostgreSQL 執行
 | 設定密碼 | `deploy/initdb/02-memory-role-password.sh`（唯一實作） | 讀 `MEMORY_DB_PASSWORD`，以 psql `\getenv` 取值，密碼不出現在容器內任何命令列。`deploy.yml` 每次部署在 `up -d` 之後執行（步驟「Set the memory-only database role password」，先 `::add-mask::`）；test compose 以 initdb 第二支 script 執行 |
 | backend 連線 | `backend/database.py` 的 `get_memory_session()` | 主連線的主機與資料庫 ＋ `cloud360_memory`／`MEMORY_DB_PASSWORD`。未設定時拋錯，**不退回**擁有者帳號 |
 
-**誠實的現況**：記憶表的實際存取（`memory_service.py`）**仍走主連線**；改用
-`get_memory_session()` 屬 `memory-service` 單元。在那之前，資料庫層邊界只對以此角色連線的
-程式成立，CI 的 `memory-schema` job 以該角色連線驗證它（`backend/scripts/verify_memory_role.sql`：
-讀不到 `public` 的任一表、寫得進 `memory` 兩表、不能在 `public` 建表）。
+**現況（build-and-test 第三輪，2026-11-14，合併前必修第 48／52 列）**：記憶表的所有存取點
+都經 `backend/services/memory_router.py` 的 `memory_session_source` 判定後以 `cloud360_memory`
+連線——記憶 HTTP 端點（`get_memory_db`）、大腦閘道的記憶預取與情節／語意記憶寫入、編排器的
+程序記憶寫入、刪除帳號前的記憶參照計數（後三者經 `memory_session_scope`）。編排器讀 `users`
+仍用主連線（該角色讀不到 `public`），兩者是不同的 session。**未設定 `MEMORY_DB_PASSWORD` 時**：
+`APP_ENV` 為 `local`／`test`／`ci` 才退回主連線（WARNING `memory_db_local_fallback`）；其他環境
+（含 staging）**不退回**——記憶端點與刪除帳號回 503、大腦的記憶預取降級、記憶寫入不執行，
+日誌記 ERROR `memory_db_unavailable`。部署流程的必要 secret 檢查已要求它，故 staging 正常不會
+走到這一列。驗證：CI 的 `memory-schema` job 以該角色連線跑 `backend/scripts/verify_memory_role.sql`
+（讀不到 `public` 的任一表、寫得進 `memory` 兩表、不能在 `public` 建表）；`concurrency` job 的
+`tests_pg/test_memory_role_ws_pg.py` 以該角色實際跑閘道與編排器的寫入與預取，並斷言主引擎不觸及記憶表。
 
 **首次部署（空 volume）的順序**：(1) 在 GitHub 建立 repository **secret**
 `MEMORY_DB_PASSWORD`（`openssl rand -hex 32`，不得含 `$`；建立後以

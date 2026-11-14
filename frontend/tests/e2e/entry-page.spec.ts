@@ -2145,4 +2145,99 @@ test.describe('U14 entry page', () => {
     await expect(group).toHaveAttribute('data-state', 'default');
     await expect(group.getByTestId('brain-clarify-candidate-target-2')).toBeEnabled();
   });
+  /**
+   * @purpose 先前的工作項（首次出現時本段尚無訊息）列在對話最前面，不得在之後每一輪都釘在對話最底；本輪尚待大腦回覆承接的工作項列在最後（build-and-test F4；BR94.5）。
+   * @ui / | 入口頁 brain-conversation、brain-workitem-list、brain-user-message
+   * @given /api/brain/ws；連線前伺服器已有一個失敗的工作項 w-old（模擬重新整理後才收到的先前工作項）
+   * @step 載入入口頁 | 對話區內出現 w-old
+   * @step 送出一句，伺服器回含 w-old 與新工作項 w-new（處理中）的 work_items、尚未回覆 | 對話區內 DOM 順序為 w-old → 使用者訊息 → w-new
+   * @step 伺服器送該輪回覆並結束 | w-new 掛在該輪回覆之下；w-old 仍在使用者訊息之前
+   * @pass 舊項在新一輪之前、待承接項在最後
+   * @story US1.1
+   */
+  test('先前的工作項列在最前且本輪待承接者列在最後', async ({ page }) => {
+    const h = await setup(page);
+    h.server.items = [F.workItem('w-old', `${M}-f4-舊失敗`, '失敗', 'architecture-design', null, `${M}-f4-請先選定`)];
+    await page.goto('/');
+    await waitReady(page);
+    await expect(conv(page).getByTestId('brain-workitem-w-old')).toBeVisible();
+    await say(page, `${M}-f4-新一輪`);
+    h.server.send(
+      F.encodeFrame(
+        F.workItemsFrame(
+          F.workItem('w-old', `${M}-f4-舊失敗`, '失敗', 'architecture-design', null, `${M}-f4-請先選定`),
+          F.workItem('w-new', `${M}-f4-新工作`, '處理中'),
+        ),
+      ),
+    );
+    await expect(conv(page).getByTestId('brain-workitem-w-new')).toBeVisible();
+    const order = () =>
+      conv(page).evaluate((root) => {
+        const pick = (sel: string) => root.querySelector(sel);
+        const user = pick('[data-testid="brain-user-message"]');
+        const old = pick('[data-testid="brain-workitem-w-old"]');
+        const neu = pick('[data-testid="brain-workitem-w-new"]');
+        const before = (a: Element | null, b: Element | null) =>
+          !!a && !!b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        return { oldBeforeUser: before(old, user), userBeforeNew: before(user, neu) };
+      });
+    expect(await order()).toEqual({ oldBeforeUser: true, userBeforeNew: true });
+    h.server.send(F.turnFrames('t-f4', `${M}-f4-已交辦`));
+    const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-f4"]');
+    await expect(msg).toHaveAttribute('data-status', 'done');
+    await expect(msg.getByTestId('brain-workitem-w-new')).toBeVisible();
+    expect(await order()).toEqual({ oldBeforeUser: true, userBeforeNew: true });
+  });
+
+  /**
+   * @purpose 從對話寫入語意記憶（build-and-test 第二輪；本階段新增、scope 尚未涵蓋）：確認反問完整呈現擬寫入的句子，按「就是這個」恰送出一次確認；寫入後記憶頁的語意記憶區看得到該則。
+   * @ui / | 入口頁 brain-clarify
+   * @ui /memory | 記憶頁 memory-zone-semantic
+   * @given /api/brain/ws 扮演閘道：收到「請記住：…」回唯一候選 memory-confirm 的反問；/api/memory/records 在確認後回含該句的語意記憶
+   * @step 送出「請記住：<偏好>」 | 反問出現，候選說明含完整偏好
+   * @step 按「就是這個」 | 送出 1 則 select_clarify_candidate{candidateId:memory-confirm}；伺服器回「已記住」與 done 後顯示該回覆
+   * @step 由 Sidebar 前往我的記憶 | 語意記憶區出現該偏好
+   * @pass 確認恰一次、記憶頁可見
+   * @story US4.1
+   */
+  test('記住的句子經確認後出現在記憶頁語意區', async ({ page }) => {
+    const h = await setup(page);
+    const preference = `${M}-mem-我們團隊偏好把服務部署在 ap-northeast-1`;
+    let confirmed = false;
+    await page.route('**/api/memory/records**', async (route) => {
+      const kind = new URL(route.request().url()).searchParams.get('kind');
+      const rows =
+        confirmed && kind === 'semantic'
+          ? [
+              {
+                memory_id: '41',
+                kind: 'semantic',
+                owner_user_id: 7,
+                visibility_scope: 'owner',
+                content: preference,
+                embedding_model: 'stub-v1',
+                created_at: '2026-11-12T00:00:00Z',
+                expires_at: null,
+              },
+            ]
+          : [];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
+    });
+    await page.goto('/');
+    await waitReady(page);
+    await say(page, `請記住：${preference}`);
+    h.server.send(
+      F.encodeFrame(F.clarifyFrame('t-mem', 'intent', [['memory-confirm', `記住這句話（語意記憶，只有你看得到）：「${preference}」`, 'memory']])),
+    );
+    const group = page.locator('[data-testid="brain-clarify"][data-kind="intent"]');
+    await expect(group).toContainText(preference);
+    await group.getByTestId('brain-clarify-candidate-memory-confirm').click();
+    await expect.poll(() => h.server.framesOf('select_clarify_candidate').length).toBe(1);
+    expect(h.server.framesOf('select_clarify_candidate')[0].payload).toMatchObject({ candidateId: 'memory-confirm' });
+    confirmed = true;
+    h.server.send(F.turnFrames('t-mem', `${M}-mem-已記住`));
+    await expect(conv(page).getByText(`${M}-mem-已記住`)).toBeVisible();
+    await page.getByTestId('sidebar-memory-link').click();
+    await expect(page.getByTestId('memory-zone-semantic')).toContainText(preference);
+  });
 });

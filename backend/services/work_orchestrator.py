@@ -77,6 +77,7 @@ from services.hierarchy_facade import (
 )
 from services.intent_routing_types import ROUTABLE_CAPABILITIES
 from services.memory_facade import MemoryFacade
+from services.memory_router import memory_session_scope
 from services.session_errors import SessionBackendUnavailable
 from services.session_store import WorkItemPutResult
 from services.work_orchestrator_capabilities import (
@@ -1081,7 +1082,7 @@ class WorkOrchestrator:
             self._memory_factory(db).write(principal, "procedure", content)
 
         try:
-            await self._call_facade(ctx.user_id, write)
+            await self._call_memory_facade(ctx.user_id, write)
         except Exception as exc:  # noqa: BLE001 - BR51.5：失敗不影響工作項
             logger.warning("work_item=%s memory_write_failed error=%s", ctx.item_id, type(exc).__name__)
 
@@ -1093,21 +1094,45 @@ class WorkOrchestrator:
         """離開事件迴圈執行；每次開獨立的 DB session、重新取使用者並鑄造 Principal。"""
         return await asyncio.to_thread(self._facade_sync, user_id, fn)
 
-    def _facade_sync(self, user_id: int, fn: Callable[[Any, Any], Any]) -> Any:
+    def _main_factory(self) -> Callable[[], Any]:
         factory = self._session_factory
         if factory is None:
             from database import SessionLocal  # 延遲取得：測試以建構子注入替身
 
             factory = SessionLocal
-        db = factory()
+        return factory
+
+    def _load_principal(self, db: Any, user_id: int) -> Any:
+        user = db.get(self._user_model, user_id)
+        # 停用判定由本單元自寫：mint_principal 不檢查 is_active（帶入項 5、10）。
+        if user is None or not getattr(user, "is_active", False):
+            raise _UserDisabled()
+        return self._mint(user)
+
+    def _facade_sync(self, user_id: int, fn: Callable[[Any, Any], Any]) -> Any:
+        db = self._main_factory()()
         try:
-            user = db.get(self._user_model, user_id)
-            # 停用判定由本單元自寫：mint_principal 不檢查 is_active（帶入項 5、10）。
-            if user is None or not getattr(user, "is_active", False):
-                raise _UserDisabled()
-            return fn(self._mint(user), db)
+            return fn(self._load_principal(db, user_id), db)
         finally:
             db.close()
+
+    async def _call_memory_facade(self, user_id: int, fn: Callable[[Any, Any], Any]) -> Any:
+        """記憶表專用的 `_call_facade`（合併前必修第 52 列／`MB-48`）。"""
+        return await asyncio.to_thread(self._memory_facade_sync, user_id, fn)
+
+    def _memory_facade_sync(self, user_id: int, fn: Callable[[Any, Any], Any]) -> Any:
+        """**兩個 session**：`users` 以主連線讀（`cloud360_memory` 讀不到 `public`），讀完即關；
+        記憶表經 `memory_session_scope`（與 HTTP 記憶端點同一套判定：啟用→記憶專用連線、
+        本機未設→退回主連線並 WARNING、非本機未設→拋 `MemoryStorageUnavailable`）。
+        """
+        main_factory = self._main_factory()
+        db = main_factory()
+        try:
+            principal = self._load_principal(db, user_id)
+        finally:
+            db.close()
+        with memory_session_scope(main_factory) as memory_db:
+            return fn(principal, memory_db)
 
     # ==================================================================
     # 訊息出口（`BR52.5`／`BR56.8`／`BR58.5`；`NFR12.27`）

@@ -17,6 +17,8 @@ import { test, expect, type Page, type Route } from '@playwright/test';
  * **突變驗證**（結果記於 `brain-infra` 的 `code-summary.md`）：
  *   M1 拿掉「我的記憶」`<nav>` 的 `aria-label` → 案例 1、2 紅；
  *   M2 把它改成與「專案」同名 → 案例 1、2 紅（案例 1 找不到名為「我的記憶」的地標，案例 2 名稱重複）。
+ *   （build-and-test 第三輪，待修 2）M3 拿掉「架構」「成本」「系統管理」任一可收合群組 `<nav>` 的
+ *   `aria-label` → 案例 3 紅（結果記於 `build-and-test/local-verify-fixes.md` 第三輪）。
  */
 
 const SELF_ID = 601;
@@ -28,7 +30,7 @@ async function json(route: Route, status: number, body: unknown): Promise<void> 
 }
 
 /** 具 K1／K2／K3 view 的已核准帳號：側欄同時出現「入口」「專案」「我的記憶」三個 `<nav>`。 */
-async function stage(page: Page): Promise<string[]> {
+async function stage(page: Page, extraPermissions: Record<string, typeof VIEW> = {}): Promise<string[]> {
   const leaked: string[] = [];
   await page.route('**/api/**', (route) => {
     leaked.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
@@ -42,7 +44,7 @@ async function stage(page: Page): Promise<string[]> {
       role: 'Project_Admin',
       is_active: true,
       authorization_status: 'approved',
-      permissions: { K1: VIEW, K2: VIEW, K3: VIEW },
+      permissions: { K1: VIEW, K2: VIEW, K3: VIEW, ...extraPermissions },
       pending_request: null,
     })
   );
@@ -97,6 +99,34 @@ test.describe('Sidebar landmarks', () => {
       });
       names.push(name);
     }
+    expect(names.every((n) => n.length > 0), `有無名的導覽地標：${JSON.stringify(names)}`).toBe(true);
+    expect(new Set(names).size, `導覽地標名稱重複：${JSON.stringify(names)}`).toBe(names.length);
+    expect(leaked).toEqual([]);
+  });
+
+  /**
+   * @purpose 可收合群組「架構」「成本」「系統管理」的 `<nav>` 也有可存取名稱（與群組標題同字），且側欄全部導覽地標名稱互不相同
+   * @ui /memory | 側欄全部導覽地標（含三個可收合群組）
+   * @given 攔截層：/api/auth/me 另帶 A3、C1、J3a view，使三個群組都出現且預設展開
+   * @step 以 role=navigation、name=架構／成本／系統管理 各自定位 | 各恰一個
+   * @step 讀側欄內每個 `<nav>` 的 aria-label | 皆非空、互不相同
+   * @pass 三個群組地標各一、側欄無無名或同名的導覽地標；沒有未被攔截的 /api 請求
+   * @story US4.2
+   * @note build-and-test 第三輪（待修 2）：原本這三個 `<nav>` 無名，螢幕閱讀器的地標清單出現三個無名「導覽」。
+   */
+  test('collapsible group nav landmarks are named', async ({ page }) => {
+    const leaked = await stage(page, { A3: VIEW, C1: VIEW, J3a: VIEW });
+    for (const name of ['架構', '成本', '系統管理']) {
+      await expect(page.getByRole('navigation', { name, exact: true })).toHaveCount(1);
+    }
+    // 側欄的根：從收合鈕往上找，第一個同時包住「我的記憶」連結的祖先（不依賴樣式 class）。
+    const names = await page.getByTestId('sidebar-toggle').evaluate((el) => {
+      let root: HTMLElement | null = el.parentElement;
+      while (root && !root.querySelector('[data-testid="sidebar-memory-link"]')) root = root.parentElement;
+      if (!root) return [];
+      return Array.from(root.querySelectorAll('nav')).map((nav) => nav.getAttribute('aria-label')?.trim() ?? '');
+    });
+    expect(names.length, `側欄導覽地標數：${JSON.stringify(names)}`).toBeGreaterThanOrEqual(6);
     expect(names.every((n) => n.length > 0), `有無名的導覽地標：${JSON.stringify(names)}`).toBe(true);
     expect(new Set(names).size, `導覽地標名稱重複：${JSON.stringify(names)}`).toBe(names.length);
     expect(leaked).toEqual([]);

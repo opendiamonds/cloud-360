@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
 
 from services.diagram_builder import build_mxgraph_xml
+from services.langgraph_runtime import chat_model
 from services.progress_channel import ProgressChannel, ProgressEvent, RequestKey
 from services.llm_limits import truncate_text_for_llm, agent_sdk_env
 from services.llm_provider import (
@@ -121,6 +122,11 @@ async def draw_architecture_diagram(provider: str, groups: list[dict[str, Any]],
         return "產圖失敗，請稍後再試或調整需求描述。"
 
 
+# 只有本機 LLM_PROVIDER=claude-code 會用到；openrouter 路徑的 ChatAnthropic 不設
+# 逾時，行為不變。產圖一輪的輸出遠長於其他 LLM 路徑的 60 秒預設。
+_CLAUDE_CODE_DESIGN_TIMEOUT_SECONDS = 300.0
+
+
 class GraphState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
@@ -136,11 +142,15 @@ def build_graph() -> StateGraph:
     api_key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENROUTER_API_KEY") or ""
     base_url = os.environ.get("ANTHROPIC_BASE_URL")
     
-    llm = ChatAnthropic(
-        model=model_name, 
-        temperature=0.2,
-        api_key=api_key,
-        base_url=base_url
+    llm = chat_model(
+        model=model_name,
+        timeout_seconds=_CLAUDE_CODE_DESIGN_TIMEOUT_SECONDS,
+        openrouter_builder=lambda: ChatAnthropic(
+            model=model_name,
+            temperature=0.2,
+            api_key=api_key,
+            base_url=base_url,
+        ),
     ).bind_tools(tools)
 
     async def call_model(state: GraphState):

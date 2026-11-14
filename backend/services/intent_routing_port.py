@@ -100,6 +100,10 @@ _TRANSPORT_MARKERS: Final = (
     "apiconnection",
 )
 
+#: 本機 claude-code 路徑「模型回了東西但形狀不對」的例外類別名。與上面一樣以名稱
+#: 比對，不讓本檔 import 該模組。
+_MALFORMED_RESPONSE_CLASS: Final = "ClaudeCodeMalformedToolCall"
+
 
 class _RouterState(TypedDict, total=False):
     """**具名 TypedDict**，不是 `dict`。
@@ -243,10 +247,14 @@ def router_chat_model(config: RoutingConfig) -> Any:
     （呼叫次數／重試／用量上限）的機制「必須存在且**可設定**」，而呼叫次數有
     `CallBudget` 這個真機制、重試沒有。接上之後 `BR6.3` 的「可設定」與
     `NFR3.63` 的「值為 0」同時成立，兩者不再互相矛盾。
-    """
-    from services.langgraph_runtime import openrouter_chat_model
 
-    return openrouter_chat_model(
+    經 `chat_model` 取得 client：openrouter 下引數原樣轉給
+    `openrouter_chat_model`；本機 `LLM_PROVIDER=claude-code` 下只有 `model` 與
+    `timeout_seconds` 起作用（`temperature`／`max_retries` CLI 沒有對應旗標）。
+    """
+    from services.langgraph_runtime import chat_model
+
+    return chat_model(
         model=config.model,
         timeout_seconds=config.timeout_seconds,
         temperature=None,
@@ -313,6 +321,8 @@ def classify_transport_failure(exc: BaseException) -> BaseException:
     """
     if isinstance(exc, IntentRoutingError):
         return exc
+    if type(exc).__name__ == _MALFORMED_RESPONSE_CLASS:
+        return MalformedRouting("模型沒有呼叫路由工具（回了文字而不是結構化決策）")
     message = str(exc).lower()
     status = _status_code(exc)
     if status == 402 or any(marker in message for marker in _BUDGET_MARKERS):

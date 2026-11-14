@@ -71,7 +71,7 @@ from services.brain_ws_contract import (
     WsServerMessageType,
     WsUnvalidatedEnvelope,
 )
-from services.embedding_port import EMBEDDING_TIMEOUT_SEC
+from services.embedding_port import EMBEDDING_TIMEOUT_SEC, EmbeddingProviderUnavailable
 from services.hierarchy_facade import HierarchyFacade, HierarchyForbidden, mint_principal
 from services.intent_routing import IntentRouter
 from services.intent_routing_errors import PlatformSelfModificationRefused
@@ -79,6 +79,7 @@ from services.intent_routing_predicate import intents_after_choice
 from services.intent_routing_types import IntentDecision
 from services.memory_errors import MemoryForbidden
 from services.memory_facade import MemoryFacade
+from services.memory_router import memory_session_scope
 from services.prompt_guard import REFUSAL_MESSAGE, is_platform_self_modification
 from services.rbac import user_can
 from services.redis_gateway import RedisGateway, build_redis_client, redis_py_error_types
@@ -358,6 +359,14 @@ class _PrefetchForbidden:
     reason: str
 
 
+@dataclass(frozen=True)
+class _WriteRefused:
+    """語意記憶寫入工作的回傳值：facade 拒絕（`forbidden`）或設定為 fulltext（`fulltext`）。不帶內容。"""
+
+    kind: str
+    reason: str
+
+
 class MemoryPrefetchAdapter:
     """注入 `IntentRouter(memory_facade=...)` 的轉接器。**內部無任何 I/O**：只讀 `ContextVar`。"""
 
@@ -500,6 +509,9 @@ class Turn:
     t_classify_end: Optional[float] = None
     t_first_content: Optional[float] = None
     prefetch: Optional[str] = None
+    # build-and-test F2：本輪開始時該段作業對象的三層名稱（`describe_work_target`）。給路由
+    # prompt 寫名稱、給「指涉詞是否就是目前對象」的判定用；取不到時為 None（三名稱皆 null）。
+    target_names: Optional[Dict[str, Any]] = field(default=None, repr=False)
     # 終止事件（done／error）**實際送達**之後才設為 True（`_send_terminal`）。T9 以它而非
     # `ledger.is_terminal` 判斷「前端是否已收到終止事件」：`ledger.finish()` 先於 done 的送出，
     # 兩者之間拋例外時 ledger 已終止、前端卻什麼都沒收到（審查 review-02 發現 1）。
@@ -514,6 +526,8 @@ class PendingClarify:
     candidates: Mapping[str, Any] = field(default_factory=dict, repr=False)
     targets: Mapping[str, rules.TargetRef] = field(default_factory=dict, repr=False)
     decision: Any = field(default=None, repr=False)
+    # build-and-test 第二輪：kind="memory" 時為使用者要記住、尚待確認的那句話（只存在行程內）。
+    memory_content: Optional[str] = field(default=None, repr=False)
 
 
 def _mint_turn_id() -> str:
@@ -602,6 +616,29 @@ def _target_triple(session: Optional[BrainSession], segment_id: str) -> Tuple[An
         getattr(segment, "project_id", None),
         getattr(segment, "system_id", None),
         getattr(segment, "diagram_id", None),
+    )
+
+
+def _current_target(
+    session: Optional[BrainSession], segment_id: str, names: Optional[Mapping[str, Any]]
+) -> rules.CurrentTarget:
+    """該段的作業對象三元組 ＋ 本輪取得的名稱 → `rules.CurrentTarget`（build-and-test F2）。"""
+    pid, sid, did = _target_triple(session, segment_id)
+    names = names or {}
+
+    def _as_int(value: Any) -> Optional[int]:
+        try:
+            return None if value is None else int(value)
+        except (TypeError, ValueError):
+            return None
+
+    return rules.CurrentTarget(
+        project_id=_as_int(pid),
+        system_id=_as_int(sid),
+        diagram_id=_as_int(did),
+        project_name=names.get("projectName"),
+        system_name=names.get("systemName"),
+        diagram_name=names.get("diagramName"),
     )
 
 
@@ -1330,9 +1367,18 @@ class BrainGateway:
         page_modes = session.page_modes if session is not None else default_page_modes()
         turn.segment = rules.resolve_segment(payload.page, page_modes)
 
+        # build-and-test 第二輪：明確的「記住／記下」句首走語意記憶寫入（先確認再寫），不經 `U11` 路由。
+        remember = rules.parse_remember_request(utterance)
+        if remember is not None:
+            await self._on_remember_request(conn, turn, remember)
+            return
+
         prefetch = await self._prefetch(conn.principal, utterance, turn)
         context_token = _PREFETCH.set(prefetch)
         router = self.routers[turn.segment]
+        triple = _target_triple(session, turn.segment)
+        if any(value is not None for value in triple):
+            turn.target_names = (await self._names_for(conn, [triple]))[triple]
         classify_exc: Optional[BaseException] = None
         decision = None
         turn.t_classify_start = self.timing.monotonic()
@@ -1342,6 +1388,7 @@ class BrainGateway:
                 session if session is not None else BrainSession(session_key=conn.session_key),
                 utterance,
                 turn_id=turn.turn_id,
+                target_names=turn.target_names,
             )
         except PlatformSelfModificationRefused:
             turn.t_classify_end = self.timing.monotonic()
@@ -1500,12 +1547,17 @@ class BrainGateway:
             return
 
         referents = [i.referent.strip() for i in decision.intents if i.referent is not None and i.referent.strip()]
-        if not referents:  # 未指名對象：依當前作業對象交辦（帶入項 13）
+        # build-and-test F2：指涉詞就是目前作業對象（名稱、prompt 寫法、舊 `#id` 代號、指示詞）
+        # → 視同未指名，依目前作業對象交辦。只排除這一類；其餘照舊走目錄比對與「找不到」。
+        current = _current_target(session, turn.segment, turn.target_names)
+        named = [r for r in referents if not rules.refers_to_current_target(r, current)]
+        if not named:  # 未指名對象、或指的就是目前對象：依當前作業對象交辦（帶入項 13）
             await self._dispatch(conn, turn, decision)
             return
-        if len({rules.norm(r) for r in referents}) > 1:
+        if len({rules.norm(r) for r in named}) + (1 if len(named) < len(referents) else 0) > 1:
             await self._reply_and_end(conn, turn, CONFLICTING_TARGETS_MESSAGE)
             return
+        referents = named
         catalog, selected = await self._catalog(conn, turn, session)
         if catalog is None:
             return
@@ -1604,6 +1656,10 @@ class BrainGateway:
             await self._fail_turn_exc(conn, turn, rules.GatewayInvalidRequest())
             return
         turn.ledger.reopen()
+        if pending.kind == "memory":
+            # 使用者按下「就是這個」才走到這裡；「都不是」在上面已安靜結束、不寫入。
+            await self._write_semantic(conn, turn, pending.memory_content or "")
+            return
         if pending.kind == "target":
             if await self._set_target_confirmed(conn, turn, turn.segment, pending.targets[candidate_id]):
                 await self._dispatch(conn, turn, pending.decision)
@@ -1702,14 +1758,14 @@ class BrainGateway:
         session_factory = self.session_factory
 
         def _search():
-            db = session_factory()
-            try:
-                return tuple(factory(db).search(principal, query, kinds=PREFETCH_KINDS, limit=PREFETCH_LIMIT))
-            except MemoryForbidden as exc:
-                # 授權判定不是依賴故障：不計入熔斷、不降級，改以結果帶回（合併前必修第 13 項）。
-                return _PrefetchForbidden(exc.reason)
-            finally:
-                db.close()
+            # 記憶專用連線（MB-48）：未設定且非本機時 `memory_session_scope` 拋
+            # `MemoryStorageUnavailable` → 本次預取 FAILED、照既有語意降級（不退回主連線）。
+            with memory_session_scope(session_factory) as db:
+                try:
+                    return tuple(factory(db).search(principal, query, kinds=PREFETCH_KINDS, limit=PREFETCH_LIMIT))
+                except MemoryForbidden as exc:
+                    # 授權判定不是依賴故障：不計入熔斷、不降級，改以結果帶回（合併前必修第 13 項）。
+                    return _PrefetchForbidden(exc.reason)
 
         _log(logging.DEBUG, "prefetch_start", turnId=turn.turn_id)
         started = self.timing.monotonic()
@@ -1738,16 +1794,93 @@ class BrainGateway:
         )
         return MemoryPrefetch(user_id=principal.user_id, query=query, kinds=PREFETCH_KINDS, hits=hits)
 
+    # -- 從對話寫入語意記憶（build-and-test 第二輪；本階段新增、已核可 scope 尚未涵蓋）----------
+
+    async def _on_remember_request(self, conn: Connection, turn: Turn, content: str) -> None:
+        """「記住：…」：先檢查內容，可寫入者以一個候選的反問請使用者確認；確認前不寫任何記憶。
+
+        確認沿用既有 `clarify`（kind=intent）形狀：唯一候選的 label 完整呈現擬寫入的那句話，
+        「就是這個」＝確認、「都不是」＝取消（`candidateId: null`，安靜結束）。不新增訊息型別。
+        """
+        turn.t_classify_start = turn.t_classify_end = self.timing.monotonic()
+        try:
+            await asyncio.to_thread(self.store.append_message, conn.session_key, turn.segment, "user", turn.utterance)
+        except Exception as exc:
+            await self._fail_turn_exc(conn, turn, exc)
+            return
+        rejection = rules.memory_content_rejection(content)
+        if rejection is not None:
+            # 只記理由代碼，不記內容（BR67.3：log 不含使用者原文）。
+            _log(logging.INFO, "memory_write_rejected", turnId=turn.turn_id, reason=rejection)
+            await self._reply_and_end(conn, turn, rules.MEMORY_REJECT_REPLIES[rejection])
+            return
+        candidate = ClarifyCandidate(
+            id=rules.MEMORY_CONFIRM_CANDIDATE_ID,
+            label=rules.memory_confirm_label(content),
+            capability=rules.MEMORY_CONFIRM_CAPABILITY,
+            confidence=None,
+        )
+        if not await self.send_turn_message(
+            conn, turn, WsServerMessageType.CLARIFY, ClarifyPayload(candidates=[candidate], kind="intent")
+        ):
+            return
+        conn.pending_clarify = PendingClarify(
+            turn=turn,
+            kind="memory",
+            candidate_ids=(rules.MEMORY_CONFIRM_CANDIDATE_ID,),
+            memory_content=content,
+        )
+        self._log_turn(turn, "clarify")
+
+    async def _write_semantic(self, conn: Connection, turn: Turn, content: str) -> None:
+        """使用者確認後寫入一則語意記憶。
+
+        只傳 `(principal, "semantic", content)`：擁有者由 facade 依已驗證身分決定（FR4.3a）、
+        可見範圍為最窄的預設（FR4.3b）——本層**不傳也無從傳**擁有者或範圍。
+        **不寫稽核事件**：`memory_audit_events.action` 的封閉集合沒有建立用的值（facade 的 `BR7.4`）。
+        """
+        factory = self.memory_facade_factory
+        session_factory = self.session_factory
+        principal = conn.principal
+
+        def _write():
+            # 記憶專用連線（MB-48）：未設定且非本機時拋 `MemoryStorageUnavailable` →
+            # FAILED → 使用者收到 `memory_write_failed`，不退回主連線、不假裝寫入成功。
+            with memory_session_scope(session_factory) as db:
+                try:
+                    return factory(db).write(principal, "semantic", content)
+                except MemoryForbidden as exc:
+                    # 授權判定不是依賴故障：不計入熔斷（同預取）。
+                    return _WriteRefused("forbidden", exc.reason)
+                except EmbeddingProviderUnavailable as exc:
+                    if exc.selected_provider == "fulltext":  # 設定使然，不是依賴故障
+                        return _WriteRefused("fulltext", "fulltext")
+                    raise
+
+        result = await self.memory.run(_write, wait_sec=self.episodic_wait_sec)
+        refused = result.value if result.outcome is Outcome.OK and isinstance(result.value, _WriteRefused) else None
+        if refused is not None:
+            _log(logging.WARNING, "semantic_write_refused", turnId=turn.turn_id, reason=refused.reason)
+            if refused.kind == "forbidden":
+                await self._fail_turn(conn, turn, rules.CODE_UNAUTHORIZED, rules.ERROR_MESSAGES["forbidden_memory"])
+            else:
+                await self._fail_turn(conn, turn, rules.CODE_INTERNAL, rules.ERROR_MESSAGES["memory_fulltext"])
+            return
+        if result.outcome is not Outcome.OK:
+            _log(logging.WARNING, "semantic_write_failed", turnId=turn.turn_id, outcome=result.outcome.value, exc=result.exc_name)
+            await self._fail_turn(conn, turn, rules.CODE_INTERNAL, rules.ERROR_MESSAGES["memory_write_failed"])
+            return
+        _log(logging.INFO, "semantic_written", turnId=turn.turn_id)
+        await self._reply_and_end(conn, turn, rules.memory_saved_reply(content))
+
     async def _write_episodic(self, principal: Any, content: str, turn_id: str) -> None:
         factory = self.memory_facade_factory
         session_factory = self.session_factory
 
         def _write():
-            db = session_factory()
-            try:
+            # 記憶專用連線（MB-48）；未設定且非本機時 FAILED → 只記 WARNING（同既有失敗語意）。
+            with memory_session_scope(session_factory) as db:
                 return factory(db).write(principal, "episodic", content)
-            finally:
-                db.close()
 
         result = await self.memory.run(_write, wait_sec=self.episodic_wait_sec)
         if result.outcome is Outcome.FAILED:

@@ -145,10 +145,16 @@ class FakeRouter:
         self.segment = segment
         self._adapter = adapter
 
-    async def classify(self, principal, session, utterance, *, turn_id: str = ""):
+    async def classify(self, principal, session, utterance, *, turn_id: str = "", target_names=None):
         shared = self._shared
         shared.calls.append(
-            SimpleNamespace(segment=self.segment, utterance=utterance, turn_id=turn_id, thread=threading.get_ident())
+            SimpleNamespace(
+                segment=self.segment,
+                utterance=utterance,
+                turn_id=turn_id,
+                thread=threading.get_ident(),
+                target_names=target_names,
+            )
         )
         try:
             hits = self._adapter.search(principal, utterance, kinds=("semantic", "procedure"), limit=5)

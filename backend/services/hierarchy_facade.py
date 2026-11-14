@@ -383,6 +383,87 @@ class HierarchyFacade:
             "刪除系統 system_id=%s actor_user_id=%s", system_id, principal.user_id
         )
 
+    # -- 架構圖掛到系統（build-and-test 本機驗證 F1，2026-11-12）-------------------
+    #
+    # **本階段新增、已核可 scope／requirements 尚未涵蓋**：FR9.1 只說系統對應架構圖檔、
+    # FR9.5 只要求專案／系統的建立路徑，沒有「圖掛系統」的寫入路徑（`OPEN-H11`）。
+    # 回補：requirements 新增「架構圖掛到系統」FR、user-stories 補 AC。
+    #
+    # 寫入資格**刻意與 `create_system` 相同**（`K2 edit` → 可見性 → 系統所屬專案的擁有者）：
+    # 把圖掛進系統等於往該系統加內容，最接近的既有寫入路徑就是建立系統。另一個理由是讀取端：
+    # 大腦的 `list_diagrams_of_system` 以 `assert_system_owned_by` 確認系統屬於呼叫者，
+    # 若允許非擁有者的管理者掛圖，他掛上的圖大腦對他仍讀不到——放寬只會產生讀不到的掛載。
+    # 不另要求 `project_admin`：`create_system` 也不要求，兩條「往系統加東西」的路徑一致。
+
+    def assert_system_attachable(
+        self,
+        principal: Principal,
+        *,
+        system_id: int,
+        project_visible: Callable[[int], bool],
+    ) -> int:
+        """呼叫者能否把圖掛到 `system_id`。通過回所屬專案 id；不通過一律拋例外，不回 False。
+
+        順序沿用 `delete_system`：`K2 edit`（403）→ 取所屬專案（不存在 404 系統句）→
+        可見性（404 系統句）→ 擁有者（404）。不存在與不可見回同一句，不新增存在性預言機。
+        """
+        self._authorize(principal, "edit")
+        return self._attachable_after_authorize(principal, system_id, project_visible)
+
+    def _attachable_after_authorize(
+        self,
+        principal: Principal,
+        system_id: int,
+        project_visible: Callable[[int], bool],
+    ) -> int:
+        """`assert_system_attachable` 的第 2–4 步。**呼叫前必須已做 `K2 edit`。**
+
+        拆出來是為了讓 `set_diagram_system` 不必在同一個請求內重做一次授權判定，
+        也讓 ast 靜態鎖（`test_project_visibility_static.py` 第 3 條）只看到「呼叫端注入
+        `project_visibility(...)`」這一種形狀——本方法收的是已注入的判定，不在鎖的名單內。
+        """
+        project_id = hierarchy_service.get_project_of_system(
+            self._db, system_id=system_id
+        )
+        if not project_visible(project_id):
+            raise HierarchyNotFound(SYSTEM_NOT_FOUND_DETAIL)
+        hierarchy_service.assert_system_owned_by(
+            self._db, system_id=system_id, user_id=principal.user_id
+        )
+        return project_id
+
+    def set_diagram_system(
+        self,
+        principal: Principal,
+        *,
+        diagram_id: int,
+        system_id: Optional[int],
+        project_visible: Callable[[int], bool],
+    ):
+        """把呼叫者**自己擁有的**圖掛到系統、改掛到另一個系統，或取消掛載（`system_id` 為 None）。
+
+        1. `K2 edit`（403）；2. 圖必須屬呼叫者（`BR6.3`，否則 404，與不存在同一種結果）；
+        3. 目標非 None 時走 `assert_system_attachable`。**只檢查目標、不檢查原系統**：
+        圖是呼叫者自己的資產，取消掛載或移出只動到他自己的圖；若要求對原系統也有寫入資格，
+        被移出專案的使用者會永遠無法把自己的圖拿回來，而該系統也因 `BR4.3` 永遠刪不掉。
+        """
+        self._authorize(principal, "edit")
+        hierarchy_service.assert_diagram_owned_by(
+            self._db, diagram_id=diagram_id, user_id=principal.user_id
+        )
+        if system_id is not None:
+            self._attachable_after_authorize(principal, system_id, project_visible)
+        diagram = hierarchy_service.set_diagram_system(
+            self._db, diagram_id=diagram_id, system_id=system_id
+        )
+        logger.info(
+            "架構圖歸屬變更 diagram_id=%s system_id=%s actor_user_id=%s",
+            diagram_id,
+            system_id,
+            principal.user_id,
+        )
+        return diagram
+
     def record_diagram_change(
         self,
         principal: Principal,

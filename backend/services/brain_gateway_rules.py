@@ -37,6 +37,11 @@ from pydantic import ValidationError
 
 from services.brain_ws_contract import WsSubprotocol
 from services.hierarchy_facade import HierarchyForbidden, HierarchyNotFound
+from services.intent_routing_context import (
+    TARGET_LAYERS,
+    format_work_target,
+    sanitize_target_name,
+)
 from services.intent_routing_errors import (
     EmptyCandidates,
     LlmBudgetExceeded,
@@ -284,6 +289,10 @@ ERROR_MESSAGES: Mapping[str, str] = {
     "rate": "訊息太頻繁，請稍候再送出",
     "internal": "處理時發生錯誤，請再說一次",
     "empty": "這一輪沒有產生任何回覆，請再說一次",
+    # build-and-test 第二輪（語意記憶寫入）：`EMBEDDING_PROVIDER=fulltext` 之下記憶層沒有向量 Port，
+    # 寫入必然失敗（`MemoryFacade._require_port`）。照實告知，不假裝成功。
+    "memory_fulltext": "目前的記憶設定（EMBEDDING_PROVIDER=fulltext）無法寫入語意記憶，這句話沒有被記住。請管理員改用支援向量的設定後再試。",
+    "memory_write_failed": "這次沒能寫入記憶，這句話沒有被記住，請稍後再說一次。",
 }
 
 CODE_INVALID = "INVALID_REQUEST"
@@ -437,6 +446,126 @@ def match_referent(
     if len(hits) == 1:
         return MatchResult(MATCH_UNIQUE, hits)
     return MatchResult(MATCH_MANY, hits)
+
+
+# ---------------------------------------------------------------------------
+# 指涉詞是否就是「目前作業對象」（build-and-test 本機驗證 F2，2026-11-12）
+#
+# 缺陷：路由脈絡原本以「專案 #1／系統 #1」描述作業對象，模型把它抄成 `referent`，
+# `match_referent` 以名稱精確比對比不到，回「找不到名為『系統 #1』」——作業對象明明已選定。
+# 修法分兩半：prompt 改寫名稱（`intent_routing_context.format_work_target`），以及本段：
+# 指涉詞**指的就是目前作業對象**時，依目前作業對象交辦。
+#
+# **界線（不得放寬成「比不到就退回目前對象」）**：只有指涉詞等於目前對象的某一種表達
+# 形式（名稱、prompt 裡的寫法、舊的 `#id` 代號、或指示詞）才算；真正指名了另一個不存在的
+# 對象，仍走 `match_referent` → 找不到。一律退回會把指名錯誤靜默吞掉，交辦到使用者沒說的對象。
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CurrentTarget:
+    """該段目前的作業對象：三層識別碼與（閘道以 `describe_work_target` 取得的）名稱。"""
+
+    project_id: Optional[int] = None
+    system_id: Optional[int] = None
+    diagram_id: Optional[int] = None
+    project_name: Optional[str] = None
+    system_name: Optional[str] = None
+    diagram_name: Optional[str] = None
+
+    @property
+    def is_set(self) -> bool:
+        return not (self.project_id is None and self.system_id is None and self.diagram_id is None)
+
+    def ids(self) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+        return (self.project_id, self.system_id, self.diagram_id)
+
+    def names(self) -> dict:
+        return {
+            "projectName": self.project_name,
+            "systemName": self.system_name,
+            "diagramName": self.diagram_name,
+        }
+
+
+#: 指示詞：指的就是「目前這一個」。只在目前對象已選定時生效。
+DEICTIC_REFERENTS = (
+    "這", "這個", "它", "此", "該", "這張", "這張圖", "這張架構圖", "這個架構圖", "這份架構圖",
+    "該架構圖", "這個系統", "該系統", "這個專案", "該專案", "目前的系統", "目前系統",
+    "目前的專案", "目前專案", "目前的架構圖", "目前架構圖", "目前的對象", "目前對象",
+    "作業對象", "目前的作業對象", "目前作業對象", "當前作業對象", "當前的作業對象",
+    "現在的作業對象", "選定的對象", "目前選定的對象",
+    # build-and-test 第三輪（AC6.1.1）：「那」系列。第二輪說「把那張圖的資料庫換成 Aurora」時模型可能把
+    # 「那張圖」填成 referent；缺這一組時它落到目錄比對而回「找不到」，AC6.1.1 不成立。
+    "那", "那個", "那張", "那張圖", "那張架構圖", "那個架構圖", "那份架構圖", "那個系統", "那個專案",
+)
+
+_CURRENT_PREFIX = re.compile(r"^(?:目前|當前|現在|選定)?(?:的)?(?:作業)?對象[:：]?")
+_CURRENT_SUFFIX = re.compile(r"(?:底下|之下|下面|裡面|裡|中|下)?(?:的)?(?:所有)?(?:架構圖|圖)$")
+_WRAPPING_QUOTES = "「」『』\"'`“”‘’"
+
+
+def current_target_key(raw: Optional[str]) -> str:
+    """「是否指目前對象」判定用的寬鬆正規化：casefold、去全部空白、統一全形符號、去外層引號。
+
+    只用在本段的判定，**不改** `norm`（`match_referent` 的精確比對，`NFR13.28`）。
+    """
+    s = (raw or "").casefold()
+    s = "".join(s.split())
+    s = s.replace("＃", "#").replace("/", "／").replace(":", "：")
+    return s.strip(_WRAPPING_QUOTES)
+
+
+def current_target_expressions(current: CurrentTarget) -> frozenset:
+    """目前作業對象的全部表達形式（已正規化）。目前對象未選定 → 空集合。"""
+    if not current.is_set:
+        return frozenset()
+    out = set()
+    hint = format_work_target(current.ids(), current.names())
+    if hint:
+        out.add(hint)
+    legacy = []
+    for (label, key), value in zip(TARGET_LAYERS, current.ids()):
+        if value is None:
+            continue
+        code = f"{label}#{value}"
+        legacy.append(code)
+        out.add(code)
+        raw = current.names().get(key)
+        for name in (raw, sanitize_target_name(raw)):
+            if name and name.strip():
+                out.add(name)
+                out.add(f"{label}「{name}」")
+                out.add(f"{label}{name}")
+    if legacy:
+        out.add("／".join(legacy))
+    keyed = {current_target_key(x) for x in out}
+    keyed.update(current_target_key(x) for x in DEICTIC_REFERENTS)
+    keyed.discard("")
+    return frozenset(keyed)
+
+
+def refers_to_current_target(referent: Optional[str], current: CurrentTarget) -> bool:
+    """指涉詞是否就是目前作業對象。目前對象未選定時一律 False（照舊走目錄比對）。
+
+    比對三個候選：整句、去掉「目前作業對象：」前綴、再去掉「下的架構圖」這類後綴。
+    前綴去掉後為空（整句就是「目前作業對象」）也算。
+    """
+    if not current.is_set:
+        return False
+    key = current_target_key(referent)
+    if not key:
+        return False
+    no_prefix = _CURRENT_PREFIX.sub("", key, count=1)
+    if not no_prefix:
+        return True
+    stripped = _CURRENT_SUFFIX.sub("", no_prefix, count=1)
+    if no_prefix != key and not stripped:  # 「目前的對象下的架構圖」：前綴＋後綴，中間沒有別的
+        return True
+    # 去掉前後綴後再去一次外層引號：「系統「A」下的架構圖」去後綴後才露出結尾的「」」。
+    candidates = {c.strip(_WRAPPING_QUOTES) for c in (key, no_prefix, stripped)}
+    candidates.discard("")
+    return bool(candidates & current_target_expressions(current))
 
 
 def _occurrences(haystack: str, needle: str) -> list:
@@ -680,7 +809,136 @@ class RateLimiter:
         return len(self._per_key.get(key, ()))
 
 
+# ---------------------------------------------------------------------------
+# 從對話寫入語意記憶（build-and-test 第二輪，2026-11-12）
+#
+# **本階段新增、已核可 scope 尚未涵蓋的寫入路徑**：FR4.1 要三種記憶，但 OQ-N3 只落地
+# 情節記憶的寫入端，語意記憶至今沒有任何寫入者。2026-11-12 使用者在本機驗證後選定
+# 「本輪補對話寫入語意記憶」。回補項：requirements 補語意記憶寫入 FR、user-stories 補 AC。
+# 程序記憶本輪不做。
+#
+# 辨識以**決定性規則**而非 LLM 分類（`project.md`：同一行為可由程式或模型做時選程式那邊，
+# 可驗證性才是判準）：只有明確的「記住／記下」句首才進入本路徑，其餘句子照舊走 `U11`
+# 路由，既有能力路由完全不受影響。寫入前一律經使用者確認（反問一個候選）。
+# ---------------------------------------------------------------------------
+
+#: 確認反問唯一候選的 id。沿用既有 `clarify`（kind=intent）訊息形狀，**不新增訊息型別**。
+MEMORY_CONFIRM_CANDIDATE_ID = "memory-confirm"
+#: 確認反問候選的 capability 欄（`ClarifyCandidate.capability` 為自由字串）。前端不讀它。
+MEMORY_CONFIRM_CAPABILITY = "memory"
+#: 從對話寫入的單則語意記憶上限（字元，code point）。遠小於記憶層 HTTP 上限 4000
+#: （`memory_router.MEMORY_CONTENT_MAX_CHARS`，測試鎖住「不超過」）：語意記憶是一句偏好或
+#: 慣用說法，且全文會出現在確認反問的候選說明裡。
+SEMANTIC_MEMORY_MAX_CHARS = 500
+
+_REMEMBER_ZH = re.compile(
+    r"^\s*(?:請|麻煩)?\s*(?:你)?\s*(?:幫我|替我)?\s*(?:記住|記下來|記下|記一下)(?:一下)?"
+)
+_REMEMBER_EN = re.compile(r"^\s*(?:please\s+)?remember(?:\s*:|\s+that\b)", re.IGNORECASE)
+#: 「記住」之後緊接這些字代表問句或回顧（「你記住了嗎」「記住過」），不是要求記住。
+_NOT_A_REQUEST = re.compile(r"^(?:了|過|嗎|沒|没)")
+_LEADING_PUNCT = re.compile(r"^[\s：:，,、。．.;；\-—]+")
+_QUOTES = "「」『』\"'“”"
+
+
+def parse_remember_request(utterance: str) -> Optional[str]:
+    """使用者要大腦記住某句話時回該句內容（可能為空字串）；否則回 `None`。
+
+    只認句首的明確動詞：中文「（請）（幫我）記住／記下／記一下」，英文
+    「remember:」「remember that」。內容去掉前導標點與成對的外層引號。
+    """
+    if not utterance:
+        return None
+    match = _REMEMBER_ZH.match(utterance) or _REMEMBER_EN.match(utterance)
+    if match is None:
+        return None
+    rest = utterance[match.end():]
+    if _NOT_A_REQUEST.match(rest.lstrip()):
+        return None
+    content = _LEADING_PUNCT.sub("", rest).strip()
+    while len(content) >= 2 and content[0] in _QUOTES and content[-1] in _QUOTES:
+        content = content[1:-1].strip()
+    return content
+
+
+# 疑似憑證：關鍵字後緊接賦值（「密碼是…」「api key: …」）。只出現關鍵字不算——
+# 「我們偏好用 Secrets Manager 管理密碼」是一句合法偏好。
+_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?:密碼|口令|密鑰|金鑰|私鑰|憑證|password|passwd|pwd|passphrase|token|api[\s_-]?key|apikey|"
+    r"secret|credential|access[\s_-]?key)"
+    r"\s*(?:是|為|為：|=|:|：)\s*\S",
+    re.IGNORECASE,
+)
+_CREDENTIAL_SHAPES = (
+    re.compile(r"-{5}BEGIN [A-Z ]*PRIVATE KEY"),
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:sk|pk|rk|ghp|gho|ghs|github_pat|xox[abprs])[-_][A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\."),
+)
+#: 長度 ≥ 32、同時含英文字母與數字的連續字元：隨機金鑰的形狀（ARN、網址以 `:`／`/` 斷開，不會命中）。
+_OPAQUE_RUN = re.compile(r"[A-Za-z0-9+_=\-]{32,}")
+_PERSONAL_SHAPES = (
+    re.compile(r"[\w.+\-]+@[\w\-]+\.[\w.\-]+"),  # 電子郵件
+    re.compile(r"\b[A-Z][12]\d{8}\b"),  # 身分證字號
+    re.compile(r"(?<!\d)09\d{2}-?\d{3}-?\d{3}(?!\d)"),  # 手機號碼
+    re.compile(r"(?<!\d)(?:\d[ \-]?){13,19}(?!\d)"),  # 卡號形狀的長數字
+)
+
+MEMORY_REJECT_EMPTY = "empty"
+MEMORY_REJECT_TOO_LONG = "too_long"
+MEMORY_REJECT_CREDENTIAL = "credential"
+MEMORY_REJECT_PERSONAL = "personal"
+
+#: 拒寫時給使用者的回覆（固定字串；不引用使用者原文）。
+MEMORY_REJECT_REPLIES: Mapping[str, str] = {
+    MEMORY_REJECT_EMPTY: "要我記住什麼呢？請在「記住：」後面寫出要記住的內容。",
+    MEMORY_REJECT_TOO_LONG: f"要記住的內容太長（上限 {SEMANTIC_MEMORY_MAX_CHARS} 字），請精簡成一句後再說一次。",
+    MEMORY_REJECT_CREDENTIAL: "這句話看起來含有密碼、金鑰或 token，為了安全我不會記住它。請拿掉這些內容後再說一次。",
+    MEMORY_REJECT_PERSONAL: "這句話看起來含有個人資料（例如電子郵件、電話或證號），為了安全我不會記住它。請拿掉這些內容後再說一次。",
+}
+
+
+def _looks_opaque(run: str) -> bool:
+    return any(c.isalpha() for c in run) and any(c.isdigit() for c in run)
+
+
+def memory_content_rejection(content: str) -> Optional[str]:
+    """要寫入語意記憶的內容不可寫入時回理由代碼（`MEMORY_REJECT_*`）；可寫入回 `None`。
+
+    依序：空白 → 長度 → 疑似憑證 → 疑似個資。判定是最小、可測的樣式比對，
+    寧可多擋（使用者可改寫後再說一次）也不把秘密寫進可被檢索的記憶。
+    """
+    if content is None or not content.strip():
+        return MEMORY_REJECT_EMPTY
+    if len(content) > SEMANTIC_MEMORY_MAX_CHARS:
+        return MEMORY_REJECT_TOO_LONG
+    if _CREDENTIAL_ASSIGNMENT.search(content) or any(p.search(content) for p in _CREDENTIAL_SHAPES):
+        return MEMORY_REJECT_CREDENTIAL
+    if any(_looks_opaque(m.group(0)) for m in _OPAQUE_RUN.finditer(content)):
+        return MEMORY_REJECT_CREDENTIAL
+    if any(p.search(content) for p in _PERSONAL_SHAPES):
+        return MEMORY_REJECT_PERSONAL
+    return None
+
+
+def memory_confirm_label(content: str) -> str:
+    """確認反問唯一候選的說明：完整呈現擬寫入的內容（使用者確認的就是這句）。"""
+    return f"記住這句話（語意記憶，只有你看得到）：「{content}」"
+
+
+def memory_saved_reply(content: str) -> str:
+    return f"好，我記住了：「{content}」。之後判讀你的需求時會參考它；你可以在「我的記憶」的語意記憶區查看或刪除。"
+
+
 __all__ = [
+    "MEMORY_CONFIRM_CANDIDATE_ID",
+    "MEMORY_CONFIRM_CAPABILITY",
+    "MEMORY_REJECT_REPLIES",
+    "SEMANTIC_MEMORY_MAX_CHARS",
+    "memory_confirm_label",
+    "memory_content_rejection",
+    "memory_saved_reply",
+    "parse_remember_request",
     "ADMIT_PROBE",
     "ADMIT_RUN",
     "ADMIT_SKIP",

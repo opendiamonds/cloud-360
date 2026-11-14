@@ -305,6 +305,40 @@
         "title": "CommitCollabReviewBody",
         "type": "object"
       },
+      "CreateDiagramRequest": {
+        "description": "建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；\n**本階段新增、已核可 scope／requirements 尚未涵蓋**）。\n\n刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應\n順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。",
+        "properties": {
+          "system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Id"
+          },
+          "title": {
+            "default": "未命名架構圖",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "xml_data": {
+            "maxLength": 2097152,
+            "minLength": 1,
+            "title": "Xml Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml_data"
+        ],
+        "title": "CreateDiagramRequest",
+        "type": "object"
+      },
       "CreateProjectIn": {
         "properties": {
           "name": {
@@ -438,6 +472,51 @@
           "requirement_label"
         ],
         "title": "DiagramChangeOut",
+        "type": "object"
+      },
+      "DiagramSystemIn": {
+        "description": "`system_id` 為 null 表示取消掛載。欄位必填（可為 null），不給預設值：\n漏傳欄位應是 422，而不是被讀成「取消掛載」。",
+        "properties": {
+          "system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Id"
+          }
+        },
+        "required": [
+          "system_id"
+        ],
+        "title": "DiagramSystemIn",
+        "type": "object"
+      },
+      "DiagramSystemOut": {
+        "properties": {
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Id"
+          }
+        },
+        "required": [
+          "diagram_id"
+        ],
+        "title": "DiagramSystemOut",
         "type": "object"
       },
       "EstimateSetDetailView": {
@@ -3581,7 +3660,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SaveDiagramRequest"
+                "$ref": "#/components/schemas/CreateDiagramRequest"
               }
             }
           },
@@ -4556,6 +4635,64 @@
           }
         ],
         "summary": "List Diagram Changes"
+      }
+    },
+    "/api/hierarchy/diagrams/{diagram_id}/system": {
+      "put": {
+        "description": "把自己的架構圖掛到系統、改掛到另一個系統，或以 `system_id: null` 取消掛載。",
+        "operationId": "set_diagram_system_api_hierarchy_diagrams__diagram_id__system_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "diagram_id",
+            "required": true,
+            "schema": {
+              "title": "Diagram Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagramSystemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramSystemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "查不到架構圖或系統（含「不屬於你」與「不可見」——刻意同一種結果）"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Diagram System"
       }
     },
     "/api/hierarchy/projects": {

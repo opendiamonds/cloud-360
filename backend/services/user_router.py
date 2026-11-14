@@ -50,6 +50,8 @@ from services.membership_types import LastAdminGuardReport, ReselectionFailureRe
 # 合併前必修第 33 列 (a)：記憶表的筆數經 `MemoryFacade`（記憶表的唯一入口）取得，
 # 本檔不 import 記憶的 ORM model。
 from services.memory_facade import MemoryFacade
+from services.memory_errors import MemoryStorageUnavailable
+from services.memory_router import memory_session_scope
 from services.rbac import (
     CANONICAL_ROLES,
     STORY_IDS,
@@ -472,7 +474,13 @@ def _blocking_user_references(
         else []
     )
     # 記憶兩類的筆數經 facade 取得（合併前必修第 33 列 (a)），其餘為 ORM 查詢。
-    memory_counts = MemoryFacade(db).count_references_to_user(user_id=uid)
+    # 記憶表走記憶專用連線（MB-48，與記憶端點同一套判定）；本機未設時借用本請求的 `db`
+    # （`close_main=False`），非本機未設時回 503 固定訊息，不退回擁有者帳號計數。
+    try:
+        with memory_session_scope(lambda: db, close_main=False) as memory_db:
+            memory_counts = MemoryFacade(memory_db).count_references_to_user(user_id=uid)
+    except MemoryStorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     checks = [
         (
             "owned_projects",

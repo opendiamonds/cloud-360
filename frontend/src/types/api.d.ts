@@ -805,6 +805,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hierarchy/diagrams/{diagram_id}/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Diagram System
+         * @description 把自己的架構圖掛到系統、改掛到另一個系統，或以 `system_id: null` 取消掛載。
+         */
+        put: operations["set_diagram_system_api_hierarchy_diagrams__diagram_id__system_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hierarchy/projects": {
         parameters: {
             query?: never;
@@ -1296,6 +1316,25 @@ export interface components {
             /** Xml Data */
             xml_data: string;
         };
+        /**
+         * CreateDiagramRequest
+         * @description 建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；
+         *     **本階段新增、已核可 scope／requirements 尚未涵蓋**）。
+         *
+         *     刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應
+         *     順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。
+         */
+        CreateDiagramRequest: {
+            /** System Id */
+            system_id?: number | null;
+            /**
+             * Title
+             * @default 未命名架構圖
+             */
+            title: string;
+            /** Xml Data */
+            xml_data: string;
+        };
         /** CreateProjectIn */
         CreateProjectIn: {
             /** Name */
@@ -1357,6 +1396,22 @@ export interface components {
             requirement_summary: string;
             /** Source */
             source: string;
+        };
+        /**
+         * DiagramSystemIn
+         * @description `system_id` 為 null 表示取消掛載。欄位必填（可為 null），不給預設值：
+         *     漏傳欄位應是 422，而不是被讀成「取消掛載」。
+         */
+        DiagramSystemIn: {
+            /** System Id */
+            system_id: number | null;
+        };
+        /** DiagramSystemOut */
+        DiagramSystemOut: {
+            /** Diagram Id */
+            diagram_id: number;
+            /** System Id */
+            system_id?: number | null;
         };
         /** EstimateSetDetailView */
         EstimateSetDetailView: {
@@ -3169,7 +3224,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveDiagramRequest"];
+                "application/json": components["schemas"]["CreateDiagramRequest"];
             };
         };
         responses: {
@@ -3826,6 +3881,48 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DiagramChangeOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_diagram_system_api_hierarchy_diagrams__diagram_id__system_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                diagram_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagramSystemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramSystemOut"];
+                };
+            };
+            /** @description 查不到架構圖或系統（含「不屬於你」與「不可見」——刻意同一種結果） */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

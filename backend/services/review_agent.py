@@ -46,7 +46,7 @@ def fallback_suggestions_from_findings(findings: list[dict[str, Any]] | None) ->
         return (
             "備援建議\n\n"
             "本次無法呼叫 Review Agent，且沒有規則發現可供擴寫。"
-            "請確認已設定 OPENROUTER_API_KEY 後重試建議。"
+            "請確認 LLM 提供者的設定（LLM_PROVIDER 及其所需的金鑰或 claude CLI）後重試建議。"
         )
     lines = [
         "備援建議（依規則發現自動產生）",
@@ -157,7 +157,7 @@ async def run_review_agent(
     """
     Yield suggestion text chunks for SSE. Raises RuntimeError on hard failure.
     """
-    from services.langgraph_runtime import RuntimeAuthError, openrouter_chat_model
+    from services.langgraph_runtime import RuntimeAuthError, chat_model
 
     configure_provider_env()
     payload = _compact_payload(diagram_summary, rule_result)
@@ -178,7 +178,7 @@ async def run_review_agent(
 
     try:
         try:
-            model = openrouter_chat_model(model=model_name)
+            model = chat_model(model=model_name)
         except RuntimeAuthError as exc:
             raise RuntimeError(auth_error_message()) from exc
 

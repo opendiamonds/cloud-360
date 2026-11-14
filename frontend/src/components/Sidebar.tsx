@@ -159,7 +159,7 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {archOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="架構">
                 {showArchWorkspace && (
                   <NavLink to="/workspace" className={linkClass}>
                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -215,7 +215,7 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {costOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="成本">
                 <NavLink to="/cost" className={linkClass}>
                   預估成本
                 </NavLink>
@@ -277,7 +277,7 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {adminOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="系統管理">
                 {showUsersAdmin && (
                   <NavLink to="/admin/users" className={adminLinkClass}>
                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
