@@ -103,6 +103,10 @@ on:
       - 'scripts/validate_embedding_provider_value.py'
       - 'backend/scripts/gen_mcp_tools.py'
       - 'backend/scripts/run_meta_schema_migration.py'
+      # 260920-orchestration-brain build-and-test（MB-48）：`ci.yml` 的 concurrency job
+      # 新增一步以這支設定記憶專用角色密碼（沿用 memory-schema job 的同一支），`run:`
+      # 直接呼叫它，掃描面隨之擴大。少了它 COVERAGE-2 紅（PR #650 於 2026-11-14 實測）。
+      - 'deploy/initdb/02-memory-role-password.sh'
   # [US:S-10] 的可展示性需要手動觸發。第一段不碰網路也不用憑證，多按幾次沒有副作用；
   # 第二段有 `if:` 把關，缺憑證或缺測試 Project 時整段跳過。
   workflow_dispatch:

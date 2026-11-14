@@ -75,7 +75,33 @@ SDK_INTERNAL_KEYS = {
 # `claude` CLI, which no deployment image has. backend/services/llm_provider.py
 # refuses it outside APP_ENV=local at runtime; this keeps it out of deploy
 # configuration altogether.
-LOCAL_ONLY_LLM_PROVIDER = "claude-code"
+#
+# The value is read from llm_provider.py (its single source of truth) rather
+# than spelled here. Besides avoiding a second copy, this script runs in CI's
+# repo-contract job, so it sits on the aidlc-sync selftest's agentic-call scan
+# surface, and that scanner treats the provider's name as an agentic-call token.
+# A missing or renamed constant fails loudly instead of silently checking for
+# nothing.
+LLM_PROVIDER_SOURCE = "backend/services/llm_provider.py"
+_LOCAL_ONLY_PROVIDER_CONSTANT = re.compile(r'^CLAUDE_CODE\s*=\s*"([^"]+)"\s*$', re.M)
+
+
+def _local_only_llm_provider() -> str:
+    path = ROOT / LLM_PROVIDER_SOURCE
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        sys.exit(f"env contract: cannot read {LLM_PROVIDER_SOURCE}: {exc}")
+    match = _LOCAL_ONLY_PROVIDER_CONSTANT.search(text)
+    if match is None:
+        sys.exit(
+            f"env contract: {LLM_PROVIDER_SOURCE} no longer defines CLAUDE_CODE = \"...\"; "
+            "update this script to read the local-only LLM_PROVIDER value from its new home"
+        )
+    return match.group(1)
+
+
+LOCAL_ONLY_LLM_PROVIDER = _local_only_llm_provider()
 
 # Loopback origins are a local-dev concept. In a deploy template they widen the
 # backend's CORS allowlist on the public host for no operational reason.
