@@ -49,7 +49,14 @@ services:
       # restore is verified, and a single volume name cannot do both. The actual
       # Docker volume is cloud360_db_pg18 (project name + declared name); the
       # old one is cloud360_cloud360_db. See DEPLOY.md.
-      - db_pg18:/var/lib/postgresql/data
+      #
+      # Mounted at /var/lib/postgresql, NOT /var/lib/postgresql/data. From 18 on,
+      # the official image keeps PGDATA at /var/lib/postgresql/18/docker and its
+      # entrypoint refuses to start (exit 1) when a volume is mounted at the old
+      # /var/lib/postgresql/data path -- even on a brand-new empty volume. CI's
+      # test stack mounts no volume, so no CI job exercises this line; it was
+      # caught by a manual start against a throwaway volume (2026-11-14).
+      - db_pg18:/var/lib/postgresql
       # Runs only on an empty data volume. schema_rbac.sql is the full-environment
       # script (schema.sql is core DDL reference only) — see DEPLOY.md 2.1.
       - ../schema_rbac.sql:/docker-entrypoint-initdb.d/01-schema_rbac.sql:ro

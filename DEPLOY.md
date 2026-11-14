@@ -1748,6 +1748,25 @@ directory，本部署形狀下沒有承載者。
 `role_permissions`；(b) **backend 必須是停止的**——它的 startup 會跑 `init_db()`（`create_all`
 ＋ 七支 `_ensure_*`），在還原中途動 schema。
 
+**步 4 的第三條硬條件（2026-11-14 本機演練補入）**：(c) **新 volume 必須掛在
+`/var/lib/postgresql`，不是 `/var/lib/postgresql/data`**。PG 18 起官方映像把 PGDATA 放在
+`/var/lib/postgresql/18/docker`，而 volume 掛在舊路徑 `/var/lib/postgresql/data` 時 entrypoint
+**直接拒絕啟動（exit 1）——連全新的空 volume 也一樣**。`deploy/docker-compose.deploy.yml`
+已改為 `db_pg18:/var/lib/postgresql`；裸映像還原時要用同一個掛載點，否則還原進去的資料
+之後 compose 讀不到：
+
+```bash
+docker run -d --name c360-pg18-restore \
+  -e POSTGRES_USER="$PGUSER" -e POSTGRES_PASSWORD="$PGPASS" -e POSTGRES_DB=cloud360 \
+  -v cloud360_db_pg18:/var/lib/postgresql \
+  pgvector/pgvector:pg18           # 不掛 initdb、不 publish port
+```
+
+**在容器裡跑 2.2.9 的 `run_meta_schema_migration.py` 時**，它讀的是 repo 根目錄的
+`schema_rbac.sql`，而 backend 映像的 build context 是 `backend/`，不含該檔——要把它唯讀掛進去
+（`-v "$PWD/schema_rbac.sql:/schema_rbac.sql:ro"`），否則以 `FileNotFoundError: '/schema_rbac.sql'`
+失敗。本機演練（PG 16 alpine → PG 18、兩支遷移、後端 `init_db()` 與成員回填）全數通過即以此形式執行。
+
 **採用哪一種做法，兩者代價不對稱，請記下實際選的那一個**：
 
 | 做法 | 代價 |

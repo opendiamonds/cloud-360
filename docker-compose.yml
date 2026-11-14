@@ -24,7 +24,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # /var/lib/postgresql, not /var/lib/postgresql/data: the PG 18 image's
+      # entrypoint refuses to start with a volume at the old path (see the same
+      # note in deploy/docker-compose.deploy.yml).
+      - postgres_data:/var/lib/postgresql
 
   adminer:
     image: adminer:latest
