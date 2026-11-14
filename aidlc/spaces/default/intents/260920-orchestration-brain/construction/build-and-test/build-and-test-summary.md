@@ -715,3 +715,18 @@
 | `work-orchestrator:NFR12.27` | work-orchestrator/nfr-requirements/tech-stack-decisions.md:20 | 本單元送出的每則訊息都先通過 `brain_ws_contract` 對應模型的驗證（承接 `NFR5`） | 斷言該目標的檢查本站實跑通過 | `backend/tests/work_orchestrator_fakes.py` → bt-logs/unit-run1.log（1467 tests OK，三輪） | — | Met |
 | `work-orchestrator:NFR12.28` | work-orchestrator/nfr-requirements/tech-stack-decisions.md:21 | PBT 落點為四個不讀 IO 的純函式：`transition`、`plan_waits`、`side_effect_on_stop`、`on_dependency_stopped`，加上 `NFR12.12` 的 stateful 模型測試 | 斷言該目標的檢查本站實跑通過 | `backend/tests/test_work_orchestrator_rules.py` → bt-logs/unit-run1.log（1467 tests OK，三輪） | — | Met |
 | `work-orchestrator:NFR12.29` | work-orchestrator/nfr-requirements/tech-stack-decisions.md:22 | 以一個測試鎖住「ASGI 傳輸收齊才交回」這個假設對本單元無害：A1／A3 的判定以完整回應本體進行，不依賴中途事件 | 斷言該目標的檢查本站實跑通過 | `backend/tests/work_orchestrator_fakes.py` → bt-logs/unit-run1.log（1467 tests OK，三輪） | — | Met |
+
+## 第三輪修正後的就緒更新（2026-11-14，conductor 追加）
+
+本節為追加，上方矩陣不改寫。完整證據見 `test-results.md` 同名節。
+
+- **建置就緒**：PR #650 head `48f6349` 的 CI、selftest 與其他 PR 檢查全部 `success`。
+- **測試就緒**：
+  - 後端 1480 tests OK（skipped=3）。
+  - `tests_pg` 19 OK。
+  - 真實 stack 上的 `ui-regression` 為 `215 passed`、`unexpected=0`。
+- **部署就緒：尚未。** 三項前置仍待使用者處理：
+  - GitHub secret `MEMORY_DB_PASSWORD` 尚未建立。
+  - staging 須先執行 `run_meta_schema_migration.py`。
+  - PG 16→18 需要 dump／restore 與維護窗口。
+- **形式判定**：仍有 `Unverified` 列（14 個延遲數字目標無任何擁有 stage，以及少數歸屬其他單元或 `ci-pipeline` 的列）。依 stage 檔的 failure predicate，本站形式上未達成功，處置交核可關卡。

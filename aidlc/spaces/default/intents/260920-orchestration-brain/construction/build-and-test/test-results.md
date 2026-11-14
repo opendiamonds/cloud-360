@@ -386,3 +386,39 @@
 | entry-page-ui Step 23（一次 CI 實跑） | **不可** | PR 上的 CI |
 | object-picker-ui Step 10 | **部分**：`entry-page.spec.ts` 62 案全綠；`entry-page-live` 需真實 stack | `ui-regression` |
 | object-picker-ui Step 12 | **部分**：build、兩支 validator 通過；`N-05` 基準比對與「`backend/`、`deploy/`、`.github/` 零變更」不可（分支層有他單元改動） | 維持清單第 64 列的處置（不勾、不改寫已核可計畫） |
+
+## 第三輪修正後的 CI 實跑證據（2026-11-14，conductor 追加）
+
+本節為追加，不改上方已寫入的內容；上方矩陣的 verdict 是第三輪修正**之前**的判定。
+
+- **推送**：PR #650 head `48f6349`，包含：
+  - `2fa972e`：修正。
+  - `a40f75e`：紀錄。
+  - `e2ca1ac`：合併 `ut`（PR #717 U22），並解決 `design_agent.py` 衝突。
+  - `48f6349`：selftest 修正。
+- **衝突導致 PR 檢查未觸發**：PR 先前與 `ut` 衝突（`mergeable=CONFLICTING`），GitHub 因此**沒有觸發任何 pull_request workflow**，只有 push 事件的 CI 跑了。合併 `ut` 後才觸發。
+- **全部 PR 檢查 `success`**：
+  - CI（run 43556488824）
+  - AI-DLC Sync Selftest（run 43556488890）
+  - Contract Guard、Code Drift Alert、Local Dev Drift、Lint Fixer、PR Reviewer、AI-DLC Sync Forward
+- **UI Regression Reporter（run 43556488900）**：在真實短生命週期 stack 上 `215 passed`，`unexpected=0 flaky=0`。本站先前因本機無法起 stack 而失敗的 20 個 e2e（`regression` 13、`entry-page-live` 5、`estimate-workspace` 2）因此有了通過證據。
+- **矩陣中 owning stage 為 CI `ui-regression` 的 6 列**：`TC-VOLUME`、`a11y-gate:A11Y-S1`、`A11Y-S3`、`A11Y-S4`、`entry-page-ui:EPN-24`、`project-pages-ui:PPN-23`。這 6 列現有上列證據，但**是否每列都被該次執行完整覆蓋，本節未逐列複核**，故不在矩陣內改寫其 verdict。
+- **仍為 `Unverified`**，本站與 CI 皆無法產生證據：
+  - 14 個延遲數字目標（「無後續擁有 stage，計畫無 performance-validation」）。
+  - 歸屬其他單元交付條件，或歸屬 `ci-pipeline`（CONDITIONAL）的少數列。
+
+  依 stage 檔，只要這些列存在，本站在形式上仍判定為失敗；處置交核可關卡由使用者決定。
+- **selftest 首次紅燈的兩個根因與修正**：
+  - R-1.2：`scripts/validate_env_contract.py` 寫死本機限定 provider 名稱，被掃描器判為代理式字樣。改為自 `backend/services/llm_provider.py` 讀取。
+  - COVERAGE-2：`ci.yml` 新增呼叫的 `deploy/initdb/02-memory-role-password.sh` 不在 selftest 觸發 allowlist，已補上。
+
+  修正後本機三支檢查器結果：`93 tests, 392 checks, 0 failures`。
+- **記憶專用角色本機實測**：
+  - 以 `cloud360_memory` 讀 `public.users` 回 `permission denied`。
+  - 設定後，後端啟動時沒有記憶連線 WARNING，也沒有 cost index rename WARNING。
+  - 語意記憶經確認後寫入成功，情節記憶寫入也成功。
+  - 資料庫上可見 `cloud360_memory` 的連線。
+- **部署前置（未完成，需使用者處理）**：
+  - GitHub secret `MEMORY_DB_PASSWORD` **尚未建立**。查證方式是以 `gh api` 只列名稱；`JWT_SECRET`、`OPENROUTER_API_KEY`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD` 都在 secrets，variables 沒有同名項。
+  - staging 須在部署前執行 `run_meta_schema_migration.py`（DEPLOY.md §2.2.8）。
+  - compose 映像已改為 `pgvector/pgvector:pg18`：PG 16→18 需要手動 dump／restore 和維護窗口，自動回滾不會還原資料。
