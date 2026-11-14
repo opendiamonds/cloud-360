@@ -660,7 +660,7 @@ jobs:
       # backend/tests_pg/__init__.py 的 docstring。
       # 合併前必修第 33 列 (g)：步驟名稱與 tests_pg 的實際內容一致（六支檔；第五支為
       # build-and-test 第二輪新增的語意記憶寫入後預取可讀，第六支為第三輪的記憶專用角色 WS 路徑）。
-      - name: Run real-PostgreSQL tests (membership C1-C4, memory V1/D1-D2, purge atomicity, requirement field G1-G4, semantic memory prefetch, memory role WS path)
+      - name: Run real-PostgreSQL tests (membership C1-C4, memory V1/D1-D2, purge atomicity, requirement field G1-G4, semantic memory prefetch, memory role WS path, cost schema startup)
         env:
           MEMORY_DB_PASSWORD: ci_memory_db_password_not_for_production
         run: python -m unittest discover -s tests_pg -v

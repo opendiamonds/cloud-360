@@ -358,7 +358,7 @@ test.describe('U24 member pages', () => {
    * @api DELETE /api/membership/projects/{project_id}/members/{user_id} -> 204 | 移出成員
    * @ui /projects/:projectId/members | 清單頁（邀請）與詳情頁（改角色、移出）
    * @given 以 project_admin 且具 K3 view+edit 的帳號開啟成員頁
-   * @step 邀請一位成員並等新列出現 | list_members 的請求數不增加，清單多一列
+   * @step 邀請一位成員並等新列出現 | `list_members` 的請求數不增加，清單多 1 列
    * @step 進入詳情頁改角色並儲存 | list_members 的請求數不增加，角色就地更新
    * @step 在詳情頁移出該成員 | DELETE 之後只有一次 list_members（清單頁自己的掛載抓取），不是兩次
    * @pass 三種操作都沒有讓處理器呼叫清單抓取函式

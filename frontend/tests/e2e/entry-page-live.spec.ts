@@ -39,7 +39,7 @@ test.describe('U14 entry page live stack', () => {
    * @api POST /api/auth/login -> 200 | 帳密驗證，成功時回 access_token
    * @ui / | 入口頁 brain-entry-page、brain-context-bar
    * @given 真實測試 stack；seed 帳號 admin / admin123（Platform_Admin，具 K1:view）；WS 端點 /api/brain/ws
-   * @step 以 admin 登入 | 落在 /、brain-entry-page 可見
+   * @step 以 admin 登入 | 落在 `/`、`brain-entry-page` 可見
    * @step 檢視大腦 WebSocket | 恰一條，網址路徑為 /api/brain/ws、不含 ?
    * @step 等待 ready | 脈絡列 data-state 不再是 connecting
    * @pass 真實握手完成且網址乾淨
@@ -102,7 +102,7 @@ test.describe('U14 entry page live stack', () => {
    * @ui /workspace | 工作區脈絡列
    * @ui /assessment | 評核頁脈絡列
    * @given 真實測試 stack；admin 已登入（WS /api/brain/ws）
-   * @step 經 Sidebar 進 /workspace | 新開一條大腦連線、入口頁那條已關閉
+   * @step 經 Sidebar 進 /workspace | 新開 1 條大腦連線、入口頁那條已關閉
    * @step 經 Sidebar 進 /assessment | 再新開一條、工作區那條已關閉
    * @pass 任一時刻未關閉的大腦連線恰 1 條
    * @story US8.1
@@ -127,7 +127,7 @@ test.describe('U14 entry page live stack', () => {
    * @api POST /api/auth/login -> 200 | 帳密驗證，成功時回 access_token
    * @ui / | Sidebar「入口」、入口頁「我的記憶」捷徑
    * @given 真實測試 stack；admin 已登入
-   * @step 檢視 Sidebar | sidebar-entry-link 可見且 aria-current="page"
+   * @step 檢視 Sidebar | `sidebar-entry-link` 可見且 `aria-current="page"`
    * @step 檢視入口頁頁首 | brain-memory-shortcut 可見並連到 /memory
    * @pass 入口與記憶捷徑皆可見
    * @story US1.4

@@ -81,7 +81,7 @@ test.describe('Sidebar landmarks', () => {
    * @purpose 側欄裡含「入口」「專案」「我的記憶」三個連結的 `<nav>` 都有名稱，且三個名稱互不相同
    * @ui /memory | 側欄的三個導覽地標
    * @given 同上
-   * @step 對三個連結各取最近的 `<nav>` 祖先，讀其可存取名稱（aria-label 或 aria-labelledby）
+   * @step 對三個連結各取最近的 `<nav>` 祖先，讀其可存取名稱（aria-label 或 aria-labelledby） | 3 個名稱皆非空且互不相同
    * @pass 三個名稱皆非空且互不相同
    * @story US4.2
    * @note 只檢查這三個獨立項：可收合群組的 `<nav>` 由群組標題按鈕承擔辨識，不在本列範圍（第 35 列 (c) 只點名「我的記憶」）。
@@ -108,7 +108,7 @@ test.describe('Sidebar landmarks', () => {
    * @purpose 可收合群組「架構」「成本」「系統管理」的 `<nav>` 也有可存取名稱（與群組標題同字），且側欄全部導覽地標名稱互不相同
    * @ui /memory | 側欄全部導覽地標（含三個可收合群組）
    * @given 攔截層：/api/auth/me 另帶 A3、C1、J3a view，使三個群組都出現且預設展開
-   * @step 以 role=navigation、name=架構／成本／系統管理 各自定位 | 各恰一個
+   * @step 以 role=navigation、name=架構／成本／系統管理 各自定位 | 各恰 1 個
    * @step 讀側欄內每個 `<nav>` 的 aria-label | 皆非空、互不相同
    * @pass 三個群組地標各一、側欄無無名或同名的導覽地標；沒有未被攔截的 /api 請求
    * @story US4.2

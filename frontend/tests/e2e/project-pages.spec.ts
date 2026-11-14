@@ -882,7 +882,7 @@ test.describe('U23 project pages', () => {
    * @api GET /api/requirements/systems/{system_id}/fields -> 200 | 進頁時的唯一一次欄位讀取
    * @ui /projects/:projectId | 籤列（總覽／需求／記憶摘要）
    * @given 具 K4 的帳號；單一系統
-   * @step 聚焦總覽籤並按右鍵 | 需求籤 aria-selected=true 且取得焦點
+   * @step 聚焦總覽籤並按右鍵 | 需求籤 `aria-selected="true"` 且取得焦點
    * @step 按 End，再按 Home | 依序選到記憶摘要、總覽
    * @step 檢查切籤前後 | pathname 不變、history.length 不增、/api 請求數不增
    * @pass 方向鍵與 Home／End 生效；切籤沒有任何副作用
@@ -1113,7 +1113,7 @@ test.describe('U23 project pages', () => {
    * @ui /projects/:projectId | 總覽、需求、記憶摘要三籤
    * @given 名稱與值皆為獨特假字串；一欄的 PUT 回 422、一個專案的系統清單回 500
    * @step 走過清單頁、詳情頁三籤並做一次部分失敗的儲存 | 畫面照常
-   * @step 檢查收集到的主控台訊息 | 不含任何一個獨特字串
+   * @step 檢查收集到的主控台訊息 | 不得含任何一個獨特字串
    * @pass 使用者資料不會經主控台外洩（本 repo 為 public，CI log 可公開讀取）
    * @story US11.2
    */

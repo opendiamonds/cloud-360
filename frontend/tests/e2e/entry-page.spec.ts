@@ -342,8 +342,8 @@ test.describe('U14 entry page', () => {
    * @purpose 打錯的網址導回 /，再由落地判斷決定落點（網址列與畫面一致，BR91.3）。
    * @ui / | 入口頁
    * @given 具 K1 的使用者
-   * @step 開啟 /e2e-u14-not-a-page | 網址被改寫為 /
-   * @step 檢視畫面 | brain-entry-page 可見
+   * @step 開啟 /e2e-u14-not-a-page | 網址被改寫為 `/`
+   * @step 檢視畫面 | `brain-entry-page` 可見
    * @pass 不存在的路徑導回 / 並顯示入口頁
    * @story US1.4
    */
@@ -643,7 +643,7 @@ test.describe('U14 entry page', () => {
    * @ui / | 入口頁 brain-stream-cursor
    * @given 以 reducedMotion: 'reduce' 模擬偏好；/api/brain/ws 送 token 不送 done
    * @step 送出一句、伺服器送一個 token | 游標可見
-   * @step 讀游標的 computed animation-name | 為 none
+   * @step 讀游標的 computed animation-name | 為 `none`
    * @pass 減少動態時游標無動畫
    * @story US8.1
    */
@@ -1444,7 +1444,7 @@ test.describe('U14 entry page', () => {
    * @ui / | 入口頁
    * @ui /workspace | 工作區
    * @given /api/brain/ws；入口頁完成一輪對話
-   * @step 經 Sidebar 到 /workspace 再回到入口頁 | 原句與回覆仍可見
+   * @step 經 Sidebar 到 /workspace 再回到入口頁 | 換頁前的原句與回覆 2 則都仍可見，不得消失
    * @pass 紀錄跨頁保留
    * @story US3.1
    */
@@ -1533,7 +1533,7 @@ test.describe('U14 entry page', () => {
    * @ui /assessment | 評核頁「問大腦」面板
    * @given 未登入；/me 對兩位使用者的回應皆缺 id
    * @step A 經登入頁登入並完成一輪對話 | 對話區有 A 的原句
-   * @step 經 Sidebar 登出、B 經登入頁登入 | 入口頁對話區沒有 A 的原句與回覆
+   * @step 經 Sidebar 登出、B 經登入頁登入 | 入口頁對話區不得出現 A 的原句與回覆
    * @step B 進 /workspace 與 /assessment 並展開面板 | 皆沒有 A 的對話
    * @pass 換人即清空，不依賴 user.id
    * @story US8.1
@@ -1622,7 +1622,7 @@ test.describe('U14 entry page', () => {
    * @given 已登入（sessionStorage 只有 token）
    * @step 記下 localStorage／sessionStorage 的鍵集合 | —
    * @step 送出含唯一標記的一句並完成一輪 | —
-   * @step 再讀兩個儲存 | 鍵集合與對話前相同；全部值不含該句
+   * @step 再讀兩個儲存 | 鍵集合與對話前相同；全部值不得含該句
    * @pass 使用者原句不落地
    * @story US8.1
    */
@@ -1651,7 +1651,7 @@ test.describe('U14 entry page', () => {
    * @ui / | 入口頁
    * @given page.on('console') 收集全部訊息；作業對象帶三個唯一名稱；伺服器另送未知 type、零內容 done 與 error
    * @step 完成一輪含唯一原句的對話並觸發上述三種會記 console 的情形 | —
-   * @step 檢視收集到的訊息 | 不含原句、三個名稱與 token 子字串
+   * @step 檢視收集到的訊息 | 不得含原句、三個名稱與 token 子字串
    * @pass 主控台不洩漏內容
    * @story US8.1
    */
@@ -1680,7 +1680,7 @@ test.describe('U14 entry page', () => {
    * @ui / | 入口頁
    * @ui /workspace | 工作區
    * @given page.on('request') 收集 /api/ 請求
-   * @step 開啟入口頁並完成一輪交辦 | 每個請求都屬既有端點 GET /api/auth/me、GET /api/membership/reselections/pending；交辦期間沒有新增請求
+   * @step 開啟入口頁並完成一輪交辦 | 每個請求都屬既有端點 `GET /api/auth/me`、`GET /api/membership/reselections/pending`；交辦期間不得有新增請求
    * @step 分別以具 K1 與不具 K1 的帳號開啟 /workspace | 兩者的 /api/ 請求序列相同
    * @pass 大腦相關畫面零新增 HTTP
    * @story US8.1
@@ -2239,5 +2239,47 @@ test.describe('U14 entry page', () => {
     await expect(conv(page).getByText(`${M}-mem-已記住`)).toBeVisible();
     await page.getByTestId('sidebar-memory-link').click();
     await expect(page.getByTestId('memory-zone-semantic')).toContainText(preference);
+  });
+
+  /**
+   * @purpose 只用鍵盤就能在入口頁輸入需求並送出：Tab 走得到輸入框與「送出」鈕，按 Enter 即送出，全程不需指標裝置。
+   * @ui / | 入口頁 brain-input、brain-send、brain-conversation
+   * @given 攔截層：/api/brain/ws 由假大腦伺服器扮演；已登入且具 K1；入口頁已就緒；全程不呼叫 click()
+   * @step 從頁面起點逐次按 Tab（上限 60 次） | 焦點落在 `brain-input`（不得超過 60 次仍未到）
+   * @step 以鍵盤輸入一句含唯一標記的需求 | `brain-input` 的值等於該句
+   * @step 按 Tab | 焦點移到 `brain-send`，且該鈕為可用
+   * @step 按 Enter | 假伺服器恰收到 1 則 `user_message`，其 `text` 等於該句
+   * @step 伺服器回一輪 token 與 done | 對話區出現原句與回覆，輸入框清空
+   * @pass Tab 可達輸入框與送出鈕、Enter 送出恰 1 則訊息，且原句與回覆皆可見
+   * @story US1.1
+   * @note 對應 `stories.md` 的 AC-A11Y.1（a11y-gate traceability 原為 Deferred：「純鍵盤完成流程，axe 判不到」）。
+   *       axe 只看靜態屬性，抓不到「元素被設成 tabIndex=-1」或「送出只綁在 onClick」這類只有實際操作才會現形的缺陷；
+   *       本案以 Tab／Enter 的真實鍵盤事件走完流程，突變把輸入框設為 `tabIndex={-1}` 時紅燈。
+   */
+  test('只用鍵盤即可在入口頁輸入並送出', async ({ page }) => {
+    const h = await setup(page);
+    await page.goto('/');
+    await waitReady(page);
+    const text = `${M}-keyboard-只用鍵盤送出`;
+    const isFocused = (testid: string) =>
+      page.evaluate((id) => document.activeElement?.getAttribute('data-testid') === id, testid);
+    let tabs = 0;
+    while (!(await isFocused('brain-input'))) {
+      expect(tabs, '按了 60 次 Tab 仍未到達輸入框').toBeLessThan(60);
+      await page.keyboard.press('Tab');
+      tabs += 1;
+    }
+    await page.keyboard.type(text);
+    await expect(page.getByTestId('brain-input')).toHaveValue(text);
+    await page.keyboard.press('Tab');
+    expect(await isFocused('brain-send')).toBe(true);
+    await expect(page.getByTestId('brain-send')).toBeEnabled();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => h.server.framesOf('user_message').length).toBe(1);
+    expect(h.server.framesOf('user_message')[0].payload).toMatchObject({ text });
+    h.server.send(F.turnFrames('t-kbd', `${M}-keyboard-回覆`));
+    await expect(conv(page).getByText(text, { exact: true })).toBeVisible();
+    await expect(conv(page).getByText(`${M}-keyboard-回覆`)).toBeVisible();
+    await expect(page.getByTestId('brain-input')).toHaveValue('');
   });
 });
