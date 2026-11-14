@@ -1,0 +1,147 @@
+name: One-off PG 16 to 18 upgrade for PR 650
+
+# One-off, human-triggered maintenance run. It exists only on the branch
+# danniel/chore/pg18-upgrade-run and is triggered by a person pushing that
+# branch; it is never merged into ut or main. It performs DEPLOY.md 5.4
+# steps 1-5 plus the two pre-merge migrations (DEPLOY.md 2.2.7, 2.2.9) on the
+# staging host, so that merging PR 650 afterwards finds PG 18 data and the new
+# schema already in place. Rollback disposition for this window: B (DEPLOY.md
+# 5.4 invariant 2), recorded in the intent's rollback-runbook.md.
+#
+# The repository is public and Actions logs are public: no step prints a
+# credential, a dump, or row contents. Only counts and exit codes are logged.
+
+on:
+  push:
+    branches:
+      - danniel/chore/pg18-upgrade-run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-10-10
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    name: PG 16 to 18 upgrade and pre-merge migrations
+    runs-on: [self-hosted, linux, x64, cloud360]
+    timeout-minutes: 60
+    env:
+      OLD_DB: cloud360-db-1
+      OLD_BACKEND: cloud360-backend-1
+      OLD_VOL: cloud360_cloud360_db
+      NEW_VOL: cloud360_db_pg18
+      RESTORE: c360-pg18-restore
+      NET: c360-upgrade
+      IMG: c360-backend-pr650
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight (read-only)
+        run: |
+          set -euo pipefail
+          docker inspect "$OLD_DB" --format '{{.Config.Image}} {{.State.Status}}'
+          docker inspect "$OLD_BACKEND" --format '{{.Config.Image}} {{.State.Status}}'
+          img=$(docker inspect "$OLD_DB" --format '{{.Config.Image}}')
+          case "$img" in postgres:16*) ;; *) echo "::error::$OLD_DB runs $img, expected postgres:16 -- already upgraded?"; exit 1;; esac
+          docker volume inspect "$OLD_VOL" >/dev/null
+          if docker volume inspect "$NEW_VOL" >/dev/null 2>&1; then
+            echo "::error::$NEW_VOL already exists; refusing to overwrite it"; exit 1
+          fi
+          db_bytes=$(docker run --rm -v "$OLD_VOL":/v:ro alpine du -sb /v | cut -f1)
+          root_dir=$(docker info --format '{{.DockerRootDir}}')
+          root_avail=$(df -B1 --output=avail "$root_dir" | tail -1 | tr -d ' ')
+          home_avail=$(df -B1 --output=avail "$HOME" | tail -1 | tr -d ' ')
+          need_root=$(( db_bytes * 5 / 2 + 4 * 1024 * 1024 * 1024 ))
+          echo "DBSIZE=${db_bytes} docker_root_avail=${root_avail} need=${need_root} home_avail=${home_avail}"
+          [ "$root_avail" -ge "$need_root" ] || { echo "::error::not enough space on $root_dir (DEPLOY.md 5.5)"; exit 1; }
+          [ "$home_avail" -ge "$db_bytes" ] || { echo "::error::not enough space in \$HOME for the dump (DEPLOY.md 5.5)"; exit 1; }
+
+      - name: Read DB credentials from the running container
+        run: |
+          set -euo pipefail
+          u=$(docker exec "$OLD_DB" printenv POSTGRES_USER)
+          p=$(docker exec "$OLD_DB" printenv POSTGRES_PASSWORD)
+          d=$(docker exec "$OLD_DB" printenv POSTGRES_DB)
+          echo "::add-mask::$p"
+          { echo "PGUSER_V=$u"; echo "PGPASS_V=$p"; echo "PGDB_V=$d"; } >> "$GITHUB_ENV"
+
+      - name: Stop backend and dump (DEPLOY.md 5.3)
+        run: |
+          set -euo pipefail
+          docker stop "$OLD_BACKEND"
+          mkdir -p "$HOME/cloud360-upgrade" && chmod 700 "$HOME/cloud360-upgrade"
+          dump="$HOME/cloud360-upgrade/cloud360-dump-$(date +%Y%m%d-%H%M%S).sql"
+          ( umask 077; docker exec "$OLD_DB" pg_dump -U "$PGUSER_V" "$PGDB_V" > "$dump" )
+          test -s "$dump"
+          stat -c '%a %s bytes' "$dump"
+          echo "DUMP=$dump" >> "$GITHUB_ENV"
+
+      - name: Stop the old database (old volume is kept for rollback)
+        run: docker stop "$OLD_DB"
+
+      - name: Start PG 18 on the new volume (no initdb, no ports)
+        run: |
+          set -euo pipefail
+          docker network create "$NET" >/dev/null
+          docker volume create --label com.docker.compose.project=cloud360 \
+            --label com.docker.compose.volume=db_pg18 "$NEW_VOL" >/dev/null
+          docker run -d --name "$RESTORE" --network "$NET" --network-alias db --memory 4g \
+            -e POSTGRES_USER="$PGUSER_V" -e POSTGRES_PASSWORD="$PGPASS_V" -e POSTGRES_DB="$PGDB_V" \
+            -v "$NEW_VOL":/var/lib/postgresql pgvector/pgvector:pg18 >/dev/null
+          for i in $(seq 1 60); do
+            docker exec "$RESTORE" pg_isready -U "$PGUSER_V" -d "$PGDB_V" >/dev/null 2>&1 && break
+            sleep 2
+          done
+          sleep 3
+          docker exec "$RESTORE" pg_isready -U "$PGUSER_V" -d "$PGDB_V"
+
+      - name: Restore and reindex (DEPLOY.md 5.4 step 5)
+        run: |
+          set -euo pipefail
+          docker exec -i "$RESTORE" psql -q -v ON_ERROR_STOP=1 -U "$PGUSER_V" -d "$PGDB_V" < "$DUMP" > /dev/null
+          docker exec "$RESTORE" psql -U "$PGUSER_V" -d "$PGDB_V" -c "REINDEX DATABASE $PGDB_V;"
+          docker exec "$RESTORE" psql -U "$PGUSER_V" -d "$PGDB_V" -tAc \
+            "select 'users=' || (select count(*) from users) || ' diagrams=' || (select count(*) from user_diagrams)"
+
+      - name: Build this branch's backend image
+        run: docker build -q -t "$IMG" ./backend
+
+      - name: Migration 2.2.7 run_hierarchy_migration.py
+        run: |
+          set -euo pipefail
+          docker run --rm --network "$NET" \
+            -e DATABASE_URL="postgresql+psycopg://${PGUSER_V}:${PGPASS_V}@db:5432/${PGDB_V}" \
+            "$IMG" python scripts/run_hierarchy_migration.py
+
+      - name: Migration 2.2.9 run_meta_schema_migration.py
+        run: |
+          set -euo pipefail
+          docker run --rm --network "$NET" \
+            -e DATABASE_URL="postgresql+psycopg://${PGUSER_V}:${PGPASS_V}@db:5432/${PGDB_V}" \
+            -v "$PWD/schema_rbac.sql:/schema_rbac.sql:ro" \
+            "$IMG" python scripts/run_meta_schema_migration.py
+
+      - name: Remove the temporary restore container (new volume stays)
+        run: |
+          docker rm -f "$RESTORE"
+          docker network rm "$NET"
+          docker image rm "$IMG" || true
+
+      - name: On failure, put the old stack back
+        if: failure()
+        run: |
+          docker rm -f "$RESTORE" 2>/dev/null || true
+          docker network rm "$NET" 2>/dev/null || true
+          docker volume rm "$NEW_VOL" 2>/dev/null || true
+          docker start "$OLD_DB" "$OLD_BACKEND"
+          echo "::error::upgrade failed; the old PG 16 stack was restarted on its original volume. The dump (if any) is kept under \$HOME/cloud360-upgrade."
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "PG 18 data is on volume $NEW_VOL and both migrations exited 0."
+          echo "The site stays down until PR 650 is merged and deploy.yml brings the new stack up."
+          echo "Old volume $OLD_VOL and the dump stay until verification passes (DEPLOY.md 5.8)."
