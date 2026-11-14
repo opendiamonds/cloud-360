@@ -833,3 +833,13 @@ PBT hard constraint：N/A（本單元非 ADR-0006 點名的三個落點）；既
   - **15.2**（完整後端套件與 `tests_pg` 全綠）：完整後端套件 1391 OK，但本輪改動了 `SEARCH_SQL` 並新增 `tests_pg` 的 `V2`，`tests_pg` 未在現行位元組上執行（本機不啟資料庫），不能宣稱全綠；待 CI。
 
 **計數**：以與正式寫入相同的轉換作用於計畫的暫存區副本，`grep -c '^ *- \[x\]'` = **65**、`grep -c '^ *- \[ \]'` = **4**（共 69）；與原檔的差異只有 65 行的勾選字元。計畫檔是本輪最後寫入的檔（寫入計畫可能使 plan approval 指紋失效而擋下其後的 shell 指令，見前一節之六），故計數先於寫入取得。
+
+## 整站重跑後的勾選回復（2026-11-08T13:52:32Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-725719d9f4c4.tsv`：20 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：65 勾／4 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] 1.1 `git diff --stat -- backend/database.py` 必須為空（記錄基準）
+  - - [ ] 10.1 `git diff --stat -- backend/database.py` 仍為空
+  - - [ ] 10.2 `git diff --stat -- backend/requirements.txt` **為空**（`NFR8.20`）
+  - - [ ] 15.2 完整後端套件與 `tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）全綠；`validate_repo_contract.py`、`validate_env_contract.py` 綠燈

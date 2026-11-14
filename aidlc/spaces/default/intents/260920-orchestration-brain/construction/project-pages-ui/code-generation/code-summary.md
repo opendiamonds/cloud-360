@@ -544,3 +544,9 @@ repo 內未留下 `.pyc`／`__pycache__`／`.hypothesis`（`git status --porcela
 - **已知限制（併入 merge-blockers，既有列已涵蓋）**：第 39 列 (a) R-08 的 `test_d_*` 三案不斷言 `detail`，依 2026-10-26T02:56:46Z 裁決維持不修；前端 e2e 本輪未驗證（無前端改動）。
 - **範圍外觀察（不處置）**：A3 紀錄的行號 `membership_facade.py:552` 現為 `:570`、`hierarchy_facade.py:343`／`:380` 現為 `:342`／`:379`——內容相同、只是定位漂移，該紀錄屬 `brain-infra`，本輪不改。`frontend/junit.xml`、`frontend/pw-report.json` 的 mtime 晚於收據，為測試報告檔，非本輪產生。
 
+
+## 整站重跑後的勾選回復（2026-11-08T22:53:31Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-225da72b9a44.tsv`：50 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：56 勾／0 未勾。

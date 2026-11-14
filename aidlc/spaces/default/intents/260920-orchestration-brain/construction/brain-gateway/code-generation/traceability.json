@@ -367,6 +367,13 @@
       "status": "OK",
       "target": "backend/main.py",
       "note": "既有 5 個 SSE 端點的 router 檔（agent_router／review_router／lens_router／collab_router／advice_stream_router）git diff 為 0 行；main.py 只動 brain 相關三處（BR67.9）。"
+    },
+    {
+      "id": "BT-SEMANTIC-MEMORY-WRITE",
+      "status": "OK",
+      "target": "backend/tests/test_brain_gateway_semantic_memory.py",
+      "scope": "added-in-build-and-test",
+      "note": "本階段新增、已核可 scope 尚未涵蓋（build-and-test 第二輪，2026-11-12）：對話中「記住：…」經確認後寫入語意記憶。真實 PG 證據 backend/tests_pg/test_semantic_memory_prefetch_pg.py。requirements／stories 待回補（新增語意記憶寫入 FR 與 AC）；測試的 @story 暫掛 US4.1，回補後改指新 AC。"
     }
   ],
   "reverse": [
@@ -441,6 +448,18 @@
       "status": "OK",
       "target": "backend/tests/test_deploy_required_secrets.py",
       "note": "合併前必修第 37 列 (b)（review-03 R-13／L2）：DeployRequiredSecretsTest 三案以 yaml.safe_load 靜態讀 .github/workflows/deploy.yml 的「Require the secrets that must not default」步驟，鎖住 OPENROUTER_API_KEY 的 env 來源為 secrets、缺值判斷恰一行且在 missing 判斷之前、缺值分支有指名說明；不執行 workflow、不讀 secret 值。突變 D1–D5 皆紅、還原後綠（code-summary「合併前必修第 37 列」節）。(a) 第 19 列狀態字未落地（交 conductor）；(c) DEPLOY.md:2340 已由 brain-infra A7 更正；(d) 引用更正記於 code-summary；(e) 前端寫檔注意未能寫入 unit-test-instructions.md（改動會使 Plan Approval 綁定失效），文字暫記於 code-summary。"
+    },
+    {
+      "id": "CG-BT3-MEMDB",
+      "status": "OK",
+      "target": "backend/services/brain_gateway.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，MB-48〕_prefetch／_write_semantic／_write_episodic 的 session 改經 memory_router.memory_session_scope；測試 backend/tests/test_memory_db_session_ws.py 的 GatewayMemorySessionTest。"
+    },
+    {
+      "id": "CG-BT3-DEICTIC",
+      "status": "OK",
+      "target": "backend/services/brain_gateway_rules.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，AC6.1.1〕DEICTIC_REFERENTS 補「那」系列；覆蓋記於 work-orchestrator 的 AC6.1.1。"
     }
   ]
 }

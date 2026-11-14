@@ -558,3 +558,11 @@ review-04 的 16 項中 `Resolved (reviewer)` 10 項；未結 6 項逐項確認�
 2. review-04 R-06：`test_brain_gateway_limits.py:80-82` 逾時後不斷言槽位已清空（屬 `brain-gateway`）。
 3. review-04 R-16：`DEPLOY.md` §5.13 缺「未裁決前後續合併會重複在 6a 失敗」與環境性／程式性的最短判準。
 4. 本輪新增的未驗證項：收據後 `Sidebar.tsx`／`ContextBar.tsx`／`deploy.yml` 的改動未在真實 stack 上跑過 `entry-page-live`／`regression`／`estimate-workspace`，須由下一次 CI `ui-regression` 承擔（Step 23 因此不勾）。
+
+## 整站重跑後的勾選回復（2026-11-08T22:58:54Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-5bac9ccd7b33.tsv`：53 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：57 勾／2 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **本機驗證**（`cicd-pipeline.md` §二之一 最後一列）：對 `docker compose -f deploy/docker-compose.test.yml up -d` 起的 stack，把 URL 換成 `http://localhost:8090/api/brain/ws`，正
+  - - [ ] **Step 23 — 真實環境驗證（一次 CI 實跑）**

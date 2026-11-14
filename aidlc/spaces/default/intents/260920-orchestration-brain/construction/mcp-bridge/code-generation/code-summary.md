@@ -610,3 +610,9 @@ R-08 只需改紀錄，已由本節處理，不需併入。
 - `merge-blockers.md` 第 38 列：處置欄原文末尾就地補記本輪結論，結論為「待重審 mcp-bridge」。
 - 已知限制（需 conductor 併入 merge-blockers 者）：**無新增**。觀察：`security-design.md` 的取代註記引用 `docker-compose.deploy.yml` 工作樹行號，該檔若在提交前再變動，行號需重核（以句子引用為準）。
 
+
+## 整站重跑後的勾選回復（2026-11-08T22:49:03Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-df428e2b9341.tsv`：40 同、1 變（`LOCAL-DEV.md`，交審查員判定是否碰到本單元）。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：12 勾／0 未勾。

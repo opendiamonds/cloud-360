@@ -666,3 +666,9 @@ M1–M7 的證據檔（契約模組與兩支測試）自收據逐位元相同，
 全部 74 格依下列依據重勾：Step 1–12 的證據檔除 `ci.yml` 外自收據逐位元相同；`ci.yml` 相關的 Step 10 五格由本輪的閘門行定位、CI 閘門突變與兩支 validator 重驗；Step 1 的 `api.d.ts` 一格由本輪 `check:types` 重驗；Step 8／9 中指名 `BrainPage.tsx` 的格子，其標的已由 `U13`（`fa8ce42`）移到 `brainProtocol.ts`／`useBrainConnection.ts:150`，由本輪 S9-3／S9-4 在現行落點重驗（計畫內文保留為當時紀錄，不改）；Step 12 的完整後端套件一格由本輪 `Ran 1368 tests OK` 重驗；本節五格為本輪工作。
 
 勾選後 `grep -c` 實算：已勾 74、未勾 0（`grep -c '^- \[x\]'`／`grep -c '^- \[ \]'`，於勾選完成後執行）。`validate_repo_contract.py`、`validate_env_contract.py` 皆 passed；`traceability.json` 本輪無需更新。
+
+## 整站重跑後的勾選回復（2026-11-08T06:51:22Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算最新收據 `reviewed-source-0504fe12eb5c.tsv`：14 同、0 變。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：74 勾／0 未勾。

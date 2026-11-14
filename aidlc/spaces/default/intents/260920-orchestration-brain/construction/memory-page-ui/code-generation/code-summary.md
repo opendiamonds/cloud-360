@@ -440,3 +440,9 @@ R-01、R-05 已由本輪紀錄處置，不需併入（第 6 列 (d) 的紀錄面
 - `frontend/tests/e2e/a11y.spec.ts:77` 的註解仍寫「我的記憶的 `<nav>` 無 aria-label」，在 brain-infra 補上 `aria-label` 後已過期；該檔為 brain-infra／a11y-gate 的工作樹改動，非本單元。
 - `sidebar-landmarks.spec.ts` 為未追蹤檔：第 35 列 (c) 的鎖定依賴 brain-infra 的那批改動一起提交。
 - `MemoryFacade.count_references_to_user` 不經 `_authorize_approved`（見五），由其他單元以理由記載。
+
+## 整站重跑後的勾選回復（2026-11-08T15:43:25Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-75c064902e47.tsv`：19 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：30 勾／0 未勾。

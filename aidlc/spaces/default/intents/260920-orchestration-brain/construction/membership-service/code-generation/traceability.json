@@ -694,6 +694,12 @@
       "status": "OK",
       "target": "backend/tests/test_membership_backfill_docstring.py",
       "note": "2026-11-07（合併前必修第 31 列 (b)，`brain-infra` 交接的唯一非共用檔項目）：`backend/services/membership_backfill.py` 模組 docstring 第 28–37 行不再以「`owner_user_id` 指向不存在的使用者」作為持續性失敗的例子（`projects.owner_user_id` 有外鍵，該情形不可能存在），改為與 `run_backfill` 的終檢訊息及 `DEPLOY.md` §2.2.10 一致的兩類原因（終檢剩餘數不為 0、`INSERT` 本身拋例外）；只改 docstring，除模組 docstring 外的 AST 與 HEAD 相同。新測試 `B1`（模組 docstring）、`B2`（終檢的執行期訊息）鎖住本單元擁有的兩個載體；`DEPLOY.md` 為共用檔，不在本測試射程內。突變：還原舊句 → `B1` 紅；執行期訊息的「不會是孤兒擁有者」改為「可能是孤兒擁有者」→ `B2` 紅；兩者還原後 `cmp` 與 repo 相同、綠。第 31 列 (b) 在本單元的部分就此關閉，故不另立 open item。"
+    },
+    {
+      "id": "CG-MB66",
+      "status": "OK",
+      "target": "backend/tests_pg/test_membership_concurrency.py",
+      "note": "2026-11-08（合併前必修第 66 列）：`test_C3_assert_can_deactivate_takes_no_lock` 的前置資料由「整列移出 bob」改為「保留 bob 的成員列、停用其帳號（`users.is_active = false`）」。第 21 列裁決後獨人專案放行，舊前置使守門回 `passed`（CI 逐字 `'passed' != 'guard'`）；新前置同時滿足「有其他成員」與「其他成員皆不合格」。只改測試，`backend/services/membership_service.py` 未動（sha256 `a9b00ca0…7230`）。真實 PostgreSQL（`pgvector/pgvector:pg18`，只綁 127.0.0.1）`tests_pg` 15 案 OK。突變（副本）：M1 `projects_losing_last_admin` 恆回 `[]` → C3 紅（`'passed' != 'guard'`）；M2 守門查詢加 `with_for_update()` → C3 紅（`'broken' != 'satisfied'`）；兩者還原後 sha256 與基線相同，15 案再綠。第 66 列在本單元就此關閉，故不另立 open item。"
     }
   ],
   "open_items": [

@@ -270,3 +270,11 @@ R-12 的數字現況（本輪實算）：`object-picker.spec.ts` **33** 案（�
 
 <!-- 寫入時間：2026-11-08T04:44:33Z -->
 勾選完成後實算（`grep -c '^- \[x\]'`／`grep -c '^- \[ \]'`）：**18 勾／2 未勾**（未勾為 Step 10、Step 12）。與勾選前副本以「勾選字元正規化後 `diff`」比對無其他差異，計畫只動了勾選字元。收尾時 `git status --porcelain | grep -E '\.pyc|\.hypothesis|__pycache__'` 為空，scratchpad 副本已刪除。
+
+## 整站重跑後的勾選回復（2026-11-08T23:43:32Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-3a9a1f427629.tsv`：9 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：18 勾／2 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **Step 10 — 回歸**：跑 `entry-page.spec.ts`、`entry-page-live.spec.ts` 與其他既有 brain 相關 spec 全綠（`OPEN-OP16-4`）。
+  - - [ ] **Step 12 — 環境與建置檢查**：`npm run build`（含 `tsc -b`）；`N-05` 三個比較基準完工後重取並比對相同；`python3 scripts/validate_repo_contract.py`、`python3 scripts/validate_env_contra

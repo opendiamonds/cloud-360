@@ -322,3 +322,10 @@ developer，`2026-11-06T13:34:19Z`（`date -u`）。本輪不改任何應用程�
 
 - `source-manifest.json` 寫的是 repo 根的 `openapi.json`，計畫 §三 第 7 列寫 `backend/openapi.json`；後者不存在。本輪以 manifest 為準，計畫文字不改。
 - 突變腳本與副本只放在 scratchpad，跑完已刪除。
+
+## 整站重跑後的勾選回復（2026-11-08T11:13:32Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算最新收據 `reviewed-source-7867815dfd2c.tsv`：6 同、1 變（`openapi.json`，交審查員判定是否碰到本單元）。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：12 勾／1 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] `git diff --stat` 不含 §三「不動的檔案」清單中的任何一項（`NFR8.1`）

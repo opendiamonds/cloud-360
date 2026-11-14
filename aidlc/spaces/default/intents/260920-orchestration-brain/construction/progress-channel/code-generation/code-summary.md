@@ -537,3 +537,9 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 - `traceability.json`：不需更新（無程式與測試變動），`json.load` 驗證為合法 JSON。
 - `python3 -B scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」
 - `python3 -B scripts/validate_env_contract.py`：「Cloud-360 environment configuration contract validation passed.」
+
+## 整站重跑後的勾選回復（2026-11-08T07:05:01Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算最新收據 `reviewed-source-4d5e2ac3a2e1.tsv`：7 同、0 變。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：17 勾／0 未勾。

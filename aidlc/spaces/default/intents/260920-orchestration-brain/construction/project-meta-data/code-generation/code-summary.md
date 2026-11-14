@@ -460,3 +460,9 @@ Homebrew PostgreSQL **17.7** ＋ pgvector 0.8.1，在 scratchpad 建一次性叢
 處置紀錄：2026-11-06T23:44:01Z（UTC；台灣時間 2026-11-07）— `verify_meta_schema.sql:340` 補 `P17`；新增一則測試鎖定通過訊息與斷言編號集合一致；M4 紅、還原綠；後端 1373 測試 OK；`OPEN-CG18-14` 關閉；計畫勾選 2／19。
 
 處置紀錄（conductor）：2026-11-06T23:49:09Z — 上一節 §六 的 19 格未勾係引擎於計畫重新核可時重設（與本檔 :215 記載的同一行為）。conductor 依 §九「收尾」的指示重核證據（`unit-test-instructions.md:15` 的 `psql` 指令、`run_meta_schema_migration.py:95`、`schema_rbac.sql:615` 的 `J)` 區塊、`ci.yml:415`、`DEPLOY.md:251`；repo 內無新增 `.pyc`／`.hypothesis`），19 格的依據與 2026-11-06T22:09:46Z 一節相同且其後只有 `:340` 訊息文字與一則新測試變動，故勾回。現況 `grep -c`：**21／0**。
+
+## 整站重跑後的勾選回復（2026-11-08T12:28:32Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-73848765bae2.tsv`：5 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：21 勾／0 未勾。

@@ -50,7 +50,8 @@
     "AC10.2.1",
     "AC10.2.2",
     "AC10.2.3",
-    "AC10.2.4"
+    "AC10.2.4",
+    "AC6.1.1"
   ],
   "coverage": [
     {
@@ -340,6 +341,12 @@
       "id": "AC10.2.4",
       "status": "Deferred",
       "target": "本單元對 C1 只讀取，C1 讀取端點不寫 estimate_audit_events，AC 的可觀察結果不存在；授權主體為使用者本人由 BR51.1 保證（test_work_orchestrator_authz）。回報上游（OPEN-WO12-6）"
+    },
+    {
+      "id": "AC6.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_followup_same_diagram.py",
+      "note": "〔2026-11-14 build-and-test 第三輪〕intent-router 標 Deferred 指派至本單元。查證：架構設計能力只改作業對象那張既有的圖（_execute_architecture：_resolve_single_diagram → get_diagram → generate_architecture → PUT 回同一張，不另建新圖），工作區產出或開啟的圖由前端 useWorkspaceTargetSync 送 set_work_target 設為作業對象，故第二輪依作業對象交辦即作用在同一張。缺口：模型把「那張圖」填成 referent 時，brain_gateway_rules.DEICTIC_REFERENTS 只有「這」系列而落到目錄比對回「找不到」；已補「那」系列（修改落在 brain-gateway 的 brain_gateway_rules.py）。測試 3 案（referent=「那張圖」、未指名、「那」系列判定）；突變 M11（移除「那」系列）紅。限定：作業對象只指定系統且其下有多張圖時，第一輪即請使用者選圖，AC 的 Given 不成立，不在此覆蓋。"
     }
   ],
   "reverse": [
@@ -414,6 +421,12 @@
       "status": "OK",
       "target": "backend/tests/test_work_orchestrator_flow.py",
       "note": "合併前必修第 36 列（review-02 R-05、R-06、R-08；review-03 新發現 2），計畫 §六之三 Step 18–24，2026-11-08。(a) R-05：put_work_item.lua:50-62、update_work_item.lua:53-63 在 HGETALL 前補取捨註解（讀回整個 session hash、O(n)、現行量級下接受的理由、須改寫的時機與兩種改法），只增註解行、演算法／回傳值／ARGV 不變。(b) R-06：CorrectTest.test_correct_after_the_terminal_item_was_pruned_raises_not_found（本檔 :441）——先跑完 1 項、再跑完 20 項，經生產轉終態路徑修剪掉最舊項後送停掉 → WorkItemNotFound（work_orchestrator.py:340），Redis 與推送不變，brain_gateway_rules.error_for → INVALID_REQUEST＋「找不到這個工作項」（BR55、BR52.4、US1.1）。替身的修剪走 session_types.ref_update_work_item；真實 Lua 修剪與它的一致性由 tests_redis 既有 prune 案承擔。(c) R-08：backend/tests_redis/test_work_item_lua.py:252 test_cjson_encoded_size_matches_real_cjson_encode，12 組輸入以真實 Redis 的 string.len(cjson.encode(...)) 比對 cjson_encoded_size（opt-in，不在 CI；本輪對本機一次性 Redis 8.8.0 實跑通過）；DEPLOY.md:1931-1934 已有「Redis 大版本升級後必須重跑」附註，未改。(d) code-summary 兩處說法更正見該檔 2026-11-08 一節。突變 4 項皆紅、還原皆綠。"
+    },
+    {
+      "id": "CG-BT3-MEMDB",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，MB-48〕_write_procedure_memory 改經 _call_memory_facade：users 以主連線讀後即關，記憶寫入經 memory_router.memory_session_scope；測試 backend/tests/test_memory_db_session_ws.py 的 OrchestratorProcedureMemorySessionTest、tests_pg/test_memory_role_ws_pg.py。"
     }
   ]
 }

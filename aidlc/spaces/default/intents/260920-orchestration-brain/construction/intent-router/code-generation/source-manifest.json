@@ -29,6 +29,14 @@
     { "path": "backend/tests/brain_gateway_fakes.py" },
     { "path": "backend/tests/test_brain_gateway_turn.py" },
     { "path": "backend/tests/test_brain_gateway_memory.py" },
-    { "path": "backend/tests/test_brain_gateway_rules.py" }
+    { "path": "backend/tests/test_brain_gateway_rules.py" },
+    { "path": "backend/services/claude_code_chat.py" },
+    { "path": "backend/services/llm_provider.py" },
+    { "path": "backend/services/review_agent.py" },
+    { "path": "backend/services/wa_lens_engine.py" },
+    { "path": "backend/services/design_agent.py" },
+    { "path": "backend/cost/cost_advice_agent.py" },
+    { "path": "backend/tests/test_claude_code_chat.py" },
+    { "path": "scripts/validate_env_contract.py" }
   ]
 }

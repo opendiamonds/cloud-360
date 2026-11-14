@@ -142,21 +142,21 @@
     },
     {
       "id": "AC4.5.1",
-      "status": "N/A",
-      "target": "BR4.1",
-      "note": "只有 episodic 受 90 天約束，條件必填 CHECK 已落地並由 S7 雙向守住；清除行為屬 U9。"
+      "status": "OK",
+      "target": "backend/tests_pg/test_memory_role_ws_pg.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，由 N/A 改 OK〕以 cloud360_memory 連線：對 memory schema 可讀寫（閘道情節寫入、編排器程序寫入、閘道預取在真實 PG 上成立），對 public 不擴大（同檔 test_memory_role_cannot_read_public_users）；另有 backend/scripts/verify_memory_role.sql R0–R3（CI memory-schema job）。合併前必修第 52 列／MB-48 補齊 WS／編排／刪帳號路徑後，「應用程式的資料庫角色」在所有記憶存取點皆為 cloud360_memory（非本機環境未設密碼時不退回主連線）。 原 N/A 時期註記：只有 episodic 受 90 天約束，條件必填 CHECK 已落地並由 S7 雙向守住；清除行為屬 U9。"
     },
     {
       "id": "AC4.5.2",
-      "status": "N/A",
-      "target": "BR4.2",
-      "note": "清除的承載形式（gh-aw／Actions）為約束而非本單元實作；本單元提供 expires_at 與其索引。"
+      "status": "OK",
+      "target": "backend/tests_pg/test_memory_role_ws_pg.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，由 N/A 改 OK〕test_cross_schema_join_executes_in_the_same_database：主連線執行 memory.memory_records JOIN public.users 可執行且結果正確（同一 database 的跨 schema join）。 原 N/A 時期註記：清除的承載形式（gh-aw／Actions）為約束而非本單元實作；本單元提供 expires_at 與其索引。"
     },
     {
       "id": "AC4.5.3",
-      "status": "N/A",
-      "target": "BR4.3",
-      "note": "清除動作留稽核：action 的 purged_by_retention 值與 occurred_at 索引已落地；寫入行為屬 U9。S11 已驗記憶被刪後稽核列仍存在。"
+      "status": "OK",
+      "target": "backend/tests_pg/test_memory_role_ws_pg.py",
+      "note": "〔2026-11-14 build-and-test 第三輪，由 N/A 改 OK〕test_memory_role_cannot_read_public_users：以 cloud360_memory 連線 SELECT public.users 被拒（permission denied）；另有 verify_memory_role.sql R1。 原 N/A 時期註記：清除動作留稽核：action 的 purged_by_retention 值與 occurred_at 索引已落地；寫入行為屬 U9。S11 已驗記憶被刪後稽核列仍存在。"
     }
   ],
   "reverse": [

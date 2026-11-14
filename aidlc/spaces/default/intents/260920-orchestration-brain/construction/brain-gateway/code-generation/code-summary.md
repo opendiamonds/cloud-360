@@ -553,3 +553,12 @@ R-01–R-09：其修正點所在的 `brain_gateway.py`、`brain_gateway_rules.py
   - 實算見本節末行。
 - 勾選前存副本（scratchpad `bg-plan-before-mb37.md`），勾選後以「把 `[x]` 換回 `[ ]` 再 diff 副本」確認**只有勾選字元變動**（26 行）；實算（`grep -c -E "^\s*- \[x\]"`／`"^\s*- \[ \]"` 於計畫檔）：**已勾 26、未勾 3**（Step 9、15、21；全檔 29 格＝Step 1–17 共 17 ＋ §六之二 5 ＋ §六之三 7）。
 - `validate_repo_contract.py`、`validate_env_contract.py`：寫入本節前執行皆 passed，寫入本節後重跑見回報。
+
+## 整站重跑後的勾選回復（2026-11-08T22:44:56Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-f0f6ecd79388.tsv`：29 同、1 變（`LOCAL-DEV.md`，交審查員判定是否碰到本單元）。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：26 勾／3 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **Step 9 — Frontend**：本單元不新建頁面（屬 `U14`）；只做 DEMO 前端移除與兩支 e2e 落地頁改寫，以 `npm run lint`、`tsc -b` 驗證；e2e 由 CI `ui-regression` 執行。
+  - - [ ] **Step 15 — 第 19 項查證**：以 `gh api repos/opendiamonds/cloud-360/actions/secrets` 與 `.../actions/variables` 各查一次名稱（唯讀，只列名稱、不讀值），確認 `OPENROUTER_API_KEY` 在 sec
+  - - [ ] **Step 21 — (e) 前端檢查的寫檔注意**：在 `unit-test-instructions.md` 的現況註記 append 一段：往後前端檢查改用實體 `node_modules` 副本或 `tsc -b --tsBuildInfoFile` 指向 scratchpad，避免經 symli

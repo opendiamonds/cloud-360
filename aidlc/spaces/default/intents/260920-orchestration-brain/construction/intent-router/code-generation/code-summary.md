@@ -466,3 +466,122 @@ ADR-0006 PBT：符合。`test_intent_routing_predicate.py` 的 P1–P7 全為 `@
 - `python3 -B scripts/validate_repo_contract.py`：`Cloud-360 repository contract validation passed.`
 - `python3 -B scripts/validate_env_contract.py`：`Cloud-360 environment configuration contract validation passed.`
 - repo 內未新增 `.pyc`／`__pycache__`／`.hypothesis`（`git status --porcelain` 過濾為空）；副本與 scratchpad 的 Hypothesis 目錄已刪除。
+
+## 2026-11-08 本機 Claude Code provider
+
+時間戳（`date -u`）：`2026-11-08T15:01:10Z`。對應計畫「## 七、本機開發用 Claude Code provider」七格。
+
+### 範圍揭露（原樣帶入計畫第七節）
+
+**來源與範圍揭露**：2026-11-08 使用者為了在本機驗證整個需求，選擇「新增 Claude Code provider」（本機以使用者已登入的 `claude` CLI 當模型，不用 OpenRouter）。**這是 code-generation 階段新增的能力，`scope-document.md`、`requirements.md` 皆未涵蓋**，依 `project.md` 規則逐處標明並要求回補：承接為 build-and-test 站的回補項（requirements 新增一條「本機開發 LLM provider」NFR、`LOCAL-DEV.md` H1 改寫），不得被讀成既有 CAP 的延伸。它與 RAID R-11 的關係：R-11 退役的是 `LLM_PROVIDER=cli`（舊模式會刪掉新路徑唯一的憑證、健康檢查仍回綠）；本節**不復活** `cli` 值（仍維持退回 openrouter ＋ ERROR），而是新增一個**只在本機開發可選**、自帶健康檢查的新值 `claude-code`，兩者的失敗模式不同（新值不刪任何環境變數）。
+
+### 改動檔（`grep -n` 實查）
+
+| 檔案:行 | 內容 |
+|---|---|
+| `backend/services/claude_code_chat.py`（新檔）`:243` `parse_tool_calls`、`:349` `ClaudeCodeChatModel`、`:359` `bind_tools`、`:395` `_generate`、`:435` `_agenerate` | LangChain `BaseChatModel` 子類，呼叫 `claude -p --output-format json` |
+| `backend/services/llm_provider.py:52-58` | `CLAUDE_CODE` 常數與 `_CLAUDE_CODE_APP_ENV` |
+| `backend/services/llm_provider.py:94-97` | `APP_ENV` 閘門（其餘值退回 openrouter ＋ ERROR） |
+| `backend/services/llm_provider.py:128`、`:162`、`:172` | `configure_provider_env`／`llm_auth_ready`／`auth_error_message` 的 claude-code 分支 |
+| `backend/services/langgraph_runtime.py:121`、`:149` | 單一 factory `chat_model`；openrouter 下 `openrouter_chat_model(**kwargs)` |
+| `backend/services/intent_routing_port.py:255-257`、`:105`、`:324` | 改經 factory；`ClaudeCodeMalformedToolCall` 對應 `MalformedRouting` |
+| `backend/services/review_agent.py:182`、`backend/services/wa_lens_engine.py:615`、`backend/cost/cost_advice_agent.py:151`、`backend/services/design_agent.py:145` | 其餘四個呼叫點改經 factory |
+| `scripts/validate_env_contract.py:78`、`:248`、`:330` | 新檢查 `validate_local_only_provider_stays_out_of_deploy` 並掛進 `main()` |
+| `backend/.env.example:16-18`、`LOCAL-DEV.md:43`、`:59` 起小節 | 範本與文件 |
+| `backend/tests/test_claude_code_chat.py`（新檔） | 36 個測試 |
+
+**`openrouter` 路徑無語意改動的說明**（`git diff` 逐處）：
+
+- `get_provider`：`LLM_PROVIDER` 未設、`openrouter`、`cli`、其他值的分支未動；只多一個 `raw == "claude-code"` 分支。
+- `configure_provider_env`／`llm_auth_ready`／`auth_error_message`：開頭各多一個 claude-code 分支，openrouter 走原本程式。
+- `chat_model`：openrouter 下把 `kwargs` 原樣交給 `openrouter_chat_model`，`openrouter_chat_model` 本體未動（`test_openrouter_forwards_kwargs_verbatim` 斷言 kwargs 相等）。
+- `design_agent`：`ChatAnthropic(...)` 的引數未動，改包進 `openrouter_builder` lambda；`timeout_seconds=300` 只有 claude-code 分支讀取，openrouter 分支不使用。
+- `classify_transport_failure`：多一個比對類別名的分支，該類別只會由 claude-code 路徑拋出。
+
+證據：改動前基線與改動後的後端全套見下方回歸數字，既有 1397 個測試維持綠。
+
+**需明講的一處**：`test_a3_langgraph_migration.py` 兩條測試以字串斷言 `review_agent.py`／`wa_lens_engine.py` 原始碼含 `openrouter_chat_model`。改經 factory 後這個字串只剩在註解裡（`# openrouter 下等同 openrouter_chat_model(model=model_name)。`），測試仍綠，但它現在驗的是註解不是呼叫。本輪不得改既有測試，故留著；實質約束由新測試 `test_every_call_site_goes_through_the_factory`（AST 掃呼叫）承擔。建議 build-and-test 把那兩行字串斷言改成 `chat_model`。
+
+### 設計約束對照
+
+| 約束 | 落點 |
+|---|---|
+| 1 只限本機 | `llm_provider.py:94-97`。比對字面 `local`，**不沿用** `database.LOCAL_APP_ENVS`（它含 test／ci）。`APP_ENV` 未設定也退回（fail closed）；repo 其他處未設定視為 local，此處刻意較嚴 |
+| 2 單一 factory | `chat_model`；五個呼叫點經它（AST 測試鎖住）；`openrouter_chat_model` 保留 |
+| 3 `ClaudeCodeChatModel` | 參數清單不經 shell；prompt 只走 stdin（`--system-prompt` 傳固定字串）；逾時 kill 整個行程群組；非零 exit／空輸出／非 JSON／`is_error` 皆拋錯 |
+| 4 工具呼叫 | `parse_tool_calls`；`tool_choice` 未命中拋 `ClaudeCodeMalformedToolCall`；routing 與 design_agent 工具迴圈皆有測試 |
+| 5 健康檢查 | `llm_auth_ready` 用 `shutil.which`；不檢查登入，寫進 `LOCAL-DEV.md` |
+| 6 不碰憑證 | 子行程環境為白名單（比「排除兩組」更嚴，`JWT_SECRET`／`DATABASE_URL` 也傳不下去）；log 只記筆數、字元數、exit code、耗時 |
+| 7 ADR-0006 | 下表 |
+
+**超出約束文字、但基於實查加上的項目**：`--safe-mode`、`--tools ""`、`--no-session-persistence`（`claude --help` 實查，CLI 版本 2.1.319），以及工作目錄用系統暫存目錄。理由：prompt 含使用者輸入，CLI 預設帶內建工具與本機 hook／CLAUDE.md，只當模型用時這些都不該生效。
+
+### ADR-0006 四面向
+
+| 面向 | 判定 | 說明 |
+|---|---|---|
+| IAM | 無新身分 | 沿用使用者本機 CLI 登入；後端不讀、不存任何 token |
+| Encryption | 無變更 | 資料傳輸由 CLI 自行處理 |
+| Network exposure | 無新 port | 子行程由 CLI 自行連 Anthropic；部署設定禁止此值（validator 新檢查） |
+| Audit logging | 無變更 | 未新增稽核事件；log 不含 prompt 與 stderr 原文 |
+
+PBT hard constraint（agent routing）：`ToolCallParsingProperties` 兩條 Hypothesis 性質（往返 200 例、AIMessage 轉換 100 例）。
+
+### 測試、突變、實測（實跑輸出）
+
+後端全套（scratchpad 副本，`-B`）：
+
+| 時點 | 結果 |
+|---|---|
+| 改動前基線 | `Ran 1397 tests`，`OK (skipped=3)` |
+| 改動後（最終同步） | `Ran 1433 tests`，`OK (skipped=3)` |
+| 本單元與相關模組（五個 `test_intent_routing_*`、`test_claude_code_chat`、`test_langgraph_runtime`、`test_llm_provider`、`test_a3_langgraph_migration`、`test_langgraph_migration`） | `Ran 160 tests`，`OK` |
+| 新測試檔 | `Ran 36 tests`，`OK` |
+
+突變（只在副本，基線 `Ran 36 tests`，`OK`）：
+
+| 突變 | 結果 | 紅燈案例 |
+|---|---|---|
+| M1 拿掉 `APP_ENV` 限制 | `FAILED (failures=6, errors=1)` | `test_only_app_env_local_enables_claude_code` 六個 subTest、`test_non_local_app_env_never_builds_claude_model` |
+| M2 `tool_choice` 未命中退成文字 | `FAILED (failures=2)` | `test_forced_tool_missing_raises_instead_of_text`、`test_any_tool_choice_requires_a_call` |
+| M3 逾時不 kill 子行程 | `FAILED (failures=2)` | `test_async_timeout_kills_process`、`test_sync_timeout_kills_process` |
+| M4 validator 新檢查恆過 | `FAILED (failures=4)` | `test_claude_code_in_any_deploy_file_fails` 四個部署檔 |
+
+還原後 `sha256` 與基線相同，且 `Ran 36 tests`，`OK`：
+
+```
+96ff8ebdacc104332d5216d3926d14e969432a662a9b42141dcaa4ff277c250b  backend/services/llm_provider.py
+9a9538945bb994744f8c3ae7c40e057a98256e696a41eb2b9733d97b9d305275  backend/services/claude_code_chat.py
+49b04196d5f0abd26d9ef0a9e9d2f19d4f737b09f79f1c675273f7bb8a543713  scripts/validate_env_contract.py
+```
+
+本機實測（真實 `claude` CLI，副本，`APP_ENV=local`、`LLM_PROVIDER=claude-code`；未記 prompt 原文）：
+
+| 呼叫 | 結果 | 耗時 |
+|---|---|---|
+| `arun_routing`（`timeout_seconds=120`，模型名為 OpenRouter 格式故用 CLI 預設模型） | 成功，回 `candidates`／`slot_labels`，1 個候選 | 3.79 秒 |
+| `cost_advice_agent._invoke_once` | 成功 | 1.86 秒 |
+
+實測的 prompt 為短字串，**不是** `build_routing_prompt` 產出的完整路由 prompt，也未經 `intent_routing_parser` 驗證；design_agent、review、lens 只跑了假 CLI，未跑真實 CLI。
+
+其餘驗證：
+
+- `python3 -B scripts/validate_repo_contract.py`：`Cloud-360 repository contract validation passed.`
+- `python3 -B scripts/validate_env_contract.py`：`Cloud-360 environment configuration contract validation passed.`
+- `dump_openapi.py --check`（副本）：`規格檔與後端程式碼一致。`
+- repo 內快取數前後相同：`.pyc` **243 → 243**、`.hypothesis` 檔 **352 → 352**。
+- 計畫勾選（`grep -c`，全檔）：`[x]` **7**（第七節七格）、`[ ]` **48**（其他節，本輪未動）。
+- `traceability.json`、`source-manifest.json`：`json.load` 通過。
+
+### 已知限制（`LOCAL-DEV.md` 已寫明）
+
+- `temperature`、`BRAIN_ROUTER_MAX_RETRIES` 在 claude-code 路徑不起作用；回應不串流。
+- 路由預設逾時 5 秒對 CLI 太緊，本機須調大 `BRAIN_ROUTER_TIMEOUT_SEC`。
+- `.env` 設 claude-code 時跑後端單元測試會走錯分支（實跑 `test_intent_routing_port`：`FAILED (errors=3)`），須改回 openrouter。
+- `review_agent.py:49` 的備援文字仍寫「請確認已設定 OPENROUTER_API_KEY」，在 claude-code 下不精確；非本節列出的改動，未動。
+
+## 整站重跑後的勾選回復（2026-11-08T15:32:35Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-ac865b241904.tsv`：23 同、4 變（`LOCAL-DEV.md`、`backend/.env.example`、`backend/services/intent_routing_port.py`、`backend/services/langgraph_runtime.py`，交審查員判定是否碰到本單元）。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：55 勾／0 未勾。

@@ -313,3 +313,12 @@ HEAD 為 `c6a40f91b80581173facc55a5285db9700146a9e`；brain-infra A1 的修改**
 - 本輪未 commit、未觸發任何 workflow；`gh` 只做 `run list`／`run view` 唯讀查詢。
 
 處置紀錄（`2026-11-06T14:33:26Z`）：計畫 §八 完成 5／6 格；勾選「收尾」後 `grep -c` 實算 **18 勾／3 未勾**（未勾：§五 判準 1、2；§八 真實 PostgreSQL 驗證——皆因 A1 之後的 `schema_rbac.sql` 尚未在任何真實 PostgreSQL 上套用）；`traceability.json` 經 `python3 -I` 的 `json.load` 通過；未改任何程式碼與共用檔，未 commit。
+
+## 整站重跑後的勾選回復（2026-11-08T12:23:03Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算最新收據 `reviewed-source-7f71872725c8.tsv`：3 同、1 變（`backend/scripts/verify_memory_schema.sql`，交審查員判定是否碰到本單元）。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：18 勾／3 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] `N-2` job 綠燈，且**兩次**套用 `schema_rbac.sql` 皆成功（`BR1.3`）
+  - - [ ] `verify_memory_schema.sql` 的全部斷言通過
+  - - [ ] **真實 PostgreSQL 驗證**：若本機可用 Docker，起一個只綁 `127.0.0.1`、隨機埠、拋棄式 volume 的 `pgvector/pgvector:pg18` 容器，套用 `schema_rbac.sql` **兩次**（`BR1.3`），再以測試密碼執行 `deploy/ini

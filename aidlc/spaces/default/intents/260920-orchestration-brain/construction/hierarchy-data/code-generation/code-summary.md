@@ -828,3 +828,9 @@ Code Generation 依使用者裁決自頭重來；本單元計畫重新核可後�
 - `source-manifest.json`：補 `backend/tests/test_hierarchy_migration_exit_codes.py`，共 11 條。
 - `python3 -B scripts/validate_repo_contract.py`：「Cloud-360 repository contract validation passed.」；`python3 -B scripts/validate_env_contract.py`：「Cloud-360 environment configuration contract validation passed.」
 - 處置紀錄：2026-11-01T00:44:20Z（`date -u`）本節完成。
+
+## 整站重跑後的勾選回復（2026-11-08T06:57:36Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫勾選全部重設為未勾。
+- 依據：本單元自上次 READY 審查後無程式改動；以 Python `hashlib` 重算最新收據 `reviewed-source-f1d5899107ee.tsv`：3 同、7 變（`DEPLOY.md`、`backend/scripts/run_hierarchy_migration.py`、`backend/services/hierarchy_migration.py`、`backend/services/user_router.py`、`frontend/src/types/api.d.ts`、`openapi.json`、`schema_rbac.sql`，交審查員判定是否碰到本單元）。勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：75 勾／0 未勾。

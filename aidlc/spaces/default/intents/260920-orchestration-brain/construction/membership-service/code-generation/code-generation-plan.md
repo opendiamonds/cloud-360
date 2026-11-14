@@ -362,3 +362,14 @@ Testing Contract 解析結果為 **`methodology: test-after`**、**`test_strateg
 - [x] **勾選重設與紀錄**：本計畫被重設的勾選，逐格依現況核對後勾回（核對不過者留空並寫理由）；`traceability.json` 更新第 31 列 (b) 對應的開放項（`python3 -I` 驗 JSON）；`code-summary.md` 檔尾附加「## 2026-11-07 第 21、31 列剩餘項與回歸」一節，含改動檔:行、測試數（實跑輸出）、突變結果、勾選數（`grep -c` 實算）與 `date -u` 時間戳。
 - 追溯：`merge-blockers.md` #21、#31 (b)；`brain-infra` 交接；review-04 R-03、review-05 新發現 1。
 
+
+## 十、合併前必修第 66 列：`tests_pg` C3 測試前提修正（2026-11-08）
+
+**來源**：CI run `42454550208`（PR #650，head `ff537a7`）的 `Concurrency (real PostgreSQL row locks)` job 實跑，`backend/tests_pg/test_membership_concurrency.py` 的 `test_C3_assert_can_deactivate_takes_no_lock` 失敗，逐字 `AssertionError: 'passed' != 'guard'`，同 job 其餘 14 案通過。成因：該案 `:443-451` 把 bob 整列移出，使 alice 成為唯一成員；第 21 列（2026-10-25 裁決「獨自一人的專案不擋」）後 `projects_losing_last_admin` 只回報「有其他成員且皆不合格」的專案（`membership_service.py:724-745`），獨人專案放行，故該案「守門必須 raise」的前提失效。**程式行為符合裁決，修的是測試前提，不改 `membership_service.py`。**使用者 2026-11-08 指示「修正好」。
+
+- [x] **改寫 C3 的前置資料**：`test_membership_concurrency.py` C3 改為保留「該專案有其他成員、但沒有任何合格接手人」的狀態（例：保留 bob 的成員列但令其不合格——停用、待核准，或改為只有 `K3.view` 的全域角色；或另加一位不合格成員），取代整列移出 bob；同步改寫 `:444-446` 註解，寫明此案依第 1、21 列判準需「有其他成員且皆不合格」。測試名稱與 `@` 規格註解（若有）維持可被 TCMS 對應。
+- [x] **真實 PostgreSQL 實跑**：以一次性、只綁 `127.0.0.1` 的 `pgvector/pgvector:pg18` 容器（跑完刪除，不連 staging 或共用 DB），套 `schema_rbac.sql` 後在 scratchpad 的 rsync 副本跑 `tests_pg/test_membership_concurrency.py` 全部案例，15 案全綠（實跑輸出）。
+- [x] **突變驗證**（scratchpad 副本，逐項套用→跑 C3→還原→sha256 與基線相同→綠）：(M1) `projects_losing_last_admin` 恆回 `[]` → C3 紅（守門「真的有在判定」那一半）；(M2) 守門查詢加 `FOR UPDATE`（或 `with_for_update()`）→ C3 紅（barrier 破損）。
+- [x] **回歸與快取**：副本跑 `tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints` 與後端全套；repo 跑兩支 validator（`-B`）；確認 repo 內 `.pyc`／`.hypothesis`／`__pycache__` 數量前後不變。
+- [x] **紀錄**：`code-summary.md` 檔尾附加「## 2026-11-08 合併前必修第 66 列（C3）」一節，含改動檔:行、實跑輸出、突變結果、勾選數（`grep -c` 實算）與 `date -u` 時間戳；`traceability.json` 加對應項（`python3 -I` 驗 JSON）。
+- 追溯：`merge-blockers.md` #66（#57、#65 記載的跨單元紅燈）、#21。

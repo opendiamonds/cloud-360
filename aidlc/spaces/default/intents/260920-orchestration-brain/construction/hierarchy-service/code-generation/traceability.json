@@ -297,6 +297,13 @@
       "status": "OK",
       "target": "backend/services/hierarchy_router.py",
       "note": "HierarchyConflictError → 409 ＋ **顯式** responses 宣告。T13／T17。守門缺口見 OPEN-ID7-2。"
+    },
+    {
+      "id": "BT-F1-DIAGRAM-SYSTEM-ATTACH",
+      "status": "OK",
+      "target": "backend/tests/test_diagram_system_attach.py",
+      "scope": "added-in-build-and-test",
+      "note": "本階段新增、已核可 scope 尚未涵蓋（build-and-test F1，2026-11-12）：架構圖掛到系統（工作區存新圖時自動掛、系統頁掛圖／改掛／取消）。e2e：frontend/tests/e2e/project-pages.spec.ts、object-picker.spec.ts。requirements／stories 待回補（FR9.1／FR9.5 不涵蓋此寫入路徑）；測試的 @story 暫掛 US9.1，回補後改指新 AC。"
     }
   ],
   "reverse": [

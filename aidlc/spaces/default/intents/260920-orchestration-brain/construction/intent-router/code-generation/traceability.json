@@ -132,7 +132,8 @@
     "NFR4.65",
     "NFR7.60",
     "MB-5",
-    "MB-13"
+    "MB-13",
+    "LOCAL-LLM-PROVIDER"
   ],
   "coverage": [
     {
@@ -920,6 +921,13 @@
       "status": "OK",
       "target": "backend/tests/test_brain_gateway_memory.py",
       "note": "合併前必修第 13 項（2026-10-23，使用者裁決：本輪以授權錯誤結束）：intent_routing._memory_notes 讓 MemoryForbidden 向上傳遞、其餘例外仍降級；正式接線的記憶讀取在閘道預取，故 brain_gateway._prefetch／MemoryPrefetchAdapter 一併改為把授權拒絕交給 U11，error_for 映射為既有代碼 UNAUTHORIZED，WARN 安全日誌不含輸入原文。測試：test_brain_gateway_memory.py 的 test_memory_authorization_denial_ends_the_turn_as_unauthorized（真 IntentRouter、模型未被呼叫）、test_intent_routing_context.py 的 MemoryForbiddenIsNotDegradedTest。突變（併回 except Exception）2 案紅、（閘道預取不攔）1 案紅。"
+    },
+    {
+      "id": "LOCAL-LLM-PROVIDER",
+      "status": "OK",
+      "target": "backend/tests/test_claude_code_chat.py",
+      "scope": "added-in-code-generation",
+      "note": "本階段新增、已核可 scope 尚未涵蓋（2026-11-08 使用者指示；計畫第七節）：LLM_PROVIDER=claude-code，僅 APP_ENV=local 生效，以使用者已登入的 claude CLI 當模型。不復活已退役的 cli（RAID R-11）。實作 backend/services/claude_code_chat.py、langgraph_runtime.chat_model、llm_provider 閘門；五個呼叫點改經 factory。回補項由 build-and-test 承接：requirements 新增一條本機開發 LLM provider NFR、LOCAL-DEV.md H1 改寫。 〔2026-11-14 build-and-test 第三輪〕requirements／stories 仍待回補（本輪未改 requirements.md／stories.md）。"
     }
   ]
 }

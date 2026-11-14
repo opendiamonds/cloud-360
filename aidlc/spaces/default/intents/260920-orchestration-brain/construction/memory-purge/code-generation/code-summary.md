@@ -758,3 +758,16 @@ repo 內快取數前後：`pyc=243 pycache=14 hyp=1` → `pyc=243 pycache=14 hyp
 1. `backend/database.py` 的未提交 `+72` 行使計畫 1.3、12.5 照字面不成立；屬第 20／29 列的工作，請確認它的歸屬與提交時機。
 2. `merge-blockers.md` 第 32 列的處置欄需由 conductor 回填（(a)(c)(e) 已處置、(b) 續由 `OPEN-CG9-2` 追蹤、(d)(f) 已查證一致），並安排 memory-purge 重審。
 3. `tests_pg/test_purge_atomicity.py` 的模組 docstring 仍寫 `deploy.yml:124／:471`（`:8`），屬同類過時行號，但不在 (e) 的 workflow 檔範圍內，本輪未改。
+
+## 整站重跑後的勾選回復（2026-11-08T13:44:35Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-7cb3888048dc.tsv`：15 同、3 變（`backend/scripts/verify_memory_schema.sql`、`frontend/src/types/api.d.ts`、`openapi.json`，交審查員判定是否碰到本單元）。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：55 勾／7 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] 1.3 `git diff --stat -- backend/database.py` 必須為空（開工前記錄基準）
+  - - [ ] 1.4 確認 `schema_rbac.sql` 目前**沒有** `K)` 區塊標題（避免 `extract_blocks` 的重複字母 `RuntimeError`）
+  - - [ ] 2.6 `backend/scripts/seed_retention_system_actor.py`：`from run_meta_schema_migration import extract_blocks` 取得解析器（**不複製**），執行 `K)` 區塊，在 COMMIT **之前**逐項查證後
+  - - [ ] 8.1 `.github/workflows/memory-retention-purge.yml`：
+  - - [ ] 12.5 收尾核對：`git diff --stat -- backend/database.py` 仍為空；`python3 scripts/validate_repo_contract.py` 與 `python3 scripts/validate_env_contract.py` 皆綠燈；`cd ba
+  - - [ ] 不改程式與 workflow。`DEPLOY.md` 的 90 天清除小節新增「合併進 `ut` 之後、併入 `main` 之前」的程序：① 以 `workflow_dispatch`、`ref=ut`、`dry_run=true` 跑一次並核對預覽（即 `OPEN-ID9-4` 要求的第一次真實執行前的 
+  - - [ ] `merge-blockers.md` 第 17 列處置改為「已處置為人工義務：合併 `main` 前每週手動觸發」，並標明這是**持續中的人工義務**而非已修正。

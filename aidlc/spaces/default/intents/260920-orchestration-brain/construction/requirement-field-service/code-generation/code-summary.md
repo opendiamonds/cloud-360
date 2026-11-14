@@ -406,3 +406,11 @@ router 未改：`RequirementFieldValidationError` 原本就由 `_translate()` �
 ### 本輪改動檔
 
 `code-generation-plan.md`（只改勾選字元，前後 diff 已確認）與本檔（append 本節）。`traceability.json`、`source-manifest.json` 未改。未 commit、未 push、未觸發 CI、未以 `gh` 寫入。
+
+## 整站重跑後的勾選回復（2026-11-08T22:36:58Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-ed3c4b9bde06.tsv`：22 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：22 勾／2 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **Step 11 — 環境／建置設定**：零新環境變數；`python3 scripts/validate_env_contract.py`、`python3 scripts/validate_repo_contract.py` 通過；前端 `npm run check:types` 通過。
+  - - [ ] **Step 17 — 回歸與收尾**：完整後端套件、`tests_pg`（本機一次性 PostgreSQL 17，綁 127.0.0.1，用完即刪）、`dump_openapi.py --check`、`validate_repo_contract.py`、`validate_env_contract.p

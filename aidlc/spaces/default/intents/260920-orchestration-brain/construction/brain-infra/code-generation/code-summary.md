@@ -613,3 +613,10 @@ c80aba97 修正(deps): PostgreSQL 驅動改用 psycopg v3，並以 URL 顯式指
 - `traceability.json`：`MB-20`／`MB-29` 由 `Deferred` 改 `OK`，`MB-33` note 改寫為 `query` 已依裁決完成；`OPEN-MB20-ROLE`、`OPEN-MB33-QUERY` 標為 `closed`；新增 `OPEN-MB20-SECRET`。`json.load` 可解析。
 - 交接追加：memory-service 改用 `database.get_memory_session()` 存取記憶表時，須確認其查詢不 join `public` 的表（該角色讀不到 `public.users`／`project_members`）；可見範圍判定若需要 `public` 資料，須在主連線先取得再傳入。
 - **計畫勾選實算**：`grep -c '^ *- \[x\]'` = **67**，`- [ ]` = **1**（A11：CI 安裝驗證本機無法執行）。
+
+## 整站重跑後的勾選回復（2026-11-08T06:46:48Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎在 `unit start` 時把本計畫 68 格勾選全部重設為未勾。
+- 依據：重跑後 iteration 1 審查以 `shasum -a 256` 重算收據 `reviewed-source-e0f4f731bd71.tsv`，50 個來源檔與 manifest 全部逐位元相同；`33deb2e` 的三個檔不在本單元 `source-manifest.json` 內。故 review-07 的逐格判定對現況仍成立，67 格依 HEAD 版勾回（`git diff` 確認差異僅勾選字元）。
+- A11（`requirements.txt` 釘選的 CI 安裝驗證）本輪補勾：CI run `42454550208`（PR #650，head `ff537a7`）的 `Backend (import + unit tests)` job 已實跑 `pip install -r requirements.txt`、import、OpenAPI／WS／MCP 漂移與單元測試，全部通過。
+- 現況（grep 實算）：68 勾／0 未勾。

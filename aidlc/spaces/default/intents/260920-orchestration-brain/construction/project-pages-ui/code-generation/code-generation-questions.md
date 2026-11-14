@@ -1,11 +1,12 @@
 # Code Generation Plan Approval
 
-AI-DLC writes this file when it asks you to approve the plan. To answer here
-instead of in chat, write your answer after `[Answer]:` and say done.
+AI-DLC built this plan without asking because plan approval is off for this
+piece of work. This file is the record and asks nothing; to look at a plan
+before it is built, ask in chat.
 
 ## Plan Approval
 
-Approve the code plan for project-pages-ui?
+Built without asking: plan approval is off for this piece of work (set by you).
 
 - 56 plan steps
 - Tests: see unit-test-instructions.md
@@ -13,11 +14,8 @@ Approve the code plan for project-pages-ui?
 Full plan: aidlc/spaces/default/intents/260920-orchestration-brain/construction/project-pages-ui/code-generation/code-generation-plan.md
 Test instructions: aidlc/spaces/default/intents/260920-orchestration-brain/construction/project-pages-ui/code-generation/unit-test-instructions.md
 
-[Approval Fingerprint]: sha256:v3:6dbbeef3fa095f2c4d8f2312d8992aa9b9ce5624283ab46e6a11087e9695cd9b
-[Planned Source]: 76b3d6f70a82cc156d385449f4b4afb6bd1d2b1c88324f49115b870a50694593
+[Approval Fingerprint]: sha256:v3:b4bdb80d5b0d192f50d6995f307478e93987014f0b64a592c16b1fc25e434ecf
+[Planned Source]: 692e512200b9880f45c7d1bba22889036051216a19ca71b969dd4cfe30deed23
 
-- A. Approve Plan
-- B. Request Changes
-- C. I'll edit the files
 
-[Answer]: A. Approve Plan
+[Answer]: Plan approval off

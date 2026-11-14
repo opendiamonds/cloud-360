@@ -283,3 +283,25 @@ stage 檔 Critical Rules 逐字：NFR 的可量測目標與 Testing Contract 的
   "contract_sha256": "sha256:1f0b6822601f52ff3e71a9bd20a949c9e106f87999f78c986398d5e1963f2f77"
 }
 ```
+
+## 七、本機開發用 Claude Code provider（2026-11-08 使用者指示；**本階段新增、已核可 scope 尚未涵蓋**）
+
+**來源與範圍揭露**：2026-11-08 使用者為了在本機驗證整個需求，選擇「新增 Claude Code provider」（本機以使用者已登入的 `claude` CLI 當模型，不用 OpenRouter）。**這是 code-generation 階段新增的能力，`scope-document.md`、`requirements.md` 皆未涵蓋**，依 `project.md` 規則逐處標明並要求回補：承接為 build-and-test 站的回補項（requirements 新增一條「本機開發 LLM provider」NFR、`LOCAL-DEV.md` H1 改寫），不得被讀成既有 CAP 的延伸。它與 RAID R-11 的關係：R-11 退役的是 `LLM_PROVIDER=cli`（舊模式會刪掉新路徑唯一的憑證、健康檢查仍回綠）；本節**不復活** `cli` 值（仍維持退回 openrouter ＋ ERROR），而是新增一個**只在本機開發可選**、自帶健康檢查的新值 `claude-code`，兩者的失敗模式不同（新值不刪任何環境變數）。
+
+**設計約束**（實作須逐條滿足）：
+1. **只在本機開發可選**：`LLM_PROVIDER=claude-code` 僅在 `APP_ENV` 為 `local` 時生效；其他 `APP_ENV`（含 `test`、`ci`、staging 的部署值）一律退回 `openrouter` 並記一行 ERROR（沿用 `llm_provider.py` 「一個設錯的選用變數不得讓 API 起不來」的模組契約）。`deploy/.env.example`、`deploy/render-env.sh`、`deploy/docker-compose.*.yml` 不得出現 `claude-code`，以 `scripts/validate_env_contract.py` 新增一項檢查鎖住。
+2. **單一 factory**：新增 `services/llm_provider.py` 層級的 `chat_model(...)`（或在 `langgraph_runtime` 新增同義 factory），依 provider 回 `ChatOpenAI`（既有行為逐位元不變）或新的 `ClaudeCodeChatModel`；既有呼叫點 `intent_routing_port.router_chat_model`、`review_agent`、`wa_lens_engine`、`cost/cost_advice_agent`、`design_agent`（目前直建 `ChatAnthropic`）改經此 factory。`openrouter_chat_model` 保留且行為不變。
+3. **`ClaudeCodeChatModel`**（新檔 `backend/services/claude_code_chat.py`，LangChain `BaseChatModel` 子類）：`_generate`／`_agenerate` 以 `asyncio.create_subprocess_exec`／`subprocess.run` 的**參數清單**（不經 shell）呼叫 `claude -p --output-format json`（必要時 `--model`、`--system-prompt` 或以 stdin 傳入完整對話），prompt 一律經 stdin 傳入、不上命令列；逾時沿用呼叫端的 `timeout_seconds`，逾時 kill 子行程並拋可分型的例外（讓 `classify_transport_failure` 等既有分型照常運作）；非零 exit code、空輸出、非 JSON 一律拋錯並記 log（不得靜默、不得把 stderr 原文回給使用者）。
+4. **工具呼叫**：`bind_tools(tools, tool_choice=...)` 以提示詞要求模型只輸出 `{"tool_calls":[{"name":...,"args":{...}}]}` 形狀的 JSON，解析成 `AIMessage.tool_calls`；`tool_choice` 指定工具時，回應不含該工具即拋錯（不得退成純文字）。`intent_routing_port`（強制單一工具）與 `design_agent`（工具迴圈）兩條路徑都要能用。
+5. **健康檢查誠實**：`llm_auth_ready()` 在 `claude-code` 下檢查 `claude` 是否在 `PATH` 上（`shutil.which`）；找不到時 `auth_error_message()` 回明確可行動的訊息。不檢查登入狀態（CLI 自己會在呼叫時報錯，由第 3 點的錯誤處理承擔），但須在 `LOCAL-DEV.md` 寫明。
+6. **不碰憑證**：子行程環境不注入 `OPENROUTER_API_KEY`／`ANTHROPIC_*`；不讀、不記錄任何 token；log 不含 prompt 原文（沿用既有 LLM log 慣例）。
+7. **ADR-0006 四面向**：IAM——無新身分，沿用使用者本機 CLI 登入；Encryption——無變更；Network exposure——無新 port，子行程由 CLI 自行連 Anthropic；Audit logging——無變更。逐項寫進 code-summary。
+
+- [x] **實作 `ClaudeCodeChatModel` 與 factory**：依約束 1–6；`backend/.env.example` 補 `LLM_PROVIDER` 的 `claude-code` 說明（只限本機）；`LOCAL-DEV.md` H1 新增「本機以 Claude Code 當模型」小節（後端須 bare-metal 跑，因容器內無 `claude`；`APP_ENV=local`；前置 `claude` 已登入）。
+- [x] **改接既有呼叫點**：約束 2 列出的五處改經 factory；`openrouter` provider 下逐位元行為不變（既有測試全綠為證）。
+- [x] **測試（`backend/tests/test_claude_code_chat.py`，附 §4.4 規格註解）**：以 `PATH` 前置一支 scratchpad 內的假 `claude` 可執行檔（印固定 JSON／非零 exit／睡過逾時／非 JSON）測：純文字回應、強制工具呼叫解析、`tool_choice` 指定但未回該工具 → 拋錯、非零 exit → 拋錯且不洩 stderr、逾時 → 子行程被 kill 且拋可分型例外、`APP_ENV≠local` → 退回 openrouter ＋ ERROR、`claude` 不在 PATH → `llm_auth_ready()` 為 False。**ADR-0006 PBT**（agent routing 屬 hard constraint）：以 Hypothesis 對「工具呼叫 JSON → `AIMessage.tool_calls`」解析做往返性質測試。`validate_env_contract.py` 新檢查的正反案。
+- [x] **突變驗證**（scratchpad 副本）：(M1) 拿掉 `APP_ENV` 限制 → 非本機案紅；(M2) `tool_choice` 未命中改為退成文字 → 對應案紅；(M3) 逾時不 kill 子行程 → 對應案紅；(M4) `validate_env_contract` 新檢查改恆過 → 反案紅。逐項還原後 sha256 與基線相同且綠。
+- [x] **本機實測**：在 scratchpad 副本、`APP_ENV=local`、`LLM_PROVIDER=claude-code`，以真實 `claude` CLI 跑一次意圖路由（`arun_routing`）與一次 `cost_advice_agent` 的單次呼叫，記錄成功與耗時（不記 prompt 原文）。
+- [x] **回歸與快取**：副本跑本單元與後端全套；repo 跑兩支 validator（`-B`）與 `dump_openapi --check`；repo 內 `.pyc`／`.hypothesis` 數量前後不變。
+- [x] **紀錄**：`source-manifest.json` 補列新增／改動檔；`code-summary.md` 檔尾附加「## 2026-11-08 本機 Claude Code provider」一節（改動檔:行、測試與突變實跑輸出、ADR-0006 四面向表、範圍揭露）；`traceability.json` 加對應項並標 `scope: added-in-code-generation`（`python3 -I` 驗 JSON）。
+- 追溯：使用者 2026-11-08 指示；RAID R-11；`project.md` 「requirements 或後續階段新增已核可 scope 項目時須逐處明標」。

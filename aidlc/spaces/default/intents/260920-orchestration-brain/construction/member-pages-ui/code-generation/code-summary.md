@@ -720,3 +720,13 @@ TCMS 案例名為 `U24 member pages › <test>`：
 - `traceability.json` **未改**：逐項檢查後無因本輪變為不實的註記（PATCH 新 422 的訊號種類問題歸入 R-13 已知限制，不改既有列）；`source-manifest.json` 未改（無新增／刪除路徑）。
 - `python3 -B scripts/validate_repo_contract.py`：passed；`python3 -B scripts/validate_env_contract.py`：passed（於勾「收尾」格之前執行）。
 - 偏離：無程式改動；e2e 未實跑（環境限制，已如上記）。repo 內未產生 `.pyc`／`__pycache__`／`.hypothesis`（本輪未執行 Python 測試；validator 以 `-B` 執行）。
+
+## 整站重跑後的勾選回復（2026-11-08T15:39:38Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-7303ea15cb7a.tsv`：11 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：30 勾／4 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **Step 9 — `MemberDetailPage.tsx`（實作）**
+  - - [ ] **Step 10 — 路由與 Sidebar 入口（實作）**
+  - - [ ] **Step 20 — 回歸與收尾**：`npm run lint`（0 errors）、`npx tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠（對話框改動後重跑無障礙掃描點 11、12、15）；新檔加入 `source-manifest.
+  - - [ ] **Step 24 — 回歸與收尾**：lint 0 errors、`tsc -b`、build；`member-pages.spec.ts` 與 `a11y.spec.ts` 全綠；`code-summary.md` 追加補修段，並列出本節與 §五之二 新增的全部 e2e 案例名稱，供 `tcms-tes

@@ -867,3 +867,13 @@ Redis 8.8.0（`/opt/homebrew/bin/redis-server`，未安裝新套件）、redis-p
 
 - **12b (1)**：選「留在 code-summary 就好」。`unit-test-instructions.md` 不改；副本指令須帶 `tests_redis/`、用 `-P` 時須設 `PYTHONPATH=.` 的說明由本節第五段承接。12b 格維持未勾（字面要求改 `unit-test-instructions.md`），屬裁決後的已知偏離。
 - **9.3**：選「接受為已知偏離」。`deploy.yml` 的順序不動（步驟 6a 在 Redis 重啟存活驗證之後），註解已如實描述（`brain-infra` 採 review-02 R-08 第二選項）；9.3 維持未勾。`merge-blockers.md` 第 34 列 (d) 的「修後重勾 9.3」由 conductor 改記為已知偏離。
+
+## 整站重跑後的勾選回復（2026-11-08T14:19:26Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-59f004a97e64.tsv`：19 同、0 變。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：67 勾／4 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] 5.1 連線池：`min 5 / max 20`、`idle timeout 10m`、`max lifetime 30m`（`performance-design.md` 的算式）
+  - - [ ] 9.3 逐項比對五項；`NFR4.57` 的 TTL 斷言為**區間**（< 原值且 > 原值 − 寬限）；步驟置於部署序列**最後**，並在步驟說明中**明確宣告**它會中斷當下使用者的 session（審查 `R-02`：不寫假緩解）
+  - - [ ] 12.4 全套回歸：`python -m unittest discover -s tests -v` 綠燈；`dump_openapi.py --check` 通過；`backend/database.py`、`openapi.json`、`api.d.ts` diff 為空
+  - - [ ] **12b 第 34 列 (j) 單元紀錄改寫**：(1) `unit-test-instructions.md` §二 現況註記補上副本指令實際需要的 `python -B`／`-P`（依實際用法）、`PYTHONPATH=.`，並寫明須一併帶 `tests_redis/`；(2) `code-summa

@@ -647,3 +647,95 @@ scratchpad 副本（`rsync -a --exclude .git --exclude node_modules`，含 `fron
 - `source-manifest.json`：新增 `backend/tests/test_membership_backfill_docstring.py`（共 29 條）。
 
 處置紀錄（2026-11-07T00:54:21Z）：第 31 列 (b) docstring 已更正、新增 `B1`／`B2` 並經突變驗證；第 21 列 (a)–(e) 與第 31 列 (a)(c)(e)(f)(g) 皆已由 brain-infra 處理，無屬本單元而未修的項目；回歸 41／43／1375 測試 OK、兩支 validator passed、repo 快取數不變；勾選 70／79。
+
+## 2026-11-08 合併前必修第 66 列（C3）
+
+**來源**：CI run `42454550208`（PR #650，head `ff537a7`）的 concurrency job，`test_C3_assert_can_deactivate_takes_no_lock` 逐字 `AssertionError: 'passed' != 'guard'`。第 21 列裁決（獨自一人的專案不擋）後舊前置資料使守門放行。只改測試前提，`backend/services/membership_service.py` 未動（repo 內 sha256 `a9b00ca070a510fb685ed2c1d83083abab03eabca9e5ee0f98257630e7db7230`，與突變基線相同）。
+
+### 一、改法與選擇理由
+
+`backend/tests_pg/test_membership_concurrency.py`（`grep -n` 實查）：
+
+| 行 | 前 | 後 |
+|---|---|---|
+| `:441` | docstring「該專案只有 alice 一位管理者時守門必須 raise」 | 「該專案除 alice 外的成員皆不合格時守門必須 raise」 |
+| `:444-452` | 註解說明「讓 alice 成為唯一的成員」 | 註解寫明第 21 列與第 1 ＋ 4 項兩個判準，以及為何停用 bob 不影響 T2 的呼叫 |
+| `:453-457` | `ProjectMember` 刪除 bob 的成員列 | `UPDATE users SET is_active = false`（bob） |
+| `:531` | 診斷訊息「守門沒有判定出唯一管理者」 | 「守門沒有判定出無合格接手人的專案」 |
+
+測試名稱未改（TCMS 案例名稱對應不受影響）。
+
+選「保留 bob 的成員列、停用其帳號」，不選計畫列舉的其他做法，理由：
+
+- **待核准**：`users.authorization_status` 由 `_ensure_j5_schema()` 補欄，同樣可行，但 `is_active` 是 `is_qualified_successor` 的第一個條件，不經 `user_can`，判定路徑最短。
+- **改為只有 `K3.view` 的全域角色**：要依賴權限矩陣的內容，矩陣之後改動會讓本案無聲失效；停用不依賴矩陣。
+- **另加不合格成員**：要多一列資料，且仍得處理 bob（他是合格接手人）。
+
+bob 維持 `project_admin`，順帶驗到「不合格的其他管理者不算數」。
+
+**確認守門會回報該專案**：`projects_losing_last_admin` 的回報條件是 `project_id in projects_with_others and not qualified[project_id]`（第 21 列判準只看成員列是否存在，不看合格；合格判定走 `qualified_successors`）。bob 的成員列保留 → 前者成立；bob 停用 → `is_qualified_successor` 回 `False`、該專案合格清單為空 → 後者成立。
+
+**確認 T1 持鎖時 T2 仍跑得到 barrier**：T2 只讀 `projects`／`project_members`／`users`／`role_permissions`，未改動查詢、未取鎖；實跑 `T2_barrier` 為 `satisfied`（見二）。停用 bob 不影響 T2 以 `mint_principal(self.bob)` 呼叫守門：`assert_can_deactivate` 不檢查 principal 權限，`_Actor` 只帶 `id` 與 `role`。
+
+### 二、真實 PostgreSQL 實跑
+
+環境：一次性 `pgvector/pgvector:pg18` 容器（`-p 127.0.0.1:55432:5432`，`docker port` 實查為 `5432/tcp -> 127.0.0.1:55432`），套 `schema_rbac.sql`（`ON_ERROR_STOP=1`，exit 0），密碼 [REDACTED]；在 scratchpad 的 rsync 副本跑 `python -B -m unittest discover -s tests_pg -v`（CI 同一指令；15 案是整個 `tests_pg`，其中 `test_membership_concurrency.py` 4 案）。
+
+```
+Ran 15 tests in 8.904s
+
+OK
+```
+
+開工時 Docker Desktop 未啟動（socket 連不上），依指示須用容器，故以 `open -a Docker` 啟動；Docker Desktop 收尾時仍維持執行。容器已 `docker stop`（`--rm`），`docker ps -a --filter name=ms-c3-pg` 為 0 列。未連 staging、共用 DB 或 Redis。
+
+### 三、突變驗證（只在副本）
+
+基線 sha256（副本 `services/membership_service.py`）：`a9b00ca070a510fb685ed2c1d83083abab03eabca9e5ee0f98257630e7db7230`。
+
+| 突變 | 內容 | C3 結果 | 還原 sha256 |
+|---|---|---|---|
+| M1 | `projects_losing_last_admin` 查詢前插入 `return []` | 紅：`AssertionError: 'passed' != 'guard'`；`守門沒有判定出無合格接手人的專案`；`FAILED (failures=1)` | 與基線相同 |
+| M2 | 守門 `admin_rows` 查詢加 `.with_for_update()` | 紅：`AssertionError: 'broken' != 'satisfied'`；`守門在另一個執行緒持有該專案鎖的期間卡住了——它取鎖了`；`Ran 1 test in 15.157s`、`FAILED (failures=1)` | 與基線相同 |
+
+M2 當次的步驟紀錄為 `T1: error:MembershipLockTimeout`、`T2: committed`：該次是 T2 先取得鎖，T1 取鎖逾時而沒有到 barrier，barrier 同樣破損。斷言抓到的仍是「守門取鎖」。
+
+兩項還原後再跑全部 `tests_pg`：`Ran 15 tests in 8.732s`、`OK`。
+
+### 四、回歸與快取
+
+| 檢查 | 結果 |
+|---|---|
+| 副本 `tests.test_membership_data tests.test_membership_facade tests.test_membership_endpoints` | `Ran 41 tests in 1.950s`、`OK` |
+| 副本後端全套 `discover -s tests`（`-X faulthandler`，兩次） | 兩次皆 `Ran 1397 tests`、`OK (skipped=3)`（100.792s／101.894s） |
+| repo `python3 -B scripts/validate_repo_contract.py` | `Cloud-360 repository contract validation passed.` |
+| repo `python3 -B scripts/validate_env_contract.py` | `Cloud-360 environment configuration contract validation passed.` |
+
+**未解的異常（如實記載）**：後端全套未加 `-X faulthandler` 的那一次（輸出導向檔案）以 exit **139**（segmentation fault）結束，無 Python traceback，log 末幾行在 `cloud360.brain_gateway` 的 `ws_ready`。在那之前另一次同樣未加旗標、輸出接 `tail` 的執行，結束狀態未取得（`tail -4` 未含 `Ran` 行）。其後兩次加 `-X faulthandler` 皆綠，未重現，故崩潰點未定位。本輪 diff 只動 `tests_pg`，`discover -s tests` 不載入該目錄，崩潰與本列無關，但全套存在間歇性 segfault 的可能，本輪未排除。
+
+快取（`find` 實算，排除 `backend/.venv` 與 `node_modules`）：`.pyc` 243 → 243、`.hypothesis` 檔 352 → 352。`__pycache__` 目錄開工時未計數，改以 `-newermt 2026-11-08T12:39:00Z` 查證本輪開始後無變動目錄（0 個；目前共 14 個）。
+
+### 五、計畫勾選
+
+`grep -c -- '- \[x\]'` 全檔 **5**、`grep -c -- '- \[ \]'` **79**（共 84）；§十 5／5。依指示只勾 §十，其他節維持開工時的未勾狀態（`- [x]` 開工時為 0，與 11-07 記的 70／79 不同：計畫其後被重設過，本輪未追查原因、未動）。
+
+### 六、追溯
+
+`traceability.json` 新增 reverse 條目 `CG-MB66`（target 為本測試檔）；`python3 -I` 的 `json.load` 驗證可解析（`ok dict`，reverse 19 條、open_items 18 條）。第 66 列已關閉，故未新增 open item。
+
+處置紀錄（2026-11-08T13:25:16Z）：第 66 列 C3 前置資料已修正，`tests_pg` 15 案 OK，突變 M1／M2 皆紅且還原，回歸 41／1397 測試 OK（另見間歇性 segfault 註記），兩支 validator passed，快取數不變，§十勾選 5／5。未 commit、未 push。
+
+## 整站重跑後的勾選回復（2026-11-08T13:32:26Z）
+
+- 背景：2026-11-08T06:40:14Z 使用者決定重跑整個 code-generation 階段（整站關卡因審查收據失效卡死，唯一出路）。引擎把本計畫勾選全部重設為未勾。
+- 依據：以 Python `hashlib` 重算上一次審查留下、與現況最吻合的收據 `reviewed-source-c87d6c7478d7.tsv`：26 同、3 變（`backend/tests_pg/test_membership_concurrency.py`、`frontend/src/types/api.d.ts`、`openapi.json`，交審查員判定是否碰到本單元）。本輪 `REVIEW_REQUESTED` 當下引擎另會產生一份新收據，以那份為準。既有勾選依 HEAD 版回復（差異僅勾選字元）。
+- 現況（實算）：75 勾／9 未勾；未勾格沿用 HEAD 的未勾理由：
+  - - [ ] **聚合版** `assert_can_deactivate`：一次 `GROUP BY project_id HAVING count(*) = 1`，找出該使用者獨任管理者的全部專案（`[N3]`=C）。**不取鎖**（`NFR12.3`：它是跨專案唯讀掃描，取鎖會讓一次停用鎖住該使用者的全部專案）。
+  - - [ ] **不改 `backend/database.py`**（`NFR12.5`；判準是該檔 diff 為空）。
+  - - [ ] **等價測試**（`NFR12.12`／`[N3]`=C）：對隨機成員集合比對「聚合查詢的結果」與「逐專案呼叫單專案判定函式的結果」是否相同。它需要資料庫，**故不是 PBT 的作用對象**——與 `select_successor` 不同。可在既有 SQLite 路徑執行（`GROUP BY ... HA
+  - - [ ] **7b `MembershipFacade` 的七個公開方法**（`K-16` 的 `public_interface`）：`resolve_project_role`／`list_members`／`invite_member`／`remove_member`／`change_role`／`assert
+  - - [ ] **7c 自動改選流程**：觸發條件是 `project_owner` 的**帳號被停用**（`BR4.4`），在停用**成功之後**才跑。**逐專案獨立交易**，各自取鎖、各自釋放（`scalability-design.md §二`；`BR4.3` 的冪等性使逐專案獨立安全）。冪等：該專案已有 `pro
+  - - [ ] 新增 `backend/scripts/backfill_project_members.py`，沿用 `U18` 的 `[P1]`=A 形狀：獨立腳本、單一交易、**大聲失敗（非零碼）**、不動啟動路徑。
+  - - [ ] 15a 實作 ＋ 測試：守門在「有合格接手人」時放行並改選、「無合格接手人」時 409；候選排除待核准、停用、只有 `K3.view` 的成員；邀請停用帳號 → 拒、邀請待核准帳號 → 拒；非擁有但為最後管理者的專案也被改選。突變：拿掉合格謂詞中任一條件 → 對應測試紅。
+  - - [ ] 15b 實作 ＋ 測試：注入單一專案改選失敗 → 停用端點回 500 且列出該專案、其他專案仍改選成功；重送停用 → 失敗專案補跑成功、已成功的專案不產生第二筆事件。突變：拿掉失敗回報 → 紅。
+  - - [ ] 15c 實作 ＋ 測試：有專案無成員列時呼叫補齊函式 → 擁有者成為 `project_admin`；重跑不產生重複；終檢失敗時拋出。突變：拿掉「無成員列」條件 → 重複寫入測試紅。
