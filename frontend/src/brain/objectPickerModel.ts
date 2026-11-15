@@ -22,9 +22,15 @@ export type RowKind = 'p' | 's';
 /**
  * md 以上選單的固定寬度（px）。**唯一的定義處**（`review-01` `R-05`）：`ContextBar` 以它夾住左緣，
  * `ObjectPicker` 以它產生 `--picker-width`（class `md:w-(--picker-width)`），兩邊不再各寫一份。
- * 本檔唯一的非函式匯出：常數，不帶任何副作用。
+ * 本檔的非函式匯出只有純常數（本常數與下方的 `NOT_OWNED_TARGET_NOTE`），不帶任何副作用。
  */
 export const PICKER_WIDTH_PX = 384;
+
+/**
+ * 非擁有者不能把專案設為作業對象時的說明（`[OP3]`=A）。選單（`ObjectPickerGroup`）與專案頁的
+ * 「在工作區建立架構圖」「把作業對象設為這個專案」共用這一份，避免兩處文字各自漂移。純字串常數。
+ */
+export const NOT_OWNED_TARGET_NOTE = '大腦目前只能以你建立的專案為作業對象';
 
 /** 一個專案的系統清單在本次開啟中的畫面狀態（未出現在 Map 中＝尚未請求）。 */
 export interface SystemsEntry {

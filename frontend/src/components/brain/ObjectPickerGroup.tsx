@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { rowKey, type FilteredGroup } from '../../brain/objectPickerModel';
+import { NOT_OWNED_TARGET_NOTE, rowKey, type FilteredGroup } from '../../brain/objectPickerModel';
 import type { ProjectOut, SystemOut } from '../../projects/projectsApi';
 
 /**
@@ -107,7 +107,7 @@ export const ObjectPickerGroup: React.FC<ObjectPickerGroupProps> = ({
       </div>
       {!selectable && (
         <p id={noteId} data-testid={`brain-object-not-owned-${pid}`} className="ml-8 text-xs text-gray-600">
-          大腦目前只能以你建立的專案為作業對象
+          {NOT_OWNED_TARGET_NOTE}
         </p>
       )}
       {form && <div className="ml-8">{form}</div>}

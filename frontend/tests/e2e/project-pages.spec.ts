@@ -1,4 +1,5 @@
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page, type WebSocketRoute } from '@playwright/test';
+import * as F from '../../src/brain/testing/wsFrames';
 
 /**
  * U23 project-pages-ui — 專案清單／建立／詳情（總覽、需求、記憶摘要三籤）。
@@ -914,10 +915,10 @@ test.describe('U23 project pages', () => {
   });
 
   /**
-   * @purpose 無資料來源的三處誠實呈現：架構圖「尚無法取得」、記憶摘要籤固定說明且不打記憶 API、頁首只有 [成員]。
+   * @purpose 取不到資料的三處誠實呈現：缺 A1 view 時架構圖「尚無法取得」（2026-11-15 起有 A1 view 者改顯示真值，見 `Project page brain entry`）、記憶摘要籤固定說明且不打記憶 API、頁首只有 [成員]。
    * @api GET /api/hierarchy/projects -> 200 | 專案資料取自清單
    * @ui /projects/:projectId | 總覽籤計數、記憶摘要籤、頁首
-   * @given 具 K3 view 的帳號；單一系統
+   * @given 具 K3 view、無 A1 view 的帳號；單一系統
    * @step 開啟總覽 | 架構圖計數為「尚無法取得」
    * @step 切到記憶摘要籤 | 顯示「專案記憶的彙整尚未提供」，對 /api/memory 的請求數為 0
    * @step 檢查頁首 | 有 [成員]、沒有 [設定]
@@ -1301,5 +1302,249 @@ test.describe('Diagram attach to system', () => {
     await row.getByRole('button', { name: '掛上' }).click();
     await expect(page.getByTestId('system-diagrams-status')).toHaveText('查不到系統');
     await expect(row).toContainText('這個系統還沒有掛上你的架構圖');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 部署後追加（2026-11-15）：專案頁的大腦入口與架構圖計數。
+//
+// **本階段新增、已核可 scope／requirements 尚未涵蓋**（使用者在 staging 看過專案總覽後選定「先做 1＋2」；
+// 第 3 項「讓大腦新建一張架構圖」不在範圍）。回補：requirements 新 FR、user-stories 新 AC，見
+// `operation/followups/project-page-brain-entry.md`；規格註解暫掛既有故事，回補後改指新 AC。
+// 另開 describe，不動既有兩個 describe 的 TCMS 名稱。
+//
+// 大腦伺服器以 `page.routeWebSocket` 扮演（形狀沿用 `object-picker.spec.ts` 的 BrainServer，刻意不抽共用
+// 模組：不改已交付單元的 spec），訊框只由 `src/brain/testing/wsFrames.ts` 產生（EPN-19）。
+// ---------------------------------------------------------------------------
+
+type ClientFrame = { type: string; payload: Record<string, unknown> };
+interface TargetIds {
+  pid: string | null;
+  sid: string | null;
+  did: string | null;
+}
+
+class ProjectBrainServer {
+  conns: { ws: WebSocketRoute; frames: ClientFrame[] }[] = [];
+  shared: TargetIds = { pid: null, sid: null, did: null };
+  names: Record<string, string> = {};
+
+  async install(page: Page): Promise<void> {
+    await page.routeWebSocket(/\/api\/brain\/ws(\?.*)?$/, (ws) => {
+      const conn = { ws, frames: [] as ClientFrame[] };
+      this.conns.push(conn);
+      ws.onMessage((raw) => {
+        const data = JSON.parse(String(raw)) as ClientFrame;
+        conn.frames.push(data);
+        if (data.type === 'hello') {
+          for (const f of F.snapshotFrames(this.sharedFrame())) ws.send(f);
+        }
+        if (data.type === 'set_work_target') {
+          const p = data.payload as { projectId: string | null; systemId: string | null; diagramId: string | null };
+          this.shared = { pid: p.projectId, sid: p.systemId, did: p.diagramId };
+          ws.send(F.encodeFrame(this.sharedFrame()));
+        }
+      });
+    });
+  }
+
+  private name(prefix: string, id: string | null): string | null {
+    return id === null ? null : (this.names[`${prefix}${id}`] ?? null);
+  }
+
+  sharedFrame() {
+    const t = this.shared;
+    return F.workTargetFrame('shared', t.pid, t.sid, t.did, this.name('p', t.pid), this.name('s', t.sid), this.name('d', t.did));
+  }
+
+  framesOf(type: string): ClientFrame[] {
+    return this.conns.flatMap((c) => c.frames.filter((f) => f.type === type));
+  }
+}
+
+const BRAIN_PERMS = { K1: FULL, K2: FULL, K3: FULL, K4: FULL, A1: FULL };
+
+/** 在 setupApp 之後註冊（後註冊者優先）：/me 帶 K1／A1，collab 與工作區所需端點樁化。 */
+async function withBrain(
+  page: Page,
+  opts: { perms?: Record<string, Perm>; shared?: TargetIds; diagrams?: MyDiagramStub[] } = {}
+): Promise<ProjectBrainServer> {
+  const server = new ProjectBrainServer();
+  server.names = { p10: 'e2e-project-detail', p20: 'e2e-other-project', s100: 'e2e-system-1', s200: 'e2e-other-system' };
+  if (opts.shared) server.shared = opts.shared;
+  await page.route('**/api/auth/me', (route) =>
+    fulfillJson(route, 200, {
+      id: SELF_ID,
+      username: SELF_NAME,
+      role: 'Project_Architect',
+      is_active: true,
+      authorization_status: 'approved',
+      permissions: opts.perms ?? BRAIN_PERMS,
+      pending_request: null,
+    })
+  );
+  await page.route('**/api/collab/**', (route) =>
+    fulfillJson(route, 200, route.request().method() === 'GET' ? [] : {})
+  );
+  await page.route('**/api/collab/diagrams', (route) => fulfillJson(route, 200, opts.diagrams ?? []));
+  await page.route('**/api/collab/workspace/bootstrap', (route) =>
+    fulfillJson(route, 200, {
+      diagram: { id: 7, title: 'e2e-last-opened', xml_data: '<mxGraphModel/>', is_owner: true, shared_user_ids: [] },
+      messages: [],
+    })
+  );
+  await page.route('https://embed.diagrams.net/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body></body></html>' })
+  );
+  await page.routeWebSocket('**/api/collab/ws/**', () => undefined);
+  await server.install(page);
+  return server;
+}
+
+const LAST_OPENED: MyDiagramStub = {
+  id: 7,
+  title: 'e2e-last-opened',
+  is_owner: true,
+  system_id: null,
+  updated_at: '2026-11-01T00:00:00Z',
+};
+
+test.describe('Project page brain entry', () => {
+  /**
+   * @purpose 擁有者在系統卡片按「在工作區建立架構圖」：經既有 set_work_target 把作業對象設為該系統，伺服器確認後才導到 /workspace，且工作區開空白畫布而非上次的圖。
+   * @api GET /api/hierarchy/projects/{project_id}/systems -> 200 | 專案 10 的系統 e2e-system-1
+   * @api GET /api/collab/workspace/bootstrap -> 200 | 回上次開的圖 e2e-last-opened（id 7）
+   * @ui /projects/:projectId | 總覽籤「系統的架構圖」的系統卡片
+   * @ui /workspace | 工作區的架構圖選單
+   * @given 具 K1／A1 edit 的專案 10 擁有者；共享段作業對象尚未選定；上次在工作區開的是圖 7
+   * @step 開啟專案 10 的總覽，按 e2e-system-1 的「在工作區建立架構圖」 | 大腦連線收到一則 set_work_target：projectId=10、systemId=100、diagramId=null、segment=shared
+   * @step 等伺服器回推作業對象 | 網址變為 /workspace
+   * @step 等工作區載入完成 | 架構圖選單的值為空（未還原圖 7），脈絡列顯示 e2e-system-1
+   * @pass set_work_target 恰一則且三層 id 正確；導頁發生在回推之後；工作區為空白畫布
+   * @story US9.1
+   */
+  test('sets the work target to the system and opens a blank workspace', async ({ page }) => {
+    await setupApp(page, detailWorld(1));
+    const server = await withBrain(page, { diagrams: [LAST_OPENED] });
+    await page.goto(detailUrl('overview'));
+    const action = page.getByTestId('system-create-in-workspace-100');
+    await expect(action).toBeVisible();
+    await expect(action).not.toHaveAttribute('aria-disabled', 'true');
+
+    await action.click();
+    await expect(page).toHaveURL(/\/workspace$/);
+    const frames = server.framesOf('set_work_target').map((f) => f.payload);
+    expect(frames).toEqual([{ projectId: '10', systemId: '100', diagramId: null, segment: 'shared' }]);
+
+    const picker = page.locator('select').filter({ has: page.locator('option', { hasText: '請選擇歷史架構圖' }) });
+    await expect(picker).toHaveCount(1);
+    await expect(picker).toHaveValue('');
+    await expect(page.getByTestId('brain-context-name-system')).toHaveText('e2e-system-1');
+  });
+
+  /**
+   * @purpose 不是專案擁有者時，「在工作區建立架構圖」與「把作業對象設為這個專案」照列但停用並說明，按了不送任何設定、不導頁。
+   * @api GET /api/hierarchy/projects -> 200 | 專案 10 的擁有者是另一位使用者
+   * @ui /projects/:projectId | 系統卡片的建立動作；脈絡列下的作業對象提示
+   * @given 具 K1／A1 edit 的成員（非擁有者）；共享段作業對象在另一個專案 20
+   * @step 開啟專案 10 的總覽 | 建立動作 aria-disabled="true"，旁邊說明逐字為「大腦目前只能以你建立的專案為作業對象」，且由 aria-describedby 指向
+   * @step 檢查作業對象提示 | 顯示「不在這個專案內」，「把作業對象設為這個專案」aria-disabled="true"，說明逐字同上
+   * @step 按這兩個控件 | 大腦連線收到的 set_work_target 為 0 則，網址仍是 /projects/10
+   * @pass 兩個控件都停用、說明逐字一致、按下無任何副作用
+   * @story US9.1
+   */
+  test('disables the create action and the project target button for a non-owner', async ({ page }) => {
+    await setupApp(page, detailWorld(1, OTHER_ID));
+    const server = await withBrain(page, { shared: { pid: '20', sid: '200', did: null } });
+    await page.goto(detailUrl('overview'));
+    const action = page.getByTestId('system-create-in-workspace-100');
+    await expect(action).toHaveAttribute('aria-disabled', 'true');
+    const note = page.getByTestId('system-create-in-workspace-note-100');
+    await expect(note).toHaveText('大腦目前只能以你建立的專案為作業對象');
+    expect(await action.getAttribute('aria-describedby')).toBe(await note.getAttribute('id'));
+
+    const notice = page.getByTestId('project-target-notice');
+    await expect(notice).toContainText('不在這個專案內');
+    await expect(page.getByTestId('project-target-set')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId('project-target-not-owned')).toHaveText('大腦目前只能以你建立的專案為作業對象');
+
+    // aria-disabled 的控件仍可聚焦、可被點到（不是 disabled 屬性）；以 force 真的點下去，驗證點了沒有副作用。
+    await action.click({ force: true });
+    await page.getByTestId('project-target-set').click({ force: true });
+    await page.waitForTimeout(300);
+    expect(server.framesOf('set_work_target')).toHaveLength(0);
+    expect(new URL(page.url()).pathname).toBe('/projects/10');
+  });
+
+  /**
+   * @purpose 頂端統計列的架構圖計數＝我掛在本專案各系統的圖數；別的專案的系統、未掛載、別人分享的圖都不算。
+   * @api GET /api/collab/diagrams -> 200 | 我的圖與目前歸屬（分享給我的圖 system_id 一律 null）
+   * @ui /projects/:projectId | 總覽籤「架構圖」計數
+   * @given 專案 10 有系統 100、101；我的圖：兩張掛 100、一張掛 101、一張掛其他專案的系統 999、一張未掛；另有一張別人分享給我的圖
+   * @step 開啟總覽 | 「架構圖」計數為 3，並註明「你掛在這個專案各系統的架構圖」
+   * @pass 數字恰為 3（不是 0、不是 4、不是 6，也不是「尚無法取得」）
+   * @story US11.3
+   */
+  test('counts my diagrams attached to the systems of this project', async ({ page }) => {
+    await setupApp(page, detailWorld(2));
+    await withDiagrams(page, [
+      { id: 21, title: 'e2e-a', is_owner: true, system_id: 100, updated_at: '2026-11-01T00:00:00Z' },
+      { id: 22, title: 'e2e-b', is_owner: true, system_id: 100, updated_at: '2026-11-01T00:00:00Z' },
+      { id: 23, title: 'e2e-c', is_owner: true, system_id: 101, updated_at: '2026-11-01T00:00:00Z' },
+      { id: 24, title: 'e2e-d', is_owner: true, system_id: 999, updated_at: '2026-11-01T00:00:00Z' },
+      { id: 25, title: 'e2e-e', is_owner: true, system_id: null, updated_at: '2026-11-01T00:00:00Z' },
+      { id: 26, title: 'e2e-f', is_owner: false, system_id: null, updated_at: '2026-11-01T00:00:00Z' },
+    ]);
+    await page.goto(detailUrl('overview'));
+    await expect(page.getByTestId('project-count-diagrams-value')).toHaveText('3');
+    await expect(page.getByTestId('project-count-diagrams')).toContainText('你掛在這個專案各系統的架構圖');
+    await expect(page.getByTestId('project-count-diagrams')).not.toContainText('尚無法取得');
+  });
+
+  /**
+   * @purpose 專案頁在 K1 view 時掛脈絡列、作業對象提示與收合的「問大腦」面板，進頁不改作業對象、一鍵才改；沒有 K1 時三者與建立動作都不出現、也不開大腦連線。
+   * @api GET /api/hierarchy/projects -> 200 | 專案 10 由我擁有
+   * @ui /projects/:projectId | 脈絡列、作業對象提示、「問大腦」面板
+   * @given 兩個瀏覽器環境，唯一差異是 K1；有 K1 者的共享段作業對象在另一個專案 20
+   * @step 有 K1 開啟專案 10 | 脈絡列顯示 e2e-other-system；提示「不在這個專案內」；「問大腦」鈕存在；此時 set_work_target 為 0 則
+   * @step 按「問大腦」 | 面板展開（aria-expanded=true）
+   * @step 按「把作業對象設為這個專案」 | 收到 set_work_target：projectId=10、systemId=null、diagramId=null、segment=shared；提示消失；脈絡列專案層為 e2e-project-detail
+   * @step 沒有 K1 開啟專案 10 | 脈絡列、提示、「問大腦」、建立動作皆不在 DOM；大腦連線數為 0
+   * @pass 進頁不送設定；有 K1 才掛載；改設只在使用者按下時發生
+   * @story US2.1
+   */
+  test('mounts the context bar and brain panel only with K1 view', async ({ browser }: { browser: Browser }) => {
+    const allowCtx = await browser.newContext();
+    const allow = await allowCtx.newPage();
+    await setupApp(allow, detailWorld(1));
+    const server = await withBrain(allow, { shared: { pid: '20', sid: '200', did: null } });
+    await allow.goto(detailUrl('overview'));
+    await expect(allow.getByTestId('brain-context-bar')).toHaveAttribute('data-state', 'default');
+    await expect(allow.getByTestId('brain-context-name-system')).toHaveText('e2e-other-system');
+    await expect(allow.getByTestId('project-target-notice')).toContainText('不在這個專案內');
+    expect(server.framesOf('set_work_target')).toHaveLength(0);
+    await allow.getByTestId('brain-subpage-panel-toggle').click();
+    await expect(allow.getByTestId('brain-subpage-panel-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+    await allow.getByTestId('project-target-set').click();
+    await expect(allow.getByTestId('project-target-notice')).toHaveCount(0);
+    await expect(allow.getByTestId('brain-context-name-project')).toHaveText('e2e-project-detail');
+    expect(server.framesOf('set_work_target').map((f) => f.payload)).toEqual([
+      { projectId: '10', systemId: null, diagramId: null, segment: 'shared' },
+    ]);
+    await allowCtx.close();
+
+    const denyCtx = await browser.newContext();
+    const deny = await denyCtx.newPage();
+    await setupApp(deny, detailWorld(1));
+    const denied = await withBrain(deny, { perms: { K2: FULL, K3: FULL, K4: FULL, A1: FULL } });
+    await deny.goto(detailUrl('overview'));
+    await expect(deny.getByTestId('project-system-diagrams')).toBeVisible();
+    await expect(deny.getByTestId('brain-context-bar')).toHaveCount(0);
+    await expect(deny.getByTestId('project-target-notice')).toHaveCount(0);
+    await expect(deny.getByTestId('brain-subpage-panel')).toHaveCount(0);
+    await expect(deny.getByTestId('system-create-in-workspace-100')).toHaveCount(0);
+    expect(denied.conns).toHaveLength(0);
+    await denyCtx.close();
   });
 });

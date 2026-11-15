@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/auth-context';
 import { useCollaboration } from '../hooks/useCollaboration';
 import { apiUrl } from '../config/api';
 import { isCanvasDirty } from '../utils/unsavedWork';
+import { isNewDiagramHandoff } from '../projects/workspaceHandoff';
 import { useBrainConnection } from '../brain/useBrainConnection';
 import { useWorkspaceTargetSync } from '../brain/useWorkspaceTargetSync';
 import { BrainSession } from '../components/brain/BrainSession';
@@ -60,6 +61,11 @@ function formatGenerateError(raw: string): string {
 export const WorkspacePage = () => {
   const { token, canArch, can, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // 部署後追加（2026-11-15；本階段新增、已核可 scope／requirements 尚未涵蓋）：從專案總覽「在工作區建立
+  // 架構圖」進來時開空白畫布，不還原上次開的圖——否則使用者落在舊圖上，存檔是更新舊圖而不是建新圖，
+  // 也就不會依作業對象掛到系統。只在第一次 render 讀取；bootstrap 結束後清掉導覽 state，重新整理不再觸發。
+  const startNewDiagramRef = useRef(isNewDiagramHandoff(location.state));
   const { sidebarCollapsed, setSidebarCollapsed } = useLayoutNav();
   const canEditArch = canArch('edit');
   const canReviewArch = canArch('review');
@@ -307,7 +313,8 @@ export const WorkspacePage = () => {
         });
         if (!response.ok) return;
         const data = await response.json();
-        if (data.diagram) {
+        const startNew = startNewDiagramRef.current;
+        if (data.diagram && !startNew) {
           setXml(data.diagram.xml_data || '');
           markBrainOrigin('bootstrap');
           setCurrentDiagramId(data.diagram.id);
@@ -322,12 +329,17 @@ export const WorkspacePage = () => {
         } else {
           setSaveStatus('no-file');
         }
-        if (Array.isArray(data.messages) && data.messages.length > 0) {
+        // 還原的對話屬於上次那張圖；開空白畫布時不帶入。
+        if (!startNew && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages);
         }
       } catch (err) {
         console.error('Workspace bootstrap failed', err);
       } finally {
+        if (startNewDiagramRef.current) {
+          startNewDiagramRef.current = false;
+          navigate('/workspace', { replace: true, state: null });
+        }
         setBootstrapDone(true);
         // BR97.5 的就緒閘門：bootstrap 結束（圖清單請求已先結束）。
         onBrainPageReady({
@@ -341,7 +353,7 @@ export const WorkspacePage = () => {
     };
 
     bootstrap();
-  }, [token, onBrainPageReady, markBrainOrigin]);
+  }, [token, onBrainPageReady, markBrainOrigin, navigate]);
 
   const handleLoadDiagram = async (id: number) => {
     try {
