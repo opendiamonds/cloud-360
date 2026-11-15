@@ -1,9 +1,11 @@
 /**
- * brainSession.ts — 一個頁面的大腦連線在元件樹中的 context、型別與 hook
+ * brainSession.ts — 全站唯一的大腦連線在元件樹中的 context、型別與 hook
  *
  * Provider 元件 `BrainSession` 在 `components/brain/BrainSession.tsx`（`react-refresh/only-export-components`
- * 要求元件與非元件匯出分檔，與本檔成對）。連線本身由頁面呼叫 `useBrainConnection(page)` 持有——子頁面的
- * 同步掛點（`useWorkspaceTargetSync`／`useAssessmentTargetSync`）需要同一個連線物件。
+ * 要求元件與非元件匯出分檔，與本檔成對）。連線本身由 `BrainConnectionProvider`（掛在 `App.tsx` 的路由外層）
+ * 呼叫 `useBrainConnection` 持有，全站一條；頁面、子頁面的同步掛點（`useWorkspaceTargetSync`／
+ * `useAssessmentTargetSync`）與浮動小助手都以 `useBrainSession()` 取得同一個物件（部署後追加
+ * 「全站大腦小助手」，2026-11-15）。
  */
 
 import { createContext, useContext } from 'react';
@@ -34,7 +36,9 @@ export interface WorkTargetIds {
 }
 
 export interface BrainConnection {
+  /** 目前路由推導出的頁面種類（`brainRoutePage.pageForPath`）；送出的 user_message 帶這個值。 */
   page: BrainPage;
+  /** 是否持有連線（＝使用者有 `K1 view`）。頁面與小助手的大腦掛點都以它把關。 */
   enabled: boolean;
   status: ConnectionStatus;
   /** 本頁目前讀取的段（入口頁恆為 shared）。 */
@@ -44,6 +48,8 @@ export interface BrainConnection {
   /** 本頁目前讀取段的作業對象；尚未收到為 null。 */
   target: WorkTargetPayload | null;
   workItems: WorkItem[];
+  /** 在入口頁以外（小助手所在的畫面）終止的輪次數（done／帶輪次的 error／反問）；小助手以它判斷收合期間的未讀。 */
+  assistantReplyCount: number;
   /** 已按「不是這個」、等下一則 work_items 的工作項（BR94.4）。 */
   pendingCorrections: string[];
   awaitingReply: boolean;
@@ -57,7 +63,10 @@ export interface BrainConnection {
   setWorkTarget: (ids: WorkTargetIds) => boolean;
   announce: (text: string) => void;
   reconnect: () => void;
-  /** 同步掛點登記事件回呼（一頁只有一個掛點）；回傳退訂函式。 */
+  /**
+   * 同步掛點登記事件回呼（一頁只有一個掛點）；回傳退訂函式。全站一條連線之下，換頁時快照早已到過：
+   * 新掛點以 `target` 的現值取得初始作業對象（`useTargetSyncCore` 掛載時讀取），不重播事件。
+   */
   subscribe: (listeners: ConnectionListeners) => () => void;
 }
 

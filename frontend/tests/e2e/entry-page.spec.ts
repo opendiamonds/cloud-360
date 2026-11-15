@@ -410,14 +410,14 @@ test.describe('U14 entry page', () => {
   });
 
   /**
-   * @purpose 每頁至多一條大腦連線；換頁即關閉舊頁的連線（EPN-01）。
+   * @purpose 全站至多一條大腦連線；換頁不重連（2026-11-15 起全站一條，取代原本「每頁一條、換頁即關舊開新」的 EPN-01，見 followups/global-brain-assistant.md）。
    * @ui / | 入口頁
    * @ui /workspace | 工作區脈絡列
    * @ui /assessment | 評核頁脈絡列
-   * @given 全權限使用者，三頁各自掛大腦連線
-   * @step 經 Sidebar 在入口、工作區、評核頁之間切換 5 次 | 每次換頁後連線數穩定
-   * @step 計算未關閉的大腦連線 | 恰 1 條
-   * @pass 切換 5 次後未關閉的連線恰 1 條
+   * @given 全權限使用者，全站共用一條大腦連線
+   * @step 經 Sidebar 在入口、工作區、評核頁之間切換 5 次 | 每次換頁後脈絡列就緒，連線總數不增加
+   * @step 計算大腦連線 | 建立過的恰 1 條、未關閉的恰 1 條、hello 恰 1 則
+   * @pass 切換 5 次後連線總數與未關閉數都是 1
    * @story US8.1
    */
   test('三頁切換後未關閉的大腦連線恰一條', async ({ page }) => {
@@ -430,11 +430,12 @@ test.describe('U14 entry page', () => {
       if (path === '/') await page.getByTestId('sidebar-entry-link').click();
       else await page.locator(`a[href="${path}"]`).first().click();
       await expect(page).toHaveURL(new RegExp(`${path === '/' ? '/' : path}$`));
-      await expect.poll(() => h.server.conns.length, { message: `hop ${path}` }).toBe(before + 1);
       await waitReady(page);
+      expect(h.server.conns.length, `hop ${path}`).toBe(before);
     }
     await expect.poll(() => h.server.open().length).toBe(1);
-    expect(h.server.conns.length).toBe(hops.length + 1);
+    expect(h.server.conns.length).toBe(1);
+    expect(h.server.framesOf('hello')).toHaveLength(1);
   });
 
   /**
@@ -541,11 +542,11 @@ test.describe('U14 entry page', () => {
   /**
    * @purpose 子頁面收到 4403 不得導航（照 BR92.5 字面會形成無限迴圈並丟掉畫布）；K1 撤銷後大腦掛點卸載、頁面本身與畫布不變（security-design §六之二 案 2）。
    * @api GET /api/auth/me -> 200 | 第二次回應不含 K1
-   * @ui /workspace | 工作區脈絡列與「問大腦」面板
+   * @ui /workspace | 工作區脈絡列與大腦小助手按鈕（2026-11-15 起取代「問大腦」面板）
    * @given 第一次 /me 具 K1＋A1；第二次只有 A1；bootstrap 開啟自有圖 11
-   * @step 開啟 /workspace 並等連線就緒 | 脈絡列與面板可見、畫布載入圖 11
+   * @step 開啟 /workspace 並等連線就緒 | 脈絡列與小助手按鈕可見、畫布載入圖 11
    * @step 伺服器以 4403 關閉 | pathname 仍為 /workspace
-   * @step 檢視掛點、導航紀錄與畫布 | 脈絡列與面板消失；4403 之後沒有任何 history 變更、沒有新的大腦連線；畫布載入紀錄不變
+   * @step 檢視掛點、導航紀錄與畫布 | 脈絡列與小助手按鈕消失；4403 之後沒有任何 history 變更、沒有新的大腦連線；畫布載入紀錄不變
    * @pass 不導航、掛點卸載、畫布不受影響
    * @story US3.1
    */
@@ -557,7 +558,7 @@ test.describe('U14 entry page', () => {
     });
     await page.goto('/workspace');
     await waitReady(page);
-    await expect(page.getByTestId('brain-subpage-panel')).toBeVisible();
+    await expect(page.getByTestId('brain-assistant-toggle')).toBeVisible();
     await expect.poll(async () => (await h.canvasLoads()).join()).toContain(`${M}-d11`);
     const loadsBefore = await h.canvasLoads();
     // 記錄 4403 之後的每一次 history 變更：最終回到 /workspace 不足以證明沒有導航過。
@@ -574,7 +575,7 @@ test.describe('U14 entry page', () => {
     });
     await h.server.last.ws.close({ code: 4403 });
     await expect(page.getByTestId('brain-context-bar')).toHaveCount(0);
-    await expect(page.getByTestId('brain-subpage-panel')).toHaveCount(0);
+    await expect(page.getByTestId('brain-assistant-toggle')).toHaveCount(0);
     await expect(page).toHaveURL(/\/workspace$/);
     expect(await page.evaluate(() => (window as unknown as { __paths: string[] }).__paths)).toEqual([]);
     expect(h.server.conns.length).toBe(1);
@@ -1009,12 +1010,12 @@ test.describe('U14 entry page', () => {
   });
 
   /**
-   * @purpose 子頁面「改為獨立對話」只在伺服器回推後才換徽章；獨立段的面板為空、脈絡列改為該段；切回共享時紀錄與作業對象與離開時相同（BR97.3、BR97.8、AC3.1.1、AC3.1.2、AC3.1.4）。
-   * @ui /workspace | 工作區脈絡列與「問大腦」面板
-   * @given /api/brain/ws；共享段作業對象專案 1、workspace 段作業對象專案 2；面板內已有一輪共享段對話
+   * @purpose 子頁面「改為獨立對話」只在伺服器回推後才換徽章；獨立段的小助手對話區為空、脈絡列改為該段；切回共享時紀錄與作業對象與離開時相同（BR97.3、BR97.8、AC3.1.1、AC3.1.2、AC3.1.4）。2026-11-15 起對話在大腦小助手（取代「問大腦」面板）。
+   * @ui /workspace | 工作區脈絡列與大腦小助手
+   * @given /api/brain/ws；共享段作業對象專案 1、workspace 段作業對象專案 2；小助手內已有一輪共享段對話
    * @step 關閉伺服器自動回推後按「改為獨立對話」 | 送出 set_sharing_mode{isolated, workspace}；徽章仍為「共享」
-   * @step 伺服器推送 sharing_mode=isolated 與 workspace 段 work_target | 徽章「獨立」、面板沒有共享段的訊息、脈絡列為專案 2
-   * @step 伺服器推送切回共享 | 徽章「共享」、面板再次出現原訊息、脈絡列為專案 1
+   * @step 伺服器推送 sharing_mode=isolated 與 workspace 段 work_target | 徽章「獨立」、小助手沒有共享段的訊息、脈絡列為專案 2
+   * @step 伺服器推送切回共享 | 徽章「共享」、小助手再次出現原訊息、脈絡列為專案 1
    * @pass 不樂觀更新、段切換與還原皆正確
    * @story US3.1
    */
@@ -1025,10 +1026,10 @@ test.describe('U14 entry page', () => {
     h.server.names = { p1: `${M}-共享專案`, p2: `${M}-獨立專案` };
     await page.goto('/workspace');
     await waitReady(page);
-    await page.getByTestId('brain-subpage-panel-toggle').click();
+    await page.getByTestId('brain-assistant-toggle').click();
     await say(page, `${M}-共享段的話`);
     h.server.send(F.turnFrames('t-25', `${M}-共享段的回覆`));
-    const panel = page.getByTestId('brain-subpage-panel');
+    const panel = page.getByTestId('brain-assistant-window');
     await expect(panel).toContainText(`${M}-共享段的回覆`);
     h.server.echo = false;
     await page.getByTestId('brain-context-sharing-switch').click();
@@ -1048,10 +1049,10 @@ test.describe('U14 entry page', () => {
   });
 
   /**
-   * @purpose 子頁面面板送出的 user_message 帶本頁 page；回寫的 set_work_target 帶本頁目前讀取的段（BR92.3、BR97.4、AC3.1.3）。
-   * @ui /workspace | 工作區「問大腦」面板與架構圖下拉
+   * @purpose 子頁面送出的 user_message 帶本頁 page（2026-11-15 起由全站連線依路由推導、從大腦小助手送出）；回寫的 set_work_target 帶本頁目前讀取的段（BR92.3、BR97.4、AC3.1.3）。
+   * @ui /workspace | 工作區大腦小助手與架構圖下拉
    * @given /api/brain/ws；兩張自有圖 11、12；workspace 已切為獨立對話
-   * @step 展開面板送出一句 | user_message.payload.page 為 workspace
+   * @step 展開小助手送出一句 | user_message.payload.page 為 workspace
    * @step 從下拉改選圖 12 | set_work_target.payload 為 {diagramId:'12', segment:'workspace'}
    * @pass page 與 segment 欄位皆為本頁的值
    * @story US3.1
@@ -1063,7 +1064,7 @@ test.describe('U14 entry page', () => {
     await page.goto('/workspace');
     await waitReady(page);
     await expect(page.getByTestId('brain-context-sharing-badge')).toHaveText('獨立');
-    await page.getByTestId('brain-subpage-panel-toggle').click();
+    await page.getByTestId('brain-assistant-toggle').click();
     await say(page, `${M}-子頁面的話`);
     await expect.poll(() => h.server.framesOf('user_message').length).toBe(1);
     expect(h.server.framesOf('user_message')[0].payload).toMatchObject({ page: 'workspace' });
@@ -1073,14 +1074,14 @@ test.describe('U14 entry page', () => {
   });
 
   /**
-   * @purpose 脈絡列只掛在入口頁、工作區與評核頁；成本頁與使用者管理頁不掛、不開大腦連線（BR97.1、AC2.1.3）。
+   * @purpose 脈絡列只掛在入口頁、工作區與評核頁（及專案頁）；成本頁與使用者管理頁不掛脈絡列（BR97.1、AC2.1.3）。2026-11-15 起全站一條大腦連線供浮動小助手使用，兩頁仍不掛脈絡列，連線恰 1 條、不因換頁增加。
    * @ui /cost | 成本頁
    * @ui /admin/users | 使用者管理頁
    * @given 全權限使用者
    * @step 開啟 /cost | 無 brain-context-bar
    * @step 開啟 /admin/users | 無 brain-context-bar
-   * @step 計算大腦連線 | 0 條
-   * @pass 兩頁皆不掛脈絡列、不開連線
+   * @step 計算大腦連線 | 每次載入恰 1 條（goto 為整頁載入，共 2 條、同時存活至多 1 條）
+   * @pass 兩頁皆不掛脈絡列，連線不多開
    * @story US2.1
    */
   test('成本頁與使用者管理頁不掛脈絡列', async ({ page }) => {
@@ -1093,7 +1094,8 @@ test.describe('U14 entry page', () => {
     await expect(page).toHaveURL(/\/admin\/users$/);
     await page.waitForLoadState('networkidle');
     await expect(page.getByTestId('brain-context-bar')).toHaveCount(0);
-    expect(h.server.conns.length).toBe(0);
+    expect(h.server.conns.length).toBe(2);
+    await expect.poll(() => h.server.open().length).toBe(1);
   });
 
   /**
@@ -1392,7 +1394,7 @@ test.describe('U14 entry page', () => {
    * @purpose 沒有 K1 時子頁面不掛脈絡列與面板，畫布操作也不送任何作業對象訊息（nfr-design R-05）。
    * @ui /workspace | 工作區
    * @given 只有 A1 的使用者；自有圖 11、12；bootstrap 開 11
-   * @step 開啟 /workspace | 無 brain-context-bar、無 brain-subpage-panel
+   * @step 開啟 /workspace | 無 brain-context-bar、無 brain-assistant-toggle（2026-11-15 起取代 brain-subpage-panel）
    * @step 從下拉改選圖 12 | 大腦連線 0 條、set_work_target 0 則
    * @pass 無 K1 時同步掛點全為 no-op
    * @story US3.1
@@ -1402,7 +1404,7 @@ test.describe('U14 entry page', () => {
     await page.goto('/workspace');
     await expect.poll(async () => (await h.canvasLoads()).join()).toContain(`${M}-d11`);
     await expect(page.getByTestId('brain-context-bar')).toHaveCount(0);
-    await expect(page.getByTestId('brain-subpage-panel')).toHaveCount(0);
+    await expect(page.getByTestId('brain-assistant-toggle')).toHaveCount(0);
     await page.locator('select', { has: page.locator('option[value="12"]') }).first().selectOption('12');
     await expect.poll(async () => (await h.canvasLoads()).join()).toContain(`${M}-d12`);
     await page.waitForTimeout(300);
@@ -1411,12 +1413,12 @@ test.describe('U14 entry page', () => {
   });
 
   /**
-   * @purpose 串流中換頁：舊頁的該輪轉為中斷；新頁的連線收到同一 turnId 的後續時合併回原訊息、不另建一則（BR93.7、AC1.1.4）。
+   * @purpose 串流中換頁：同一 turnId 的後續合併回原訊息、不另建一則（BR93.7、AC1.1.4）。2026-11-15 起全站一條連線，換頁不關連線，該輪不再轉為中斷，而是在小助手裡接著串流。
    * @ui / | 入口頁
-   * @ui /workspace | 工作區「問大腦」面板
+   * @ui /workspace | 工作區大腦小助手
    * @given /api/brain/ws；入口頁一輪已收到第一個 token、尚未 done
-   * @step 經 Sidebar 換到 /workspace 並展開面板 | 該輪顯示「你在回覆完成前離開了這一頁」
-   * @step 伺服器在新連線送同一 turnId 的 token 與 done | 面板中該 turnId 的訊息恰 1 則，含兩段文字、狀態 done
+   * @step 經 Sidebar 換到 /workspace 並展開小助手 | 該輪仍是串流中（data-status=streaming），沒有「你在回覆完成前離開了這一頁」；沒有新連線
+   * @step 伺服器在同一條連線送同一 turnId 的 token 與 done | 小助手中該 turnId 的訊息恰 1 則，含兩段文字、狀態 done
    * @pass 換頁後同一輪只顯示一則
    * @story US1.1
    */
@@ -1430,9 +1432,11 @@ test.describe('U14 entry page', () => {
     await page.locator('a[href="/workspace"]').first().click();
     await expect(page).toHaveURL(/\/workspace$/);
     await waitReady(page);
-    await page.getByTestId('brain-subpage-panel-toggle').click();
+    await page.getByTestId('brain-assistant-toggle').click();
     const msg = page.locator('[data-testid="brain-stream-message"][data-turn-id="t-39"]');
-    await expect(msg).toContainText('你在回覆完成前離開了這一頁');
+    await expect(msg).toHaveAttribute('data-status', 'streaming');
+    await expect(msg).not.toContainText('你在回覆完成前離開了這一頁');
+    expect(h.server.conns.length).toBe(1);
     h.server.send([F.encodeFrame(F.tokenFrame('t-39', `${M}-後半`)), F.encodeFrame(F.doneFrame('t-39'))]);
     await expect(msg).toHaveCount(1);
     await expect(msg).toContainText(`${M}-前半${M}-後半`);
@@ -1529,12 +1533,12 @@ test.describe('U14 entry page', () => {
    * @api GET /api/auth/me -> 200 | 回應不含 id 欄位
    * @ui /login | 登入頁
    * @ui / | 入口頁
-   * @ui /workspace | 工作區「問大腦」面板
-   * @ui /assessment | 評核頁「問大腦」面板
+   * @ui /workspace | 工作區大腦小助手（2026-11-15 起取代「問大腦」面板）
+   * @ui /assessment | 評核頁大腦小助手
    * @given 未登入；/me 對兩位使用者的回應皆缺 id
    * @step A 經登入頁登入並完成一輪對話 | 對話區有 A 的原句
    * @step 經 Sidebar 登出、B 經登入頁登入 | 入口頁對話區不得出現 A 的原句與回覆
-   * @step B 進 /workspace 與 /assessment 並展開面板 | 皆沒有 A 的對話
+   * @step B 進 /workspace 與 /assessment 並展開小助手 | 皆沒有 A 的對話
    * @pass 換人即清空，不依賴 user.id
    * @story US8.1
    */
@@ -1568,8 +1572,11 @@ test.describe('U14 entry page', () => {
     for (const path of ['/workspace', '/assessment']) {
       await page.locator(`a[href="${path}"]`).first().click();
       await waitReady(page);
-      await page.getByTestId('brain-subpage-panel-toggle').click();
-      await expect(page.getByTestId('brain-subpage-panel')).not.toContainText(`${M}-A的`);
+      // 小助手的展開狀態跨頁保留：第一頁展開後，第二頁已是展開的，不再點按鈕。
+      const win = page.getByTestId('brain-assistant-window');
+      if ((await win.count()) === 0) await page.getByTestId('brain-assistant-toggle').click();
+      await expect(win).toBeVisible();
+      await expect(win).not.toContainText(`${M}-A的`);
     }
   });
 

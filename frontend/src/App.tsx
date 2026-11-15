@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { BrainTranscriptProvider } from './brain/BrainTranscriptContext';
+import { BrainConnectionProvider } from './components/brain/BrainConnectionProvider';
 import { useAuth } from './context/auth-context';
 import { ProtectedRoute, CapabilityRoute } from './components/RouteGuard';
 import { Layout } from './components/Layout';
@@ -52,6 +53,11 @@ function App() {
       {/* U14：對話紀錄在路由之外（換頁不丟）；清除綁登入／登出事件，此處不帶任何 key（R-03）。 */}
       <BrainTranscriptProvider>
       <BrowserRouter>
+        {/*
+          部署後追加「全站大腦小助手」（2026-11-15）：全站唯一的大腦連線與小助手狀態。在路由之內（以目前路由
+          推導 page）、Routes 之外（換頁不重掛、不重連）。
+        */}
+        <BrainConnectionProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/403" element={<ForbiddenPage />} />
@@ -256,6 +262,7 @@ function App() {
             }
           />
         </Routes>
+        </BrainConnectionProvider>
       </BrowserRouter>
       </BrainTranscriptProvider>
     </AuthProvider>

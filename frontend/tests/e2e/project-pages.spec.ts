@@ -1502,14 +1502,14 @@ test.describe('Project page brain entry', () => {
   });
 
   /**
-   * @purpose 專案頁在 K1 view 時掛脈絡列、作業對象提示與收合的「問大腦」面板，進頁不改作業對象、一鍵才改；沒有 K1 時三者與建立動作都不出現、也不開大腦連線。
+   * @purpose 專案頁在 K1 view 時掛脈絡列、作業對象提示與浮動大腦小助手（2026-11-15 起取代收合的「問大腦」面板，見 followups/global-brain-assistant.md），進頁不改作業對象、一鍵才改；沒有 K1 時三者與建立動作都不出現、也不開大腦連線。
    * @api GET /api/hierarchy/projects -> 200 | 專案 10 由我擁有
-   * @ui /projects/:projectId | 脈絡列、作業對象提示、「問大腦」面板
+   * @ui /projects/:projectId | 脈絡列、作業對象提示、大腦小助手
    * @given 兩個瀏覽器環境，唯一差異是 K1；有 K1 者的共享段作業對象在另一個專案 20
-   * @step 有 K1 開啟專案 10 | 脈絡列顯示 e2e-other-system；提示「不在這個專案內」；「問大腦」鈕存在；此時 set_work_target 為 0 則
-   * @step 按「問大腦」 | 面板展開（aria-expanded=true）
+   * @step 有 K1 開啟專案 10 | 脈絡列顯示 e2e-other-system；提示「不在這個專案內」；小助手按鈕存在；此時 set_work_target 為 0 則
+   * @step 按小助手按鈕，再按「關閉」 | 小助手展開（aria-expanded=true、對話窗可見），關閉後對話窗消失
    * @step 按「把作業對象設為這個專案」 | 收到 set_work_target：projectId=10、systemId=null、diagramId=null、segment=shared；提示消失；脈絡列專案層為 e2e-project-detail
-   * @step 沒有 K1 開啟專案 10 | 脈絡列、提示、「問大腦」、建立動作皆不在 DOM；大腦連線數為 0
+   * @step 沒有 K1 開啟專案 10 | 脈絡列、提示、小助手按鈕、建立動作皆不在 DOM；大腦連線數為 0
    * @pass 進頁不送設定；有 K1 才掛載；改設只在使用者按下時發生
    * @story US2.1
    */
@@ -1523,8 +1523,11 @@ test.describe('Project page brain entry', () => {
     await expect(allow.getByTestId('brain-context-name-system')).toHaveText('e2e-other-system');
     await expect(allow.getByTestId('project-target-notice')).toContainText('不在這個專案內');
     expect(server.framesOf('set_work_target')).toHaveLength(0);
-    await allow.getByTestId('brain-subpage-panel-toggle').click();
-    await expect(allow.getByTestId('brain-subpage-panel-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await allow.getByTestId('brain-assistant-toggle').click();
+    await expect(allow.getByTestId('brain-assistant-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await expect(allow.getByTestId('brain-assistant-window')).toBeVisible();
+    // 浮動對話窗是非強制回應、蓋在頁面右側之上：先關閉再操作頁上的提示列（使用者的實際動線）。
+    await allow.getByTestId('brain-assistant-close').click();
 
     await allow.getByTestId('project-target-set').click();
     await expect(allow.getByTestId('project-target-notice')).toHaveCount(0);
@@ -1542,7 +1545,7 @@ test.describe('Project page brain entry', () => {
     await expect(deny.getByTestId('project-system-diagrams')).toBeVisible();
     await expect(deny.getByTestId('brain-context-bar')).toHaveCount(0);
     await expect(deny.getByTestId('project-target-notice')).toHaveCount(0);
-    await expect(deny.getByTestId('brain-subpage-panel')).toHaveCount(0);
+    await expect(deny.getByTestId('brain-assistant-toggle')).toHaveCount(0);
     await expect(deny.getByTestId('system-create-in-workspace-100')).toHaveCount(0);
     expect(denied.conns).toHaveLength(0);
     await denyCtx.close();

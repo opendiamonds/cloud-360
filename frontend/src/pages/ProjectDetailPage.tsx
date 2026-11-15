@@ -17,10 +17,8 @@ import {
   type SystemOut,
 } from '../projects/projectsApi';
 import { readFields, type FieldSetView } from '../projects/requirementsApi';
-import { useBrainConnection } from '../brain/useBrainConnection';
-import { BrainSession } from '../components/brain/BrainSession';
+import { useBrainSession } from '../brain/brainSession';
 import { ContextBar } from '../components/brain/ContextBar';
-import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
 import { ProjectTargetNotice } from '../components/projects/ProjectTargetNotice';
 
 /**
@@ -113,8 +111,10 @@ export const ProjectDetailPage: React.FC = () => {
   const { token, user, can } = useAuth();
   const canSeeFields = can('K4', 'view');
   const canEditFields = can('K4', 'edit');
-  const brainEnabled = can('K1', 'view');
-  const brain = useBrainConnection('entry', { enabled: brainEnabled });
+  // 部署後追加「全站大腦小助手」（2026-11-15）：連線改為全站一條；路由 /projects/* 推導 page='entry'
+  // （brainRoutePage.pageForPath，與本頁原本以 'entry' 開連線相同），讀寫共享段。
+  const brain = useBrainSession();
+  const brainEnabled = brain.enabled;
 
   const [status, setStatus] = useState<DetailStatus>('loading');
   const [project, setProject] = useState<ProjectOut | null>(null);
@@ -314,11 +314,8 @@ export const ProjectDetailPage: React.FC = () => {
           <ProjectDetailHeader project={project} canSeeMembers={can('K3', 'view')} />
           {brainEnabled && (
             <div data-testid="project-brain" className="mb-4 overflow-hidden rounded-xl border border-gray-200">
-              <BrainSession connection={brain}>
-                <ContextBar sharingToggle={false} />
-                <ProjectTargetNotice project={project} />
-                <SubpageBrainPanel />
-              </BrainSession>
+              <ContextBar sharingToggle={false} />
+              <ProjectTargetNotice project={project} />
             </div>
           )}
           <ProjectTabs tabs={tabs} active={active} onSelect={handleSelectTab} />
