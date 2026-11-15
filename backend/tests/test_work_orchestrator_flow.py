@@ -70,6 +70,10 @@ class Harness:
         # 在較慢的 CI 機器上 PUT 尚未完成就被判逾時（PR #723 的 CI 實例）。
         # 非逾時情境的測試一律給足夠大的值；要測逾時的案例自行傳入 persist_timeout。
         kwargs.setdefault("persist_timeout", 100_000)
+        # 同一個問題也打到工作項自己的 deadlineAt（看門迴圈每讓出一次推進一個 tick）：
+        # 把 tick 縮到 0.01 秒，使「真實工作完成前假時鐘就越過期限」需要 50 倍的讓出次數。
+        # 測逾時的案例以 clock.advance 直接推進，不依賴 tick 的大小。
+        kwargs.setdefault("watchdog_tick", 0.01)
         self.store, self.redis = make_store()
         self.clock = FakeClock()
         self.recorder = FacadeRecorder()
