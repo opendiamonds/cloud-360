@@ -65,6 +65,11 @@ def session(diagram_id=12, system_id=None, project_id=None):
 
 class Harness:
     def __init__(self, app=None, **kwargs):
+        # 寫回逾時以 FakeClock 判定，而 FakeClock 每讓出一次事件迴圈就前進一個 tick（0.5 秒）；
+        # PUT 卻走真實的 ASGI transport 與執行緒池。預設 60 秒只等於約 120 次讓出，
+        # 在較慢的 CI 機器上 PUT 尚未完成就被判逾時（PR #723 的 CI 實例）。
+        # 非逾時情境的測試一律給足夠大的值；要測逾時的案例自行傳入 persist_timeout。
+        kwargs.setdefault("persist_timeout", 100_000)
         self.store, self.redis = make_store()
         self.clock = FakeClock()
         self.recorder = FacadeRecorder()
