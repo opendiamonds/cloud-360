@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -30,7 +33,7 @@ if str(backend_dir) not in sys.path:
 if str(backend_dir / "services") not in sys.path:
     sys.path.insert(0, str(backend_dir / "services"))
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -38,30 +41,62 @@ from models import Base, User, UserDiagram
 from services.rbac import ensure_role_permissions_seeded
 
 
-def make_session() -> Session:
+def make_session(*, threaded: bool = False) -> Session:
     # StaticPool：所有連線共用同一個 in-memory 資料庫。預設的 SingletonThreadPool
     # 會讓每個執行緒拿到各自的空資料庫，而 TestClient 在另一個執行緒裡跑 app，
     # 沒有 StaticPool 時端點測試會看到 "no such table"。
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    #
+    # threaded=True：改用暫存檔資料庫，每個連線各自一條 sqlite3 連線。StaticPool 的單一連線
+    # 被兩個執行緒同時使用時會丟 InterfaceError（大腦閘道的定期重驗與收訊重驗都以
+    # `asyncio.to_thread` 開 session，兩者可能同時查 DB），造成機率性失敗；檔案資料庫由
+    # SQLite 自己的鎖序列化，沒有這個問題。
+    tmpdir = None
+    if threaded:
+        tmpdir = tempfile.mkdtemp(prefix="cloud360-test-db-")
+        engine = create_engine(
+            f"sqlite:///{os.path.join(tmpdir, 'test.db')}",
+            connect_args={"check_same_thread": False, "timeout": 30},
+        )
+        # models.py 的全域 connect listener 對每條連線 ATTACH ':memory:' AS memory——在多連線下
+        # 那是每條連線各一份空庫。改附加同目錄的檔案庫，讓 `memory.*` 兩張表跨連線共用。
+        memory_path = os.path.join(tmpdir, "memory.db")
+
+        @event.listens_for(engine, "connect")
+        def _shared_memory_schema(dbapi_connection, _record):
+            cursor = dbapi_connection.cursor()
+            try:
+                try:
+                    cursor.execute("DETACH DATABASE memory")
+                except Exception:
+                    pass  # 本 listener 先於全域 listener 執行時，memory 尚未附加
+                cursor.execute(f"ATTACH DATABASE '{memory_path}' AS memory")
+            finally:
+                cursor.close()
+    else:
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
     ensure_role_permissions_seeded(db, force=True)
     # Keep engine on session for tearDown drop_all
     db._test_engine = engine  # type: ignore[attr-defined]
+    db._test_tmpdir = tmpdir  # type: ignore[attr-defined]
     return db
 
 
 def close_session(db: Session) -> None:
     engine = getattr(db, "_test_engine", None)
+    tmpdir = getattr(db, "_test_tmpdir", None)
     db.close()
     if engine is not None:
         Base.metadata.drop_all(bind=engine)
         engine.dispose()
+    if tmpdir:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def make_user(

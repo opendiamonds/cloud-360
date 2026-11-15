@@ -70,6 +70,8 @@ CONTEXT_PATH = SERVICES_DIR / "intent_routing_context.py"
 PARSER_PATH = SERVICES_DIR / "intent_routing_parser.py"
 PREDICATE_PATH = SERVICES_DIR / "intent_routing_predicate.py"
 PORT_PATH = SERVICES_DIR / "intent_routing_port.py"
+#: ADR-0024：Decisions API 的純函式層（機率 → 槽位）。
+DECISIONS_PATH = SERVICES_DIR / "intent_routing_decisions.py"
 
 #: 本單元的**全部**新模組。清單是**寫死的**而不是 glob——glob 會在有人漏建或
 #: 改名時靜默少驗一個檔，而這一組測試的全部價值在於它涵蓋每一個模組。
@@ -82,6 +84,7 @@ UNIT_MODULES = (
     PARSER_PATH,
     PREDICATE_PATH,
     PORT_PATH,
+    DECISIONS_PATH,
 )
 
 #: `SEC-1`：不自取身分。自取身分會讓同進程呼叫者得以用別人的身分分類與讀記憶。

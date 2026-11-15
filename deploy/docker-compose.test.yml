@@ -127,7 +127,7 @@ services:
       # backend would refuse to start (BR3.4) -- turning every PR's
       # ui-regression red. The values mirror the deploy stack so a routing bug
       # cannot hide behind a different threshold in CI.
-      BRAIN_ROUTER_MODEL: ${BRAIN_ROUTER_MODEL:-typesafe/jev-1.13}
+      BRAIN_ROUTER_MODEL: ${BRAIN_ROUTER_MODEL:-typesafe/jev-1.14}
       BRAIN_ROUTER_TIMEOUT_SEC: ${BRAIN_ROUTER_TIMEOUT_SEC:-5}
       BRAIN_ROUTER_MAX_CALLS_PER_TURN: ${BRAIN_ROUTER_MAX_CALLS_PER_TURN:-1}
       BRAIN_ROUTER_MAX_RETRIES: ${BRAIN_ROUTER_MAX_RETRIES:-0}

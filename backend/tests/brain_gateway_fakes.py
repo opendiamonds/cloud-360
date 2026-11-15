@@ -145,7 +145,14 @@ class FakeRouter:
         self.segment = segment
         self._adapter = adapter
 
-    async def classify(self, principal, session, utterance, *, turn_id: str = "", target_names=None):
+    @property
+    def needs_target_catalog(self) -> bool:
+        """與 `IntentRouter.needs_target_catalog` 同名同義（ADR-0024：Decisions port 才要目錄）。"""
+        return self._shared.needs_target_catalog
+
+    async def classify(
+        self, principal, session, utterance, *, turn_id: str = "", target_names=None, target_catalog=None
+    ):
         shared = self._shared
         shared.calls.append(
             SimpleNamespace(
@@ -154,6 +161,7 @@ class FakeRouter:
                 turn_id=turn_id,
                 thread=threading.get_ident(),
                 target_names=target_names,
+                target_catalog=target_catalog,
             )
         )
         try:
@@ -179,6 +187,7 @@ class RouterScript:
         self.calls: list = []
         self.memory_seen: list = []
         self.before_return: Optional[Callable[[], Any]] = None
+        self.needs_target_catalog: bool = False
 
 
 class FakeOrchestrator:
@@ -398,7 +407,8 @@ class Harness:
     """一組可用的閘道：真 `SessionStore`（Redis 替身）、真認證（SQLite）、其餘以替身注入。"""
 
     def __init__(self, *, max_total: int = 200, max_per_key: int = 10, redis: Optional[WorkItemFakeRedis] = None, rate=None) -> None:
-        self.db = make_session()
+        # threaded：閘道在多個執行緒同時開 session（定期重驗＋收訊重驗），見 helpers.make_session。
+        self.db = make_session(threaded=True)
         self.Session = sessionmaker(bind=self.db._test_engine)
         self.timing = FakeTiming()
         self.redis = redis if redis is not None else WorkItemFakeRedis()

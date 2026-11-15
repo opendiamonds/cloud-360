@@ -2,8 +2,19 @@
 
 **契約（同進程呼叫端依賴，請勿變更）**
 
-本檔是本單元**唯一跨越信任邊界**的一層：使用者的自然語言輸入在這裡離開本平台
-（OpenRouter → `typesafe/jev-1.13`）。
+本檔是本單元**唯一跨越信任邊界**的一層：使用者的自然語言輸入在這裡離開本平台。
+
+兩個 port，**選擇點只有一處**（`select_routing_port`，依 `LLM_PROVIDER`）
+-----------------------------------------------------------------------
+
+| port | 何時 | 出站 |
+|---|---|---|
+| `DecisionsRoutingPort` | `openrouter`（部署環境） | `langgraph_runtime.openrouter_decide` → OpenRouter Decisions API（`typesafe/jev-1.14`，ADR-0024） |
+| `ToolCallingRoutingPort` | `claude-code`（本機開發） | `langgraph_runtime.chat_model` → 工具呼叫（下文的 `[D1]`=A 扁平 schema） |
+
+Jev 是決策模型，chat/completions 端點對它回 400（2026-11-15 實測），所以 openrouter
+下的工具呼叫路徑已不可用；本機 `claude-code` 沒有 Decisions API，照舊走工具呼叫。
+兩個 port 都回既有的 `ClassificationResult`，之後的 `decide()` 與對外形狀不變。
 
 硬約束
 ------
@@ -55,17 +66,30 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any, Final, Mapping, Optional, TypedDict
 
 from services.intent_routing_config import RoutingConfig
-from services.intent_routing_context import RoutingPrompt
+from services.intent_routing_context import (
+    RoutingPrompt,
+    build_routing_prompt,
+    target_choices,
+)
+from services.intent_routing_decisions import (
+    build_questions,
+    build_state,
+    parse_answers,
+    routing_from_answers,
+)
 from services.intent_routing_errors import (
     IntentRoutingError,
     LlmBudgetExceeded,
     LlmUnavailable,
     MalformedRouting,
 )
+from services.intent_routing_parser import parse_classification
 from services.intent_routing_types import (
+    ClassificationResult,
     MAX_CANDIDATES_PER_SLOT,
     MAX_SLOTS,
     MAX_SLOT_INDEX,
@@ -100,9 +124,12 @@ _TRANSPORT_MARKERS: Final = (
     "apiconnection",
 )
 
-#: 本機 claude-code 路徑「模型回了東西但形狀不對」的例外類別名。與上面一樣以名稱
-#: 比對，不讓本檔 import 該模組。
-_MALFORMED_RESPONSE_CLASS: Final = "ClaudeCodeMalformedToolCall"
+#: 「模型回了東西但形狀不對」的例外類別名：本機 claude-code 路徑的
+#: `ClaudeCodeMalformedToolCall`，與 Decisions 路徑 2xx 但本文不是 JSON 物件的
+#: `DecisionsMalformedResponse`。與上面一樣以名稱比對，不讓本檔 import 那兩個模組。
+_MALFORMED_RESPONSE_CLASSES: Final = frozenset(
+    ("ClaudeCodeMalformedToolCall", "DecisionsMalformedResponse")
+)
 
 
 class _RouterState(TypedDict, total=False):
@@ -321,8 +348,8 @@ def classify_transport_failure(exc: BaseException) -> BaseException:
     """
     if isinstance(exc, IntentRoutingError):
         return exc
-    if type(exc).__name__ == _MALFORMED_RESPONSE_CLASS:
-        return MalformedRouting("模型沒有呼叫路由工具（回了文字而不是結構化決策）")
+    if type(exc).__name__ in _MALFORMED_RESPONSE_CLASSES:
+        return MalformedRouting(f"模型回應形狀不對：{type(exc).__name__}")
     message = str(exc).lower()
     status = _status_code(exc)
     if status == 402 or any(marker in message for marker in _BUDGET_MARKERS):
@@ -418,8 +445,32 @@ async def arun_routing(graph: Any, prompt: RoutingPrompt, budget: CallBudget) ->
     `budget.consume()` 在呼叫**之前**，所以上限為 0 時一次也不會發出去。
     """
     budget.consume()
+    state = await _call_with_typed_failures(
+        lambda: graph.ainvoke({"system": prompt.system, "user": prompt.user})
+    )
+    args = state.get("tool_args") if isinstance(state, Mapping) else None
+    if not isinstance(args, Mapping):
+        raise MalformedRouting("圖執行完成但沒有帶回 tool call 的引數")
+    return dict(args)
+
+
+# ---------------------------------------------------------------------------
+# 兩個 port 與唯一的選擇點
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RoutedClassification:
+    """port 的輸出：既有的 `ClassificationResult` ＋ 是否必須反問（只有 Decisions 會設）。"""
+
+    result: ClassificationResult
+    force_clarify: bool = False
+
+
+async def _call_with_typed_failures(call: Any) -> Any:
+    """跑一次出站呼叫；失敗依 `classify_transport_failure` 分型後向上傳遞，不靜默。"""
     try:
-        state = await graph.ainvoke({"system": prompt.system, "user": prompt.user})
+        return await call()
     except BaseException as exc:  # 外部依賴邊界：分型後向上傳遞，不靜默
         mapped = classify_transport_failure(exc)
         logger.warning(
@@ -430,13 +481,134 @@ async def arun_routing(graph: Any, prompt: RoutingPrompt, budget: CallBudget) ->
         if mapped is exc:
             raise
         raise mapped from exc
-    args = state.get("tool_args") if isinstance(state, Mapping) else None
-    if not isinstance(args, Mapping):
-        raise MalformedRouting("圖執行完成但沒有帶回 tool call 的引數")
-    return dict(args)
+
+
+class ToolCallingRoutingPort:
+    """工具呼叫路徑（本機 `claude-code`；測試也以注入的 factory／builder 使用它）。
+
+    `P-4`：client 與圖在第一次 `route` 時建立，之後同一個實例重用。
+    """
+
+    needs_target_catalog: bool = False
+
+    def __init__(
+        self,
+        config: RoutingConfig,
+        *,
+        model_factory: Optional[Any] = None,
+        graph_builder: Optional[Any] = None,
+    ) -> None:
+        self._config = config
+        self._model_factory = model_factory or router_chat_model
+        self._graph_builder = graph_builder or compile_routing_graph
+        self._graph: Any = None
+
+    def _compiled_graph(self) -> Any:
+        if self._graph is None:
+            self._graph = self._graph_builder(self._model_factory(self._config))
+        return self._graph
+
+    async def route(
+        self,
+        *,
+        text: str,
+        work_target_hint: Optional[str],
+        recent_messages: Any,
+        memory_notes: Any,
+        budget: CallBudget,
+        target_catalog: Any = (),
+    ) -> RoutedClassification:
+        prompt = build_routing_prompt(
+            user_text=text,
+            work_target_hint=work_target_hint,
+            recent_messages=recent_messages,
+            memory_notes=memory_notes,
+        )
+        payload = await arun_routing(self._compiled_graph(), prompt, budget)
+        return RoutedClassification(result=parse_classification(payload))
+
+
+class DecisionsRoutingPort:
+    """OpenRouter Decisions API 路徑（ADR-0024）。
+
+    - 每輪恰一次請求（`CallBudget`，`NFR3.62`），逾時與重試取自 `RoutingConfig`
+      （`BRAIN_ROUTER_TIMEOUT_SEC`／`BRAIN_ROUTER_MAX_RETRIES`），語意與工具呼叫路徑相同。
+    - 失敗分型沿用 `classify_transport_failure`：4xx／5xx／逾時／連線 → `LlmUnavailable`，
+      402 → `LlmBudgetExceeded`，`refusal`／形狀不符 → `MalformedRouting`。
+      **沒有 fallback 模型**：失敗就讓閘道照現有方式回覆（`NFR10`／`TS-2`）。
+    - `RuntimeAuthError`（金鑰缺失）原樣傳遞，理由見模組 docstring。
+    """
+
+    needs_target_catalog: bool = True
+
+    def __init__(self, config: RoutingConfig, *, transport: Any = None) -> None:
+        self._config = config
+        self._transport = transport
+
+    async def route(
+        self,
+        *,
+        text: str,
+        work_target_hint: Optional[str],
+        recent_messages: Any,
+        memory_notes: Any,
+        budget: CallBudget,
+        target_catalog: Any = (),
+    ) -> RoutedClassification:
+        from services.langgraph_runtime import openrouter_decide
+
+        targets = target_choices(tuple(target_catalog or ()))
+        questions = build_questions(targets)
+        state = build_state(
+            user_text=text,
+            work_target_hint=work_target_hint,
+            memory_notes=tuple(memory_notes or ()),
+        )
+        budget.consume()
+        body = await _call_with_typed_failures(
+            lambda: openrouter_decide(
+                model=self._config.model,
+                state=state,
+                questions=questions,
+                timeout_seconds=self._config.timeout_seconds,
+                max_retries=self._config.max_retries,
+                transport=self._transport,
+            )
+        )
+        answers = parse_answers(body, tuple(key for key, _o, _s in targets))
+        routed = routing_from_answers(answers, self._config.confidence_threshold, targets)
+        return RoutedClassification(result=routed.result, force_clarify=routed.force_clarify)
+
+
+def select_routing_port(
+    config: RoutingConfig,
+    *,
+    model_factory: Optional[Any] = None,
+    graph_builder: Optional[Any] = None,
+) -> Any:
+    """**唯一的選擇點**：依 `LLM_PROVIDER` 決定這個行程的路由 port。
+
+    - 呼叫端明文注入 `model_factory`／`graph_builder`（測試）→ 工具呼叫 port。
+      那是建構而不是選擇：注入就代表要的是工具呼叫路徑。
+    - `claude-code`（本機）→ 工具呼叫 port。
+    - 其他（`openrouter`，含部署環境）→ Decisions port。
+    """
+    if model_factory is not None or graph_builder is not None:
+        return ToolCallingRoutingPort(
+            config, model_factory=model_factory, graph_builder=graph_builder
+        )
+    from services.llm_provider import CLAUDE_CODE, get_provider
+
+    if get_provider() == CLAUDE_CODE:
+        return ToolCallingRoutingPort(config)
+    return DecisionsRoutingPort(config)
 
 
 __all__ = [
+    "DecisionsRoutingPort",
+    "RoutedClassification",
+    "ToolCallingRoutingPort",
+    "select_routing_port",
     "ROUTING_TOOL_NAME",
     "CallBudget",
     "arun_routing",

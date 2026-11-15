@@ -17,8 +17,8 @@
 | L1 guard | 本檔（`prompt_guard` 前置） | 既有純函式 |
 | **L0 fetch** | **本檔**——**本單元唯一的讀取 I/O 點** | **不純** |
 | L2 context-builder | `intent_routing_context.py` | 純函式 |
-| L3 model-port | `intent_routing_port.py`——唯一的出站 I/O 點 | 不純 |
-| L4 parser | `intent_routing_parser.py` | 純函式 |
+| L3 model-port | `intent_routing_port.py`——唯一的出站 I/O 點（Decisions／工具呼叫兩個 port，ADR-0024） | 不純 |
+| L4 parser | `intent_routing_parser.py`（工具呼叫）／`intent_routing_decisions.py`（Decisions：機率 → 槽位） | 純函式 |
 | L5 predicate | `intent_routing_predicate.py` | 純函式（**PBT 落點**） |
 
 **L0 與 L2 分離是刻意的**：取資料的 I/O 放在 L2 之外（本檔先取好再傳進去），
@@ -74,19 +74,10 @@ from dataclasses import dataclass
 from typing import Any, Callable, Final, Mapping, Optional, Sequence, Tuple
 
 from services.intent_routing_config import RoutingConfig, resolve_routing_config
-from services.intent_routing_context import (
-    RoutingPrompt,
-    build_routing_prompt,
-    format_work_target,
-)
+from services.intent_routing_context import format_work_target
+from services.intent_routing_decisions import effective_threshold
 from services.intent_routing_errors import PlatformSelfModificationRefused
-from services.intent_routing_parser import parse_classification
-from services.intent_routing_port import (
-    CallBudget,
-    arun_routing,
-    compile_routing_graph,
-    router_chat_model,
-)
+from services.intent_routing_port import CallBudget, select_routing_port
 from services.intent_routing_predicate import can_dispatch, decide
 from services.intent_routing_types import (
     PROMPT_GUARD_HIT,
@@ -340,8 +331,8 @@ class IntentRouter:
     |---|---|
     | `memory_facade` | `K-08` 的 `MemoryFacade`（唯讀）。`None` 時視為記憶降級 |
     | `config` | `RoutingConfig`；省略則於建構時解析環境變數（門檻缺值即拋） |
-    | `model_factory` | 預設 `router_chat_model`；測試以替身取代 |
-    | `graph_builder` | 預設 `compile_routing_graph` |
+    | `port` | 路由 port；省略則由 `select_routing_port` 依 `LLM_PROVIDER` 選（唯一選擇點） |
+    | `model_factory`／`graph_builder` | 注入時改用工具呼叫 port 並以它們建 client 與圖（測試替身） |
     | `observer` | 預設 `log_routing_observation` |
 
     **`P-4`（連線重用）的落法是實例層快取，不是模組層。**
@@ -352,6 +343,10 @@ class IntentRouter:
     ——`NFR3.67` 的結構斷言因此不需要為它開一個白名單例外。
     快取在第一次 `classify` 時建立；事件迴圈是單執行緒的，故不需要鎖
     （`threading.Lock` 在 asyncio 的 `await` 邊界上只會給出錯誤的安全感）。
+    這段只對**工具呼叫 port** 成立（快取在 `ToolCallingRoutingPort` 實例上）。
+    **Decisions port 目前每輪新建一個 `httpx.AsyncClient`**，P-4 在該路徑尚未落實
+    ——已列為 ADR-0024 與 `operation/followups/jev-decisions-router.md` 的未完成項；
+    實測延遲 389–664 ms（含握手）仍在 800 ms 預算內。
     """
 
     def __init__(
@@ -363,18 +358,24 @@ class IntentRouter:
         graph_builder: Optional[Callable[[Any], Any]] = None,
         observer: Optional[Callable[[RoutingObservation], None]] = None,
         segment_id: str = SEGMENT_SHARED,
+        port: Any = None,
     ) -> None:
         self._memory_facade = memory_facade
         self._config = config if config is not None else resolve_routing_config()
-        self._model_factory = model_factory or router_chat_model
-        self._graph_builder = graph_builder or compile_routing_graph
+        self._port = port or select_routing_port(
+            self._config, model_factory=model_factory, graph_builder=graph_builder
+        )
         self._observer = observer or log_routing_observation
         self._segment_id = segment_id
-        self._graph: Any = None
 
     @property
     def config(self) -> RoutingConfig:
         return self._config
+
+    @property
+    def needs_target_catalog(self) -> bool:
+        """閘道是否要在 `classify` 前取使用者可見的專案／系統名稱（Decisions port 才要）。"""
+        return bool(getattr(self._port, "needs_target_catalog", False))
 
     def _observe(self, observation: RoutingObservation) -> None:
         """寫出一筆觀測，**並且吞掉它自己的失敗**。
@@ -398,20 +399,6 @@ class IntentRouter:
                 type(exc).__name__,
             )
 
-    def _compiled_graph(self) -> Any:
-        if self._graph is None:
-            self._graph = self._graph_builder(self._model_factory(self._config))
-        return self._graph
-
-    def build_prompt(self, context: RoutingContext, text: str) -> RoutingPrompt:
-        """L0 的產出 → L2 的輸入。拆成一個方法只為了讓它可被單獨讀。"""
-        return build_routing_prompt(
-            user_text=text,
-            work_target_hint=context.work_target_hint,
-            recent_messages=context.recent_messages,
-            memory_notes=context.memory_notes,
-        )
-
     async def classify(
         self,
         principal: Any,
@@ -420,6 +407,7 @@ class IntentRouter:
         *,
         turn_id: str = "",
         target_names: Optional[Mapping[str, Optional[str]]] = None,
+        target_catalog: Sequence[str] = (),
     ) -> IntentDecision:
         """`K-10`：把一句自然語言判定為 `IntentDecision`。
 
@@ -429,8 +417,10 @@ class IntentRouter:
            （`BR1.2`）並拋 `PlatformSelfModificationRefused`。
         2. L0 取該段作業對象與歷程、取語意／程序記憶（`BR5.1`／`NFR7.62`）。
         3. L2 組出**最少上下文**的 prompt（`BR6.1`）。
-        4. L3 發出**恰一次** tool call（`NFR3.62`／`NFR3.63`）。
-        5. L4 把扁平回應還原成**槽位 × 候選**兩層並跑 `V-1`～`V-5`。
+        4. L3 發出**恰一次**模型請求（`NFR3.62`／`NFR3.63`）：openrouter 走 Decisions
+           API、本機 claude-code 走 tool call（ADR-0024）。
+        5. L4 還原成**槽位 × 候選**兩層：工具呼叫跑 `V-1`～`V-5`；Decisions 把機率
+           轉成槽位（`intent_routing_decisions.routing_from_answers`）。
         6. L5 對每槽位求 `can_single_out`、以 `BR4.2` AND 聚合、填入
            `IntentDecision`。
 
@@ -447,6 +437,10 @@ class IntentRouter:
         對象三層名稱，用來把 prompt 的作業對象寫成名稱而非 `#id`。本層**不自己查名稱**——
         查名稱要 DB，而本單元的 L0 只讀傳進來的 session 與記憶 facade。省略時取不到名稱的
         層寫「（名稱無法取得）」。
+
+        `target_catalog` 同為關鍵字、選用（ADR-0024）：使用者可見的專案與系統名稱，
+        Decisions port 據以組出 `named_target` 的選項；工具呼叫 port 不讀它。
+        `needs_target_catalog` 為假時閘道不必取。
 
         **`prompt_guard` 命中為什麼拋例外而不回 `IntentDecision`**：
         固定拒絕訊息不是一個 `IntentDecision`（兩邊皆空會違反 `EC5`），
@@ -487,13 +481,19 @@ class IntentRouter:
                 segment_id=self._segment_id,
                 target_names=target_names,
             )
-            payload = await arun_routing(
-                self._compiled_graph(),
-                self.build_prompt(context, text),
-                CallBudget(self._config.max_calls_per_turn),
+            routed = await self._port.route(
+                text=text,
+                work_target_hint=context.work_target_hint,
+                recent_messages=context.recent_messages,
+                memory_notes=context.memory_notes,
+                budget=CallBudget(self._config.max_calls_per_turn),
+                target_catalog=target_catalog,
             )
-            result = parse_classification(payload)
-            decision = decide(result, self._config.confidence_threshold)
+            result = routed.result
+            threshold = effective_threshold(
+                self._config.confidence_threshold, routed.force_clarify
+            )
+            decision = decide(result, threshold)
         except BaseException as exc:
             self._observe(
                 RoutingObservation(
@@ -519,9 +519,7 @@ class IntentRouter:
                 slot_count=len(result.slots),
                 capability_ranks=_capability_ranks(result),
                 scores_available=result.scores_available,
-                can_single_out=can_dispatch(
-                    result, self._config.confidence_threshold
-                ),
+                can_single_out=can_dispatch(result, threshold),
                 elapsed_ms=elapsed_ms(),
                 error_kind=None,
                 memory_degraded=context.memory_degraded,
