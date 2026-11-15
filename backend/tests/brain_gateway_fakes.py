@@ -407,7 +407,8 @@ class Harness:
     """一組可用的閘道：真 `SessionStore`（Redis 替身）、真認證（SQLite）、其餘以替身注入。"""
 
     def __init__(self, *, max_total: int = 200, max_per_key: int = 10, redis: Optional[WorkItemFakeRedis] = None, rate=None) -> None:
-        self.db = make_session()
+        # threaded：閘道在多個執行緒同時開 session（定期重驗＋收訊重驗），見 helpers.make_session。
+        self.db = make_session(threaded=True)
         self.Session = sessionmaker(bind=self.db._test_engine)
         self.timing = FakeTiming()
         self.redis = redis if redis is not None else WorkItemFakeRedis()
