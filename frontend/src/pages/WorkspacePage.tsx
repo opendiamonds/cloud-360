@@ -11,12 +11,10 @@ import { useCollaboration } from '../hooks/useCollaboration';
 import { apiUrl } from '../config/api';
 import { isCanvasDirty } from '../utils/unsavedWork';
 import { isNewDiagramHandoff } from '../projects/workspaceHandoff';
-import { useBrainConnection } from '../brain/useBrainConnection';
+import { useBrainSession } from '../brain/brainSession';
 import { useWorkspaceTargetSync } from '../brain/useWorkspaceTargetSync';
-import { BrainSession } from '../components/brain/BrainSession';
 import { ContextBar } from '../components/brain/ContextBar';
 import { SyncNotice } from '../components/brain/SyncNotice';
-import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
 
 interface Diagram {
   id: number;
@@ -107,10 +105,12 @@ export const WorkspacePage = () => {
   });
   const [canvasLayoutEpoch, setCanvasLayoutEpoch] = useState(0);
 
-  // U14：大腦掛點（脈絡列、同步提示、「問大腦」面板）只在 K1 view 時掛載；無 K1 時不開連線，
+  // U14：大腦掛點（脈絡列、同步提示）只在 K1 view 時掛載；無 K1 時不開連線，
   // 同步掛點的全部入口為 no-op（security-design §六之二、nfr-design R-05）。
-  const brainEnabled = can('K1', 'view');
-  const brain = useBrainConnection('workspace', { enabled: brainEnabled });
+  // 部署後追加「全站大腦小助手」（2026-11-15）：連線改為全站一條（BrainConnectionProvider，路由 /workspace
+  // 推導 page='workspace'），本頁不再自己開；`enabled` 即 K1 view。「問大腦」面板由浮動小助手取代。
+  const brain = useBrainSession();
+  const brainEnabled = brain.enabled;
   // 首次對齊要開的圖交給既有 handleLoadDiagram（定義在下方）；以 ref 轉送，只在事件回呼內被讀取。
   const loadDiagramRef = useRef<(id: number) => void>(() => undefined);
   const openDiagramForBrain = useCallback((id: number) => loadDiagramRef.current(id), []);
@@ -959,13 +959,15 @@ export const WorkspacePage = () => {
 
   return (
     <div className="flex h-full w-full flex-col">
-    {/* U14（BR97.1、BR97.4）：脈絡列（可切換共享）、同步提示與收合的「問大腦」面板；只在 K1 view 時掛載。 */}
+    {/*
+      U14（BR97.1）：作業對象列（可切換共享）與同步提示；只在 K1 view 時掛載。部署後追加「全站大腦小助手」
+      （2026-11-15）：原本的收合「問大腦」面板（[EP1]=A）由全站浮動小助手取代，本頁既有的設計對話區不動。
+    */}
     {brainEnabled && (
-      <BrainSession connection={brain}>
+      <>
         <ContextBar sharingToggle />
         <SyncNotice sync={brainSync} />
-        <SubpageBrainPanel />
-      </BrainSession>
+      </>
     )}
     <div className="relative flex flex-1 min-h-0 w-full overflow-hidden">
       {toast?.type === 'error' && (

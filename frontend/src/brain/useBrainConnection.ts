@@ -1,7 +1,14 @@
 /**
- * useBrainConnection — 一個頁面的大腦 WebSocket 連線（`BR92.x`；performance-design §一）
+ * useBrainConnection — 全站唯一的大腦 WebSocket 連線（`BR92.x`；performance-design §一）
  *
- * **每頁一條**（`EPN-01`）：連線在**一個** effect 內建立；`WebSocket`、退避計時器、首次失敗時刻、
+ * **全站一條**（部署後追加「全站大腦小助手」，2026-11-15；取代原本的「每頁一條」`EPN-01`）：只由
+ * `BrainConnectionProvider` 呼叫一次。`page` 由目前路由推導（`brainRoutePage.pageForPath`），但**不是**連線的
+ * 參數——握手只有 `hello{v}`（`clientFrame('hello', …)`），`page` 是每則 `user_message` 的欄位、`scope` 是每則
+ * `set_sharing_mode` 的欄位（閘道 `brain_gateway.py` 以 `payload.page` 逐則決定段）。所以換頁不重連：effect 的
+ * 依賴不含 `page`；三個 scope 的共享模式與各段作業對象都以伺服器推送為準保存在本 hook，讀取段依目前 `page`
+ * 在 render 時推導。
+ *
+ * 連線在**一個** effect 內建立；`WebSocket`、退避計時器、首次失敗時刻、
  * 連線 id 放在 `useRef`，只在 effect 的 setup／cleanup 與事件回呼內讀寫（render 期間不讀 ref）。
  *
  * cleanup 依序：清除退避計時器 → 把本連線未終止的輪次轉 interrupted（`BR93.7`）→ `ws.close(1000)` → ref 歸 null。
@@ -31,6 +38,7 @@ import {
   type BrainPage,
   type SegmentId,
   type SharingMode,
+  type SubPage,
   type WorkItem,
   type WorkTargetPayload,
 } from './brainProtocol';
@@ -49,6 +57,11 @@ const BRAIN_WS_PATH = '/api/brain/ws';
 
 interface Options {
   enabled: boolean;
+  /**
+   * 目前畫面是否以浮動小助手呈現對話（＝不在入口頁）。為 true 時終止的輪次計入 `assistantReplyCount`，
+   * 供小助手判斷收合期間的未讀；入口頁本身就是整頁對話，那裡的回覆不算未讀。
+   */
+  assistantSurface: boolean;
 }
 
 /**
@@ -80,6 +93,9 @@ interface LastSent {
 
 const NOTHING_SENT: LastSent = { kind: 'other', userItemId: null, answered: true };
 
+type SharingModes = Partial<Record<SubPage, SharingMode>>;
+type SegmentTargets = Partial<Record<SegmentId, WorkTargetPayload>>;
+
 /** 非輪次請求送出後的標記：待決的 user_message／反問選擇保留，其餘歸為 `other`（R-08）。 */
 function afterNonTurnSend(last: LastSent): LastSent {
   return !last.answered && last.kind !== 'other' ? last : NOTHING_SENT;
@@ -88,13 +104,15 @@ function afterNonTurnSend(last: LastSent): LastSent {
 /** 零寬空白：螢幕閱讀器不念，但使相同文字的第二次播報仍是一次 DOM 內容變更（R-12）。 */
 const REANNOUNCE_MARK = String.fromCharCode(0x200b);
 
-export function useBrainConnection(page: BrainPage, { enabled }: Options): BrainConnection {
+export function useBrainConnection(page: BrainPage, { enabled, assistantSurface }: Options): BrainConnection {
   const { token, refreshMe } = useAuth();
   const { dispatch } = useBrainTranscript();
 
   const [status, setStatus] = useState<ConnectionStatus>(() => (enabled ? 'connecting' : 'idle'));
-  const [sharingMode, setSharingModeState] = useState<SharingMode | null>(null);
-  const [target, setTarget] = useState<WorkTargetPayload | null>(null);
+  // 伺服器推送的各 scope 共享模式與各段作業對象（快照與扇出都逐項取代）。目前頁的值在 render 時推導。
+  const [sharingModes, setSharingModes] = useState<SharingModes>({});
+  const [targets, setTargets] = useState<SegmentTargets>({});
+  const [assistantReplyCount, setAssistantReplyCount] = useState(0);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [pendingCorrections, setPendingCorrections] = useState<string[]>([]);
   const [awaitingReply, setAwaitingReply] = useState(false);
@@ -104,8 +122,15 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   const wsRef = useRef<WebSocket | null>(null);
   const connIdRef = useRef<string | null>(null);
   const readySentRef = useRef(false);
-  const readSegmentRef = useRef<SegmentId>(segmentFor(page, null));
-  const targetsRef = useRef<Partial<Record<SegmentId, WorkTargetPayload>>>({});
+  const sharingMode: SharingMode | null = page === 'entry' ? null : sharingModes[page] ?? null;
+  const readSegment = segmentFor(page, sharingMode);
+  const target = targets[readSegment] ?? null;
+
+  // 事件回呼讀的「目前頁／目前讀取段」：每次 render 後同步（render 期間不寫 ref）。
+  const pageRef = useRef<BrainPage>(page);
+  const assistantSurfaceRef = useRef(assistantSurface);
+  const readSegmentRef = useRef<SegmentId>(readSegment);
+  const targetsRef = useRef<SegmentTargets>({});
   const turnTextRef = useRef<Map<string, string>>(new Map());
   const costTurnsRef = useRef<Set<string>>(new Set());
   const forbiddenRefreshedRef = useRef(false);
@@ -115,6 +140,9 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
 
   useEffect(() => {
     latestRef.current = { refreshMe, dispatch };
+    pageRef.current = page;
+    assistantSurfaceRef.current = assistantSurface;
+    readSegmentRef.current = readSegment;
   });
 
   useEffect(() => {
@@ -135,6 +163,12 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
     // LiveRegion 元件簽章不動（其檔頭契約）；更新式為純函式，不就地修改任何物件。
     const announceFresh = (text: string) => {
       setAnnouncement((prev) => (prev === text ? `${text}${REANNOUNCE_MARK}` : text));
+    };
+
+    // 一輪在入口頁以外終止（done／帶輪次的 error／反問）：小助手收合時據此顯示未讀。入口頁的回覆就在整頁
+    // 對話上，不算未讀。判定依畫面（是否在入口頁），不依 page：專案、記憶、成本頁的 page 也是 entry。
+    const countAssistantReply = () => {
+      if (assistantSurfaceRef.current) setAssistantReplyCount((n) => n + 1);
     };
 
     // 本連線收到任何輪次訊息：最後送出的 user_message 已被受理（不再視為可被非輪次錯誤拒絕）。
@@ -185,7 +219,8 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
             readySentRef.current = true;
             // 重連後以伺服器推送覆蓋（NFR4.140）：快照緊接在 ready 之後到達。
             targetsRef.current = {};
-            setTarget(null);
+            setTargets({});
+            // 共享模式不在此清空：快照緊接著送全部 scope 的 sharing_mode，先清空會讓獨立段的畫面閃回共享段。
             setWorkItems([]);
             setPendingCorrections([]);
             setStatus('ready');
@@ -222,6 +257,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
             const turnId = env.turnId ?? (env.payload as Schemas['DonePayload']).turnId;
             act({ type: 'done', turnId, segment, connId: myConnId, id: nextLocalId('brain') });
             setAwaitingReply(false);
+            countAssistantReply();
             // 完成時把整段寫入 LiveRegion 一次（BR93.6；寫入點只有這裡與 error）。
             const text = turnTextRef.current.get(turnId);
             const hadCard = costTurnsRef.current.delete(turnId);
@@ -269,6 +305,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
               id: nextLocalId('brain'),
             });
             setAwaitingReply(false);
+            countAssistantReply();
             turnTextRef.current.delete(turnId);
             announceFresh(payload.message);
             return;
@@ -279,6 +316,7 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
             act({ type: 'clarify', turnId: env.turnId, payload, segment, connId: myConnId, id: nextLocalId('clarify') });
             // 反問後該輪等使用者選擇，伺服器此時不送 done：解除等待，讓使用者可回答或改說新句（BR95.5）。
             setAwaitingReply(false);
+            countAssistantReply();
             return;
           }
           case 'work_items': {
@@ -291,19 +329,20 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
           }
           case 'sharing_mode': {
             const payload = env.payload as Schemas['SharingModePayload'];
-            // 入口頁忽略全部 sharing_mode；子頁面只套用 scope 相符者（BR92.4）。
-            if (page === 'entry' || payload.scope !== page) return;
-            const nextSegment = segmentFor(page, payload.mode);
-            readSegmentRef.current = nextSegment;
-            setSharingModeState(payload.mode);
-            setTarget(targetsRef.current[nextSegment] ?? null);
+            // 全站一條連線：每個 scope 的模式都記下（快照會送全部 scope）；目前頁只讀自己 scope 的值，
+            // 入口頁恆讀共享段（BR92.4 的過濾改在 render 時推導 readSegment）。
+            setSharingModes((prev) => ({ ...prev, [payload.scope]: payload.mode }));
+            const current = pageRef.current;
+            if (current !== 'entry' && payload.scope === current) {
+              readSegmentRef.current = segmentFor(current, payload.mode);
+            }
             return;
           }
           case 'work_target': {
             const payload = env.payload as Schemas['WorkTargetPayload'];
             targetsRef.current = { ...targetsRef.current, [payload.segment]: payload };
+            setTargets(targetsRef.current);
             if (payload.segment !== readSegmentRef.current) return;
-            setTarget(payload);
             listenersRef.current.onWorkTarget?.(payload);
             return;
           }
@@ -373,7 +412,8 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
       readySentRef.current = false;
       if (ws) ws.close(1000);
     };
-  }, [enabled, token, page, attempt]);
+    // `page` 刻意不在依賴內：換頁不重連（見檔頭）。
+  }, [enabled, token, attempt]);
 
   const sendFrame = useCallback((frame: string): boolean => {
     const ws = wsRef.current;
@@ -387,14 +427,15 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
       const trimmed = text.trim();
       if (!trimmed) return;
       const connId = connIdRef.current;
+      // page 帶送出當下的路由推導值（每則訊息各自帶，閘道據此決定段）。
       if (!connId || !sendFrame(clientFrame('user_message', { text, page }))) return;
       const id = nextLocalId('user');
       lastSentRef.current = { kind: 'user_message', userItemId: id, answered: false };
       // 使用者輪次打上連線 id，供卸載或斷線時轉 interrupted（BR93.7、BR92.7）。
-      dispatch({ type: 'appendUser', segment: readSegmentRef.current, id, text, connId });
+      dispatch({ type: 'appendUser', segment: readSegment, id, text, connId });
       setAwaitingReply(true);
     },
-    [dispatch, page, sendFrame],
+    [dispatch, page, readSegment, sendFrame],
   );
 
   const selectCandidate = useCallback(
@@ -426,10 +467,10 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
   );
 
   const setWorkTarget = useCallback((ids: WorkTargetIds): boolean => {
-    const sent = sendFrame(clientFrame('set_work_target', { ...ids, segment: readSegmentRef.current }));
+    const sent = sendFrame(clientFrame('set_work_target', { ...ids, segment: readSegment }));
     if (sent) lastSentRef.current = afterNonTurnSend(lastSentRef.current);
     return sent;
-  }, [sendFrame]);
+  }, [readSegment, sendFrame]);
 
   const announce = useCallback((text: string) => setAnnouncement(text), []);
 
@@ -449,9 +490,10 @@ export function useBrainConnection(page: BrainPage, { enabled }: Options): Brain
     page,
     enabled,
     status: enabled && status === 'idle' ? 'connecting' : status,
-    readSegment: segmentFor(page, sharingMode),
-    sharingMode: page === 'entry' ? null : sharingMode,
+    readSegment,
+    sharingMode,
     target,
+    assistantReplyCount,
     workItems,
     pendingCorrections,
     awaitingReply,

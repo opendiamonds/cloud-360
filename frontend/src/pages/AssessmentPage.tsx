@@ -8,12 +8,10 @@ import { downloadReviewPdf } from '../utils/exportReviewPdf';
 import { exportDiagramToPngDataUrl } from '../utils/exportDiagramPng';
 import { buildOptimizeSuggestionsSummary, normalizeOptimizeFinding } from '../utils/optimizeSuggestions';
 import { toPlainSuggestionText } from '../lib/plainText';
-import { useBrainConnection } from '../brain/useBrainConnection';
+import { useBrainSession } from '../brain/brainSession';
 import { useAssessmentTargetSync } from '../brain/useAssessmentTargetSync';
-import { BrainSession } from '../components/brain/BrainSession';
 import { ContextBar } from '../components/brain/ContextBar';
 import { SyncNotice } from '../components/brain/SyncNotice';
-import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
 
 type DiagramItem = {
   id: number;
@@ -244,8 +242,9 @@ export const AssessmentPage = () => {
   const selectedDiagramId = diagramOverride ?? urlDiagramId;
 
   // U14：大腦掛點只在 K1 view 時掛載；無 K1 時不開連線、同步掛點全部 no-op（nfr-design R-05）。
-  const brainEnabled = can('K1', 'view');
-  const brain = useBrainConnection('assessment', { enabled: brainEnabled });
+  // 部署後追加「全站大腦小助手」（2026-11-15）：連線改為全站一條（路由 /assessment 推導 page='assessment'）。
+  const brain = useBrainSession();
+  const brainEnabled = brain.enabled;
   const openDiagramForBrain = useCallback((id: number) => setDiagramOverride(id), []);
   const brainSync = useAssessmentTargetSync(brain, {
     selectedDiagramId,
@@ -1233,14 +1232,14 @@ export const AssessmentPage = () => {
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* U14（BR97.1、BR97.4）：脈絡列（可切換共享）、同步提示與收合的「問大腦」面板；只在 K1 view 時掛載。 */}
+        {/*
+          U14（BR97.1）：作業對象列（可切換共享）與同步提示；只在 K1 view 時掛載。部署後追加「全站大腦小助手」
+          （2026-11-15）：原本的收合「問大腦」面板（[EP1]=A）由全站浮動小助手取代，本頁既有的評核對話區不動。
+        */}
         {brainEnabled && (
           <div className="overflow-hidden rounded-2xl border border-gray-200">
-            <BrainSession connection={brain}>
-              <ContextBar sharingToggle />
-              <SyncNotice sync={brainSync} />
-              <SubpageBrainPanel />
-            </BrainSession>
+            <ContextBar sharingToggle />
+            <SyncNotice sync={brainSync} />
           </div>
         )}
         <div className="flex items-start justify-between gap-4">

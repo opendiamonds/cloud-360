@@ -97,28 +97,27 @@ test.describe('U14 entry page live stack', () => {
   });
 
   /**
-   * @purpose 依序進工作區與評核頁時，每頁恰一條未關閉的大腦連線，前一頁那條已關閉（EPN-01）。
+   * @purpose 依序進工作區與評核頁時，全程只有一條大腦連線、換頁不重連（2026-11-15 起全站一條，取代原本「每頁一條、換頁即關舊開新」的 EPN-01；舊名「三頁各自一條連線且前一頁的已關閉」，見 followups/global-brain-assistant.md）。
    * @api POST /api/auth/login -> 200 | 帳密驗證，成功時回 access_token
    * @ui /workspace | 工作區脈絡列
    * @ui /assessment | 評核頁脈絡列
    * @given 真實測試 stack；admin 已登入（WS /api/brain/ws）
-   * @step 經 Sidebar 進 /workspace | 新開 1 條大腦連線、入口頁那條已關閉
-   * @step 經 Sidebar 進 /assessment | 再新開一條、工作區那條已關閉
-   * @pass 任一時刻未關閉的大腦連線恰 1 條
+   * @step 經 Sidebar 進 /workspace | 脈絡列就緒；大腦連線總數仍為 1、未關閉
+   * @step 經 Sidebar 進 /assessment | 脈絡列就緒；大腦連線總數仍為 1、未關閉
+   * @pass 換頁兩次後，建立過的大腦連線恰 1 條且未關閉
    * @story US8.1
    */
-  test('三頁各自一條連線且前一頁的已關閉', async ({ page }) => {
+  test('三頁切換全程只有一條大腦連線', async ({ page }) => {
     const sockets = trackBrainSockets(page);
     await login(page);
     await waitReady(page);
+    await expect.poll(() => sockets.length).toBe(1);
     for (const path of ['/workspace', '/assessment']) {
-      const before = sockets.length;
       await page.locator(`a[href="${path}"]`).first().click();
       await expect(page).toHaveURL(new RegExp(`${path}$`));
-      await expect.poll(() => sockets.length).toBe(before + 1);
       await waitReady(page);
-      await expect.poll(() => sockets.filter((s) => !s.isClosed()).length).toBe(1);
-      expect(sockets[sockets.length - 1].isClosed()).toBe(false);
+      expect(sockets.length, `hop ${path}`).toBe(1);
+      expect(sockets[0].isClosed()).toBe(false);
     }
   });
 

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { NavChromeProvider } from './NavChromeContext';
 import { Sidebar } from './Sidebar';
 import { ReselectionBanner } from './membership/ReselectionBanner';
+import { BrainAssistant } from './brain/BrainAssistant';
 
 interface LayoutProps {
   children: ReactNode;
@@ -26,6 +27,11 @@ export const Layout = ({ children }: LayoutProps) => {
           <ReselectionBanner />
           {children}
         </div>
+        {/*
+          部署後追加「全站大腦小助手」（2026-11-15）：浮動按鈕與對話窗掛在 Layout，全站每一頁都有；
+          元件自行判定 K1 view 與入口頁（不顯示）。狀態在路由外層 BrainConnectionProvider，換頁保留。
+        */}
+        <BrainAssistant />
       </div>
     </NavChromeProvider>
   );
