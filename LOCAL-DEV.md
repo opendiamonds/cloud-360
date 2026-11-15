@@ -76,6 +76,7 @@ FastAPI → chat_model() → ClaudeCodeChatModel → claude -p（子行程）→
 - **模型名**：含 `/` 的 OpenRouter 格式（預設值都是）CLI 不認得，會改用 CLI 的預設模型。要指定就給不含 `/` 的別名（`LLM_MODEL=sonnet`、`BRAIN_ROUTER_MODEL=sonnet`）。
 - **不串流**：A3 建議是整段一次出現。
 - `temperature`、`BRAIN_ROUTER_MAX_RETRIES` 在這條路徑不起作用。
+- **意圖路由走工具呼叫，不走 Decisions API**：OpenRouter 下路由改用 Decisions API 與決策模型 `typesafe/jev-1.14`（ADR-0024），本機 `claude-code` 沒有那個端點，所以照舊用工具呼叫；兩條路徑的反問候選文字不同（Decisions 由伺服器模板產生），本機看到的路由行為不等於 staging。
 - 用量算在你的 Claude 帳號上。
 - 跑後端單元測試時把 `.env` 的 `LLM_PROVIDER` 改回 `openrouter`：既有測試以替身驗 OpenRouter 路徑，選到 `claude-code` 會走錯分支。
 
@@ -436,7 +437,9 @@ BRAIN_SESSION_HISTORY_MAX=200
 # 本機**不需要** OPENROUTER_API_KEY 也能跑本單元的測試（全部用替身）；
 # 要真的讓路由層打模型才需要金鑰（見本節的 OPENROUTER_API_KEY）。
 # 換 BRAIN_ROUTER_MODEL 不需改程式，但準確率數字不可跨模型沿用。
-BRAIN_ROUTER_MODEL=typesafe/jev-1.13
+# LLM_PROVIDER=openrouter 時必須是決策模型（typesafe/jev-*，走 OpenRouter Decisions
+# API，ADR-0024）；設成 chat 模型會記 WARNING 且每輪路由失敗。claude-code 見上一節。
+BRAIN_ROUTER_MODEL=typesafe/jev-1.14
 BRAIN_ROUTER_TIMEOUT_SEC=5
 BRAIN_ROUTER_MAX_CALLS_PER_TURN=1
 BRAIN_ROUTER_MAX_RETRIES=0
@@ -713,6 +716,7 @@ docker compose -f deploy/docker-compose.test.yml down -v
 | 後端啟動就掛，訊息提到 `BRAIN_SESSION_HISTORY_MAX` | 它是 required、**無預設**（`BR3.5`／`NFR8.40`）。缺值不會被讀成「無上限」——那會讓單一 Redis key 無上界成長且無聲 | 在 `backend/.env` 設 `BRAIN_SESSION_HISTORY_MAX=200` |
 | 後端啟動就掛，訊息提到 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD` | 它是 required、**無預設**（`BR3.4`／`NFR8.60`）。缺值不會被讀成某個預設門檻——那等於讓「信心不足要不要先問」由一個沒有人選過的數字決定 | 在 `backend/.env` 設 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD=0.7` |
 | 後端啟動就掛，訊息提到門檻必須落在 `0 < t <= 1` | 設了 `0`（或大於 1）。擋在啟動是刻意的：門檻 0 會讓反問路徑**永不觸發**，而文件上看起來已解決 | 設一個 0 與 1 之間的值；初版是 `0.7` |
+| 啟動 log 出現 `BRAIN_ROUTER_MODEL=… 不是 OpenRouter 決策模型` 的 WARNING，之後每句都回「大腦暫時無法判讀這句話」 | 路由走 OpenRouter Decisions API（ADR-0024），只接受決策模型；chat 模型在該端點會失敗（反過來，決策模型在 chat/completions 端點回 400） | 把 `BRAIN_ROUTER_MODEL` 改回 `typesafe/jev-1.14`（或移除讓它取預設） |
 | 啟動 log 出現 `BRAIN_ROUTER_TIMEOUT_SEC 未設定，取預設` 之類的 WARN | 這四個變數**有**預設，缺值只是沒照設定跑，所以是 WARN 不是失敗 | 想消掉 WARN 就在 `backend/.env` 補上；不補也能跑 |
 | 對話超過 200 則之後，最舊的訊息不見了 | 這是刻意行為（`BR3.4`）：超限時自該段**最舊**端丟棄。上限**每段獨立**，所以 `/workspace` 的活躍對話不會擠掉 `/assessment` 的歷程 | 不是 bug。要改上限就改 `BRAIN_SESSION_HISTORY_MAX`，並記得部署端要同步 `deploy/render-env.sh` 與 `deploy/.env.example` |
 | 長訊息時，**不到 200 則**最舊的訊息就不見了（例如每則數千個中文字時只留十幾則） | 這也是刻意行為：每段另有**序列化後 200 KB** 的位元組上限，與 200 則取較嚴者（`merge-blockers.md` 第 18 項）。一則 4000 個中文字約 12 KB，200 KB 只放得下約 16 則 | 不是 bug。位元組上限是程式常數 `DEFAULT_SEGMENT_MAX_BYTES`（`backend/services/session_types.py`），**不是**環境變數；改 `BRAIN_SESSION_HISTORY_MAX` 不會影響它 |

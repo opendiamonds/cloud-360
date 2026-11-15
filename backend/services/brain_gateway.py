@@ -1373,23 +1373,40 @@ class BrainGateway:
             await self._on_remember_request(conn, turn, remember)
             return
 
-        prefetch = await self._prefetch(conn.principal, utterance, turn)
-        context_token = _PREFETCH.set(prefetch)
         router = self.routers[turn.segment]
-        triple = _target_triple(session, turn.segment)
-        if any(value is not None for value in triple):
-            turn.target_names = (await self._names_for(conn, [triple]))[triple]
         classify_exc: Optional[BaseException] = None
+        # ADR-0024：Decisions 路由以「使用者可見的專案／系統名稱」當 named_target 的選項。
+        # 目錄與交辦時的 `_catalog` 同一個來源（同受 U23 可見性守門）；取不到時本輪照路由失敗
+        # 的方式結束（先寫使用者訊息、再 error），不帶空目錄硬跑——空目錄會把指名別的系統的句子
+        # 靜默交辦給目前的作業對象。
+        needs_catalog = bool(getattr(router, "needs_target_catalog", False))
+        catalog_kwargs: Dict[str, Any] = {}
+        if needs_catalog:
+            segment_now = (session.segments or {}).get(turn.segment) if session is not None else None
+            try:
+                built = await asyncio.to_thread(
+                    self._build_catalog, conn.principal, getattr(segment_now, "project_id", None)
+                )
+                catalog_kwargs["target_catalog"] = tuple(t.name for t in built.entries())
+            except Exception as exc:
+                classify_exc = exc
+        prefetch = await self._prefetch(conn.principal, utterance, turn) if classify_exc is None else None
+        context_token = _PREFETCH.set(prefetch)
+        triple = _target_triple(session, turn.segment)
+        if classify_exc is None and any(value is not None for value in triple):
+            turn.target_names = (await self._names_for(conn, [triple]))[triple]
         decision = None
         turn.t_classify_start = self.timing.monotonic()
         try:
-            decision = await router.classify(
-                conn.principal,
-                session if session is not None else BrainSession(session_key=conn.session_key),
-                utterance,
-                turn_id=turn.turn_id,
-                target_names=turn.target_names,
-            )
+            if classify_exc is None:
+                decision = await router.classify(
+                    conn.principal,
+                    session if session is not None else BrainSession(session_key=conn.session_key),
+                    utterance,
+                    turn_id=turn.turn_id,
+                    target_names=turn.target_names,
+                    **catalog_kwargs,
+                )
         except PlatformSelfModificationRefused:
             turn.t_classify_end = self.timing.monotonic()
             await self._refuse(conn, turn)

@@ -47,7 +47,9 @@
 # FASTEMBED_MODEL and BRAIN_SESSION_HISTORY_MAX (U10; a literal 200, not a
 # credential -- see deploy/.env.example for why it has no default in code), plus
 # the five BRAIN_ROUTER_* variables (U11 intent-router; model name, timeout,
-# per-turn call cap, retry count and the confidence threshold). The threshold is
+# per-turn call cap, retry count and the confidence threshold; the model must be
+# an OpenRouter DECISIONS model such as typesafe/jev-1.14 -- routing calls the
+# Decisions API, ADR-0024 -- or every turn fails). The threshold is
 # the only one of the five the backend refuses to start without (BR3.4), and it
 # is still a literal, not a credential -- routing it through a repository secret
 # that does not exist would write an EMPTY string and turn a good merge red. Routing them through deploy.yml's `env:` map would need six
@@ -145,7 +147,7 @@ OLLAMA_EMBED_MODEL=bge-m3
 FASTEMBED_MODEL=multilingual-e5-large
 EMBEDDING_TIMEOUT_SEC=10
 BRAIN_SESSION_HISTORY_MAX=200
-BRAIN_ROUTER_MODEL=typesafe/jev-1.13
+BRAIN_ROUTER_MODEL=typesafe/jev-1.14
 BRAIN_ROUTER_TIMEOUT_SEC=5
 BRAIN_ROUTER_MAX_CALLS_PER_TURN=1
 BRAIN_ROUTER_MAX_RETRIES=0

@@ -99,6 +99,40 @@ def sanitize_target_name(name: Optional[str]) -> str:
     return " ".join("".join(kept).split())[:TARGET_NAME_MAX_CHARS]
 
 
+#: 指名對象選項的筆數上界（Decisions 路由，ADR-0024）。與閘道的
+#: `CATALOG_PROJECT_MAX`（50）同值：閘道目錄超過 50 個專案時本來就不展開系統、
+#: 改回「專案太多」，路由層的選項清單不必比閘道能比對的範圍更大；每多一個名稱就多
+#: 一段送出平台的使用者資料與輸入 token（每輪費用與輸入長度線性相關）。
+TARGET_CHOICE_MAX: Final = 50
+
+
+def target_choices(names: Sequence[Optional[str]], limit: int = TARGET_CHOICE_MAX) -> Tuple[Tuple[str, str, str], ...]:
+    """使用者可見的專案／系統名稱 → `(選項鍵, 原字串, 整理後的顯示文字)`。
+
+    - 原字串**原樣保留**：選中時以它當 `referent`，閘道既有的 `match_referent`
+      （`norm` 後精確相等）才能直接命中；整理後的文字只放進 `criteria` 的定義。
+    - 整理沿用 `sanitize_target_name`（F2）：去控制字元、去引號括號、截長。
+      整理後為空的名稱略過。
+    - 以 `strip().casefold()` 去重（與閘道 `norm` 同一個判準），保留第一次出現的。
+    - 選項鍵是 `t0`、`t1`…：名稱不當鍵，使用者自訂文字不會出現在請求的結構位置上。
+    """
+    out = []
+    seen = set()
+    for raw in names:
+        if raw is None:
+            continue
+        original = str(raw)
+        key_norm = original.strip().casefold()
+        shown = sanitize_target_name(original)
+        if not key_norm or not shown or key_norm in seen:
+            continue
+        seen.add(key_norm)
+        out.append((f"t{len(out)}", original.strip(), shown))
+        if len(out) >= limit:
+            break
+    return tuple(out)
+
+
 #: 三層的顯示標籤與 `describe_work_target` 名稱鍵（單一來源：prompt 與閘道的
 #: 「是否指目前對象」判定都由這張表產生同一種寫法）。
 TARGET_LAYERS: Final = (
@@ -255,9 +289,11 @@ __all__ = [
     "DEFAULT_TEXT_CHARS",
     "RoutingPrompt",
     "TARGET_LAYERS",
+    "TARGET_CHOICE_MAX",
     "TARGET_NAME_MAX_CHARS",
     "build_routing_prompt",
     "build_system_prompt",
     "format_work_target",
     "sanitize_target_name",
+    "target_choices",
 ]

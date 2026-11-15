@@ -14,6 +14,13 @@ from dataclasses import dataclass
 from typing import Any
 
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+#: OpenRouter Decisions API (classification models such as ``typesafe/jev-1.14``).
+#: The ``alpha`` path segment means OpenRouter does not promise stability; see
+#: ADR-0024 for the risk and why the intent router accepts it.
+DEFAULT_OPENROUTER_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+#: HTTP statuses worth retrying when a caller grants a retry budget. 4xx other
+#: than 408/429 are request errors: retrying them only repeats the bill.
+_RETRYABLE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 DEFAULT_OPENROUTER_MODEL = "google/gemini-3.7-flash"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
@@ -83,7 +90,7 @@ def openrouter_chat_model(
 
     ``temperature=None`` omits the parameter entirely instead of sending a
     value. Some OpenRouter-hosted models advertise an EMPTY
-    ``supported_parameters`` array (``typesafe/jev-1.13`` is one), and for those
+    ``supported_parameters`` array (``typesafe/jev-1.13`` was one), and for those
     an unconditional ``temperature=0.0`` is a parameter the provider may reject
     or silently ignore -- see U11's ``tech-stack-decisions.md`` TS-3a.
 
@@ -161,6 +168,75 @@ def chat_model(
     )
 
 
+class DecisionsMalformedResponse(Exception):
+    """The Decisions API answered 2xx but the body is not a JSON object.
+
+    Kept distinct from transport failures: the provider responded, the shape is
+    wrong. Callers map it to their own "malformed" category by class name.
+    """
+
+
+async def openrouter_decide(
+    *,
+    model: str,
+    state: str,
+    questions: Mapping[str, Any],
+    timeout_seconds: float,
+    max_retries: int = 0,
+    transport: Any = None,
+) -> dict:
+    """POST one request to OpenRouter's Decisions API and return the JSON body.
+
+    This is the only place the Decisions endpoint is called, so the outbound
+    path stays inside this runtime module (U11 ``SEC-2``: router modules must
+    not import an HTTP client themselves).
+
+    - Raises ``RuntimeAuthError`` when ``OPENROUTER_API_KEY`` is missing.
+    - Raises ``httpx.HTTPStatusError`` for a non-2xx answer (status on
+      ``exc.response.status_code``) and ``httpx.TransportError`` subclasses for
+      timeouts/connection failures, after ``max_retries`` extra attempts on the
+      retryable subset only.
+    - Raises ``DecisionsMalformedResponse`` when a 2xx body is not a JSON object.
+
+    ``transport`` is an ``httpx`` transport for tests (``httpx.MockTransport``);
+    production passes ``None``.
+    """
+    api_key = _require_openrouter_api_key()
+    import httpx
+
+    body = {"model": model, "state": state, "questions": dict(questions)}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    attempts = 1 + max(0, int(max_retries))
+    last_exc: BaseException | None = None
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(float(timeout_seconds)), transport=transport
+    ) as client:
+        for attempt in range(attempts):
+            try:
+                response = await client.post(
+                    DEFAULT_OPENROUTER_DECISIONS_URL, json=body, headers=headers
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                if exc.response.status_code in _RETRYABLE_STATUSES and attempt + 1 < attempts:
+                    continue
+                raise
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt + 1 < attempts:
+                    continue
+                raise
+            try:
+                parsed = response.json()
+            except ValueError as exc:
+                raise DecisionsMalformedResponse("decisions response is not JSON") from exc
+            if not isinstance(parsed, dict):
+                raise DecisionsMalformedResponse("decisions response is not a JSON object")
+            return parsed
+    raise last_exc if last_exc is not None else RuntimeError("unreachable")
+
+
 def invoke_graph(
     graph: Any,
     state: Any,
@@ -214,9 +290,11 @@ async def astream_graph(
 
 __all__ = [
     "DEFAULT_OPENROUTER_BASE_URL",
+    "DEFAULT_OPENROUTER_DECISIONS_URL",
     "DEFAULT_OPENROUTER_MODEL",
     "DEFAULT_TIMEOUT_SECONDS",
     "OPENROUTER_API_KEY_ENV",
+    "DecisionsMalformedResponse",
     "InvokeOutcome",
     "OpenRouterSettings",
     "RuntimeAuthError",
@@ -225,5 +303,6 @@ __all__ = [
     "chat_model",
     "invoke_graph",
     "openrouter_chat_model",
+    "openrouter_decide",
     "stream_graph",
 ]

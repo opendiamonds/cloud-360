@@ -9,7 +9,7 @@
 
 | 變數 | 預設 | 缺值行為 |
 |---|---|---|
-| `BRAIN_ROUTER_MODEL` | `typesafe/jev-1.13` | 取預設 ＋ INFO |
+| `BRAIN_ROUTER_MODEL` | `typesafe/jev-1.14` | 取預設 ＋ INFO；openrouter 下不是決策模型時 WARNING |
 | `BRAIN_ROUTER_TIMEOUT_SEC` | `5` | 取預設 ＋ WARN |
 | `BRAIN_ROUTER_MAX_CALLS_PER_TURN` | `1` | 取預設 ＋ WARN |
 | `BRAIN_ROUTER_MAX_RETRIES` | `0` | 取預設 ＋ WARN |
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Final, Optional
 
@@ -48,7 +49,20 @@ THRESHOLD_ENV: Final = "BRAIN_ROUTER_CONFIDENCE_THRESHOLD"
 #: `TS-1`／`OQ-4`：路由層模型。**獨立變數，不得沿用 `LLM_MODEL`**——後者是
 #: A1／A3 功能 agent 在用的，共用會讓 `NFR10` 逐字允許的「編排層與功能 agent
 #: 得使用不同模型」在設定層消失（`NFR10.60`）。
-DEFAULT_MODEL: Final = "typesafe/jev-1.13"
+#:
+#: 2026-11-16 起為 `typesafe/jev-1.14`（ADR-0024）：它是**決策模型**，只走
+#: OpenRouter Decisions API；`jev-1.13` 與 `jev-1.14` 在 chat/completions 端點皆回 400。
+DEFAULT_MODEL: Final = "typesafe/jev-1.14"
+
+#: 已知的 OpenRouter **決策模型**識別。只用來在啟動時提醒，不擋啟動。
+#: 以 `typesafe/jev-<版本號>` 判定：`jev-1.13`／`jev-1.14` 實測為決策模型；
+#: 其他名稱（例如 chat 模型 `google/gemini-3.7-flash`）在 Decisions 端點上會失敗。
+_DECISIONS_MODEL_PATTERN: Final = re.compile(r"^typesafe/jev-\d+(\.\d+)*$")
+
+
+def is_decisions_model(model: str) -> bool:
+    """`model` 是否為已知的 OpenRouter 決策模型（大小寫不拘）。"""
+    return bool(_DECISIONS_MODEL_PATTERN.match((model or "").strip().lower()))
 
 #: `NFR3.61`：單次模型呼叫硬逾時 5 秒。
 DEFAULT_TIMEOUT_SEC: Final = 5.0
@@ -183,6 +197,7 @@ def configure_intent_routing_env(env: Optional[Any] = None) -> RoutingConfig:
     影響——既有測試全綠本身就是這個選擇的驗證。
     """
     config = resolve_routing_config(env)
+    warn_if_not_decisions_model(config.model)
     logger.info(
         "intent router 設定已解析：模型 %s、逾時 %s 秒、每輪上限 %s 次、"
         "重試 %s 次、信心門檻 %s",
@@ -193,6 +208,28 @@ def configure_intent_routing_env(env: Optional[Any] = None) -> RoutingConfig:
         config.confidence_threshold,
     )
     return config
+
+
+def warn_if_not_decisions_model(model: str) -> bool:
+    """openrouter 下 `BRAIN_ROUTER_MODEL` 不是決策模型時記一行 WARNING，回傳是否記了。
+
+    **不拒絕啟動**：它是有預設的選用變數，設錯一個字不該讓整個 API 起不來；但路由
+    每一輪都會失敗（Decisions 端點不接受 chat 模型），所以訊息要直說。本機
+    `claude-code` 走工具呼叫路徑，模型名的語意不同，不提醒。
+    """
+    from services.llm_provider import CLAUDE_CODE, get_provider
+
+    if get_provider() == CLAUDE_CODE or is_decisions_model(model):
+        return False
+    logger.warning(
+        "%s=%s 不是 OpenRouter 決策模型：意圖路由走 Decisions API（ADR-0024），"
+        "這個設定會讓每一輪路由都失敗（大腦回「暫時無法判讀」）。請改回 %s 或其他 "
+        "typesafe/jev-* 決策模型。",
+        MODEL_ENV,
+        model,
+        DEFAULT_MODEL,
+    )
+    return True
 
 
 __all__ = [
@@ -207,6 +244,8 @@ __all__ = [
     "TIMEOUT_ENV",
     "RoutingConfig",
     "configure_intent_routing_env",
+    "is_decisions_model",
     "resolve_confidence_threshold",
     "resolve_routing_config",
+    "warn_if_not_decisions_model",
 ]
