@@ -27,7 +27,15 @@ const UNAVAILABLE_TEXT: Record<string, string> = {
  * 並以「依前值調整 state」清掉 `pickerOpen`（重連後不會自己冒出來），焦點移到本區塊、頁面 `LiveRegion` 播報
  * 一次（`functional-spec-corrections.md` F-02、`nfr-design-corrections.md` D-05）。五態判定與名稱節點不受影響。
  */
-export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle }) => {
+export const ContextBar: React.FC<{
+  sharingToggle: boolean;
+  /**
+   * 浮動小助手窗頂的同一條作業對象列（部署後追加「全站大腦小助手」）：子頁面同時有頁內作業對象列與小助手，
+   * 測試 id 與區域名稱需可區分（axe `landmark-unique`）。預設值即原本的頁內作業對象列。
+   */
+  testIdPrefix?: string;
+  regionLabel?: string;
+}> = ({ sharingToggle, testIdPrefix = 'brain-context', regionLabel = '目前作業對象' }) => {
   const conn = useBrainSession();
   const [expanded, setExpanded] = useState(false);
   const { target, status, sharingMode, announce } = conn;
@@ -98,8 +106,8 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
       ref={sectionRef}
       tabIndex={-1}
       role="region"
-      aria-label="目前作業對象"
-      data-testid="brain-context-bar"
+      aria-label={regionLabel}
+      data-testid={`${testIdPrefix}-bar`}
       data-state={state}
       className="bg-white border-b border-gray-200 px-4 py-2 text-sm focus:outline-none"
     >
@@ -114,12 +122,12 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
         {(state === 'default' || state === 'independent' || state === 'no-object') && (
           <span className="flex flex-wrap items-center gap-1 text-gray-900 break-all">
             {visible.length === 0 ? (
-              <span data-testid="brain-context-none">{TARGET_NONE}</span>
+              <span data-testid={`${testIdPrefix}-none`}>{TARGET_NONE}</span>
             ) : (
               visible.map((l, i) => (
                 <React.Fragment key={l.key}>
                   {i > 0 && <span className="text-gray-400">/</span>}
-                  <span data-testid={`brain-context-name-${l.key}`} data-id={l.id ?? undefined} className="font-medium">
+                  <span data-testid={`${testIdPrefix}-name-${l.key}`} data-id={l.id ?? undefined} className="font-medium">
                     {l.name}
                   </span>
                 </React.Fragment>
@@ -132,7 +140,7 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
             <button
               ref={switchRef}
               type="button"
-              data-testid="brain-context-switch-object"
+              data-testid={`${testIdPrefix}-switch-object`}
               aria-haspopup="dialog"
               aria-expanded={pickerVisible}
               onClick={togglePicker}
@@ -146,7 +154,7 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
         {sharingToggle && status === 'ready' && (
           <>
             <span
-              data-testid="brain-context-sharing-badge"
+              data-testid={`${testIdPrefix}-sharing-badge`}
               className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold border ${
                 sharingMode === 'isolated' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-brand-50 text-brand-700 border-brand-200'
               }`}
@@ -155,7 +163,7 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
             </span>
             <button
               type="button"
-              data-testid="brain-context-sharing-switch"
+              data-testid={`${testIdPrefix}-sharing-switch`}
               onClick={() => conn.setSharingMode(sharingMode === 'isolated' ? 'shared' : 'isolated')}
               className="text-xs font-semibold text-brand-700 hover:underline"
             >
@@ -165,7 +173,7 @@ export const ContextBar: React.FC<{ sharingToggle: boolean }> = ({ sharingToggle
         )}
         <button
           type="button"
-          data-testid="brain-context-toggle"
+          data-testid={`${testIdPrefix}-toggle`}
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
           className="ml-auto text-xs text-gray-500 hover:text-gray-800"

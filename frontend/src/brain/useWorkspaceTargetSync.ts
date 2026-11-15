@@ -142,6 +142,18 @@ export function useTargetSyncCore(conn: BrainConnection, mirror: SyncMirror): Ta
     connRef.current = conn;
   });
 
+  // 全站一條連線（部署後追加「全站大腦小助手」，2026-11-15）：從別頁換進本頁時，快照早已在連線上到過，
+  // 不會再有 work_target 事件。掛載時以連線的現值（本頁讀取段的作業對象，render 時已依本頁 page 推導）
+  // 補上「快照先到」那一支：暫存為待對齊、旗標不消耗，等 onPageReady 對齊。本頁尚未就緒，不會在此對齊，
+  // 也不 setState。之後到達的 work_target 照常覆蓋。
+  useEffect(() => {
+    const c = connRef.current;
+    if (c.status !== 'ready' || c.target === null) return;
+    if (alignedRef.current || pendingInitialRef.current !== null) return;
+    targetRef.current = c.target;
+    pendingInitialRef.current = c.target;
+  }, []);
+
   /** 記下本頁送出、尚未收到回聲的值（上限 8，超出丟最舊；functional-design R-05）。 */
   const rememberEcho = (diagramId: string | null) => {
     const echoes = pendingEchoesRef.current;
