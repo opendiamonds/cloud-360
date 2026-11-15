@@ -1,12 +1,19 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useAuth } from '../../context/auth-context';
+import type { BrainConnection } from '../../brain/brainSession';
+import { isOwnedByMe } from '../../brain/objectPickerModel';
 import {
   ApiError,
-  listMyDiagrams,
   setDiagramSystem,
   type MyDiagram,
+  type ProjectOut,
   type SystemOut,
 } from '../../projects/projectsApi';
+import {
+  NOT_OWNED_TARGET_NOTE,
+  useWorkspaceHandoff,
+  type WorkspaceHandoff,
+} from '../../projects/workspaceHandoff';
 
 /**
  * SystemDiagrams — 總覽籤的「系統的架構圖」區（build-and-test 本機驗證 F1，2026-11-12）
@@ -19,28 +26,77 @@ import {
  * 本元件只在缺 `K2 edit` 時不渲染控制項，其餘拒絕（404）照實顯示伺服器的訊息。
  *
  * 資料抓取沿用 `react-hooks/set-state-in-effect` 的兩層形狀：純抓取在 `projectsApi`，state 只在
- * `.then`／`.catch` 內更新，`useEffect` 以 `cancelled` 防卸載後 setState。
+ * `.then`／`.catch` 內更新，`useEffect` 以 `cancelled` 防卸載後 setState（抓取自 2026-11-15 起在
+ * `OverviewTab`）。
+ *
+ * **部署後追加（2026-11-15；本階段新增、已核可 scope／requirements 尚未涵蓋）**：
+ * - 「我的圖」清單改由 `OverviewTab` 持有並傳入（同一份資料同時算頂端的架構圖計數，單一真實來源）；
+ * - 每個系統列加「在工作區建立架構圖」：先經既有 `set_work_target` 把作業對象設為該系統、等伺服器確認後
+ *   導到 `/workspace`（見 `projects/workspaceHandoff.ts`）。只在有大腦連線（`K1 view`）且具 `A1 edit` 時渲染；
+ *   不是專案擁有者時照列但停用並說明（`[OP3]`=A，說法與 `ObjectPicker` 相同）。系統列在圖清單載入中或
+ *   失敗時也照列，讓這個動作不依賴圖清單。
  */
-type LoadState = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; diagrams: MyDiagram[] };
+export type MyDiagramsLoad = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; diagrams: MyDiagram[] };
+
+const CreateInWorkspace: React.FC<{
+  system: SystemOut;
+  owned: boolean;
+  brain: BrainConnection;
+  handoff: WorkspaceHandoff;
+}> = ({ system, owned, brain, handoff }) => {
+  const noteId = useId();
+  const ready = brain.status === 'ready';
+  const pendingHere = handoff.pendingSystemId === system.id;
+  const busy = handoff.pendingSystemId !== null;
+  const enabled = owned && ready && !busy;
+  let note: string | null = null;
+  if (!owned) note = NOT_OWNED_TARGET_NOTE;
+  else if (!ready) note = '大腦連線就緒後才能設定作業對象';
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        data-testid={`system-create-in-workspace-${system.id}`}
+        aria-disabled={enabled ? undefined : true}
+        aria-describedby={note ? noteId : undefined}
+        onClick={() => {
+          if (enabled) handoff.start(system);
+        }}
+        className={`min-h-11 rounded border px-3 text-sm font-bold ${
+          enabled ? 'border-brand-200 text-brand-700 hover:bg-brand-50' : 'cursor-not-allowed border-gray-200 text-gray-400'
+        }`}
+      >
+        {pendingHere ? '正在設定作業對象…' : '在工作區建立架構圖'}
+      </button>
+      {note && (
+        <span id={noteId} data-testid={`system-create-in-workspace-note-${system.id}`} className="text-xs text-gray-600">
+          {note}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const SystemRow: React.FC<{
   system: SystemOut;
   systems: SystemOut[];
-  diagrams: MyDiagram[];
+  /** null＝圖清單尚未載入或失敗：只渲染系統名與建立動作。 */
+  diagrams: MyDiagram[] | null;
   canEdit: boolean;
   busy: boolean;
   onChange: (diagramId: number, systemId: number | null) => void;
-}> = ({ system, systems, diagrams, canEdit, busy, onChange }) => {
+  createAction: React.ReactNode;
+}> = ({ system, systems, diagrams, canEdit, busy, onChange, createAction }) => {
   const selectId = useId();
-  const attached = diagrams.filter((d) => d.system_id === system.id);
-  const candidates = diagrams.filter((d) => d.system_id !== system.id);
+  const attached = (diagrams ?? []).filter((d) => d.system_id === system.id);
+  const candidates = (diagrams ?? []).filter((d) => d.system_id !== system.id);
   const [choice, setChoice] = useState('');
   const systemName = (id: number | null) => systems.find((s) => s.id === id)?.name;
 
   return (
     <li className="rounded border border-gray-200 p-3" data-testid={`system-diagrams-${system.id}`}>
       <h3 className="text-sm font-bold text-gray-900">{system.name}</h3>
-      {attached.length === 0 ? (
+      {diagrams === null ? null : attached.length === 0 ? (
         <p className="mt-1 text-sm text-gray-600">這個系統還沒有掛上你的架構圖</p>
       ) : (
         <ul className="mt-1 space-y-1 text-sm text-gray-800">
@@ -98,33 +154,29 @@ const SystemRow: React.FC<{
           </button>
         </form>
       )}
+      {createAction}
     </li>
   );
 };
 
-export const SystemDiagrams: React.FC<{ systems: SystemOut[] }> = ({ systems }) => {
-  const { token, can, canArch } = useAuth();
+export const SystemDiagrams: React.FC<{
+  project: ProjectOut;
+  systems: SystemOut[];
+  state: MyDiagramsLoad;
+  onReload: () => void;
+  /** 本頁的大腦連線；無 `K1 view`（未開連線）時為 null。 */
+  brain: BrainConnection | null;
+}> = ({ project, systems, state, onReload, brain }) => {
+  const { token, user, can, canArch } = useAuth();
   const canSee = canArch('view');
   const canEdit = can('K2', 'edit');
-  const [state, setState] = useState<LoadState>({ status: 'loading' });
-  const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-
-  useEffect(() => {
-    if (!token || !canSee) return;
-    let cancelled = false;
-    listMyDiagrams(token)
-      .then((diagrams) => {
-        if (!cancelled) setState({ status: 'ready', diagrams });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ status: 'failed' });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, canSee, reloadKey]);
+  const handoff = useWorkspaceHandoff(brain);
+  // 擁有者判定只有一處（`objectPickerModel.isOwnedByMe`，`OPN-12`）；這不是授權，伺服器仍以擁有者範圍解析。
+  const owned = user?.id !== undefined && isOwnedByMe(project, user.id);
+  // 沒有大腦連線時不顯示：存檔掛到系統靠的是作業對象，沒有連線就沒有作業對象，顯示了也掛不上。
+  const showCreate = brain !== null && canArch('edit');
 
   if (!canSee || systems.length === 0) return null;
 
@@ -135,7 +187,7 @@ export const SystemDiagrams: React.FC<{ systems: SystemOut[] }> = ({ systems }) 
     setDiagramSystem(token, diagramId, systemId)
       .then(() => {
         setMessage({ kind: 'ok', text: systemId === null ? '已取消掛載' : '已掛到系統' });
-        setReloadKey((k) => k + 1);
+        onReload();
       })
       .catch((err: unknown) => {
         setMessage({
@@ -158,26 +210,34 @@ export const SystemDiagrams: React.FC<{ systems: SystemOut[] }> = ({ systems }) 
             {message.text}
           </span>
         )}
+        {handoff.error && (
+          <span className="font-bold text-red-800" data-testid="system-create-in-workspace-error">
+            {handoff.error}
+          </span>
+        )}
       </p>
       {state.status === 'loading' && <p className="mt-2 text-sm text-gray-500">正在載入架構圖…</p>}
       {state.status === 'failed' && <p className="mt-2 text-sm font-bold text-amber-800">無法取得架構圖</p>}
-      {state.status === 'ready' && (
-        <ul className="mt-2 space-y-2">
-          {[...systems]
-            .sort((a, b) => a.id - b.id)
-            .map((system) => (
-              <SystemRow
-                key={system.id}
-                system={system}
-                systems={systems}
-                diagrams={state.diagrams}
-                canEdit={canEdit}
-                busy={busy}
-                onChange={handleChange}
-              />
-            ))}
-        </ul>
-      )}
+      <ul className="mt-2 space-y-2">
+        {[...systems]
+          .sort((a, b) => a.id - b.id)
+          .map((system) => (
+            <SystemRow
+              key={system.id}
+              system={system}
+              systems={systems}
+              diagrams={state.status === 'ready' ? state.diagrams : null}
+              canEdit={canEdit}
+              busy={busy}
+              onChange={handleChange}
+              createAction={
+                showCreate && brain ? (
+                  <CreateInWorkspace system={system} owned={owned} brain={brain} handoff={handoff} />
+                ) : null
+              }
+            />
+          ))}
+      </ul>
     </section>
   );
 };

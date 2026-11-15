@@ -17,6 +17,11 @@ import {
   type SystemOut,
 } from '../projects/projectsApi';
 import { readFields, type FieldSetView } from '../projects/requirementsApi';
+import { useBrainConnection } from '../brain/useBrainConnection';
+import { BrainSession } from '../components/brain/BrainSession';
+import { ContextBar } from '../components/brain/ContextBar';
+import { SubpageBrainPanel } from '../components/brain/SubpageBrainPanel';
+import { ProjectTargetNotice } from '../components/projects/ProjectTargetNotice';
 
 /**
  * ProjectDetailPage — 專案詳情（`US11`、`AC12.1.3`／`AC12.6.3`；`BR83`、`BR85.1`、`BR88`）
@@ -40,6 +45,13 @@ import { readFields, type FieldSetView } from '../projects/requirementsApi';
  *
  * 本頁持有 `changesBySystem`（而非總覽籤自行抓取）：端點 7 必須與端點 5 共用同一個佇列並
  * 排在其後，只有頁面能決定入列順序。
+ *
+ * **大腦（部署後追加，2026-11-15；本階段新增、已核可 scope／requirements 尚未涵蓋）**：與工作區／評估頁
+ * 同一個形狀——脈絡列、作業對象提示、收合的「問大腦」面板，**只在 `K1 view` 時掛載**（無 `K1` 時不開連線）。
+ * 連線以 `page='entry'` 開：本頁沒有自己的獨立段（ws 契約的 `page`／`scope` 只有 entry／workspace／
+ * assessment，不改契約），讀寫的是與入口頁相同的共享段，能做的事也與入口頁相同；故脈絡列不顯示共享切換。
+ * 進頁**不改**作業對象，只在目前對象不在本專案時提示（`ProjectTargetNotice`）。同一條連線也供總覽籤的
+ * 「在工作區建立架構圖」設定作業對象。
  */
 
 type DetailStatus = 'loading' | 'ready' | 'not-found' | 'error';
@@ -101,6 +113,8 @@ export const ProjectDetailPage: React.FC = () => {
   const { token, user, can } = useAuth();
   const canSeeFields = can('K4', 'view');
   const canEditFields = can('K4', 'edit');
+  const brainEnabled = can('K1', 'view');
+  const brain = useBrainConnection('entry', { enabled: brainEnabled });
 
   const [status, setStatus] = useState<DetailStatus>('loading');
   const [project, setProject] = useState<ProjectOut | null>(null);
@@ -298,6 +312,15 @@ export const ProjectDetailPage: React.FC = () => {
       {!invalidId && status === 'ready' && project && token && (
         <>
           <ProjectDetailHeader project={project} canSeeMembers={can('K3', 'view')} />
+          {brainEnabled && (
+            <div data-testid="project-brain" className="mb-4 overflow-hidden rounded-xl border border-gray-200">
+              <BrainSession connection={brain}>
+                <ContextBar sharingToggle={false} />
+                <ProjectTargetNotice project={project} />
+                <SubpageBrainPanel />
+              </BrainSession>
+            </div>
+          )}
           <ProjectTabs tabs={tabs} active={active} onSelect={handleSelectTab} />
           <div
             role="tabpanel"
@@ -313,6 +336,7 @@ export const ProjectDetailPage: React.FC = () => {
                 changesBySystem={changesBySystem}
                 canSeeFields={canSeeFields}
                 onSystemCreated={handleSystemCreated}
+                brain={brainEnabled ? brain : null}
               />
             )}
             {active === 'requirements' && (

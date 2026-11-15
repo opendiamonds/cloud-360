@@ -210926,3 +210926,327 @@
 **Stage**: deployment-pipeline
 
 ---
+
+## Decision Recorded
+**Timestamp**: 2026-11-14T06:09:06Z
+**Event**: DECISION_RECORDED
+**Stage**: deployment-execution
+**Decision**: 等使用者完成部署前置（MEMORY_DB_PASSWORD secret、PG 16→18 升版、兩支遷移腳本）後通知，再合併 PR #650
+**Options**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T06:18:34Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: aac96df331e18e74f
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T06:27:49Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a06bc58b975583bb7
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T06:37:07Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a8006a7bfe33dd162
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T06:46:24Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a4b719ee8cf1fd5df
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T06:55:40Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a590b289c38face85
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T07:05:07Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a0a550c07a4312558
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T07:14:18Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a77b890df948c9632
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T07:17:25Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: af1fbbd9581310964
+**Message**: 目標是把整個大腦需求部署到 cloud360.danniel.cc；程式碼、測試、CI 和 TCMS 都已完成，現在卡在部署前置。下一步請你建立 `MEMORY_DB_PASSWORD` secret、升級 PG 到 18、跑兩支遷移腳本，完成後說「前置已完成，請合併」。
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T14:59:39Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T15:05:02Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a09512a3739ce8360
+**Message**: 前置已完成，請合併
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T15:08:08Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: af7721cab18e99057
+**Message**: Goal: deploy the brain feature to cloud360.danniel.cc; all PR #650 checks were green, and the Postgres 18 mount fix just pushed is in CI. Next: create the MEMORY_DB_PASSWORD secret, do the staging upg
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:13:22Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T15:13:53Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a83bb9cbcc497d7e5
+**Message**: 重新建好了
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:15:21Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:38:15Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["2-9你不能幫我做嗎"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T15:38:16Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: secret 已確認。staging 主機上的第 2–9 步（dump、用新 volume 起 PG 18 並還原、REINDEX、兩支遷移都印出 exit=0、收掉臨時容器）也做完了嗎？
+**Reply**: 2-9你不能幫我做嗎
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:38:57Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:39:16Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["不能透過github agent?"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T15:39:17Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: 這台電腦 SSH 到 192.168.10.10:22 會逾時。你平常怎麼連進 staging 主機？
+**Reply**: 不能透過github agent?
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T15:42:01Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["執行，成功後就合併 (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T15:42:02Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: 要用 staging 的 GitHub Actions runner 執行 PG 16→18 升版與兩支遷移嗎？（會停掉網站直到合併後部署完成；失敗會自動退回舊 stack）
+**Reply**: 執行，成功後就合併 (Recommended)
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T15:51:31Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-execution/deployment-execution-questions.md
+**Context**: operation > deployment-execution > deployment-execution-questions.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T15:51:45Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-execution/deployment-log.md
+**Context**: operation > deployment-execution > deployment-log.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T15:51:53Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-execution/health-check-report.md
+**Context**: operation > deployment-execution > health-check-report.md
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-14T15:52:01Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/deployment-execution/smoke-test-results.md
+**Context**: operation > deployment-execution > smoke-test-results.md
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-11-14T15:52:38Z
+**Event**: DECISION_RECORDED
+**Stage**: deployment-execution
+**Decision**: 等使用者登入 staging 完成需登入的冒煙測試（大腦對話、請記住、專案、存圖掛系統）後再核可 Deployment Execution
+**Options**: 驗證通過,發現問題
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T15:52:53Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a928f704bd36eac25
+**Message**: 我登入了，你幫我在瀏覽器驗證
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T15:56:42Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a937491d805025e24
+**Message**: The feature is live on staging at cloud360.danniel.cc: PR #650 is merged and deployed, with the Postgres 18 upgrade and migrations done. Next, please log in and spot-check the brain chat, "請記住", proje
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T16:05:05Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-14T16:27:52Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["先做 1＋2，3 開新 intent (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-14T16:27:53Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: 專案頁「直接建立架構圖」與「在專案頁跟大腦對話」要怎麼進行？
+**Reply**: 先做 1＋2，3 開新 intent (Recommended)
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T16:29:04Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: ab46a7bce56d9579d
+**Message**: 繼續
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-14T16:33:07Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: unknown
+**Agent ID**: a0a6ffa53e814eb7f
+**Message**: The brain feature is live on staging, and next is adding a create-diagram button and brain chat to the project page. To continue, press Shift+Tab to leave auto mode and say "繼續", or tell me to build i
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-15T02:07:59Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-11-15T02:29:47Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260920-orchestration-brain/operation/followups/project-page-brain-entry.md
+**Context**: operation > followups > project-page-brain-entry.md
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-11-15T02:30:15Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-developer-agent
+**Agent ID**: adee62fb305ba6920
+**Message**: Items 1 and 2 are built and their tests pass. All changes are frontend only: backend, `openapi.json` and `ws-contract.json` are unchanged. The full e2e run had 20 failures, all in the three specs that
+
+---
+
+## Human Turn
+**Timestamp**: 2026-11-15T02:35:22Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+
+---
