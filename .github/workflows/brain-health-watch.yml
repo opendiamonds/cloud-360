@@ -12,14 +12,19 @@ name: Brain health watch
 # 並以既有的 SLACK_BOT_TOKEN 發一則 Slack。
 #
 # ---------------------------------------------------------------------------
-# 兩個 job，刻意互不依賴
+# 三個 job，刻意互不依賴
 # ---------------------------------------------------------------------------
-# scan        在被監看的主機（self-hosted runner）上讀 backend 容器日誌——那是日誌
-#             唯一的所在。主機或 runner 離線時，`on: schedule` 不會排入、不會失敗、
-#             不會留下任何 run（memory-retention-watchdog.yml 檔頭有同一段說明）。
-# site-probe  在 GitHub 代管的 runner 上從外部打網站，正是為了在 scan 跟著主機一起
-#             消失時仍然有人發現。兩者各自管理一則 issue，故不以 needs 串接：串接會讓
-#             probe 等一個永遠不會開始的 job。
+# scan          在被監看的主機（self-hosted runner）上讀 backend 容器日誌——那是日誌
+#               唯一的所在。
+# site-probe    同樣在主機上，但經**公開網址**（Cloudflare Tunnel）打首頁與登入端點，
+#               抓 tunnel／前端／資料庫壞掉。它原本跑在 GitHub 代管 runner 上，首次
+#               驗證（run 43882387962）兩個端點都回 403——Cloudflare 擋下 GitHub 機房
+#               的 IP，那是誤報（issue #725）。
+# runner-watch  在 GitHub 代管 runner 上檢查**上一次** scan 有沒有真的被執行。主機或
+#               runner 離線時，前兩個 job 會一直排隊或被新的一輪取代而取消，自己不會
+#               失敗、也不會告警；這是唯一不依賴那台主機的眼睛。
+# 三者各自管理一則 issue，故不以 needs 串接：串接會讓 GitHub 端的 job 等一個永遠不會
+# 開始的 job。
 #
 # ---------------------------------------------------------------------------
 # 公開 log 的紀律
@@ -44,6 +49,8 @@ permissions:
   contents: read
   # 開／更新／關閉告警 issue。先例：memory-retention-watchdog.yml（OPEN-ID9-2）。
   issues: write
+  # runner-watch 讀本 workflow 的 run 與 job 狀態。先例：memory-retention-watchdog.yml。
+  actions: read
 
 jobs:
   scan:
@@ -188,8 +195,9 @@ jobs:
           exit 1
 
   site-probe:
-    name: probe the site from outside
-    runs-on: ubuntu-latest
+    name: probe the public URL
+    # 在主機上、但經公開網址出去再進來：GitHub 代管 runner 的 IP 會被 Cloudflare 擋（403）。
+    runs-on: [self-hosted, linux, x64, cloud360]
     timeout-minutes: 5
     concurrency:
       group: brain-health-site-probe
@@ -230,17 +238,17 @@ jobs:
       - name: Notify
         uses: ./.github/actions/brain-health-alert
         with:
-          title_prefix: "[brain-health] 網站從外部無法使用"
+          title_prefix: "[brain-health] 網站從公開網址無法使用"
           alerts: ${{ steps.probe.outputs.alerts }}
           slack_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: C0B5XEQDVR7
           details: |
-            從 GitHub 代管 runner 探測 `https://cloud360.danniel.cc`（重試 3 次）：
+            從 staging 主機經公開網址（Cloudflare Tunnel）探測 `https://cloud360.danniel.cc`（重試 3 次）：
             - 首頁 HTTP ${{ steps.probe.outputs.home }}（預期 200）
             - `POST /api/auth/login` 以不存在的帳號 HTTP ${{ steps.probe.outputs.login }}（預期 401；資料庫相依功能是否可用）
           runbook: |
             **處置**：
-            1. `SITE_DOWN`：主機、Cloudflare Tunnel（`cloudflared` 容器）或 frontend 停了；此時 `scan` job 多半也沒有在跑。
+            1. `SITE_DOWN`：Cloudflare Tunnel（`cloudflared` 容器）或 frontend 停了，或 Cloudflare 開始擋主機自己的 IP（看回應碼：403 多半是後者）。
             2. `DATA_PLANE_DOWN`（首頁正常）：後端或資料庫壞了，首頁仍可開但所有需資料庫的功能失效。
             告警全部解除後，下一次檢查會自動留言並關閉本 issue。
 
@@ -249,5 +257,98 @@ jobs:
         env:
           ALERTS: ${{ steps.probe.outputs.alerts }}
         run: |
-          echo "::error::網站外部探測失敗：${ALERTS}" >&2
+          echo "::error::公開網址探測失敗：${ALERTS}" >&2
+          exit 1
+
+  runner-watch:
+    name: watch the self-hosted runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: brain-health-runner-watch
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      WORKFLOW_FILE: brain-health-watch.yml
+      SCAN_JOB_NAME: scan backend logs
+      # 只看建立至少 50 分鐘前的那一輪：太新的一輪 scan 可能只是還在排隊。
+      MIN_AGE_SECONDS: "3000"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/actions/brain-health-alert
+          sparse-checkout-cone-mode: false
+
+      # 判斷邏輯只有這一步，backend/tests/test_brain_health_watch.py 以假的 gh 實際執行。
+      - name: Decide whether the previous scan ever ran
+        id: watch
+        env:
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          now="$(date -u +%s)"
+          if ! runs="$(gh run list --workflow "${WORKFLOW_FILE}" --event schedule --limit 10 \
+                --json databaseId,createdAt 2>/dev/null)"; then
+            # 本 workflow 尚未進入預設分支（main）時查不到任何 run：這不是主機離線，不告警。
+            echo "state=unregistered" >> "$GITHUB_OUTPUT"
+            echo "alerts=" >> "$GITHUB_OUTPUT"
+            echo "previous=" >> "$GITHUB_OUTPUT"
+            echo "scan=" >> "$GITHUB_OUTPUT"
+            echo "::notice::查不到 ${WORKFLOW_FILE} 的排程 run（尚未進入預設分支？），本次不判斷。"
+            exit 0
+          fi
+          prev="$(printf '%s' "${runs}" | jq -r --arg cur "${CURRENT_RUN_ID}" --argjson now "${now}" \
+            --argjson min "${MIN_AGE_SECONDS}" \
+            '[.[] | select((.databaseId | tostring) != $cur)
+                  | select(($now - (.createdAt | fromdateiso8601)) >= $min)] | .[0].databaseId // empty')"
+          if [ -z "${prev}" ]; then
+            echo "state=no-previous" >> "$GITHUB_OUTPUT"
+            echo "alerts=" >> "$GITHUB_OUTPUT"
+            echo "previous=" >> "$GITHUB_OUTPUT"
+            echo "scan=" >> "$GITHUB_OUTPUT"
+            echo "還沒有夠舊的上一輪可判斷"
+            exit 0
+          fi
+          scan="$(gh run view "${prev}" --json jobs 2>/dev/null \
+            | jq -r --arg n "${SCAN_JOB_NAME}" \
+                '[.jobs[] | select(.name == $n)] | .[0] | if . == null then "missing" else "\(.status)/\(.conclusion // "")" end')"
+          [ -n "${scan}" ] || scan="missing"
+          # scan 真的被 runner 執行過：completed 且結論為 success 或 failure（failure 代表它跑了、發現告警）。
+          # 其他狀態——queued／waiting／pending、cancelled（被下一輪取代）、missing——代表 runner 沒有接手。
+          case "${scan}" in
+            completed/success|completed/failure) alerts="" ;;
+            *) alerts="RUNNER_OFFLINE" ;;
+          esac
+          {
+            echo "state=checked"
+            echo "alerts=${alerts}"
+            echo "previous=${prev}"
+            echo "scan=${scan}"
+          } >> "$GITHUB_OUTPUT"
+          echo "previous run ${prev}: scan=${scan} alerts=${alerts:-none}"
+
+      - name: Notify
+        if: steps.watch.outputs.state == 'checked'
+        uses: ./.github/actions/brain-health-alert
+        with:
+          title_prefix: "[brain-health] staging 主機或 runner 離線"
+          alerts: ${{ steps.watch.outputs.alerts }}
+          slack_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: C0B5XEQDVR7
+          details: |
+            上一輪排程（run ${{ steps.watch.outputs.previous }}）的 `scan` job 狀態：`${{ steps.watch.outputs.scan }}`（預期 `completed/success` 或 `completed/failure`）。
+            排隊、被取消或不存在，代表 self-hosted runner 沒有接手——此時 `scan` 與 `site-probe` 都不會告警。
+          runbook: |
+            **處置**：
+            1. 確認 `192.168.10.10` 開機、網路正常。
+            2. 確認 runner 服務在跑（repo Settings → Actions → Runners，`cloud360-10-10` 應為 Idle／Active）。
+            3. runner 恢復後，下一輪 scan 會補上日誌檢查；本 issue 在下一次判斷正常後自動關閉。
+
+      - name: Fail the run while an alert is firing
+        if: steps.watch.outputs.alerts != ''
+        env:
+          ALERTS: ${{ steps.watch.outputs.alerts }}
+        run: |
+          echo "::error::self-hosted runner 疑似離線：${ALERTS}" >&2
           exit 1
