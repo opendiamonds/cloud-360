@@ -621,5 +621,45 @@ class RetentionPurgeContractTest(unittest.TestCase):
         )
 
 
+class PurgeSchedulePausedTest(unittest.TestCase):
+    """清除排程暫停的鎖（2026-11-16 使用者裁決「先封住清除排程再發佈」）。
+
+    排程一律做不可回復的真實刪除，而選取條件從未以 dry-run 驗證（OPEN-ID9-4）。本測試存在
+    就代表「尚未驗證」：dry-run 驗證完成、由使用者決定重新開啟時，恢復兩支 workflow 的
+    `schedule:` 並**刪除本類別**。受測對象是 workflow 檔，沒有 HTTP 端點與 UI。
+    """
+
+    def _on(self, path: Path) -> dict:
+        import yaml
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return doc.get("on", doc.get(True))  # PyYAML 把裸的 on 讀成 True
+
+    def test_purge_runs_only_by_hand_and_defaults_to_dry_run(self):
+        """
+        @purpose 清除 workflow 進入 main 之後不得自動做真實刪除：沒有 schedule，只有手動觸發且預設 dry_run=true。
+        @given .github/workflows/memory-retention-purge.yml
+        @step 讀取 on 段 | 沒有 schedule
+        @step 讀取 workflow_dispatch.inputs.dry_run | default 為 true
+        @pass 排程暫停且手動預設唯讀
+        @story US4.2
+        """
+        on = self._on(PURGE_WORKFLOW)
+        self.assertNotIn("schedule", on)
+        self.assertIs(on["workflow_dispatch"]["inputs"]["dry_run"]["default"], True)
+
+    def test_watchdog_paused_with_the_purge(self):
+        """
+        @purpose 看守與清除同時暫停：清除沒有排程時，看守若照常排程會每天開「清除逾期」的誤報 issue。
+        @given .github/workflows/memory-retention-watchdog.yml
+        @step 讀取 on 段 | 沒有 schedule，仍有 workflow_dispatch
+        @pass 不產生每日誤報
+        @story US4.2
+        """
+        on = self._on(WATCHDOG_WORKFLOW)
+        self.assertNotIn("schedule", on)
+        self.assertIn("workflow_dispatch", on)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

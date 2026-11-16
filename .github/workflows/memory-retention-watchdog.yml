@@ -48,12 +48,11 @@ name: Memory retention watchdog
 # residual risk.
 
 on:
-  schedule:
-    # 06:23 UTC, about 12.7h after the purge's 17:41 UTC slot, so a failure the
-    # same night is seen the next morning. The 3-day threshold means the exact
-    # hour does not matter; it is pinned only to avoid the top-of-hour backlog
-    # and the other schedules in this repo.
-    - cron: "23 6 * * *"
+  # 排程暫停（2026-11-16）：清除排程已暫停（見 memory-retention-purge.yml 的 on: 段），
+  # 本看守若照常排程，會因「找不到任何一次成功的排程清除」每天開一則誤報 issue。
+  # 與清除排程同時恢復：
+  #   schedule:
+  #     - cron: "23 6 * * *"   # 06:23 UTC, about 12.7h after the purge's 17:41 UTC slot
   workflow_dispatch:
 
 permissions:
