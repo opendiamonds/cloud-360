@@ -213000,3 +213000,20 @@
 **Context**: operation > performance-validation > nfr-validation-matrix.md
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-11-16T15:21:26Z
+**Event**: HUMAN_TURN
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Picked**: ["先封住清除排程再發佈 (Recommended)"]
+
+---
+
+## Question Replied
+**Timestamp**: 2026-11-16T15:21:26Z
+**Event**: QUESTION_REPLIED
+**Session**: 56773cc3-e254-48cd-b7b8-07a8ebb8a7aa
+**Question**: ut 發佈到 main 會讓 90 天記憶清除的排程生效，每天 17:41 UTC（台灣 01:41）做不可回復的真實刪除，而它從未做過 dry-run 驗證。要怎麼發佈？
+**Reply**: 先封住清除排程再發佈 (Recommended)
+
+---
