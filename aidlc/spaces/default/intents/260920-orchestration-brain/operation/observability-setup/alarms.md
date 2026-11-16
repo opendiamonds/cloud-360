@@ -86,5 +86,4 @@
 - **Cloudflare 擋主機自己的 IP**：若 Cloudflare 規則改變、開始擋 staging 主機的出口 IP，`site-probe` 會以 403 告警 `SITE_DOWN`——runbook 已註明「403 多半是 Cloudflare」。
 - **真實執行驗證**：
   - 第 1 次（run 43882387962，初版）：`scan` 在 staging 上成功執行、讀到後端健康、無告警、未開 issue；`site-probe`（當時在 GitHub 代管 runner）被 Cloudflare 以 403 擋下，開出誤報 issue #725（已關閉）；Slack 未接受訊息，初版沒有印出 Slack 的錯誤碼，原因無從判斷——修訂 1 已補印。
-  - 第 2 次（修訂 1，PR #726 合併後，run 43884718365，2026-11-16T14:21Z）：三個 job 皆成功。`scan` 讀到後端健康、無告警；`site-probe` 在主機上經公開網址打，首頁 200、登入端點 401；`runner-watch` 查得到 run 但尚無「至少 50 分鐘前的上一輪」，回報 `no-previous`、未誤報。三者都無告警，故沒有開 issue、也沒有發 Slack。一次性分支已刪除。
-  - **Slack 尚未實際驗證**：兩次驗證中，只有誤報那一次發過 Slack，而當時沒有印錯誤碼；修訂 1 之後沒有任何狀態改變。下一次真的觸發告警時，看 run 的「Report whether Slack accepted the message」步驟即可得知結果。
+  - 第 2 次（修訂 1）：結果補記於此。
