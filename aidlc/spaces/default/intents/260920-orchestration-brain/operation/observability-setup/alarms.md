@@ -10,9 +10,7 @@
 
 ## 二、告警清單
 
-三個 job 互不依賴，各自管理一則 issue：`scan` 在被監看的主機上讀日誌；`site-probe` 同樣在主機上，但經公開網址（Cloudflare Tunnel）打網站；`runner-watch` 在 GitHub 代管 runner 上檢查上一輪 `scan` 有沒有真的被執行。
-
-> **修訂 1（2026-11-16T14:15:12Z）**：`site-probe` 原本跑在 GitHub 代管 runner 上。首次真實驗證（一次性分支 `danniel/chore/brain-health-run`，run 43882387962）兩個端點都回 **403**——Cloudflare 擋下 GitHub 機房的 IP，網站本身正常，開出的 issue #725 是誤報，已註明原因並關閉。使用者裁決改為「主機上打公開網址＋GitHub 端檢查 scan 有沒有跑」，以 `runner-watch` 取代原本只有外部探測才能提供的「主機整台離線」偵測。
+兩個 job 互不依賴（`scan` 在被監看的主機上讀日誌；`site-probe` 在 GitHub 代管 runner 上從外部打網站），各自管理一則 issue。
 
 | ID | 來源 job | 條件（每小時一次） | 嚴重度 | Routes to | 對應的上游定義 |
 |---|---|---|---|---|---|
@@ -23,9 +21,8 @@
 | `MEMORY_DEGRADED` | scan | 1 小時內 `memory_degraded=True` ≥ 3 輪 | P3 | 同上 | `intent-router` monitoring-design §二（記憶持續降級） |
 | `PROMPT_GUARD_SURGE` | scan | 1 小時內 `error_kind=PROMPT_GUARD_HIT` ≥ 5 次 | P2 | 同上 | `intent-router` monitoring-design §二 |
 | `SLO_7D_BREACH` | scan | 7 天可用性 < 99% 且樣本 ≥ 50 輪 | P2 | 同上 | `slo-config.md` S1 |
-| `SITE_DOWN` | site-probe（主機上，經公開網址） | 重試 3 次後首頁仍非 200 | P1 | GitHub issue「[brain-health] 網站從公開網址無法使用」＋ Slack | `deploy.yml` 的外部可達檢查 |
-| `DATA_PLANE_DOWN` | site-probe（主機上，經公開網址） | 重試 3 次後 `POST /api/auth/login`（不存在帳號）仍非 401 | P1 | 同上 | `deploy.yml` 的資料面探測（同一個探測帳號） |
-| `RUNNER_OFFLINE` | runner-watch（GitHub 代管） | 本輪以外、建立至少 50 分鐘前的上一輪排程，其 `scan` job 不是 `completed/success` 或 `completed/failure`（排隊中、被下一輪取代而取消、或不存在） | P1 | GitHub issue「[brain-health] staging 主機或 runner 離線」＋ Slack | `memory-retention-watchdog.yml` 的「看守者不能住在被看守的機器上」 |
+| `SITE_DOWN` | site-probe | 重試 3 次後首頁仍非 200 | P1 | GitHub issue「[brain-health] 網站從外部無法使用」＋ Slack | `deploy.yml` 的外部可達檢查 |
+| `DATA_PLANE_DOWN` | site-probe | 重試 3 次後 `POST /api/auth/login`（不存在帳號）仍非 401 | P1 | 同上 | `deploy.yml` 的資料面探測（同一個探測帳號） |
 
 **嚴重度只是標註**：本 repo 沒有 on-call 輪值，P1／P2／P3 不對應不同通道。
 
@@ -58,7 +55,7 @@
 
 ## 六、測試與突變驗證
 
-`backend/tests/test_brain_health_watch.py`：初版 14 案全綠（含以 11/15 事故形狀的日誌斷言兩條告警會觸發）；修訂 1 新增 `RunnerWatchTest` 4 案，共 18 案全綠。
+`backend/tests/test_brain_health_watch.py`：14 案全綠（含以 11/15 事故形狀的日誌斷言兩條告警會觸發）。
 
 | 突變 | 改動 | 結果 |
 |---|---|---|
@@ -69,21 +66,8 @@
 
 還原後兩檔 sha256 與基線相同（workflow `ba8f4259e9c7f55b…`、action `f99e71daa9ebe0f9…`），14 案重跑全綠。
 
-修訂 1 的突變（workflow 基線 `ba7ba8d12a3b8192…`）：
-
-| 突變 | 改動 | 結果 |
-|---|---|---|
-| H5 | `completed/cancelled` 視為 runner 健康 | 紅：`test_previous_scan_never_picked_up_fires_runner_offline` |
-| H6 | 拿掉「至少 50 分鐘前」的過濾 | 紅：`test_skips_current_and_too_recent_runs` |
-
-還原後 sha256 與基線相同，18 案重跑全綠。
-
 ## 七、仍未覆蓋（殘餘風險）
 
 - **沒人看守看守者**：GitHub Actions 長時間故障或本 workflow 被停用時兩條路徑同時沉默——與 `memory-retention-watchdog` 的 `OPEN-ID9-1` 同形，接受為殘餘風險。
-- ~~self-hosted runner 離線但網站正常時不會告警~~：修訂 1 以 `runner-watch` 覆蓋。
-- **`runner-watch` 與排程本身都要等本 workflow 進入預設分支 `main`**：GitHub 只在預設分支上執行 `on: schedule`，也只對預設分支上的 workflow 開放 `workflow_dispatch`。在 `ut` 發佈到 `main` 之前，三個 job 都不會自動執行；`runner-watch` 屆時查不到 run 會以 `state=unregistered` 跳過而不誤報。
-- **Cloudflare 擋主機自己的 IP**：若 Cloudflare 規則改變、開始擋 staging 主機的出口 IP，`site-probe` 會以 403 告警 `SITE_DOWN`——runbook 已註明「403 多半是 Cloudflare」。
-- **真實執行驗證**：
-  - 第 1 次（run 43882387962，初版）：`scan` 在 staging 上成功執行、讀到後端健康、無告警、未開 issue；`site-probe`（當時在 GitHub 代管 runner）被 Cloudflare 以 403 擋下，開出誤報 issue #725（已關閉）；Slack 未接受訊息，初版沒有印出 Slack 的錯誤碼，原因無從判斷——修訂 1 已補印。
-  - 第 2 次（修訂 1）：結果補記於此。
+- **self-hosted runner 離線但網站正常**：`scan` 不會產生 run、`site-probe` 也是綠的。此時不會告警，只能由 Actions 列表缺少 `scan` 的 run 看出。
+- **真實執行驗證**：本站合併部署後以一次 `workflow_dispatch` 驗證（[Q5]=A），結果補記於本節。

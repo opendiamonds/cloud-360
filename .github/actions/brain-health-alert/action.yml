@@ -1,6 +1,6 @@
 name: Brain health alert
 description: >-
-  大腦健康告警的通知端（observability-setup，[Q4]=C）。由 brain-health-watch.yml 的三個 job
+  大腦健康告警的通知端（observability-setup，[Q4]=C）。由 brain-health-watch.yml 的兩個 job
   共用：依「目前觸發中的告警 id」開啟、更新或關閉一則 GitHub issue，並在狀態改變時發一則
   Slack 訊息。issue 本身就是狀態：以固定標題前綴去重，以 issue 內最後一個
   `brain-health-sig` 標記判斷告警組合是否改變——沒變就不留言、不發 Slack，避免每小時
@@ -139,13 +139,7 @@ runs:
       shell: bash
       env:
         OK: ${{ steps.send.outputs.ok }}
-        RESPONSE: ${{ steps.send.outputs.response }}
-        SLACK_ERROR: ${{ steps.send.outputs.error }}
       run: |
-        # Slack 的回應只含 ok／error 碼與訊息 ts，不含 token；與 deploy.yml 的同名步驟一樣印出，
-        # 否則 not_in_channel 與 invalid_auth 看起來一模一樣（首次驗證 run 43882387962 即是如此）。
-        if [ "${OK}" = "true" ]; then
-          echo "Slack accepted the alert (ok=true)"
-        else
-          echo "::warning::Slack 沒有接受告警訊息（ok=${OK:-unset} error=${SLACK_ERROR:-none}）。Response: ${RESPONSE:-none}（issue 已更新，不影響告警本身）" >&2
+        if [ "${OK}" != "true" ]; then
+          echo "::warning::Slack 沒有接受告警訊息（issue 已更新，不影響告警本身）" >&2
         fi
