@@ -4,21 +4,26 @@
 （`get_current_user`、facade 授權、SQLite 測試資料庫）。**授權不 mock**；token 以 backend 的
 `create_access_token` 簽發。兩種協定版本（`legacy`、`auto`＝現代）都跑（Step 1 中途關卡調整 1）。
 
-資料庫：沿用 `RequirementFieldFixture`（同一個 in-memory SQLite）。並發的 backend 請求跑在執行緒池裡，而
-SQLAlchemy 的 `Session` 不是執行緒安全的，所以 `get_db` 覆寫以一把鎖讓 backend 端**逐一**使用 session——
-這只序列化 backend 內部的 DB 存取；bridge 端的請求交錯（T-1 要驗的東西）不受影響。
+資料庫：沿用 `RequirementFieldFixture` 的資料，但以 `threaded=True` 建在暫存檔 SQLite 上，`get_db` 覆寫
+**每個請求各開一個 session**——與線上相同。並發的 backend 請求跑在執行緒池裡，而 SQLAlchemy 的 `Session`
+不是執行緒安全的。
+
+原本的做法是讓所有請求共用同一個 session、以一把鎖序列化「取得 session」；但鎖的釋放時機與回應序列化
+（可能觸發延遲載入的 SQL）、commit 的兩階段之間沒有對齊，CI 上偶發 `This session is in 'prepared' state`
+（`test_interleaved_writes_keep_identity_and_agent`，2026-11-16 PR #724 的 CI）。每請求一個 session 讓這類交錯
+在結構上不存在；寫入的序列化交給 SQLite 自己的鎖。bridge 端的請求交錯（T-1 要驗的東西）不受影響。
 """
 
 import tests.helpers  # noqa: F401  必須最先匯入：處理 sys.path 與 psycopg stub
 
 import asyncio
 import json
-import threading
 import unittest
 import uuid
 from unittest import mock
 
 import httpx
+from sqlalchemy.orm import sessionmaker
 
 from database import get_db
 from main import app as backend_app
@@ -58,20 +63,23 @@ def all_property_names(schema):
 class E2EBase(RequirementFieldFixture, unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         preserve_logging(self)
-        self.build_fixture()
+        self.build_fixture(threaded=True)
         self.system2 = HierarchyFacade(self.db).create_system(
             mint_principal(self.outsider), project_id=self.other_project.id, name="S2",
             project_visible=ALWAYS_VISIBLE)
         self.db.commit()
         self.owner_token = "Bearer " + create_access_token({"sub": self.owner.username})
         self.outsider_token = "Bearer " + create_access_token({"sub": self.outsider.username})
-        lock = threading.Lock()
+        request_sessions = sessionmaker(bind=self.db._test_engine)
 
-        def locked_db():
-            with lock:
-                yield self.db
+        def per_request_db():
+            db = request_sessions()
+            try:
+                yield db
+            finally:
+                db.close()
 
-        backend_app.dependency_overrides[get_db] = locked_db
+        backend_app.dependency_overrides[get_db] = per_request_db
 
     def tearDown(self):
         backend_app.dependency_overrides.clear()
