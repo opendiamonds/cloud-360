@@ -104,12 +104,15 @@ name: Memory retention purge (90d)
 #   * no step echoes deploy/.env, DATABASE_URL, or any secret.
 
 on:
-  schedule:
-    # 17:41 UTC = 01:41 at the host's local time (UTC+8): genuinely off-peak for
-    # the self-hosted machine, which also serves deploys. The odd minute avoids
-    # GitHub's top-of-hour backlog, and no other workflow in this repo uses it
-    # (existing schedules: 00:37, 21:13, 22:29, 23:00, and every 6h at :00).
-    - cron: "41 17 * * *"
+  # 排程暫停（2026-11-16 使用者裁決「先封住清除排程再發佈」）：
+  # 本 workflow 一旦進入預設分支 main，排程每天都會做**不可回復的真實刪除**（下方
+  # Decide the mode 步驟：排程一律 dry_run=false），而它從未以 dry-run 驗證過選取條件
+  # （infrastructure-design 的 OPEN-ID9-4，blocking-downstream）。在 dry-run 驗證完成、
+  # 由使用者決定重新開啟之前，只保留手動觸發（預設 dry_run=true）。
+  # 重新開啟時恢復下面這兩行，並刪除 backend/tests/test_retention_purge_contract.py 的
+  # PurgeSchedulePausedTest——那個測試的存在就是「尚未驗證」的標記。
+  #   schedule:
+  #     - cron: "41 17 * * *"   # 17:41 UTC = 01:41 at the host's local time (UTC+8)
   workflow_dispatch:
     inputs:
       dry_run:
