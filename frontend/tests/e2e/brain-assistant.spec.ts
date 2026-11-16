@@ -8,7 +8,7 @@ import * as F from '../../src/brain/testing/wsFrames';
 // **本階段新增、已核可 requirements／user-stories 尚未涵蓋**（使用者以選單選定「全站統一用小助手」）。它取代
 // `[EP1]`=A 的子頁面「問大腦」收合面板；工作區與評估頁既有的設計／評核對話區不動。回補項見
 // `aidlc/spaces/default/intents/260920-orchestration-brain/operation/followups/global-brain-assistant.md`；
-// 規格註解暫掛既有故事，回補後改指新 AC。
+// 2026-11-16 已回補為 `FR14.5`／`US14.5`，規格註解改指 `US14.5`。
 //
 // 全部走攔截層：`page.routeWebSocket` 扮演大腦伺服器（形狀沿用 `object-picker.spec.ts` 的 BrainServer，刻意不抽
 // 共用模組：不改已交付單元的 spec），`page.route` 樁化 HTTP。伺服器訊框只由 `src/brain/testing/wsFrames.ts`
@@ -168,7 +168,7 @@ test.describe('Global brain assistant', () => {
    * @step 依序開啟 /projects/10、/memory、/cost | 每頁都有 1 個 brain-assistant-toggle，aria-label 為「開啟大腦小助手」
    * @step 無 K1 者開啟 /projects/10、/memory、/cost | 三頁的 brain-assistant-toggle 都是 0 個，大腦連線 0 條
    * @pass 有 K1 時三頁皆有、入口頁沒有；無 K1 時都沒有
-   * @story US2.1
+   * @story US14.5
    */
   test('shows the assistant button on non-entry pages only for K1 users', async ({ page, browser }) => {
     await setup(page);
@@ -203,7 +203,7 @@ test.describe('Global brain assistant', () => {
    * @step 輸入一句並送出 | 大腦連線收到 1 則 user_message，payload.page 為 entry、text 為原句
    * @step 伺服器回一輪 token＋done | 回覆文字出現在小助手的對話區
    * @pass page 為 entry 且回覆顯示在小助手內
-   * @story US8.1
+   * @story US14.5
    */
   test('sends from the project page with the routed page and shows the reply', async ({ page }) => {
     const h = await setup(page);
@@ -229,7 +229,7 @@ test.describe('Global brain assistant', () => {
    * @step 換到入口頁 / | 小助手不顯示；入口頁對話區有同一句原句與回覆（同一段、只有一份）
    * @step 統計大腦 WebSocket | 頁面建立的大腦 WebSocket 1 條、攔截層收到 1 條、hello 1 則
    * @pass 狀態與紀錄跨頁保留，且全程只有一條連線
-   * @story US8.1
+   * @story US14.5
    */
   test('keeps the conversation and open state across pages over a single websocket', async ({ page }) => {
     const h = await setup(page);
@@ -271,7 +271,7 @@ test.describe('Global brain assistant', () => {
    * @step 量測按鈕與畫布 iframe 的位置 | 按鈕不與畫布底部 32px 狀態列的右端 96px（縮放比例選單）重疊
    * @step 展開小助手並送出一句 | user_message.payload.page 為 workspace
    * @pass 面板已移除、作業對象列保留、小助手可用且帶本頁 page、不遮住畫布縮放控件
-   * @story US3.1
+   * @story US14.5
    */
   test('replaces the workspace ask-brain panel with the assistant and keeps the target bar', async ({ page }) => {
     const h = await setup(page);
@@ -305,7 +305,7 @@ test.describe('Global brain assistant', () => {
    * @step 收合狀態下伺服器回一輪 | 按鈕 data-unread=true、aria-label「開啟大腦小助手（有新回覆）」
    * @step 再展開 | 未讀提示消失
    * @pass Esc 關閉且焦點正確；未讀提示只在收合期間出現
-   * @story US8.1
+   * @story US14.5
    */
   test('closes with Escape, returns focus to the button and flags unread replies', async ({ page }) => {
     const h = await setup(page);
@@ -338,7 +338,7 @@ test.describe('Global brain assistant', () => {
    * @given 具 K1 的使用者；在 /cost 展開小助手且有一輪對話
    * @step 以 axe（`wcag2a`、`wcag2aa`、`wcag21a`、`wcag21aa`）只掃 `brain-assistant-window` | violations 為 0 個（空陣列 `[]`）
    * @pass 0 個違規
-   * @story US8.1
+   * @story US14.5
    */
   test('passes an axe scan with the assistant open', async ({ page }) => {
     const h = await setup(page);
