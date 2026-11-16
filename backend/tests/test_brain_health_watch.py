@@ -199,129 +199,39 @@ class WorkflowShapeTest(unittest.TestCase):
 
     def test_jobs_run_where_they_must_and_do_not_depend_on_each_other(self):
         """
-        @purpose scan 與 site-probe 必須在被監看的主機上（日誌只在那裡；GitHub 代管 runner 打公開網址會被 Cloudflare 以 403 擋下，
-                 首次驗證 run 43882387962 即誤報）；runner-watch 必須在 GitHub 代管 runner 上——它是主機離線時唯一的眼睛。
-                 三者都不得以 needs 串接：串接會讓 GitHub 端等一個永遠不會開始的 job。
+        @purpose scan 必須在被監看的主機上（日誌只在那裡）；site-probe 必須在 GitHub 代管 runner 上且不依賴 scan——
+                 主機離線時 scan 不會產生任何 run，串接會讓外部探測永遠等不到。
         @given brain-health-watch.yml
-        @step 檢視 scan、site-probe 的 runs-on | 皆含 self-hosted 與 cloud360
-        @step 檢視 runner-watch | runs-on 為 ubuntu-latest
-        @step 檢視三個 job | 皆沒有 needs
-        @pass 監看路徑互相獨立且位置正確
+        @step 檢視 scan.runs-on | 含 self-hosted 與 cloud360
+        @step 檢視 site-probe | runs-on 為 ubuntu-latest、沒有 needs
+        @pass 兩條監看路徑互相獨立
         @story US8.1
         """
         jobs = self.wf["jobs"]
-        for name in ("scan", "site-probe"):
-            self.assertIn("self-hosted", jobs[name]["runs-on"], name)
-            self.assertIn("cloud360", jobs[name]["runs-on"], name)
-        self.assertEqual(jobs["runner-watch"]["runs-on"], "ubuntu-latest")
-        for name in ("scan", "site-probe", "runner-watch"):
-            self.assertNotIn("needs", jobs[name], name)
+        self.assertIn("self-hosted", jobs["scan"]["runs-on"])
+        self.assertIn("cloud360", jobs["scan"]["runs-on"])
+        self.assertEqual(jobs["site-probe"]["runs-on"], "ubuntu-latest")
+        self.assertNotIn("needs", jobs["site-probe"])
+        self.assertNotIn("needs", jobs["scan"])
 
     def test_minimal_permissions_and_logs_never_printed(self):
         """
-        @purpose 本 repo 為 public、Actions log 公開：權限只有 contents:read＋issues:write＋actions:read；
+        @purpose 本 repo 為 public、Actions log 公開：權限只有 contents:read＋issues:write；
                  docker logs 一律導到 RUNNER_TEMP 的檔案，workflow 內沒有任何 cat／head／tail 印出日誌。
         @given brain-health-watch.yml 全文
-        @step 檢視 permissions | 恰為 {contents: read, issues: write, actions: read}
+        @step 檢視 permissions | 恰為 {contents: read, issues: write}
         @step 檢視每一行 docker logs | 皆以 > 導向檔案
         @step 搜尋 cat／head／tail 日誌檔 | 零命中
         @pass 不外洩日誌內容
         @story US8.1
         """
-        self.assertEqual(self.wf["permissions"], {"contents": "read", "issues": "write", "actions": "read"})
+        self.assertEqual(self.wf["permissions"], {"contents": "read", "issues": "write"})
         lines = [ln for ln in self.text.splitlines() if "docker logs" in ln and not ln.strip().startswith("#")]
         self.assertTrue(lines)
         for ln in lines:
             self.assertIn("> ", ln, ln)
         for bad in ("cat \"${LOG", "head ", "tail -", "cat ${RUNNER_TEMP}"):
             self.assertNotIn(bad, self.text)
-
-
-FAKE_GH_RUNS = r"""#!/usr/bin/env bash
-case "$1 $2" in
-  "run list") [ -n "$GH_RUNS_FAIL" ] && exit 1; cat "$GH_RUNS" ;;
-  "run view") cat "$GH_JOBS" ;;
-esac
-"""
-
-
-class RunnerWatchTest(_Shell):
-    def setUp(self):
-        super().setUp()
-        wf = yaml.safe_load(WATCH_WF.read_text(encoding="utf-8"))
-        job = wf["jobs"]["runner-watch"]
-        self.script = _step(job["steps"], "Decide whether the previous scan ever ran")["run"]
-        self.job_env = {k: str(v) for k, v in job["env"].items() if "${{" not in str(v)}
-        bindir = self.tmp / "bin"
-        bindir.mkdir()
-        gh = bindir / "gh"
-        gh.write_text(FAKE_GH_RUNS)
-        gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-        self.path = f"{bindir}:{os.environ['PATH']}"
-
-    def watch(self, runs, scan_status=None, list_fails=False) -> dict:
-        (self.tmp / "runs.json").write_text(json.dumps(runs))
-        jobs = [] if scan_status is None else [{"name": "scan backend logs", "status": scan_status[0], "conclusion": scan_status[1]}]
-        jobs.append({"name": "probe the public URL", "status": "completed", "conclusion": "success"})
-        (self.tmp / "jobs.json").write_text(json.dumps({"jobs": jobs}))
-        out = self.tmp / "out"
-        out.write_text("")
-        env = dict(os.environ, **self.job_env, PATH=self.path, GH_RUNS=str(self.tmp / "runs.json"),
-                   GH_JOBS=str(self.tmp / "jobs.json"), GH_RUNS_FAIL="1" if list_fails else "",
-                   CURRENT_RUN_ID="999", GITHUB_OUTPUT=str(out))
-        proc = subprocess.run([BASH, "-c", self.script], env=env, capture_output=True, text=True)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        return self.outputs(out)
-
-    OLD = "2020-01-01T00:00:00Z"
-
-    def test_previous_scan_that_ran_is_healthy(self):
-        """
-        @purpose 上一輪 scan 已被 runner 執行（成功或發現告警而失敗）時，runner 是活的，不告警。
-        @given 上一輪（夠舊）的 scan 為 completed/success；另一次為 completed/failure
-        @step 依序執行判斷步驟 | state=checked、alerts 為空
-        @pass 不誤報
-        @story US8.1
-        """
-        for concl in ("success", "failure"):
-            o = self.watch([{"databaseId": 5, "createdAt": self.OLD}], ("completed", concl))
-            self.assertEqual((o["state"], o["alerts"]), ("checked", ""), concl)
-
-    def test_previous_scan_never_picked_up_fires_runner_offline(self):
-        """
-        @purpose 主機或 runner 離線時，scan 會一直排隊、或被下一輪取代而取消——它自己永遠不會告警。這裡必須告警。
-        @given 上一輪 scan 狀態分別為 queued、completed/cancelled、整個 job 不存在
-        @step 依序執行判斷步驟 | alerts=RUNNER_OFFLINE
-        @pass 主機離線會被發現
-        @story US8.1
-        """
-        for status in (("queued", None), ("completed", "cancelled"), None):
-            o = self.watch([{"databaseId": 5, "createdAt": self.OLD}], status)
-            self.assertEqual(o["alerts"], "RUNNER_OFFLINE", status)
-
-    def test_skips_current_and_too_recent_runs(self):
-        """
-        @purpose 只判斷「本輪以外、建立至少 50 分鐘前」的那一輪：本輪與剛排入的一輪本來就還沒跑完，拿來判會每次誤報。
-        @given 兩筆 run：本輪（id 999）與剛建立的一筆；兩者的 scan 都是 queued
-        @step 執行判斷步驟 | state=no-previous、alerts 為空
-        @pass 不把排隊中的新一輪當成離線
-        @story US8.1
-        """
-        import datetime
-        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        o = self.watch([{"databaseId": 999, "createdAt": self.OLD}, {"databaseId": 6, "createdAt": now}], ("queued", None))
-        self.assertEqual((o["state"], o["alerts"]), ("no-previous", ""))
-
-    def test_unregistered_workflow_does_not_alert(self):
-        """
-        @purpose 本 workflow 尚未進入預設分支（main）時 `gh run list` 失敗——那不是主機離線，不得每小時誤報。
-        @given gh run list 以非零結束
-        @step 執行判斷步驟 | state=unregistered、alerts 為空、步驟成功
-        @pass 未上線期間不誤報
-        @story US8.1
-        """
-        o = self.watch([], list_fails=True)
-        self.assertEqual((o["state"], o["alerts"]), ("unregistered", ""))
 
 
 FAKE_GH = r"""#!/usr/bin/env bash
