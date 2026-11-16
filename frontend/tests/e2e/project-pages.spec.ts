@@ -1255,7 +1255,7 @@ test.describe('Diagram attach to system', () => {
    * @step 在下拉選 e2e-diagram-a 並按「掛上」 | PUT 本體 system_id=100；狀態列「已掛到系統」；系統列出現 e2e-diagram-a
    * @step 按「取消掛載「e2e-diagram-a」」 | PUT 本體 system_id=null；系統列回到空說明
    * @pass 兩次 PUT 本體正確且畫面隨之更新
-   * @story US14.1
+   * @story US9.1
    */
   test('attaches my diagram to a system and detaches it from the overview', async ({ page }) => {
     const state = detailWorld(1);
@@ -1286,7 +1286,7 @@ test.describe('Diagram attach to system', () => {
    * @given 同上，但伺服器對掛載一律回 404「查不到系統」
    * @step 選圖並按「掛上」 | 狀態列顯示「查不到系統」
    * @pass 系統列仍是空說明
-   * @story US14.1
+   * @story US9.1
    */
   test('shows the server refusal and keeps the system unattached', async ({ page }) => {
     const state = detailWorld(1);
@@ -1310,7 +1310,7 @@ test.describe('Diagram attach to system', () => {
 //
 // **本階段新增、已核可 scope／requirements 尚未涵蓋**（使用者在 staging 看過專案總覽後選定「先做 1＋2」；
 // 第 3 項「讓大腦新建一張架構圖」不在範圍）。回補：requirements 新 FR、user-stories 新 AC，見
-// `operation/followups/project-page-brain-entry.md`；2026-11-16 已回補為 `FR14.4`／`US14.4`，規格註解改指 `US14.4`。
+// `operation/followups/project-page-brain-entry.md`；規格註解暫掛既有故事，回補後改指新 AC。
 // 另開 describe，不動既有兩個 describe 的 TCMS 名稱。
 //
 // 大腦伺服器以 `page.routeWebSocket` 扮演（形狀沿用 `object-picker.spec.ts` 的 BrainServer，刻意不抽共用
@@ -1421,7 +1421,7 @@ test.describe('Project page brain entry', () => {
    * @step 等伺服器回推作業對象 | 網址變為 /workspace
    * @step 等工作區載入完成 | 架構圖選單的值為空（未還原圖 7），脈絡列顯示 e2e-system-1
    * @pass set_work_target 恰一則且三層 id 正確；導頁發生在回推之後；工作區為空白畫布
-   * @story US14.4
+   * @story US9.1
    */
   test('sets the work target to the system and opens a blank workspace', async ({ page }) => {
     await setupApp(page, detailWorld(1));
@@ -1451,7 +1451,7 @@ test.describe('Project page brain entry', () => {
    * @step 檢查作業對象提示 | 顯示「不在這個專案內」，「把作業對象設為這個專案」aria-disabled="true"，說明逐字同上
    * @step 按這兩個控件 | 大腦連線收到的 set_work_target 為 0 則，網址仍是 /projects/10
    * @pass 兩個控件都停用、說明逐字一致、按下無任何副作用
-   * @story US14.4
+   * @story US9.1
    */
   test('disables the create action and the project target button for a non-owner', async ({ page }) => {
     await setupApp(page, detailWorld(1, OTHER_ID));
@@ -1483,7 +1483,7 @@ test.describe('Project page brain entry', () => {
    * @given 專案 10 有系統 100、101；我的圖：兩張掛 100、一張掛 101、一張掛其他專案的系統 999、一張未掛；另有一張別人分享給我的圖
    * @step 開啟總覽 | 「架構圖」計數為 3，並註明「你掛在這個專案各系統的架構圖」
    * @pass 數字恰為 3（不是 0、不是 4、不是 6，也不是「尚無法取得」）
-   * @story US14.4
+   * @story US11.3
    */
   test('counts my diagrams attached to the systems of this project', async ({ page }) => {
     await setupApp(page, detailWorld(2));
@@ -1511,7 +1511,7 @@ test.describe('Project page brain entry', () => {
    * @step 按「把作業對象設為這個專案」 | 收到 set_work_target：projectId=10、systemId=null、diagramId=null、segment=shared；提示消失；脈絡列專案層為 e2e-project-detail
    * @step 沒有 K1 開啟專案 10 | 脈絡列、提示、小助手按鈕、建立動作皆不在 DOM；大腦連線數為 0
    * @pass 進頁不送設定；有 K1 才掛載；改設只在使用者按下時發生
-   * @story US14.4
+   * @story US2.1
    */
   test('mounts the context bar and brain panel only with K1 view', async ({ browser }: { browser: Browser }) => {
     const allowCtx = await browser.newContext();

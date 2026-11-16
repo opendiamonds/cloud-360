@@ -97,7 +97,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @pass 三處皆指向同一系統
         @api POST /api/collab/diagrams -> 200 | 存檔時掛到系統
         @api GET /api/collab/diagrams -> 200 | 我的圖含 system_id
-        @story US14.1
+        @story US9.1
         """
         res = self.client_as(self.alice).post(
             "/api/collab/diagrams",
@@ -127,7 +127,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step POST /api/collab/diagrams 不帶 system_id | 200、system_id 為 null
         @pass 資料庫的 system_id 為 NULL
         @api POST /api/collab/diagrams -> 200 | 不帶系統
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice)
         self.assertIsNone(self._system_of(did))
@@ -140,7 +140,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step bob 邀請 alice 為一般成員後再 POST | 仍 404，圖數不變
         @pass 兩次都沒有新建任何圖
         @api POST /api/collab/diagrams -> 404 | 目標系統不可寫
-        @story US14.1
+        @story US9.1
         """
         before = self._diagram_count()
         res = self.client_as(self.alice).post(
@@ -170,7 +170,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step dev POST 帶 alice 的 system_id | 403
         @pass 圖數不變
         @api POST /api/collab/diagrams -> 403 | 缺 K2 edit
-        @story US14.1
+        @story US9.1
         """
         before = self._diagram_count()
         res = self.client_as(self.dev).post(
@@ -187,7 +187,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step POST 帶不存在的 system_id | 404，detail 與帶 bob 的系統相同
         @pass 不存在與不可寫不可區分
         @api POST /api/collab/diagrams -> 404 | 系統不存在
-        @story US14.1
+        @story US9.1
         """
         a = self.client_as(self.alice).post(
             "/api/collab/diagrams", json={"xml_data": XML, "title": "x", "system_id": 99999}
@@ -209,7 +209,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step PUT system_id=null | 200，system_id 為 null
         @pass 每一步資料庫都同步
         @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 200 | 掛載、改掛、取消
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice)
         client = self.client_as(self.alice)
@@ -226,7 +226,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step bob PUT alice 的圖到 bob 的系統 | 404
         @pass alice 的圖仍未掛載
         @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 404 | 不是圖的擁有者
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice)
         res = self.client_as(self.bob).put(
@@ -243,7 +243,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step bob 把 alice 邀為 project_admin 後再 PUT | 仍 404（不是擁有者），歸屬不變
         @pass 兩次歸屬都維持原系統
         @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 404 | 目標系統不可寫
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice, system_id=self.s_alice)
         client = self.client_as(self.alice)
@@ -268,7 +268,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step dev PUT system_id=null | 403
         @pass 歸屬不變
         @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 403 | 缺 K2 edit
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.dev)
         res = self.client_as(self.dev).put(
@@ -283,7 +283,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step PUT 空本體 | 422
         @pass 歸屬不變
         @api PUT /api/hierarchy/diagrams/{diagram_id}/system -> 422 | 缺欄位
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice, system_id=self.s_alice)
         res = self.client_as(self.alice).put(f"/api/hierarchy/diagrams/{did}/system", json={})
@@ -297,7 +297,7 @@ class DiagramSystemAttachTest(unittest.TestCase):
         @step bob GET /api/collab/diagrams | 該圖 is_owner=false、system_id=null
         @pass 歸屬不外露
         @api GET /api/collab/diagrams -> 200 | 分享的圖
-        @story US14.1
+        @story US9.1
         """
         did = self._create_diagram(self.alice, system_id=self.s_alice)
         share = self.client_as(self.alice).post(
