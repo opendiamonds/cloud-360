@@ -1,0 +1,745 @@
+{
+  "stage": "code-generation",
+  "unit": "entry-page-ui",
+  "upstream_ids": [
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.2.1",
+    "AC1.2.2",
+    "AC1.2.3",
+    "AC1.2.4",
+    "AC1.3.1",
+    "AC1.3.2",
+    "AC1.3.3",
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "AC2.2.1",
+    "AC2.2.2",
+    "AC2.2.3",
+    "AC3.1.1",
+    "AC3.1.2",
+    "AC3.1.3",
+    "AC3.1.4",
+    "AC5.1.1",
+    "AC5.1.2",
+    "AC5.1.3",
+    "AC8.1.1",
+    "AC8.1.2",
+    "AC8.1.3",
+    "AC8.1.4",
+    "AC9.1.1",
+    "AC9.1.2",
+    "AC9.1.3",
+    "AC9.1.4",
+    "AC10.1.1",
+    "AC10.1.2",
+    "AC10.1.3",
+    "AC10.1.4",
+    "AC10.1.5",
+    "AC10.2.1",
+    "AC10.2.2",
+    "AC10.2.3",
+    "AC10.2.4",
+    "BR91.1",
+    "BR91.2",
+    "BR91.3",
+    "BR91.4",
+    "BR91.5",
+    "BR92.1",
+    "BR92.2",
+    "BR92.3",
+    "BR92.4",
+    "BR92.5",
+    "BR92.6",
+    "BR92.7",
+    "BR92.8",
+    "BR93.1",
+    "BR93.2",
+    "BR93.3",
+    "BR93.4",
+    "BR93.5",
+    "BR93.6",
+    "BR93.7",
+    "BR94.1",
+    "BR94.2",
+    "BR94.3",
+    "BR94.4",
+    "BR94.5",
+    "BR94.6",
+    "BR94.7",
+    "BR95.1",
+    "BR95.2",
+    "BR95.3",
+    "BR95.4",
+    "BR95.5",
+    "BR96.1",
+    "BR96.2",
+    "BR96.3",
+    "BR96.4",
+    "BR97.1",
+    "BR97.2",
+    "BR97.3",
+    "BR97.4",
+    "BR97.5",
+    "BR97.6",
+    "BR97.7",
+    "BR97.8",
+    "BR98.1",
+    "BR98.2",
+    "BR98.3",
+    "BR98.4",
+    "BR98.5",
+    "NFR2.140",
+    "NFR2.141",
+    "NFR3.140",
+    "NFR3.141",
+    "NFR4.140",
+    "NFR5.140",
+    "NFR5.141",
+    "NFR8.140",
+    "NFR11.140",
+    "NFR11.100"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E16「工作項兩處同步且五狀態文字正確」：常駐區與對話流同 id 的狀態文字相同"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E16：五狀態文字、在等、失敗原因、sideEffect 三語意"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page-live.spec.ts",
+      "note": "L2「平台自我竄改句子顯示固定拒絕訊息」——尚未在真實 stack 執行（需 docker-compose.test.yml）；依 2026-10-27 裁決改由計畫 Step 23 的一次 CI 實跑（ui-regression）承擔，跑完前不宣稱為綠；攔截層 E12 驗 token 逐訊框呈現"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E28／E29（快照先到、後到同結果）、E39（串流中換頁合併為一則）"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E23 三層名稱與兩種佔位；後端名稱來源見 backend/tests/test_describe_work_target.py (a)–(j)"
+    },
+    {
+      "id": "AC1.2.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E19 意圖反問提示「我不確定你指的是哪一件事」"
+    },
+    {
+      "id": "AC1.2.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E19 選定只送一次、整組停用"
+    },
+    {
+      "id": "AC1.2.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E20 回絕送 null、焦點回輸入列、脈絡列不變"
+    },
+    {
+      "id": "AC1.2.4",
+      "status": "N/A",
+      "target": "落點為 U11 路由層的輸出與 U2 契約的 ClarifyCandidate.confidence 欄位；本單元依 [DM:D3]=A 不讀不顯示信心值，對此 AC 無可觀察的畫面面"
+    },
+    {
+      "id": "AC1.3.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E18「不是這個」只送一次"
+    },
+    {
+      "id": "AC1.3.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E18 等下一則 work_items 才改畫面（不本地改狀態）"
+    },
+    {
+      "id": "AC1.3.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E18 已停掉與新項同時可見"
+    },
+    {
+      "id": "AC1.4.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E1 K1 使用者落在入口頁"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E2 無 K1 走既有瀑布、Sidebar 無入口"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E1 pending 帳號落 /waiting-approval（突變 F1 因 can() 在 pending 時恆 false 而不可觀察，見 code-summary）"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E2 全無權限落 /403"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E23（入口頁）、E25／E26（工作區脈絡列）"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E25 子頁面脈絡列顯示所讀段的作業對象"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E27 /cost 與 /admin/users 不掛脈絡列、不開大腦連線"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E41 1011 後重連以伺服器推送覆蓋、紀錄保留；真實 backend 重啟交 tcms-test-cases 手動桶"
+    },
+    {
+      "id": "AC2.2.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E37 由工作區帶圖進評核頁後入口頁對象一致（孤兒圖使「同一系統」落空，OPEN-EP14-17）"
+    },
+    {
+      "id": "AC2.2.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E37、E32、E33、E34 選定圖改變時的回寫規則"
+    },
+    {
+      "id": "AC2.2.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E23 脈絡列名稱；E34 刪除後保留上兩層"
+    },
+    {
+      "id": "AC3.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E25 改為獨立對話以伺服器回推為準"
+    },
+    {
+      "id": "AC3.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E25 獨立段面板為空、切回共享紀錄還原"
+    },
+    {
+      "id": "AC3.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E26 子頁面送出帶 page、set_work_target 帶所讀段"
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E25 切回共享時紀錄與作業對象相同；E40 換頁後紀錄仍在"
+    },
+    {
+      "id": "AC5.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E16 工作項狀態在兩處一致"
+    },
+    {
+      "id": "AC5.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E16 五狀態文字"
+    },
+    {
+      "id": "AC5.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E18 更正後新項出現"
+    },
+    {
+      "id": "AC8.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E12 token 收到即呈現（不緩衝到 done）"
+    },
+    {
+      "id": "AC8.1.2",
+      "status": "N/A",
+      "target": "落點為 U13 的 record=True（握手與每則訊息）；本單元不參與活動時間的寫入，無可觀察的畫面面"
+    },
+    {
+      "id": "AC8.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E5 連線網址不含 ? 與 token、先送 hello；真實 stack 的 L1 本機未執行"
+    },
+    {
+      "id": "AC8.1.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/regression.spec.ts",
+      "note": "既有 15 個 e2e 依 [EPI2]=A 與 infra R-01／R-02 處置，合併前必修第 26 項 (e) 再於 not.toHaveURL(/\\/login$/) 之後補正向落點（toHaveURL(/\\/$/) ＋ brain-entry-page 可見）；需真實 stack，尚未執行，依 2026-10-27 裁決改由計畫 Step 23 的一次 CI 實跑（ui-regression）承擔，跑完前不宣稱為綠"
+    },
+    {
+      "id": "AC9.1.1",
+      "status": "OK",
+      "target": "backend/tests/test_describe_work_target.py",
+      "note": "(e) 孤兒圖只回 diagramName、(e2) 只有圖時不推導上層；前端呈現見 E23"
+    },
+    {
+      "id": "AC9.1.2",
+      "status": "N/A",
+      "target": "落點為 U4 hierarchy-data：其 functional-design/traceability.json:18-20 已將本 AC 標為 OK，target 逐字含「遷移只寫 system_id、不動任何既有欄位……故圖仍能開啟並編輯」，即 Then 的前後兩半（遷移與可開啟編輯）皆由 U4 承接（審查 R-08 已實讀確認）。本單元不觸及遷移與既有圖的歸屬"
+    },
+    {
+      "id": "AC9.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E37／E35 子頁面同步不覆蓋作業對象"
+    },
+    {
+      "id": "AC9.1.4",
+      "status": "N/A",
+      "target": "落點為 U4 hierarchy-data 的遷移不變量（system_id IS NULL 列數為 0）；屬資料庫層，本單元無畫面面"
+    },
+    {
+      "id": "AC10.1.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 成本問答的回覆與工作項"
+    },
+    {
+      "id": "AC10.1.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 成本工作項就地轉完成，不另產生進度訊息"
+    },
+    {
+      "id": "AC10.1.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 卡片附在完成的工作項之後（偏離 D-7：附加而非取代）"
+    },
+    {
+      "id": "AC10.1.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 全程 pathname 變更 0 次"
+    },
+    {
+      "id": "AC10.1.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E22 無 C1 權限以失敗與伺服器說明呈現"
+    },
+    {
+      "id": "AC10.2.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E22 逾時原因文字"
+    },
+    {
+      "id": "AC10.2.2",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E22 失敗原因文字與逾時不同"
+    },
+    {
+      "id": "AC10.2.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E12 串流逐訊框呈現"
+    },
+    {
+      "id": "AC10.2.4",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E22 權限失敗說明"
+    },
+    {
+      "id": "BR91.1",
+      "status": "OK",
+      "target": "frontend/src/App.tsx",
+      "note": "DefaultRedirect：isPending 之後、其他權限之前渲染 EntryPage；E1"
+    },
+    {
+      "id": "BR91.2",
+      "status": "OK",
+      "target": "frontend/src/App.tsx",
+      "note": "無 K1 沿用既有瀑布；E2"
+    },
+    {
+      "id": "BR91.3",
+      "status": "OK",
+      "target": "frontend/src/App.tsx",
+      "note": "* 路由改 Navigate 到 /；E3"
+    },
+    {
+      "id": "BR91.4",
+      "status": "OK",
+      "target": "frontend/src/components/Sidebar.tsx",
+      "note": "「入口」置頂獨立 nav、end 比對；E4"
+    },
+    {
+      "id": "BR91.5",
+      "status": "OK",
+      "target": "frontend/src/pages/EntryPage.tsx",
+      "note": "記憶捷徑以 canSeeMemoryEntry 判定；E4"
+    },
+    {
+      "id": "BR92.1",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "每頁一條連線、子協定由 WsSubprotocol 型別取值（brainProtocol.ts）；E5、E6"
+    },
+    {
+      "id": "BR92.2",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "先送 hello、核對 ready.protocolVersion；E5"
+    },
+    {
+      "id": "BR92.3",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "user_message.page、set_work_target.segment、set_sharing_mode.scope；E26"
+    },
+    {
+      "id": "BR92.4",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "sharing_mode 依 scope、work_target 依 segment 過濾；E24、E25"
+    },
+    {
+      "id": "BR92.5",
+      "status": "OK",
+      "target": "frontend/src/brain/brainProtocol.ts",
+      "note": "classifyClose／delayFor／shouldGiveUp；4403 依 security-design §六之二（偏離字面，見 code-summary）；E7–E11"
+    },
+    {
+      "id": "BR92.6",
+      "status": "OK",
+      "target": "frontend/src/brain/brainProtocol.ts",
+      "note": "parseInbound 未知 type 忽略、errorCategory 以 never 窮盡；E49。合併前必修第 2 項(b)（[EP-MB2]=A）：turnId=null 的 error 由 useBrainConnection.ts 派送 systemNotice、ConversationView.tsx 渲染 brain-system-notice；entry-page.spec.ts「等待中收到非輪次錯誤只多一則系統提示」「連續兩則非輪次錯誤各自保留」「帶輪次的錯誤標在該輪且不出現系統提示」"
+    },
+    {
+      "id": "BR92.7",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "interruptOpenTurns 轉中斷、重試只在按下時送一次；E15"
+    },
+    {
+      "id": "BR92.8",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "console 只記 type／code／關閉碼；E46"
+    },
+    {
+      "id": "BR93.1",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "token 以 turnId 為鍵立即附加；E12"
+    },
+    {
+      "id": "BR93.2",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "零內容 done 轉 empty；E14"
+    },
+    {
+      "id": "BR93.3",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "pendingConnId 於任一輪終止解除；E15。非輪次錯誤（systemNotice）不解除任何輪次的等待：entry-page.spec.ts「等待中收到非輪次錯誤只多一則系統提示」（brain-user-message 的 data-pending、送出鈕停用）"
+    },
+    {
+      "id": "BR93.4",
+      "status": "OK",
+      "target": "frontend/src/brain/BrainTranscriptContext.tsx",
+      "note": "App 層記憶體 store、登入／登出事件清空（不帶 key）；E40、E43、E44、E45"
+    },
+    {
+      "id": "BR93.5",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "updateTurn 找不到 turnId 時於接收頁所讀段新建；E21（伺服器發起的成本卡片輪）"
+    },
+    {
+      "id": "BR93.6",
+      "status": "OK",
+      "target": "frontend/src/components/brain/StreamingMessage.tsx",
+      "note": "aria-busy、motion-reduce 游標；完成時 LiveRegion 寫入一次（useBrainConnection）；E12、E13"
+    },
+    {
+      "id": "BR93.7",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "卸載轉中斷、同 turnId 合併回原訊息；E39"
+    },
+    {
+      "id": "BR94.1",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "work_items 整份取代、單一集合；E16、E41"
+    },
+    {
+      "id": "BR94.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemDock.tsx",
+      "note": "只列處理中／等待中、空集合不渲染、窄螢幕收合；E17"
+    },
+    {
+      "id": "BR94.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemList.tsx",
+      "note": "五狀態文字與說明、sideEffect 三語意；E16"
+    },
+    {
+      "id": "BR94.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemList.tsx",
+      "note": "不是這個送一次並停用、aria-label 含 label；E18"
+    },
+    {
+      "id": "BR94.5",
+      "status": "OK",
+      "target": "frontend/src/brain/brainTranscript.ts",
+      "note": "錨點：首次出現時該段最後一則大腦訊息；回覆未到時由下一則承接（解讀見 code-summary）；E18、E21"
+    },
+    {
+      "id": "BR94.6",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemList.tsx",
+      "note": "只顯示伺服器 label，capability 只作 data 屬性；E16"
+    },
+    {
+      "id": "BR94.7",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ConversationView.tsx",
+      "note": "成本卡片附在工作項之後（偏離 D-7）；E21"
+    },
+    {
+      "id": "BR95.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
+      "note": "intent 提示與「就是這個」；E19"
+    },
+    {
+      "id": "BR95.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
+      "note": "target 只顯示 label、恆有「都不是」；E20"
+    },
+    {
+      "id": "BR95.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
+      "note": "不讀不顯示 confidence；E19"
+    },
+    {
+      "id": "BR95.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
+      "note": "選定只送一次、picking 後停用；E19。選擇被非輪次錯誤拒絕（[GW-MB2]=A 的 T3）→ brainTranscript.ts 的 systemNotice 把本段 picking 改回 default 可重選：entry-page.spec.ts「反問選擇被非輪次錯誤拒絕後可重選」"
+    },
+    {
+      "id": "BR95.5",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx",
+      "note": "回絕焦點回輸入列；新句使舊組 stale（brainTranscript appendUser）；E20"
+    },
+    {
+      "id": "BR96.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/CostAnswerCard.tsx",
+      "note": "三段文字、無法取價鍵、href 取 costPageUrl；E21"
+    },
+    {
+      "id": "BR96.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemList.tsx",
+      "note": "逾時與失敗以 failureReason 原樣呈現；E22"
+    },
+    {
+      "id": "BR96.3",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 pathname 變更 0 次；突變 F21 紅"
+    },
+    {
+      "id": "BR96.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/WorkItemList.tsx",
+      "note": "權限失敗以同一路徑呈現；E22"
+    },
+    {
+      "id": "BR97.1",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E27 三處以外不掛脈絡列；掛點在 EntryPage／WorkspacePage／AssessmentPage"
+    },
+    {
+      "id": "BR97.2",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "三層名稱、（無法顯示名稱）、（未命名）、尚未選定；名稱來源 backend/services/brain_gateway.py _names_for；E23"
+    },
+    {
+      "id": "BR97.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "切換以伺服器回推為準；E25"
+    },
+    {
+      "id": "BR97.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/SubpageBrainPanel.tsx",
+      "note": "子頁面收合面板、送出帶本頁 page；E25、E26"
+    },
+    {
+      "id": "BR97.5",
+      "status": "OK",
+      "target": "frontend/src/brain/useWorkspaceTargetSync.ts",
+      "note": "就緒閘門、pending、decideInitialAlignment、pendingEchoes；E28–E32、E35、E36"
+    },
+    {
+      "id": "BR97.6",
+      "status": "OK",
+      "target": "frontend/src/brain/useWorkspaceTargetSync.ts",
+      "note": "狀態驅動回寫、刪除保留上兩層、分享圖不送、新建空白不送；E33、E34、E37"
+    },
+    {
+      "id": "BR97.7",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "U16 未提供選單時不渲染「切換對象」鈕（本單元不渲染）；回呼轉 set_work_target 由 useBrainConnection.setWorkTarget 提供"
+    },
+    {
+      "id": "BR97.8",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ConversationView.tsx",
+      "note": "依 readSegment 顯示該段紀錄；切回共享還原；E25"
+    },
+    {
+      "id": "BR98.1",
+      "status": "OK",
+      "target": "frontend/src/components/brain/EntryEmptyState.tsx",
+      "note": "兩張卡依權限、點擊填入不送出；E48"
+    },
+    {
+      "id": "BR98.2",
+      "status": "OK",
+      "target": "frontend/src/pages/EntryPage.tsx",
+      "note": "不渲染「最近的對話」（移到另一個 intent）"
+    },
+    {
+      "id": "BR98.3",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "region／aria-label；播報經 BrainSession 的單一 LiveRegion；brain-* testid"
+    },
+    {
+      "id": "BR98.4",
+      "status": "OK",
+      "target": "frontend/src/brain/testing/wsFrames.ts",
+      "note": "型別化建構器（tsc -b 檢查，突變 C3 紅）＋ eslint tests 區塊（T1、T2 紅）；兩層 e2e"
+    },
+    {
+      "id": "BR98.5",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E47 入口頁與子頁面掛點零新增 HTTP；突變 F19 紅"
+    },
+    {
+      "id": "NFR2.140",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ContextBar.tsx",
+      "note": "data-state 五態與三個名稱節點的 data-id；E23"
+    },
+    {
+      "id": "NFR2.141",
+      "status": "OK",
+      "target": "frontend/src/brain/useWorkspaceTargetSync.ts",
+      "note": "快照先到、後到進同一個 decideInitialAlignment；E28、E29"
+    },
+    {
+      "id": "NFR3.140",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "token 收到即 dispatch；E12；突變 F13 紅"
+    },
+    {
+      "id": "NFR3.141",
+      "status": "OK",
+      "target": "backend/tests/test_describe_work_target.py",
+      "note": "StatementCountTest：每組 ≤ 5、快照 ≤ 15、與擁有專案數無關"
+    },
+    {
+      "id": "NFR4.140",
+      "status": "OK",
+      "target": "frontend/src/brain/useBrainConnection.ts",
+      "note": "ready 後以快照逐項取代；E41；突變 F18 紅"
+    },
+    {
+      "id": "NFR5.140",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py",
+      "note": "三欄只加在 WorkTargetPayload、重 dump／重產；兩道漂移閘門綠；突變 C1、C2 紅"
+    },
+    {
+      "id": "NFR5.141",
+      "status": "OK",
+      "target": "backend/services/brain_ws_contract.py",
+      "note": "協定維持 v:1（未改版本）；合併前三項檢查只在分支、squash 之前由合併者執行（交接，見 code-summary）"
+    },
+    {
+      "id": "NFR8.140",
+      "status": "OK",
+      "target": "scripts/validate_env_contract.py",
+      "note": "零新環境變數、零 compose 變更：validate_env_contract.py 通過、deploy/ 與 *.env.example 零 diff"
+    },
+    {
+      "id": "NFR11.140",
+      "status": "OK",
+      "target": "frontend/tests/e2e/entry-page.spec.ts",
+      "note": "E21 入口頁成本問答全程 pathname 變更 0 次"
+    },
+    {
+      "id": "NFR11.100",
+      "status": "N/A",
+      "target": "落點為 U23 project-pages-ui；本單元 nfr-requirements/performance-requirements.md:32 只以「同 U23 的 NFR11.100 處置」引用它說明 NFR11.140 不入 NFR11 母體，本單元不承接此條"
+    }
+  ]
+}

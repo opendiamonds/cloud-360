@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "binding": 648,
+  "last_status": null,
+  "last_field_value": "parked @ rough-mockups (260920-orchestration-brain)",
+  "last_reason_code": "parked",
+  "managed_block_hash": "5cb16594dc7e213d96bc2d71cbc2305eec2799032104b49518e0a45096a6a41c",
+  "last_synced_at": "2026-09-29T14:36:39Z",
+  "last_written_status": "In progress"
+}

@@ -1,0 +1,195 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "memory-purge",
+  "upstream_ids": [
+    "NFR7.10",
+    "NFR7.11",
+    "NFR7.12",
+    "NFR7.13",
+    "NFR7.14",
+    "NFR7.15",
+    "NFR6.10",
+    "NFR8.10",
+    "NFR6.1",
+    "NFR6.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR7.10",
+      "status": "OK",
+      "target": "cicd-pipeline.md §三之一",
+      "note": "清除涵蓋兩個目標。本站的基礎設施增量是**CI 面的交易邊界要求**：步1＋2 必須在**同一次 psql 呼叫**內，因為分成兩個 Actions step 會變成兩個連線、兩個交易，打破 nfr-design 定下的邊界——而那個錯誤在 YAML 上看起來很自然（「一個步驟做一件事」）。列為 code-generation 的 blocking 檢查項。"
+    },
+    {
+      "id": "NFR7.11",
+      "status": "OK",
+      "target": "infrastructure-specification.md §五 ＋ cicd-pipeline.md §二之一",
+      "note": "清除須留稽核、actor 為系統 actor。本站的增量是**既有環境取得該 seed 的路徑**：DEPLOY.md 證實唯一路徑是手動重跑整支 schema_rbac.sql，故 seed 必須 ON CONFLICT DO NOTHING——否則 UNIQUE 違反會擋下整支腳本其後的所有陳述（承審查 R-03）。另查證：既有單元測試走 create_all() 不執行 seed，故**既有測試不會驗證系統 actor 存在**（OPEN-ID9-3）。"
+    },
+    {
+      "id": "NFR7.12",
+      "status": "OK",
+      "target": "infrastructure-specification.md §二 ＋ §三",
+      "note": "連線路徑與零暴露。本站確認：db 不取得 host port、無新 tunnel、無新監聽埠、無新 secret（監看者用內建 GITHUB_TOKEN）。**監看者不是暴露面**——它是出向呼叫 GitHub API，不接受任何入向連線。"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "OK",
+      "target": "monitoring-design.md §二 ＋ §三",
+      "note": "**本站是它的落點，本輪關閉 OPEN-N9-1 的機制選擇。** [ID1]=A：GitHub 託管的純 Actions 監看排程，以 gh api 查清除 workflow 最後一次**成功**的時間，逾 3 天開 issue。關鍵洞察：偵測「有沒有跑」**不需要資料庫**——直接指標（資料庫新鮮度）的所有可達實作都違反上游判準，故代理指標是唯一解而非將就。門檻 3 天（1 天會因偶發故障製造噪音、7 天以上失去合規意義）。"
+    },
+    {
+      "id": "NFR7.14",
+      "status": "OK",
+      "target": "cicd-pipeline.md §三 ＋ §四",
+      "note": "決定性邏輯放純 Actions。兩個 workflow 都不走 LLM 路徑：清除是字面 SQL；監看者是 gh api ＋ 時間戳比較。檔名刻意不以 .md 結尾（那是 gh-aw 的慣例）。"
+    },
+    {
+      "id": "NFR7.15",
+      "status": "OK",
+      "target": "cicd-pipeline.md §三之一 步3",
+      "note": "清除稽核本身不留稽核。步3 為獨立交易，與步1＋2 分開。"
+    },
+    {
+      "id": "NFR6.10",
+      "status": "OK",
+      "target": "infrastructure-specification.md §六 IAM 格",
+      "note": "承 [ND2]=A 的更正：NFR6.10 不構成 IAM 邊界。**本站新增一項上游沒有的 IAM 面**：監看者需要 issues: write，而本 repo 既有排程 workflow 無此先例（只有 issues: read ＋ gh-aw safe-outputs）。清除 workflow 本身的 permissions 取最小（contents: read）。"
+    },
+    {
+      "id": "NFR8.10",
+      "status": "OK",
+      "target": "infrastructure-specification.md §二之二",
+      "note": "零新部署設定。三項二元判準：validate_env_contract.py 綠燈、diff 不含 deploy/ 等五類路徑、actions/secrets 的名稱集合不變。[ID1]=A 使它維持成立（監看者用內建 GITHUB_TOKEN）。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "infrastructure-specification.md §六 Encryption 格",
+      "note": "**不是本單元的需求。** 它出現在上游 nfr-design/security-design.md §四 的 Encryption 格裡，作為「本單元承接 U5 的決定、無增量」的依據。實際擁有者：U5 memory-data 的靜態加密決定（→主機層 LUKS）。本站對它無設計責任；列在此處是為了讓 traceability sensor 的上游掃描結果與本檔一致（同 nfr-design 那一站的六列 N/A，見 reverse 的 ID9-ID-TABLE-COST）。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "infrastructure-specification.md §六 Encryption 格",
+      "note": "**不是本單元的需求。** 它出現在上游 nfr-design/security-design.md §四 的 Encryption 格裡，作為「本單元承接 U5 的決定、無增量」的依據。實際擁有者：U5 memory-data 的傳輸決定（→compose 內部，不要求 sslmode）。本站對它無設計責任；列在此處是為了讓 traceability sensor 的上游掃描結果與本檔一致（同 nfr-design 那一站的六列 N/A，見 reverse 的 ID9-ID-TABLE-COST）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ID9-WATCHDOG-SCOPE",
+      "status": "OK",
+      "target": "monitoring-design.md §三之二",
+      "note": "**監看者自己漏跑沒有人監看，本站寫明這是刻意的邊界而非遺漏。** 任何監看鏈必須在某處停止；停在這裡可接受的理由是**依賴面嚴格縮小**：監看者只依賴 GitHub 自身，而被監看者依賴 GitHub ＋ 自架主機 ＋ runner 服務 ＋ 資料庫容器。殘留風險（GitHub Actions 長期故障或 workflow 被誤停用時兩者同時靜默）記為 OPEN-ID9-1。寫這一節的理由：一條沒有說明自己邊界的監看設計會讓讀者以為漏跑已被完全排除。"
+    },
+    {
+      "id": "ID9-PERM-NO-PRECEDENT",
+      "status": "OK",
+      "target": "monitoring-design.md §二之三",
+      "note": "**提問時我把 issues 權限的先例說得比實情寬，作答後開檔更正。** daily-digest.md 的 permissions 是 issues: **read**，其開 issue 走 gh-aw 的 safe-outputs 消毒路徑而非寫入權限；故本 repo **沒有任何排程 workflow 持有 issues: write**，本設計要的權限比任何既有排程 workflow 都寬。真正有先例的是 actions: read（daily-digest.md:13），恰為查 run 歷史所需。結論不變但代價改寫；兩個替代方案已寫明（直接 issues: write vs 改用 gh-aw safe-outputs）且不預選。OPEN-ID9-2。"
+    },
+    {
+      "id": "ID9-RETURNING-STAR",
+      "status": "OK",
+      "target": "monitoring-design.md §五之一 ＋ cicd-pipeline.md §三之二",
+      "note": "**本單元最危險的單字之差**：清除的 SQL 若寫 `RETURNING *`（為了印出刪了什麼），會把記憶內容印進**公開可讀**的 Actions log——而清除處理的正是個人對話歷程。只能 RETURNING id 或僅取 row_count。**CI 不會抓這個**，故列為 code-generation 的 blocking 檢查項。"
+    },
+    {
+      "id": "ID9-SUCCESS-FILTER",
+      "status": "OK",
+      "target": "cicd-pipeline.md §四之一",
+      "note": "**監看者容易寫錯的細節**：`gh api .../runs` 預設回所有 run 含失敗的。只取最新一筆看時間，會讓「每天都失敗」被判為新鮮——**而那正是最需要告警的狀況之一**。查詢必須帶 status=success，且「查不到任何成功 run」須視為逾期而非跳過。"
+    },
+    {
+      "id": "ID9-DEDUP",
+      "status": "OK",
+      "target": "monitoring-design.md §三之一",
+      "note": "監看者每日執行，故持續漏跑會連續命中門檻。開 issue 前須以固定標題前綴查 open issue，有則不開第二個。沒有這一條的後果：一週後七個相同 issue，而那與沒有告警的效果接近——它會訓練讀者忽略它。"
+    },
+    {
+      "id": "ID9-ONLY-GC",
+      "status": "OK",
+      "target": "infrastructure-specification.md §四之一",
+      "note": "**本站查出一項跨單元影響**：本單元是 memory_audit_events **唯一的 DELETE 端**。U5 的索引註解逐字說明該表本輪沒有任何讀取端、「所以不會有人順手建它」；而 U8 只寫不刪。故本單元不只承載保存期合規，也是該表的**唯一垃圾回收路徑**——NFR7.13 的漏跑偵測因此保護兩件事，不是一件。"
+    },
+    {
+      "id": "ID9-NO-REGRESSION",
+      "status": "OK",
+      "target": "cicd-pipeline.md §二之一",
+      "note": "**系統 actor seed 對既有測試無回歸，逐項實測而非推論**：admin_edit_count 的迴圈過濾 is_active == True（user_router.py:695 逐字 `for u in db.query(User).filter(User.is_active == True).all()`），故 is_active=FALSE 的系統 actor 不被計入；e2e 的「只有一個已核准帳號」假設同理不受影響；/api/auth/list 的 total 會 +1（:533 逐字 `total = db.query(User).count()`，無過濾）——那是 OPEN-ND9-1 的已知後果。**最關鍵一項**：make_session() 以 create_all() 建表、不執行 schema_rbac.sql 的 seed，故既有單元測試完全不受 seed 影響，但也**不會驗證系統 actor 存在**（OPEN-ID9-3）。"
+    },
+    {
+      "id": "ID9-IRREVERSIBLE",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五之一",
+      "note": "**本單元唯一真正不可逆的操作**：已執行的清除無法回滾（刪除的記憶與稽核列無法復原）。workflow 檔可 revert、seed 可刪（但見 OPEN-ND9-1），只有清除本身不可逆——這是 FR4.5 的本意，但它意味著**一個排程設定錯誤會造成不可復原的資料損失**。故須先以 workflow_dispatch ＋ dry-run 驗證選取條件再啟用排程（OPEN-ID9-4）。"
+    },
+    {
+      "id": "ID9-SCHEDULE-ACTIVATION",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "排程要到 workflow 檔進入**預設分支**後才會排入——GitHub 的既有行為。寫明以免被誤讀為「merge 進 ut 後立刻會跑」。"
+    },
+    {
+      "id": "ID9-NO-SLO",
+      "status": "N/A",
+      "target": "monitoring-design.md §四",
+      "note": "本單元無 SLO，理由與其他單元不同故寫明：它不是服務、沒有可用性面。「有沒有按時跑」已由 §三 的告警承載——那是**告警**而非 SLO（沒有誤差預算可言：漏跑就是漏跑）。"
+    },
+    {
+      "id": "ID9-PBT-NA",
+      "status": "N/A",
+      "target": "infrastructure-specification.md §六 的 PBT 判定",
+      "note": "PBT N/A（非豁免），與上游一致：兩個 workflow 與其中的 SQL／gh api 呼叫，無本單元擁有的純函式。"
+    },
+    {
+      "id": "ID9-TCMS",
+      "status": "N/A",
+      "target": "cicd-pipeline.md §六",
+      "note": "tcms-test-cases 是 blocking 且至今未對本 intent 任何單元執行過。本站記分桶預判：待自動化三項（皆需真實 PostgreSQL）、**只能手動一項**（監看者的端到端行為——需製造「連續 3 天未成功」的狀態，CI 無法合成）。"
+    },
+    {
+      "id": "ID9-ID-TABLE-COST",
+      "status": "OK",
+      "target": "本檔的兩列 N/A ＋ nfr-design/traceability.json 的六列 N/A",
+      "note": "**同一個副作用在本單元連續兩站出現，故記為成本而非偶發。** 為了讓 NFRx.y 在本 intent 內可唯一定位，nfr-requirements 那一站列了一張「編號已被佔用」的對照表，nfr-design 的 ADR-0006 表又引用了 U5 的 NFR6.1／NFR6.2 — traceability sensor 掃上游 artifact 取 NFRx.y 時把它們都算進來，於 nfr-design 回報 6 列、於本站回報 2 列。兩站的處置相同：以 N/A ＋ 具名擁有者列進 coverage，不回改已凍結的上游。**可執行判準（本站補強）**：在 artifact 裡引用「其他單元的 NFRx.y」時，引用本身就是下游每一站的 N/A 義務 — 若只是為了說明承接關係，改以散文敘述而不寫出 id，可避免成本沿著整條 stage 鏈累積。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ID9-1",
+      "severity": "named-gap",
+      "text": "**監看者自己漏跑沒有人監看。** 刻意的邊界：任何監看鏈必須在某處停止，而停在「只依賴 GitHub」是本 repo 能達到的最小依賴面。殘留風險：GitHub Actions 長期故障或 workflow 被誤停用時，清除與監看**同時靜默**。"
+    },
+    {
+      "id": "OPEN-ID9-2",
+      "severity": "named-gap",
+      "text": "**issues: write 在本 repo 無先例。** 既有排程 workflow 只有 issues: read ＋ gh-aw 的 safe-outputs。兩個替代方案已寫明且不預選：直接 issues: write（範圍已最小，不含 contents: write）或改用 gh-aw safe-outputs（權限一致但把二元檢查放進 LLM 路徑，[ID1] 選項 B 已因此被否決）。落點：使用者或 repo 維護者。"
+    },
+    {
+      "id": "OPEN-ID9-3",
+      "severity": "named-gap",
+      "text": "**既有測試不會驗證系統 actor 存在。** make_session() 以 create_all() 建表、不執行 schema_rbac.sql 的 seed。若清除的稽核 INSERT 要有測試保護，該測試必須走真實 PostgreSQL（memory-schema job 或 U19 新建的 tests_pg/）。落點：code-generation。"
+    },
+    {
+      "id": "OPEN-ID9-4",
+      "severity": "blocking-downstream",
+      "text": "**啟用排程之前必須先以 workflow_dispatch ＋ dry-run 驗證選取條件**（只 SELECT count(*)、不 DELETE）。這不是測試建議，是**不可逆操作的前置驗證**：已執行的清除無法回滾，一個選取條件寫錯會造成不可復原的資料損失。落點：code-generation。"
+    },
+    {
+      "id": "OPEN-ND9-1",
+      "severity": "carried",
+      "text": "系統 actor 列會出現在 Admin 使用者清單上（且 /api/auth/list 的 total 永久 +1，:533 無過濾）；刪掉它會讓後續清除的稽核 INSERT 全部失敗。"
+    },
+    {
+      "id": "OPEN-ND9-2",
+      "severity": "carried",
+      "text": "是否為清除新增真正受限的資料庫角色（[ND2]=A 接受現況）。新憑證會打破 NFR8.10。"
+    },
+    {
+      "id": "OPEN-CG5-1",
+      "severity": "carried",
+      "text": "grant 邊界未被 CI 驗證（承 U5）。本單元是有刪除權的新消費者，故此缺口在本單元之後更值得補。"
+    }
+  ]
+}

@@ -9,10 +9,12 @@
     "FR1.4",
     "FR1.5",
     "FR1.6",
+    "FR1.7",
     "FR4.1",
     "FR4.2",
     "FR4.3",
     "FR4.4",
+    "FR5.4",
     "FR6.2",
     "FR6.3",
     "FR6.4",
@@ -35,7 +37,8 @@
     "BR2.9",
     "BR2.10",
     "BR2.11",
-    "BR2.12"
+    "BR2.12",
+    "BR2.14"
   ],
   "coverage": [
     { "id": "FR1.1", "status": "OK", "target": "backend/cost/estimate_intake_router.py" },
@@ -43,6 +46,8 @@
     { "id": "FR1.4", "status": "OK", "target": "backend/cost/estimate_intake_service.py" },
     { "id": "FR1.5", "status": "OK", "target": "backend/cost/estimate_intake_service.py" },
     { "id": "FR1.6", "status": "OK", "target": "backend/cost/estimate_intake_service.py" },
+    { "id": "FR1.7", "status": "OK", "target": "backend/cost/workload_context.py" },
+    { "id": "FR5.4", "status": "OK", "target": "backend/cost/estimate_intake_service.py", "note": "持久化；prompt 組裝屬 U7" },
     { "id": "FR4.1", "status": "OK", "target": "backend/cost/estimate_intake_service.py" },
     { "id": "FR6.2", "status": "OK", "target": "backend/cost/estimate_intake_service.py" },
     { "id": "FR6.3", "status": "OK", "target": "backend/cost/estimate_intake_router.py" },

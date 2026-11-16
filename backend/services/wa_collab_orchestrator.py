@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 from collections.abc import AsyncIterator
 from typing import Any, Optional
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from models import ArchitectureReview, User, UserDiagram
 from services.collab_suggestions import build_optimize_suggestions_summary
 from services.design_agent import run_design_agent
+from services.progress_channel import DuplicateChannelKey, ProgressChannel
 from services.review_agent import (
     fallback_suggestions_from_findings,
     run_review_agent,
@@ -76,29 +78,48 @@ async def _remap_design_events(
 ) -> AsyncIterator[dict[str, Any]]:
     """執行 Design Agent，將 xml → xml_preview，message 加上 speaker=design。"""
     last_xml: Optional[str] = None
-    async for event in run_design_agent(messages, current_xml):
-        et = event.get("type")
-        if et == "message":
-            yield {
-                "type": "message",
-                "speaker": "design",
-                "content": event.get("content") or "",
-                "round": round_no,
-            }
-        elif et == "progress":
-            yield {"type": "progress", "content": event.get("content") or "", "round": round_no}
-        elif et == "xml":
-            last_xml = event.get("content") or ""
-            yield {
-                "type": "xml_preview",
-                "content": last_xml,
-                "round": round_no,
-            }
-        elif et == "error":
-            yield {"type": "error", "content": event.get("content") or "Design Agent 錯誤"}
-            return
-        else:
-            yield event
+    # U22：這個呼叫點原本完全不傳進度鍵，所以 A1↔A3 共編的兩輪產圖與其他併發
+    # 請求共用同一個模組層佇列。鍵必須 per-request 且來自密碼學安全隨機源
+    # （SEC-1）；本函式每輪各自鑄造一個，兩輪的事件因此也互不混淆。
+    # 注意：這裡**只**補進度鍵。這個呼叫點同時還有一個不傳 thread_id 的缺陷
+    # （使所有共編使用者共用 "default-thread" 的對話記憶），那是 FR13.4、是
+    # 對話記憶的共用而非事件錯送，**刻意不在本單元夾帶**那個分區語意決定。
+    request_key = secrets.token_urlsafe(32)
+    try:
+        ProgressChannel.open(request_key)
+    except DuplicateChannelKey:
+        # 固定訊息，不含例外原文也不含鍵（BR3.1／SEC-2）。
+        logger.exception("進度通道的鍵重複，無法開始第 %s 輪 Design", round_no)
+        yield {"type": "error", "content": "系統忙碌中，請稍後再試。"}
+        return
+    try:
+        async for event in run_design_agent(messages, current_xml, request_key=request_key):
+            et = event.get("type")
+            if et == "message":
+                yield {
+                    "type": "message",
+                    "speaker": "design",
+                    "content": event.get("content") or "",
+                    "round": round_no,
+                }
+            elif et == "progress":
+                yield {"type": "progress", "content": event.get("content") or "", "round": round_no}
+            elif et == "xml":
+                last_xml = event.get("content") or ""
+                yield {
+                    "type": "xml_preview",
+                    "content": last_xml,
+                    "round": round_no,
+                }
+            elif et == "error":
+                yield {"type": "error", "content": event.get("content") or "Design Agent 錯誤"}
+                return
+            else:
+                yield event
+    finally:
+        # BR2.1／BR2.3：含上方 `et == "error"` 的提早 return 與呼叫端放棄本
+        # generator 的情形，鍵都必須被清掉。
+        ProgressChannel.close(request_key)
     if last_xml is not None:
         yield {"type": "_internal_xml", "content": last_xml}
 
@@ -318,15 +339,12 @@ async def run_wa_collab(
     """
     yield {
         "type": "progress",
-        "content": (
-            f"啟動 Design ↔ Review 協作（目標：消除 HIGH_RISK 且分數 ≥ {TARGET_SCORE}，"
-            f"最多 {MAX_ROUNDS} 輪）"
-        ),
+        "content": "需求收集中…",
     }
 
     # —— Round 1：Design 產圖／改圖 ——
-    yield {"type": "progress", "content": "第 1 輪：Design Agent 產圖中…", "round": 1}
     xml_r1: Optional[str] = None
+    first_event = True
     async for ev in _remap_design_events(messages, current_xml, round_no=1):
         if ev.get("type") == "_internal_xml":
             xml_r1 = ev.get("content")
@@ -334,6 +352,9 @@ async def run_wa_collab(
         if ev.get("type") == "error":
             yield ev
             return
+        if first_event and ev.get("type") == "progress":
+            yield {"type": "progress", "content": "第 1 輪：Design Agent 產圖中…", "round": 1}
+            first_event = False
         yield ev
 
     if not xml_r1:
@@ -347,6 +368,15 @@ async def run_wa_collab(
             "message": "尚未產圖，協作評核未啟動。",
         }
         return
+
+    yield {
+        "type": "progress",
+        "content": (
+            f"啟動 Design ↔ Review 協作（目標：消除 HIGH_RISK 且分數 ≥ {TARGET_SCORE}，"
+            f"最多 {MAX_ROUNDS} 輪）"
+        ),
+        "round": 1,
+    }
 
     yield {
         "type": "message",
@@ -453,7 +483,10 @@ async def run_wa_collab(
         f"然後呼叫 draw_architecture_diagram 改圖。\n\n"
         f"【必須優先處理的高風險】\n{high_json}\n\n"
         f"【Review Agent 發言】\n{review_text}\n\n"
-        f"【全部 findings】\n{findings_json}"
+        f"【全部 findings】\n{findings_json}\n\n"
+        f"【改圖座標注意事項】\n"
+        f"請務必保留原本 AZ 與 Subnet 內主要運算節點的 (x, y) 座標，"
+        f"新增的輔助元件（如 CloudWatch, SNS, IAM）請依規範放置在左右兩側外掛槽位（CloudWatch/SNS 置於右側 x=1060；IAM/S3 置於左側 x=80），嚴禁改動既有節點位置造成重疊。"
     )
     round2_messages = list(messages) + [
         {"role": "assistant", "content": review_text or "（Review 無文字）"},

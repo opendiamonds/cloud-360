@@ -5,6 +5,7 @@
   "writes": [
     { "path": "frontend/src/pages/CostPage.tsx" },
     { "path": "frontend/src/components/cost/types.ts" },
+    { "path": "frontend/src/components/cost/EstimateWorkloadForm.tsx" },
     { "path": "frontend/src/components/cost/EstimateUploadZone.tsx" },
     { "path": "frontend/src/components/cost/EstimateCloudCard.tsx" },
     { "path": "frontend/src/components/cost/EstimateChecksPanel.tsx" },

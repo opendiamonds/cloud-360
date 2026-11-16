@@ -21,6 +21,13 @@ python3 scripts/tcms_sync.py \
 
 ### 目的
 
+> **已退役（2026-11-14 註記，intent `260920-orchestration-brain` 的 tcms-test-cases 站）**：
+> `LLM_PROVIDER=cli` 已於 2026-10-02 退役（RAID R-11），設定它會退回 `openrouter` 並記一行
+> ERROR，本案描述的路徑已不存在。本機以已登入的 `claude` CLI 當模型的需求，改由
+> `LLM_PROVIDER=claude-code`（只限 `APP_ENV=local`）承擔，對應案例為 TCMS 的
+> 「本機 LLM_PROVIDER=claude-code 只在 APP_ENV=local 生效……」（id 258）。本案保留作歷史紀錄，
+> TCMS 上應設為停用，不再執行。
+
 驗證本機開發者能**只靠自己已登入的 `claude` CLI**跑通 A1，不必持有 OpenRouter 金鑰。
 
 此路徑在自動化層零覆蓋：`ui-regression` 的 Playwright 套件刻意不碰任何 LLM
@@ -115,6 +122,11 @@ FastAPI → claude-agent-sdk → claude CLI 子行程 → 供應商 → 模型
 
 ### 目的
 
+> **已退役（2026-11-14 註記，intent `260920-orchestration-brain` 的 tcms-test-cases 站）**：
+> `LLM_PROVIDER=cli` 已於 2026-10-02 退役（RAID R-11），本案守的「cli 模式刪除殘留變數」
+> 行為已不存在，原自動化對應的測試類別也已隨之刪除。本案保留作歷史紀錄，TCMS 上應設為停用，
+> 不再執行。
+
 回歸案例。驗證 `.env` 裡**殘留的 OpenRouter 設定不會癱瘓 cli 模式**。
 
 這是實測踩過的缺陷：模型名稱正規化與環境變數刪除**互相抵銷**，導致每次
@@ -193,7 +205,7 @@ LLM_PROVIDER=cli + .env 殘留 ANTHROPIC_DEFAULT_SONNET_MODEL=anthropic/claude-s
 ### 追溯
 
 - 實作：`backend/services/llm_provider.py` 的 `_CLI_ALIAS_MODEL_VARS`
-- 自動化對應：`backend/tests/test_llm_provider.py::CliModeClearsConflictingVars`
+- 自動化對應：已移除（原 `test_llm_provider.py` 的 cli 模式測試類別隨 cli 退役刪除，2026-10-02，RAID R-11）
 - PR #499 · commit 2511e3d
 - User story：A1
 

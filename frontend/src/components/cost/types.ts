@@ -6,6 +6,7 @@ export type EstimateLine = {
   ordinal: number;
   item_name: string | null;
   spec: string | null;
+  spec_description?: string | null;
   quantity: number | null;
   amount: number | null;
   currency: string | null;
@@ -54,8 +55,12 @@ export type EstimateSetSummary = {
   advice_status: string | null;
 };
 
+/** Optional workload / budget context captured at upload (for AI advice). */
+export type WorkloadContextPayload = Record<string, string | number> | null;
+
 export type EstimateSetDetail = EstimateSetSummary & {
   estimates: CloudEstimate[];
+  workload_context?: WorkloadContextPayload;
 };
 
 export function authHeaders(): HeadersInit {

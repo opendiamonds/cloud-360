@@ -145,9 +145,9 @@ class TestBuildMxgraphXml(unittest.TestCase):
         self.assertIn('id="g_gcp_subnet"', xml)
         self.assertIn('id="n1"', xml)
         self.assertIn('parent="g_gcp_subnet"', xml)
-        self.assertIn('strokeColor=#4285F4', xml)  # GCP Cloud style color
-        self.assertIn('strokeColor=#34A853', xml)  # GCP VPC style color
-        self.assertIn('strokeColor=#FBBC05', xml)  # GCP Subnet style color
+        self.assertIn('fillColor=#F6F6F6', xml)  # GCP Cloud style color
+        self.assertIn('fillColor=#E3F2FD', xml)  # GCP VPC style color
+        self.assertIn('fillColor=#EDE7F6', xml)  # GCP Subnet style color
 
     @patch(
         "services.diagram_builder.fetch_icon_from_n8n",
@@ -194,9 +194,8 @@ class TestBuildMxgraphXml(unittest.TestCase):
         self.assertIn('id="g_az_vnet"', xml)
         self.assertIn('id="g_az_subnet"', xml)
         self.assertIn('parent="g_az_subnet"', xml)
-        self.assertIn('strokeColor=#0078D4', xml)  # Azure Cloud style color
-        self.assertIn('strokeColor=#5C2D91', xml)  # Azure VNet style color
-        self.assertIn('strokeColor=#00BCF2', xml)  # Azure Subnet style color
+        self.assertIn('strokeColor=light-dark(#5ea1ee, #ededed)', xml)  # Azure Cloud style color
+        self.assertIn('strokeColor=light-dark(#a1a1a1, #ededed)', xml)  # Azure VNet style color
         mock_icon.assert_called_once_with("aks", provider="Azure")
 
 
@@ -328,7 +327,7 @@ class TestNormalizeDiagramLayout(unittest.TestCase):
                 "type": "private_subnet",
                 "x": 0,
                 "y": 0,
-                "width": 360,  # 約兩欄寬 → 3 個 icon 變兩排
+                "width": 180,  # 約兩欄寬 → 3 個 icon 變兩排
                 "height": 320,
             }
         ]
@@ -542,5 +541,69 @@ class TestIconOverlapAndCongestion(unittest.TestCase):
         )
 
 
+class TestNormalizeGroupType(unittest.TestCase):
+    def test_aws_group_type_inferences(self):
+        from services.diagram_builder import normalize_group_type
+
+        self.assertEqual(normalize_group_type({"name": "AWS Cloud"}), "aws_cloud")
+        self.assertEqual(normalize_group_type({"name": "VPC"}), "vpc")
+        self.assertEqual(normalize_group_type({"name": "Availability Zone 1"}), "az")
+        self.assertEqual(normalize_group_type({"name": "Public Subnet 1"}), "public_subnet")
+        self.assertEqual(normalize_group_type({"name": "Private Subnet 1"}), "private_subnet")
+        self.assertEqual(normalize_group_type({"name": "DB Subnet 1"}), "private_subnet")
+        self.assertEqual(normalize_group_type({"name": "App Subnet"}), "private_subnet")
+        self.assertEqual(normalize_group_type({"type": "Public Subnet"}), "public_subnet")
+        self.assertEqual(normalize_group_type({"type": "az"}), "az")
+
+    def test_gcp_and_azure_group_type_inferences(self):
+        from services.diagram_builder import normalize_group_type
+
+        self.assertEqual(normalize_group_type({"name": "Google Cloud Platform"}, provider="GCP"), "gcp_cloud")
+        self.assertEqual(normalize_group_type({"name": "Zone A"}, provider="GCP"), "gcp_zone")
+        self.assertEqual(normalize_group_type({"name": "Regional VPC Network"}, provider="GCP"), "gcp_region")
+        self.assertEqual(normalize_group_type({"name": "App Subnet A"}, provider="GCP"), "gcp_subnet")
+
+        self.assertEqual(normalize_group_type({"name": "Microsoft Azure"}, provider="Azure"), "azure_cloud")
+        self.assertEqual(normalize_group_type({"name": "Availability Zone 1"}, provider="Azure"), "azure_az")
+        self.assertEqual(normalize_group_type({"name": "Application Tier"}, provider="Azure"), "azure_vnet")
+        self.assertEqual(normalize_group_type({"name": "VMSS (Web Tier)"}, provider="Azure"), "azure_subnet")
+        self.assertEqual(normalize_group_type({"name": "Storage Tier"}, provider="Azure"), "azure_resource_group")
+
+    @patch(
+        "services.diagram_builder.fetch_icon_from_n8n",
+        new_callable=AsyncMock,
+        return_value="<svg></svg>",
+    )
+    def test_aws_template_colors_applied(self, mock_fetch):
+        from services.diagram_builder import build_mxgraph_xml
+
+        groups = [
+            {"id": "2", "name": "AWS Cloud", "x": 30, "y": 20, "width": 960, "height": 844},
+            {"id": "3", "name": "VPC", "x": 30, "y": 170, "width": 900, "height": 658},
+            {"id": "4", "name": "Availability Zone 1", "x": 46, "y": 214, "width": 380, "height": 598},
+            {"id": "5", "name": "Private Subnet 1", "x": 62, "y": 258, "width": 340, "height": 172},
+            {"id": "7", "name": "DB Subnet 1", "x": 62, "y": 450, "width": 340, "height": 172},
+            {"id": "9", "name": "Public Subnet 1", "x": 62, "y": 640, "width": 340, "height": 130},
+        ]
+        nodes = [
+            {"id": "n1", "name": "ec2", "x": 100, "y": 300},
+        ]
+        xml = asyncio.run(build_mxgraph_xml(groups, nodes, [], provider="AWS"))
+
+        # Verify AWS Cloud has aws_cloud style
+        self.assertIn("group_aws_cloud_alt", xml)
+        # Verify VPC has group_vpc2 style and strokeColor=#8C4FFF
+        self.assertIn("grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;", xml)
+        # Verify Availability Zone 1 has dashed az style (#147EBA)
+        self.assertIn('value="Availability Zone 1" style="fillColor=none;strokeColor=#147EBA;dashed=1;', xml)
+        # Verify Public Subnet has green style (#7AA116, #F2F6E8)
+        self.assertIn('value="Public Subnet 1" style="shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#7AA116;fillColor=#F2F6E8;', xml)
+        # Verify Private Subnet has teal style (#00A4A6, #E6F6F7)
+        self.assertIn('value="Private Subnet 1" style="shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#00A4A6;fillColor=#E6F6F7;', xml)
+        # Verify DB Subnet has teal style (#00A4A6, #E6F6F7)
+        self.assertIn('value="DB Subnet 1" style="shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#00A4A6;fillColor=#E6F6F7;', xml)
+
+
 if __name__ == "__main__":
     unittest.main()
+

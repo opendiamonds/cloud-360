@@ -90,7 +90,7 @@
 
 ## Step 2 — Agent
 
-- [x] `backend/cost/cost_advice_agent.py`：組 prompt、≤3 invoke、可選 `fetch_hourly`、產出 saving／comparison／quality／reasons
+- [x] `backend/cost/cost_advice_agent.py`：組 prompt（含解析結果＋選填 workload_context）、≤3 invoke、可選 `fetch_hourly`、產出 saving／comparison／quality／reasons
 
 ## Step 3 — SSE
 

@@ -1,0 +1,180 @@
+{
+  "stage": "nfr-design",
+  "unit": "brain-infra",
+  "upstream_ids": [
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.2a",
+    "NFR6.3",
+    "NFR7.1",
+    "NFR8.1",
+    "NFR8.1a",
+    "NFR8.1b",
+    "NFR8.2",
+    "NFR8.3",
+    "NFR8.4",
+    "NFR8.5",
+    "NFR8.6",
+    "NFR8.7",
+    "NFR8.8",
+    "NFR8.9",
+    "NFR9.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "D-2 決定 Redis 連線維持明文（不用 rediss://），故 NFR4.1 的 ACL 使用者與密碼是該連線的唯一身分控制；D-3 把可連到 Redis 的容器**由 5 個縮到 3 個（backend／db／ollama）**，使該憑證的暴露面縮小——**但 internal 內部不隔離（user-defined bridge 預設 enable_icc 為 true），故暴露面縮小而未縮到單一容器**。（**數字本輪更正，審查 R-19**：初版寫「由 4 個縮到 1 個（backend）」，與同檔 NFR8.7 直接對撞；上一輪列舉修正落點時只列了四處、漏了這第五種表達形式。） ACL 的確切指令集與 key pattern 仍屬 U10（nfr-requirements §五 明文轉交），本站不重決定"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "D-1 為該 AOF volume 提供靜態加密承載（主機層全碟，見 §一 的涵蓋範圍表第一列）。appendfsync 具體值仍屬 U10，但 NFR4.2 已約束其選值不得使 NFR3 的 P50 預算失守，本站不放寬該約束"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "D-1 涵蓋 Ollama 模型快取 volume（內容為模型權重、非機密，故加密對它是附帶而非必要）。**D-3 對它有一個承載性約束**：兩份 compose 的 networks: 宣告不得帶 internal: true，否則首次啟動的模型下載會失敗，該 volume 永遠是空的"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "PG 18 ＋ pgvector 的五個映像落點是部署資產的逐字內容，不是設計題。本站不改動任何落點。唯一交集是 D-3 把 db 服務移進 internal 網段——那是同一份 compose 的另一個欄位，不影響映像宣告"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "CREATE EXTENSION 的兩處承載（schema_rbac.sql ＋ 呼叫點在 create_all 之前的啟動補丁）是實作位置的指定，不是設計題"
+    },
+    {
+      "id": "NFR6.2a",
+      "status": "N/A",
+      "target": "schema_rbac.sql 單一交易的硬依賴是既有事實的記載，本站無設計介入"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "D-4 補上 NFR6.3(c) 七步程序缺少的那一塊：dump 檔的權限（umask 077 建立時即 0600）、位置（$HOME 專用目錄、不得在 repo 工作區）、刪除時機（驗證通過後立即刪除並記錄）。D-1 另使該 dump 在離線面被涵蓋（它在 $HOME 下、系統碟加密），但兩者不可互相替代——D-1 管離線、D-4 管線上。§三 另指出 NFR6.3(b) 的排序不變量與全碟加密的開機解鎖存在張力：升版窗口內若主機重開，解鎖早於任何 compose 動作"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "NFR7.1 把加密的**承載面**留給本站、**手段**留給 OQ-3。本站定案手段為主機層全碟加密（D-1），並明寫其保護邊界：保護磁碟離線曝露，不保護執行中的主機或被攻陷的容器。OQ-3 原本指定的 U5／U8 應用層欄位級加密**未採用**（[G1]=A 排除 B 與 C），故該 OQ 在本單元收斂而非下推——但 §二 已標明它保護不到的那一面正是 D-2 明文接受的那一面。**契約層的對應**：contract-summary.md 的 ADR-0006 判定表 Encryption 列把 OQ-3 記為與 OQ-4／OQ-10 同一條 CONDITIONAL 風險鏈；D-1 使 OQ-3 這一環斷開（全碟加密涵蓋承載 K-05 記憶列的資料庫 volume，即其全部資料範圍），而 OQ-4／OQ-10 仍在鏈上、落點為 U11，本站未碰。見 security-design.md §六"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "N/A",
+      "target": "七個變數由 render-env.sh 寫入、deploy.yml 兩處同步，是部署設定契約，不是設計題。D-3 不新增任何環境變數（networks: 是 compose 結構而非變數），故九處同步點不變"
+    },
+    {
+      "id": "NFR8.1a",
+      "status": "N/A",
+      "target": "deploy compose 的 backend.environment: 七個變數不得帶 :- fallback——設定契約，本站無介入"
+    },
+    {
+      "id": "NFR8.1b",
+      "status": "N/A",
+      "target": "test compose 的 backend.environment: Redis 三者自帶測試預設值——設定契約，本站無介入。但 D-3 要求 test compose 也宣告 networks: 分段（與 NFR4.1(c)「兩份 compose 都必須有」同形狀）"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "N/A",
+      "target": "deploy/.env.example 列出七者——設定契約。相關但不同的一點：D-1 的涵蓋範圍表指出 deploy/.env 本身不在 Docker volume 內，是全碟加密才涵蓋得到的三個落地物之一"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "N/A",
+      "target": "backend/.env.example 列出 backend 讀得到的變數——設定契約，本站無介入"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "N/A",
+      "target": "LOCAL-DEV.md 同步——文件契約，本站無新增。**判定理由已更正（審查 R-07）**：初版寫「本機 dev 是 bare-metal uvicorn ＋ vite，無 compose」，那是錯的——repo 根存在第三份 compose（docker-compose.yml，db 為 postgres:15-alpine 且 publish 5432，另有 adminer publish 8080），而已核可的 NFR6.1 落點 4 逐字要求改它的 db 映像。正確的理由是：**D-3 刻意不適用於該份 compose**（它 publish 端口是為了讓開發者以 GUI 與 psql 直連，那是它存在的目的；對它分段會破壞既有開發工具，且它上面沒有 cloudflared／Redis／Ollama，沒有要擋的威脅），故本站對 LOCAL-DEV.md 不新增任何同步義務。該檔因 NFR6.1 落點 4 而需更新的部分，由 NFR6.1／NFR8.4 在需求層已承載。見 security-design.md D-3 的三份 compose 適用性表"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "本站為 DEPLOY.md 新增**五塊**必寫內容，皆為可二元判定：(1) D-1 的全碟加密前置條件，含祖先鏈含 crypto_LUKS 的判準、ZFS 原生加密的替代判準、以及**四個要逐一檢查的掛載點**（/、/var/lib/docker、/home 或 $HOME 所在掛載點、自架 runner 工作目錄——審查 R-05／R-06）；(2) §三 要求明寫解鎖方式（passphrase vs TPM）與其對斷電自動回復的後果；(3) D-4 的 dump 檔三條要求與其通過條件表；(4) **穿過 /api/ 且會查 Postgres 的探測在手動升版路徑上的那一份**（POST /api/auth/login 帶刻意錯誤憑證、斷言 401，含 --connect-timeout 5 --max-time 15），用於七步程序中 up db 之後的驗證——手動路徑不經 deploy.yml，且升版時 backend 是被停掉的、時序與自動部署不同。**注意：DEPLOY.md 這一份不足以關上 R-01**，自動部署路徑的那一份在 deploy.yml（見 SCOPE-DEPLOY-YML-PROBE，審查 R-16）；(5) 回退窗口結束時 docker volume rm 舊 volume 並記錄（審查 R-13）。這五項疊加在 NFR8.5 既有的八項之上"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "N/A",
+      "target": "憑證值不得含 $（compose 內插會無聲截斷）——既有的 render-env.sh 檢查，本站無介入"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "NFR8.7 要求 Redis 無 host port（入向為零）。D-3 補上它沒有涵蓋的那一面：**同網段內的橫向可達性**。**數字本輪更正（審查 R-14）**：分段前可直連 redis:6379 者為 db／backend／frontend／cloudflared／ollama **五個**（初版寫四個，漏算 ollama）；分段後為 backend／db／ollama **三個**（初版寫「只有 backend」，錯——user-defined bridge 預設 enable_icc 為 true，同網段成員彼此可達全部端口，**D-3 隔離 edge↔internal、不隔離 internal 內部**）。真實變化 5 → 3。D-3 真正把數字壓到 0 的是另一列：突破 cloudflared 後可達的資料面服務由 3 變 0。兩者疊加才是完整的暴露面控制。**本項的機械閘門狀態本輪改變**：連通性現由 deploy.yml 的部署後探測把關（見 PROBE-API-DB 與 SCOPE-DEPLOY-YML-PROBE），但「誰掛哪個網段」本身仍無閘門，見 §四"
+    },
+    {
+      "id": "NFR8.8",
+      "status": "OK",
+      "target": "**本站在此推翻一個已核可的決定，非修正措辭（審查 R-02，經使用者裁決保留 D-3）。** NFR8.8 的「未採用的替代方案與其代價」逐字列出「另切一個只含 db／backend／ollama 的內部 network（比 basic auth 輕，但 compose 網路設定變複雜）」，同節上方逐字寫「這是刻意決定，不是遺漏（[N4]=A 定案）」——**D-3 採用的正是被排除的那一個**（本站版本為 db／redis／ollama ＋ backend，形狀相同、多含 redis）。反轉依據是新事實而非重新權衡：上游排除它的理由是成本（compose 網路設定變複雜），而上游當時**不知道扁平網段上有 cloudflared**（本站 V1／V2 查證才發現），且方向是加強防守、不移除任何既有控制。使用者在被明確告知此為反轉後裁決保留 D-3 並明寫反轉，不回改已核可的上游文件。**代價**：已核可的 NFR8.8 文字與本站設計自此並存矛盾，靠交叉引用維持可讀性；下一次觸及 NFR8.8 者應就地標為已被本站反轉。**附帶**：同一措辭缺口也在契約層——contract-summary.md 的 K-01 images_and_services 對 redis 與 ollama 的 exposure 逐字皆為「compose 內部網路 only；不得 publish port」，只管入向不管橫向，ADR-0006 判定表的 Network exposure 列原樣引用了它。不回改 K-01；以本檔 D-3 與 §六 向下游傳遞"
+    },
+    {
+      "id": "NFR8.9",
+      "status": "OK",
+      "target": "兩個新容器的記錄承載已由 NFR8.9 自己定案（不指定 driver、必須指定 max-size／max-file、零認證下未授權的 Ollama 呼叫在記錄上不可辨識為已接受的代價），本站無新增也無削弱，security-design.md §二 的判定為「已處置」。**status 由 Deferred 更正為 OK（審查 R-10）**：被 defer 的是 correlation ID，而它不在 NFR8.9 的文字裡；整列標 Deferred 會讓下游誤讀成「記錄承載本身還沒解決」。correlation ID 的缺口已移至 reverse 的 AUDIT-CORRELATION-ID 獨立條目"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "本機 embedding 對外部花費的貢獻為零，前提是 embedding 真的在本機 Ollama 算。D-3 對此有一個承載性約束（同 NFR4.3）：networks: 不得帶 internal: true，否則模型下載失敗、Ollama 無法服務，embedding 就會退回外部 API——那正好使 NFR9.1 失守。此為本站新識別的因果連結"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "D-1",
+      "status": "N/A",
+      "target": "主機層全碟加密。對應上游 NFR7.1（承載面 → 手段），但其涵蓋範圍超出 NFR7.1 所述的兩個 volume：另涵蓋 NFR6.3 的 dump 檔、deploy/.env、cloudflared 憑證三個**不在 Docker volume 內**的落地物。這三者在上游沒有任何一條需求碰到"
+    },
+    {
+      "id": "D-2",
+      "status": "N/A",
+      "target": "容器間傳輸維持明文。**上游 20 條需求沒有任何一條碰到 in-transit**，而 ADR-0006 的 encryption 面向涵蓋它，故本站以此條承接。它的成立前提之一（compose network 是有意義的邊界）在 D-3 之前不成立"
+    },
+    {
+      "id": "D-3",
+      "status": "N/A",
+      "target": "compose networks: 分段。既是 NFR8.7／NFR8.8 的補強（見 coverage），也是 D-2 可被接受的前提。另含一條本站定案的實作禁令：不得設 internal: true（否則 NFR4.3 的模型下載與 NFR9.1 的本機 embedding 同時失效）。無對應上游 id"
+    },
+    {
+      "id": "D-4",
+      "status": "N/A",
+      "target": "dump 檔三條硬要求。補 NFR6.3(c) 七步程序的缺口——該程序對 dump 的權限、位置、刪除時機一條都沒有，而 dump 是全庫明文含 password_hash，且本 repo 的 secret 掃描器（只讀 contract_files()）與禁止路徑檢查（path-part 精確比對 prod／production／secrets）對它皆結構性無效"
+    },
+    {
+      "id": "IAM-PG-SUPERUSER",
+      "status": "N/A",
+      "target": "PostgreSQL 至今以單一 superuser 連線、無最小權限拆分（deploy/docker-compose.deploy.yml:16 的 POSTGRES_USER 與 :36 的 DATABASE_URL 是同一帳號）。**既有基線、非本單元引入**，但落在 ADR-0006 的 IAM 面向上故必須記載。縮窄它會改變 schema_rbac.sql 的擁有者語意與 _ensure_*_schema 的 DDL 權限需求，屬 U5 memory-data 或一個獨立的安全強化 intent——**目前尚無任何單元正式承接它**。本站的交付是標出它，不是修它"
+    },
+    {
+      "id": "AUDIT-CORRELATION-ID",
+      "status": "N/A",
+      "target": "correlation ID 的產生與跨 agent 傳遞在本單元沒有任何落點——observability-design 的 produces_kinds 不含 packaging，故本站沒有承載它的產出檔。它屬 ADR-0006 的 Audit logging 面向，而該面向在本單元的判定為「部分處置」（NFR8.9 已處置記錄承載，此項未處置）。承接點：U13 brain-gateway（請求入口、產生點）與 U12 work-orchestrator（跨 agent 呼叫的傳遞點）的 nfr-design 迭代。**風險**：nfr-design 是 CONDITIONAL 且 for_each: unit-of-work，其 condition 為連言（NFR Requirements was executed AND NFR patterns need design），brain-infra 跑過本站**完全不保證** U12／U13 會跑——屆時判定 skip 的執行者須重新提交使用者裁決，不得由實作者當場決定。由審查 R-10 從 NFR8.9 列拆出為獨立條目，形狀比照 IAM-PG-SUPERUSER 與 TENSION-DISK-UNLOCK"
+    },
+    {
+      "id": "PROBE-API-DB",
+      "status": "N/A",
+      "target": "穿過 location /api/ 且會查 Postgres 的探測（POST /api/auth/login 帶刻意錯誤憑證、斷言 401，含 --connect-timeout 5 --max-time 15）。**兩個落點缺一不可**：deploy.yml 的部署後步驟（每一次自動部署，見 SCOPE-DEPLOY-YML-PROBE）與 DEPLOY.md 的升版步驟（手動路徑）。**逾時參數不是裝飾（審查 R-17）**：Docker 跨網段隔離是 DROP 而非 reject，網段打錯的表現是 SYN 被丟掉、連線掛住，最後由 frontend/nginx.conf:30 的 proxy_read_timeout 600s 逾時；失敗分類已更正為「500、504、curl 逾時（000）同屬資料面不可達」，初版把 502／504 逐字歸因為「backend 不可達」會把診斷指錯方向。**它存在的理由是一個 Critical 缺口**：D-3 把既有的 db 服務移進 internal 網段，而若歸屬打錯、backend→db 斷掉，現有四道機制一個都不會發現——deploy.yml:116 與 :131 兩個 curl 都打 / 並由 frontend/nginx.conf:35–37 的 try_files 回靜態檔；db 的 pg_isready（docker-compose.deploy.yml:25）在 db 容器內部執行；depends_on: service_healthy（同檔 :63–65）只管啟動順序；deploy.yml 全檔對 /api 命中數為 0。探測的三段依據：nginx.conf:16 的 location /api/ → proxy_pass 證明 frontend→backend；user_router.py:386 的 db.query 在任何密碼比對之前執行、證明 backend→db；:387–388 對不存在的使用者 raise 401，故 401 是「兩段都通」的唯一結果。**失敗分類以 security-design.md 的分類表為準**，該表經兩輪更正：**持續 502 指向 backend→db 斷掉**（database.py:76 的 create_all 與 :78–83 的六個補丁全在 :86 的 try 之外，故 db 不可達時 startup 拋例外、uvicorn 不服務、restart: unless-stopped 反覆重啟、nginx 始終取不到上游——審查 R-27）；**500／504／curl 逾時 000 指向 backend→redis／ollama 斷掉**（這兩段不在 startup 路徑上）；回 HTML 為 /api/ 路由或 frontend→backend 斷。該表是診斷指向、不是通過條件，通過條件只有 401——**初版此處的括號原樣留著被自己指名為錯的「502／504 = backend 不可達」，審查 R-20 查出，本輪更正**。不產生任何狀態、不需要憑證。**必須有有界重試（30 × 5s），單發斷言會把好的部署判成壞的**：8090 檢查不證明 backend 就緒（compose :77–78 的 depends_on 無 condition、deploy.yml :118 第一次成功即 exit 0），而 main.py:46–50 的 startup 同步跑 init_db()、database.py:74–83 內含六個 _ensure_*_schema DDL 補丁，這段完成前 /api/* 一律 502；誤判會觸發 rollback 並對一個沒問題的合併開 revert PR（審查 R-18）。無對應上游 id——由審查 R-01 查出、本站承接，三個落點見 SCOPE-DEPLOY-YML-PROBE 與 NFR8.5"
+    },
+    {
+      "id": "SCOPE-DEPLOY-YML-PROBE",
+      "status": "N/A",
+      "target": "**本階段新增、已核可 scope 尚未涵蓋、需回補（security-design.md §〇 的 S-6）。** 把 /api 探測加進 .github/workflows/deploy.yml **兩處**：(1) deploy job 的**獨立新步驟**（在 `Wait for the frontend to answer locally` 步驟**之後**，**不是**加進該步驟的迴圈內——:116 在迴圈內、:118 就 exit 0，照字面加在那裡是永不執行的死碼，審查 R-18）；(2) rollback job 的健康檢查迴圈（:229–236，[G7]=A、審查 R-22），因為該迴圈目前只 curl / ，使「rolled back and healthy on 8090」在資料面上未被驗證，而 rollback 正是探測失敗後的必經路徑。兩處皆須有界重試並滿足 security-design.md 的 PROBE-CONTRACT 七條（P-1…P-7）。**本輪起設計文件不再給可執行 shell，只給契約**——理由是前一版的兩段 bash 立刻成為缺陷來源（未收據驗證的五項發現有三項出在那幾行上），而它們在 code-generation 之前不會被執行、不會被測試。**兩個 job 的結果表達方式不同，不可互抄（P-6／P-7，審查 R-28）**：deploy job 以步驟結束碼（失敗即紅燈）；rollback job 的 :229–236 以 $GITHUB_OUTPUT 的 restored 表達、該步驟今天不因健康檢查紅燈，且 notify 的 case（:381–386）只認 healthy／unhealthy／none。本站定案採「併入既有迴圈的成功條件」（/ 與 /api/auth/login 兩者皆通才 RESTORED=healthy; break，不使用 exit，:237 仍為唯一寫入點，case 不需改動），不採新增第三狀態（那需同一 PR 補 case 分支，漏改即退化成「結果未知」）。**另一條硬要求（P-5，審查 R-24，已實測複驗）**：deploy.yml 的三個同類步驟（:114／:129／:208）皆為 set -euo pipefail，其下 code=$(curl …) 會因 curl 非零結束碼當場終止步驟（不重試、不印診斷、結束碼為 curl 的 7／28），既有兩道檢查沒事是因為把 curl 放在 if 條件位置；故取值必須以不觸發 set -e 的形式進行。**牆鐘上界（審查 R-25）**：30 ×（請求逾時 ＋ 5s 間隔）≈ 10 分鐘，而 rollback job 的 timeout-minutes 是 20 且內含其他兩個迴圈，餘裕不大、實作時須實測並記入 DEPLOY.md。**為何它不是既有範圍的自然延伸**：本單元對 deploy.yml 的既有義務是 NFR8.1 逐字要求的「兩處同步」，而那指的是**兩個 job 的 env: 對照表**（該條表格逐字列 deploy → :90–104、rollback → Restore the last-good deployment 步驟的 env:，並明寫兩個 job 的改動不對稱、rollback 沒有等價的 required-secrets 守門）；新增驗證步驟是改它的**部署流程**，且因為失敗會觸發既有 rollback job，它實質上是一個**新的自動回滾觸發條件**。（初版把 NFR8.1 轉述為「兩個 job 都要呼叫 render-env.sh」——那是 project.md ## Mandated 的另一條規則，非 NFR8.1；審查 R-21 更正。）**為何必須做**：R-01 要防的失敗是無人值守的——deploy.yml:10–14 觸發於 pull_request closed 到 ut，D-3 這次網段變更本身就走那條路；只寫進 DEPLOY.md 的話，deploy.yml 對 /api 的命中數仍是 0，引入分段的那一次部署仍綠燈通過。**為何不採只記 warning**：本 repo 有實證對照——ui-regression 是真閘門因為它 exit 1，local-dev-drift 只提問所以無強制力。由審查 R-16 查出，使用者於 [G6]=A 在知情下裁決採用"
+    },
+    {
+      "id": "SCOPE-DEPLOY-MD-FDE",
+      "status": "N/A",
+      "target": "**本階段新增、已核可 scope 尚未涵蓋、需回補（security-design.md §〇 的 S-7）。** DEPLOY.md 的前置條件新增：全碟加密要求、其四個要逐一檢查的掛載點（/、/var/lib/docker、/home 或 $HOME 所在掛載點、自架 runner 工作目錄）、祖先鏈含 crypto_LUKS 的判準與 ZFS 原生加密的替代判準、以及解鎖方式（passphrase vs TPM）的記載。**為何它不是既有範圍的自然延伸**：NFR8.5 的既有八項都是「部署時要知道的事」，本項是**部署環境必須先具備的條件**——對既有主機是一次重裝或資料遷移，且與斷電後的自動回復有張力（§三）。已核可的 scope-document 沒有任何一項涉及主機層的磁碟配置。由 [G1]=A ＋ [G5]=A 定案，掛載點清單與判準由審查 R-05／R-06 補完"
+    },
+    {
+      "id": "TENSION-DISK-UNLOCK",
+      "status": "N/A",
+      "target": "全碟加密的開機解鎖與斷電後自動回復的張力。restart: unless-stopped 與 deploy.yml 的自癒設計都預設主機會自己回到可服務狀態；passphrase 解鎖使該預設不成立，TPM 解鎖則把保護降為「磁碟離開這台機器才有效」。本站刻意不選，要求 DEPLOY.md 明寫採用哪一種與其後果。無對應上游 id——由本站的 D-1 製造"
+    }
+  ]
+}

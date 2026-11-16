@@ -1,0 +1,50 @@
+{
+  "stage": "functional-design",
+  "unit": "requirement-field-service",
+  "upstream_ids": [
+    "AC11.2.1",
+    "AC11.2.2",
+    "AC11.2.3",
+    "AC11.3.1",
+    "AC11.3.2",
+    "AC11.3.3"
+  ],
+  "coverage": [
+    { "id": "AC11.2.1", "status": "OK", "target": "BR44.1, BR44.5", "note": "僅資料層部分，畫面層由 U23 承擔：本單元提供每欄的 filledState（三態），使「未填」可由資料決定；文字標示與不靠顏色屬 U23 的畫面。" },
+    { "id": "AC11.2.2", "status": "OK", "target": "BR42.2, BR44.5, BR44.6", "note": "錯綁別組的寫入以 UnknownFieldKey 拒絕；回應的組標題即 agent 名稱，組內欄位集合恆等於宣告。" },
+    { "id": "AC11.2.3", "status": "OK", "target": "BR46.2, BR46.1", "note": "僅資料層部分，畫面層由 U23 承擔：本單元保證失敗的寫入整筆回滾、回明確錯誤；「畫面告知失敗且輸入值不消失」屬 U23 的畫面，BR46.1／BR46.2 不驗它。" },
+    { "id": "AC11.3.1", "status": "OK", "target": "BR44.2, BR44.4", "note": "unfilledCount 與分組明細由同一次查詢推導並同一回應回傳（I-4）。" },
+    { "id": "AC11.3.2", "status": "OK", "target": "BR43.5, BR44.2, BR44.4", "note": "填滿一欄後重讀，該欄為 filled、計數減一。" },
+    { "id": "AC11.3.3", "status": "OK", "target": "BR44.2", "note": "全部已填時 unfilledCount 為 0，且無欄位為 never_filled 或 cleared。" }
+  ],
+  "reverse": [
+    { "id": "BR41.1", "status": "N/A", "target": "授權規則（待核准帳號先拒）：承 ADR-0006 IAM 面，US11.2／US11.3 不談權限；由 TestClient allow/deny 雙向驗證" },
+    { "id": "BR41.2", "status": "N/A", "target": "授權規則（全域 K4 層）：承 FR12.6 兩層串聯與 K-17 authorization_model，無故事 AC；由 TestClient allow/deny 雙向驗證" },
+    { "id": "BR41.3", "status": "N/A", "target": "授權規則（系統存在與歸屬）：承 K-17 delegation，無故事 AC" },
+    { "id": "BR41.4", "status": "N/A", "target": "授權規則（per-project 層）：承 [FD4]=A 與 FR12.6，無故事 AC；由 TestClient allow/deny 雙向驗證" },
+    { "id": "BR41.5", "status": "N/A", "target": "授權規則（先判定後存取）：承 K-17 hard_rule，無故事 AC" },
+    { "id": "BR41.6", "status": "N/A", "target": "拒絕 log：ADR-0006 audit logging 面，無故事 AC" },
+    { "id": "BR42.1", "status": "N/A", "target": "組必須已宣告：AC11.2.2 的前置驗證，與 BR42.2 同一入口" },
+    { "id": "BR42.3", "status": "N/A", "target": "代寫標示的驗證：承 [FD1]=A，無故事 AC" },
+    { "id": "BR42.4", "status": "N/A", "target": "值長度上限：邊界輸入驗證（phases/construction.md），無故事 AC" },
+    { "id": "BR42.5", "status": "N/A", "target": "代寫路徑的空值寫入被拒：[FD3]=A 的適用範圍（review-01 R-06），無故事 AC" },
+    { "id": "BR43.1", "status": "N/A", "target": "值語意（去空白）：[FD3]=A 的前提，無故事 AC" },
+    { "id": "BR43.2", "status": "N/A", "target": "值語意（使用者的空值即清空）：承 [FD3]=A 與 ADR-015；清空控件不在已核可畫面（J-20），上游未寫 AC" },
+    { "id": "BR43.3", "status": "N/A", "target": "值語意（清空從未填過為 no-op）：承 ADR-015，無故事 AC" },
+    { "id": "BR43.4", "status": "N/A", "target": "值語意（重複清空為 no-op）：承 K-17 retry_and_idempotency，無故事 AC" },
+    { "id": "BR43.6", "status": "N/A", "target": "值語意（同值寫入仍更新溯源）：承 K-17 write_field，無故事 AC" },
+    { "id": "BR43.7", "status": "N/A", "target": "值語意（清空已填欄位）：承 ADR-015 與 K-17 clear_field，無故事 AC" },
+    { "id": "BR44.3", "status": "N/A", "target": "不再宣告的列不顯示不計數：承 [UG:G9]=A，第一版定義不會移除，無故事 AC" },
+    { "id": "BR45.1", "status": "N/A", "target": "寫入者恆為本人：承 ADR-015 與 FR11.6，無故事 AC" },
+    { "id": "BR45.2", "status": "N/A", "target": "代寫標示只在帶入時有值：承 [FD1]=A，無故事 AC" },
+    { "id": "BR45.3", "status": "N/A", "target": "清空時代寫標示為空：承 K-17 clear_field 簽章，無故事 AC" },
+    { "id": "BR45.4", "status": "N/A", "target": "代寫標示不授予權限：承 FR11.6，無故事 AC" },
+    { "id": "BR45.5", "status": "N/A", "target": "updatedAt 的更新時機：承 K-17 FieldView 形狀，無故事 AC" },
+    { "id": "BR46.3", "status": "N/A", "target": "錯誤訊息不洩原文與值：ADR-0006 面，無故事 AC" },
+    { "id": "BR46.4", "status": "N/A", "target": "框架 422 不回顯輸入：BR46.3 的完整性（review-01 R-05），無故事 AC" },
+    { "id": "BR47.1", "status": "N/A", "target": "資料表變更：承 [FD1]=A 與 U18 指派本單元的 OPEN-CG18-6，技術約束" },
+    { "id": "BR47.2", "status": "N/A", "target": "資料表變更的可重跑收斂（本機與 staging）：技術約束，無故事 AC" },
+    { "id": "BR47.3", "status": "N/A", "target": "收斂結果的欄位級斷言：技術約束（review-01 R-01），無故事 AC" },
+    { "id": "BR47.4", "status": "N/A", "target": "ORM 模型、一致性測試與依方言的 upsert：技術約束（review-01 R-01），無故事 AC" }
+  ]
+}

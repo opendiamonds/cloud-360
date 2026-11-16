@@ -84,8 +84,14 @@ def ensure_role_permissions_seeded(db: Session, force: bool = False) -> int:
 def ensure_missing_role_permissions(db: Session) -> int:
     """
     只 INSERT 缺失的 (role, story_id)；不 UPDATE／DELETE 既有列（ADR-C1-02）。
+
+    SEC-4：插入列時必須記錄**是哪些** (role, story_id)，不得只記列數——
+    既有環境補進新 story id 時，只有列數的日誌無從事後確認補了什麼。
+    形式為一行彙總（非逐列一行：既有環境首次啟動會刷幾十行 INFO，
+    而斷言行數會把一個會變的數字變成受測契約）。內容只有角色名與
+    story id，不含任何使用者身分。
     """
-    inserted = 0
+    inserted_pairs: List[str] = []
     for role, story_id, can_view, can_edit, can_review in DEFAULT_ROLE_PERMISSIONS:
         exists = (
             db.query(RolePermission)
@@ -104,11 +110,15 @@ def ensure_missing_role_permissions(db: Session) -> int:
                 updated_by="system_seed",
             )
         )
-        inserted += 1
-    if inserted:
+        inserted_pairs.append(f"{role}/{story_id}")
+    if inserted_pairs:
         db.commit()
-        logger.info("ensure_missing_role_permissions: inserted %d rows", inserted)
-    return inserted
+        logger.info(
+            "ensure_missing_role_permissions: inserted %d rows: %s",
+            len(inserted_pairs),
+            ", ".join(inserted_pairs),
+        )
+    return len(inserted_pairs)
 
 
 def get_permission_row(

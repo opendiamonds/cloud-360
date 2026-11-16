@@ -1,0 +1,290 @@
+{
+  "stage": "functional-design",
+  "unit": "hierarchy-service",
+  "upstream_ids": [
+    "US9.2",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3",
+    "US11.1",
+    "AC11.1.1",
+    "AC11.1.2",
+    "AC11.1.3"
+  ],
+  "coverage": [
+    {
+      "id": "US9.2",
+      "status": "OK",
+      "target": "BR2.1",
+      "note": "建立專案與系統的能力由本單元承載。寫入路徑的唯一性（兩個使用者入口共用一個端點）即 BR2.1；其前置條件為 BR2.2（目標專案須存在）與 BR2.3（新建者預設標記為否）。"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "OK",
+      "target": "BR2.1",
+      "note": "Then「它出現在我可選的作業對象中」。工作流程 W1 第 6 步。前置的權限條件為 BR1.1、名稱條件為 BR3.1／BR3.2。"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "OK",
+      "target": "BR2.2",
+      "note": "Then「該系統歸屬於該專案，且可被選為作業對象」。歸屬由 BR2.2（目標專案必須存在）保證；工作流程 W2。"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "OK",
+      "target": "BR1.1",
+      "note": "Then「我被拒絕，且拒絕經由既有的 require_story_action 路徑」。BR1.1 逐字要求不自建第二套拒絕機制——故自建拒絕邏輯即違反本 AC，不只是風格問題。BR1.2 進一步封住同進程繞過，否則本 AC 可被一條不經路由的呼叫路徑整個繞開。"
+    },
+    {
+      "id": "US11.1",
+      "status": "Deferred",
+      "target": "BR2.1",
+      "note": "本故事的三條 AC 全部是**畫面**行為，由 U23 project-pages-ui 承載。unit-of-work-story-map.md:194-195 逐字說明本單元之所以被列在這則故事下，是因為「寫入端是既有 hierarchy-service 的系統建立端點」——本單元提供其背後的寫入端（BR2.1／W2），不提供畫面。"
+    },
+    {
+      "id": "AC11.1.1",
+      "status": "Deferred",
+      "target": "BR2.1",
+      "note": "Then「畫面提供一個建立系統的動作」——畫面行為，落在 U23。本單元提供該動作要呼叫的端點。"
+    },
+    {
+      "id": "AC11.1.2",
+      "status": "Deferred",
+      "target": "BR2.1",
+      "note": "Then「畫面是空狀態（說明 ＋ 建立系統的動作），不是一張空表或一個無選項的選擇器」——純畫面行為，落在 U23。本單元對空狀態無任何責任。"
+    },
+    {
+      "id": "AC11.1.3",
+      "status": "Deferred",
+      "target": "BR2.1",
+      "note": "Then「系統計數由 0 變為 1」。計數的**資料來源**是本單元的建立端點（W2 第 7 步），但 Then 斷言的是**總覽籤上的顯示**，故驗證落點在 U23。本單元只保證建立成功後該專案確實多一個系統。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.2",
+      "status": "N/A",
+      "target": "上游指派的未決事項，非 AC 驅動",
+      "note": "受保護操作一律經 HierarchyFacade，禁止繞過它直呼底層 service。來源是**契約 K-07 的 consumers.in_process／sole_entry／identity_passing／resource_context（逐字）**，以及 unit-of-work.md:222 指派給 functional-design 的 Accepted risk（domain-design 審查 R-01）。不是任何一條 AC。它保護 AC9.2.3——沒有它，該 AC 可被一條不經 facade 的呼叫路徑整個繞開。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "誠實宣告，非禁令",
+      "note": "判定只有一份（在 facade），底層服務層不設第二道角色檢查。violation_behaviour 為「不適用」。**這是契約 K-07 的 rule 所選擇的模型**（「FastAPI router 與同進程呼叫端共用這一個入口，故 require_story_action 的判定只有一份呼叫點」），不是本站的選擇；本站只負責讓它可被強制。"
+    },
+    {
+      "id": "BR2.3",
+      "status": "N/A",
+      "target": "資料不變量，非 AC",
+      "note": "新建者預設標記為否。保護 U4 已交付的部分唯一索引（每個使用者只應有一組預設）。無 AC 描述它，因為它是遷移語意的保護而非使用者可見行為。"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "技術驗證規則",
+      "note": "名稱非空白。U4 已交付的實體層亦有此約束，本條存在的理由是讓錯誤訊息對使用者有意義，而非資料庫層的訊息。"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "[F5]=C 的本站定案，非 AC",
+      "note": "名稱衝突回 409。沒有 AC 要求名稱唯一；本條是本站為了避免作業對象選擇器出現兩個相同選項而加的，並刻意不以 schema 約束承載（會回頭改已登記完成的 U4）。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "誠實宣告，非禁令",
+      "note": "BR3.2 的唯一性是最佳努力而非不變量（TOCTOU）。violation_behaviour 為「不適用」。"
+    },
+    {
+      "id": "BR4.1",
+      "status": "N/A",
+      "target": "[F6]=A 的本站定案，非 AC",
+      "note": "預設組可改名。無 AC 描述；理由是歸屬的權威來源是識別碼而非名稱，故改名不影響任何不變量。"
+    },
+    {
+      "id": "BR4.2",
+      "status": "N/A",
+      "target": "保護 U4 的已核可不變量",
+      "note": "預設組不可刪除。保護的是「遷移後歸屬為空的架構圖列數必須為 0」——那是 U4 擁有且已有測試（tests.test_hierarchy_migration 15 項通過）的不變量，不是本單元的 AC。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "保護 U4 的已核可不變量",
+      "note": "不可刪除仍有架構圖的系統。與 BR4.2 同源，但觸發條件不同（刪系統 vs 刪預設組），故分列。"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "[F3]=A 的本站定案，非 AC",
+      "note": "不可刪除仍有系統的專案，回 409 並說明數量。資料庫已以 restrict 做了一半的決定；本條把它呈現為有用的訊息而非資料庫錯誤。無 AC 描述刪除行為。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "DG-3 的解決；本階段新增、scope 尚未涵蓋",
+      "note": "變更紀錄查詢端點。來源是 unit-of-work.md:220 指派給本單元的 DG-3，以及 [DD:E8]=C 逐字的理由「可用同一標籤搜尋它影響過哪些圖」。**不在 unit-of-work.md:109 的已核可交付清單內**，已於 functional-spec.md §一 標記並要求回補 scope-document。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "契約 K-07 `public_interface`；非本階段新增",
+      "note": "變更紀錄的**唯一寫入端**。來源是**契約 K-07 的 public_interface（逐字）**：HierarchyFacade.record_diagram_change，consumed_by: [U12]，且 K-07 註明「U12 是 DiagramChangeRecord 的唯一寫入端」。呼叫方式為**同進程**（consumers.in_process 逐字列有 U12），principal 為第一參數。無 AC 描述寫入語意。\n**本列於 2026-10-06 更正（審查 R-04）。** 原文寫「由 [F1]=A 的後果逼出（WorkOrchestrator 改走 HTTP 就需要一個端點可打）……不在已核可交付清單內，同樣已標記並要求回補」——那是依 [F1]=A 的 HTTP 模型寫的，而 [F1]=A 已被使用者於同日裁決推翻（改為遵循 K-07 的同進程 facade 模型，見 OPEN-H6）。兩處錯誤因此一併更正：① 呼叫方式不是 HTTP；② 它**不是**本階段新增（契約早已列出），故**不要求回補**。functional-spec.md §一 的表已先行更正，本列原本漏了同步——正是 project.md 記過的跨檔傳播失敗。"
+    },
+    {
+      "id": "BR5.3",
+      "status": "N/A",
+      "target": "實讀 U4 交付物查出的落差",
+      "note": "來源欄位只容納大腦編排一個值。components.md 的實體屬性清單沒有這個欄位，而 U4 已交付的實體有且必填。後果是非大腦路徑的圖異動無法寫紀錄。無 AC 描述。"
+    },
+    {
+      "id": "BR5.4",
+      "status": "N/A",
+      "target": "技術驗證規則",
+      "note": "來源需求摘要非空白。空摘要的紀錄對查詢端毫無價值。"
+    },
+    {
+      "id": "BR5.5",
+      "status": "N/A",
+      "target": "誠實宣告，非禁令",
+      "note": "變更紀錄不是永久稽核軌跡（級聯刪除）。violation_behaviour 為「不適用」。寫下它是因為 unit-of-work.md:250 把它列在 ADR-0006 的 audit logging 面下，而稽核軌跡的通常預期與此相反。"
+    },
+    {
+      "id": "BR1.4",
+      "status": "N/A",
+      "target": "K-07 residual_gap 的關閉點，非 AC",
+      "note": "principal 只能由授權入口鑄造。**本條是 unit-of-work.md:222 指派給本站的事項的實際落地點**，關閉的是契約 K-07 自己具名的 residual_gap（『facade 是唯一入口』無機械強制，繞過它直呼底層 service 只能靠 code review 擋下）。無 AC 描述它——它保護的是整個授權模型的可強制性，不是某一條使用者可見行為。射程有限：它讓「拿不到 principal 就呼叫不了 facade」成立，但不阻止完全不碰 facade 的直呼，那一半屬 BR1.5。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "N/A",
+      "target": "執行落點不在本單元",
+      "note": "「沒有其他單元 import 底層服務層」須由可執行檢查守住。**本單元無法自己驗證它**——它約束的是**四個**同進程呼叫端 `U10` session-store／`U12` work-orchestrator／`U19` membership-service／`U20` requirement-field-service（`components.md:110-112`／`:156-158`／`:559-561`／`:618-620` 四條 style: sync 入邊；消費端清單見 `contract-summary.md:1551` 的 K-07 擴充表）；執行落點在那**四個**單元的 code-generation。本單元只能定義它並記為具名缺口（`OPEN-H2`）。**本列於 2026-10-06 更正（審查 iteration 2 的 `R-01`）**：原文寫「它約束的是 `U10` 與 `U12`……執行落點在那兩個單元」，與同一條規則的 `applies_to`（已改為四個）自相矛盾；漏掉 `U19`／`U20` 的後果是它們的 import 掃查不會被排進各自的 code-generation，而 `U19` 讀的正是 `ownerUserId`。**本條同時是 `OQ-N2` 的答覆**（`bolt-plan.md:108`，B1 進入條件）：加機制而非只由 review 擋；`U8` 那一半不屬本單元（審查 `R-16`）。"
+    },
+    {
+      "id": "BR2.4",
+      "status": "N/A",
+      "target": "契約條款，非 AC",
+      "note": "建立類操作非冪等，呼叫端不得自動重試。逐字來自契約 K-07 的 retry_and_idempotency（create_* 非冪等、resolve_work_target 唯讀且冪等可安全重試、record_diagram_change 非冪等不得重試）。無 AC 描述重試語意。"
+    },
+    {
+      "id": "BR4.5",
+      "status": "N/A",
+      "target": "誠實宣告，非禁令",
+      "note": "本輪 HTTP 介面沒有改名端點。violation_behaviour 為「不適用」。本條是本站比對 components.md 的 behaviour（列了「改」）與契約 K-07 的 OpenAPI 區塊（只有 get／post／delete，無 patch／put）查出的落差。兩者都是已核可產出，落差不是本站造成的；寫下它是為了讓 U23 project-pages-ui 不會以為有端點可打。見 open_items OPEN-H5。"
+    },
+    {
+      "id": "BR5.6",
+      "status": "N/A",
+      "target": "U4 欄位註解的逐字指派（OQ-H3），非 AC",
+      "note": "變更紀錄的行為者必須是實際造成異動的人，**不得預設為 session 擁有者**。來源是 **U4 已交付 DDL 的欄位註解逐字指派**（`schema_rbac.sql:420`）：「The writer (U12) must store the user who actually caused the change and must NOT default to the session owner (OQ-H3 still open)」。審查 R-07 指出它直接打在本站定義的 facade 簽名上——BR1.2 強制 principal 為第一參數，而在大腦編排流程裡 principal 極可能就是 session 擁有者，正是該註解警告的預設。本單元是 facade 的擁有者，故是唯一能規定此取值來源的地方。**本條關閉 OQ-H3 的 facade 契約面**；寫入端實際傳什麼值，驗證落點在 U12 的 code-generation。無 AC 描述行為者取值。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "N/A",
+      "target": "審查 R-02 查出的上游缺口，非 AC",
+      "note": "讀取與 resolve_work_target 的列範圍限於請求者擁有的專案與其底下的系統；以識別碼直接解析他人資源時回「查不到」而非「無權限」。**來源是審查 iteration 1 的 R-02（Critical）＋使用者 2026-10-06 的裁決。** K-07 的 OpenAPI 逐字寫「列出使用者**可見**的專案」，而「可見」在本站原本的 22 條規則裡沒有任何定義；K2 是 role_permissions 層的**全域**角色權限（契約 K-03 逐字「11 個既有角色 × 2 個 story id」）、**不帶列層範圍**，故照原規格最直接的實作是「有 K2 即可列出任何人的專案」。無 AC 描述列範圍——這是上游的缺口，不是本站的新增需求。\n**射程於 2026-10-06 由 `[F9]`=A 收窄（審查 iteration 2 的 `R-12`，Critical）**：本條只管**列舉型讀取**與使用者自己的解析路徑；受信任同進程消費端為做自己的授權判定而需要的存在驗證走 `BR6.4`，不套列範圍。原文把 `resolve_work_target` 整個納入，會使契約 `K-16`／`K-17` 不可實作——`assert_can_deactivate(principal, target_user_id)` 要查的是被停用者名下的專案，本條之下回「查不到」故 `LastAdminGuard` 永不觸發，而該契約的 `no_database_backstop` 逐字「這個檢查是唯一防線」（停用端點是 UPDATE，`unit-of-work.md:446` 逐字「外鍵對 UPDATE 零效力」）。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "N/A",
+      "target": "誠實宣告（收窄範圍），非禁令",
+      "note": "BR6.1 的擁有者範圍是本輪的刻意收窄，不是最終可見範圍模型；最終模型屬 K-16（契約逐字「per-project 授權判定的唯一來源」）。violation_behaviour 為「不適用」——本條是誠實宣告。不在本輪委由 K-16 的理由是**依賴方向**：ProjectMembership（U19）已 depends_on ProjectHierarchy（U7）且 style: sync（components.md:559-561），反向呼叫會成環，且 K-16／K-17 契約明訂兩層 facade 不得互相假設對方已檢查。記為 OPEN-H7。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "審查 R-02 ＋ U4 資料表註解，非 AC",
+      "note": "變更紀錄的讀取同受 BR6.1 的列範圍限制，且不得被呈現為完整變更歷史。前半來源同 BR6.1；後半實讀 U4 的資料表註解逐字（`schema_rbac.sql:416`）「Coverage is declared by the source column, NOT by the table name — read source before presenting anything」與「Edits made through the existing A1 page do NOT pass through the writer, so rows here are NOT a complete change history」。無 AC 描述。\n**判定依據於 2026-10-06 改為架構圖自身的擁有者（審查 iteration 2 的 `R-13`，Critical；使用者裁決 `[R-13]`=A）**：以 `user_diagrams.user_id`（NOT NULL）為準，不上溯 system→project。原文宣稱空的系統參照「在健康的系統中不可達」，**該宣稱為假**，已實測三項：`UserDiagram`（`backend/models.py:91-105`）沒有該欄位的 ORM 屬性；三條建圖路徑（`collab_router.py:517`、`review_router.py:131`／`:327`）全走 ORM 故一律留空；唯一寫入者 `hierarchy_migration.py:469-472` 只被獨立腳本呼叫（該檔 `:13` 逐字「不掛在啟動路徑上」）。故 `AC9.1.4` 的不變量只在遷移當下成立，之後每張新圖都讓它再度不成立——而大腦寫紀錄的對象正是新圖。沿用上溯會讓 `W5`／`W8`（`DG-3` 的落點）對新圖回傳空集合。可見性與歸屬刻意分開：`system_id` 仍是歸屬的權威來源（K-04 `column_added` 逐字）。"
+    },
+    {
+      "id": "BR6.4",
+      "status": "N/A",
+      "target": "`[F9]`=A 的裁決結果，非 AC",
+      "note": "受信任同進程消費端的存在驗證與擁有者查詢不套列範圍，改以三道約束取代：只能同進程呼叫、只回傳最小欄位（存在性／擁有者 id／所屬專案 id，不回名稱不回清單故無法枚舉）、呼叫端必須自己完成授權判定（`K-16`／`K-17` 的 hard_rule 已如此要求，且兩層 facade 不得互相假設對方已檢查）。**來源：使用者裁決 `[F9]`=A（2026-10-06），審查 iteration 2 的 `R-12`（Critical）。** `[F8]`=A 的這個代價在當時三個選項裡完全未揭露，故依 `project.md` 的規則回頭指名並請使用者重選。代價如實記載並列為 `OPEN-H10`：`U7` 因此成為可問出特定專案擁有者的通道。無 AC 描述。"
+    },
+    {
+      "id": "BR6.5",
+      "status": "N/A",
+      "target": "審查 `R-15` 查出的寫入面缺口，非 AC",
+      "note": "寫入路徑（`create_system`、`delete_project`、`delete_system`、`BR4.1` 的改名）同樣需要擁有者檢查，而 `BR6.1` 只涵蓋讀取面。**來源：審查 iteration 2 的 `R-15`（Major，previously-missed）。** `[F8]`／`[F9]` 兩題的題幹都只談讀取（「列出使用者可見的專案」），故寫入面兩次裁決都沒被問到；但 `components.md` 的 `ProjectHierarchy.behaviour` 逐字涵蓋「讀、建立、修改、刪除」四者。比讀取外洩更嚴重：具 `K2` 者可在他人專案底下建立系統、或刪除他人的專案與系統，且是破壞性的。`BR4.2`／`BR4.3`／`BR4.4` 完全不涉及擁有者，擋不住這一類。本條是把已定案的擁有者範圍一致地套用到其餘三者，不是新的產品決定。`W1` 是唯一不需要本條的寫入路徑（建立專案的擁有者就是請求者本人），已在該流程就地寫明以免被讀成漏寫。"
+    },
+    {
+      "id": "BR6.6",
+      "status": "N/A",
+      "target": "契約擴充，已列入 §一 範圍新增表，非 AC",
+      "note": "衝突型拒絕（名稱重複、底下仍有東西）需要契約上存在的承載方式：新增 `HierarchyConflictError` 並由 router 轉 409，且 route decorator 必須**顯式**宣告 `responses={409: {...}}`。**來源：審查 iteration 2 的 `R-17`（Major，previously-missed）。** 本檔四條規則要求回「衝突」，而 K-07 的 `raises` 沒有衝突型例外、其 OpenAPI 區塊沒有 409。不顯式宣告則該契約不進 spec、前端產不出型別，**而 CI 保持綠燈**——`unit-of-work.md:447` 逐字：實測 `openapi.json` 的 55 個 operation 宣告的狀態碼只有 {200:53, 422:45, 201:1, 204:1}，非 2xx/422 的宣告數為 0。同一份檔對 `U19` 已記過這個形狀。這是對已核可契約 K-07 的擴充，已列入 `functional-spec.md` §一。"
+    },
+    {
+      "id": "DG-2",
+      "status": "N/A",
+      "target": "`components.md:472` 的具名缺口，由 `BR4.4`＋`BR4.3` 關閉",
+      "note": "**`DG-2` 的關閉登錄（審查 iteration 2 的 `R-06`：全檔原本對 `DG-2` 零命中）。** `components.md:472` 逐字「`Project`／`System` 被刪除時的 **cascade 行為未定**。刪一個 `System` 會讓 `user_diagrams.system_id` 與 `DiagramChangeRecord` 同時懸空；刪一個 `Project` 會讓其下所有 `System` 懸空」，並於 `:488`（`H-7`）指派 `functional-design`——即本站。由 `BR4.4`（專案底下仍有系統即拒絕，不級聯）＋`BR4.3`（系統底下仍有圖即拒絕）關閉：兩種懸空都不可能發生。關閉的是「**遷移之後持續滿足**」那一面——契約 `K-04` 的 `migration.invariant`（`contract-summary.md:361` 逐字「遷移後 user_diagrams 中 system_id IS NULL 的列數必須為 0」）只保證遷移當下為 0，而 `DG-2` 問的是刪除會不會在執行期打破它。**另一面沒關**：新建的圖從未被指派系統（`OPEN-H11`），那是另一條打破同一個不變量的路徑，不在 `DG-2` 的射程內。**注意**：上一版把 `DG-2` 誤標為「預設組的可變性未定」——那其實是本站 `[F6]`=A 的題目，與 `DG-2` 無關。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-H1",
+      "severity": "scope-addition",
+      "text": "**本項於 2026-10-06 大幅收窄。** 原記為「本單元多兩個端點（查詢端 ＋ 寫入端）」，依據是 [F2]=A 與 [F7]=A。追查 contract-summary.md 後確認：**寫入路徑早在契約 K-07 就被契約化**（public_interface 逐字列有 HierarchyFacade.record_diagram_change，consumed_by: [U12]），故它不是本階段新增。真正新增的只有**變更紀錄的查詢介面**（BR5.1）——K-07 的 public_interface 沒有讀取方法，但其 known_gap 已逐字記載 DG-3、landing 指名本單元、if_implemented 已寫下實作條件，故它是契約已預見的分支而非憑空擴張。仍不在 unit-of-work.md:109 的交付清單內，**要求回補 scope-document.md 的能力 9**。"
+    },
+    {
+      "id": "OPEN-H2",
+      "severity": "named-gap",
+      "text": "BR1.5（沒有其他單元 import 底層服務層）無法由本單元自己驗證——它約束的是 U10 session-store 與 U12 work-orchestrator 的呼叫方式。本單元能做的只有定義 facade、以 BR1.4 讓 principal 不可偽造，並在此記明約束。可執行的檢查屬 U10／U12 的 code-generation：掃「import 的是 facade 還是底層 service 模組」。**這是契約 K-07 自己具名的 residual_gap 的另一半**——BR1.4 關閉了「偽造 principal」那一半，「完全不碰 facade」這一半仍然開著。若兩者之一照舊直呼底層 service，繞過是**靜默的**（不會有錯誤，只會沒有檢查），而 domain-design 審查 R-01 指的正是這兩條邊。"
+    },
+    {
+      "id": "OPEN-H3",
+      "severity": "named-gap",
+      "text": "BR3.2 的名稱唯一性在併發下不成立（BR3.3 的 TOCTOU）。[F5]=C 的已知代價，選項文字已逐字揭露。若日後判定必須是真不變量，修法是加唯一索引——那是 U4 的 schema 變更並觸發 project.md 的 blocking 同步規則。"
+    },
+    {
+      "id": "OPEN-H4",
+      "severity": "process",
+      "text": "本站的 [F1]／[F2]／[F3]／[F5] 四題在呈現前未先記 DECISION_RECORDED（先問才記），不符 audit-format 的「Before presenting a non-gate structured question」。四題的完整選項文字存於 functional-design-questions.md，故內容可追溯；缺的是呈現前的那一列。[F4]／[F6]／[F7] 已改正順序。"
+    },
+    {
+      "id": "OPEN-H5",
+      "severity": "named-gap",
+      "text": "**改名在本輪的 HTTP 表面上不可達。** components.md 的 ProjectHierarchy.behaviour 逐字列了「讀、建立、**修改**、刪除」，而契約 K-07 的 OpenAPI 區塊只有 get／post／delete——沒有任何 patch 或 put。本檔 BR4.1 允許預設組改名，但沒有端點可打。兩者都是已核可產出，落差不是本站造成的。下游（U23 project-pages-ui）若要提供改名 UI，會發現沒有端點。修補方式是補一條 HTTP path 進 K-07 的 OpenAPI 區塊——那是契約變更，不是本站可做的。"
+    },
+    {
+      "id": "OPEN-H6",
+      "severity": "process",
+      "text": "**本站 Step 1 漏讀 contract-summary.md，導致 [F1]／[F7] 兩題問了契約已經回答的事，且 [F1]=A 的作答與已核可契約 K-07 直接牴觸。** functional-design.md 的 consumes 把 contract-summary 標為 required: false，我因此跳過它；直到 upstream-coverage sensor 回報它未被任何產出引用才追查到。使用者於 2026-10-06 裁決遵循 K-07。原作答與選項本文均保留並加 supersession 註記。**教訓**：consumes 標 required: false 指的是「該產出可能不存在」，不是「存在也可以不讀」——存在就必須讀。"
+    },
+    {
+      "id": "OPEN-H7",
+      "severity": "named-gap",
+      "text": "**讀取的可見範圍是刻意收窄的過渡版（BR6.1／BR6.2），而 OQ-14 未被回答的那一半仍然開著。** requirements.md:795 的 OQ-14 逐字包含「以及是否沿用 diagram_shares 形狀的多對多分享」，而承接它的 domain-design E4 只回答了 story id 的字首與數量那一半——分享／可見範圍那一半從未被回答。本輪以 ownerUserId 範圍為限（使用者 2026-10-06 裁決），代價是**被分享或以成員身分取得的存取在本輪看不到任何東西**。最終模型屬契約 K-16（per-project 授權判定的唯一來源）。承接站：U19 membership-service 的 functional-design（per-unit，CONDITIONAL）；轉移目標：U19 的 code-generation（ALWAYS）。"
+    },
+    {
+      "id": "OPEN-H8",
+      "severity": "named-gap",
+      "text": "**變更紀錄的保存期為 90 天，而執行清除的機制不在本 repo。** U4 的資料表註解逐字（`schema_rbac.sql:416`）「Retention 90 days keyed on created_at (U4-R1); the purge mechanism itself is not in this repo (U4-R2)」。兩個後果方向相反，下游不得假設任一方：① 若清除機制日後落地，90 天前的紀錄查不到（BR5.1 的查詢端要能表達「查不到不等於沒發生」）；② 清除機制既然目前不存在，實際行為是紀錄一直累積，與宣告的保存期不符。本單元不擁有 DDL 也不擁有清除機制，故只能記載。另注意 project.md 禁止以 repo 內實作程式承載無人值守的排程，故清除機制若要落地，承載形式是 gh-aw 或 GitHub Actions workflow，不是 scripts/ 下的 Python。"
+    },
+    {
+      "id": "OPEN-H9",
+      "severity": "named-gap",
+      "text": "**本單元新增的第五個 HTTP path（/api/hierarchy/diagram-changes）在落地前不受任何漂移閘門保護。** §四之二 的四個 path 來自 K-07 的 OpenAPI 區塊，會進 openapi.json 因此自動受既有兩道閘門保護；第五個 path 不在 K-07 內（其 public_interface 沒有讀取方法，DG-3 當時仍是具名缺口），故在實作並重 dump openapi.json 之前，沒有任何機械檢查會發現它與本規格不符。處置：實作時依 ci.yml 的 dump_openapi.py --check 同步重 dump（漏 dump 即 CI 紅燈），並依 team.md 的 A＋B 規則補 allow/deny 雙向 TestClient 測試＋BR6.1 的列範圍測試。驗證落點：本單元的 code-generation。"
+    },
+    {
+      "id": "OPEN-H10",
+      "severity": "named-gap",
+      "text": "**`BR6.4` 的判定支援型查詢使 `U7` 成為一個「可問出特定專案擁有者是誰」的通道。** 這是 `[F9]`=A 的刻意取捨（替代方案是讓契約 `K-16`／`K-17` 不可實作）。緩解**不是**列範圍過濾，而是三道約束：只能同進程呼叫（不經任何 HTTP path 暴露）、只回傳最小欄位（存在性／擁有者 id／所屬專案 id，不回名稱不回清單，故只能驗證一個**已知**識別碼、不能枚舉未知的）、呼叫端必須自己完成授權判定。**三者缺一即不成立**，而其中第 (1) 與第 (3) 項本單元無法自己驗證——它們約束的是 `U19`／`U20` 的呼叫方式與本單元 router 的實作方式。驗證落點：本單元的 code-generation（router 不得以本組方法實作列舉端點）＋ `U19`／`U20` 的 code-generation（呼叫端自檢）。與 `OPEN-H2` 的 import 掃查同一批檢查。"
+    },
+    {
+      "id": "OPEN-H11",
+      "severity": "named-gap",
+      "text": "**新建的架構圖從未被指派系統歸屬，故 `AC9.1.4` 的不變量只在遷移當下成立。** 本站實測三項：(1) `UserDiagram`（`backend/models.py:91-105`）**沒有** `system_id` 的 ORM 屬性；(2) 三條建圖路徑（`collab_router.py:517`、`review_router.py:131`／`:327`）全部以 ORM 建構，一律留 NULL；(3) 唯一寫入者 `hierarchy_migration.py:469-472` 的 raw UPDATE 只被 `backend/scripts/run_hierarchy_migration.py` 呼叫，該模組 `:13` 逐字「**不掛在啟動路徑上**」。**兩個後果**：① 契約 `K-04` 的 `migration.invariant` 在遷移之後被流量持續打破（`DG-2` 關的是刪除那條路徑，不含這一條）；② `W5` 的**系統條件篩選對新圖無效**（標籤篩選不受影響），而大腦寫紀錄的對象正是新圖——若 `BR6.3` 沿用上溯判定，`DG-3` 實際上沒有關閉。本站已以 `[R-13]`=A 改用圖的擁有者判可見性，繞開了可見性那一面，但**歸屬本身仍然缺**。**本單元修不了**：建立圖不是本單元的路徑，`collab_router`／`review_router` 屬既有模組且 `team.md` 明訂修改既有 router 不得夾帶重構（那兩支目前也沒有 HTTP 層測試保護）。承接：擁有建立路徑的單元；若本 intent 無此單元，承接站為 `U7` 的 code-generation 之後的新 intent，須由閘門上的使用者裁決。"
+    },
+    {
+      "id": "OPEN-H12",
+      "severity": "named-gap",
+      "text": "**`OQ-H1`（專案擁有者被刪除或停用時專案的去向）落點指名本單元，本站明寫退回、不在此定案。** `schema_rbac.sql:347` 的 COMMENT 逐字「Deletion behaviour of the referenced user is **deliberately NOT decided** (`OQ-H1`, **landing U7**) — no ON DELETE clause」。退回的理由：擁有者消失時專案該轉給誰、是否先要求指定接手人，是**成員與接手人語意**，而該語意屬契約 `K-16`——`MembershipFacade.assert_can_deactivate` 正是為此存在，其 `last_admin_guard` 已定下「專案不得失去最後一位管理者」且 `select_successor` 已定下自動改選。在本單元定案會與 `K-16` 形成兩套互相不知道的規則。**附帶更正（審查 `R-07`）**：`entities.md` 原稱「移除一個仍擁有專案的使用者會被參照完整性擋下」——該句**只對硬刪除成立**，對停用路徑完全無效（停用端點做的是 UPDATE，`unit-of-work.md:446` 逐字「外鍵對 UPDATE 零效力」）；已就地限定射程，以免被讀成「停用路徑有資料庫 backstop」。承接站：`U19 membership-service` 的 functional-design（per-unit，CONDITIONAL）；轉移目標：`U19` 的 code-generation（ALWAYS）。"
+    }
+  ]
+}

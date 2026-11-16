@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": null,
+  "version": 1,
+  "writes": [
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/services/review_agent.py" },
+    { "path": "backend/services/wa_lens_engine.py" },
+    { "path": "backend/tests/test_a3_langgraph_migration.py" },
+    { "path": "backend/Dockerfile" },
+    { "path": "DEPLOY.md" },
+    { "path": "LOCAL-DEV.md" }
+  ]
+}

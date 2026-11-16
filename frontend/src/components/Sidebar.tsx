@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
 import { useLayoutNav } from './NavChromeContext';
+import { canSeeMemoryEntry } from '../memory/memoryEntry';
 
 export const Sidebar: React.FC = () => {
-  const { user, logout, can, canArch } = useAuth();
+  const { user, logout, can, canArch, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebarCollapsed } = useLayoutNav();
 
@@ -21,6 +22,12 @@ export const Sidebar: React.FC = () => {
   const showMatrixAdmin = can('J3b', 'view');
   const showCoreSection = showArchWorkspace || showAssessment;
   const showAdminSection = showUsersAdmin || showMatrixAdmin;
+  // INV-3（BR31.2）：記憶的兩個入口共用同一個判定，不在此自行判斷。
+  const showMemory = canSeeMemoryEntry({ isAuthenticated });
+  // U23（BR81.1）：「專案」第一層獨立項，以 K2 view 把關，與 /projects 的 CapabilityRoute 同一判定。
+  const showProjects = can('K2', 'view');
+  // U14（BR91.4）：「入口」第一層獨立項、置於最上方，以 K1 view 顯示（與 DefaultRedirect 同一判定）。
+  const showEntry = can('K1', 'view');
 
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
@@ -117,6 +124,17 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto py-4">
+        {showEntry && (
+          <div className="mb-2">
+            <nav className="space-y-1 px-2" aria-label="入口">
+              {/* end：只有 / 本身算目前頁（aria-current 由 NavLink 依比對結果設定）。 */}
+              <NavLink to="/" end data-testid="sidebar-entry-link" className={linkClass}>
+                入口
+              </NavLink>
+            </nav>
+          </div>
+        )}
+
         {showCoreSection && (
           <div className="mb-2">
             <button
@@ -141,7 +159,7 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {archOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="架構">
                 {showArchWorkspace && (
                   <NavLink to="/workspace" className={linkClass}>
                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,12 +215,41 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {costOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="成本">
                 <NavLink to="/cost" className={linkClass}>
                   預估成本
                 </NavLink>
               </nav>
             )}
+          </div>
+        )}
+
+        {/*
+          U23：「專案」。第一層獨立項，位置在「我的記憶」之前（線框 §14：「入口」之後、
+          「我的記憶」之前；U14 的「入口」已落地於本區塊最上方）。
+        */}
+        {showProjects && (
+          <div className="mb-2">
+            <nav className="space-y-1 px-2" aria-label="專案">
+              <NavLink to="/projects" data-testid="sidebar-projects-link" className={linkClass}>
+                專案
+              </NavLink>
+            </nav>
+          </div>
+        )}
+
+        {/*
+          U15：「我的記憶」。獨立的 <div>（原本刻意與 DEMO 大腦入口分開，DEMO 已隨 U13 移除；
+          大腦入口的正式落點是 U14）。
+        */}
+        {showMemory && (
+          <div className="mb-2">
+            {/* 合併前必修第 35 列 (c)：與「入口」「專案」兩個 <nav> 一致，補可存取名稱。 */}
+            <nav className="space-y-1 px-2" aria-label="我的記憶">
+              <NavLink to="/memory" data-testid="sidebar-memory-link" className={linkClass}>
+                我的記憶
+              </NavLink>
+            </nav>
           </div>
         )}
 
@@ -230,7 +277,7 @@ export const Sidebar: React.FC = () => {
               </svg>
             </button>
             {adminOpen && (
-              <nav className="space-y-1 px-2 mt-1">
+              <nav className="space-y-1 px-2 mt-1" aria-label="系統管理">
                 {showUsersAdmin && (
                   <NavLink to="/admin/users" className={adminLinkClass}>
                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -276,7 +323,7 @@ export const Sidebar: React.FC = () => {
         )}
 
         {!showCoreSection && !showAdminSection && (
-          <p className="px-4 text-xs text-gray-400 leading-relaxed">
+          <p className="px-4 text-xs text-gray-600 leading-relaxed">
             目前角色尚未開放任何功能選單，請聯絡管理員調整權限。
           </p>
         )}

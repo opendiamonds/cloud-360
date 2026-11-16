@@ -1,10 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { type Dirent, existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MODULE_TOOLS_DIR = dirname(fileURLToPath(import.meta.url));
 const MODULE_HARNESS_ROOT = join(MODULE_TOOLS_DIR, "..");
-const KNOWN_HARNESSES = [".claude", ".kiro", ".codex", ".cursor", ".aidlc"] as const;
+const PROJECTED_INVOKE = "aidlc";
+// Release version grammar: stable x.y.z, or a preview id
+// x.y.z-preview.YYYYMMDD.N. Literal of PREVIEW_CHANNEL / VERSION_ID in
+// aidlc-channel.ts, repeated here because hooks ship this module with a closed
+// set of sibling tools and must not grow that closure; t330 keeps them in step.
+const FRAMEWORK_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-preview\.\d{8}\.[1-9]\d*)?$/;
 
 export interface HarnessLocation {
   harnessDir?: string;
@@ -13,22 +18,207 @@ export interface HarnessLocation {
   projectDir?: string;
 }
 
+export interface ProjectHarness {
+  root: string;
+  harnessDir: string;
+  distribution: string;
+  frameworkVersion?: string;
+}
+
+const HARNESS_PRECEDENCE = [".claude", ".kiro", ".codex", ".cursor", ".aidlc"] as const;
+
+function markerRecord(path: string): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (error) {
+    throw new Error(
+      `${path}: invalid harness metadata (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${path}: harness metadata must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function legacyDistribution(harnessDir: string): string | null {
+  if (!/^\.[a-z0-9][a-z0-9._-]*$/i.test(harnessDir)) return null;
+  return harnessDir.slice(1);
+}
+
+function harnessIdentity(root: string, strict = false): ProjectHarness | null {
+  const harnessDir = basename(root);
+  const dataDir = join(root, "tools", "data");
+  const harnessPath = join(dataDir, "harness.json");
+  const stampPath = join(dataDir, "aidlc-stamp.json");
+  if (!existsSync(harnessPath) && !existsSync(stampPath)) return null;
+
+  try {
+    // The immutable projection stamp is authoritative. harness.json is mutable
+    // plugin-selection state, so malformed contents must not hide an otherwise
+    // identifiable stamped install.
+    const markerPath = existsSync(stampPath) ? stampPath : harnessPath;
+    const marker = markerRecord(markerPath);
+    if (marker.harnessDir !== harnessDir) {
+      throw new Error(`${markerPath}: harness metadata identity is invalid`);
+    }
+
+    // Releases before projection stamps shipped only harnessDir + rulesSubdir.
+    // Keep those trees identifiable so init can adopt and rewrite them.
+    const legacy = !existsSync(stampPath) && marker.schemaVersion === undefined;
+    const distribution = legacy
+      ? legacyDistribution(harnessDir)
+      : marker.distribution;
+    if (
+      (!legacy && marker.schemaVersion !== 1) ||
+      typeof distribution !== "string" ||
+      !/^[a-z0-9][a-z0-9-]*$/.test(distribution)
+    ) {
+      throw new Error(`${markerPath}: harness metadata identity is invalid`);
+    }
+    const frameworkVersion = marker.frameworkVersion;
+    if (
+      existsSync(stampPath) &&
+      (typeof frameworkVersion !== "string" || !FRAMEWORK_VERSION.test(frameworkVersion))
+    ) {
+      throw new Error(`${stampPath}: frameworkVersion must be a release version id`);
+    }
+    return {
+      root,
+      harnessDir,
+      distribution,
+      ...(typeof frameworkVersion === "string" ? { frameworkVersion } : {}),
+    };
+  } catch (error) {
+    if (strict) throw error;
+    return null;
+  }
+}
+
+export function discoverProjectHarnesses(projectDir: string): ProjectHarness[] {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(projectDir, { withFileTypes: true });
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return [];
+    throw error;
+  }
+  const priority = (name: string): number => {
+    const index = HARNESS_PRECEDENCE.indexOf(name as typeof HARNESS_PRECEDENCE[number]);
+    return index < 0 ? HARNESS_PRECEDENCE.length : index;
+  };
+  const harnesses: ProjectHarness[] = [];
+  for (
+    const entry of entries.sort((left, right) =>
+      priority(left.name) - priority(right.name) || left.name.localeCompare(right.name)
+    )
+  ) {
+    if (!entry.isDirectory()) continue;
+    const identity = harnessIdentity(join(projectDir, entry.name));
+    if (identity) harnesses.push(identity);
+  }
+  return harnesses;
+}
+
+export function isCompiledModuleUrl(url: string): boolean {
+  return /\/(?:\$bunfs|%7ebun|~bun)\//i.test(url.replace(/\\/g, "/"));
+}
+
 export function isCompiledExecutable(
   moduleUrl = import.meta.url,
   executable = process.execPath,
 ): boolean {
-  const normalizedModuleUrl = moduleUrl.replace(/\\/g, "/");
   const executableName = basename(executable.replace(/\\/g, "/")).toLowerCase();
-  return normalizedModuleUrl.includes("/$bunfs/") || !executableName.startsWith("bun");
+  return isCompiledModuleUrl(moduleUrl) || !executableName.startsWith("bun");
 }
 
-export function compiledExecutable(): string | null {
+export function compiledExecutable(
+  moduleUrl = import.meta.url,
+  executable = process.execPath,
+): string | null {
   const explicit = process.env.AIDLC_COMPILED_EXECUTABLE?.trim();
   if (explicit) return explicit;
-  return isCompiledExecutable() ? process.execPath : null;
+  return isCompiledExecutable(moduleUrl, executable) ? executable : null;
+}
+
+// Child calls and human-facing command rendering describe the same dispatcher
+// operations. Child calls use argv and an absolute source path so neither cwd
+// changes nor a native executable's process.execPath can turn a script into a
+// dispatcher command.
+export function aidlcEngineCommand(
+  route: "orchestrate" | "log" | "state" | "bolt" | "runtime" | "sensor",
+  args: readonly string[],
+  sourceToolPath?: string,
+  executable: string | null = compiledExecutable(),
+): string[] {
+  return executable
+    ? [executable, "engine", route, ...args]
+    : [process.execPath, sourceToolPath ?? resolveHarnessPath(["tools", `aidlc-${route}.ts`]), ...args];
+}
+
+// Control characters (line breaks, terminal escapes) in something we print.
+export function hasControlCharacters(value: string): boolean {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: detecting them is the point
+  return /[\u0000-\u001f\u007f]/.test(value);
+}
+
+// One argument of a command we print for someone to run: bare when it cannot
+// expand, else single-quoted so no shell substitutes into it. It stays one
+// line of plain text: a control character is shown as "?", never emitted.
+export function quoteCommandArgument(
+  value: string,
+  shell: "posix" | "powershell" = process.platform === "win32" ? "powershell" : "posix",
+): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: replacing them is the point
+  value = value.replace(/[\u0000-\u001f\u007f]/g, "?");
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+  return shell === "powershell"
+    ? `'${value.replaceAll("'", "''")}'`
+    : `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+export function aidlcInvocation(): string {
+  if (isCompiledExecutable()) return "aidlc";
+  if (!PROJECTED_INVOKE.startsWith("{{")) return PROJECTED_INVOKE;
+  return `bun ${runtimeHarnessDir()}/tools/aidlc.ts`;
+}
+
+// The Bun dispatcher of the projected tree this module runs from: the tool a
+// copy-channel command ran. Null in the source tree, where the project's own
+// tree stands in for a projection.
+export function projectedDispatcher(): string | null {
+  return PROJECTED_INVOKE.startsWith("{{") ? null : join(MODULE_TOOLS_DIR, "aidlc.ts");
+}
+
+export function entrySkillInvocation(): string {
+  return runtimeHarnessDir() === ".codex" ? "$aidlc" : "/aidlc";
+}
+
+export function aidlcDispatcherInvocation(route: string): string {
+  return `${aidlcInvocation()} engine ${route}`;
+}
+
+export function aidlcToolInvocation(
+  route: string,
+  sourceTool?: string,
+  qualifiedSource = true,
+): string {
+  const invoke = aidlcInvocation();
+  if (!invoke.startsWith("bun ")) return aidlcDispatcherInvocation(route);
+  const tool = sourceTool ??
+    route.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  const path = qualifiedSource
+    ? `${runtimeHarnessDir()}/tools/aidlc-${tool}.ts`
+    : `aidlc-${tool}.ts`;
+  return `bun ${path}`;
 }
 
 function explicitRuntimeProjectDir(): string | null {
+  const internal = process.env.AIDLC_RUNTIME_PROJECT_DIR;
+  if (internal) {
+    return isAbsolute(internal) ? internal : resolve(process.cwd(), internal);
+  }
   const argv = process.argv.slice(1);
   const index = argv.indexOf("--project-dir");
   if (index >= 0 && argv[index + 1] && !argv[index + 1].startsWith("--")) {
@@ -36,7 +226,8 @@ function explicitRuntimeProjectDir(): string | null {
       ? argv[index + 1]
       : resolve(process.cwd(), argv[index + 1]);
   }
-  const explicit = process.env.AIDLC_PROJECT_DIR ?? process.env.CLAUDE_PROJECT_DIR;
+  const explicit = process.env.AIDLC_PROJECT_DIR ??
+    process.env.CLAUDE_PROJECT_DIR ?? process.env.KIRO_PROJECT_DIR;
   return explicit
     ? isAbsolute(explicit) ? explicit : resolve(process.cwd(), explicit)
     : null;
@@ -55,10 +246,7 @@ export function runtimeHarnessDir(projectDir = runtimeProjectDir()): string {
     if (/^\.[a-z0-9][a-z0-9._-]*$/i.test(candidate)) return candidate;
   }
 
-  for (const candidate of KNOWN_HARNESSES) {
-    if (isAidlcHarnessRoot(join(projectDir, candidate))) return candidate;
-  }
-  return ".claude";
+  return discoverProjectHarnesses(projectDir)[0]?.harnessDir ?? ".claude";
 }
 
 function readHarnessName(root: string): string | null {
@@ -71,6 +259,70 @@ function readHarnessName(root: string): string | null {
       : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The two Kiro tree layouts. `agent-v1` is the Kiro CLI agent-JSON layout (JSON
+ * agents carrying their hooks); `kas` is the one Kiro IDE 1.x and Kiro CLI v3 run
+ * (Markdown agents, standalone `.kiro/hooks/*.json`). A row name says which
+ * distribution shipped a tree, not its layout, so code that depends on the
+ * layout asks for it here.
+ */
+export type KiroLayout = "agent-v1" | "kas";
+
+/** The layout a harness.json record declares, or the one its row name implied before the field existed. */
+export function kiroLayoutOf(record: unknown): KiroLayout | null {
+  if (!record || typeof record !== "object") return null;
+  const { kiroLayout, name, distribution } = record as Record<string, unknown>;
+  if (kiroLayout === "agent-v1" || kiroLayout === "kas") return kiroLayout;
+  const row = typeof name === "string" ? name : distribution;
+  if (row === "kiro-ide") return "kas";
+  if (row === "kiro") return "agent-v1";
+  return null;
+}
+
+/**
+ * The layout of the `.kiro` tree at `harnessRoot`: its harness.json first, then
+ * the conductor file it ships. With both conductors present the Markdown one
+ * wins, since the agent-v1 JSON is what a move to the KAS layout leaves behind.
+ * Null when the tree is neither.
+ */
+export function kiroTreeLayout(harnessRoot: string): KiroLayout | null {
+  try {
+    const layout = kiroLayoutOf(
+      JSON.parse(readFileSync(join(harnessRoot, "tools", "data", "harness.json"), "utf-8")),
+    );
+    if (layout) return layout;
+  } catch {
+    // A tree without readable metadata still has its conductor file.
+  }
+  if (existsSync(join(harnessRoot, "agents", "aidlc.md"))) return "kas";
+  if (existsSync(join(harnessRoot, "agents", "aidlc.json"))) return "agent-v1";
+  return null;
+}
+
+/**
+ * The harness dir for this process, or null when the working directory cannot
+ * be read (a command started from a directory the user cannot list or enter).
+ * Null means "not discoverable here", never a default harness: a command that
+ * needs one still resolves it later and reports the error then. Other
+ * discovery errors are rethrown.
+ *
+ * Codex sets CODEX_SESSION_ID in every shell command its model runs, so in a
+ * project that also holds another tool's install, a command Codex runs reads
+ * the Codex install instead of the first one found.
+ */
+export function discoverableRuntimeHarnessDir(projectDir = runtimeProjectDir()): string | null {
+  try {
+    if (!process.env.AIDLC_HARNESS_DIR?.trim() && process.env.CODEX_SESSION_ID?.trim()) {
+      const codex = discoverProjectHarnesses(projectDir).find((item) => item.distribution === "codex");
+      if (codex) return codex.harnessDir;
+    }
+    return runtimeHarnessDir(projectDir);
+  } catch (error) {
+    if (["EACCES", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? "")) return null;
+    throw error;
   }
 }
 
@@ -98,6 +350,14 @@ export function runtimeHarnessName(
   if (harnessDir === ".kiro") return "kiro";
   if (harnessDir === ".cursor") return "cursor";
   return "claude";
+}
+
+// The tools that hide a Stop-hook block's reason from the person: Kiro CLI
+// shows none of it, opencode hands it to the agent as a hidden synthetic part,
+// and Kiro IDE (whose tree Kiro CLI v3 also runs) drops Stop output. There the
+// agent says the carrying-on line itself.
+export function hidesStopNote(harnessName: string): boolean {
+  return harnessName === "kiro" || harnessName === "kiro-ide" || harnessName === "opencode";
 }
 
 function distributionFor(harnessDir: string, projectDir = runtimeProjectDir()): string {
@@ -139,6 +399,155 @@ export function packagedDistributionRoot(
   return join(dirname(process.execPath), "runtime", distribution);
 }
 
+/**
+ * The running release's own copy of a project harness's tools/data/harness.json,
+ * or null. A native engine reads the project's file, which an older release may
+ * have written and which stays so until the next `aidlc config`; the runtime it
+ * ships beside itself holds the same harness as this release writes it. The harness is the one the project's file names. A Bun engine reads its
+ * own tree already and ships no such copy. Any failure reads as no copy.
+ */
+export function releasedHarnessData(projectHarnessData: string): Record<string, unknown> | null {
+  if (!isCompiledExecutable()) return null;
+  try {
+    const declared = JSON.parse(readFileSync(projectHarnessData, "utf-8")) as Record<string, unknown>;
+    const { name, harnessDir } = declared;
+    if (
+      typeof name !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(name) ||
+      typeof harnessDir !== "string" || !/^\.[a-z0-9][a-z0-9._-]*$/i.test(harnessDir)
+    ) {
+      return null;
+    }
+    const released = join(packagedDistributionRoot(harnessDir, name), harnessDir, "tools", "data", "harness.json");
+    if (resolve(released) === resolve(projectHarnessData)) return null;
+    const copy = JSON.parse(readFileSync(released, "utf-8")) as unknown;
+    if (copy === null || typeof copy !== "object" || Array.isArray(copy)) return null;
+    const data = copy as Record<string, unknown>;
+    return data.name === name && data.harnessDir === harnessDir ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The largest directive a host shows whole as one shell result, and that host. */
+export interface DirectiveLimit {
+  bytes: number;
+  host: string;
+}
+
+// The host's name as the person knows it, by harness id. A harness.json is
+// project-editable, so its own productName never reaches the model: the id
+// only selects one of these fixed names.
+const HOST_LABELS: Readonly<Record<string, string>> = {
+  claude: "Claude Code",
+  codex: "Codex CLI",
+  copilot: "GitHub Copilot",
+  cursor: "Cursor",
+  kiro: "Kiro CLI",
+  "kiro-ide": "Kiro IDE",
+  opencode: "opencode",
+};
+
+// A limit is a positive whole number; anything else declares none.
+function declaredLimit(data: Record<string, unknown>): DirectiveLimit | null {
+  const bytes = data.directiveMaxBytes;
+  if (!Number.isSafeInteger(bytes) || (bytes as number) <= 0) return null;
+  const host = typeof data.name === "string" && Object.hasOwn(HOST_LABELS, data.name)
+    ? HOST_LABELS[data.name]
+    : "this assistant";
+  return { bytes: bytes as number, host };
+}
+
+function harnessDataLimit(harnessData: string): DirectiveLimit | null {
+  let own: DirectiveLimit | null = null;
+  try {
+    own = declaredLimit(JSON.parse(readFileSync(harnessData, "utf-8")) as Record<string, unknown>);
+  } catch {
+    // An unreadable file declares nothing of its own.
+  }
+  // The running release's copy is the host's ceiling as this release knows it.
+  // A project value can only tighten it, so a release that lowers a host's
+  // budget reaches projects configured earlier, and no project value raises it.
+  const released = releasedHarnessData(harnessData);
+  const shipped = released ? declaredLimit(released) : null;
+  if (own === null) return shipped;
+  return shipped !== null && shipped.bytes < own.bytes ? shipped : own;
+}
+
+/**
+ * The smallest directive limit declared by the engine's own harness data or by
+ * any harness installed in the project, or null when none declares one. With
+ * several harnesses in one project, the engine cannot tell which host prints its
+ * result (Claude's `.claude` is found before Copilot's `.aidlc`), so the
+ * smallest wins. Each harness's value is the smaller of its project file's and
+ * its release copy's, or whichever of the two declares one.
+ */
+export function directiveLimitFor(harnessData: string[], projectDir?: string): DirectiveLimit | null {
+  const files = [...harnessData];
+  if (projectDir !== undefined) {
+    try {
+      for (const harness of discoverProjectHarnesses(projectDir)) {
+        files.push(join(harness.root, "tools", "data", "harness.json"));
+      }
+    } catch {
+      // An unreadable project keeps the engine's own value.
+    }
+  }
+  let smallest: DirectiveLimit | null = null;
+  for (const file of new Set(files.map((path) => resolve(path)))) {
+    const limit = harnessDataLimit(file);
+    if (limit && (smallest === null || limit.bytes < smallest.bytes)) smallest = limit;
+  }
+  return smallest;
+}
+
+// AI-DLC writes its own files only into real folders: a write through a link
+// lands wherever the link points, which can be outside this project. The
+// first folder (or file) on the way from the project to `target`, `target`
+// included, that is a link, relative to the project, or null. A target that is
+// not inside the project is not this check's to judge.
+export function linkOnTheWay(projectDir: string, target: string): string | null {
+  const rel = relative(projectDir, target);
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
+  let path = projectDir;
+  for (const part of rel.split(/[\\/]/).filter(Boolean)) {
+    path = join(path, part);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return relative(projectDir, path);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+// The folder names AI-DLC itself gives its tree. The line shows a path only
+// as far as it is made of these, so no name a repository chose reaches the
+// reader: a link deeper down is named by the AI-DLC folder that holds it.
+const AIDLC_FOLDER_NAMES = new Set([
+  ".aidlc", ".agents", ".claude", ".codex", ".cursor", ".github", ".kiro", ".opencode",
+  "agents", "aidlc", "aidlc-common", "command", "data", "hooks", "knowledge", "plugin",
+  "rules", "scopes", "sensors", "settings", "skills", "spaces", "stages", "steering", "tools",
+]);
+
+export class LinkedFolderError extends Error {
+  constructor(readonly folder: string) {
+    const parts = folder.split(/[\\/]/);
+    const known = parts.findIndex((part) => !AIDLC_FOLDER_NAMES.has(part));
+    super(
+      known === -1
+        ? `${folder} is a link, so AI-DLC changed nothing there. ` +
+          "Replace the link with a real folder or file, then run this again."
+        : `${known === 0 ? "This project" : parts.slice(0, known).join(sep)} holds a link, so AI-DLC changed nothing there. ` +
+          "Replace the link with a real folder or file, then run this again.",
+    );
+  }
+}
+
+export function refuseLinkOnTheWay(projectDir: string, target: string): void {
+  const link = linkOnTheWay(projectDir, target);
+  if (link !== null) throw new LinkedFolderError(link);
+}
+
 export function resolveHarnessRoot(location: HarnessLocation = {}): string {
   const projectDir = location.projectDir ?? runtimeProjectDir();
   const harnessDir = location.harnessDir ?? runtimeHarnessDir(projectDir);
@@ -152,11 +561,11 @@ export function resolveHarnessRoot(location: HarnessLocation = {}): string {
   // Mutation is project-owned. Explicit/module/packaged roots are read
   // fallbacks only and must never become a write target.
   if (location.mutable) {
-    if (location.projectDir !== undefined || explicitRuntimeProjectDir()) {
-      return projectRoot;
-    }
-    const moduleRoot = moduleHarnessRoot(harnessDir);
-    return moduleRoot ?? projectRoot;
+    const root = location.projectDir !== undefined || explicitRuntimeProjectDir()
+      ? projectRoot
+      : moduleHarnessRoot(harnessDir) ?? projectRoot;
+    refuseLinkOnTheWay(projectDir, root);
+    return root;
   }
 
   const explicit = explicitHarnessRoot(harnessDir, distribution);
@@ -175,7 +584,9 @@ export function resolveHarnessPath(
   segments: readonly string[],
   location: HarnessLocation = {},
 ): string {
-  return join(resolveHarnessRoot(location), ...segments);
+  const path = join(resolveHarnessRoot(location), ...segments);
+  if (location.mutable) refuseLinkOnTheWay(location.projectDir ?? runtimeProjectDir(), path);
+  return path;
 }
 
 export function resolveSkillsPath(
@@ -195,13 +606,14 @@ export function resolveSkillsPath(
     harnessDir,
     distribution,
   }));
-  if (distribution === "copilot") {
-    return join(distributionRoot, ".github", "skills", ...segments);
-  }
-  if (distribution === "codex" && !existsSync(harnessSkills)) {
-    return join(distributionRoot, ".agents", "skills", ...segments);
-  }
-  return harnessSkills;
+  const shared = distribution === "copilot"
+    ? join(distributionRoot, ".github", "skills", ...segments)
+    : distribution === "codex" && !existsSync(harnessSkills)
+    ? join(distributionRoot, ".agents", "skills", ...segments)
+    : null;
+  if (shared === null) return harnessSkills;
+  if (location.mutable) refuseLinkOnTheWay(projectDir, shared);
+  return shared;
 }
 
 export function resolveDistributionPath(
@@ -222,4 +634,21 @@ export function resolveDistributionPath(
     ),
     ...segments,
   );
+}
+
+// A space name: one plain path segment, a lowercase letter, then lowercase
+// letters, digits and hyphens (the shape `space create` gives a name).
+export const SPACE_NAME_REGEX = /^[a-z][a-z0-9-]*$/;
+
+// The space the active-space cursor names: its text, when that is a space name
+// whose folder exists under <workspace>/spaces/; anything else is the default
+// space.
+export function knownActiveSpace(workspaceRootDir: string, cursorText: string | null | undefined): string {
+  const name = (cursorText ?? "").trim();
+  if (!SPACE_NAME_REGEX.test(name)) return "default";
+  try {
+    return statSync(join(workspaceRootDir, "spaces", name)).isDirectory() ? name : "default";
+  } catch {
+    return "default";
+  }
 }

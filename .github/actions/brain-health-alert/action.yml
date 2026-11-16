@@ -1,0 +1,151 @@
+name: Brain health alert
+description: >-
+  大腦健康告警的通知端（observability-setup，[Q4]=C）。由 brain-health-watch.yml 的三個 job
+  共用：依「目前觸發中的告警 id」開啟、更新或關閉一則 GitHub issue，並在狀態改變時發一則
+  Slack 訊息。issue 本身就是狀態：以固定標題前綴去重，以 issue 內最後一個
+  `brain-health-sig` 標記判斷告警組合是否改變——沒變就不留言、不發 Slack，避免每小時
+  洗版讓讀者學會忽略它。
+
+  本 repo 為 public、issue 與 Actions log 都公開可讀：呼叫端只能傳計數、錯誤類別與門檻，
+  不得傳對話內容、使用者名稱、系統名或任何憑證。
+
+inputs:
+  title_prefix:
+    description: issue 標題（同時是去重鍵）。改動它會讓開著的 issue 變孤兒、下一次再開一則新的。
+    required: true
+  alerts:
+    description: 目前觸發中的告警 id，空白分隔；空字串代表一切正常。
+    required: true
+  details:
+    description: 給人看的計數與門檻（Markdown），只含計數與類別。
+    required: true
+  runbook:
+    description: 處置步驟（Markdown）。
+    required: true
+  slack_token:
+    description: Slack bot token；空字串時只處理 issue、不發 Slack。
+    required: false
+    default: ""
+  slack_channel:
+    description: Slack 頻道 id。
+    required: false
+    default: ""
+
+outputs:
+  action:
+    description: opened / commented / unchanged / recovered / none
+    value: ${{ steps.issue.outputs.action }}
+  issue_number:
+    description: 涉及的 issue 編號（none 時為空）
+    value: ${{ steps.issue.outputs.issue_number }}
+
+runs:
+  using: composite
+  steps:
+    - name: Open, update or close the alert issue
+      id: issue
+      shell: bash
+      env:
+        TITLE_PREFIX: ${{ inputs.title_prefix }}
+        ALERTS: ${{ inputs.alerts }}
+        DETAILS: ${{ inputs.details }}
+        RUNBOOK: ${{ inputs.runbook }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        # 簽章＝排序後以逗號連接的告警 id（不含空白，故可用單一 pattern 取回）。
+        sig="$(printf '%s' "${ALERTS}" | tr ' ' '\n' | sed '/^$/d' | sort -u | paste -sd, -)"
+        [ -n "${sig}" ] || sig="ok"
+
+        # gh issue list（非搜尋索引）：索引最多落後數分鐘，剛開的 issue 會被當成不存在。
+        existing="$(gh issue list --state open --limit 100 --json number,title \
+          | jq -r --arg p "${TITLE_PREFIX}" '[.[] | select(.title == $p)] | .[0].number // empty')"
+
+        last_sig=""
+        if [ -n "${existing}" ]; then
+          last_sig="$(gh issue view "${existing}" --json body,comments \
+            | jq -r '[.body] + [.comments[].body] | map(select(test("brain-health-sig:"))) | last // ""' \
+            | sed -nE 's/.*brain-health-sig: ([^ ]+) -->.*/\1/p' | tail -1)"
+        fi
+
+        body="$(printf '%s\n\n%s\n\n%s\n\n- 本次檢查：%s\n\n<!-- brain-health-sig: %s -->\n' \
+          "${DETAILS}" "${RUNBOOK}" "觸發中的告警：\`${sig}\`" "${RUN_URL}" "${sig}")"
+
+        action="none"
+        if [ "${sig}" != "ok" ]; then
+          if [ -z "${existing}" ]; then
+            existing="$(gh issue create --title "${TITLE_PREFIX}" --body "${body}" | sed -nE 's#.*/issues/([0-9]+).*#\1#p')"
+            action="opened"
+          elif [ "${sig}" != "${last_sig}" ]; then
+            gh issue comment "${existing}" --body "${body}"
+            action="commented"
+          else
+            action="unchanged"
+          fi
+        elif [ -n "${existing}" ]; then
+          gh issue comment "${existing}" --body "$(printf '已恢復：本次檢查沒有任何告警觸發。\n\n%s\n\n- 本次檢查：%s\n\n<!-- brain-health-sig: ok -->\n' "${DETAILS}" "${RUN_URL}")"
+          gh issue close "${existing}"
+          action="recovered"
+        fi
+
+        echo "action=${action}" >> "$GITHUB_OUTPUT"
+        echo "issue_number=${existing}" >> "$GITHUB_OUTPUT"
+        echo "alert issue: action=${action} issue=${existing:-none} alerts=${sig}"
+
+    - name: Compose the Slack payload
+      id: slack
+      if: >-
+        inputs.slack_token != '' &&
+        (steps.issue.outputs.action == 'opened' ||
+         steps.issue.outputs.action == 'commented' ||
+         steps.issue.outputs.action == 'recovered')
+      shell: bash
+      env:
+        TITLE_PREFIX: ${{ inputs.title_prefix }}
+        ALERTS: ${{ inputs.alerts }}
+        ACTION: ${{ steps.issue.outputs.action }}
+        ISSUE: ${{ steps.issue.outputs.issue_number }}
+        CHANNEL_ID: ${{ inputs.slack_channel }}
+        ISSUE_BASE: ${{ github.server_url }}/${{ github.repository }}/issues
+      run: |
+        set -euo pipefail
+        case "${ACTION}" in
+          opened)    head=":rotating_light: ${TITLE_PREFIX}" ;;
+          commented) head=":warning: ${TITLE_PREFIX}（告警組合改變）" ;;
+          recovered) head=":white_check_mark: ${TITLE_PREFIX}：已恢復" ;;
+        esac
+        {
+          echo "*${head}*"
+          [ -n "${ALERTS}" ] && echo "觸發中：\`${ALERTS}\`"
+          echo "<${ISSUE_BASE}/${ISSUE}|issue #${ISSUE}>"
+        } > "${RUNNER_TEMP}/brain-health-slack.txt"
+        jq -Rs --arg channel "${CHANNEL_ID}" '{channel: $channel, text: ., mrkdwn: true}' \
+          "${RUNNER_TEMP}/brain-health-slack.txt" > "${RUNNER_TEMP}/brain-health-slack.json"
+        echo "path=${RUNNER_TEMP}/brain-health-slack.json" >> "$GITHUB_OUTPUT"
+
+    - name: Send the Slack message
+      id: send
+      if: steps.slack.outputs.path != ''
+      uses: slackapi/slack-github-action@v4.0.0
+      with:
+        method: chat.postMessage
+        token: ${{ inputs.slack_token }}
+        payload-file-path: ${{ steps.slack.outputs.path }}
+        # Slack 故障不得讓告警 job 變綠或變紅：issue 已是主要通道。
+        errors: false
+
+    - name: Report whether Slack accepted the message
+      if: steps.slack.outputs.path != ''
+      shell: bash
+      env:
+        OK: ${{ steps.send.outputs.ok }}
+        RESPONSE: ${{ steps.send.outputs.response }}
+        SLACK_ERROR: ${{ steps.send.outputs.error }}
+      run: |
+        # Slack 的回應只含 ok／error 碼與訊息 ts，不含 token；與 deploy.yml 的同名步驟一樣印出，
+        # 否則 not_in_channel 與 invalid_auth 看起來一模一樣（首次驗證 run 43882387962 即是如此）。
+        if [ "${OK}" = "true" ]; then
+          echo "Slack accepted the alert (ok=true)"
+        else
+          echo "::warning::Slack 沒有接受告警訊息（ok=${OK:-unset} error=${SLACK_ERROR:-none}）。Response: ${RESPONSE:-none}（issue 已更新，不影響告警本身）" >&2
+        fi

@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "unit": "session-store",
+  "version": 1,
+  "writes": [
+    { "path": "backend/services/session_types.py" },
+    { "path": "backend/services/session_errors.py" },
+    { "path": "backend/services/redis_gateway.py" },
+    { "path": "backend/services/session_store.py" },
+    { "path": "backend/services/session_scripts/append_message.lua" },
+    { "path": "backend/services/session_scripts/switch_to_isolated.lua" },
+    { "path": "backend/tests/test_session_types.py" },
+    { "path": "backend/tests/test_session_contract.py" },
+    { "path": "backend/tests/test_session_store_behaviour.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/requirements.txt" },
+    { "path": "backend/.env.example" },
+    { "path": "deploy/.env.example" },
+    { "path": "deploy/render-env.sh" },
+    { "path": "deploy/docker-compose.deploy.yml" },
+    { "path": "deploy/docker-compose.test.yml" },
+    { "path": ".github/workflows/deploy.yml" },
+    { "path": "LOCAL-DEV.md" },
+    { "path": "DEPLOY.md" }
+  ]
+}

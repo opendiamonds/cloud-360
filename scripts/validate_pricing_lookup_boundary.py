@@ -46,6 +46,7 @@ SURVIVAL_RELATIVE = {
     "cost/pricing_query_parser.py",
     "cost/pricing_units.py",
     "cost/config.py",
+    "cost/sku_catalog.py",
 }
 
 

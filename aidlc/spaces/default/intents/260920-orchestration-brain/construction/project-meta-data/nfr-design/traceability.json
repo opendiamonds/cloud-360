@@ -1,0 +1,189 @@
+{
+  "stage": "nfr-design",
+  "unit": "project-meta-data",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR8.2",
+    "NFR8.3",
+    "NFR8.4",
+    "NFR8.5"
+  ],
+  "coverage": [
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "security-design.md §一、§二、§四",
+      "note": "新增元件的部署設定完整性。本站設計其承載形式，分三處：① [ND1]=A 的四條外鍵 ON DELETE 設計（§一，三條 CASCADE／NO ACTION ＋ 一條刻意不設外鍵）；② 獨立腳本的形狀（§二，單一交易使退出碼可被信任 ＋ 自我終檢）；③ 索引（§四，四個 FK 欄位零索引，而 U4 是三對三）。"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "security-design.md §二之一",
+      "note": "一支獨立腳本建全部新物件。本站的設計增量是**單一交易**：全部 DDL 包在一個交易內（PostgreSQL 的 DDL 可交易），使「退出碼 0 ⟺ 全部物件存在」成立。BR2.1 的 IF NOT EXISTS 已讓重跑安全，故單一交易的價值不在可重跑，而在消除「部分成功而回報成功」這個狀態——沒有它，中途失敗會留下半套結構而操作者從輸出看不出跑到哪裡。"
+    },
+    {
+      "id": "NFR8.3",
+      "status": "OK",
+      "target": "security-design.md §二之二、§二之三",
+      "note": "大聲失敗。本站的設計增量有二：① **自我終檢**——commit 之前查 information_schema 確認三張表／索引／CHECK／三條外鍵都在，任一缺即 rollback 並非零碼結束，形狀沿用 U4 腳本的 :83（它在宣告成功前先驗自己的後條件）；② 失敗輸出的憑證外洩問題**已實測排除**——以假 URL 觸發連線失敗並檢查 traceback 全文，含密碼=否、含使用者名稱=否、含主機與埠=是，故沿用 U4 的 traceback.print_exc() 不洩漏憑證。仍成立的要求是腳本自身不得輸出 DATABASE_URL 或其片段（函式庫不保護這條路徑）。"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "security-design.md §一之三",
+      "note": "不動啟動路徑（database.py diff 為空）。**本站另查出一個更近的同類風險並以設計避開**：若四條外鍵採 RESTRICT，新 DDL 會從外部弄壞已交付的 U7 程式——hierarchy_service.delete_project（:147-162）只有 is_default（:153）與剩餘系統數（:156）兩道守門，沒有成員那一道，而 components.md:886 逐字把 ProjectMember 的寫入端列為「建立專案時的自動寫入 ＋ 邀請成功」，故 U19 之後每個新建專案至少有一列成員，:161 的 db.delete(project) 會在 commit 時丟未捕捉的 IntegrityError。採 CASCADE 使該函式行為完全不變。"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "security-design.md §二之二、§六第 4 項",
+      "note": "DEPLOY.md 記執行步驟與 psql 驗證。本站的設計增量是指出自我終檢**不解決** OPEN-P5：它讓一次成功的執行成為可信證據，但不讓「沒跑」變得可見。並明寫承接形式應為部署後的健康檢查，而非把腳本塞進 deploy.yml——後者把資料庫結構變更放進自動部署路徑，屬 project.md 的 high-risk action 範圍。"
+    },
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR3",
+      "status": "N/A",
+      "target": "U13（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "U1／U10（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。**附帶**：本站 §二之三 的憑證外洩實測是查證結果而非加密設計，且結論為不洩漏，故不改變本列的 N/A 判定。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "U5（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。**附帶**：本站 §三之五 明寫 reselection_events **刻意沒有**保存期限的理由（母體是罕見的 owner 停用事件，而 components.md:886 逐字「事件列本身不刪……刪了就失去稽核」），以免下一個人照 U5 的 90 天形狀補一個清除作業而把 FR12.4b 的稽核清掉。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "C1（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "U11（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14／U15（非本單元）",
+      "note": "判定與理由見 construction/project-meta-data/nfr-requirements/traceability.json 的 coverage 同 id 列；本站無新增 pattern，不重複論證。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "ND-FK-U18",
+      "status": "OK",
+      "target": "security-design.md §一",
+      "note": "使用者裁決 [ND1]=A（2026-10-06T14:54:23Z，時間取自 audit shard 而非估計）的設計落地。問它而不自選的理由：BR2.3（已核可）只要求外鍵存在、未定 ON DELETE，而「稽核表的父列被刪時怎麼辦」在本 intent 已被用**兩種相反**方式核可過——U4 的 diagram_change_records 採 CASCADE（schema_rbac.sql:395），U5 的 memory_audit_events 由 [M1]=A 完全不設外鍵（S8／S11）。reselection_events 是第三張稽核表，無單一慣例可照。落地：project_members.project_id CASCADE、project_members.user_id 不寫子句並在 COMMENT 承接 OQ-H1（沿用 U4 對 projects.owner_user_id 的同一慣例，schema_rbac.sql:346-347）、reselection_events.project_id **不設外鍵**、system_requirement_fields.system_id CASCADE。"
+    },
+    {
+      "id": "ND-SURV-U18",
+      "status": "OK",
+      "target": "security-design.md §一之四",
+      "note": "「不設外鍵」必須被兩條斷言鎖住，缺一不可：P-FK0（結構——對 projects 無任何外鍵）＋ P-SURV（行為——刪除 projects 列後稽核列仍存在）。U5 已證實只有結構斷言綠而行為斷言紅表示後者寫錯了。**並寫明 P-SURV 的前置條件**：刪除那列 projects 必須先滿足 U4 既有的兩道守門（非預設專案、底下無系統），否則紅燈的原因會是守門而不是外鍵——U5 的 M1 突變正是踩過「突變本身是 no-op」這個洞。落點 code-generation。"
+    },
+    {
+      "id": "ND-COLS-U18",
+      "status": "OK",
+      "target": "security-design.md §三之一–§三之三",
+      "note": "**本站最重要的產出，且落在本單元唯一適用的 ADR-0006 面向（audit logging）上。** entities.md 比 domain-design 少了**九個欄位**（實算：ProjectMember 5/5 缺 0、ReselectionEvent 7/2 缺 5、SystemRequirementField 8/4 缺 4；計數由 scratchpad/u18_cols.py 解析 components.md:819 的 Entity Ownership 表與 entities.md 的 yaml 區塊輸出，非手寫；十七種拼法在整個 construction/project-meta-data/ 的命中數全部為 0）。缺漏的六個正是 FR12.4b（requirements.md:307，逐字「誰、何時、對誰、舊角色、新角色」）與 ADR-015（「誰清」）點名的稽核事實。**被破壞的已核可 AC 可指名**：AC12.2.2（stories.md:777）的 Then 逐字「顯示誰在何時把角色由什麼改為什麼」，四件事對應 promotedUserId／occurredAt／previousRole／newRole，全在缺漏清單裡。處置依 project.md：標出缺口、指名不可滿足的 AC、指派 code-generation（ALWAYS 且在游標之後，已查 aidlc-state.md 的游標位置而非憑 execution 欄推定）並給具體修法，**不逕自改已通過審查的上游產出**。"
+    },
+    {
+      "id": "ND-PROMISE-U18",
+      "status": "OK",
+      "target": "security-design.md §三之二",
+      "note": "為什麼這落在本站而非「不是我的欄位」：**本單元自己的文字承諾了這些欄位能回答的問題，而它宣告的欄位集合答不出來**。四處逐字對照——entities.md 說 clearedAt「使清空動作可被稽核（誰清、何時清）」但只答得出何時；security-requirements.md §二 說「reselection_events（改選事件本身即稽核）」但 project_id ＋ acknowledged_at 答不出誰拿到管理權；同檔 IAM 格說「改選選錯人等於把專案管理權給錯人」而事後無法查證選了誰；契約 K-17 的 clear_field note 逐字「記 clearedAt 與 updatedBy」而 updatedBy 不存在。"
+    },
+    {
+      "id": "ND-FR122-U18",
+      "status": "OK",
+      "target": "security-design.md §三之四",
+      "note": "FR12.2（人工角色指定）的稽核在本 intent **沒有任何承載者**：requirements.md:620 的 audit logging 格第 ② 項逐字要求它「須留同一組稽核欄位」，而 FR12.2 在 domain-design 與本單元的命中數**各為 0**。ReselectionEvent 的欄位集合恰好就是它需要的那一組，但該實體的名稱與描述只涵蓋自動改選。**一般化不只是最便宜的正解，它是已核可 AC 的要求**：AC12.2.2 的 Given 逐字「我改了某人的角色」是人工變更，When 指向同一個成員詳情頁的變更紀錄。本站仍不自行決定表的語意範圍（屬實體邊界），記為 OPEN-ND18-3。"
+    },
+    {
+      "id": "ND-IDX-U18",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "entities.md 對「索引／index」的命中數為 **0**，而 U4 已交付的 DDL 是三條外鍵三個索引（schema_rbac.sql:336／:358／:388）、models.py 六處 FK 欄位帶 index=True，且 **PostgreSQL 不會自動為 referencing 欄位建索引**。本站先逐條列出**已被唯一約束覆蓋**的四個查詢（resolve_project_role／list_members／FR12.4 挑選／read_fields），刻意不把它們報成缺口——避免去「修」沒有壞的東西。真正缺的是 reselection_events：entity_constraints 逐字「故不可用專案做唯一鍵」，其後果是這張表**連一個索引都沒有**，而 [M1]=B 要求橫幅在每次進入產品時都看得到，故它承載三張表中頻率最高的讀取。設計為 partial index ON (promoted_user_id) WHERE acknowledged_at IS NULL——partial 的理由不只省空間：已確認的列會離開索引，故其大小是「目前未確認數」而非「歷來總數」。先例 schema_rbac.sql:341 的 uq_projects_default_per_owner 同一慣用法。"
+    },
+    {
+      "id": "ND-NOIDX-U18",
+      "status": "N/A",
+      "target": "security-design.md §四之三",
+      "note": "**刻意不要求**的一個索引：project_members.user_id 不是任何索引的前導欄，但它成為缺口的兩個條件本輪都不成立——① 以成員身分列出「我參與的專案」尚未存在（hierarchy_facade.list_projects:231 目前 owner-scoped，是 [F8/R-02]「Owner-scoped now; flag membership as the known successor」的已核可結果）；② 使用者硬刪除時的外鍵子側掃描，而使用者刪除行為是 OQ-H1、上游刻意未決。寫下條件而不建索引的理由：不需要的索引有寫入成本，而「以後可能要」不是現在建的依據。承接站 U19。"
+    }
+  ],
+  "open_items": [
+    {
+      "id": "OPEN-ND18-1",
+      "severity": "blocking-downstream",
+      "text": "**九個欄位必須在 code-generation 的 DDL 中回補**（ReselectionEvent 五個、SystemRequirementField 四個），依 components.md:819 的 Entity Ownership 表。**它不會被任何測試或 sensor 抓到**：本單元的驗證載體是對 DDL 的斷言，而斷言是依 entities.md 寫的——entities.md 少了欄位，斷言就不會檢查它們。這與 U5 的 occurredAt 索引是同一個形狀：缺口在規格裡，所以驗證也看不見它。不滿足的已核可項目：FR12.4b 全條、AC12.2.2（其 Then 的四件事）、契約 K-17 的 clear_field note、entities.md 自己的 entity_constraints（『同一系統內同一欄位名至多一列』指向未宣告的欄位）、AC11.2.2 的 UnknownFieldKey（無資料基礎）。"
+    },
+    {
+      "id": "OPEN-ND18-2",
+      "severity": "blocking-downstream",
+      "text": "**BR2.3（已核可）寫「四條外鍵」而本站設計收為三條**（[ND1]=A）。處置是指派修訂而非回改 rules.md。風險形狀與第 1 項相反：若 code-generation 只讀 rules.md 就會建出第四條外鍵，而那會讓 P-FK0 紅燈——**這一次缺口會被抓到**。落點 code-generation；rules.md 的回補屬 functional-design 的修訂，由 code-generation 在 summary 中揭露。"
+    },
+    {
+      "id": "OPEN-ND18-3",
+      "severity": "named-gap",
+      "text": "**FR12.2（人工角色指定）的稽核無承載者**，而 AC12.2.2 的 Given 逐字「我改了某人的角色」已要求同一個變更紀錄承載它。本站不自行決定 reselection_events 的語意範圍該不該一般化成通用的角色變更稽核表——那是實體邊界的決定，屬 domain／functional design。落點 code-generation（它必須在建表時決定該表涵蓋哪些事件），已附 AC 依據供其判斷。"
+    },
+    {
+      "id": "OPEN-P5",
+      "severity": "named-gap",
+      "text": "**承接且未改善**：deploy.yml 不呼叫任何遷移腳本，故「部署後有沒有人去跑」沒有機械保證。本站 §二之二 的自我終檢讓**一次成功的執行**成為可信證據（退出碼 0 ⟺ 全部物件存在），但不讓「沒跑」變得可見。承接形式仍應是部署後的健康檢查（偵測缺表即告警），**不是**把腳本塞進 deploy.yml——後者把資料庫結構變更放進自動部署路徑，屬 project.md 的 high-risk action 範圍（需 plan ＋ impact ＋ rollback ＋ human gate）。"
+    },
+    {
+      "id": "OPEN-P2",
+      "severity": "named-gap",
+      "text": "**承接**：project_members.role 與既有全域角色同名不同義，資料層無法強制區分，只能在 COMMENT 標明；真正的區分依賴 U19／U20 不把兩者混用。承接站 U19 的 code-generation。"
+    },
+    {
+      "id": "OPEN-P4",
+      "severity": "named-gap",
+      "text": "**承接**：拒絕事件不留痕跡（U19 的 H-8）。reselection_events 記的是**改選**事件而非**拒絕**事件。本站 §三之四 的一般化討論**不涵蓋**它——拒絕事件是未發生的授權變更，與角色變更稽核不同類，在此寫明以免兩者被混為一談。"
+    }
+  ]
+}

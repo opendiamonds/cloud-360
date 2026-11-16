@@ -1,0 +1,179 @@
+{
+  "stage": "functional-design",
+  "unit": "mcp-bridge",
+  "upstream_ids": [
+    "AC11.4.1",
+    "AC11.4.2",
+    "AC11.4.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC11.4.1",
+      "status": "OK",
+      "target": "BR75.1, BR75.2, BR73.2, BR76.2, BR78.2",
+      "note": "前提（使用者以 [MB1]=A 接受）：以本單元的最小測試 client 擔任「agent」——系統內真實的大腦側 MCP client 不存在（OPEN-MB21-1）。被驗的是 server 的行為，與呼叫端是誰無關：client 經真實 HTTP 呼叫 bridge，bridge 以該使用者 token 經真實 FastAPI 路由與 facade 授權（BR78.2）。測試：非成員（另含待核准、缺 K4.view 兩例）呼叫 read_requirement_fields → isError、error=forbidden，且 message 等於同一 token 直接 GET 該端點所得的 detail（BR76.2 的原樣轉送使「理由相同」可逐字斷言）。未驗證的部分：真實 agent 在大腦流程中觸發此呼叫"
+    },
+    {
+      "id": "AC11.4.2",
+      "status": "OK",
+      "target": "BR72.3, BR72.4, BR72.5, BR72.6, BR72.7, BR72.9, BR71.5",
+      "note": "結構斷言兩處：(1) generated_tools.json 每一項 inputSchema 遞迴屬性名不命中 token|key|secret|authorization（不分大小寫、子字串），且鍵集合等於測試檔內以字面值寫出的期望白名單（白名單版本，承共同 DoD；不以 allowlist.json 為期望值）；(2) 啟動後經 tools/list 取得的 schema 同樣斷言。.mcp.json 排除：攔截 gen_mcp_tools.py 兩種模式開啟的路徑，斷言讀取的輸入集合封閉為 openapi.json 與 allowlist.json、generated_tools.json 只作輸出（--check 時讀來比對）、.mcp.json 從未被開啟（BR72.9，必測 T-6），測試本身不讀 .mcp.json。白名單期望集合以字面值寫在測試檔內、不讀 allowlist.json（必測 T-5），避免同一個 PR 同改輸入與產物而自證。write／clear 的 field_key 改名為 field（BR72.5）已由 [MB6]=A 裁決。另以產生器 PBT 的八個類別逐類斷言單一錯誤碼並設成功分支下限（functional-spec.md §六，必測 T-3）"
+    },
+    {
+      "id": "AC11.4.3",
+      "status": "OK",
+      "target": "BR75.1, BR73.1, BR76.4, BR78.1",
+      "note": "前提同 AC11.4.1（測試 client 擔任 agent，OPEN-MB21-1）。測試：成員（K4.view）以 read_requirement_fields 讀一個已填欄位的系統 → 非 isError，structured content 等於同一 token 直接 GET 的 FieldSetView，且含該欄位的 value。另以缺 Authorization 的同一呼叫得 unauthenticated 且 backend 未收到請求，證明成功確實來自使用者 token"
+    },
+    {
+      "id": "BR71.1",
+      "status": "N/A",
+      "target": "獨立進程與零環境變數：[MB5]=A、[I6]=A，部署形狀無故事 AC"
+    },
+    {
+      "id": "BR71.2",
+      "status": "N/A",
+      "target": "傳輸選擇：[I6]=A（OQ-16），無故事 AC"
+    },
+    {
+      "id": "BR71.3",
+      "status": "N/A",
+      "target": "liveness：monitoring-design.md §七，無故事 AC"
+    },
+    {
+      "id": "BR71.4",
+      "status": "N/A",
+      "target": "backend 不可用不退出：monitoring-design.md:184-188，無故事 AC"
+    },
+    {
+      "id": "BR71.6",
+      "status": "N/A",
+      "target": "Host 允許清單：本站決定 D-6，ADR-0006 network exposure"
+    },
+    {
+      "id": "BR72.1",
+      "status": "N/A",
+      "target": "產生器純函式形狀：[I7]=A 與 S-15（PBT 標的），支撐 AC11.4.2 但非其可觀察行為"
+    },
+    {
+      "id": "BR72.2",
+      "status": "N/A",
+      "target": "allowlist 預設拒絕與三項：[MB4]=A"
+    },
+    {
+      "id": "BR72.8",
+      "status": "N/A",
+      "target": "名稱與描述取自 allowlist：本站決定 D-3"
+    },
+    {
+      "id": "BR72.10",
+      "status": "N/A",
+      "target": "requires_agent 與 method／inject 綁定：審查 R-05、本站決定 D-18，支撐 BR74.3，無故事 AC。驗證落點：PBT 性質七（agent_mismatch 類別）與必測 T-8"
+    },
+    {
+      "id": "BR72.11",
+      "status": "N/A",
+      "target": "路徑前綴白名單（成員管理類結構性排除）：[MB4]=A、ADR-0004、本站決定 D-18，無故事 AC。驗證落點：PBT 性質二（out_of_scope 類別）與必測 T-8"
+    },
+    {
+      "id": "BR73.3",
+      "status": "N/A",
+      "target": "token 只在 contextvar：[MB2]=A、OQ-15（隨使用者切換），無獨立 AC。驗證落點：BR78.4 的並發多 client 身分隔離測試（functional-spec.md §十二 必測 T-1）——backend 端每個請求的 Authorization 等於發起者的 token"
+    },
+    {
+      "id": "BR73.4",
+      "status": "N/A",
+      "target": "token 不進任何輸出：FR11.5 的延伸（工具結果與 log），AC11.4.2 只約束 schema 故無對應 AC。驗證落點：BR78.5 的逐分支不外洩測試（functional-spec.md §十二 必測 T-2）——BR76.1 每一列與成功分支的工具結果全文不含 token"
+    },
+    {
+      "id": "BR73.5",
+      "status": "N/A",
+      "target": "不解碼 JWT：ADR-0006 IAM，本站決定"
+    },
+    {
+      "id": "BR74.1",
+      "status": "N/A",
+      "target": "agent 宣告位置：[MB3]=A，本站決定 D-1"
+    },
+    {
+      "id": "BR74.2",
+      "status": "N/A",
+      "target": "代寫組登錄表：[MB3]=A；team.md 單一真實來源"
+    },
+    {
+      "id": "BR74.3",
+      "status": "N/A",
+      "target": "寫與清空需宣告：U20 交接（code-summary.md:147-149）"
+    },
+    {
+      "id": "BR74.4",
+      "status": "N/A",
+      "target": "bridge 填入 on_behalf_of：X-04 tools.write_requirement_field.note；US11.4 標題「身分不會被冒用」的代寫面，無對應 AC"
+    },
+    {
+      "id": "BR74.5",
+      "status": "N/A",
+      "target": "自報限制揭露：[MB3]=A、OPEN-RF20-1"
+    },
+    {
+      "id": "BR74.6",
+      "status": "N/A",
+      "target": "空值寫入本地擋：U20 交接"
+    },
+    {
+      "id": "BR75.3",
+      "status": "N/A",
+      "target": "不呼叫成員層：[MB4]=A；契約追認 C-5 移除 McpBridge → ProjectMembership 邊與 K-16 consumed_by 的 U21"
+    },
+    {
+      "id": "BR75.4",
+      "status": "N/A",
+      "target": "參數驗證與路徑段字元集白名單：本站決定 D-4、D-16，ADR-0006 network exposure，無故事 AC。驗證落點：PBT 性質六（以 httpx build_request 實際組出的 URL 為判準）與必測 T-4（\".\"、\"..\" 等 example）"
+    },
+    {
+      "id": "BR76.1",
+      "status": "N/A",
+      "target": "錯誤封閉表：construction.md Error Handling；AC11.4.1 只用到其中 forbidden 一列"
+    },
+    {
+      "id": "BR76.3",
+      "status": "N/A",
+      "target": "isError 形狀：本站決定 D-5"
+    },
+    {
+      "id": "BR77.1",
+      "status": "N/A",
+      "target": "bridge log 欄位：ADR-0006 audit logging（requirements.md:620）"
+    },
+    {
+      "id": "BR77.2",
+      "status": "N/A",
+      "target": "log 禁止項：team.md Forbidden，無故事 AC。驗證落點：BR78.5（必測 T-2）——以正式 configure_logging 的層級收集全部 logger 輸出，逐分支斷言不含 token"
+    },
+    {
+      "id": "BR77.3",
+      "status": "N/A",
+      "target": "稽核主體為使用者：requirements.md:620、X-04 audit_subject，無故事 AC"
+    },
+    {
+      "id": "BR77.4",
+      "status": "N/A",
+      "target": "清空溯源缺口揭露：OPEN-MB21-4"
+    },
+    {
+      "id": "BR78.3",
+      "status": "N/A",
+      "target": "唯一組裝點 create_app：審查 R-10、本站決定 D-19，測試拓樸的結構約束，無故事 AC"
+    },
+    {
+      "id": "BR78.4",
+      "status": "N/A",
+      "target": "必測：並發身分隔離（驗 BR73.3）：審查 R-02，無故事 AC（US11.4 標題「身分不會被冒用」的跨請求面）；即 functional-spec.md §十二 必測 T-1"
+    },
+    {
+      "id": "BR78.5",
+      "status": "N/A",
+      "target": "必測：逐分支不外洩（驗 BR73.4、BR77.2）：審查 R-02、FR11.5 的結果與 log 面，無故事 AC；即 functional-spec.md §十二 必測 T-2"
+    }
+  ]
+}

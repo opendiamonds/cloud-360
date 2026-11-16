@@ -193,13 +193,15 @@ FR5.5 規定 agent 得經 `pricing_client` 呼叫目錄價端點確認現價，*
 
 **Decision**
 
-`PricingLookup` 為獨立元件，且「**唯讀，其輸出不得進入估價明細的寫入路徑**」是它的**職責定義**，不是使用慣例。它只被 `CostAdviceAgent` 依賴，不被任何持有 `EstimateLineItem` 寫入權的元件依賴——這在相依圖上就能看出來。
+`PricingLookup` 為獨立元件，且「**唯讀，其價格輸出不得進入估價明細的寫入路徑**」是它的**職責定義**，不是使用慣例。它只被 `CostAdviceAgent` 依賴，不被任何持有 `EstimateLineItem` 寫入權的元件依賴——這在相依圖上就能看出來。
+
+**2026-09-26 後補（FR13）**：intake 得經獨立元件 `SkuCatalog` 查目錄 SKU 的**人類可讀描述**並寫入 `specDescription`。此例外不含 hourly／單價／小計。`EstimateIntakeService → SkuCatalog` 是允許的相依邊；`EstimateIntakeService → PricingLookup` 仍禁止。
 
 僅限目錄價端點；帳單與用量類 API（Cost Explorer、Cost Management、Billing Export）全面禁止，此禁令是目錄價端點得以使用憑證的對價（ADR-0018 §2）。憑證缺漏或呼叫失敗時降級，不得使建議產生流程失敗。
 
 **Consequences**
 
-正面：AH-6 的界線有了結構性載體。違反它需要新增一條相依邊（`EstimateIntakeService → PricingLookup`），這在 code review 與相依圖上都顯眼。
+正面：AH-6 的價格界線仍有結構性載體。違反它需要新增一條相依邊（`EstimateIntakeService → PricingLookup`），這在 code review 與相依圖上都顯眼。描述查詢走另一條邊，不會被誤讀成「intake 可以取價」。
 
 負面：多一個元件。但它本來就是既有 `pricing_client` 的改造，不是全新構件。
 

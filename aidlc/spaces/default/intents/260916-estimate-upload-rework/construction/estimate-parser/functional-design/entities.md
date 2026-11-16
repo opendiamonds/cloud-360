@@ -23,6 +23,8 @@ entities:
       - { name: ordinal, type: integer, required: true, min: 0 }
       - { name: itemName, type: string, required: false }
       - { name: spec, type: string, required: false }
+      - { name: serviceId, type: string, required: false, description: "GCP 等檔案欄；parse 只擷取不外呼" }
+      - { name: specDescription, type: string, required: false, description: "parse() 不填；intake 可於寫庫前補" }
       - { name: quantity, type: number, required: false, nullable: true }
       - { name: amount, type: number, required: false, nullable: true }
       - { name: currency, type: string, required: false, nullable: true }

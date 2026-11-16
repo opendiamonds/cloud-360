@@ -3,6 +3,7 @@
   "unit": "estimate-workspace-ui",
   "coverage": [
     { "id": "FR1.1", "status": "OK", "target": "EstimateUploadZone" },
+    { "id": "FR1.7", "status": "OK", "target": "EstimateWorkloadForm" },
     { "id": "FR3.1", "status": "OK", "target": "EstimateCloudCard" },
     { "id": "FR3.2", "status": "OK", "target": "EstimateChecksPanel" },
     { "id": "FR4.1", "status": "OK", "target": "EstimateHistoryDrawer" },

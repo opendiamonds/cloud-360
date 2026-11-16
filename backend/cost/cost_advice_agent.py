@@ -53,8 +53,10 @@ def _optional_price_notes(clouds: list[dict[str, Any]]) -> list[str]:
 
 def _build_prompt(payload: dict[str, Any], price_notes: list[str]) -> str:
     clouds = payload.get("clouds") or []
+    workload = payload.get("workload_context") or {}
     body = {
         "estimate_set_id": payload.get("estimate_set_id"),
+        "workload_context": workload,
         "clouds": clouds,
         "catalog_price_notes": price_notes,
         "instructions": (
@@ -68,6 +70,9 @@ def _build_prompt(payload: dict[str, Any], price_notes: list[str]) -> str:
             "saving_text 寫省錢與用量優化建議（至少兩段或兩點）；"
             "comparison_text 寫跨雲比較，若少於兩朵雲則省略並在 unavailable_reasons.comparison 說明；"
             "quality_text 寫資料品質／完整性檢查。"
+            "若有 workload_context，必須對照系統說明、資訊需求、費用限制、流量與負載指標"
+            "來給建議（例如預算是否超標、流量是否驅動頻寬／CDN 成本、可用性目標是否影響多區架構）；"
+            "缺欄位時不要臆造數字，可在建議中標明假設。"
             "不得捏造目錄牌價；若 catalog_price_notes 沒有 hit，請在內文或 "
             "unavailable_reasons 說明無法對照現價。"
         ),
@@ -133,8 +138,8 @@ def _invoke_once(prompt: str) -> str:
     """One LLM call via U6 helpers (counts toward ≤3 budget)."""
     from services.langgraph_runtime import (
         InvokeOutcome,
+        chat_model,
         invoke_graph,
-        openrouter_chat_model,
     )
 
     try:
@@ -143,7 +148,7 @@ def _invoke_once(prompt: str) -> str:
         raise RuntimeError("langgraph_missing") from exc
 
     def _node(state: dict[str, Any]) -> dict[str, Any]:
-        model = openrouter_chat_model()
+        model = chat_model()
         msg = model.invoke([{"role": "user", "content": state["prompt"]}])
         content = getattr(msg, "content", None) or str(msg)
         return {**state, "text": content}

@@ -1,0 +1,36 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-10-06T16:54:14Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Minor | `backend/scripts/verify_meta_schema.sql` — group C (`system_requirement_fields`) assertions `P9`–`P12` | `P1` asserts `project_members` has *exactly* 6 columns and `P5` asserts `reselection_events` has *exactly* 8, each with an explicit "多一欄或少一欄皆紅" rationale in `unit-test-instructions.md`. No equivalent exact-column-count assertion exists for `system_requirement_fields` (9 columns per `components.md:820` and the actual DDL). `P9`–`P12` check specific nullability/CHECK/UNIQUE/COMMENT facts but never the column *set*, so an accidentally added extra column on this table (e.g. a stray sensitive field) would pass all 12 assertions silently — breaking the symmetry the unit's own test design explicitly claims to have established for the other two tables. | Add a 13th assertion (or extend `P9`) asserting `system_requirement_fields` has exactly 9 columns, mirroring `P1`/`P5`, or explicitly document in `unit-test-instructions.md` why group C is exempt from the pattern. | New |
+| R-02 | Minor | `backend/scripts/run_meta_schema_migration.py` `EXPECTED_FK_DELETE_ACTIONS` (3 entries) vs. actual DDL (8 FKs in the `J)` block) | The migration script's post-condition check only verifies `ON DELETE` behaviour for 3 of the 8 foreign keys it creates (`project_members.project_id`, `project_members.user_id`, `system_requirement_fields.system_id`). The other 5 (`invited_by`, `promoted_user_id`, `previous_owner_user_id`, `updated_by`, `updated_on_behalf_of`) are covered only by the generic `pg_constraint` existence check inside `EXPECTED_CONSTRAINTS`/table-exists checks, not by name, so a future edit that silently changes one of their `ON DELETE` clauses (e.g. accidentally adding `CASCADE` to `updated_by`, which would let a user-deletion silently erase who cleared a requirement field) would not fail the migration script's self-check. Low risk given today's `ON DELETE` values are all the PostgreSQL default, but worth a conscious decision rather than an implicit one. | Either add the remaining 5 FKs to `EXPECTED_FK_DELETE_ACTIONS` (expected `'a'`) or note in the script's docstring that only semantically load-bearing `ON DELETE` clauses are checked. | New |
+
+### Validation Tool Results
+
+No stage-specified validation tools were listed for this per-unit `code-generation` review beyond the standing instruction not to run Python/the test suite (workspace-fingerprint hazard). All verification below was done by direct file inspection, `grep`, and manual trace-through — no code was executed.
+
+| Check | Result | Interpretation |
+|---|---|---|
+| Column counts in `J)` DDL block vs. plan (`project_members` 6, `reselection_events` 8, `system_requirement_fields` 9) | Matches exactly (counted columns in `schema_rbac.sql:555-663`) | Confirms §三 of the plan and the `components.md:819-820` Entity Ownership table were followed, not `entities.md` |
+| Foreign-key count in `J)` block | 8 FKs counted directly (`project_members`: 3, `reselection_events`: 2, `system_requirement_fields`: 3); `reselection_events.project_id` has no `REFERENCES` clause at all | Confirms `[ND1]=A` is correctly implemented and confirms the summary's new finding (`OPEN-CG18-3`, actual FK count is 8, not `rules.md BR2.3`'s claimed "four") |
+| `hierarchy_service.delete_project()` guard lines cited as justification for `CASCADE` | `backend/services/hierarchy_service.py:153` (`is_default`), `:156` (remaining systems count), `:161` (`db.delete(project)`) — read directly, matches the plan/summary's claim verbatim, no member guard exists | The CASCADE-not-RESTRICT rationale in `code-summary.md` §三之一 is accurate, not just asserted |
+| `K-15` contract `foreign_keys` field (`contract-summary.md:1567-1571`) | Lists 4 FKs including `reselection_events.project_id → projects.id` | Confirms `OPEN-CG18-2`'s claim that the cross-unit contract still disagrees with `[ND1]=A` and that `nfr-design`'s review R-01 fixed `rules.md` but missed `K-15` — this is a real, correctly-disclosed upstream gap, not fabricated |
+| `rules.md` `BR2.3` literal text | "四條外鍵必須存在" listing the same 4 FKs including the one `[ND1]=A` removed | Confirms the plan's claimed inconsistency is real |
+| `entities.md` attribute lists for `ReselectionEvent` (2 attrs) / `SystemRequirementField` (4 attrs) | Confirmed by direct read (`entities.md:53-74`) | Confirms the "nine missing columns" claim and that DDL correctly follows `components.md` instead |
+| `verify_meta_schema.sql` `P4`/`P7` self-constructed preconditions (non-default project, zero systems) | Present and checked before the delete (`:258-264`, `:310-315`) | Confirms the plan's claim #2 (P7 actually constructs a project satisfying U4's guards before deleting) |
+| 10 mutations (`N1`–`N10`) traced against the DDL/assertions they target | All 10 map to a real, checkable DDL element and a real assertion; no mutation targets a non-existent object | No fabricated mutation coverage found |
+| `.github/workflows/ci.yml` `memory-schema` job | `id`/`name:` unchanged, one new step added calling `verify_meta_schema.sql`, with inline comment explaining the scope-creep-of-name tradeoff | Matches plan §四之二 exactly |
+| `DEPLOY.md` §2.2.9 | Present, matches claimed content (table list, 4 "easily misread" facts, 3-state table, migration steps, 9 `psql` verification commands) | Matches claim |
+| `497 tests — OK`, OpenAPI/WS-contract drift checks, repo/env contract checks (code-summary.md §二) | Not independently re-run per the dispatch's hard constraint (no Python execution) | Treated as an unverified claim by this review, consistent with the dispatch's instruction; no contradicting evidence found in the static diffs inspected |
+| `source-manifest.json` paths vs. actual `git status` | `schema_rbac.sql`, `.github/workflows/ci.yml`, `DEPLOY.md` carry more lines than this unit's own diff (330/82/266 vs. claimed 176/19/150) because other units' uncommitted changes share the same files, exactly as the dispatch brief warned | Attributed correctly; this unit's own slice of each file (the `J)` block, the one new CI step, and §2.2.9) was isolated and verified independently |
+
+### Summary
+
+This is an unusually rigorous DDL-only `spec` unit: every claimed number (column counts, FK counts, assertion counts) was independently recountable and checked out exactly, the one explicitly-flagged sibling-unit integration point (`K-15` in `contract-summary.md`) was spot-checked and confirms a real, correctly self-disclosed gap rather than a fabricated one, and the `CASCADE`-vs-`RESTRICT` justification was verified against the actual `hierarchy_service.py` code it cites. The two findings recorded are genuine but minor test-coverage asymmetries (a missing exact-column-count assertion for one of the three tables, and an incomplete `ON DELETE` check list in the migration script's self-verification) that do not block an implementer and do not contradict any upstream contract or NFR; both are easy to close in a follow-up without re-opening the plan.

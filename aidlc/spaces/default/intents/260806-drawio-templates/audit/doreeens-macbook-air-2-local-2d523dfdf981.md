@@ -388,3 +388,12 @@
 **Details**: Scope: bugfix, 7 stages completed
 
 ---
+
+## Error Logged
+**Timestamp**: 2026-08-17T02:02:29Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-utility
+**Command**: aidlc-utility --status
+**Error**: Usage: aidlc-utility <help|version|status|doctor|intent-birth|intent|space|space-create|codekb-path|detect|select-plugins|plugin-list|plugin-sync|recompose|scope-change|config-change|config-get|config-list|set-status|detect-scope|resolve-env-scope|scope-table|stage-table|upgrade> [--project-dir <path>] [--scope <scope>] [--json]
+
+---

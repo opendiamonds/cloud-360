@@ -1,0 +1,141 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "intent-router",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "NFR1.60",
+      "note": "意圖識別準確率 ≥80%。**本單元就是這條 NFR 的受測對象**，但量測機制依 NFR1 逐字落在 build-and-test（3.6，ALWAYS）。本站的貢獻是 NFR1.60：**反問率必須與準確率同時呈現**——NFR1 自己的連動條款逐字警告「調高信心門檻會讓系統多反問、少交辦，準確率的帳面數字因此上升，但那不是識別變準了」，只報其中一個即為無效的品質報告。80% 的最終值依共用校正程序在 build-and-test 裁決。"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "U10 session-store（SessionContext 的跨頁持久化）＋ U14 entry-page-ui（脈絡列呈現）",
+      "note": "跨頁面上下文保留率 ≥95%。本單元對 SessionContext **唯讀**（BR7.4，functional-design 修訂 1 新增），不寫入、不持久化，故零落點。它**消費**保留率的結果（指涉詞解析讀該段的作業對象與歷程），但不負責保留。"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.60, NFR3.61, NFR3.62, NFR3.63, NFR3.64, NFR3.65, NFR3.66, NFR3.67, NFR3.68, NFR3.69, NFR3.70, NFR3.71, NFR3.72, NFR3.73, NFR3.74",
+      "note": "首字回應時間 P50 ≤ 2 秒。NFR3 逐字寫明「這條預算幾乎全部被路由層的 LLM 呼叫吃掉……本 NFR 能否達成，實質上由路由層的模型選擇決定」——**本單元就是那個路由層**。本站做了全 intent 唯一一次預算切分：路由層 800ms ＋ 下游首字 1200ms = 2000ms（[N2]=A）。.68–.71 為可靠性面（大聲失敗、空清單是失敗、schema 不合、述詞永不失敗），.72–.74 為觀測面。"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.70, NFR3.67",
+      "note": "狀態外部化與重啟還原。**本單元無狀態**，故 NFR4 對它是**結構性滿足而非豁免**：沒有任何東西需要還原。NFR3.67 是它的守門條款——禁止引入行程內共享可變狀態（快取、計數器、連線池）作為擴展手段，與 K-09 的 hard_rule「一律放 Redis，不得放行程記憶體」同精神。這也是 reliability-requirements.md 拒絕在本單元內建 circuit breaker 的理由之一。 **修訂 1（審查 R-01，Critical）**：原編號 NFR4.60 與 session-store 的 NFR4.60（Redis 記憶體使用率訊號）直接碰撞，已改號為 NFR4.70。錯因是我自己的碰撞檢查 regex 列舉了分支卻漏掉 4——詳見 performance-requirements.md 檔頭。"
+    },
+    {
+      "id": "NFR5",
+      "status": "N/A",
+      "target": "U2 brain-ws-contract（WS 訊息型別契約與其 CI 漂移閘門）",
+      "note": "WebSocket 契約閘門。K-10 是 **in-process**（contract-summary.md:745），本單元不暴露任何 WebSocket 或 HTTP 端點（SEC-2），故不在 NFR5 的作用域內。WS 那一面由 U2 承載、U13 消費。"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "NFR6.60",
+      "note": "記憶層的 schema 隔離與其 CI 驗證。NFR6 的主體（對真實 PostgreSQL 執行的 CI job）屬 U8 memory-service。本單元承載它的**應用側半邊**：NFR6.60 禁止繞過 K-08 的 MemoryFacade 直接讀 memory schema——繞過即是 schema 隔離在應用層被突破，而 CI job 驗的是資料庫層，看不到這一種。"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR7.62",
+      "note": "episodic memory 的保存與刪除稽核。**修訂 1（審查 R-02 Critical ＋ R-03 Major）後只剩一條子條**：NFR7.62（呼叫 MemoryFacade.search 時 kinds 不得含情節記憶）——它逐字就是在講情節記憶的讀取範圍，親代真實。原本一併掛在此的三條日誌禁令已改為孤兒 ID SEC-3／SEC-4／SEC-5：NFR7 的逐字主體是保存 90 天與刪除稽核，推不出日誌內容限制，而本檔 §四 STRIDE 已把與記憶無關的 prompt_guard 命中納入同一條禁令，證明其適用範圍比 NFR7 的字面寬。**另：NFR7.62 由「前置護欄」改判為「現行防護」**——U8 的 POST /api/memory/records（memory_router.py:158-183）已可建立 kind=episodic 的記憶且不限制 kind，該路徑今天就可達，不必等 OQ-N3。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.60, NFR8.61",
+      "note": "新增元件的部署設定完整性。本單元新增五個環境變數（tech-stack-decisions.md 的 TS-4）。NFR8.61 是三處同步義務（backend/.env.example、deploy/.env.example、deploy/render-env.sh），由 scripts/validate_env_contract.py 機械檢查；NFR8.60 是缺值行為必須明確——其中 BRAIN_ROUTER_CONFIDENCE_THRESHOLD **無預設、缺值即啟動失敗**（BR3.4 逐字「缺值不得以預設值靜默啟動」），其餘四個取預設並記 log。NFR8 的理由逐字是「此失敗模式無聲」，而既有實例（N8N_USER／N8N_PASSWORD 靜默退回灰底佔位圖）正是本條要防的形狀。"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR9.60, NFR9.61, NFR9.62",
+      "note": "成本原則。NFR9 逐字：上限由 OpenRouter 後台承載，本 intent 不建計量機制；編排層以「盡量省」為設計原則、**非可量測門檻**。本站因此不發明一個成本門檻，只落三條可驗證的紀律：NFR9.60 最少上下文（同時是 ADR-0006 encryption 面的資料外送最小化）、NFR9.61 成本與歷程長度的線性關係及其 context 上界、NFR9.62 達到供應商速率限制時大聲失敗而非靜默排隊。"
+    },
+    {
+      "id": "NFR10",
+      "status": "OK",
+      "target": "NFR10.60, NFR10.61",
+      "note": "路由層模型的可替換性。**本站結案 OQ-4**：路由層模型＝typesafe/jev-1.13（使用者 2026-10-03T11:48:31Z 的裁決，本站 [N1]=C 再確認）。NFR10.60 落可替換性（獨立環境變數 BRAIN_ROUTER_MODEL，不與功能 agent 共用 LLM_MODEL，呼應 [F1] 逐字允許兩者用不同模型）、NFR10.61 落換模型後必須重跑標註集。**如實記載一項不合規**：NFR10 逐字要求「在有實測準確率與延遲基準後決定」，而那個基準至今不存在——這是先決定、後驗證，使用者在知情下（N12 的選項文字已揭露此落差）做了裁決。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "U14 entry-page-ui ＋ U12 work-orchestrator（跨功能任務的實際流程）",
+      "note": "跨功能任務的頁面切換次數。這是**產品層級**的量測，母體為具名的跨功能任務情境，比較「有大腦」與「現行 11 條路由」的切換次數。本單元的分類正確與否會影響它，但本單元沒有任何可量測的落點——它不產生頁面、不決定流程。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "SEC-1",
+      "status": "N/A",
+      "target": "ADR-0006 的 IAM 面（由 project.md 承載的 hard constraint，非任何 inception NFR）",
+      "note": "principal 一律由參數傳入，本單元不自行取身分。**沒有 inception NFR 親代**：NFR1–NFR11 逐條核對後沒有一條是 IAM。硬掛到 NFR6（記憶層 schema 隔離的 CI 驗證）之下會製造錯誤的親代，而「引用錯層級會讓代價看起來比實際輕」是本 intent 已記過的失誤形狀。詳見 security-requirements.md 的 §二之零。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "N/A",
+      "target": "ADR-0006 的 network exposure 面（同上）",
+      "note": "不註冊任何 FastAPI route／WebSocket 端點；出站只經 langgraph_runtime，不自行 httpx 直打。同樣沒有 inception NFR 親代。**入站與出站刻意分開陳述**：入站零增量，但本單元**發起**一條對第三方 API 的外送連線，合併寫成「零增量」會漏掉後者。"
+    },
+    {
+      "id": "OQ-10",
+      "status": "Deferred",
+      "target": "build-and-test（3.6，ALWAYS）—— 執行路徑真實，但成功依賴一個未滿足的外部前置條件（見 tech-stack-decisions.md 的 TS-6）",
+      "note": "路由層能否產出可比較的信心值。**修訂 1（審查 R-06，Major）撤回「本站解掉了它」這個措辭。** build-and-test 確實不會被 skip，且它本來就會產生 NFR10 要求的準確率與延遲基準——這部分的機制性宣稱成立。**但它的成功仍依賴 OPENROUTER_API_KEY 已配置**，而該金鑰至今未設（backend/.env 不存在），取得它的那一題（brain-infra 的 N14）自 2026-10-03 起 [Answer] 欄仍為空。build-and-test 的 Step 9 逐字：未被更下游站擁有的目標是「Unverified，不是 deferred 成功」，會觸發失敗升級。已把該前置條件升格為 TS-6 的 blocking 宣告並在此追蹤，不再只存在於別的單元的問題檔裡。本站的產出把兩條求值分支都寫完整（BR3.2 有分數、BR3.3 無分數），[IR1]=A 讓兩種結論都不需重寫規則，故延後的代價仍是有界的。"
+    },
+    {
+      "id": "TS-3a",
+      "status": "N/A",
+      "target": "本站查出、上游未記載的整合風險 → U11 的 code-generation（3.5，ALWAYS）",
+      "note": "Jev 的 supported_parameters 為空陣列，而現行 openrouter_chat_model 固定傳 temperature=0.0（langgraph_runtime.py:95）。路由層不得無條件沿用該簽章。這不對應任何 inception NFR——它是 [N1]=C 帶進來的實作層後果。"
+    },
+    {
+      "id": "TS-3c",
+      "status": "N/A",
+      "target": "對 OQ-N1（產生自然語言回覆的單元尚未指派）的約束",
+      "note": "Jev 的 output_modalities 為 [\"decisions\"]，**不產生文字**（initiative-brief.md:313 逐字：不適用能力 8）。故屆時被指派「產生大腦自身回覆」的那個單元**不能用 Jev**。本站只記下這條約束，不指派那個單元——它的指派本來就是 OQ-N1 的內容。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "N/A",
+      "target": "project.md 的公開 repo 輸出禁令 ＋ ADR-0006 的 Audit logging 面（非任何 inception NFR）",
+      "note": "日誌不得含使用者輸入文字（text）、候選標籤（label）或 referent。**修訂 1（審查 R-03）由 NFR7.60 改為孤兒 ID**：NFR7 的逐字主體是 episodic memory 的保存 90 天與刪除稽核，推不出日誌內容限制。referent 最容易被漏——它看起來像識別碼，實際上是解析使用者句子得到的系統名或圖名。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "N/A",
+      "target": "同 SEC-3",
+      "note": "prompt_guard 命中可被觀測（它是安全事件），但紀錄不得含觸發它的輸入。**修訂 1 由 NFR7.61 改為孤兒 ID**。它是 R-03 論證的關鍵證據：prompt_guard 命中與記憶完全無關，卻適用同一條日誌禁令——證明這些禁令的範圍比 NFR7 的字面寬。"
+    },
+    {
+      "id": "SEC-5",
+      "status": "N/A",
+      "target": "同 SEC-3（條文在 observability-requirements.md）",
+      "note": "日誌欄位白名單：允許 capability、rank、score、scoresAvailable、len(slots)、述詞結果、耗時、錯誤型別、turnId；禁止 text、label、referent、記憶內容。**修訂 1 由 NFR7.63 改為孤兒 ID**。"
+    },
+    {
+      "id": "TS-6",
+      "status": "N/A",
+      "target": "blocking 前置條件 → 只有使用者能滿足；最晚期限為 build-and-test（3.6）開始之前",
+      "note": "OPENROUTER_API_KEY 必須在 build-and-test 之前配置，否則 NFR1／NFR10／OQ-10 會被標 Unverified 並觸發該站的失敗升級梯。**修訂 1（審查 R-06）新增**：此前置條件原本只存在於 brain-infra 的 N14（自 2026-10-03 起未作答），沒有任何機制追蹤它。"
+    }
+  ]
+}

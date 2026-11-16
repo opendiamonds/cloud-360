@@ -65,6 +65,28 @@ const HARNESS_NAME = (() => {
   }
   return HARNESS_LEAF.replace(/^\./, "");
 })();
+// Whether the .kiro tree is the KAS layout (Markdown agents, standalone hook
+// JSON) rather than the agent-v1 JSON layout. Same reading as the runtime's
+// kiroTreeLayout (core/tools/aidlc-runtime-paths.ts), which this template ships
+// without: harness.json's kiroLayout, else the row name trees carried before it,
+// else the conductor file. `kiro-ide` names only the KAS adapter.
+const KIRO_KAS_LAYOUT = (() => {
+  if (HARNESS_LEAF !== ".kiro") return false;
+  if (process.env.AIDLC_HARNESS_NAME?.trim() === "kiro-ide") return true;
+  try {
+    const parsed = JSON.parse(
+      readFileSync(join(HARNESS_DIR, "tools", "data", "harness.json"), "utf-8"),
+    ) as { kiroLayout?: unknown; name?: unknown; distribution?: unknown };
+    if (parsed.kiroLayout === "kas" || parsed.kiroLayout === "agent-v1") {
+      return parsed.kiroLayout === "kas";
+    }
+    const row = typeof parsed.name === "string" ? parsed.name : parsed.distribution;
+    if (row === "kiro-ide" || row === "kiro") return row === "kiro-ide";
+  } catch {
+    // A tree without readable metadata still has its conductor file.
+  }
+  return existsSync(join(HARNESS_DIR, "agents", "aidlc.md"));
+})();
 const IS_COPILOT = HARNESS_NAME === "copilot";
 const IS_OPENCODE = HARNESS_NAME === "opencode";
 const STAGES_DIR = join(HARNESS_DIR, "aidlc-common", "stages");
@@ -72,16 +94,14 @@ const SKILLS_DIR = IS_COPILOT
   ? join(PROJECT_DIR, ".github", "skills")
   : join(HARNESS_DIR, "skills");
 const PHASES = ["initialization", "ideation", "inception", "construction", "operation"];
-const COMPOSE_LOCK_RETRIES = 600;
-const SCOPE_TABLE_BEGIN =
-  "<!-- BEGIN: compiled scope grid via `bun aidlc-utility.ts scope-table` - do NOT hand-edit -->";
+const NATIVE_RUNTIME = Boolean(process.env.AIDLC_COMPILED_EXECUTABLE?.trim());
 const SCOPE_TABLE_END = "<!-- END: compiled scope grid -->";
-const STAGE_TABLE_BEGIN =
-  "<!-- BEGIN: compiled stage graph via `bun aidlc-utility.ts stage-table` - do NOT hand-edit -->";
 const STAGE_TABLE_END = "<!-- END: compiled stage graph -->";
 type ParseStageFrontmatter = (raw: string) => Record<string, unknown>;
 interface InstalledAidlcLib {
   hooksHealthDir?: (projectDir: string) => string;
+  writeHookStatusFile?: (healthDir: string, fileName: string, data: string) => boolean;
+  removeHookStatusFile?: (healthDir: string, fileName: string) => boolean;
   parseStageFrontmatter?: ParseStageFrontmatter;
   acquireAuditLock?: (
     projectDir: string,
@@ -107,6 +127,19 @@ function installedAidlcLib(): Promise<InstalledAidlcLib | null> {
   return installedLibPromise;
 }
 
+async function composeLockRetries(): Promise<number> {
+  // Resolve from the installed engine: this template is copied into plugins,
+  // so repository-relative imports would break emitted hooks.
+  try {
+    const budget = await import(join(HARNESS_DIR, "tools", "aidlc-runtime-budget.ts"));
+    if (Number.isSafeInteger(budget.LONG_SUBPROCESS_TIMEOUT_MS) &&
+      budget.LONG_SUBPROCESS_TIMEOUT_MS > 0) {
+      return Math.ceil(budget.LONG_SUBPROCESS_TIMEOUT_MS / 100);
+    }
+  } catch { /* Older source installs do not contain the shared policy module. */ }
+  return 9000; // Fifteen-minute compatibility backstop, at the existing 100ms cadence.
+}
+
 function installedStageSchema(): Promise<InstalledStageSchema | null> {
   installedSchemaPromise ??= import(join(HARNESS_DIR, "tools", "aidlc-stage-schema.ts"))
     .then((module) => module as InstalledStageSchema)
@@ -129,7 +162,11 @@ function slugFromPath(path: string): string {
   return path.replace(/\\/g, "/").split("/").pop()!.replace(/\.md$/, "");
 }
 
+const SAFE_PLUGIN_KEY = /^[a-z][a-z0-9-]*$/;
+
 function pluginNameFromRoot(): string {
+  const supplied = process.env.AIDLC_PLUGIN_KEY?.trim();
+  if (supplied && SAFE_PLUGIN_KEY.test(supplied)) return supplied;
   if (!PLUGIN_ROOT) return "plugin";
   for (const md of [
     ".claude-plugin",
@@ -141,16 +178,42 @@ function pluginNameFromRoot(): string {
   ]) {
     try {
       const m = JSON.parse(readFileSync(join(PLUGIN_ROOT, md, "plugin.json"), "utf-8"));
-      if (typeof m?.name === "string" && m.name.trim()) {
-        const hostName = m.name.trim();
-        // Emitted AIDLC plugins use aidlc-<name> as the host package ID while
-        // stage/scope ownership uses the logical <name>.
-        return hostName.startsWith("aidlc-") ? hostName.slice("aidlc-".length) : hostName;
+      if (typeof m?.name === "string" && m.name.startsWith("aidlc-")) {
+        const key = m.name.slice("aidlc-".length);
+        if (SAFE_PLUGIN_KEY.test(key)) return key;
       }
     } catch { /* try next / fall through */ }
   }
+  const fromContent = firstPluginFieldInPlugin();
+  if (fromContent) return fromContent;
   const parts = PLUGIN_ROOT.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
   return parts[parts.length - 2] || parts[parts.length - 1] || "plugin";
+}
+
+function firstPluginFieldInPlugin(): string | null {
+  const roots = ["stages", "scopes", "contributions"];
+  const visit = (dir: string): string | null => {
+    if (!existsSync(dir)) return null;
+    for (const entry of readdirSync(dir).sort()) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) {
+        const nested = visit(path);
+        if (nested) return nested;
+        continue;
+      }
+      if (!entry.endsWith(".md")) continue;
+      const match = readFileSync(path, "utf-8").match(
+        /^plugin:\s*([a-z][a-z0-9-]*)\s*$/m,
+      );
+      if (match) return match[1];
+    }
+    return null;
+  };
+  for (const root of roots) {
+    const found = visit(join(PLUGIN_ROOT, root));
+    if (found) return found;
+  }
+  return null;
 }
 
 // The plugin's stable IDENTITY, computed once up front so every per-plugin
@@ -159,7 +222,8 @@ function pluginNameFromRoot(): string {
 // plugin-root basename: a projection root is `dist/plugins/<name>/<harness>`, so
 // its basename is the harness leaf (claude/kiro), shared by every plugin — keying
 // on it would let two plugins on one harness clobber each other's drops/retry
-// files. Prefer the manifest `name`; fall back to the parent-dir <name> segment.
+// files. Transactional sync injects the normalized host-manifest key; direct
+// compatibility composition derives the same key from that manifest.
 const PLUGIN_NAME = pluginNameFromRoot();
 const PLUGIN_KEY = PLUGIN_NAME.replace(/[^\w.-]/g, "_");
 
@@ -176,7 +240,7 @@ async function resolveHealthDir(): Promise<string> {
   if (typeof lib?.hooksHealthDir === "function") {
     dir = lib.hooksHealthDir(PROJECT_DIR);
   } else {
-    dir = join(PROJECT_DIR, "aidlc", "spaces", "default", "intents", ".aidlc-hooks-health");
+    dir = join(PROJECT_DIR, "aidlc", "spaces", "default", "intents", ".aidlc-engine", "hooks-health");
   }
   _healthDir = dir;
   return dir;
@@ -212,15 +276,37 @@ function recordInstalledToolPayloadDrop(reason: string): void {
 // — a clean plugin's compose (or an early-exit guard) deleted another plugin's
 // live degraded drop, so doctor went green (round-6). Per-plugin files isolate
 // each plugin's signal; doctor globs `*.drops` and aggregates them all.
+// The file goes through the installed engine's hook status writer and
+// remover, which go through no link inside the record; an engine from before
+// them keeps the plain write and removal until it is upgraded.
+async function writeDropFile(healthDir: string, fileName: string, data: string): Promise<void> {
+  const lib = await installedAidlcLib();
+  if (typeof lib?.writeHookStatusFile === "function") {
+    lib.writeHookStatusFile(healthDir, fileName, data);
+    return;
+  }
+  mkdirSync(healthDir, { recursive: true });
+  writeFileSync(join(healthDir, fileName), data, { flag: "w" });
+}
+
+async function removeDropFile(healthDir: string, fileName: string): Promise<void> {
+  const lib = await installedAidlcLib();
+  if (typeof lib?.removeHookStatusFile === "function") {
+    lib.removeHookStatusFile(healthDir, fileName);
+    return;
+  }
+  const dropFile = join(healthDir, fileName);
+  if (existsSync(dropFile)) rmSync(dropFile, { force: true });
+}
+
 async function flushDrops(): Promise<void> {
   try {
     const healthDir = await resolveHealthDir();
-    const dropFile = join(healthDir, `plugin-compose-${PLUGIN_KEY}.drops`);
+    const dropName = `plugin-compose-${PLUGIN_KEY}.drops`;
     if (_drops.length === 0) {
-      if (existsSync(dropFile)) rmSync(dropFile, { force: true });
+      await removeDropFile(healthDir, dropName);
     } else {
-      mkdirSync(healthDir, { recursive: true });
-      writeFileSync(dropFile, _drops.map((l) => l + "\n").join(""), { flag: "w" });
+      await writeDropFile(healthDir, dropName, _drops.map((l) => l + "\n").join(""));
     }
   } catch { /* truly non-fatal */ }
   _drops.length = 0;
@@ -240,19 +326,11 @@ async function flushInstalledToolPayloadDrops(): Promise<void> {
   if (!installedToolPayloadAuditRan) return;
   try {
     const healthDir = await resolveHealthDir();
-    const dropFile = join(
-      healthDir,
-      `plugin-compose-installed-tool-payloads-${HARNESS_KEY}.drops`,
-    );
+    const dropName = `plugin-compose-installed-tool-payloads-${HARNESS_KEY}.drops`;
     if (_installedToolPayloadDrops.length === 0) {
-      if (existsSync(dropFile)) rmSync(dropFile, { force: true });
+      await removeDropFile(healthDir, dropName);
     } else {
-      mkdirSync(healthDir, { recursive: true });
-      writeFileSync(
-        dropFile,
-        _installedToolPayloadDrops.map((line) => line + "\n").join(""),
-        { flag: "w" },
-      );
+      await writeDropFile(healthDir, dropName, _installedToolPayloadDrops.map((line) => line + "\n").join(""));
     }
   } catch { /* truly non-fatal */ }
   _installedToolPayloadDrops.length = 0;
@@ -294,7 +372,10 @@ function selectCommandForPlugin(): string {
   const selected = selectedPlugins();
   const names = new Set<string>(selected ?? ["aidlc"]);
   names.add(PLUGIN_NAME);
-  return `bun ${HARNESS_LEAF}/tools/aidlc-utility.ts select-plugins ${[...names].sort().join(",")}`;
+  const selection = [...names].sort().join(",");
+  return NATIVE_RUNTIME
+    ? `aidlc engine plugin select ${selection}`
+    : `bun ${HARNESS_LEAF}/tools/aidlc-utility.ts select-plugins ${selection}`;
 }
 
 function installedToolCommand(tool: "utility" | "graph" | "runner", args: string[]): string[] {
@@ -307,11 +388,12 @@ function installedToolCommand(tool: "utility" | "graph" | "runner", args: string
     };
     return [process.execPath, join(HARNESS_DIR, "tools", files[tool]), ...args];
   }
-  if (tool === "utility") return [executable, "gen", ...args];
-  if (tool === "graph") return [executable, "graph", ...args];
-  if (args[0] === "write") return [executable, "gen", "runners", ...args.slice(1)];
-  if (args[0] === "scopes") return [executable, "gen", "runner-scopes", ...args.slice(1)];
-  if (args[0] === "list") return [executable, "gen", "runner-list", ...args.slice(1)];
+  if (tool === "utility") return [executable, "engine", "gen", ...args];
+  if (tool === "graph") return [executable, "engine", "graph", ...args];
+  if (args[0] === "write") return [executable, "engine", "gen", "runners", ...args.slice(1)];
+  if (args[0] === "check") return [executable, "engine", "gen", "runners", "--check", ...args.slice(1)];
+  if (args[0] === "scopes") return [executable, "engine", "gen", "runner-scopes", ...args.slice(1)];
+  if (args[0] === "list") return [executable, "engine", "gen", "runner-list", ...args.slice(1)];
   throw new Error(`No compiled dispatcher route for aidlc-runner-gen ${args.join(" ")}`);
 }
 
@@ -341,7 +423,6 @@ function installedToolEnv(): NodeJS.ProcessEnv {
 
 function refreshSkillGeneratedRegion(
   verb: "scope-table" | "stage-table",
-  beginMarker: string,
   endMarker: string,
 ): void {
   const skillMd = installedOrchestratorSkillPath();
@@ -351,11 +432,15 @@ function refreshSkillGeneratedRegion(
   }
 
   const before = readFileSync(skillMd, "utf-8").replace(/\r\n/g, "\n");
-  if (!before.includes(beginMarker)) {
+  const kind = verb === "stage-table" ? "stage graph" : "scope grid";
+  const beginMatch = before.match(
+    new RegExp(`<!-- BEGIN: compiled ${kind}[^\\n]* -->`),
+  );
+  if (!beginMatch || beginMatch.index === undefined) {
     recordDrop(`${verb} refresh skipped: SKILL.md missing BEGIN marker`, "advisory");
     return;
   }
-  const beginIdx = before.indexOf(beginMarker);
+  const beginIdx = beginMatch.index;
   const endIdx = before.indexOf(endMarker, beginIdx);
   if (endIdx === -1) {
     recordDrop(`${verb} refresh failed: SKILL.md missing END marker after BEGIN marker`);
@@ -374,7 +459,10 @@ function refreshSkillGeneratedRegion(
   }
 
   const region = (r.stdout || "").replace(/\r\n/g, "\n").replace(/\n$/, "");
-  if (!region.includes(beginMarker) || !region.includes(endMarker)) {
+  if (
+    !new RegExp(`<!-- BEGIN: compiled ${kind}[^\\n]* -->`).test(region) ||
+    !region.includes(endMarker)
+  ) {
     recordDrop(`aidlc-utility ${verb} emitted an invalid generated region`);
     return;
   }
@@ -442,9 +530,9 @@ if (
   await flushDrops();
   return;
 }
-// A sibling compose can legitimately hold the lock for compile + runner
-// regeneration, so queue for ~60s rather than skipping after the default ~5s.
-if (!lockLib.acquireAuditLock(PROJECT_DIR, COMPOSE_LOCK_RETRIES)) {
+// A sibling compose can hold the lock across compilation and runner generation.
+// Use the installed compound-work backstop without changing owner/reaper rules.
+if (!lockLib.acquireAuditLock(PROJECT_DIR, await composeLockRetries())) {
   recordDrop("plugin compose skipped: could not acquire the shared workspace lock");
   await flushDrops();
   return;
@@ -1215,7 +1303,7 @@ async function kiroPluginAgentPrechecks(): Promise<KiroPluginAgentPrechecks | nu
   ) {
     return null;
   }
-  const isKiroIde = HARNESS_NAME === "kiro-ide";
+  const isKiroIde = KIRO_KAS_LAYOUT;
   const isKiroCli = HARNESS_LEAF === ".kiro" && !isKiroIde;
   const surfaceExt = isKiroIde
     ? ".md"
@@ -2403,8 +2491,8 @@ try {
       if (retryPending) {
         try { rmSync(retryMarker, { force: true }); } catch { /* best-effort */ }
       }
-      refreshSkillGeneratedRegion("stage-table", STAGE_TABLE_BEGIN, STAGE_TABLE_END);
-      refreshSkillGeneratedRegion("scope-table", SCOPE_TABLE_BEGIN, SCOPE_TABLE_END);
+      refreshSkillGeneratedRegion("stage-table", STAGE_TABLE_END);
+      refreshSkillGeneratedRegion("scope-table", SCOPE_TABLE_END);
     }
   }
 

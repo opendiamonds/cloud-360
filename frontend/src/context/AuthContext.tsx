@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiUrl } from '../config/api';
 import { AuthContext } from './auth-context';
 import type { StoryAction, User } from './auth-context';
@@ -45,6 +45,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 沒有 token 的情況第一次 render 就是 false，不必在 effect body 內同步 setState
   // （react-hooks/set-state-in-effect），也省掉登入頁的載入畫面閃爍。
   const [isLoading, setIsLoading] = useState(() => !!getStoredToken());
+  // U14：身分邊界的訂閱者（大腦對話紀錄）。ref 只在事件處理與訂閱函式內讀寫，render 期間不讀。
+  const authBoundaryListeners = useRef<Set<() => void>>(new Set());
+
+  const subscribeAuthBoundary = useCallback((listener: () => void) => {
+    const listeners = authBoundaryListeners.current;
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
+  /** 同步通知全部訂閱者：在 login()／logout() 的第一行呼叫，早於任何 setUser／setToken。 */
+  const notifyAuthBoundary = () => {
+    for (const listener of Array.from(authBoundaryListeners.current)) listener();
+  };
 
   const applyUser = (u: User, tokenVal: string) => {
     clearLegacyAuthStorage();
@@ -54,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = useCallback(() => {
+    notifyAuthBoundary();
     clearLegacyAuthStorage();
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     setToken(null);
@@ -80,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [logout]);
 
   const login = async (username: string, tokenVal: string, roleVal: string | null) => {
+    notifyAuthBoundary();
     clearLegacyAuthStorage();
     sessionStorage.setItem(TOKEN_STORAGE_KEY, tokenVal);
     setToken(tokenVal);
@@ -142,6 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         can,
         canArch,
         refreshMe,
+        subscribeAuthBoundary,
       }}
     >
       {children}

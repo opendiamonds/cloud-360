@@ -1,0 +1,295 @@
+{
+  "stage": "nfr-design",
+  "unit": "mcp-bridge",
+  "upstream_ids": [
+    "NFR21.1",
+    "NFR21.2",
+    "NFR21.3",
+    "NFR21.4",
+    "NFR21.5",
+    "NFR21.6",
+    "NFR21.7",
+    "NFR21.8",
+    "NFR21.9",
+    "NFR21.10",
+    "NFR21.11",
+    "NFR21.12",
+    "NFR21.13",
+    "NFR21.14",
+    "NFR21.15",
+    "NFR21.16",
+    "NFR21.17",
+    "NFR21.18",
+    "NFR21.19",
+    "NFR21.20",
+    "NFR21.21",
+    "NFR21.22",
+    "NFR21.23",
+    "NFR21.24",
+    "NFR21.25",
+    "NFR21.26",
+    "NFR21.27",
+    "NFR21.28",
+    "NFR21.29",
+    "NFR21.30",
+    "NFR21.31",
+    "NFR21.32",
+    "NFR21.33",
+    "NFR21.34",
+    "NFR21.35",
+    "NFR21.36",
+    "NFR21.37",
+    "NFR21.38",
+    "NFR21.39",
+    "NFR21.40",
+    "NFR21.41"
+  ],
+  "coverage": [
+    {
+      "id": "NFR21.1",
+      "status": "OK",
+      "target": "performance-design.md §一",
+      "note": "httpx 分項逾時 ＋ asyncio.timeout 整體上限"
+    },
+    {
+      "id": "NFR21.2",
+      "status": "OK",
+      "target": "performance-design.md §二",
+      "note": "讀檔只在 startup.load_and_validate；全非同步"
+    },
+    {
+      "id": "NFR21.3",
+      "status": "OK",
+      "target": "performance-design.md §三",
+      "note": "分段推導與量測輸出格式；本站無法判定是否達成，量測落 build-and-test（帶入項 R-07）"
+    },
+    {
+      "id": "NFR21.4",
+      "status": "OK",
+      "target": "security-design.md §五",
+      "note": "期望集合為測試字面值，與啟動參考集合刻意不同源"
+    },
+    {
+      "id": "NFR21.5",
+      "status": "OK",
+      "target": "security-design.md §五",
+      "note": "產生腳本讀取集合封閉，與啟動入口分離"
+    },
+    {
+      "id": "NFR21.6",
+      "status": "OK",
+      "target": "reliability-design.md §五",
+      "note": "具名入口 cli.main／startup.load_and_validate；R-12 擇 (a)、R-17 簽名統一"
+    },
+    {
+      "id": "NFR21.7",
+      "status": "OK",
+      "target": "security-design.md §一",
+      "note": "屏障在記錄包裝，兩路線皆與測試同一事件迴圈（帶入項 R-15）"
+    },
+    {
+      "id": "NFR21.8",
+      "status": "OK",
+      "target": "security-design.md §三",
+      "note": "validate_input=False、總攔截；依賴所釘 SDK 版本，code-generation 第一步確認"
+    },
+    {
+      "id": "NFR21.9",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "fullmatch，樣式與 KEY_PATTERN 逐字相同（帶入項 R-13）"
+    },
+    {
+      "id": "NFR21.10",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "SEGMENT_PATTERN.pattern 與 KEY_PATTERN.pattern 逐字相同"
+    },
+    {
+      "id": "NFR21.11",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "parse_credential 判定，前三步失敗不建 BackendCall"
+    },
+    {
+      "id": "NFR21.12",
+      "status": "OK",
+      "target": "security-design.md §六",
+      "note": "bridge 不做授權，grep 範圍為全部模組"
+    },
+    {
+      "id": "NFR21.13",
+      "status": "OK",
+      "target": "security-design.md §六",
+      "note": "follow_redirects=False；3xx 落入其他狀態碼"
+    },
+    {
+      "id": "NFR21.14",
+      "status": "OK",
+      "target": "security-design.md §一",
+      "note": "拒收一切 cookie 的 jar（擇 (b)）；httpx 行為未實測，以判準驗證"
+    },
+    {
+      "id": "NFR21.15",
+      "status": "OK",
+      "target": "security-design.md §四",
+      "note": "驗證順序固定"
+    },
+    {
+      "id": "NFR21.16",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "--host 預設 127.0.0.1；derive_allowed_hosts(port)（帶入項 R-04、R-18）"
+    },
+    {
+      "id": "NFR21.17",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "設定只經命令列參數與常數"
+    },
+    {
+      "id": "NFR21.18",
+      "status": "OK",
+      "target": "security-design.md §八",
+      "note": "不 import jwt／jose／base64"
+    },
+    {
+      "id": "NFR21.19",
+      "status": "OK",
+      "target": "security-design.md §二",
+      "note": "/healthz 在全部閘門之外；binding 不交給 SDK"
+    },
+    {
+      "id": "NFR21.20",
+      "status": "OK",
+      "target": "scalability-design.md §二",
+      "note": "BodyLimit 先緩衝後交付；算式更正（帶入項 R-05）"
+    },
+    {
+      "id": "NFR21.21",
+      "status": "OK",
+      "target": "scalability-design.md §一",
+      "note": "bridge 自己的 ConcurrencyGate，/healthz 豁免，不用 limit_concurrency（帶入項 R-01）"
+    },
+    {
+      "id": "NFR21.22",
+      "status": "OK",
+      "target": "scalability-design.md §三",
+      "note": "串流讀取超量即停；ResponseTooLarge 經 map_outcome（帶入項 R-08 第 3 點）"
+    },
+    {
+      "id": "NFR21.23",
+      "status": "OK",
+      "target": "scalability-design.md §四",
+      "note": "閘門計數為實例屬性；ContextVar 每請求重設"
+    },
+    {
+      "id": "NFR21.24",
+      "status": "OK",
+      "target": "scalability-design.md §五",
+      "note": "limits.py 五個具名常數與 BridgeLimits"
+    },
+    {
+      "id": "NFR21.25",
+      "status": "OK",
+      "target": "reliability-design.md §四",
+      "note": "惰性連線；失敗只影響該次"
+    },
+    {
+      "id": "NFR21.26",
+      "status": "OK",
+      "target": "reliability-design.md §一",
+      "note": "TransportFailure 恰四值；classify_transport_error 歸類表（帶入項 R-08、R-20）"
+    },
+    {
+      "id": "NFR21.27",
+      "status": "OK",
+      "target": "reliability-design.md §二",
+      "note": "run_tool_call 至多一次 exchange"
+    },
+    {
+      "id": "NFR21.28",
+      "status": "OK",
+      "target": "reliability-design.md §三",
+      "note": "CredentialContext 的 finally 重設；單元層兩路線皆可執行"
+    },
+    {
+      "id": "NFR21.29",
+      "status": "OK",
+      "target": "reliability-design.md §三",
+      "note": "dispatch 總攔截；注入替身於主直譯器驗證"
+    },
+    {
+      "id": "NFR21.30",
+      "status": "OK",
+      "target": "reliability-design.md §六",
+      "note": "模組分層、兩路線端到端拓樸、CI 步驟、skip 禁令擴及全部（帶入項 R-02、R-11）"
+    },
+    {
+      "id": "NFR21.31",
+      "status": "OK",
+      "target": "reliability-design.md §七",
+      "note": "--check 只 import generator；__init__.py 為空"
+    },
+    {
+      "id": "NFR21.32",
+      "status": "OK",
+      "target": "reliability-design.md §八",
+      "note": "stop_grace_period 15s 交接；記憶體上界見 scalability-design.md §六"
+    },
+    {
+      "id": "NFR21.33",
+      "status": "OK",
+      "target": "observability-design.md §一",
+      "note": "單一 logger；BridgeFormatter 單行；mcp.server.lowlevel.server 為 ERROR"
+    },
+    {
+      "id": "NFR21.34",
+      "status": "OK",
+      "target": "observability-design.md §二",
+      "note": "dispatch 的 finally 恰一行；tool 正規化（帶入項 R-06、R-19）"
+    },
+    {
+      "id": "NFR21.35",
+      "status": "OK",
+      "target": "observability-design.md §四",
+      "note": "啟動記實際埠；startup_failed 單行 subject"
+    },
+    {
+      "id": "NFR21.36",
+      "status": "OK",
+      "target": "observability-design.md §五",
+      "note": "access_log=False、log_config=None"
+    },
+    {
+      "id": "NFR21.37",
+      "status": "OK",
+      "target": "logical-components.md §四",
+      "note": "精確釘選與選路；SDK 範圍由 code-generation 第一步判定"
+    },
+    {
+      "id": "NFR21.38",
+      "status": "OK",
+      "target": "logical-components.md §四",
+      "note": "兩路線計數口徑見 reliability-design.md §6.3"
+    },
+    {
+      "id": "NFR21.39",
+      "status": "OK",
+      "target": "logical-components.md §四",
+      "note": "擇 (a)：每類別各自一個 @given（帶入項 R-14）"
+    },
+    {
+      "id": "NFR21.40",
+      "status": "OK",
+      "target": "logical-components.md §一",
+      "note": "只有 app.py、server.py import mcp；純函式禁令"
+    },
+    {
+      "id": "NFR21.41",
+      "status": "OK",
+      "target": "logical-components.md §四",
+      "note": "第一順位不改 Dockerfile；第二退路見 reliability-design.md §6.3"
+    }
+  ]
+}

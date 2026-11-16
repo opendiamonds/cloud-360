@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "hierarchy-service",
+  "version": 1,
+  "writes": [
+    { "path": "backend/models.py" },
+    { "path": "backend/services/hierarchy_facade.py" },
+    { "path": "backend/services/hierarchy_service.py" },
+    { "path": "backend/services/hierarchy_router.py" },
+    { "path": "backend/main.py" },
+    { "path": "backend/tests/test_hierarchy_service.py" },
+    { "path": "openapi.json" }
+  ]
+}

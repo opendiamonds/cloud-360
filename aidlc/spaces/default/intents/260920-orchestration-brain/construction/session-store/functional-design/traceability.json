@@ -1,0 +1,273 @@
+{
+  "stage": "functional-design",
+  "unit": "session-store",
+  "upstream_ids": [
+    "US2.1",
+    "AC2.1.1",
+    "AC2.1.2",
+    "AC2.1.3",
+    "AC2.1.4",
+    "US2.2",
+    "AC2.2.1",
+    "AC2.2.2",
+    "AC2.2.3",
+    "US3.1",
+    "AC3.1.1",
+    "AC3.1.2",
+    "AC3.1.3",
+    "AC3.1.4",
+    "US6.1",
+    "AC6.1.1",
+    "AC6.1.2",
+    "AC6.1.3",
+    "US9.1",
+    "AC9.1.1",
+    "AC9.1.2",
+    "AC9.1.3",
+    "AC9.1.4"
+  ],
+  "coverage": [
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "BR2.2, BR4.1, BR7.1, BR7.3",
+      "note": "跨頁延續同一作業對象。機制：三頁預設皆讀 shared 段（BR2.2 使入口頁恆讀它），狀態在單一 Redis key（BR7.1），連線建立時逐段推送（BR7.3）。"
+    },
+    {
+      "id": "AC2.1.1",
+      "status": "OK",
+      "target": "BR2.2, BR4.1, BR7.3",
+      "note": "Then「該頁的脈絡列顯示逐欄相同的三元組」。逐欄相同由「兩頁讀同一個 shared 段的同一組欄位」保證（BR4.1 把作業對象定在段層、BR2.2 使入口頁恆為 shared），不靠任何同步機制。"
+    },
+    {
+      "id": "AC2.1.2",
+      "status": "OK",
+      "target": "BR2.2, BR7.3",
+      "note": "Then「脈絡列仍顯示同一個三元組」。與 AC2.1.1 同機制；/assessment 的預設模式亦為 shared（entities.md 的 pageModes default）。"
+    },
+    {
+      "id": "AC2.1.3",
+      "status": "OK",
+      "target": "BR2.8",
+      "note": "Then「該頁不顯示共享脈絡列——這兩處不在共享範圍內」。**BR2.8 是寫本檔時補上的**：原本的 35 條規則沒有一條承接這一條 AC，EC2 只說了 pageModes 的鍵集合，沒說不在共享範圍的頁面不讀任何段。"
+    },
+    {
+      "id": "AC2.1.4",
+      "status": "OK",
+      "target": "BR1.2, BR7.1",
+      "note": "Then「我的對話脈絡與作業對象完整還原」。BR1.2 禁止行程記憶體、BR7.1 把「全部段／全部歷程／每段作業對象／每頁模式」逐項列為還原範圍。驗證方式為單元定義逐字的「重啟還原測試」。"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "BR2.2, BR4.1",
+      "note": "看完檢視結果帶著同一個系統回去改圖。兩頁都讀 shared 段。"
+    },
+    {
+      "id": "AC2.2.1",
+      "status": "OK",
+      "target": "BR2.2, BR4.1",
+      "note": "Then「脈絡列指向同一個系統」。同 AC2.1.1 的機制。"
+    },
+    {
+      "id": "AC2.2.2",
+      "status": "OK",
+      "target": "BR4.1, BR7.3",
+      "note": "Then「系統辨識的作業對象就是我剛才檢視的那個」。入口頁讀 shared 段（BR2.2 的直接後果），該段的作業對象即 /assessment 當時設定的值。"
+    },
+    {
+      "id": "AC2.2.3",
+      "status": "OK",
+      "target": "BR7.2, BR1.4",
+      "note": "Then「脈絡列顯示『尚未選定』而非空白或錯誤」。BR7.2 把該狀態寫成真可達而非只在首次使用可達一次；可達路徑見 functional-spec.md 的 W7。 **追溯 sensor 補正**：原本只掛 BR7.2，而 BR7.2 的可達性本身是 BR1.4（TTL 到期時三者一起消失）給的——少掛它，整個可達性論證就少了底下那一層。"
+    },
+    {
+      "id": "US3.1",
+      "status": "OK",
+      "target": "BR2.3, BR2.4, BR2.5, BR3.1, BR3.2",
+      "note": "在子頁面開一段不相干的新對話。本故事是本站三題定案的主要落點。"
+    },
+    {
+      "id": "AC3.1.1",
+      "status": "OK",
+      "target": "BR2.2, BR2.3, BR2.7",
+      "note": "Then 有兩個子句。「該頁進入一段新對話」由 BR2.4 建段；「入口頁的脈絡不受影響」由 BR2.3（只改該頁的模式）＋ BR2.2（入口頁恆為 shared）＋ BR2.7（扇出帶範圍識別，非該頁的客戶端忽略）三者合起來保證。**這是 [S1]=A 存在的唯一理由**——session 層的單一 sharingMode 之下這個子句不成立。"
+    },
+    {
+      "id": "AC3.1.2",
+      "status": "OK",
+      "target": "BR3.1, BR3.2",
+      "note": "Then「它不含共享對話的任何訊息」。BR3.1 強制追加時指明段（無段識別即拒絕，不預設共享段），BR3.2 使讀取視圖只含本段——由形狀保證而非執行期過濾。"
+    },
+    {
+      "id": "AC3.1.3",
+      "status": "OK",
+      "target": "BR4.2",
+      "note": "Then「系統正確指向切換前的那張架構圖——作業對象沿用」。BR4.2 在建段時逐欄複製共享段當下的三個值（含 null）。"
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "OK",
+      "target": "BR2.5, BR4.4",
+      "note": "Then「共享對話的訊息歷程與作業對象與我離開時相同」——**兩樣東西**。歷程那一半由 BR2.5（切回不刪段、也不動共享段）保證；作業對象那一半由 BR4.4 保證，而它需要 [S3]=A 的段層作業對象才成立。若作業對象仍是 session 層的單一組，這一句只有一半能滿足。"
+    },
+    {
+      "id": "US6.1",
+      "status": "Deferred",
+      "target": "OPEN-S10-1 → U12 work-orchestrator 的 functional-design（3.1，CONDITIONAL、per-unit；轉移目標為 U12 的 code-generation，3.5，ALWAYS）",
+      "note": "三條 AC 中 AC6.1.2 屬 U11、AC6.1.3 已由本單元滿足，**AC6.1.1 缺寫入端**。本單元提供機制（BR3.3 的穩定順序、BR4.3 的段層 set_work_target、BR6.2 的冪等）但不擁有寫入端，故整則故事記為 Deferred 而非 OK——寫 OK 會讓一個真實缺口在追溯表上看起來已覆蓋。"
+    },
+    {
+      "id": "AC6.1.1",
+      "status": "Deferred",
+      "target": "OPEN-S10-1 → U12 work-orchestrator（functional-design，轉移目標 code-generation，ALWAYS）",
+      "note": "Then「系統作用在該張圖上，不需我重新指定」。**目前不可滿足**：兩個可能落點（段的作業對象、段的歷程）都沒有寫入端——作業對象的唯一寫入端是使用者手動選取（contract-summary.md:307／:311），而第一輪是「產出」該圖、使用者不可能事先選它；SessionMessage 只有 role 與 text，無產出物參照欄位。具體修法與不需新增 DAG 邊的查證見 functional-spec.md §五。"
+    },
+    {
+      "id": "AC6.1.2",
+      "status": "N/A",
+      "target": "U11 intent-router（K-10 的 below_threshold／clarify 契約）",
+      "note": "Then「系統走 US1.2 的反問路徑，不擅自挑一個」。判定與反問屬 U11；本單元只提供它讀取的歷程與作業對象。"
+    },
+    {
+      "id": "AC6.1.3",
+      "status": "OK",
+      "target": "BR3.2, BR2.6",
+      "note": "Then「系統無法解析它——獨立對話不共享訊息歷程」。這是**負向**驗收，而本單元用兩條規則把它鎖成結構性質：BR3.2 的讀取視圖只含本段、BR2.6 禁止任何合併路徑。少了 BR2.6，未來某個「把獨立段併回共享」的便利功能會讓這條 AC 靜默失效。"
+    },
+    {
+      "id": "US9.1",
+      "status": "OK",
+      "target": "BR4.1, BR4.5, BR4.6",
+      "note": "指得出我在動哪一個系統。本單元承擔「持有並服務三層識別」那一半；遷移那一半屬 U4。"
+    },
+    {
+      "id": "AC9.1.1",
+      "status": "OK",
+      "target": "BR4.1, BR4.5, BR4.6",
+      "note": "Then「脈絡列顯示完整的三層路徑」。在本 AC 的 Given（專案底下有多個系統、使用者選定其中一個系統的架構圖）之下，K-07 的 resolve_work_target 會推導出完整三元組，本單元原樣儲存。**界線**：OPEN-H11 的圖（system_id 為空）落在本 AC 的 Given 之外，其部分三元組由 EC7／BR4.5 如實承載——本單元不偽造上層也不拒絕儲存。"
+    },
+    {
+      "id": "AC9.1.2",
+      "status": "N/A",
+      "target": "U4 hierarchy-data（既有架構圖的遷移）",
+      "note": "遷移行為不經本單元；本單元只讀 K-07 解析的結果。"
+    },
+    {
+      "id": "AC9.1.3",
+      "status": "N/A",
+      "target": "U4 hierarchy-data（遷移不改變既有頁面的使用方式）",
+      "note": "既有架構圖頁面不經本單元。"
+    },
+    {
+      "id": "AC9.1.4",
+      "status": "N/A",
+      "target": "U4 hierarchy-data（遷移後 system_id IS NULL 列數須為 0，且不得以警告帶過）",
+      "note": "資料庫層的遷移不變量，本單元無任何落點。**但它與本單元有一個被動關聯**：該不變量只保證遷移當下為 0，而 OPEN-H11（新建的圖從未被指派系統）會持續打破它——那正是 EC7 必須允許部分三元組的原因。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "N/A",
+      "target": "x-session-key-derivation 指派 U13 產生 session key",
+      "note": "本單元的邊界條件，不是任何 AC 的行為。"
+    },
+    {
+      "id": "BR1.3",
+      "status": "N/A",
+      "target": "ADR-005 的 TTL 續期",
+      "note": "上游既定的存活期政策；沒有 AC 斷言「續期發生了」，它由 AC2.1.4 的還原間接受益。"
+    },
+    {
+      "id": "BR1.5",
+      "status": "N/A",
+      "target": "ADR-005 的 Alternatives Rejected",
+      "note": "禁令型規則：不提供顯式清除。禁令沒有對應的正向 AC。"
+    },
+    {
+      "id": "BR1.6",
+      "status": "N/A",
+      "target": "K-09.public_interface 的 returns: BrainSession | None",
+      "note": "首次使用的合法起點；由 AC2.2.3 的「尚未選定」間接涵蓋，但本身是介面契約而非驗收行為。"
+    },
+    {
+      "id": "BR2.1",
+      "status": "N/A",
+      "target": "entities.md EC4 的封閉集合",
+      "note": "形狀驗證規則，無獨立 AC。"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "DG-5（數值由 nfr-requirements 決定）",
+      "note": "上限修剪的行為；**數值未定故目前無法寫出可判定的 AC**，這是刻意的未決而非遺漏。"
+    },
+    {
+      "id": "BR3.5",
+      "status": "N/A",
+      "target": "既有前例 ADR-008／K-01 的 EMBEDDING_PROVIDER 大聲失敗",
+      "note": "啟動設定的缺值行為；屬部署面，上游無 AC。"
+    },
+    {
+      "id": "BR3.6",
+      "status": "N/A",
+      "target": "project.md 的公開 repo 輸出禁令",
+      "note": "禁令型規則。對話內容不得入 log 沒有正向 AC，但它是本單元最容易犯且後果不可逆的一條。"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "[S3]=A 的介面後果",
+      "note": "set_work_target 必須帶段識別，是 BR4.1 的介面面；AC3.1.4 透過 BR4.4 間接依賴它。"
+    },
+    {
+      "id": "BR4.7",
+      "status": "N/A",
+      "target": "ADR-0006 的 IAM 面在本單元的新落點",
+      "note": "**[S3]=A 自己製造出來的授權面**：作業對象由一組變成每段一組後，若驗證仍只跑一次就會有 N−1 組未驗的值。上游沒有 AC，因為上游不知道會有多段。"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "K-09.behaviour_semantics.authorization_responsibility",
+      "note": "委派宣告，非行為。"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "K-07 的 identity_passing 形狀",
+      "note": "禁令型規則：不自行取身分。"
+    },
+    {
+      "id": "BR5.3",
+      "status": "N/A",
+      "target": "K-09 的 in-process 宣告",
+      "note": "禁令型規則：不暴露對外端點。"
+    },
+    {
+      "id": "BR6.1",
+      "status": "N/A",
+      "target": "K-09 每個方法的 raises: [SessionBackendUnavailable]",
+      "note": "失效行為。**上游無 AC，而它要防的是本單元最危險的無聲失敗**（回空 session 與 TTL 到期在使用者眼中不可區分），故逐字寫成規則而非留給實作。"
+    },
+    {
+      "id": "BR6.2",
+      "status": "N/A",
+      "target": "K-09.behaviour_semantics.retry_and_idempotency",
+      "note": "冪等宣告，非行為。"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "x-retry-and-idempotency.server_side 與 x-concurrent-connections.fanout_vs_no_replay",
+      "note": "邊界澄清：狀態扇出不是歷史重播。它防的是把兩者混為一談。"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "FR6.1 的順序前提；其唯一消費端 AC6.1.1 目前為 Deferred（OPEN-S10-1）",
+      "note": "訊息順序穩定是 U11 解析「第 N−1 輪產出」的前提。**本輪沒有任何 OK 覆蓋指向它，是因為需要它的那條 AC 自己是 Deferred**——寫成 OK 會讓 AC6.1.1 的缺口在追溯表上消失。OPEN-S10-1 關閉後，本條應改掛到 AC6.1.1 的 target 上。"
+    }
+  ]
+}

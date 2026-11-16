@@ -5,7 +5,7 @@
 |---|---|
 | IAM | 經 CapabilityRoute C1.view／edit 閘 |
 | Encryption | HTTPS 既有 |
-| Network | 僅呼叫 `/api/cost/v1` |
+| Network | 僅呼叫 `/api/cost/v1`；教學彈窗另開官方計算機為使用者手勢外連（FR12），前端不抓官網 |
 | Audit | 不在前端寫稽核 |
 
 ## NFR-S.1 錯誤面（Q2=A）
