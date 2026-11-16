@@ -1412,7 +1412,7 @@ test.describe('Workspace save attaches to work target', () => {
    * @note 走「儲存並評核」而不是「儲存架構圖」：後者取 draw.io 內嵌畫布回傳的 XML，而本檔把
    *       embed.diagrams.net 樁成空白頁、畫布永遠不會 init；前者取頁面自己的 XML，與存檔路徑同一支
    *       `saveDiagram`。成功提示「已掛到系統「…」」因隨即換頁而不斷言，由 `saveDiagram` 的同一分支承擔。
-   * @story US9.1
+   * @story US14.1
    */
   test('saves a new diagram into the selected system and says so', async ({ page }) => {
     const h = await setup(page, {

@@ -89,3 +89,12 @@ python3 -B scripts/tcms_sync.py --file aidlc/spaces/default/intents/260920-orche
 | `260802-last-login-column` 兩個 cli 案例 | 在該 intent 的 `manual-test-cases.md` 兩案的「目的」節加上退役註記，失效的追溯改為「已移除」說明。全 repo `tcms_validate.py --all` 結果為 `通過 27/27　ERROR 0　WARN 0`。以 `--file` 同步該檔：`完成：新增 0 筆，更新 13 筆`，兩案為 TCMS id 27、28。工具會整檔重送，所以另外 11 筆也被重送 |
 | 兩案的 TCMS 狀態改為停用 | **未做**：`tcms_sync.py` 沒有改狀態的功能，需由使用者在 TCMS 介面把 id 27、28 設為停用 |
 
+
+## 部署後追加範圍的同步與狀態調整（2026-11-16T15:19:37Z）
+
+| 項目 | 結果 |
+|---|---|
+| 全站小助手 6 案（TC-265～270） | 先跑 `tcms_validate.py --all`：`通過 27/27　ERROR 0　WARN 0`；第二層語意審查逐案七點通過（`@story` 當時暫掛既有故事，見下一列）。`tcms_sync.py --spec frontend/tests/e2e/brain-assistant.spec.ts`：`完成：更新 6 筆` |
+| TC-27、TC-28（兩個退役的 cli 案例） | 以 `tcms_sync.connect()` 取得的連線呼叫 `TestCase.update` 把 `case_status` 改為 `DISABLED`（id 3），回讀確認皆為 `DISABLED`。上一列的「未做」就此結案 |
+| TC-83（改名前的舊案「三頁各自一條連線且前一頁的已關閉」） | 同上改為 `DISABLED`；改名後的新案為 TC-271「三頁切換全程只有一條大腦連線」 |
+| `@story` 改指 US14 | 需求回補（`FR14`／`US14`）後，部署後追加的測試規格註解由暫掛的既有故事改指 `US14.1`／`US14.2`／`US14.4`／`US14.5`。合併進 `ut` 後以 `--spec` 重新同步 `brain-assistant`、`project-pages`、`object-picker` 三支；結果補記於此 |
