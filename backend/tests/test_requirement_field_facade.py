@@ -67,10 +67,8 @@ class RequirementFieldFixture:
     有 view＋edit；`Developer` 只有 view；`SRE` 皆無。
     """
 
-    def build_fixture(self, *, threaded: bool = False) -> None:
-        # threaded：多執行緒同時存取（例如 mcp-bridge e2e 的並發請求）時改用暫存檔資料庫，
-        # 讓每個請求各自開 session；見 helpers.make_session。
-        self.db = make_session(threaded=threaded)
+    def build_fixture(self) -> None:
+        self.db = make_session()
         self.clock = FixedClock(T1)
         # owner：建立專案者，per-project 角色為 project_admin，全域有 K4.edit。
         self.owner = make_user(self.db, username="owner", role="Project_Architect")
