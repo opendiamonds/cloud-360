@@ -160,7 +160,14 @@ def parse_diagram_summary(xml: str) -> dict[str, Any]:
             continue
         if not value and "swimlane" not in style and "shape=" not in style:
             continue
-        nodes.append({"id": cid, "label": value, "style": style[:200]})
+        nodes.append(
+            {
+                "id": cid,
+                "label": value,
+                "style": style[:200],
+                "parent": cell.attrib.get("parent") or "",
+            }
+        )
     return {"nodes": nodes, "edges": edges, "node_count": len(nodes), "edge_count": len(edges)}
 
 

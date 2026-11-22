@@ -1,0 +1,23 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u2-iac-ui",
+  "note": "ui NFR：長等待 UI、客戶端保密、a11y、既有 React stack；服務端 PBT／Checkov／in-memory 歸 U1。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7"
+  ],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "security-requirements.md ADR-0006 UI 表" },
+    { "id": "NFR2", "status": "N/A", "target": "PBT 屬 u1-iac-api 三核心" },
+    { "id": "NFR3", "status": "OK", "target": "security-requirements.md NFR3.UI.1–3" },
+    { "id": "NFR4", "status": "N/A", "target": "第一個 D HTTP 403 TestClient 屬 U1；UI 僅消費 403" },
+    { "id": "NFR5", "status": "OK", "target": "security-requirements.md NFR5.1–5.4" },
+    { "id": "NFR6", "status": "OK", "target": "tech-stack-decisions.md 既有 frontend 語彙" },
+    { "id": "NFR7", "status": "OK", "target": "performance／security：error.code＋busy；無強制 RUM（Q5=A）" }
+  ]
+}

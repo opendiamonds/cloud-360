@@ -118,6 +118,56 @@
         "title": "ChatRequest",
         "type": "object"
       },
+      "CheckItemModel": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "CheckItemModel",
+        "type": "object"
+      },
       "CloudEstimateView": {
         "properties": {
           "checks": {
@@ -474,6 +524,39 @@
         "title": "DiagramChangeOut",
         "type": "object"
       },
+      "DiagramReadinessModel": {
+        "properties": {
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "node_count": {
+            "title": "Node Count",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "empty",
+              "unreadable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "diagram_id",
+          "title",
+          "status",
+          "node_count"
+        ],
+        "title": "DiagramReadinessModel",
+        "type": "object"
+      },
       "DiagramSystemIn": {
         "description": "`system_id` 為 null 表示取消掛載。欄位必填（可為 null），不給預設值：\n漏傳欄位應是 422，而不是被讀成「取消掛載」。",
         "properties": {
@@ -517,6 +600,42 @@
           "diagram_id"
         ],
         "title": "DiagramSystemOut",
+        "type": "object"
+      },
+      "DraftSummaryModel": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "module_tree": {
+            "$ref": "#/components/schemas/ModuleTreeModel"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id",
+          "diagram_id",
+          "status",
+          "module_tree",
+          "created_at"
+        ],
+        "title": "DraftSummaryModel",
         "type": "object"
       },
       "EstimateSetDetailView": {
@@ -773,6 +892,24 @@
         "title": "FieldView",
         "type": "object"
       },
+      "FileEntryModel": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "FileEntryModel",
+        "type": "object"
+      },
       "FilledState": {
         "description": "三態（`ADR-015`；推導規則見 `BR44.1`）。",
         "enum": [
@@ -782,6 +919,70 @@
         ],
         "title": "FilledState",
         "type": "string"
+      },
+      "FindingModel": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "title"
+        ],
+        "title": "FindingModel",
+        "type": "object"
+      },
+      "GenerateResponseModel": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/DraftSummaryModel"
+          }
+        },
+        "required": [
+          "draft"
+        ],
+        "title": "GenerateResponseModel",
+        "type": "object"
       },
       "GuardedProjectRef": {
         "description": "`LastAdminGuardReport` 的一項。\n\n**必須同時含 id 與名稱**：`entities.md` 逐字「只給 id 的話畫面無法告知\n使用者是哪個專案」。",
@@ -1321,6 +1522,22 @@
         "title": "Message",
         "type": "object"
       },
+      "ModuleTreeModel": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntryModel"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "ModuleTreeModel",
+        "type": "object"
+      },
       "OffendersView": {
         "properties": {
           "currency_ordinals": {
@@ -1452,6 +1669,22 @@
           "lens"
         ],
         "title": "PutLensBody",
+        "type": "object"
+      },
+      "ReadinessResponseModel": {
+        "properties": {
+          "diagrams": {
+            "items": {
+              "$ref": "#/components/schemas/DiagramReadinessModel"
+            },
+            "title": "Diagrams",
+            "type": "array"
+          }
+        },
+        "required": [
+          "diagrams"
+        ],
+        "title": "ReadinessResponseModel",
         "type": "object"
       },
       "RegisterRequest": {
@@ -1644,6 +1877,67 @@
         "title": "ResetDefaultsResponse",
         "type": "object"
       },
+      "RewriteResponseModel": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/DraftSummaryModel"
+          },
+          "rewrite": {
+            "$ref": "#/components/schemas/RewriteResultModel"
+          }
+        },
+        "required": [
+          "rewrite",
+          "draft"
+        ],
+        "title": "RewriteResponseModel",
+        "type": "object"
+      },
+      "RewriteResultModel": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "rewrite_id": {
+            "title": "Rewrite Id",
+            "type": "string"
+          },
+          "rewritten_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rewritten Paths",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rewrite_id",
+          "draft_id",
+          "report_id",
+          "status",
+          "rewritten_paths",
+          "created_at"
+        ],
+        "title": "RewriteResultModel",
+        "type": "object"
+      },
       "RolePermissionRow": {
         "properties": {
           "can_edit": {
@@ -1760,6 +2054,29 @@
         "title": "SaveDiagramRequest",
         "type": "object"
       },
+      "SaveDraftResponseModel": {
+        "properties": {
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "saved_at": {
+            "title": "Saved At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "diagram_id",
+          "draft_id",
+          "saved_at"
+        ],
+        "title": "SaveDraftResponseModel",
+        "type": "object"
+      },
       "SaveEstimateBody": {
         "properties": {
           "name": {
@@ -1773,6 +2090,148 @@
           "name"
         ],
         "title": "SaveEstimateBody",
+        "type": "object"
+      },
+      "ScanReportModel": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckItemModel"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingModel"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "max_severity": {
+            "enum": [
+              "NONE",
+              "INFO",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "title": "Max Severity",
+            "type": "string"
+          },
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id",
+          "draft_id",
+          "diagram_id",
+          "status",
+          "findings",
+          "max_severity",
+          "created_at"
+        ],
+        "title": "ScanReportModel",
+        "type": "object"
+      },
+      "ScanResponseModel": {
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/ScanReportModel"
+          }
+        },
+        "required": [
+          "report"
+        ],
+        "title": "ScanResponseModel",
+        "type": "object"
+      },
+      "SessionSnapshotModel": {
+        "properties": {
+          "advice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advice"
+          },
+          "diagram_id": {
+            "title": "Diagram Id",
+            "type": "integer"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftSummaryModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_rewrite": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RewriteResultModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_scan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScanReportModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scan_advice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Advice"
+          }
+        },
+        "required": [
+          "diagram_id"
+        ],
+        "title": "SessionSnapshotModel",
         "type": "object"
       },
       "ShareDiagramRequest": {
@@ -4956,6 +5415,522 @@
           }
         ],
         "summary": "Delete System"
+      }
+    },
+    "/api/iac/advice": {
+      "post": {
+        "description": "D1 edit. Streams an explanation of the draft already produced for this diagram.",
+        "operationId": "iacAdvice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Advice",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/download": {
+      "get": {
+        "description": "D1 edit. Severity does not block the zip.",
+        "operationId": "iacDownloadZip",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "diagram_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Diagram Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Download",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/files": {
+      "post": {
+        "description": "D1 edit. Replaces the current draft's .tf text. Does not call a model.",
+        "operationId": "iacReplaceDraftFiles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Replace Draft Files",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/generate": {
+      "post": {
+        "description": "D1 edit. JSON by default. Accept: text/event-stream yields progress, note tokens, then the draft.",
+        "operationId": "iacGenerate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Generate",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/readiness": {
+      "get": {
+        "description": "D1 view. Classifies visible diagrams before generate. Does not call a model.",
+        "operationId": "iacGetReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Get Readiness",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/save": {
+      "post": {
+        "description": "D1 edit. Writes the current draft, both notes, and the scan for that draft. Does not call a model.",
+        "operationId": "iacSaveDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveDraftResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Save Draft",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/scan": {
+      "post": {
+        "description": "D2 edit. diagram_id scans the saved draft. files scans uploaded .tf text and leaves the draft in place.",
+        "operationId": "iacScan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Scan",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/scan-advice": {
+      "post": {
+        "description": "D2 edit. Streams a note about the latest scan. Does not rescan.",
+        "operationId": "iacScanAdvice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Scan Advice",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/secrets/rewrite": {
+      "post": {
+        "description": "D3 edit. Omitted report_id uses the latest succeeded report.",
+        "operationId": "iacSecretsRewrite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewriteResponseModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Secrets Rewrite",
+        "tags": [
+          "iac"
+        ]
+      }
+    },
+    "/api/iac/session": {
+      "get": {
+        "description": "D1 view. An empty slot is 200 with null artifact fields. A saved draft is loaded when memory is empty.",
+        "operationId": "iacGetSession",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "diagram_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Diagram Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshotModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Iac Get Session",
+        "tags": [
+          "iac"
+        ]
       }
     },
     "/api/membership/projects/{project_id}/members": {

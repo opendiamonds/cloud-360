@@ -1,0 +1,23 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u1-iac-api",
+  "note": "service NFR：延遲分 LLM／非 LLM、Checkov、in-memory 容量、best-effort 可靠、結構化 log；NFR5 歸 U2。",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7"
+  ],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "security-requirements.md ADR-0006 表；NFR1.x" },
+    { "id": "NFR2", "status": "OK", "target": "tech-stack-decisions.md NFR2 測試邊界" },
+    { "id": "NFR3", "status": "OK", "target": "security-requirements.md NFR3.1–NFR3.3" },
+    { "id": "NFR4", "status": "OK", "target": "security-requirements.md NFR4.1–NFR4.2" },
+    { "id": "NFR5", "status": "N/A", "target": "無障礙屬 UI；見 u2-iac-ui" },
+    { "id": "NFR6", "status": "OK", "target": "tech-stack-decisions.md backend/iac／logger" },
+    { "id": "NFR7", "status": "OK", "target": "observability-requirements.md NFR7.1–NFR7.6" }
+  ]
+}
