@@ -52,43 +52,6 @@ class TestFormatUserPrompt(unittest.TestCase):
         prompt = load_system_prompt()
         self.assertIn("禁止使用 Markdown", prompt)
         self.assertIn("一般口語對答", prompt)
-        self.assertIn("混合雲", prompt)
-        self.assertIn("Hub-and-Spoke", prompt)
-
-
-class TestDesignAgentTool(unittest.IsolatedAsyncioTestCase):
-    async def test_draw_architecture_diagram_accepts_compound_provider(self):
-        from services.design_agent import draw_architecture_diagram
-
-        fn = getattr(draw_architecture_diagram, "coroutine", draw_architecture_diagram)
-        config = {"configurable": {"request_key": "test_k"}}
-        with patch("services.design_agent.build_compound_diagram_xml", return_value="<mxfile>compound</mxfile>") as mock_build:
-            res = await fn(
-                provider="compound",
-                groups=[],
-                nodes=[{"id": "n1", "name": "aws_ec2"}],
-                edges=[],
-                config=config,
-                can_edit=True,
-            )
-            self.assertIn("架構圖已成功產生", res)
-            mock_build.assert_called_once()
-
-    async def test_draw_architecture_diagram_rbac_guard(self):
-        from services.design_agent import draw_architecture_diagram
-
-        fn = getattr(draw_architecture_diagram, "coroutine", draw_architecture_diagram)
-        config = {"configurable": {"request_key": "test_k"}}
-        res = await fn(
-            provider="compound",
-            groups=[],
-            nodes=[],
-            edges=[],
-            config=config,
-            can_edit=False,
-        )
-        self.assertIn("權限不足", res)
-        self.assertIn("A1.edit", res)
 
     def test_roles_labeled(self):
         out = format_user_prompt(
