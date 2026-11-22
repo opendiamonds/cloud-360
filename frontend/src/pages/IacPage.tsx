@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { hasPendingGenerate, IacWorkspace } from '../components/iac/IacWorkspace';
+import { IacWorkspace } from '../components/iac/IacWorkspace';
+import { hasPendingGenerate } from '../iac/pendingGenerate';
 import { useAuth } from '../context/auth-context';
 import { apiUrl } from '../config/api';
 import type { DiagramOption, IacStep } from '../iac/iacTypes';

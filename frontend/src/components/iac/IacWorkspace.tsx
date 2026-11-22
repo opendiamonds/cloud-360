@@ -32,18 +32,10 @@ import type {
   ScanReport,
 } from '../../iac/iacTypes';
 import { iacNavItem } from '../../iac/iacNav';
+import { clearPendingGenerate, hasPendingGenerate } from '../../iac/pendingGenerate';
 import { IacDownloadConfirm } from './IacDownloadConfirm';
 
 const DIAGRAM_STORAGE_KEY = 'iac-diagram-id';
-const PENDING_GENERATE_KEY = 'iac-generate-now';
-
-export function rememberPendingGenerate(diagramId: number) {
-  sessionStorage.setItem(PENDING_GENERATE_KEY, String(diagramId));
-}
-
-export function hasPendingGenerate(diagramId: number): boolean {
-  return sessionStorage.getItem(PENDING_GENERATE_KEY) === String(diagramId);
-}
 
 const BUSY_TEXT: Record<Exclude<IacAction, 'session'>, string> = {
   generate: '正在產生 IaC 草稿',
@@ -438,8 +430,23 @@ function IacWorkspaceBody({
   const [advising, setAdvising] = useState(false);
   const [scanAdvice, setScanAdvice] = useState('');
   const [scanAdvising, setScanAdvising] = useState(false);
-  const [diagramXml, setDiagramXml] = useState<string | null>(null);
-  const [diagramPreview, setDiagramPreview] = useState<'idle' | 'loading' | 'ready' | 'empty'>('idle');
+  // 預覽狀態由「目前請求鍵是否已有快照」導出。effect 只在 fetch callback 寫入快照，
+  // 不在 effect body 同步 setState（react-hooks/set-state-in-effect）。
+  const diagramRequestKey =
+    step === 'generate' && diagramId != null && token ? `${diagramId}:${token}` : null;
+  const [diagramSnapshot, setDiagramSnapshot] = useState<{
+    key: string;
+    xml: string | null;
+    status: 'ready' | 'empty';
+  } | null>(null);
+  const diagramPreview =
+    diagramRequestKey == null
+      ? 'idle'
+      : diagramSnapshot?.key === diagramRequestKey
+        ? diagramSnapshot.status
+        : 'loading';
+  const diagramXml =
+    diagramRequestKey != null && diagramSnapshot?.key === diagramRequestKey ? diagramSnapshot.xml : null;
   const [readiness, setReadiness] = useState<DiagramReadiness[] | null>(null);
   const [loadedReadinessKey, setLoadedReadinessKey] = useState<string | null>(null);
   const diagramKey = diagrams.map((item) => item.id).join(',');
@@ -524,14 +531,10 @@ function IacWorkspaceBody({
   }, [diagramId]);
 
   useEffect(() => {
-    if (step !== 'generate' || diagramId == null || !token) {
-      setDiagramXml(null);
-      setDiagramPreview('idle');
-      return;
-    }
+    if (diagramRequestKey == null || diagramId == null || !token) return;
     const controller = new AbortController();
     let cancelled = false;
-    setDiagramPreview('loading');
+    const key = diagramRequestKey;
     fetch(apiUrl(`/api/collab/diagrams/${diagramId}`), {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
@@ -544,19 +547,17 @@ function IacWorkspaceBody({
             ? (data as { xml_data: string }).xml_data.trim()
             : '';
         if (cancelled) return;
-        setDiagramXml(xml || null);
-        setDiagramPreview(xml ? 'ready' : 'empty');
+        setDiagramSnapshot({ key, xml: xml || null, status: xml ? 'ready' : 'empty' });
       })
       .catch((err: unknown) => {
         if (cancelled || isAbortError(err)) return;
-        setDiagramXml(null);
-        setDiagramPreview('empty');
+        setDiagramSnapshot({ key, xml: null, status: 'empty' });
       });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [step, diagramId, token]);
+  }, [diagramRequestKey, diagramId, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -677,7 +678,7 @@ function IacWorkspaceBody({
         fail('generate', epoch, err);
       })
       .finally(() => {
-        if (pending && !signal.aborted) sessionStorage.removeItem(PENDING_GENERATE_KEY);
+        if (pending && !signal.aborted) clearPendingGenerate();
         if (!disposedRef.current) setAdvising(false);
         finish('generate', epoch);
       });
@@ -685,9 +686,9 @@ function IacWorkspaceBody({
 
   useEffect(() => {
     if (!autoGenerate || step !== 'generate' || diagramId == null || !token || isLoading) return;
-    if (sessionStorage.getItem(PENDING_GENERATE_KEY) !== String(diagramId)) return;
+    if (!hasPendingGenerate(diagramId)) return;
     if (!canEditD1 || readinessReason) {
-      sessionStorage.removeItem(PENDING_GENERATE_KEY);
+      clearPendingGenerate();
       return;
     }
     if (busy || autoTried.current === diagramId) return;

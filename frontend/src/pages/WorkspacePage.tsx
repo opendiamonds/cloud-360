@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { IacEntryControl } from '../components/iac/IacEntryControl';
-import { rememberPendingGenerate } from '../components/iac/IacWorkspace';
+import { rememberPendingGenerate } from '../iac/pendingGenerate';
 import { ChatBox } from '../components/ChatBox';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
