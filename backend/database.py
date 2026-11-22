@@ -157,7 +157,7 @@ def init_db():
             "記憶專用資料庫連線未設定（MEMORY_DB_PASSWORD 為空或非 PostgreSQL）——"
             "以 cloud360_memory 角色連線的程式路徑不可用"
         )
-    # U1：**必須早於 create_all**，方向與下面六支 _ensure_* 相反。理由見該函式的
+    # U1：**必須早於 create_all**，方向與下面七支 _ensure_* 相反。理由見該函式的
     # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
     _ensure_vector_extension()
     Base.metadata.create_all(bind=engine)
