@@ -694,6 +694,10 @@ function IacWorkspaceBody({
     if (busy || autoTried.current === diagramId) return;
     autoTried.current = diagramId;
     runGenerate(true);
+    return () => {
+      // 開發模式會先啟動再中止這次請求。清掉記帳，重跑的 effect 才會再產生。
+      autoTried.current = null;
+    };
   }, [autoGenerate, step, diagramId, token, isLoading, canEditD1, readinessReason, busy]);
 
   const runApplyEdit = () => {

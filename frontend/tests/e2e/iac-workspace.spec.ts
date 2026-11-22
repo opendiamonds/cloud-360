@@ -43,7 +43,12 @@ async function login(page: Page, username: string, password: string) {
   await page.getByPlaceholder('請輸入您的帳號').fill(username);
   await page.getByPlaceholder('請輸入密碼').fill(password);
   await page.getByRole('button', { name: '登入系統' }).click();
-  await expect(page).toHaveURL(/\/(workspace|cost)/);
+  // 具 K1 的帳號登入後落在入口頁 /。IaC 入口按鈕在架構圖工作區，側邊選單兩邊都有。
+  await expect(page).not.toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('brain-entry-page')).toBeVisible();
+  await page.goto('/workspace');
+  await expect(page).toHaveURL(/\/workspace$/);
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
@@ -138,6 +143,21 @@ function scanReport(severity: 'HIGH' | 'LOW') {
   };
 }
 
+async function stubReady(page: Page, diagramId = 42) {
+  await page.route('**/api/iac/readiness', async (route) => {
+    await fulfillJson(route, {
+      diagrams: [
+        {
+          diagram_id: diagramId,
+          title: 'Fixture diagram',
+          status: 'ready',
+          node_count: 1,
+        },
+      ],
+    });
+  });
+}
+
 async function stubEmptySession(page: Page) {
   await page.route('**/api/iac/session*', async (route) => {
     const id = Number(new URL(route.request().url()).searchParams.get('diagram_id') || 0);
@@ -223,6 +243,7 @@ test.describe('IaC 工作區', () => {
    * @given 架構圖 id 為 42；/api/iac/generate 由 route stub 回傳 main.tf
    * @api POST /api/iac/generate -> 200 | 回傳草稿檔案樹
    * @api GET /api/iac/session -> 200 | 空的工作階段
+   * @api GET /api/iac/readiness -> 200 | 圖 42 的 status 為 ready，產生不會被擋下
    * @ui /iac/generate | iac-file-tree 與 iac-hcl-preview
    * @step 在架構圖頁點 `iac-entry` | 進入 `/iac/generate`，POST /api/iac/generate 的 diagram_id 為 42
    * @step 檢視檔案樹與預覽 | 出現 `main.tf` 與 stub 的 HCL 片段
@@ -238,6 +259,7 @@ test.describe('IaC 工作區', () => {
     });
     await stubCollab(page, { id: 42, title: 'Fixture diagram' });
     await stubEmptySession(page);
+    await stubReady(page);
     await page.route('**/api/iac/generate', async (route) => {
       const body = route.request().postDataJSON() as { diagram_id?: number };
       diagramId = body.diagram_id ?? null;
@@ -256,6 +278,7 @@ test.describe('IaC 工作區', () => {
    * @given 第一次 generate 回傳含 preview-keep-marker 的草稿；第二次回 422 generate_failed
    * @api POST /api/iac/generate -> 200 | 第一次回傳可預覽草稿
    * @api POST /api/iac/generate -> 422 | 第二次 error.code 為 generate_failed
+   * @api GET /api/iac/readiness -> 200 | 圖 42 的 status 為 ready，第一次產生不會被擋下
    * @ui /iac/generate | 預覽區與產生失敗文案
    * @step 從架構圖頁進入 Terraform 產出 | 預覽出現 `preview-keep-marker`
    * @step 再按產生 | 出現「產生失敗，請重試」，且 `preview-keep-marker` 仍在
@@ -263,13 +286,13 @@ test.describe('IaC 工作區', () => {
    * @story US2.3
    */
   test('產生失敗時保留先前預覽並顯示錯誤文案', async ({ page }) => {
-    let calls = 0;
+    let failNext = false;
     await stubMe(page, { D1: storyPermission(true, true) });
     await stubCollab(page, { id: 42, title: 'Fixture diagram' });
     await stubEmptySession(page);
+    await stubReady(page);
     await page.route('**/api/iac/generate', async (route) => {
-      calls += 1;
-      if (calls === 1) {
+      if (!failNext) {
         await fulfillJson(route, { draft: draft(KEEP) });
         return;
       }
@@ -279,6 +302,7 @@ test.describe('IaC 工作區', () => {
     await openWorkspace(page);
     await expect(page.getByTestId('iac-diagram-select')).toHaveValue('42');
     await expect(page.getByTestId('iac-hcl-preview')).toContainText(KEEP);
+    failNext = true;
     await page.getByTestId('iac-run-d1').click();
     await expect(page.getByText('產生失敗，請重試')).toBeVisible();
     await expect(page.getByTestId('iac-hcl-preview')).toContainText(KEEP);
