@@ -1192,7 +1192,7 @@ export const WorkspacePage = () => {
               <select
                 className="bg-transparent border-none text-xs font-bold text-indigo-700 outline-none cursor-pointer focus:ring-0"
                 value={selectedProvider}
-                onChange={(e) => setSelectedProvider(e.target.value as any)}
+                onChange={(e) => setSelectedProvider(e.target.value as 'aws' | 'azure' | 'gcp' | 'compound')}
                 title="切換架構圖雲端平台模式"
               >
                 <option value="compound">✨ 混合雲 (Compound)</option>
