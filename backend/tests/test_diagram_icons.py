@@ -149,7 +149,7 @@ class FetchFallsBackLoudly(unittest.IsolatedAsyncioTestCase):
     """Every degraded path must say so; a grey icon must never be silent."""
 
     async def _fetch(self, response, service="Lambda"):
-        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": "https://n8n.example/webhook", "DISABLE_ICON_CACHE": "1"}):
+        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": "https://n8n.example/webhook"}):
             with patch("httpx.AsyncClient", return_value=_client_returning(response)):
                 with self.assertLogs("services.diagram_builder", level="WARNING") as logs:
                     svg = await fetch_icon_from_n8n(service)
@@ -174,7 +174,7 @@ class FetchFallsBackLoudly(unittest.IsolatedAsyncioTestCase):
 
 class FetchSucceeds(unittest.IsolatedAsyncioTestCase):
     async def _fetch(self, response, service):
-        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": "https://n8n.example/webhook", "DISABLE_ICON_CACHE": "1"}):
+        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": "https://n8n.example/webhook"}):
             with patch("httpx.AsyncClient", return_value=_client_returning(response)):
                 return await fetch_icon_from_n8n(service)
 
@@ -195,7 +195,7 @@ class FetchSucceeds(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(svg, "<svg>n</svg>")
 
     async def test_unset_webhook_url_returns_the_placeholder(self):
-        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": "", "DISABLE_ICON_CACHE": "1"}):
+        with patch.dict("os.environ", {"N8N_WEBHOOK_URL": ""}):
             svg = await fetch_icon_from_n8n("Lambda")
         self.assertIn("#cccccc", svg)
 

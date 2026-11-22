@@ -1,3 +1,0 @@
-manifest	405dfa07364548a96aac22e1db38d598963b1ec63e2f1a5e42ab931395b15593	-
-	backend/services/diagram_builder.py	100644	a27c02a3076db68152d070415027f892b1bdbd868b4e445004d649982e4f6fe1
-	backend/tests/test_diagram_builder_compound.py	100644	f5e42f5cbdf7d1a149d873d64a7a08a843ad615d68887036d8c3461a553f631d

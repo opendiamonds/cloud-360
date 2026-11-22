@@ -15,7 +15,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
 
-from services.diagram_builder import build_compound_diagram_xml, build_mxgraph_xml
+from services.diagram_builder import build_mxgraph_xml
 from services.langgraph_runtime import chat_model
 from services.progress_channel import ProgressChannel, ProgressEvent, RequestKey
 from services.llm_limits import truncate_text_for_llm, agent_sdk_env
@@ -73,20 +73,11 @@ def format_user_prompt(messages: list[dict[str, str]]) -> str:
 
 
 @tool
-async def draw_architecture_diagram(
-    provider: str,
-    groups: list[dict[str, Any]],
-    nodes: list[dict[str, Any]],
-    edges: list[dict[str, Any]],
-    config: RunnableConfig,
-    clouds: list[dict[str, Any]] | None = None,
-    connections: list[dict[str, Any]] | None = None,
-    can_edit: bool = True,
-) -> str:
+async def draw_architecture_diagram(provider: str, groups: list[dict[str, Any]], nodes: list[dict[str, Any]], edges: list[dict[str, Any]], config: RunnableConfig) -> str:
     """當架構需求釐清後，呼叫此工具來產生雲端架構圖。
     
     Args:
-        provider: 雲端供應商平台 ("AWS", "GCP", "Azure", "compound")
+        provider: 雲端供應商平台 ("AWS", "GCP", "Azure")
         groups: 架構圖上的框架/區域陣列。每個物件包含：
             - id: 框架唯一識別碼 (如 "g_cloud", "g_vpc", "g_az1", "g_pub1", "g_priv1")
             - name: 框架顯示名稱 (如 "AWS Cloud", "VPC", "Availability Zone 1", "Public Subnet 1", "Private Subnet 1", "DB Subnet 1")
@@ -94,18 +85,12 @@ async def draw_architecture_diagram(
             - x, y, width, height: 絕對座標與尺寸
         nodes: 要畫在圖表上的雲端元件節點陣列。每個物件包含 id, name (官方全名), x, y
         edges: 節點間的連線陣列。每個物件包含 source (起點 node id), target (終點 node id)
-        clouds: 混合雲專用：三雲容器規格清單 (provider 為 compound 時使用)
-        connections: 混合雲專用：跨雲連線規格清單 (provider 為 compound 時使用)
-        can_edit: 權限檢查旗標 (RBAC A1.edit 防護)
     """
     # `config` 由 LangGraph 注入，**不在 LLM 看到的工具 schema 內**（實測
     # `draw_architecture_diagram.args` 只含四個業務參數）。進度事件的鍵走這條
     # 路而不是模組層全域：鍵隨 invocation 傳遞，所以兩個併發請求的工具各自寫
     # 進自己的通道（BR1.3）。
     request_key = _request_key_from_config(config)
-
-    if not can_edit:
-        return "權限不足：您目前僅具備唯讀權限，無法執行架構圖變更 (需要 A1.edit 權限)。"
 
     async def on_progress(msg: str) -> None:
         await ProgressChannel.publish(request_key, ProgressEvent("progress", msg))
@@ -115,39 +100,13 @@ async def draw_architecture_diagram(
     )
 
     try:
-        prov_norm = (provider or "").strip().lower()
-        if prov_norm == "compound":
-            # 若為混合雲模式，優先使用 clouds/connections，或由 groups/nodes/edges 適配轉換
-            if clouds:
-                xml_data = await build_compound_diagram_xml(
-                    clouds=clouds,
-                    connections=connections or edges,
-                    on_progress=on_progress,
-                )
-            else:
-                # 依照群組結構分拆為三雲容器結構
-                azure_nodes = [n for n in (nodes or []) if "azure" in (n.get("name", "") + n.get("id", "")).lower()]
-                gcp_nodes = [n for n in (nodes or []) if "gcp" in (n.get("name", "") + n.get("id", "")).lower() or any(k in n.get("name", "").lower() for k in ("bigquery", "gke", "spanner"))]
-                aws_nodes = [n for n in (nodes or []) if n not in azure_nodes and n not in gcp_nodes]
-
-                synthetic_clouds = [
-                    {"id": "azure_c", "provider": "azure", "title": "Azure Cloud", "nodes": azure_nodes},
-                    {"id": "aws_c", "provider": "aws", "title": "AWS Cloud", "nodes": aws_nodes},
-                    {"id": "gcp_c", "provider": "gcp", "title": "GCP Cloud", "nodes": gcp_nodes},
-                ]
-                xml_data = await build_compound_diagram_xml(
-                    clouds=synthetic_clouds,
-                    connections=connections or edges,
-                    on_progress=on_progress,
-                )
-        else:
-            xml_data = await build_mxgraph_xml(
-                groups=groups or [],
-                nodes=nodes or [],
-                edges=edges or [],
-                on_progress=on_progress,
-                provider=provider,
-            )
+        xml_data = await build_mxgraph_xml(
+            groups=groups or [],
+            nodes=nodes or [],
+            edges=edges or [],
+            on_progress=on_progress,
+            provider=provider,
+        )
         await ProgressChannel.publish(request_key, ProgressEvent("xml", xml_data))
         return "架構圖已成功產生並送往畫布。請用簡短繁中告知使用者參考右側畫面。"
     except Exception:
@@ -317,18 +276,7 @@ async def run_design_agent(
 
             last_message = event["messages"][-1]
             if isinstance(last_message, AIMessage) and not last_message.tool_calls:
-                msg_content = last_message.content
-                if isinstance(msg_content, list):
-                    text_parts = []
-                    for part in msg_content:
-                        if isinstance(part, str):
-                            text_parts.append(part)
-                        elif isinstance(part, dict) and "text" in part:
-                            text_parts.append(part["text"])
-                    msg_content = "".join(text_parts)
-                elif not isinstance(msg_content, str):
-                    msg_content = str(msg_content)
-                yield {"type": "message", "content": msg_content}
+                yield {"type": "message", "content": last_message.content}
 
         # drain one last time
         async for q_event in _drain_progress(request_key):
