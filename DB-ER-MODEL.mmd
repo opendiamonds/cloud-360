@@ -1,0 +1,402 @@
+erDiagram
+
+    %% ==================================================
+    %% ERModel v0.3 — 對齊現行 ut（065dc0f，2026-11-22）
+    %% 來源：DB-ER-MODEL.md（本機資料庫擷取）、schema_rbac.sql、backend/models.py
+    %% v0.2 → v0.3：補上 13 張現行表——授權申請與權限矩陣（2）、
+    %%   架構圖分享／對話／WA 審查／WA lens／IaC 草稿（5）、估價 C1（6）；
+    %%   users 補 password_hash、last_opened_diagram_id、authorization_status；
+    %%   規劃區的 A、C、D、E 標明對應的現行表
+    %% 資料庫 27 張表 = 本圖 23 張 ＋ 4 張已退役 archive_*（見檔尾）
+    %% 主鍵沿用既有慣例：整數流水號
+    %% ==================================================
+
+    %% --------------------------------------------------
+    %% 使用者與授權
+    %% --------------------------------------------------
+    USERS ||--o{ ROLE_AUTHORIZATION_REQUESTS : "requests role (CASCADE)"
+    ROLE_PERMISSIONS }o..o{ USERS : "matrix by role (no FK)"
+
+    USERS {
+        int id PK
+        varchar username UK
+        varchar password_hash
+        varchar role "全域 RBAC 角色，可空（待核准）"
+        bool is_active
+        int last_opened_diagram_id FK "ON DELETE SET NULL"
+        timestamptz last_activity_at
+        varchar authorization_status "預設 approved；database.py 補丁"
+    }
+
+    ROLE_AUTHORIZATION_REQUESTS {
+        int id PK
+        int user_id FK "ON DELETE CASCADE"
+        varchar requested_role
+        varchar status
+        varchar decided_by
+        timestamptz decided_at
+        text note
+        timestamptz created_at
+    }
+
+    ROLE_PERMISSIONS {
+        varchar role PK
+        varchar story_id PK "例：A1、C1、J5"
+        bool can_view
+        bool can_edit
+        bool can_review
+        varchar updated_by
+        timestamptz updated_at
+    }
+
+    %% --------------------------------------------------
+    %% 核心階層：使用者 → 專案 → 系統 → 架構圖
+    %% --------------------------------------------------
+    USERS ||--o{ PROJECTS : "owns"
+    USERS ||--o{ PROJECT_MEMBERS : "joins"
+    PROJECTS ||--o{ PROJECT_MEMBERS : "has members (CASCADE)"
+    PROJECTS ||--o{ SYSTEMS : "contains (RESTRICT)"
+    SYSTEMS |o--o{ USER_DIAGRAMS : "groups (RESTRICT)"
+    USERS ||--o{ USER_DIAGRAMS : "authors"
+    USER_DIAGRAMS ||--o{ DIAGRAM_CHANGE_RECORDS : "change history (CASCADE)"
+    SYSTEMS ||--o{ SYSTEM_REQUIREMENT_FIELDS : "requirement fields (CASCADE)"
+    PROJECTS ||--o{ RESELECTION_EVENTS : "admin reselection (no FK)"
+
+    PROJECTS {
+        int id PK
+        varchar name
+        int owner_user_id FK "建立者，NOT NULL"
+        bool is_default "每位使用者至多一個預設專案"
+        timestamptz created_at
+    }
+
+    PROJECT_MEMBERS {
+        int id PK
+        int project_id FK "ON DELETE CASCADE；與 user_id 唯一"
+        int user_id FK
+        varchar role "project_admin 或 member"
+        int invited_by FK
+        timestamptz joined_at
+    }
+
+    SYSTEMS {
+        int id PK
+        int project_id FK "ON DELETE RESTRICT"
+        varchar name
+        bool is_default "每個專案至多一個預設系統"
+        timestamptz created_at
+    }
+
+    USER_DIAGRAMS {
+        int id PK
+        int user_id FK
+        int system_id FK "可空；歸屬的權威來源"
+        varchar title
+        text xml_data "draw.io XML"
+        timestamptz updated_at
+    }
+
+    DIAGRAM_CHANGE_RECORDS {
+        int id PK
+        int diagram_id FK "ON DELETE CASCADE"
+        varchar source "僅 brain_orchestration"
+        int actor_user_id FK
+        text requirement_summary
+        varchar requirement_label
+        timestamptz created_at
+    }
+
+    SYSTEM_REQUIREMENT_FIELDS {
+        int id PK
+        int system_id FK "ON DELETE CASCADE"
+        varchar agent_group "例：cost"
+        varchar field_key "例：SLA、TPS、預算"
+        text value "NULL 搭配 cleared_at 表示已清空"
+        timestamptz cleared_at
+        int updated_by FK
+        varchar updated_on_behalf_of "agent 識別字，刻意無 FK"
+        timestamptz updated_at
+    }
+
+    RESELECTION_EVENTS {
+        int id PK
+        int project_id "刻意無 FK：稽核須比專案活得久"
+        varchar cause "auto_reselection 或 manual_role_change"
+        int promoted_user_id FK
+        int previous_owner_user_id FK
+        varchar previous_role
+        varchar new_role
+        timestamptz occurred_at
+        timestamptz acknowledged_at
+    }
+
+    %% --------------------------------------------------
+    %% 架構圖周邊：分享、A1 對話、WA 審查（A3）、IaC 草稿（D）
+    %% --------------------------------------------------
+    USER_DIAGRAMS ||--o{ DIAGRAM_SHARES : "shared with"
+    USERS ||--o{ DIAGRAM_SHARES : "receives"
+    USER_DIAGRAMS ||--o{ USER_DIAGRAM_CHATS : "chat per user (CASCADE)"
+    USERS ||--o{ USER_DIAGRAM_CHATS : "chats"
+    USER_DIAGRAMS |o--o{ ARCHITECTURE_REVIEWS : "reviewed by (CASCADE)"
+    USERS ||--o{ ARCHITECTURE_REVIEWS : "creates"
+    USERS |o--o{ WA_LENSES : "updates"
+    USER_DIAGRAMS ||--o{ IAC_SAVED_DRAFTS : "IaC draft per user (CASCADE)"
+    USERS ||--o{ IAC_SAVED_DRAFTS : "saves"
+
+    DIAGRAM_SHARES {
+        int user_id PK "FK users"
+        int diagram_id PK "FK user_diagrams"
+    }
+
+    USER_DIAGRAM_CHATS {
+        int user_id PK "FK users"
+        int diagram_id PK "FK user_diagrams，CASCADE"
+        text messages_json
+        timestamptz updated_at
+    }
+
+    ARCHITECTURE_REVIEWS {
+        int id PK
+        int diagram_id FK "可空，CASCADE"
+        int created_by FK
+        varchar provider "aws、azure、gcp"
+        varchar status
+        int overall_score
+        text scores_json
+        text findings_json
+        text suggestions_text
+        varchar rule_pack_version
+        text xml_snapshot
+        bool archived
+        timestamptz created_at
+    }
+
+    WA_LENSES {
+        int id PK
+        varchar lens_id
+        varchar provider
+        bool is_active
+        text body_json
+        int updated_by FK
+        timestamptz updated_at
+    }
+
+    IAC_SAVED_DRAFTS {
+        int user_id PK "FK users"
+        int diagram_id PK "FK user_diagrams，CASCADE"
+        varchar draft_id
+        text files_json "Terraform 檔案"
+        text advice_text
+        text scan_advice_text
+        text scan_json "掃描結果"
+        timestamptz updated_at
+    }
+
+    %% --------------------------------------------------
+    %% 估價（C1）：上傳官方估價表 → 解析明細 → agent 建議
+    %% estimate_sets.diagram_id 刻意無 FK
+    %% --------------------------------------------------
+    USERS ||--o{ ESTIMATE_SETS : "owns (CASCADE)"
+    USER_DIAGRAMS |o..o{ ESTIMATE_SETS : "for diagram (no FK)"
+    ESTIMATE_SETS ||--o{ ESTIMATES : "per cloud (CASCADE)"
+    ESTIMATES ||--o{ ESTIMATE_LINE_ITEMS : "line items (CASCADE)"
+    ESTIMATE_SETS ||--o| ADVICE : "advice (CASCADE)"
+    ESTIMATE_SETS ||--o{ ESTIMATE_SHARES : "shared (CASCADE)"
+    USERS ||--o{ ESTIMATE_SHARES : "receives (CASCADE)"
+    ESTIMATE_SETS ||--o{ ESTIMATE_AUDIT_EVENTS : "audited (CASCADE)"
+    USERS ||--o{ ESTIMATE_AUDIT_EVENTS : "acts"
+
+    ESTIMATE_SETS {
+        int id PK
+        int owner_user_id FK "ON DELETE CASCADE"
+        int diagram_id "可空，刻意無 FK"
+        text note
+        text workload_context_json
+        bool is_saved
+        timestamptz created_at
+    }
+
+    ESTIMATES {
+        int id PK
+        int estimate_set_id FK "與 cloud 唯一"
+        varchar cloud "aws、azure、gcp"
+        numeric stated_total
+        varchar currency
+        int parsed_line_count
+        int unparsed_line_count
+        varchar source_format "csv、xlsx"
+    }
+
+    ESTIMATE_LINE_ITEMS {
+        int id PK
+        int estimate_id FK
+        int ordinal
+        text item_name
+        text spec
+        numeric quantity
+        numeric amount
+        varchar currency
+        varchar parse_status
+        text raw_text
+    }
+
+    ESTIMATE_SHARES {
+        int estimate_set_id PK "FK estimate_sets"
+        int user_id PK "FK users"
+        timestamptz shared_at
+    }
+
+    ESTIMATE_AUDIT_EVENTS {
+        int id PK
+        int actor_user_id FK
+        int estimate_set_id FK
+        varchar event_type
+        varchar cloud
+        timestamptz occurred_at
+    }
+
+    ADVICE {
+        int estimate_set_id PK "FK estimate_sets"
+        varchar status "generating 等"
+        text saving_text
+        text comparison_text
+        text quality_text
+        text unavailable_reasons_json
+        timestamptz completed_at
+    }
+
+    %% --------------------------------------------------
+    %% 記憶層（PostgreSQL memory schema ＋ pgvector）
+    %% --------------------------------------------------
+    USERS ||--o{ MEMORY_RECORDS : "owns"
+    MEMORY_RECORDS |o..o{ MEMORY_AUDIT_EVENTS : "audited by (no FK)"
+    USERS ||--o{ MEMORY_AUDIT_EVENTS : "acts"
+
+    MEMORY_RECORDS {
+        int id PK
+        varchar kind "semantic、procedure、episodic"
+        int owner_user_id FK
+        varchar visibility_scope
+        text content
+        vector embedding "1024 維，HNSW cosine"
+        varchar embedding_model
+        timestamptz created_at
+        timestamptz expires_at "episodic 必填，90 天清除（排程目前暫停）"
+    }
+
+    MEMORY_AUDIT_EVENTS {
+        int id PK
+        int memory_id "刻意無 FK：刪除後稽核仍保留"
+        int actor_user_id FK
+        varchar action "deleted_by_user、purged_by_retention、scope_changed"
+        varchar previous_scope
+        varchar new_scope
+        timestamptz occurred_at
+    }
+
+    %% --------------------------------------------------
+    %% 對話層：大腦 session 存 Redis，不是資料庫表
+    %% --------------------------------------------------
+    USERS ||--o{ BRAIN_SESSIONS : "owns"
+    BRAIN_SESSIONS ||--o{ SESSION_SEGMENTS : "segments (shared / per page)"
+    SESSION_SEGMENTS }o--o| SYSTEMS : "work target (optional)"
+
+    BRAIN_SESSIONS {
+        string session_key PK "Redis key，帶 TTL"
+        int user_id "可空"
+        string page_modes "各頁 shared 或 isolated"
+        int expires_at_seconds
+    }
+
+    SESSION_SEGMENTS {
+        string segment_id PK
+        int project_id "工作對象，可空"
+        int system_id "工作對象，可空"
+        int diagram_id "工作對象，可空"
+        string messages "role、text、createdAt；有筆數與長度上限"
+        string created_at
+    }
+
+    %% --------------------------------------------------
+    %% 【規劃中，尚未實作】產物索引與八大功能模組
+    %% 明細表以 artifact_id 外鍵指回索引（反向掛）。
+    %% 現況對照：A＝USER_DIAGRAMS（掛 system_id）；C＝ESTIMATE_SETS（掛使用者與架構圖）；
+    %%   D＝IAC_SAVED_DRAFTS（掛使用者與架構圖）；E＝ARCHITECTURE_REVIEWS。
+    %% 導入索引後再把這些現行表接上。
+    %% --------------------------------------------------
+    SYSTEMS ||--o{ SYSTEM_ARTIFACTS : "produces (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_ARCH_DESIGNS : "A (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_COMP_SELECTIONS : "B (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_COST_ESTIMATIONS : "C (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_IAC_GENERATIONS : "D (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_OPS_REVIEWS : "E (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_OPS_EXECUTIONS : "F (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_SECURITY_ADVISORIES : "G (planned)"
+    SYSTEM_ARTIFACTS ||--o| ARTIFACT_MCP_SKILL_LOGS : "H (planned)"
+
+    SYSTEM_ARTIFACTS {
+        int id PK
+        int system_id FK
+        string module_category "A 到 H"
+        string artifact_type "產物細項類別"
+        int version
+        timestamptz created_at
+    }
+    ARTIFACT_ARCH_DESIGNS {
+        int id PK
+        int artifact_id FK "UNIQUE，指回索引"
+        text diagram_xml "現行為 user_diagrams.xml_data"
+        jsonb tech_stack_summary
+    }
+    ARTIFACT_COMP_SELECTIONS {
+        int id PK
+        int artifact_id FK "UNIQUE"
+        text target_requirement
+        jsonb comparison_matrix
+    }
+    ARTIFACT_COST_ESTIMATIONS {
+        int id PK
+        int artifact_id FK "UNIQUE；現行為 estimate_sets"
+        numeric estimated_monthly_cost
+        jsonb cost_breakdown
+    }
+    ARTIFACT_IAC_GENERATIONS {
+        int id PK
+        int artifact_id FK "UNIQUE；現行為 iac_saved_drafts"
+        string iac_tool
+        text code_content
+    }
+    ARTIFACT_OPS_REVIEWS {
+        int id PK
+        int artifact_id FK "UNIQUE；現行為 architecture_reviews"
+        string pillar
+        jsonb findings
+    }
+    ARTIFACT_OPS_EXECUTIONS {
+        int id PK
+        int artifact_id FK "UNIQUE"
+        string action_type
+        string approval_status
+    }
+    ARTIFACT_SECURITY_ADVISORIES {
+        int id PK
+        int artifact_id FK "UNIQUE"
+        string framework
+        jsonb compliance_gaps
+    }
+    ARTIFACT_MCP_SKILL_LOGS {
+        int id PK
+        int artifact_id FK "UNIQUE"
+        string mcp_server_name
+        string skill_tool_used
+    }
+
+    %% --------------------------------------------------
+    %% 已退役、未畫進圖（資料庫仍有表，應用程式不得讀寫，>=90 天後 drop）
+    %%   archive_diagram_cost、archive_diagram_cost_line、
+    %%   archive_cost_audit_event、archive_pricing_cache
+    %% 尚未規劃（日後另開 intent）
+    %%   CHAT_SESSIONS／CHAT_MESSAGES 持久化（含附件、逐則意圖）
+    %%   SYSTEM_CONTEXT_FILES（系統脈絡檔案上傳）
+    %%   SYSTEMS.environment、SYSTEMS.primary_cloud、PROJECTS.status
+    %% --------------------------------------------------
