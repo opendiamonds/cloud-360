@@ -1,0 +1,20 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u2-compound-diagram-builder",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5"
+  ],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "tech-stack-decisions" },
+    { "id": "NFR2", "status": "OK", "target": "tech-stack-decisions" },
+    { "id": "NFR3", "status": "OK", "target": "SEC-U2.2" },
+    { "id": "NFR4", "status": "OK", "target": "SEC-U2.1" },
+    { "id": "NFR5", "status": "OK", "target": "tech-stack-decisions" }
+  ],
+  "reverse": []
+}
+

@@ -1,0 +1,3 @@
+manifest	b7260e28b443a896c916a98d24cf0c09abd8763869aba256944cf3d4ba7c329c	-
+	frontend/src/components/DrawioCanvas.tsx	100644	07609721fea64a9d992a194e2efc9188968488fb1eb563c16e52fb7ce3309940
+	frontend/src/pages/WorkspacePage.tsx	100644	41e017a723aece8151e897edc190cafe9a7b9eba4eba1e13136ce242bf07e202

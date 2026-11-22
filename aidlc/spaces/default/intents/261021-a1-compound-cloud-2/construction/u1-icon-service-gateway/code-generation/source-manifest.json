@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "stage": "code-generation",
+  "unit": "u1-icon-service-gateway",
+  "writes": [
+    { "path": "backend/services/diagram_builder.py" },
+    { "path": "backend/tests/test_diagram_builder_compound.py" },
+    { "path": "backend/tests/test_diagram_icons.py" }
+  ]
+}

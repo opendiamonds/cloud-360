@@ -1824,27 +1824,66 @@ def _normalise_icon_name(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+import html
+import sys
+
+_ICON_CACHE: dict[tuple[str, str], str] = {}
+
+
+def generate_fallback_svg(service_name: str) -> str:
+    """
+    依據 FallbackSvgSpec 產生標準 40x40 灰底文字 SVG。
+    文字截取前 4 碼英數字並轉換為大寫居中，特殊字元進行 XML 轉義。
+    """
+    clean_name = re.sub(r"[^a-zA-Z0-9]", "", service_name or "")
+    if not clean_name:
+        clean_name = (service_name or "").strip()
+    display_text = clean_name[:4].upper() if clean_name else "ICON"
+    escaped_text = html.escape(display_text)
+
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">'
+        f'<rect width="40" height="40" rx="4" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>'
+        f'<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
+        f'fill="#475569" font-family="sans-serif" font-size="10" font-weight="bold">{escaped_text}</text></svg>'
+    )
+
+
 async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
     """
     向 n8n webhook 取得服務 SVG。
+    支援 provider="compound" 混合雲上行契約。
     使用 _normalise_icon_name 去除所有括號與加號後綴並進行正規化。
-    若未設定 N8N_WEBHOOK_URL 或請求失敗，回傳灰底文字 fallback SVG。
+    若未設定 N8N_WEBHOOK_URL 或請求失敗，回傳灰底文字 fallback SVG（若 provider="compound" 採用 40x40 規格）。
+    具備記憶體快取避免重複查詢。
     """
+    cache_key = (service_name.strip(), (provider or "").strip().lower())
+    # 記憶體快取以降低外部 HTTP 請求頻率
+    if cache_key in _ICON_CACHE and not os.environ.get("DISABLE_ICON_CACHE"):
+        return _ICON_CACHE[cache_key]
+
     search_name = _normalise_icon_name(service_name)
     if not search_name:
         search_name = service_name.strip()
+    logger.info("呼叫 n8n 圖示服務: service=%s, search_name=%s, provider=%s", service_name, search_name, provider)
 
     webhook_url = os.environ.get("N8N_WEBHOOK_URL")
     n8n_user = os.environ.get("N8N_USER")
     n8n_password = os.environ.get("N8N_PASSWORD")
-    fallback_svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        f'<rect width="100" height="100" fill="#cccccc"/>'
-        f'<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
-        f'fill="black" font-size="14">{service_name}</text></svg>'
-    )
+
+    is_compound = (provider or "").lower() == "compound"
+    if is_compound:
+        fallback_svg = generate_fallback_svg(service_name)
+    else:
+        fallback_svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+            f'<rect width="100" height="100" fill="#cccccc"/>'
+            f'<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
+            f'fill="black" font-size="14">{service_name}</text></svg>'
+        )
 
     if not webhook_url:
+        _ICON_CACHE[cache_key] = fallback_svg
         return fallback_svg
 
     auth = None
@@ -1860,18 +1899,18 @@ async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
                 timeout=5.0
             )
             if response.status_code != 200:
-                # 這條路徑原本靜默 return，是最難查的一種降級：服務照常回圖，
-                # 只是每個 icon 都變灰底，沒有任何地方說得出為什麼。
                 logger.warning(
                     "n8n 取得 %s 圖示（供應商：%s）回應 HTTP %s，改用灰底佔位圖",
                     service_name,
                     provider,
                     response.status_code,
                 )
+                _ICON_CACHE[cache_key] = fallback_svg
                 return fallback_svg
 
             content = response.text.strip()
             if content.startswith("<svg"):
+                _ICON_CACHE[cache_key] = content
                 return content
 
             try:
@@ -1886,25 +1925,30 @@ async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
                             service_name,
                             provider,
                         )
+                        _ICON_CACHE[cache_key] = fallback_svg
                         return fallback_svg
                     svg = _svg_from_entry(entry)
                     if svg:
+                        _ICON_CACHE[cache_key] = svg
                         return svg
                     logger.warning(
                         "n8n 目錄項 %r 匹配到 %s，但不含 SVG 內容，改用灰底佔位圖",
                         entry.get("icon_name") or entry.get("name"),
                         service_name,
                     )
+                    _ICON_CACHE[cache_key] = fallback_svg
                     return fallback_svg
 
                 elif isinstance(data, dict):
                     svg = _svg_from_entry(data)
                     if svg:
+                        _ICON_CACHE[cache_key] = svg
                         return svg
                     nested = data.get("data")
                     if isinstance(nested, dict):
                         svg = _svg_from_entry(nested)
                         if svg:
+                            _ICON_CACHE[cache_key] = svg
                             return svg
 
             except Exception as e:
@@ -1912,7 +1956,357 @@ async def fetch_icon_from_n8n(service_name: str, provider: str = "AWS") -> str:
     except Exception as e:
         logger.warning("向 n8n 取得 %s 圖示（供應商：%s）失敗: %s", service_name, provider, e)
 
+    _ICON_CACHE[cache_key] = fallback_svg
     return fallback_svg
+
+
+async def build_compound_diagram_xml(
+    clouds: list[dict[str, Any]],
+    connections: list[dict[str, Any]] | None = None,
+    on_progress: ProgressCallback | None = None,
+) -> str:
+    """
+    依據 Hub-and-Spoke 幾何拓撲組裝混合雲 Draw.io / mxGraph XML (Contract C3)。
+    
+    支援：
+      1. 左翼 Azure (寬度 >= 360px)、中央核心 AWS (寬度 >= 480px)、右翼 GCP (寬度 >= 360px)。
+      2. 雲與雲之間保留 120px 緩衝走廊。
+      3. 套用 GROUP_STYLES 容器樣式 (azure_cloud, aws_cloud, gcp_cloud)。
+      4. 支援每一朵雲內部包含巢狀 groups（VPC / VNet / AZ / Subnets），若未提供子群組則自動生成標準 VPC 與 Subnet 框架。
+      5. 跨雲連線採直角折線路由 (edgeStyle=orthogonalEdgeStyle;)，中點標註純白膠囊協議標籤 (13.5:1 對比度)。
+    """
+    clouds = [dict(c) for c in (clouds or [])]
+    connections = [dict(e) for e in (connections or [])]
+
+    # 1. 依 Hub-and-Spoke 角色排序：Azure (左) -> AWS (中) -> GCP (右)
+    role_order = {"azure": 0, "aws": 1, "gcp": 2}
+    clouds_sorted = sorted(
+        clouds,
+        key=lambda c: role_order.get((c.get("provider") or "").lower(), 99)
+    )
+
+    current_x = 40.0
+    buffer_corridor = 120.0
+    container_y = 40.0
+
+    all_groups: list[dict[str, Any]] = []
+    all_nodes: list[dict[str, Any]] = []
+
+    for cloud in clouds_sorted:
+        prov = (cloud.get("provider") or "aws").lower()
+        cid = cloud.get("id") or f"{prov}_cloud"
+        title = cloud.get("title") or f"{prov.upper()} Cloud"
+
+        raw_nodes = cloud.get("nodes", [])
+        raw_groups = cloud.get("groups", [])
+
+        # 容器尺寸約束：中央 AWS >= 540px，兩翼 >= 400px (若包含內部群組則自適應擴充)
+        min_width = 540.0 if prov == "aws" else 400.0
+        width = max(float(cloud.get("width", min_width)), min_width)
+        height = max(float(cloud.get("height", 460.0)), 460.0)
+
+        # 雲容器對應樣式
+        container_style_type = f"{prov}_cloud" if f"{prov}_cloud" in GROUP_STYLES else "aws_cloud"
+
+        cloud_group = {
+            "id": cid,
+            "name": title,
+            "type": container_style_type,
+            "x": current_x,
+            "y": container_y,
+            "width": width,
+            "height": height,
+            "provider": prov,
+            "is_cloud": True,
+        }
+        all_groups.append(cloud_group)
+
+        # 如果 cloud 自帶 groups，直接將其座標 offset 到當前雲容器內部
+        if raw_groups:
+            for g in raw_groups:
+                g_dict = dict(g)
+                # 若為相對座標則轉換為全域絕對座標
+                gx = g_dict.get("x", 20.0)
+                gy = g_dict.get("y", 50.0)
+                if gx < current_x:
+                    gx += current_x
+                if gy < container_y:
+                    gy += container_y
+                g_dict["x"] = gx
+                g_dict["y"] = gy
+                g_dict["provider"] = prov
+                g_dict["type"] = normalize_group_type(g_dict, provider=prov.upper())
+                all_groups.append(g_dict)
+
+            for n_idx, raw_n in enumerate(raw_nodes):
+                nid = raw_n.get("id") or f"{cid}_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = raw_n.get("x", 40.0)
+                ny = raw_n.get("y", 80.0)
+                if nx < current_x:
+                    nx += current_x
+                if ny < container_y:
+                    ny += container_y
+
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "provider": prov,
+                })
+        else:
+            # 自動生成結構化網路階層框架 (VPC / VNet / Subnets)
+            # 依 provider 建立 VPC/VNet 及 Public/Private (或 Frontend/Backend) Subnets
+            inner_pad = 20.0
+            vpc_x = current_x + inner_pad
+            vpc_y = container_y + 40.0
+            vpc_w = width - (inner_pad * 2.0)
+            vpc_h = height - 55.0
+
+            vpc_type = "vpc" if prov == "aws" else ("azure_vnet" if prov == "azure" else "gcp_vpc")
+            vpc_name = "VPC" if prov == "aws" else ("Virtual Network (VNet)" if prov == "azure" else "GCP VPC")
+            vpc_id = f"{cid}_vpc"
+
+            all_groups.append({
+                "id": vpc_id,
+                "name": vpc_name,
+                "type": vpc_type,
+                "x": vpc_x,
+                "y": vpc_y,
+                "width": vpc_w,
+                "height": vpc_h,
+                "provider": prov,
+            })
+
+            # 建立 Subnets
+            sub_pad = 15.0
+            sub_w = vpc_w - (sub_pad * 2.0)
+            sub1_h = max(130.0, (vpc_h - 70.0) / 2.0)
+            sub2_h = max(130.0, (vpc_h - 70.0) / 2.0)
+
+            sub1_y = vpc_y + 35.0
+            sub2_y = sub1_y + sub1_h + 15.0
+
+            if prov == "aws":
+                sub1_name, sub1_type = "Public Subnet", "public_subnet"
+                sub2_name, sub2_type = "Private Subnet", "private_subnet"
+            elif prov == "azure":
+                sub1_name, sub1_type = "Frontend Subnet", "azure_subnet"
+                sub2_name, sub2_type = "Backend Subnet", "azure_subnet"
+            else:
+                sub1_name, sub1_type = "Public Subnet", "gcp_subnet"
+                sub2_name, sub2_type = "Private Analytics Subnet", "gcp_subnet"
+
+            sub1_id = f"{cid}_sub1"
+            sub2_id = f"{cid}_sub2"
+
+            all_groups.append({
+                "id": sub1_id,
+                "name": sub1_name,
+                "type": sub1_type,
+                "x": vpc_x + sub_pad,
+                "y": sub1_y,
+                "width": sub_w,
+                "height": sub1_h,
+                "provider": prov,
+            })
+            all_groups.append({
+                "id": sub2_id,
+                "name": sub2_name,
+                "type": sub2_type,
+                "x": vpc_x + sub_pad,
+                "y": sub2_y,
+                "width": sub_w,
+                "height": sub2_h,
+                "provider": prov,
+            })
+
+            # 將節點分配至適當子網中
+            # 前端/入口類 (alb, nat, web, ingress, front, public) -> sub1，其餘 (db, storage, worker, eks, aks, bq) -> sub2
+            sub1_nodes = []
+            sub2_nodes = []
+            for raw_n in raw_nodes:
+                sname = (raw_n.get("service_name") or raw_n.get("name") or "").lower()
+                if any(k in sname for k in ("alb", "load balancer", "nat", "gateway", "front", "ingress", "apigateway", "vm")):
+                    sub1_nodes.append(raw_n)
+                else:
+                    sub2_nodes.append(raw_n)
+
+            # 若全部落入同一個子網，平均分攤
+            if not sub1_nodes and sub2_nodes:
+                mid = max(1, len(sub2_nodes) // 2)
+                sub1_nodes = sub2_nodes[:mid]
+                sub2_nodes = sub2_nodes[mid:]
+            elif not sub2_nodes and sub1_nodes:
+                mid = max(1, len(sub1_nodes) // 2)
+                sub2_nodes = sub1_nodes[mid:]
+                sub1_nodes = sub1_nodes[:mid]
+
+            # 排版 sub1 節點
+            cols1 = max(1, len(sub1_nodes))
+            col_w1 = (sub_w - 30.0) / cols1
+            for n_idx, raw_n in enumerate(sub1_nodes):
+                nid = raw_n.get("id") or f"{cid}_s1_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = vpc_x + sub_pad + 15.0 + n_idx * col_w1 + (col_w1 - 40.0) / 2.0
+                ny = sub1_y + 45.0
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "parent_id": sub1_id,
+                    "provider": prov,
+                })
+
+            # 排版 sub2 節點
+            cols2 = max(1, len(sub2_nodes))
+            col_w2 = (sub_w - 30.0) / cols2
+            for n_idx, raw_n in enumerate(sub2_nodes):
+                nid = raw_n.get("id") or f"{cid}_s2_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = vpc_x + sub_pad + 15.0 + n_idx * col_w2 + (col_w2 - 40.0) / 2.0
+                ny = sub2_y + 45.0
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "parent_id": sub2_id,
+                    "provider": prov,
+                })
+
+        current_x += width + buffer_corridor
+
+    cells: list[str] = []
+
+    # 計算 Groups 面積與巢狀層級（面積由大到小排序，由內到外推算 parent）
+    for g in all_groups:
+        g["area"] = g.get("width", 0) * g.get("height", 0)
+    groups_sorted = sorted(all_groups, key=lambda x: x["area"], reverse=True)
+
+    for g in groups_sorted:
+        parent_id = "1"
+        rel_x, rel_y = g["x"], g["y"]
+        for potential_parent in groups_sorted:
+            if g["id"] != potential_parent["id"] and potential_parent["area"] > g["area"]:
+                if is_inside(g, potential_parent):
+                    parent_id = potential_parent["id"]
+                    rel_x = g["x"] - potential_parent["x"]
+                    rel_y = g["y"] - potential_parent["y"]
+                    break
+        g["parent_id"] = parent_id
+        g["rel_x"] = rel_x
+        g["rel_y"] = rel_y
+
+    for node in all_nodes:
+        parent_id = "1"
+        rel_x, rel_y = node["x"], node["y"]
+        node["width"] = 40
+        node["height"] = 40
+
+        # 如果已有指定且存在的 parent_id，優先計算相對座標
+        explicit_parent = next((g for g in groups_sorted if g["id"] == node.get("parent_id")), None)
+        if explicit_parent:
+            parent_id = explicit_parent["id"]
+            rel_x = node["x"] - explicit_parent["x"]
+            rel_y = node["y"] - explicit_parent["y"]
+        else:
+            best_group = None
+            for g in groups_sorted:
+                if is_inside(node, g):
+                    if best_group is None or g["area"] < best_group["area"]:
+                        best_group = g
+            if best_group:
+                parent_id = best_group["id"]
+                rel_x = node["x"] - best_group["x"]
+                rel_y = node["y"] - best_group["y"]
+
+        node["parent_id"] = parent_id
+        node["rel_x"] = rel_x
+        node["rel_y"] = rel_y
+
+    # 渲染群組 cells (由大到小加入)
+    for g in groups_sorted:
+        gid = g["id"]
+        gname = html.escape(g.get("name", ""))
+        gtype = g.get("type", "aws_cloud")
+        style = GROUP_STYLES.get(gtype, GROUP_STYLES.get("aws_cloud", ""))
+        w, h = g["width"], g["height"]
+        rx, ry = g["rel_x"], g["rel_y"]
+        pid = g["parent_id"]
+        cells.append(
+            f'<mxCell id="{gid}" value="{gname}" style="{style}" vertex="1" parent="{pid}">'
+            f'<mxGeometry x="{rx}" y="{ry}" width="{w}" height="{h}" as="geometry"/></mxCell>'
+        )
+
+    # 渲染節點 cells
+    for idx, node in enumerate(all_nodes):
+        nid = node["id"]
+        comp = node["name"]
+        pid = node["parent_id"]
+        rx = node["rel_x"]
+        ry = node["rel_y"]
+
+        if on_progress:
+            await on_progress(f"🔄 正在取得 {comp.upper()} 圖示 ({idx + 1}/{len(all_nodes)})...")
+
+        svg_content = await fetch_icon_from_n8n(comp, provider="compound")
+        b64_svg = base64.b64encode(svg_content.encode("utf-8")).decode("utf-8")
+        style = (
+            f"shape=image;image=data:image/svg+xml,{b64_svg};"
+            "verticalLabelPosition=bottom;verticalAlign=middle;align=center;"
+            "labelBackgroundColor=none;aspect=fixed;imageAspect=0;"
+            "fontFamily=Helvetica;fontSize=11;fontColor=#475569;fontStyle=1;spacingTop=-6;"
+        )
+        escaped_lbl = html.escape(node.get("label", comp).upper())
+        cells.append(
+            f'<mxCell id="{nid}" value="{escaped_lbl}" style="{style}" vertex="1" parent="{pid}">'
+            f'<mxGeometry x="{rx}" y="{ry}" width="40" height="40" as="geometry"/></mxCell>'
+        )
+
+    # 渲染連線與膠囊標籤
+    for idx, conn in enumerate(connections):
+        src = conn.get("source_node_id") or conn.get("source")
+        tgt = conn.get("target_node_id") or conn.get("target")
+        if not (src and tgt):
+            continue
+
+        cid = f"conn_{idx}"
+        proto = html.escape(conn.get("protocol_name") or conn.get("label") or "")
+        edge_style = (
+            "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
+            "html=1;strokeColor=#475569;strokeWidth=2;align=center;verticalAlign=middle;"
+            "fontFamily=Helvetica;fontSize=11;fontColor=#1E293B;fontStyle=1;"
+            "labelBackgroundColor=#FFFFFF;rounded=1;labelBorderColor=#CBD5E1;"
+            "startSize=4;endArrow=classic;endFill=1;endSize=6;"
+        )
+        cells.append(
+            f'<mxCell id="{cid}" value="{proto}" edge="1" parent="1" source="{src}" target="{tgt}" '
+            f'style="{edge_style}"><mxGeometry relative="1" as="geometry"/></mxCell>'
+        )
+
+    inner_xml = "".join(cells)
+    return (
+        f'<mxfile host="Electron" modified="2026-11-10T16:00:00.000Z" agent="Antigravity Compound Diagram" version="21.0.0" type="device">'
+        f'<diagram id="compound-diagram" name="Hybrid Cloud Architecture">'
+        f'<mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" background="#FFFFFF">'
+        f'<root><mxCell id="0"/><mxCell id="1" parent="0"/>{inner_xml}</root>'
+        f'</mxGraphModel></diagram></mxfile>'
+    )
 
 
 async def build_mxgraph_xml(

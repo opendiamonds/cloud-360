@@ -1,0 +1,14 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u3-design-agent-compound",
+  "upstream_ids": [
+    "NFR4.3",
+    "NFR4.4"
+  ],
+  "coverage": [
+    { "id": "NFR4.3", "status": "OK", "target": "cicd-pipeline" },
+    { "id": "NFR4.4", "status": "OK", "target": "cicd-pipeline" }
+  ],
+  "reverse": []
+}
+

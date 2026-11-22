@@ -47,7 +47,7 @@ const EMPTY_DIAGRAM_XML =
 const DEFAULT_WELCOME: Message = {
   role: 'assistant',
   content:
-    '嗨！我是您的 AI 雲端架構助理 👋\n請描述您想建立的雲端架構，例如：\n✨ AWS：建立一個包含 WAF、ALB 與 Aurora 的高可用架構\n✨ GCP：建立一個使用 GKE、Cloud SQL 與 BigQuery 的數據分析拓樸\n✨ Azure：建立一個包含 AKS、Azure SQL Database 與 Key Vault 的雲端架構',
+    '嗨！我是您的 AI 雲端架構助理 👋\n請描述您想建立的雲端架構，例如：\n✨ 混合雲：建立一個橫跨 AWS (Web/API)、Azure (運算) 與 GCP (BigQuery 分析) 的跨雲多雲架構\n✨ AWS：建立一個包含 WAF、ALB 與 Aurora 的高可用架構\n✨ GCP：建立一個使用 GKE、Cloud SQL 與 BigQuery 的數據分析拓樸\n✨ Azure：建立一個包含 AKS、Azure SQL Database 與 Key Vault 的雲端架構',
 };
 
 /** 將後端錯誤對齊 User Story 失敗文案 */
@@ -97,6 +97,7 @@ export const WorkspacePage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState<string>('');
   const [toast, setToast] = useState<ToastState>(null);
+  const [selectedProvider, setSelectedProvider] = useState<'aws' | 'azure' | 'gcp' | 'compound'>('compound');
   const [messages, setMessages] = useState<Message[]>([DEFAULT_WELCOME]);
   const [saveStatus, setSaveStatus] = useState<DiagramSaveStatus>('no-file');
   const [chatCollapsed, setChatCollapsed] = useState(() => {
@@ -366,7 +367,15 @@ export const WorkspacePage = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.xml_data !== undefined) {
-          setXml(data.xml_data);
+          let loadedXml = data.xml_data || '';
+          if (loadedXml.startsWith('%3C') || loadedXml.startsWith('%3c')) {
+            try {
+              loadedXml = decodeURIComponent(loadedXml);
+            } catch {
+              // ignore
+            }
+          }
+          setXml(loadedXml);
           brainSync.markOrigin('user');
           setCurrentDiagramId(data.id);
           setSaveStatus('saved');
@@ -636,9 +645,17 @@ export const WorkspacePage = () => {
                 setMessages(finalMessages);
               } else if (data.type === 'progress') {
                 setProgress(String(data.content || ''));
-              } else if (data.type === 'xml_preview') {
+              } else if (data.type === 'xml_preview' || data.type === 'xml') {
                 // 直接呈現於畫布（不經「套用預覽」）
-                generatedXml = String(data.content || '');
+                let rawXml = String(data.content || data.xml || '');
+                if (rawXml.startsWith('%3C') || rawXml.startsWith('%3c')) {
+                  try {
+                    rawXml = decodeURIComponent(rawXml);
+                  } catch {
+                    // ignore
+                  }
+                }
+                generatedXml = rawXml;
                 setXml(generatedXml);
                 setProgress('');
               } else if (data.type === 'score') {
@@ -668,8 +685,16 @@ export const WorkspacePage = () => {
                   completeScore = data.overall_score;
                 }
                 if (typeof data.xml === 'string' && data.xml) {
-                  generatedXml = data.xml;
-                  setXml(data.xml);
+                  let rawXml = data.xml;
+                  if (rawXml.startsWith('%3C') || rawXml.startsWith('%3c')) {
+                    try {
+                      rawXml = decodeURIComponent(rawXml);
+                    } catch {
+                      // ignore
+                    }
+                  }
+                  generatedXml = rawXml;
+                  setXml(rawXml);
                 }
                 setProgress('');
               } else if (data.type === 'error') {
@@ -1162,6 +1187,20 @@ export const WorkspacePage = () => {
         }
         headerCenter={
           <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200/80 max-w-full overflow-x-auto">
+            <div className="flex items-center gap-1.5 shrink-0 bg-white px-2 py-1 rounded-lg border border-gray-200 shadow-xs">
+              <span className="text-[11px] font-bold text-gray-500">雲端平台:</span>
+              <select
+                className="bg-transparent border-none text-xs font-bold text-indigo-700 outline-none cursor-pointer focus:ring-0"
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value as 'aws' | 'azure' | 'gcp' | 'compound')}
+                title="切換架構圖雲端平台模式"
+              >
+                <option value="compound">✨ 混合雲 (Compound)</option>
+                <option value="aws">AWS Cloud</option>
+                <option value="azure">Microsoft Azure</option>
+                <option value="gcp">Google Cloud (GCP)</option>
+              </select>
+            </div>
             <IacEntryControl
               canView={canViewD1}
               onOpen={() => {

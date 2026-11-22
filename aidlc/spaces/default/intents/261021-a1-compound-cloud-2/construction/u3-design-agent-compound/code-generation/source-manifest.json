@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "stage": "code-generation",
+  "unit": "u3-design-agent-compound",
+  "writes": [
+    { "path": "backend/services/design_agent.py" },
+    { "path": "backend/prompts/cloud_architecture_system_prompt.md" },
+    { "path": "backend/tests/test_design_agent.py" },
+    { "path": "backend/tests/helpers.py" }
+  ]
+}
+

@@ -1,0 +1,26 @@
+{
+  "stage": "functional-design",
+  "unit": "u1-icon-service-gateway",
+  "upstream_ids": [
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.2.1",
+    "AC4.2.2",
+    "AC4.2.3",
+    "AC4.2.4"
+  ],
+  "coverage": [
+    { "id": "AC4.1.1", "status": "OK", "target": "BR1.1" },
+    { "id": "AC4.1.2", "status": "OK", "target": "BR1.1" },
+    { "id": "AC4.1.3", "status": "OK", "target": "BR1.5" },
+    { "id": "AC4.2.1", "status": "OK", "target": "BR1.2" },
+    { "id": "AC4.2.2", "status": "OK", "target": "BR1.3" },
+    { "id": "AC4.2.3", "status": "OK", "target": "BR1.3" },
+    { "id": "AC4.2.4", "status": "OK", "target": "BR1.3" }
+  ],
+  "reverse": [
+    { "id": "BR1.4", "status": "N/A", "target": "technical SVG text rendering and truncation rule" }
+  ]
+}
+

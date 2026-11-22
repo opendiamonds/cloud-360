@@ -1,0 +1,14 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u2-compound-diagram-builder",
+  "upstream_ids": [
+    "NFR3.2",
+    "NFR4.2"
+  ],
+  "coverage": [
+    { "id": "NFR3.2", "status": "OK", "target": "cicd-pipeline" },
+    { "id": "NFR4.2", "status": "OK", "target": "cicd-pipeline" }
+  ],
+  "reverse": []
+}
+

@@ -1,0 +1,14 @@
+{
+  "stage": "nfr-design",
+  "unit": "u2-compound-diagram-builder",
+  "upstream_ids": [
+    "NFR3.2",
+    "NFR4.2"
+  ],
+  "coverage": [
+    { "id": "NFR3.2", "status": "OK", "target": "security-design" },
+    { "id": "NFR4.2", "status": "OK", "target": "security-design" }
+  ],
+  "reverse": []
+}
+
