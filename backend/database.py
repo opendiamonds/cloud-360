@@ -157,7 +157,7 @@ def init_db():
             "記憶專用資料庫連線未設定（MEMORY_DB_PASSWORD 為空或非 PostgreSQL）——"
             "以 cloud360_memory 角色連線的程式路徑不可用"
         )
-    # U1：**必須早於 create_all**，方向與下面六支 _ensure_* 相反。理由見該函式的
+    # U1：**必須早於 create_all**，方向與下面七支 _ensure_* 相反。理由見該函式的
     # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
     _ensure_vector_extension()
     Base.metadata.create_all(bind=engine)
@@ -168,6 +168,7 @@ def init_db():
     _ensure_cost_schema()
     _ensure_estimate_intake_schema()
     _ensure_last_activity_schema()
+    _ensure_iac_draft_schema()
 
     db = SessionLocal()
     try:
@@ -666,6 +667,37 @@ def _ensure_last_activity_schema():
                     "last_activity schema 補丁略過/失敗: %s — %s", sql[:60], e
                 )
     logger.info("last_activity schema 檢查完成")
+
+
+def _ensure_iac_draft_schema():
+    """既有資料庫補上使用者主動儲存的 IaC 草稿表。"""
+    from sqlalchemy import text
+
+    statements = [
+        """
+        CREATE TABLE IF NOT EXISTS iac_saved_drafts (
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            diagram_id INTEGER NOT NULL REFERENCES user_diagrams(id) ON DELETE CASCADE,
+            draft_id VARCHAR(64) NOT NULL,
+            files_json TEXT NOT NULL,
+            advice_text TEXT,
+            scan_advice_text TEXT,
+            scan_json TEXT,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+            PRIMARY KEY (user_id, diagram_id)
+        )
+        """,
+        "ALTER TABLE iac_saved_drafts ADD COLUMN IF NOT EXISTS advice_text TEXT",
+        "ALTER TABLE iac_saved_drafts ADD COLUMN IF NOT EXISTS scan_advice_text TEXT",
+        "ALTER TABLE iac_saved_drafts ADD COLUMN IF NOT EXISTS scan_json TEXT",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            try:
+                conn.execute(text(statement))
+            except Exception as e:
+                logger.warning("IaC draft schema 補丁略過/失敗: %s", e)
+    logger.info("IaC draft schema 檢查完成")
 
 
 # 本補丁的識別字。與使用者帳號共用同一個欄位，而帳號無格式約束，故理論上可能

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
 import { useLayoutNav } from './NavChromeContext';
 import { canSeeMemoryEntry } from '../memory/memoryEntry';
+import { IAC_GROUP_LABEL, IAC_NAV_ITEMS } from '../iac/iacNav';
 
 export const Sidebar: React.FC = () => {
   const { user, logout, can, canArch, isAuthenticated } = useAuth();
@@ -18,6 +19,8 @@ export const Sidebar: React.FC = () => {
   const showArchWorkspace = canArch('view');
   const showAssessment = can('A3', 'view');
   const showCost = can('C1', 'view');
+  const iacItems = IAC_NAV_ITEMS.filter((item) => can(item.storyId, 'view'));
+  const showIac = iacItems.length > 0;
   const showUsersAdmin = can('J3a', 'view');
   const showMatrixAdmin = can('J3b', 'view');
   const showCoreSection = showArchWorkspace || showAssessment;
@@ -32,6 +35,7 @@ export const Sidebar: React.FC = () => {
   // 預設展開，且隨時可收放（不因目前路由鎖死）
   const [archOpen, setArchOpen] = useState(true);
   const [costOpen, setCostOpen] = useState(true);
+  const [iacOpen, setIacOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -228,6 +232,42 @@ export const Sidebar: React.FC = () => {
           U23：「專案」。第一層獨立項，位置在「我的記憶」之前（線框 §14：「入口」之後、
           「我的記憶」之前；U14 的「入口」已落地於本區塊最上方）。
         */}
+        {showIac && (
+          <div className="mt-4 mb-2">
+            <button
+              type="button"
+              className={groupHeaderClass}
+              onClick={() => setIacOpen((open) => !open)}
+              aria-expanded={iacOpen}
+              data-testid="nav-iac"
+            >
+              <span>{IAC_GROUP_LABEL}</span>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${iacOpen ? 'rotate-90' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            {iacOpen && (
+              <nav className="space-y-1 px-2 mt-1" aria-label={IAC_GROUP_LABEL}>
+                {iacItems.map((item) => (
+                  <NavLink
+                    key={item.step}
+                    to={item.path}
+                    data-testid={`nav-iac-${item.step}`}
+                    className={linkClass}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            )}
+          </div>
+        )}
+
         {showProjects && (
           <div className="mb-2">
             <nav className="space-y-1 px-2" aria-label="專案">
@@ -322,7 +362,7 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {!showCoreSection && !showAdminSection && (
+        {!showCoreSection && !showCost && !showIac && !showProjects && !showMemory && !showAdminSection && (
           <p className="px-4 text-xs text-gray-600 leading-relaxed">
             目前角色尚未開放任何功能選單，請聯絡管理員調整權限。
           </p>

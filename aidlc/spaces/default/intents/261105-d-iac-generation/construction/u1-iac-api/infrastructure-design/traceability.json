@@ -1,0 +1,24 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u1-iac-api",
+  "upstream_ids": [
+    "NFR-PERF-1.1",
+    "NFR-SCALE-1.1",
+    "NFR-REL-1.1",
+    "NFR7.1",
+    "NFR7.5",
+    "NFR7.6",
+    "NFR1",
+    "NFR6"
+  ],
+  "coverage": [
+    { "id": "NFR-PERF-1.1", "status": "OK", "target": "infrastructure-specification.md 單 replica＋bulkhead 註記" },
+    { "id": "NFR-SCALE-1.1", "status": "OK", "target": "infrastructure-specification.md 無 Redis／單進程" },
+    { "id": "NFR-REL-1.1", "status": "OK", "target": "cicd-pipeline.md rollback／重啟清空預期" },
+    { "id": "NFR7.1", "status": "OK", "target": "monitoring-design.md 結構化 log" },
+    { "id": "NFR7.5", "status": "OK", "target": "monitoring-design.md 無 metrics 列" },
+    { "id": "NFR7.6", "status": "OK", "target": "monitoring-design.md 無 OTel" },
+    { "id": "NFR1", "status": "OK", "target": "cicd-pipeline.md secrets／映像不藏 key" },
+    { "id": "NFR6", "status": "OK", "target": "cicd-pipeline.md backend/iac 進既有 build" }
+  ]
+}

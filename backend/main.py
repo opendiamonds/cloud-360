@@ -16,6 +16,7 @@ from services.memory_router import router as memory_router
 from services.requirement_field_router import router as requirement_field_router
 from cost.estimate_intake_router import router as estimate_intake_router
 from cost.advice_stream_router import router as advice_stream_router
+from iac.iac_router import router as iac_router
 from services.llm_provider import configure_provider_env
 from services.embedding_port import configure_embedding_env
 from services.session_store import configure_session_env
@@ -136,6 +137,7 @@ app.include_router(memory_router, prefix="/api/memory")
 # 呼叫端、沒有 dependency 鏈。請求本體在授權之後才由 facade 解析，故本 router 的
 # 422 一律晚於授權判定（BR46.4）。
 app.include_router(requirement_field_router, prefix="/api/requirements")
+app.include_router(iac_router, prefix="/api/iac")
 # U13 brain-gateway：大腦唯一的 WebSocket 端點 /api/brain/ws（BR61.1）。掛在
 # /api/ 之下，nginx 的 location /api/ 才會帶 Upgrade 標頭。認證在 handler 內
 # （子協定帶 token、accept 前判定 K1），不掛 dependency——WebSocket 端點不走
