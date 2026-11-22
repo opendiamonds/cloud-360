@@ -938,206 +938,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/iac/advice": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Advice
-         * @description D1 edit. Streams an explanation of the draft already produced for this diagram.
-         */
-        post: operations["iacAdvice"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Iac Download
-         * @description D1 edit. Severity does not block the zip.
-         */
-        get: operations["iacDownloadZip"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Replace Draft Files
-         * @description D1 edit. Replaces the current draft's .tf text. Does not call a model.
-         */
-        post: operations["iacReplaceDraftFiles"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Generate
-         * @description D1 edit. JSON by default. Accept: text/event-stream yields progress, note tokens, then the draft.
-         */
-        post: operations["iacGenerate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Iac Get Readiness
-         * @description D1 view. Classifies visible diagrams before generate. Does not call a model.
-         */
-        get: operations["iacGetReadiness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/save": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Save Draft
-         * @description D1 edit. Writes the current draft, both notes, and the scan for that draft. Does not call a model.
-         */
-        post: operations["iacSaveDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Scan
-         * @description D2 edit. diagram_id scans the saved draft. files scans uploaded .tf text and leaves the draft in place.
-         */
-        post: operations["iacScan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/scan-advice": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Scan Advice
-         * @description D2 edit. Streams a note about the latest scan. Does not rescan.
-         */
-        post: operations["iacScanAdvice"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/secrets/rewrite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Iac Secrets Rewrite
-         * @description D3 edit. Omitted report_id uses the latest succeeded report.
-         */
-        post: operations["iacSecretsRewrite"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iac/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Iac Get Session
-         * @description D1 view. An empty slot is 200 with null artifact fields. A saved draft is loaded when memory is empty.
-         */
-        get: operations["iacGetSession"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/membership/projects/{project_id}/members": {
         parameters: {
             query?: never;
@@ -1448,22 +1248,6 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["Message"][];
         };
-        /** CheckItemModel */
-        CheckItemModel: {
-            /** Id */
-            id: string;
-            /** Path */
-            path?: string | null;
-            /** Resource */
-            resource?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "passed" | "failed" | "skipped";
-            /** Title */
-            title: string;
-        };
         /** CloudEstimateView */
         CloudEstimateView: {
             checks: components["schemas"]["MechanicalCheckView"];
@@ -1613,20 +1397,6 @@ export interface components {
             /** Source */
             source: string;
         };
-        /** DiagramReadinessModel */
-        DiagramReadinessModel: {
-            /** Diagram Id */
-            diagram_id: number;
-            /** Node Count */
-            node_count: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ready" | "empty" | "unreadable";
-            /** Title */
-            title: string;
-        };
         /**
          * DiagramSystemIn
          * @description `system_id` 為 null 表示取消掛載。欄位必填（可為 null），不給預設值：
@@ -1642,21 +1412,6 @@ export interface components {
             diagram_id: number;
             /** System Id */
             system_id?: number | null;
-        };
-        /** DraftSummaryModel */
-        DraftSummaryModel: {
-            /** Created At */
-            created_at: string;
-            /** Diagram Id */
-            diagram_id: number;
-            /** Draft Id */
-            draft_id: string;
-            module_tree: components["schemas"]["ModuleTreeModel"];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "succeeded" | "failed";
         };
         /** EstimateSetDetailView */
         EstimateSetDetailView: {
@@ -1746,39 +1501,12 @@ export interface components {
             /** Value */
             value?: string | null;
         };
-        /** FileEntryModel */
-        FileEntryModel: {
-            /** Content */
-            content: string;
-            /** Path */
-            path: string;
-        };
         /**
          * FilledState
          * @description 三態（`ADR-015`；推導規則見 `BR44.1`）。
          * @enum {string}
          */
         FilledState: "never_filled" | "filled" | "cleared";
-        /** FindingModel */
-        FindingModel: {
-            /** Detail */
-            detail?: string | null;
-            /** Id */
-            id: string;
-            /** Path */
-            path?: string | null;
-            /**
-             * Severity
-             * @enum {string}
-             */
-            severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-            /** Title */
-            title: string;
-        };
-        /** GenerateResponseModel */
-        GenerateResponseModel: {
-            draft: components["schemas"]["DraftSummaryModel"];
-        };
         /**
          * GuardedProjectRef
          * @description `LastAdminGuardReport` 的一項。
@@ -2041,11 +1769,6 @@ export interface components {
             /** Role */
             role: string;
         };
-        /** ModuleTreeModel */
-        ModuleTreeModel: {
-            /** Files */
-            files: components["schemas"]["FileEntryModel"][];
-        };
         /** OffendersView */
         OffendersView: {
             /** Currency Ordinals */
@@ -2108,11 +1831,6 @@ export interface components {
              * @default aws
              */
             provider: string;
-        };
-        /** ReadinessResponseModel */
-        ReadinessResponseModel: {
-            /** Diagrams */
-            diagrams: components["schemas"]["DiagramReadinessModel"][];
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -2208,29 +1926,6 @@ export interface components {
             /** Seeded */
             seeded: number;
         };
-        /** RewriteResponseModel */
-        RewriteResponseModel: {
-            draft: components["schemas"]["DraftSummaryModel"];
-            rewrite: components["schemas"]["RewriteResultModel"];
-        };
-        /** RewriteResultModel */
-        RewriteResultModel: {
-            /** Created At */
-            created_at: string;
-            /** Draft Id */
-            draft_id: string;
-            /** Report Id */
-            report_id: string;
-            /** Rewrite Id */
-            rewrite_id: string;
-            /** Rewritten Paths */
-            rewritten_paths: string[];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "succeeded" | "failed";
-        };
         /** RolePermissionRow */
         RolePermissionRow: {
             /** Can Edit */
@@ -2276,60 +1971,10 @@ export interface components {
             /** Xml Data */
             xml_data: string;
         };
-        /** SaveDraftResponseModel */
-        SaveDraftResponseModel: {
-            /** Diagram Id */
-            diagram_id: number;
-            /** Draft Id */
-            draft_id: string;
-            /** Saved At */
-            saved_at: string;
-        };
         /** SaveEstimateBody */
         SaveEstimateBody: {
             /** Name */
             name: string;
-        };
-        /** ScanReportModel */
-        ScanReportModel: {
-            /** Checks */
-            checks?: components["schemas"]["CheckItemModel"][];
-            /** Created At */
-            created_at: string;
-            /** Diagram Id */
-            diagram_id: number;
-            /** Draft Id */
-            draft_id: string;
-            /** Findings */
-            findings: components["schemas"]["FindingModel"][];
-            /**
-             * Max Severity
-             * @enum {string}
-             */
-            max_severity: "NONE" | "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-            /** Report Id */
-            report_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "succeeded" | "failed";
-        };
-        /** ScanResponseModel */
-        ScanResponseModel: {
-            report: components["schemas"]["ScanReportModel"];
-        };
-        /** SessionSnapshotModel */
-        SessionSnapshotModel: {
-            /** Advice */
-            advice?: string | null;
-            /** Diagram Id */
-            diagram_id: number;
-            draft?: components["schemas"]["DraftSummaryModel"] | null;
-            latest_rewrite?: components["schemas"]["RewriteResultModel"] | null;
-            latest_scan?: components["schemas"]["ScanReportModel"] | null;
-            /** Scan Advice */
-            scan_advice?: string | null;
         };
         /** ShareDiagramRequest */
         ShareDiagramRequest: {
@@ -4490,333 +4135,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacAdvice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacDownloadZip: {
-        parameters: {
-            query?: {
-                diagram_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacReplaceDraftFiles: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerateResponseModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacGenerate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerateResponseModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacGetReadiness: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadinessResponseModel"];
-                };
-            };
-        };
-    };
-    iacSaveDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SaveDraftResponseModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacScan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScanResponseModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacScanAdvice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacSecretsRewrite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                } | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RewriteResponseModel"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    iacGetSession: {
-        parameters: {
-            query?: {
-                diagram_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionSnapshotModel"];
-                };
             };
             /** @description Validation Error */
             422: {
