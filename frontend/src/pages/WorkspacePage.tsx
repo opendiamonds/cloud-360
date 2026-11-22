@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { IacEntryControl } from '../components/iac/IacEntryControl';
-import { rememberPendingGenerate } from '../iac/pendingGenerate';
 import { ChatBox } from '../components/ChatBox';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
@@ -72,7 +70,6 @@ export const WorkspacePage = () => {
   const canViewOnly = canArch('view') && !canEditArch;
   const canA3Edit = can('A3', 'edit');
   const canA3View = can('A3', 'view');
-  const canViewD1 = can('D1', 'view');
   const canvasRef = useRef<DrawioCanvasRef>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -514,24 +511,6 @@ export const WorkspacePage = () => {
 
     setToast(null);
     navigate(`/assessment?diagramId=${diagramId}`);
-  };
-
-  const openTerraform = async () => {
-    if (!canViewD1) return;
-    let diagramId = currentDiagramIdRef.current;
-    if (!diagramId) {
-      if (!xml || !canEditArch) {
-        navigate('/iac/generate');
-        return;
-      }
-      diagramId = await saveDiagram(xml, { successMessage: '已儲存，正在產生 IaC…' });
-      if (!diagramId) return;
-    } else if (xml && canEditArch) {
-      await autosaveDiagramXml(diagramId, xml);
-    }
-    setToast(null);
-    rememberPendingGenerate(diagramId);
-    navigate(`/iac/generate?diagramId=${diagramId}`);
   };
 
   const appendAgentMessage = (
@@ -1192,7 +1171,7 @@ export const WorkspacePage = () => {
               <select
                 className="bg-transparent border-none text-xs font-bold text-indigo-700 outline-none cursor-pointer focus:ring-0"
                 value={selectedProvider}
-                onChange={(e) => setSelectedProvider(e.target.value as any)}
+                onChange={(e) => setSelectedProvider(e.target.value as 'aws' | 'azure' | 'gcp' | 'compound')}
                 title="切換架構圖雲端平台模式"
               >
                 <option value="compound">✨ 混合雲 (Compound)</option>
