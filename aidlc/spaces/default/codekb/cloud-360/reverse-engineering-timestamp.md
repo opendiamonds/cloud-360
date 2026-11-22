@@ -263,3 +263,26 @@ gh-aw／收窄規則」三者之間需要一個明確決定。
 | 部署拓撲變更（新容器、新環境） | `architecture.md`、`technology-stack.md`、`dependencies.md` |
 | 新 story 或新角色 | `business-overview.md`、`api-documentation.md` |
 | WebSocket／SSE 契約變更 | `api-documentation.md`、`architecture.md`（機械檢查盲區一節） |
+
+## Scope of Analysis
+
+```yaml
+scope_version: 1
+kind: partial
+intent: 261021-a1-compound-cloud-2
+fingerprint: 417488e2724279405cf506a33651a0e510fa2de4
+analyzed:
+  paths:
+    - backend/services/diagram_builder.py
+    - backend/services/design_agent.py
+    - frontend/src/
+  components:
+    - diagram_builder
+    - design_agent
+    - frontend_workspace
+shallow:
+  paths:
+    - backend/tests/
+    - backend/routers/
+    - frontend/src/components/
+```

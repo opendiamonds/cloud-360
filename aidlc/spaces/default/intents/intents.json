@@ -53,5 +53,12 @@
     "dirName": "261001-a2-langgraph",
     "scope": "refactor",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a15c35-9d63-7342-9303-55fb324c239c",
+    "slug": "a1-compound-cloud",
+    "dirName": "261021-a1-compound-cloud-2",
+    "scope": "feature",
+    "status": "complete"
   }
 ]

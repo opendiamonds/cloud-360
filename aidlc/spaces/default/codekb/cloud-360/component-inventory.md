@@ -58,7 +58,7 @@
 |---|---|---|---|---|
 | `services/wa_collab_orchestrator.py` | 551 | **A1↔A3 雙 agent 協作**。Design 與 Review 互相對話最多 2 輪，目標 lens 總分 ≥ `TARGET_SCORE`(80) 且無 `HIGH_RISK`；產生 `score` 與 `xml_preview` 事件 | `design_agent`、`review_agent`、`wa_score_service` | `test_wa_collab.py`(48／3) |
 | `services/review_orchestrator.py` | 510 | **A3 評核狀態機**。狀態流轉（`pending`→`rules_complete`→`complete`／`rules_only`）；逾時控制（75s／90s）；`_archive_previous()`；SSE 事件序；`audit_log`；`get_accessible_diagram`／`review_to_dict`／`user_can_read_review` | `wa_rule_engine`、`wa_lens_engine`、`review_agent` | **狀態機主體無直接測試** |
-| `services/design_agent.py` | 328 | **A1 Design Agent**。`claude-agent-sdk` → spawn Claude Code CLI 子行程；提供行程內 MCP tool `draw_architecture_diagram`（allowed_tools 唯一項）；**明確禁用 Bash／Read／Write／Edit** | `diagram_builder`、`llm_provider`、外部 CLI | `test_design_agent.py`(85／7)，含 2 個 `@given` |
+| `services/design_agent.py` | 328 | **A1 Design Agent**。`claude-agent-sdk` → spawn Claude Code CLI 子行程；提供行程內 MCP tool `draw_architecture_diagram`（allowed_tools 唯一項，支援 `provider="compound"` 與三雲群組輸出）；**明確禁用 Bash／Read／Write／Edit** | `diagram_builder`、`llm_provider`、外部 CLI | `test_design_agent.py`(85／7)，含 2 個 `@given` |
 | `services/llm_provider.py` | 223 | **本輪新增**。LLM 供應商切換：`openrouter`（部署預設）↔ `cli`（本機已登入的 claude CLI）；`llm_auth_ready()`。docstring 40+ 行，逐項解釋為何 `cli` 模式必須 **delete** 而非清空 6 個衝突環境變數 | 環境變數、外部 CLI | `test_llm_provider.py`(243／**25**，全 repo 最多) |
 | `services/review_agent.py` | 174 | **A3 改善建議 agent**。不掛 MCP、壓縮 findings、串流 `suggestion_delta` | `llm_provider`、外部 CLI | `test_review_agent.py`(39／2) |
 
@@ -66,7 +66,7 @@
 
 | 元件 | LOC | 職責 | 外部相依 | 測試 |
 |---|---|---|---|---|
-| `services/diagram_builder.py` | **1,818（全 repo 最大模組）** | groups／nodes／edges → draw.io `mxGraphModel` XML；版面正規化、icon 與邊線去擁擠、orthogonal edge。**唯一 I/O 是 `fetch_icon_from_n8n()`** | 選填 n8n webhook | `test_diagram_builder.py`(546／18，含 2 個 `@given`)、`test_diagram_builder_edges.py`(234／11)、`test_diagram_icons.py`(196／19，含 1 個 `@given`) |
+| `services/diagram_builder.py` | **2,081（全 repo 最大模組）** | groups／nodes／edges → draw.io `mxGraphModel` XML；版面正規化、icon 與邊線去擁擠、orthogonal edge。支援 Hub-and-Spoke 三雲佈局與 cross-cloud 連線。**唯一 I/O 是 `fetch_icon_from_n8n(..., provider="compound")`** | 選填 n8n webhook | `test_diagram_builder.py`(546／18，含 2 個 `@given`)、`test_diagram_builder_edges.py`(234／11)、`test_diagram_icons.py`(196／19，含 1 個 `@given`) |
 | `services/wa_rule_engine.py` | 973 | 解析 draw.io mxGraph XML 的 `mxCell` value 與 style，產出 Well-Architected 支柱分數與 findings。**不連 AWS API、不讀 DB** | 無 | `test_wa_rule_engine.py`(150／9)，含 2 個 `@given` |
 | `services/wa_lens_engine.py` | 556 | Offline Custom Lens loader 與 `riskRules` 評估。相容 AWS WA Custom Lens `schemaVersion 2021-11-01`。**不呼叫 AWS API** | 無 | `test_wa_lens_engine.py`(146／8) |
 | `services/collab_suggestions.py` | 147 | 優化前後 findings 的差異摘要 | 無 | `test_collab_suggestions.py`(52／2) |

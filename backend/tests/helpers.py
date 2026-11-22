@@ -9,6 +9,29 @@ from unittest.mock import MagicMock
 # Mock psycopg2 before any database import (CI / hosts without the driver).
 sys.modules.setdefault("psycopg2", MagicMock())
 
+# Mock LangGraph / LangChain stack if running in light test environments
+def _fake_tool(func=None, *args, **kwargs):
+    if func is not None:
+        return func
+    return lambda f: f
+
+langchain_core_tools = MagicMock()
+langchain_core_tools.tool = _fake_tool
+sys.modules.setdefault("langchain_core.tools", langchain_core_tools)
+
+for _mod in [
+    "langgraph",
+    "langgraph.graph",
+    "langgraph.graph.message",
+    "langgraph.checkpoint",
+    "langgraph.checkpoint.memory",
+    "langgraph.prebuilt",
+    "langchain_core",
+    "langchain_core.messages",
+    "langchain_anthropic",
+]:
+    sys.modules.setdefault(_mod, MagicMock())
+
 backend_dir = Path(__file__).resolve().parents[1]
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))

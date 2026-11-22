@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "stage": "code-generation",
+  "unit": "u4-workspace-canvas-ui",
+  "writes": [
+    { "path": "frontend/src/components/DrawioCanvas.tsx" },
+    { "path": "frontend/src/pages/WorkspacePage.tsx" }
+  ]
+}
+

@@ -580,6 +580,44 @@ agent 產生的每個事件（`message`／`progress`）都即時 yield 出來，
 Node 22 與全域安裝的 `@anthropic-ai/claude-code`**，否則 `claude-agent-sdk`
 無法 spawn 子行程，A1 與 A3 建議階段全部失效。
 
+### 交易四：A1 混合雲 (Compound Cloud) 繪圖拓撲與跨雲組裝
+
+```mermaid
+sequenceDiagram
+    participant U as 使用者
+    participant FE as 前端 WorkspacePage
+    participant AG as agent_router / design_agent
+    participant DB as diagram_builder.py
+    participant N8N as n8n Webhook
+    participant CV as DrawioCanvas (iframe)
+
+    U->>FE: 點擊 Toolbar "Compound" 或輸入多雲架構提示詞
+    FE->>AG: POST /api/architecture/generate
+    Note over AG: Agent 辨識混合雲意圖，組織 AWS/Azure/GCP 三雲群組與節點
+    AG->>AG: 呼叫 draw_architecture_diagram(provider="compound", groups, nodes, edges)
+    AG->>DB: build_mxgraph_xml(provider="compound", groups, nodes, edges)
+    
+    Note over DB: 計算 Hub-and-Spoke 幾何佈局 (AWS 居中加寬, GCP 居左, Azure 居右)
+    loop 逐一取得節點圖示
+        DB->>N8N: POST {"service": name, "provider": "compound"}
+        alt n8n 成功回傳 SVG
+            N8N-->>DB: 雲端圖示 SVG
+        else 失敗或逾時 (5s)
+            DB-->>DB: 灰底 fallback 並記 Warning
+        end
+    end
+
+    Note over DB: 組合跨雲直角折線 (Orthogonal Routing) 與協議標籤
+    DB-->>AG: 回傳完整三雲 mxGraphModel XML
+    AG-->>FE: SSE chunk (type: "xml")
+    FE->>CV: mergeXml 載入畫布，自動 Fit-to-Window 呈現
+```
+
+**混合雲幾何與通訊規範**：
+1. **上行協定**：向 n8n 發送圖示請求時統一傳送 `provider = "compound"`，確保跨雲圖示解析策略一致。
+2. **空間佈局**：採用 Hub-and-Spoke 架構，中央核心雲（如 AWS）寬度設為 480px，左右側翼（GCP 與 Azure）各為 360px，中間保留 120px 跨雲通道，避免群組邊框與節點重疊。
+3. **跨雲連線**：多雲間的 edges 採用直角折線並標註連接協議（VPN / Direct Connect / HTTPS），顯著降低視覺混亂度。
+
 ### 交易三：A3 評核狀態機（本次已據實修正為四狀態）
 
 ```mermaid

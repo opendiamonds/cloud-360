@@ -448,6 +448,33 @@ pydantic v1 風格 `class Config: orm_mode = True` 改為 v2 的
   （`sorted({row[1] for row in DEFAULT_ROLE_PERMISSIONS})`），非硬編碼。
   **改 seed 資料即改變全系統的 story 清單。**
 
+## 內部工具與 Webhook 契約 ［本輪定向補充］
+
+### 1. 行程內 MCP Tool：`draw_architecture_diagram`
+- **調用方**：Agent SDK 子行程（`design_agent.py`）
+- **承載者**：`backend/services/design_agent.py:64-77`
+- **參數結構**：
+  - `provider: str` — 雲端供應商平台標識（`"AWS"`, `"GCP"`, `"Azure"`，擴充支援 `"compound"` 混合雲）
+  - `groups: list[dict]` — 框架區域（含 `id`, `name`, `type`, `x`, `y`, `width`, `height`）
+  - `nodes: list[dict]` — 節點元件（含 `id`, `name`, `x`, `y`）
+  - `edges: list[dict]` — 拓撲連線（含 `source`, `target`）
+- **傳回值**：提示文字字串，同時透過 `_progress_queue` 推送 `type: "xml"` 之 draw.io XML 事件
+
+### 2. 外部 n8n Webhook 契約
+- **端點**：`${N8N_WEBHOOK_URL}` (環境變數配置，可帶 Basic Auth)
+- **方法**：`POST`
+- **請求 Payload**：
+  ```json
+  {
+    "service": "EC2",
+    "provider": "compound"
+  }
+  ```
+- **回應規格**：
+  - HTTP 200 且 body 開頭為 `<svg`：直接作為元件圖示內嵌至 mxGraph XML。
+  - HTTP 200 且 body 為 JSON 陣列或物件：提取 SVG 欄位。
+  - 非 200 或逾時 (5.0s)：降級至灰底文字 fallback SVG，記 Warning，不阻斷主架構圖產出。
+
 ## API 面的已知缺口 ［本輪機械複驗］
 
 1. **HTTP 層測試覆蓋 5/45 operation**（`c3de2c8` 時為 3/45；本輪以

@@ -84,6 +84,12 @@
 - **NEVER** 把 RBAC 種子或權限頁的 C1 欄當成已有 cost router／Cost 頁 (affirmed 2026-08-19)
 - **NEVER** 在既有 n8n／PNG 呼叫點用 httpx 直接打雲端 Pricing API；新計價呼叫必須走獨立 `pricing_client` (affirmed 2026-08-19；**ADR-0017 §8**：`pricing_client` 恢復效力，本條原樣有效——httpx 不得在任何位置直打雲端 Pricing API，一律走 `pricing_client`；**ADR-0018 §1**：`pricing_client` 可對接的端點集合擴大至目錄價類的需憑證端點，httpx 不得直打的規定不變)
 - NEVER 以 repo 內新增的實作程式（例如 `scripts/` 下的 Python）承載**無人值守的**流程自動化與外部系統同步；此類機制一律以 gh-aw 或 GitHub Actions workflow 承載。**邊界以觸發來源判定**：由事件或排程觸發、無人在迴圈內的（`on: push`／`pull_request`／`schedule`／`workflow_dispatch` 等）屬本條禁止範圍；由 stage 檔或 slash command 觸發、須有人執行才會跑的工具**不在此限**——既有先例為 `tcms` plugin 的 `scripts/tcms_validate.py` 與 `scripts/tcms_sync.py`，兩者只被 `.claude/aidlc-common/stages/construction/tcms-test-cases.md` 呼叫，`.github/` 下無任何 workflow 呼叫它們。注意 gh-aw 是 LLM 驅動（`engine: copilot`），落在本 repo 三塊結構性盲區的「所有 LLM 路徑」那一塊，決定性的映射邏輯應優先放在純 Actions 步驟，判斷性的工作才交給 gh-aw (learned 2026-08-23；2026-08-24 收窄為「無人值守」並寫明觸發來源判準——原文的「與外部系統同步」會讓 `## Mandated` 強制要求的 tcms 流程技術性違反本條，該矛盾由使用者裁決收窄規則文字而非增列例外) <!-- cid:intent-capture:260822-c1 -->
+- **NEVER** 繞過既有 `doreen/feat/*` 分支命名與繁體中文 Conventional Commits 規範。 (affirmed 2026-11-07)
+
+- **NEVER** 在 `design_agent.py` 中向 Agent 開放 Bash、Read、Write、Edit 等檔案系統與命令列權限（僅允許 `draw_architecture_diagram` 行程內 MCP tool）。 (affirmed 2026-11-07)
+
+- **NEVER** 引入未經驗證的外部依賴套件或硬編碼憑證至程式碼庫。 (affirmed 2026-11-07)
+
 ## Mandated
 
 - ALWAYS 在 commit 前執行 `python3 scripts/validate_repo_contract.py`。違反 repo contract = CI 紅燈。contract 涵蓋 repo 層必要文件（`REQUIRED_FILES`／`REQUIRED_TEXT`）、record 層 baseline artifacts（`REQUIRED_RECORD_FILES`／`REQUIRED_RECORD_TEXT`，執行時動態解析 record 目錄）、文件語言（record 內不得有 `## English Version`）、禁止路徑與禁止內容。
@@ -131,6 +137,12 @@
 - ALWAYS codekb 以 kind: full 發布時，須在產出內明寫深度分佈（哪些路徑深讀、哪些僅盤點），不得讓 full 被下游讀成「處處都讀過」；深度切分跨越元件邊界時，拆分元件而非放寬覆蓋宣稱 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:reverse-engineering:2608f768557e75d3aab19caf5ce98b809e44c34be808f4f35f663e6bb62de474 -->
 - NEVER 對已有 reviewer 或其他 subagent 寫入內容的 artifact 做附加時，使用 index 字串切片截尾（如 s[:s.index("## Review")]）——會把下游寫入的整段內容刪掉，且 artifact 多半尚未進版控無法還原。一律以純 append 或錨定自己寫入的標記進行 (learned 2026-09-16；實例：requirements-analysis 誤刪 product-lead 的 ## Review 區段，需 resume reviewer 重寫) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:204c7209210b6fb6ccf8348a2f9af1e49cddf79d3a192473f555618f8c7a9f67 -->
 - ALWAYS requirements 或後續階段新增／推翻了已核可 scope-document 的項目時，須在產出文件內逐處明標「本階段新增或推翻、scope 尚未涵蓋」並要求回補，不得當作既有 CAP 的自然延伸吸收；標記須在提問當下即向使用者揭露後果，非事後補記 (learned 2026-09-16) (learned 2026-09-16) <!-- cid:260916-estimate-upload-rework:requirements-analysis:ed182d6322d3545d0af1f58229ee65ae34e61f2255d2afaeb1770a47d0f8005e -->
+- **ALWAYS** 對每一項變更檢查 ADR-0006 security baseline 的四個面向（IAM、encryption、network exposure、audit logging）。涉及 IAM／權限矩陣／網路暴露／稽核記錄的變更，必須在該 stage 產出中明列 security 影響與處置。 (affirmed 2026-11-07)
+
+- **ALWAYS** 在向 n8n 請求混合雲服務圖示時發送 `provider = "compound"`，且在 n8n 異常時提供灰底 fallback 容錯。 (affirmed 2026-11-07)
+
+- **ALWAYS** 在混合雲架構繪圖中採用 Hub-and-Spoke 空間佈局與直角折線跨雲連線，確保三雲群組與協議標籤邊界清楚。 (affirmed 2026-11-07)
+
 ## Corrections
 
 <!-- Project-specific corrections from human feedback. -->
@@ -260,3 +272,24 @@
 - Q11 定案為 B（空殼要能正確回「尚未提供」）而非 C（實作最小成本能力）。取捨是：保住「成本關注者」這個角色在第一版有可驗證的行為（路由正確、回覆明確），同時不把成本資料來源這個獨立子系統拉進本 intent——而本 intent 已因 Q5=B 承擔了新資料模型。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:intent-capture:63b0f3e4722dfa83d4d96a3b9978ce3e04f1ce5b2f2f2b3942def064da62f5f9 -->
 - 提問時把某題的選項順序重排（為了讓建議項排前面），寫回問題檔時卻依**位置**而非依**內容**對應，把 F11 使用者實選的 A 誤記為 C。此即 `requirements-analysis:260822-ra-c2` 警告的形狀，但該規則談的是「選項數超過上限時先收斂」，未涵蓋「順序重排後的回寫對應」。已在問題檔就地記錄更正與原因。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:feasibility:7e354cfdf52d22ea0f79d38813303a79ef9c6307e99264d0830292629f092965 -->
 - 抽象的衝突清單不足以讓人察覺答案讀反；**具體呈現「照此執行下一步會產出什麼」才有效**。本站先以矛盾偵測列出 S9 結果與 [Q1]／[Q3]／[Q5] 的三處衝突並明示「方向可能讀反」，使用者回覆「沒反，就是這樣」；直到 S10 把後果具體化為「兩項 Must 各自依賴一項 Should，故 Must 集合無法獨立交付」，使用者才主動更正為 8 Must／2 Should。下次遇到「答案與多處上游定案衝突且疑似讀反」時，直接推導到下一步的具體產出，不要停在衝突清單。 (learned 2026-09-21) <!-- cid:260920-orchestration-brain:scope-definition:5016d9d84951a6438e6965d693e3350ff564d4439eeeb17f37daee3162571973 -->
+
+## Interpretations
+- C1 provider 欄位統一固定為小寫 "compound"（非 enum 聯集），確保向外部 n8n 服務的 payload 語意一致；若未來支援單雲模式，需透過 ADR 擴充 C1/C4 enum。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:contract-design:1f72b43273177f2ec64cccfce10f94286cc80b575cd8ed4738e34d471c6ab584 -->
+
+- 交付規劃採 1 Bolt: 1 Unit 嚴格一對一遞進，並標定 Bolt 2 (U2: Compound Diagram Builder) 為核心 Walking Skeleton，提早鎖定幾何佈局之技術可行性。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:delivery-planning:d8f97175bbf07bd3caca424fa45dd80bfa9a8fd935ebacf788544690b2e7dfa0 -->
+
+- U1 圖示閘道確立在程序內引入 @lru_cache(maxsize=128)，確保多雲拓撲重複節點之圖示查詢在記憶體中極速命中，避免多次跨網路 HTTP 呼叫。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:functional-design:7daab6f09c5e5b57cf87ffaa43c9e1fd8f2500309f6f1c11dad0f08cda0ea531 -->
+
+- NFR 需求全數落實 ADR-0004 零新增外部依賴，後端以標準庫 xml.etree 與既有 httpx 滿足安全與逾時防護，前端以 Tailwind CSS 與既有 Draw.io postMessage 達成 GPU 加速。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:nfr-requirements:efe40616f84508c4e16ac3227ba5daa27bfe2faf57d4e566ca9076fdd98efc86 -->
+
+- NFR Design 階段各單元架構解耦完成：U1 確立 XSS-Safe 正則白名單過濾，U2 確立 XML 原生字元轉義與 500-node 邊界限制，U3 確立 RBAC 裝飾器防護，U4 確立 postMessage 來源白名單與 GPU 硬體加速縮放。 (learned 2026-11-10) <!-- cid:261021-a1-compound-cloud-2:nfr-design:04424cad44a9771086e27f88136fb97f475a60c2a4a39978f32bbfa958af31e1 -->
+
+- 基礎設施設計全數沿用既有容器與 GitHub Actions 測試管線：U1/U2 透過 pytest 進行單元斷言，U3 於共享 FastAPI 容器執行並配置 SSE 監控指標，U4 透過既有 Vite 打包輸出至 Nginx 靜態目錄，維持零架構變更與最高相容性。 (learned 2026-11-10) <!-- cid:261021-a1-compound-cloud-2:infrastructure-design:b72217603a29a6d327d4624f5bd327b04ec8406ec8b8e86bef3880fa40278e87 -->
+
+## Tradeoffs
+- C2/C3 採 in-process Python call（非 HTTP）以降低跨網路延遲與錯誤複雜度；代價是 U1/U2/U3 只能在同一 Python process 部署，擴展需考量 worker pool。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:contract-design:7cf970ac39c824e4fbc567a1da090bb5780439d2e9efbc424c755f232a8e7d29 -->
+- 排序選擇 WSJF 優先交付 Bolt 1 (外部 I/O 逾時防護) 與 Bolt 2 (幾何組裝骨架)，先排除外部網路相依性與空間座標演算法之核心風險，再推進 Agent 與 UI 消費者單元。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:delivery-planning:c18c038eda8a2444e2b399d04702a11aa0d380c2a0f0cc75c72fd4aac77f34eb -->
+- Fallback 40x40 灰底文字 SVG 文字截取前 4 字元大寫置中，取捨字串完整度以換取在小尺寸節點上的排版美觀性與高對比清晰度。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:functional-design:446cc88ebd0f5f7d01e2cc12fe11e868205f472baf03788fe7c27d90dc8ab6b6 -->
+- 幾何計算單元設置單圖 500 節點上限以消除記憶體 DoS 風險，以常態架構規模保護伺服器不被惡意超大輸入耗盡資源。 (learned 2026-11-08) <!-- cid:261021-a1-compound-cloud-2:nfr-requirements:6ce15a7b58b0b4618b49de9371ab60aa8297882ef2a6562965acaf2b7040c657 -->
+- 前端選擇 250ms CSS GPU 硬體加速 transform 而非 JS 輪詢計算，以固定時間上限犧牲動態彈性換取嚴格 60 FPS 零掉幀體驗。 (learned 2026-11-10) <!-- cid:261021-a1-compound-cloud-2:nfr-design:4283566576cf7cb52a2da452ae539f0289c6a11f95f4ea0a56ecc6a9243107f5 -->
+- 選擇將 U3 作為 FastAPI 共享模組而非獨立微服務，以省去額外 Kubernetes 部署維護成本，代價是與其他後端服務共用 CPU/RAM 資源配額。 (learned 2026-11-10) <!-- cid:261021-a1-compound-cloud-2:infrastructure-design:04a80a7e2f730f7d98a9c34c8ef5a91dbd35b942c913bd6a56269e853dcd5ad6 -->
