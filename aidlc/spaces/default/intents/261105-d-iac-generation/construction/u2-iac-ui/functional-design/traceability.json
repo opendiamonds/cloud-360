@@ -1,0 +1,33 @@
+{
+  "stage": "functional-design",
+  "unit": "u2-iac-ui",
+  "note": "ui：IaC 工作區。OK target 為 functional-spec Wx 或 frontend-components 元件。",
+  "upstream_ids": [
+    "US1.1",
+    "US1.2",
+    "US1.3",
+    "US1.4",
+    "US2.1",
+    "US2.3",
+    "US3.1",
+    "US3.2",
+    "US4.1",
+    "US4.2",
+    "US5.1",
+    "US6.2"
+  ],
+  "coverage": [
+    { "id": "US1.1", "status": "OK", "target": "functional-spec W1, IacEntryControl" },
+    { "id": "US1.2", "status": "OK", "target": "functional-spec W1, IacDiagramPicker" },
+    { "id": "US1.3", "status": "OK", "target": "functional-spec W1, Q2" },
+    { "id": "US1.4", "status": "OK", "target": "IacDiagramPicker onUploadFail" },
+    { "id": "US2.1", "status": "OK", "target": "functional-spec W2, IacDraftPane" },
+    { "id": "US2.3", "status": "OK", "target": "functional-spec W2" },
+    { "id": "US3.1", "status": "OK", "target": "functional-spec W3, IacFindingsPanel" },
+    { "id": "US3.2", "status": "OK", "target": "functional-spec W3" },
+    { "id": "US4.1", "status": "OK", "target": "functional-spec W4, IacRewritePanel" },
+    { "id": "US4.2", "status": "OK", "target": "functional-spec W4" },
+    { "id": "US5.1", "status": "OK", "target": "functional-spec W5, IacDownloadConfirmModal" },
+    { "id": "US6.2", "status": "OK", "target": "functional-spec W1-W5", "note": "UI 可觀察成功態" }
+  ]
+}

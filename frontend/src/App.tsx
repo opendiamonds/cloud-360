@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { BrainTranscriptProvider } from './brain/BrainTranscriptContext';
 import { BrainConnectionProvider } from './components/brain/BrainConnectionProvider';
 import { useAuth } from './context/auth-context';
 import { ProtectedRoute, CapabilityRoute } from './components/RouteGuard';
 import { Layout } from './components/Layout';
+import { iacNavItem } from './iac/iacNav';
 
 import { LoginPage } from './pages/LoginPage';
 import { WorkspacePage } from './pages/WorkspacePage';
@@ -22,6 +23,7 @@ import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectCreatePage } from './pages/ProjectCreatePage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { EntryPage } from './pages/EntryPage';
+import { IacPage } from './pages/IacPage';
 
 /**
  * 依權限導向第一個可用頁；pending → 等待授權；皆無則 403。
@@ -42,9 +44,25 @@ const DefaultRedirect: React.FC = () => {
   if (canArch('view')) return <Navigate to="/workspace" replace />;
   if (can('A3', 'view')) return <Navigate to="/assessment" replace />;
   if (can('C1', 'view')) return <Navigate to="/cost" replace />;
+  if (can('D1', 'view')) return <Navigate to="/iac/generate" replace />;
+  if (can('D2', 'view')) return <Navigate to="/iac/scan" replace />;
+  if (can('D3', 'view')) return <Navigate to="/iac/secrets" replace />;
   if (can('J3a', 'view')) return <Navigate to="/admin/users" replace />;
   if (can('J3b', 'view')) return <Navigate to="/admin/role-permissions" replace />;
   return <Navigate to="/403" replace />;
+};
+
+const IacRoute: React.FC = () => {
+  const { step } = useParams();
+  const item = iacNavItem(step);
+  if (!item) return <Navigate to="/403" replace />;
+  return (
+    <CapabilityRoute storyId={item.storyId} action="view">
+      <Layout>
+        <IacPage step={item.step} />
+      </Layout>
+    </CapabilityRoute>
+  );
 };
 
 function App() {
@@ -239,6 +257,15 @@ function App() {
                     <RolePermissionsPage />
                   </Layout>
                 </CapabilityRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/iac/:step"
+            element={
+              <ProtectedRoute>
+                <IacRoute />
               </ProtectedRoute>
             }
           />
