@@ -18,8 +18,6 @@ interface DrawioCanvasProps {
   saveStatus?: DiagramSaveStatus;
   /** 僅檢視／審核：禁止操作畫布與儲存 */
   readOnly?: boolean;
-  /** 是否在載入新 XML 時自動縮放適配畫布（時長 250ms） */
-  autoFit?: boolean;
   /** 外層版面寬度變更時遞增，觸發 draw.io iframe 重新適配 */
   layoutEpoch?: number;
   /** 標題列正中央插槽（例如歷史架構圖選單），避免浮層擋住標題 */
@@ -38,7 +36,6 @@ interface DrawioCanvasProps {
 
 export interface DrawioCanvasRef {
   mergeXml: (xml: string) => void;
-  triggerFitWindow: (padding?: number) => void;
 }
 
 const SAVE_BADGE: Record<
@@ -70,7 +67,6 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
       diagramTitle = '未命名架構圖',
       saveStatus = 'unsaved',
       readOnly = false,
-      autoFit = true,
       layoutEpoch = 0,
       headerCenter,
       headerBanner,
@@ -108,23 +104,15 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
 
     const postLoad = (nextXml: string) => {
       if (!iframeRef.current?.contentWindow) return;
-      let cleanXml = (nextXml || '').trim();
-      if (cleanXml.startsWith('%3C') || cleanXml.startsWith('%3c')) {
-        try {
-          cleanXml = decodeURIComponent(cleanXml);
-        } catch {
-          // ignore decode error
-        }
-      }
       iframeRef.current.contentWindow.postMessage(
         JSON.stringify({
           action: 'load',
           autosave: 1,
-          xml: cleanXml,
+          xml: nextXml,
         }),
         '*'
       );
-      latestXmlRef.current = cleanXml;
+      latestXmlRef.current = nextXml;
       onLoadCompleteRef.current?.();
     };
 
@@ -151,19 +139,6 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
       }
     }, [layoutEpoch, isReady]);
 
-    const triggerFitWindow = (padding: number = 32) => {
-      if (iframeRef.current && isReady) {
-        try {
-          iframeRef.current.contentWindow?.postMessage(
-            JSON.stringify({ action: 'status', messageKey: 'fitWindow', padding }),
-            '*'
-          );
-        } catch {
-          // ignore
-        }
-      }
-    };
-
     useImperativeHandle(
       ref,
       () => ({
@@ -177,7 +152,6 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
             latestXmlRef.current = mergeData;
           }
         },
-        triggerFitWindow,
       }),
       [isReady]
     );
@@ -187,14 +161,7 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
       if (!isReady || !iframeRef.current || !xml) return;
       if (xml === latestXmlRef.current) return;
       postLoad(xml);
-      // 若開啟 autoFit，50ms 後平滑縮放至可視範圍中央（四周留白 32px）
-      if (autoFit !== false) {
-        const timer = setTimeout(() => {
-          triggerFitWindow(32);
-        }, 50);
-        return () => clearTimeout(timer);
-      }
-    }, [xml, isReady, autoFit]);
+    }, [xml, isReady]);
 
     useEffect(() => {
       const handleMessage = (event: MessageEvent) => {
