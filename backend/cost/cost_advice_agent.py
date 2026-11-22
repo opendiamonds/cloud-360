@@ -138,8 +138,8 @@ def _invoke_once(prompt: str) -> str:
     """One LLM call via U6 helpers (counts toward ≤3 budget)."""
     from services.langgraph_runtime import (
         InvokeOutcome,
+        chat_model,
         invoke_graph,
-        openrouter_chat_model,
     )
 
     try:
@@ -148,7 +148,7 @@ def _invoke_once(prompt: str) -> str:
         raise RuntimeError("langgraph_missing") from exc
 
     def _node(state: dict[str, Any]) -> dict[str, Any]:
-        model = openrouter_chat_model()
+        model = chat_model()
         msg = model.invoke([{"role": "user", "content": state["prompt"]}])
         content = getattr(msg, "content", None) or str(msg)
         return {**state, "text": content}

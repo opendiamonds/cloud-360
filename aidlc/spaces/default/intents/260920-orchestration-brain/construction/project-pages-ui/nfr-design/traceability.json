@@ -1,0 +1,52 @@
+{
+  "stage": "nfr-design",
+  "unit": "project-pages-ui",
+  "upstream_ids": [
+    "NFR8.100", "NFR11.100", "NFR11.101", "NFR11.102",
+    "PPN-01", "PPN-02", "PPN-03", "PPN-04", "PPN-05", "PPN-06", "PPN-07",
+    "PPN-11", "PPN-12", "PPN-13", "PPN-14", "PPN-14a", "PPN-14b", "PPN-14c", "PPN-15", "PPN-16", "PPN-17", "PPN-18",
+    "PPN-21", "PPN-22", "PPN-23", "PPN-24", "PPN-25"
+  ],
+  "coverage": [
+    { "id": "NFR8.100", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§三「不做」：不加 database.py 補丁、零環境變數；索引經既有遷移腳本到達既有資料庫，不新增 compose 變數" },
+    { "id": "NFR11.100", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之四 末列：建立系統後 pathname 不變；突變為建立後 navigate" },
+    { "id": "NFR11.101", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之四 末列：量測方式沿用上游（pathname 恰變 1 次、id 等於 POST 回應）" },
+    { "id": "NFR11.102", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之二 末點與 §一之四：tab 不在 effect 依賴、以 replace 更新 ?tab=" },
+    { "id": "PPN-01", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之一 fanoutQueue.ts 的 FANOUT_CONCURRENCY = 4；§一之四 在途最大值恰 4；§三 更正 4 的定位為經驗值（帶入項 nfr R-05）" },
+    { "id": "PPN-02", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之一：FIFO 佇列 ＋ 呼叫端兩段入列（端點 5 全部先於端點 7，各依系統 id 遞增）；不進佇列者逐項列出（帶入項 fd R-04）" },
+    { "id": "PPN-03", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之二：Map 缺鍵＝載入中、不另設 queued 狀態；不截斷" },
+    { "id": "PPN-04", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之三：cleanup 依序設 cancelled 與 queue.cancel()；在途者不中止、結果丟棄" },
+    { "id": "PPN-05", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之二 末點：切籤只讀已持有 state" },
+    { "id": "PPN-06", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§二之二：兩支端點的固定語句序列；新檔 test_project_visibility_queries.py 以 before_cursor_execute 計數、tearDown 卸除；三道突變" },
+    { "id": "PPN-07", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§三 九項落點（schema_rbac.sql J) 區塊、models.py、test_M3、EXPECTED_INDEXES 8→9、J 區塊哨兵、DEPLOY.md 索引數 7→9 並更正既存漂移、重跑步驟與驗證指令）；performance-design.md §二之一 的 UNION 形狀使索引可被選用（帶入項 nfr R-02）" },
+    { "id": "PPN-11", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§三 缺 K2 列（兩端點 403；系統清單對存在與不存在的 id 皆 403）" },
+    { "id": "PPN-12", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§三 五身分矩陣（③ 為另一專案的成員）、M5 與新增 M6；§四 唯一定義 _visible_project_ids_select（帶入項 fd R-03）" },
+    { "id": "PPN-13", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§一：兩個無 id 常數、六處 f-string 改寫、逐路徑例外型別與訊息範本表、response.content 逐位元比較（帶入項 nfr R-01，使用者裁決）" },
+    { "id": "PPN-14", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二：project_visible 必填無預設、每方法五步順序、七案矩陣 (a)–(g)、突變 G1–G7（帶入項 fd R-01，使用者裁決；nfr R-03、R-04）" },
+    { "id": "PPN-14a", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二之二 第 1 步 _authorize 先於守門；§二之三 (f)；突變 G2" },
+    { "id": "PPN-14b", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§四 四條 grep（加上 ORM 類別名 ProjectMember）；§二之一 Callable 注入使 HierarchyFacade 不 import membership；突變 G7" },
+    { "id": "PPN-14c", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二之二 delete_system 先以 get_project_of_system 取 project_id、守門拋系統句；§一之二 表；突變 G6" },
+    { "id": "PPN-15", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二之四：BR87.7 原鎖 ＋ 三條新 ast 斷言（無預設、呼叫端必帶 project_visibility 呼叫、定義只在 MembershipFacade）" },
+    { "id": "PPN-16", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§六：沿用上游 grep 逐筆判讀" },
+    { "id": "PPN-17", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§六：三種瀏覽器儲存 grep 為 0；佇列不落地" },
+    { "id": "PPN-18", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§六：fanoutQueue.ts 不得有 console.；[PPD1]=A 的後端 log 只記 id" },
+    { "id": "PPN-21", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§一之二 fanoutQueue.ts 自寫、無 React 依賴" },
+    { "id": "PPN-22", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§二之二 SQLAlchemy event.listen" },
+    { "id": "PPN-23", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§一之一 四支新測試檔皆在 backend/tests/；前端沿用既有 Playwright" },
+    { "id": "PPN-24", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§一之一 末列：openapi.json 與 api.d.ts 重產" },
+    { "id": "PPN-25", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§三 #1、#3 的 DDL 與 ORM 寫法（含 ddl_indexes 正規式對寫法的限制）；#7–#9 的 DEPLOY.md 同步（blocking）" }
+  ],
+  "reverse": [
+    { "id": "carried:functional-design:R-01", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二、§五之二" },
+    { "id": "carried:functional-design:R-02", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§一之二 RecentChanges 的逐字標示與空態文字" },
+    { "id": "carried:functional-design:R-03", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§三 ③ 構造、M5、M6" },
+    { "id": "carried:functional-design:R-04", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§一之一" },
+    { "id": "carried:functional-design:R-05", "status": "N/A", "target": "code-generation 的 code-summary", "note": "設計檔格式缺陷，無設計內容；設計檔不回改，code-summary 記明以散文後的單一表格為準" },
+    { "id": "carried:nfr-requirements:R-01", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§一" },
+    { "id": "carried:nfr-requirements:R-02", "status": "OK", "target": "construction/project-pages-ui/nfr-design/logical-components.md", "note": "§三" },
+    { "id": "carried:nfr-requirements:R-03", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二之一、§二之二、§二之四" },
+    { "id": "carried:nfr-requirements:R-04", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§二之二、§二之三 (e)、G3" },
+    { "id": "carried:nfr-requirements:R-05", "status": "OK", "target": "construction/project-pages-ui/nfr-design/performance-design.md", "note": "§三" },
+    { "id": "carried:nfr-requirements:R-06", "status": "OK", "target": "construction/project-pages-ui/nfr-design/security-design.md", "note": "§五；[PPD1]=A 定案：成功刪除加記 actor_user_id，ADR-0006 Audit logging 判為擴充" }
+  ]
+}

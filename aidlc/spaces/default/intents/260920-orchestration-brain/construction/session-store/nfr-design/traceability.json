@@ -1,0 +1,215 @@
+{
+  "stage": "nfr-design",
+  "unit": "session-store",
+  "upstream_ids": [
+    "NFR2.40",
+    "NFR2.41",
+    "NFR2.42",
+    "NFR3.40",
+    "NFR3.41",
+    "NFR3.42",
+    "NFR3.43",
+    "NFR4.40",
+    "NFR4.41",
+    "NFR4.44",
+    "NFR4.45",
+    "NFR4.46",
+    "NFR4.47",
+    "NFR4.48",
+    "NFR4.50",
+    "NFR4.51",
+    "NFR4.52",
+    "NFR4.53",
+    "NFR4.54",
+    "NFR4.55",
+    "NFR4.56",
+    "NFR4.57",
+    "NFR4.60",
+    "NFR4.61",
+    "NFR4.62",
+    "NFR4.63",
+    "NFR4.64",
+    "NFR5.40",
+    "NFR8.40",
+    "NFR8.41",
+    "NFR8.42",
+    "NFR3.20",
+    "NFR4.1",
+    "NFR4.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.40",
+      "status": "OK",
+      "target": "Lua 內一次完成追加＋修剪＋續期，狀態變更後由 U13 扇出；扇出成本線性（performance-design.md §核心設計、scalability-design.md §擴展形狀）"
+    },
+    {
+      "id": "NFR2.41",
+      "status": "OK",
+      "target": "無狀態 session_store ＋ 狀態全在 Redis key；連線登錄屬 U13（logical-components.md §四）"
+    },
+    {
+      "id": "NFR2.42",
+      "status": "OK",
+      "target": "一次狀態變更 = 一次 Redis 寫入 ＋ N 次送出；禁止「每條連線各讀一次狀態」的形狀（performance-design.md）"
+    },
+    {
+      "id": "NFR3.40",
+      "status": "OK",
+      "target": "load 以單次 HGETALL 取回，一次 round-trip（performance-design.md §核心設計）"
+    },
+    {
+      "id": "NFR3.41",
+      "status": "OK",
+      "target": "追加只碰該段欄位、Lua 一次 round-trip；單一 blob 方案會讓此預算隨累積失守（performance-design.md 的對照表）"
+    },
+    {
+      "id": "NFR3.42",
+      "status": "OK",
+      "target": "K-07 解析在前、寫入在後；150ms 的較寬上界對應 PostgreSQL 往返（security-design.md §一）"
+    },
+    {
+      "id": "NFR3.43",
+      "status": "OK",
+      "target": "量測點在 session_store 方法進入／回傳，天然排除使用者網路（performance-design.md）"
+    },
+    {
+      "id": "NFR4.40",
+      "status": "OK",
+      "target": "Hash 結構不改變總量；容量門檻表與「先壞什麼」（scalability-design.md §容量門檻）"
+    },
+    {
+      "id": "NFR4.41",
+      "status": "Deferred",
+      "target": "OPEN-N10-6 → U10 的 code-generation（3.5，ALWAYS，游標之後）。**設計已指定形狀、只差數值**：檢查點在 SessionStore.append_message 入口（不在 Lua——拒絕要能帶出型別化的錯誤給 U13）、超限的行為是拒絕並回可辨識的錯誤而非截斷。數值屬產品面輸入長度限制（requirements.md 的 FR1.1 逐字接受自由文字且無長度上限），若須產品決定則該站重新提交使用者。**在它關閉之前，NFR4.41 的「可計算的硬上界」不成立**——記為 Deferred 而非 OK，也不是 GAP（GAP 會讀成無人承接，而它有）。"
+    },
+    {
+      "id": "NFR4.44",
+      "status": "OK",
+      "target": "以 REDIS_USER 的 ACL 身分連線；redis_gateway 為唯一連線點（logical-components.md §一）"
+    },
+    {
+      "id": "NFR4.45",
+      "status": "OK",
+      "target": "固定建構函式產生日誌紀錄、不接受任意 kwargs；白名單即欄位集合（observability-design.md §一）"
+    },
+    {
+      "id": "NFR4.46",
+      "status": "OK",
+      "target": "session_store 不 import request／websocket 型別、不判權、無 router——三項皆為可機械檢查的形狀（security-design.md §一、logical-components.md §四）"
+    },
+    {
+      "id": "NFR4.47",
+      "status": "OK",
+      "target": "解析在前、寫入解析結果；逐段驗證與其唯一例外（security-design.md §一 第 2、3 點）"
+    },
+    {
+      "id": "NFR4.48",
+      "status": "OK",
+      "target": "寫入時點驗證明示為設計選擇；讀取不重驗，時效風險由消費端決定（security-design.md §一）"
+    },
+    {
+      "id": "NFR4.50",
+      "status": "OK",
+      "target": "maxmemory-policy 改為 noeviction；本設計每個 key 皆帶 TTL（reliability-design.md、scalability-design.md §容量門檻）"
+    },
+    {
+      "id": "NFR4.51",
+      "status": "OK",
+      "target": "三種失敗成因分類與原因碼；寫入失敗、讀取正常（reliability-design.md §二）"
+    },
+    {
+      "id": "NFR4.52",
+      "status": "OK",
+      "target": "AOF 維持 yes；並明寫 redis_aof volume 是為重啟還原而非備份（reliability-design.md §六）"
+    },
+    {
+      "id": "NFR4.53",
+      "status": "OK",
+      "target": "seg:* 欄位的存在與否即段的存在與否（reliability-design.md §四）"
+    },
+    {
+      "id": "NFR4.54",
+      "status": "OK",
+      "target": "seg:<id> 的 JSON 陣列有序；Lua 為修剪的唯一載體故順序語意單一（reliability-design.md §四）"
+    },
+    {
+      "id": "NFR4.55",
+      "status": "OK",
+      "target": "tgt:<id> 欄位，每段各一組（reliability-design.md §四）"
+    },
+    {
+      "id": "NFR4.56",
+      "status": "OK",
+      "target": "pageModes 放進 meta 欄位，HGETALL 一次帶回——它是指標不是資料，故最容易漏（reliability-design.md §四）"
+    },
+    {
+      "id": "NFR4.57",
+      "status": "OK",
+      "target": "TTL 在 key 上，AOF 載入時還原剩餘秒數而非重設滿額（reliability-design.md §四）"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "OK",
+      "target": "MEMORY STATS 為獨立低頻採集點，不進熱路徑；門檻 35%／100%（observability-design.md §四）"
+    },
+    {
+      "id": "NFR4.61",
+      "status": "OK",
+      "target": "session_backend_unavailable 事件，欄位 method／sessionKey／reason／elapsedMs（observability-design.md §二）"
+    },
+    {
+      "id": "NFR4.62",
+      "status": "OK",
+      "target": "三種原因碼 redis_unreachable／redis_oom／redis_command_error 與其判定來源；中風險的字串比對已標明並指向 OPEN-N10-5（observability-design.md §三）"
+    },
+    {
+      "id": "NFR4.63",
+      "status": "OK",
+      "target": "白名單以單一建構函式強制，不接受任意 kwargs；並新增排除作業對象識別碼組合（observability-design.md §一、security-design.md §一）"
+    },
+    {
+      "id": "NFR4.64",
+      "status": "OK",
+      "target": "可重跑的還原驗證腳本，且重啟對象為 Redis 而非 backend（observability-design.md §六）"
+    },
+    {
+      "id": "NFR5.40",
+      "status": "OK",
+      "target": "本單元造成的 K-02 payload 變更不得繞過契約閘門；本檔不擁有該閘門（security-design.md 的上游表、logical-components.md §四）"
+    },
+    {
+      "id": "NFR8.40",
+      "status": "OK",
+      "target": "上限參數為環境變數、無預設值；並列為容量吃緊時不需改程式的第一道旋鈕（scalability-design.md §擴展手段）"
+    },
+    {
+      "id": "NFR8.41",
+      "status": "OK",
+      "target": "客戶端選型的兩項硬條件落為 redis_gateway 的職責（原因碼分類）；OOM 字串比對的風險已標明（observability-design.md §三、logical-components.md §一）"
+    },
+    {
+      "id": "NFR8.42",
+      "status": "OK",
+      "target": "noeviction 的設定變更與其同步紀律；scalability-design.md §擴展手段另記 maxmemory 與容器上限的連動"
+    },
+    {
+      "id": "NFR3.20",
+      "status": "N/A",
+      "target": "U8 memory-service（向量檢索延遲）",
+      "note": "本單元的 performance-requirements.md 在「本單元不負責的效能面」一節引用它，用以劃清界線——引用不等於承擔。U8 已完成，其 NFRx.y 不由本單元設計。"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "N/A",
+      "target": "U1 brain-infra（Redis ACL：app 不得以 default 連線）",
+      "note": "本單元的 security-requirements.md 以它為 NFR4.44 的來源：ACL 是 U1 已建立的保護，本單元的義務是**不繞過**它而非重新設計它。U1 已完成。"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "N/A",
+      "target": "U1 brain-infra（appendonly yes）",
+      "note": "本單元的 reliability-requirements.md 以它為 NFR4.52 的來源。本單元的義務是「不得被改掉」，其設計落點在 U1。本檔 reliability-design.md §六 另補一句它不是備份，避免被誤讀。"
+    }
+  ]
+}

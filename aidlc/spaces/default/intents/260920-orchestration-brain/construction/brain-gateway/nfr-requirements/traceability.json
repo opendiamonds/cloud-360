@@ -1,0 +1,338 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "brain-gateway",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11",
+    "NFR13.1",
+    "NFR13.2",
+    "NFR13.3",
+    "NFR13.4",
+    "NFR13.5",
+    "NFR13.6",
+    "NFR13.7",
+    "NFR13.8",
+    "NFR13.9",
+    "NFR13.10",
+    "NFR13.11",
+    "NFR13.12",
+    "NFR13.13",
+    "NFR13.14",
+    "NFR13.15",
+    "NFR13.16",
+    "NFR13.17",
+    "NFR13.18",
+    "NFR13.19",
+    "NFR13.20",
+    "NFR13.21",
+    "NFR13.22",
+    "NFR13.23",
+    "NFR13.24",
+    "NFR13.25",
+    "NFR13.26",
+    "NFR13.27",
+    "NFR13.28",
+    "NFR13.29",
+    "NFR13.30",
+    "NFR13.31",
+    "NFR13.32",
+    "NFR13.33",
+    "NFR13.34",
+    "NFR13.35",
+    "NFR13.36",
+    "NFR13.37",
+    "NFR13.38",
+    "NFR13.39",
+    "NFR13.40",
+    "NFR13.41",
+    "NFR13.42",
+    "NFR13.43",
+    "NFR13.44"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "NFR13.35（本單元的失敗形式：記憶預取靜默失敗使分類不帶記憶、畫面看不出——以 prefetch 結果欄位使其可觀察）；準確率本身的量測屬 U11 與 build-and-test"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "NFR13.26, NFR13.30, NFR13.31（work_target 的跨頁扇出、ready 前的收斂、送出失敗隔離、重連快照是 NFR2 在傳輸層的承載；保留率本身於 build-and-test 量測）"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR13.1, NFR13.2, NFR13.35（交接膠水預算 400／300／保留 500 的分配與歸因；承接 intent-router performance-requirements.md:87 與 OPEN-GW13-9）"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR13.31"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "NFR13.40, NFR13.41"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "inception NFR6 — 記憶層 schema 隔離（U5）。本單元以別的形式存在的部分（繞過 facade 直讀記憶表）由 NFR13.16 的 grep 擋下"
+    },
+    {
+      "id": "NFR7",
+      "status": "OK",
+      "target": "NFR13.24（本單元決定哪些輪次產生 episodic 內容，窮舉 6 類不寫）；90 天保存與刪除稽核屬 U8／U9，靜態加密屬 OQ-3（nfr-design）"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR13.43, NFR13.44（Redis 三變數成為啟動必要條件 → LOCAL-DEV.md 同步；本站數值為模組常數、零新環境變數）"
+    },
+    {
+      "id": "NFR9",
+      "status": "OK",
+      "target": "NFR13.6, NFR13.20（本單元零 LLM 呼叫；四道檢查先於 classify；每使用者每分鐘至多 20 次計費分類）"
+    },
+    {
+      "id": "NFR10",
+      "status": "N/A",
+      "target": "inception NFR10 — 路由層模型可替換性（U11）。本單元不選模型、不呼叫 LLM（NFR13.6），失敗模式不以別的形式存在於本單元"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "inception NFR11 — 跨功能任務的頁面切換次數（UI 單元與 build-and-test 的情境量測）。本單元是傳輸層，不決定頁面流程"
+    },
+    {
+      "id": "NFR13.1",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.2",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.3",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.4",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.5",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.6",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/performance-requirements.md"
+    },
+    {
+      "id": "NFR13.7",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.8",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.9",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.10",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.11",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.12",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.13",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.14",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.15",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.16",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/security-requirements.md"
+    },
+    {
+      "id": "NFR13.17",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.18",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.19",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.20",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.21",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.22",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/scalability-requirements.md"
+    },
+    {
+      "id": "NFR13.23",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.24",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.25",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.26",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.27",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.28",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.29",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.30",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.31",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.32",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.33",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/reliability-requirements.md"
+    },
+    {
+      "id": "NFR13.34",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/observability-requirements.md"
+    },
+    {
+      "id": "NFR13.35",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/observability-requirements.md"
+    },
+    {
+      "id": "NFR13.36",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/observability-requirements.md"
+    },
+    {
+      "id": "NFR13.37",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/observability-requirements.md"
+    },
+    {
+      "id": "NFR13.38",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/observability-requirements.md"
+    },
+    {
+      "id": "NFR13.39",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    },
+    {
+      "id": "NFR13.40",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    },
+    {
+      "id": "NFR13.41",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    },
+    {
+      "id": "NFR13.42",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    },
+    {
+      "id": "NFR13.43",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    },
+    {
+      "id": "NFR13.44",
+      "status": "OK",
+      "target": "construction/brain-gateway/nfr-requirements/tech-stack-decisions.md"
+    }
+  ]
+}

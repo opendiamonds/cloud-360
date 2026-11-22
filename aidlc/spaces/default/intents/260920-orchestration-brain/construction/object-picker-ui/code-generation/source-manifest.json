@@ -1,0 +1,34 @@
+{
+  "stage": "code-generation",
+  "unit": "object-picker-ui",
+  "version": 1,
+  "writes": [
+    {
+      "path": "frontend/src/brain/objectPickerModel.ts"
+    },
+    {
+      "path": "frontend/src/brain/objectPickerData.ts"
+    },
+    {
+      "path": "frontend/src/components/brain/ObjectPicker.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ObjectPickerGroup.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ObjectPickerCreateForm.tsx"
+    },
+    {
+      "path": "frontend/src/components/brain/ContextBar.tsx"
+    },
+    {
+      "path": "frontend/eslint.config.js"
+    },
+    {
+      "path": "frontend/tests/e2e/object-picker.spec.ts"
+    },
+    {
+      "path": "frontend/tests/e2e/a11y.spec.ts"
+    }
+  ]
+}

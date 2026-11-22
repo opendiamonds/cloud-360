@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatBox } from '../components/ChatBox';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
@@ -9,6 +9,12 @@ import { ShareModal } from '../components/ShareModal';
 import { useAuth } from '../context/auth-context';
 import { useCollaboration } from '../hooks/useCollaboration';
 import { apiUrl } from '../config/api';
+import { isCanvasDirty } from '../utils/unsavedWork';
+import { isNewDiagramHandoff } from '../projects/workspaceHandoff';
+import { useBrainSession } from '../brain/brainSession';
+import { useWorkspaceTargetSync } from '../brain/useWorkspaceTargetSync';
+import { ContextBar } from '../components/brain/ContextBar';
+import { SyncNotice } from '../components/brain/SyncNotice';
 
 interface Diagram {
   id: number;
@@ -53,6 +59,11 @@ function formatGenerateError(raw: string): string {
 export const WorkspacePage = () => {
   const { token, canArch, can, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // 部署後追加（2026-11-15；本階段新增、已核可 scope／requirements 尚未涵蓋）：從專案總覽「在工作區建立
+  // 架構圖」進來時開空白畫布，不還原上次開的圖——否則使用者落在舊圖上，存檔是更新舊圖而不是建新圖，
+  // 也就不會依作業對象掛到系統。只在第一次 render 讀取；bootstrap 結束後清掉導覽 state，重新整理不再觸發。
+  const startNewDiagramRef = useRef(isNewDiagramHandoff(location.state));
   const { sidebarCollapsed, setSidebarCollapsed } = useLayoutNav();
   const canEditArch = canArch('edit');
   const canReviewArch = canArch('review');
@@ -95,6 +106,25 @@ export const WorkspacePage = () => {
   });
   const [canvasLayoutEpoch, setCanvasLayoutEpoch] = useState(0);
 
+  // U14：大腦掛點（脈絡列、同步提示）只在 K1 view 時掛載；無 K1 時不開連線，
+  // 同步掛點的全部入口為 no-op（security-design §六之二、nfr-design R-05）。
+  // 部署後追加「全站大腦小助手」（2026-11-15）：連線改為全站一條（BrainConnectionProvider，路由 /workspace
+  // 推導 page='workspace'），本頁不再自己開；`enabled` 即 K1 view。「問大腦」面板由浮動小助手取代。
+  const brain = useBrainSession();
+  const brainEnabled = brain.enabled;
+  // 首次對齊要開的圖交給既有 handleLoadDiagram（定義在下方）；以 ref 轉送，只在事件回呼內被讀取。
+  const loadDiagramRef = useRef<(id: number) => void>(() => undefined);
+  const openDiagramForBrain = useCallback((id: number) => loadDiagramRef.current(id), []);
+  const brainSync = useWorkspaceTargetSync(brain, {
+    currentDiagramId,
+    diagrams,
+    saveStatus,
+    xml,
+    openDiagram: openDiagramForBrain,
+  });
+  const onBrainPageReady = brainSync.onPageReady;
+  const markBrainOrigin = brainSync.markOrigin;
+
   const toggleChatCollapsed = useCallback(() => {
     setChatCollapsed((prev) => {
       const next = !prev;
@@ -115,11 +145,9 @@ export const WorkspacePage = () => {
   }, [sidebarCollapsed]);
 
   const handleCanvasExit = useCallback(() => {
-    // no-file 但畫布已有 XML（例如 AI 剛產圖尚未建檔）也視為有風險離開
-    const dirty =
-      saveStatus === 'unsaved' ||
-      saveStatus === 'saving' ||
-      (saveStatus === 'no-file' && !!xml.trim());
+    // no-file 但畫布已有 XML（例如 AI 剛產圖尚未建檔）也視為有風險離開。
+    // U14：判定抽成 utils/unsavedWork.ts 的 isCanvasDirty（原樣抽出，與大腦同步掛點共用一份）。
+    const dirty = isCanvasDirty(saveStatus, xml);
     if (dirty) {
       if (!window.confirm('有未儲存的變更，確定要退出編輯模式？')) {
         return;
@@ -150,7 +178,8 @@ export const WorkspacePage = () => {
     [token]
   );
 
-  const fetchDiagrams = async () => {
+  /** U14（functional-design R-06 前半）：回傳 { ok, list }，僅 response.ok 分支 ok＝true；既有呼叫端忽略回傳值。 */
+  const fetchDiagrams = async (): Promise<{ ok: boolean; list: Diagram[] }> => {
     try {
       const response = await fetch(`${API_COLLAB}/diagrams`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -158,10 +187,12 @@ export const WorkspacePage = () => {
       if (response.ok) {
         const data = await response.json();
         setDiagrams(data);
+        return { ok: true, list: Array.isArray(data) ? data : [] };
       }
     } catch (err) {
       console.error('Failed to load diagram list', err);
     }
+    return { ok: false, list: [] };
   };
 
   /** A4：將 messages 寫回該 user×diagram */
@@ -270,17 +301,27 @@ export const WorkspacePage = () => {
   useEffect(() => {
     if (!token) return;
 
+    // U14（performance-design §四）：就緒時交給大腦同步掛點的值以區域變數明確傳入（setState 尚未 commit，不讀 ref）。
+    let listResult: { ok: boolean; list: Diagram[] } = { ok: false, list: [] };
+    let openedDiagramId: number | null = null;
+    let openedStatus: DiagramSaveStatus = 'no-file';
+    let openedXml = '';
     const bootstrap = async () => {
       try {
-        await fetchDiagrams();
+        listResult = await fetchDiagrams();
         const response = await fetch(`${API_COLLAB}/workspace/bootstrap`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
         const data = await response.json();
-        if (data.diagram) {
+        const startNew = startNewDiagramRef.current;
+        if (data.diagram && !startNew) {
           setXml(data.diagram.xml_data || '');
+          markBrainOrigin('bootstrap');
           setCurrentDiagramId(data.diagram.id);
+          openedDiagramId = data.diagram.id;
+          openedXml = data.diagram.xml_data || '';
+          openedStatus = data.diagram.xml_data ? 'saved' : 'unsaved';
           setSaveStatus(data.diagram.xml_data ? 'saved' : 'unsaved');
           setIsShared(
             !data.diagram.is_owner ||
@@ -289,18 +330,31 @@ export const WorkspacePage = () => {
         } else {
           setSaveStatus('no-file');
         }
-        if (Array.isArray(data.messages) && data.messages.length > 0) {
+        // 還原的對話屬於上次那張圖；開空白畫布時不帶入。
+        if (!startNew && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages);
         }
       } catch (err) {
         console.error('Workspace bootstrap failed', err);
       } finally {
+        if (startNewDiagramRef.current) {
+          startNewDiagramRef.current = false;
+          navigate('/workspace', { replace: true, state: null });
+        }
         setBootstrapDone(true);
+        // BR97.5 的就緒閘門：bootstrap 結束（圖清單請求已先結束）。
+        onBrainPageReady({
+          openedDiagramId,
+          openedBy: openedDiagramId === null ? null : 'bootstrap',
+          diagrams: listResult.list,
+          listOk: listResult.ok,
+          unsaved: isCanvasDirty(openedStatus, openedXml),
+        });
       }
     };
 
     bootstrap();
-  }, [token]);
+  }, [token, onBrainPageReady, markBrainOrigin, navigate]);
 
   const handleLoadDiagram = async (id: number) => {
     try {
@@ -319,6 +373,7 @@ export const WorkspacePage = () => {
             }
           }
           setXml(loadedXml);
+          brainSync.markOrigin('user');
           setCurrentDiagramId(data.id);
           setSaveStatus('saved');
           setIsShared(
@@ -332,6 +387,12 @@ export const WorkspacePage = () => {
       console.error('Failed to load diagram', err);
     }
   };
+
+  useEffect(() => {
+    loadDiagramRef.current = (id: number) => {
+      void handleLoadDiagram(id);
+    };
+  });
 
   const handleNewDiagram = async () => {
     if (!canEditArch) {
@@ -382,6 +443,8 @@ export const WorkspacePage = () => {
       setIsShared(false);
       setSaveStatus('no-file');
       setMessages([DEFAULT_WELCOME]);
+      // BR97.6 ③：被刪的圖等於作業對象的圖時，同步掛點送保留上兩層、diagramId 為 null 的設定。
+      brainSync.onDiagramDeleted(diagramId);
       await setLastOpened(null);
       await fetchDiagrams();
       showToast('架構圖已刪除', 'success', {
@@ -838,17 +901,40 @@ export const WorkspacePage = () => {
       const title = window.prompt('請為這個架構圖命名：', '新架構圖');
       if (!title) return null;
       setSaveStatus('saving');
+      // build-and-test F1（2026-11-12；本階段新增、已核可 scope／requirements 尚未涵蓋）：
+      // 目前作業對象是一個系統時，新圖存檔即掛到該系統，大腦才找得到系統下的圖。
+      // 伺服器判定資格；不合格時整個請求失敗（不存成未掛載的圖），錯誤訊息照實呈現。
+      const targetSystemId = brain.target?.systemId ?? null;
+      const targetSystemName = brain.target?.systemName ?? null;
       const response = await fetch(`${API_COLLAB}/diagrams`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ xml_data: currentXml, title }),
+        body: JSON.stringify({
+          xml_data: currentXml,
+          title,
+          ...(targetSystemId !== null ? { system_id: Number(targetSystemId) } : {}),
+        }),
       });
+      if (!response.ok && targetSystemId !== null) {
+        const data = await response.json().catch(() => null);
+        const detail = data && typeof data.detail === 'string' ? data.detail : null;
+        setSaveStatus('no-file');
+        showToast('儲存架構圖失敗：無法掛到目前作業對象的系統', 'error', {
+          hint: detail ?? '請在脈絡列確認作業對象後再存一次。',
+          autoDismissMs: 6000,
+        });
+        return null;
+      }
       if (response.ok) {
         const data = await response.json();
         setCurrentDiagramId(data.id);
         currentDiagramIdRef.current = data.id;
         setSaveStatus('saved');
         showToast(opts?.successMessage || '架構圖建立成功', 'success', {
+          hint:
+            data.system_id !== null && data.system_id !== undefined
+              ? `已掛到系統「${targetSystemName || '目前作業對象'}」`
+              : undefined,
           autoDismissMs: 3000,
         });
         fetchDiagrams();
@@ -897,7 +983,18 @@ export const WorkspacePage = () => {
   };
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full flex-col">
+    {/*
+      U14（BR97.1）：作業對象列（可切換共享）與同步提示；只在 K1 view 時掛載。部署後追加「全站大腦小助手」
+      （2026-11-15）：原本的收合「問大腦」面板（[EP1]=A）由全站浮動小助手取代，本頁既有的設計對話區不動。
+    */}
+    {brainEnabled && (
+      <>
+        <ContextBar sharingToggle />
+        <SyncNotice sync={brainSync} />
+      </>
+    )}
+    <div className="relative flex flex-1 min-h-0 w-full overflow-hidden">
       {toast?.type === 'error' && (
         <div className={`absolute top-8 ${chatCollapsed ? 'left-12' : 'left-[420px]'} right-0 z-50 flex justify-center pointer-events-none px-4 transition-[left] duration-300`}>
         <div className="pointer-events-auto bg-white/90 backdrop-blur-xl border border-red-100 px-6 py-4 rounded-2xl shadow-[0_12px_40px_rgba(239,68,68,0.15)] flex flex-col gap-3 animate-[slideInDown_0.4s_ease-out] max-w-lg w-[min(92vw,28rem)]">
@@ -1229,6 +1326,7 @@ export const WorkspacePage = () => {
         diagramId={currentDiagramId}
         token={token || ''}
       />
+    </div>
     </div>
   );
 };

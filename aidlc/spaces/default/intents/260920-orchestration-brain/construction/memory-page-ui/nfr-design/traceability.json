@@ -1,0 +1,38 @@
+{
+  "stage": "nfr-design",
+  "unit": "memory-page-ui",
+  "upstream_ids": [
+    "NFR4.80", "NFR4.90", "NFR7.90", "NFR7.91", "NFR8.90",
+    "UIP-1", "UIP-2", "UIP-3", "UIP-4", "UIP-5", "UIP-6",
+    "SEC-U15-1", "SEC-U15-2", "SEC-U15-3", "SEC-U15-4", "SEC-U15-5",
+    "TS-U15-1", "TS-U15-2", "TS-U15-3", "TS-U15-4", "TS-U15-5", "TS-U15-6", "TS-U15-7", "TS-U15-8", "TS-U15-9"
+  ],
+  "coverage": [
+    { "id": "NFR4.90", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：只放 useState，不 import 儲存 API；e2e 比對儲存鍵集合。" },
+    { "id": "NFR7.90", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：無 Context、無模組層變數，卸載即釋放；e2e 重進頁面斷言再次發出 3 個 GET。" },
+    { "id": "NFR7.91", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：DeleteConfirmRow 的固定文案。" },
+    { "id": "NFR8.90", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：常數與既有 apiUrl()，零新設定。" },
+    { "id": "UIP-1", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§一：每區各自 effect，不用 Promise.all。" },
+    { "id": "UIP-2", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§四：常數集中於 memoryPaging.ts，limit 由常數推導。" },
+    { "id": "UIP-3", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§二：沿用 AdminPage.tsx:198-203 的背景補償重抓，處置審查 R-01。" },
+    { "id": "UIP-4", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§三：依賴陣列保證只重跑情節區；cancelled flag 處理競態。" },
+    { "id": "UIP-5", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§四：FULL_ZONE_LIMIT = 200。" },
+    { "id": "UIP-6", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§五：deleting 為條目自身 state。" },
+    { "id": "SEC-U15-1", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：渲染每一列，canDelete 只決定控件。" },
+    { "id": "SEC-U15-2", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：既有 backend/tests/test_memory_authz.py 已斷言，計畫引用即可。" },
+    { "id": "SEC-U15-3", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：不呼叫 PUT .../scope。" },
+    { "id": "SEC-U15-4", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：數值只進 data 屬性。" },
+    { "id": "SEC-U15-5", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：失敗只記狀態碼與操作名。" },
+    { "id": "TS-U15-1", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§六：不做虛擬滾動，零新依賴。" },
+    { "id": "TS-U15-2", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二：每條設計的驗證落點皆為 e2e 或既有 TestClient。" },
+    { "id": "TS-U15-3", "status": "OK", "target": "construction/memory-page-ui/nfr-design/logical-components.md", "note": "§二：apiUrl() 為唯讀共用資源。" },
+    { "id": "TS-U15-4", "status": "OK", "target": "construction/memory-page-ui/nfr-design/logical-components.md", "note": "§一：memoryApi.ts 為純抓取模組。" },
+    { "id": "TS-U15-5", "status": "OK", "target": "construction/memory-page-ui/nfr-design/logical-components.md", "note": "§二：產生的 api.d.ts 為唯讀共用資源。" },
+    { "id": "TS-U15-6", "status": "OK", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "§二：filter 移除連同補償重抓一起設計。" },
+    { "id": "TS-U15-7", "status": "OK", "target": "construction/memory-page-ui/nfr-design/logical-components.md", "note": "§一：LiveRegion 為既有共用元件。" },
+    { "id": "TS-U15-8", "status": "N/A", "target": "construction/memory-page-ui/nfr-design/performance-design.md", "note": "不沿用 PaginationControl 是不採用的決定，無設計落點；EpisodicPager 取代之（logical-components.md §一）。" },
+    { "id": "TS-U15-9", "status": "OK", "target": "construction/memory-page-ui/nfr-design/security-design.md", "note": "§二 NFR8.90 列。" }
+    ,
+    { "id": "NFR4.80", "status": "N/A", "target": "construction/memory-page-ui/nfr-requirements/security-requirements.md", "note": "U24 member-pages-ui 的識別字，在本單元 nfr-requirements 僅作為 NFR4.90 的同形先例被引用，非本單元的要求。" }
+  ]
+}

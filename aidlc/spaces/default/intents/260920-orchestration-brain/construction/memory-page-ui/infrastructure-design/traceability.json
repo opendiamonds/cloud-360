@@ -1,0 +1,183 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "memory-page-ui" ,
+  "upstream_ids": [
+    "NFR4.80",
+    "NFR4.90",
+    "NFR7.90",
+    "NFR7.91",
+    "NFR8.90",
+    "UIP-1",
+    "UIP-2",
+    "UIP-3",
+    "UIP-4",
+    "UIP-5",
+    "UIP-6",
+    "SEC-U15-1",
+    "SEC-U15-2",
+    "SEC-U15-3",
+    "SEC-U15-4",
+    "SEC-U15-5",
+    "TS-U15-1",
+    "TS-U15-2",
+    "TS-U15-3",
+    "TS-U15-4",
+    "TS-U15-5",
+    "TS-U15-6",
+    "TS-U15-7",
+    "TS-U15-8",
+    "TS-U15-9"
+  ],
+  "coverage": [
+    {
+      "id": "NFR4.80",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "U24 的識別字，僅作先例引用。"
+    },
+    {
+      "id": "NFR4.90",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一「瀏覽器儲存：明文禁止」列，零新儲存面。"
+    },
+    {
+      "id": "NFR7.90",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一 同上；無用戶端靜態儲存即無用戶端加密需求。"
+    },
+    {
+      "id": "NFR7.91",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "確認文案屬前端程式，無基礎設施面；驗證落在 §一 的 e2e。"
+    },
+    {
+      "id": "NFR8.90",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "§一「環境變數：零新增」列；render-env.sh 與 .env.example 同步義務為空集合。"
+    },
+    {
+      "id": "UIP-1",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "UIP-2",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "UIP-3",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "UIP-4",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "UIP-5",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "UIP-6",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§一／§二：以 ui-regression 的 Playwright e2e 驗證，零管線改動。"
+    },
+    {
+      "id": "SEC-U15-1",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§二：驗證落在 ui-regression e2e。"
+    },
+    {
+      "id": "SEC-U15-2",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§三：後端既有 test_memory_authz.py 與新增的已核准雙向 TestClient 皆在 backend unittest 閘門內。"
+    },
+    {
+      "id": "SEC-U15-3",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§二：驗證落在 ui-regression e2e。"
+    },
+    {
+      "id": "SEC-U15-4",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/cicd-pipeline.md",
+      "note": "§二：驗證落在 ui-regression e2e。"
+    },
+    {
+      "id": "SEC-U15-5",
+      "status": "OK",
+      "target": "construction/memory-page-ui/infrastructure-design/monitoring-design.md",
+      "note": "§一：console 只含狀態碼與操作名。"
+    },
+    {
+      "id": "TS-U15-1",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-2",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-3",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-4",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-5",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-6",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-7",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-8",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    },
+    {
+      "id": "TS-U15-9",
+      "status": "N/A",
+      "target": "construction/memory-page-ui/infrastructure-design/infrastructure-specification.md",
+      "note": "技術選擇屬前端程式層，無基礎設施落點；§一 證明零新基礎設施。"
+    }
+  ]
+}

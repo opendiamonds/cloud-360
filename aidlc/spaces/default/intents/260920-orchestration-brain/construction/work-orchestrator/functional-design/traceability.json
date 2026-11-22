@@ -1,0 +1,239 @@
+{
+  "stage": "functional-design",
+  "unit": "work-orchestrator",
+  "upstream_ids": [
+    "AC1.1.1",
+    "AC1.1.2",
+    "AC1.1.3",
+    "AC1.1.4",
+    "AC1.1.5",
+    "AC1.3.1",
+    "AC1.3.2",
+    "AC1.3.3",
+    "AC5.1.1",
+    "AC5.1.2",
+    "AC5.1.3",
+    "AC10.1.1",
+    "AC10.1.2",
+    "AC10.1.3",
+    "AC10.1.4",
+    "AC10.1.5",
+    "AC10.2.1",
+    "AC10.2.2",
+    "AC10.2.3",
+    "AC10.2.4"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.1.1",
+      "status": "OK",
+      "target": "BR52.1, BR52.2, BR52.3"
+    },
+    {
+      "id": "AC1.1.2",
+      "status": "OK",
+      "target": "BR54.1"
+    },
+    {
+      "id": "AC1.1.3",
+      "status": "N/A",
+      "target": "平台自改請求的攔截在 U11／U13 的 prompt_guard，本單元收不到這類請求"
+    },
+    {
+      "id": "AC1.1.4",
+      "status": "OK",
+      "target": "BR56.1, BR56.5",
+      "note": "前提：作業對象為圖，或系統下恰有一張圖（list_diagrams_of_system）；只指定系統而系統下零張或多張圖、或作業對象為空或只有專案時，依 BR56.1 以各自的句型失敗並請使用者選圖（OPEN-H11，functional-spec 2.4；OPEN-WO12-4）"
+    },
+    {
+      "id": "AC1.1.5",
+      "status": "N/A",
+      "target": "從敘述認出作業對象屬 U11 的判讀與 U10 的作業對象更新；本單元只讀取工作階段的作業對象"
+    },
+    {
+      "id": "AC1.3.1",
+      "status": "OK",
+      "target": "BR55.1, BR55.3, BR55.7"
+    },
+    {
+      "id": "AC1.3.2",
+      "status": "Deferred",
+      "target": "BR55.4, BR53.4；停掉前提項時，等它的成本項開始執行、檢視項轉已停掉，後項狀態改變，「不受影響」不字面成立；未依賴被更正項的工作項完全不受影響。交使用者裁決（OPEN-WO12-7）"
+    },
+    {
+      "id": "AC1.3.3",
+      "status": "OK",
+      "target": "BR55.5"
+    },
+    {
+      "id": "AC5.1.1",
+      "status": "OK",
+      "target": "BR52.1"
+    },
+    {
+      "id": "AC5.1.2",
+      "status": "OK",
+      "target": "BR53.1, BR53.2"
+    },
+    {
+      "id": "AC5.1.3",
+      "status": "Deferred",
+      "target": "BR55.4, BR53.4；停掉前提項時，等它的成本項開始執行、檢視項轉已停掉，後項狀態改變，「不受影響」不字面成立；未依賴被更正項的工作項完全不受影響。交使用者裁決（OPEN-WO12-7）"
+    },
+    {
+      "id": "AC10.1.1",
+      "status": "OK",
+      "target": "BR56.3",
+      "note": "前提同 AC1.1.4：目標圖集合由作業對象的圖或 list_diagrams_of_system 取得；空 diagram_id 的估價表不採用；句中指名系統時須 U13 先依 referent 更新作業對象（OPEN-WO12-3）"
+    },
+    {
+      "id": "AC10.1.2",
+      "status": "OK",
+      "target": "BR57.1",
+      "note": "以「處理中標示就地維持、生成中不新增訊息」判定；進度文字需 WebSocket 契約增欄（OPEN-WO12-5）"
+    },
+    {
+      "id": "AC10.1.3",
+      "status": "OK",
+      "target": "BR57.3, BR58.5",
+      "note": "卡片以伺服器發起的新輪次送達（BR58.5）；契約沒有「取代」語意，「進度訊息被卡片取代」由 U14 以處理中標示轉為完成＋卡片出現呈現"
+    },
+    {
+      "id": "AC10.1.4",
+      "status": "N/A",
+      "target": "使用者不離開入口頁屬 U14 的畫面行為；本單元不導頁"
+    },
+    {
+      "id": "AC10.1.5",
+      "status": "OK",
+      "target": "BR51.3, BR51.6"
+    },
+    {
+      "id": "AC10.2.1",
+      "status": "OK",
+      "target": "BR57.4, BR56.6"
+    },
+    {
+      "id": "AC10.2.2",
+      "status": "OK",
+      "target": "BR57.4"
+    },
+    {
+      "id": "AC10.2.3",
+      "status": "OK",
+      "target": "BR58.2"
+    },
+    {
+      "id": "AC10.2.4",
+      "status": "Deferred",
+      "target": "本單元對 C1 只讀取，C1 讀取端點不寫 estimate_audit_events，AC 的可觀察結果不存在；授權主體為使用者本人由 BR51.1 保證。回報上游改寫 Then 或決定由大腦另寫稽核（OPEN-WO12-6）"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR51.2",
+      "status": "N/A",
+      "target": "token 不落地：ADR-0006 IAM 面，無故事 AC"
+    },
+    {
+      "id": "BR51.4",
+      "status": "N/A",
+      "target": "寫架構圖變更紀錄：K-07 契約義務，無故事 AC"
+    },
+    {
+      "id": "BR51.5",
+      "status": "N/A",
+      "target": "寫 procedure 記憶：U8 的 [FD4]=B 指派，無故事 AC"
+    },
+    {
+      "id": "BR52.4",
+      "status": "N/A",
+      "target": "工作項存放：[WO3]=A，技術約束"
+    },
+    {
+      "id": "BR52.5",
+      "status": "N/A",
+      "target": "改變即推送：WebSocket 契約的狀態訊息語意，無故事 AC"
+    },
+    {
+      "id": "BR53.3",
+      "status": "N/A",
+      "target": "被等待者失敗時的處置：[WO2]=A 的推論，上游未寫 AC；復原掃描亦套用（BR56.7）"
+    },
+    {
+      "id": "BR55.2",
+      "status": "N/A",
+      "target": "更正冪等：K-11 retry_and_idempotency"
+    },
+    {
+      "id": "BR55.6",
+      "status": "N/A",
+      "target": "找不到工作項：K-11 correct raises"
+    },
+    {
+      "id": "BR56.2",
+      "status": "N/A",
+      "target": "架構檢視的執行：X-02，本單元承載的故事未直接涵蓋檢視"
+    },
+    {
+      "id": "BR56.4",
+      "status": "N/A",
+      "target": "不自動重試：X-01／X-02 retry_and_idempotency"
+    },
+    {
+      "id": "BR57.2",
+      "status": "N/A",
+      "target": "輪詢連續失敗的判定：X-01 stream_read，無故事 AC"
+    },
+    {
+      "id": "BR57.5",
+      "status": "N/A",
+      "target": "成本等待只是排序的揭露：review-01 R-13，無故事 AC"
+    },
+    {
+      "id": "BR58.1",
+      "status": "N/A",
+      "target": "固定句型回覆：[WO1]=A，承接 OQ-N1"
+    },
+    {
+      "id": "BR58.3",
+      "status": "N/A",
+      "target": "A1 文字收齊後轉送、成本不轉送生成中文字：[RA:FR8.1]／X-01"
+    },
+    {
+      "id": "BR58.4",
+      "status": "N/A",
+      "target": "訊息不洩內部錯誤：ADR-0006"
+    },
+    {
+      "id": "BR51.7",
+      "status": "N/A",
+      "target": "facade 呼叫的 DB session 與 to_thread：技術約束，無故事 AC"
+    },
+    {
+      "id": "BR51.8",
+      "status": "N/A",
+      "target": "facade 擁有者範圍拒絕的落點：domain-design R-01，無故事 AC"
+    },
+    {
+      "id": "BR52.6",
+      "status": "N/A",
+      "target": "requestText 與段的來源：review-01 R-07，無故事 AC"
+    },
+    {
+      "id": "BR52.7",
+      "status": "N/A",
+      "target": "比對 status 與 dispatchStage 後寫入：技術約束（review-02 R-10），無故事 AC"
+    },
+    {
+      "id": "BR56.7",
+      "status": "N/A",
+      "target": "逾期與孤兒等待的復原掃描：review-01 R-03、review-02 R-03，無故事 AC"
+    },
+    {
+      "id": "BR56.8",
+      "status": "N/A",
+      "target": "sink 失敗不擴散：review-01 R-03，無故事 AC"
+    }
+  ]
+}

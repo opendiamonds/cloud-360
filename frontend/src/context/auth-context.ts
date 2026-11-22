@@ -50,6 +50,12 @@ export interface AuthContextType {
   /** 架構圖生成（A1／A2／A4 同一功能） */
   canArch: (action?: StoryAction) => boolean;
   refreshMe: () => Promise<void>;
+  /**
+   * U14（security-design §六之一）：訂閱「身分邊界」事件——`login()` 與 `logout()` 的第一行同步通知
+   * （早於任何 setUser／setToken）。回傳退訂函式。`refreshMe()` 與權限更新**不**通知。
+   * 唯一的訂閱者是大腦對話紀錄（換人即清空，不依賴 `User.id`）。
+   */
+  subscribeAuthBoundary: (listener: () => void) => () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

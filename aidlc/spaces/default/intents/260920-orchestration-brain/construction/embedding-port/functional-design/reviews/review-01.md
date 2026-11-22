@@ -1,0 +1,44 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-10-04T15:15:39Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Minor | `functional-spec.md` §七 (Network exposure row) | The row cites "K-01 `consumed_by: [U6]`" as if `contract-summary.md`'s `images_and_services` block for the `ollama` service (lines 151–155) literally carries a `consumed_by: [U6]` field. It doesn't — that field only exists on the four individual env-var entries (`OLLAMA_BASE_URL` etc., lines 124/130/136/142), not on the service/exposure block itself. The underlying conclusion (U6 is the sole consumer of the ollama service) is still correct, but the citation reads as a direct quote from a location that doesn't say that. | Reword the citation to say the "sole consumer" claim is inferred from the env-var `consumed_by` fields plus `implementations: [... ollama ...]`/`owner: U6`, not quoted verbatim from the service block. | Resolved |
+| R-02 | Minor | `entities.md` `H-E3` and `functional-spec.md` `OQ-E4` | Both items transfer the K-06 "four implementations" vs. `[Q1]=A` ("three implementations + one disabled state") divergence to `U8`'s own `functional-design` stage as the primary handoff point. Per `.claude/tools/data/stage-graph.json`, `functional-design` is `CONDITIONAL` ("Skip if simple logic changes with no new business logic") — i.e. U8's functional-design could in principle be skipped. `project.md ## Mandated` (the `approval-handoff:e4b6b5c2` learning) requires that any handoff to a CONDITIONAL stage explicitly flag the skip risk and name who re-confirms if it's skipped. Neither `H-E3` nor `OQ-E4` does this (they only note "必要時 contract-design" as a secondary fallback). Low practical risk given U8 clearly owns non-trivial business logic, but the team's own rule calls for the flag regardless of how likely the skip is. | Add one sentence to `H-E3`/`OQ-E4` noting U8's `functional-design` is CONDITIONAL and naming the conductor as the party who must re-surface this to the user if that stage is skipped. | Resolved |
+
+### Validation Tool Results
+
+No stage-specific validation tool was named in the dispatch for this pass; verification was done by direct repo cross-reference instead (see below). No automated validator was run.
+
+### Independent verification performed (selected)
+
+- **Traceability wiring**: `traceability.json` parsed — `coverage` has exactly 3 rows (`AC4.1.1`/`.2`/`.3`), `reverse` has exactly 30 rows, **zero `OK` anywhere** (both self-checked claims confirmed). Reconciled the 30 `reverse` ids 1:1 against the 30 `- id: BR*` entries actually present in `rules.md` YAML — exact match, no orphans either direction.
+- **Rule counts (§六 of `functional-spec.md`)**: independently parsed `rules.md`'s YAML via script — `policy:14, constraint:13, validation:2, calculation:1, authorization:0`, 30 ids total, 30 unique, 7 groups (BR1–BR7). All match the claimed table exactly.
+- **Entity count**: 6 `- name:` entries in `entities.md`, matches claim.
+- **Deviation 1** (`[Q1]=A` makes selector Optional, divergence from K-06's `implementations: [ollama, fastembed, fulltext, stub]` not rewritten upstream): confirmed K-06 literally lists four implementations (`contract-summary.md:453`); confirmed the divergence is disclosed in `H-E3`/`OQ-E4` and not silently absorbed. The "don't rewrite approved upstream, record divergence" call is consistent with the team's own precedent (`refined-mockups:c3`). See R-02 for the one gap found.
+- **Deviation 2** (`[Q2]` B→A reversal, reasoning about `OLLAMA_EMBED_MODEL` being configurable): verified against `contract-summary.md` K-01 directly (lines ~130–136) — `OLLAMA_EMBED_MODEL` is `type: string`, `default: "bge-m3"`, validation only checks "dense 維度須為 1024", does **not** pin model identity. The reasoning for overriding the user's initial B answer is accurate, not a false premise.
+- **Deviation 3** (H-E1 zero-migration-cost claim): ran `grep -rn 'memory_records|embeddingModel' schema_rbac.sql schema.sql backend/models.py` myself — zero hits, confirmed; `construction/memory-data/` does not exist. Claim holds.
+- **Deviation 4** (traceability's zero `OK` rows): the library unit shares its one assigned story (`US4.1`) with `U5`/`U8` (`unit-of-work-story-map.md:52,111`, both line numbers checked and correct), and `BR3.3` (the one obligation `components.md:432-434` directly assigns this stage) is explicitly marked `N/A` in `reverse` with the stated reason "測試斷言而非使用者可觀察行為" — that's an honest, defensible characterization, not an attempt to claim coverage it doesn't have.
+- **`BR3.3` discharge check**: `components.md:432` and `:434` opened directly — the quoted obligation ("其一致性需要一個測試鎖住") is genuinely discharged by `BR3.3`'s bidirectional-set-equality formulation and its corresponding PBT property `P5` (§五), not merely restated. This is a real, checkable test design, not a no-op.
+- **`BR5.1`**: ADR-008's Decision text (`decisions.md:312+`) places the "only compare rows with the same `embeddingModel`" filter at the retrieval layer, not the Port — `BR5.1`'s "we don't guarantee this" is an accurate restatement of that boundary, not an abdication of a responsibility ADR-008 actually assigned to this unit.
+- **`P4` (batch invariance)**: real, non-tautological property — it would catch a buggy batch implementation that shares cross-element state, which a naive "per-string hash" `stub` would not trivially satisfy unless correctly implemented per-element.
+- **Line-citation spot checks** (beyond the self-check's own claimed 13): independently re-verified `deploy/.env.example:96` and `:114` (exact), `deploy/.env.example:123` (exact — the self-check's claimed correction from `:123-124` to `:123` is consistent with what's in the final file), `deploy/docker-compose.test.yml:18` (exact, "NO ollama..."), `components.md:432` and `:434` (exact), `unit-of-work.md:42` and `:99` (exact), `unit-of-work-story-map.md:52` and `:111` (exact), `backend/.env.example:119` (exact — `fulltext` default), `LOCAL-DEV.md`'s hidden-dependency count (confirmed currently 2: `claude` CLI, n8n webhook, matching `H-E4`'s "2→3" claim), `backend/database.py:214-217,230` (content matches the described warning-vs-fail split). No broken or mis-located citations found in this sample.
+- **ADR-0006 four-face table (§七)**: cross-checked each cell against `contract-summary.md` K-06's `behaviour_semantics.authorization_responsibility` (IAM — "無", matches) and the ollama service's compose exposure rule (Network exposure — "不得 publish port", matches, modulo R-01's citation nit). No contradiction with upstream found (unlike the prior-stage failure mode this project's own learnings record).
+- **Pseudocode limit**: no code blocks in `entities.md`/`rules.md` exceed the stage's ≤15-line pseudocode constraint — both files use YAML field declarations and prose `logic:` descriptions, not implementation code.
+- **Mermaid diagram**: cardinalities cross-checked between the YAML `relationships:` blocks and the rendered `erDiagram` syntax in `functional-spec.md` §三 — consistent on all 6 relationships. I did not have a mermaid renderer available in this environment, so the self-check's claim "already rendered via the Mermaid validator" could not be independently re-executed; the syntax itself is well-formed on visual inspection.
+
+### What I did not reach
+
+- Did not open sibling unit `U8 memory-service`'s own artifacts (out of scope per the review instructions) to confirm it will actually act on `H-E1`/`H-E2`/`H-E3`/`OQ-E1`/`OQ-E4`; these are handoffs this unit correctly cannot resolve unilaterally.
+- Did not independently execute the Mermaid diagram through a renderer (none available in this environment); relied on manual syntax/cardinality cross-check instead.
+- Did not re-verify every one of the ~40+ line/file citations across all four artifacts — sampled the ones most load-bearing for the four disclosed deviations plus a selection of others; none of the sampled citations were wrong.
+
+### Summary
+
+This is a clean, well-disciplined functional design for a `library` unit with no persistent state and no user-facing behaviour of its own. All four disclosed deviations hold up under independent verification: the `[Q1]`/`[Q2]` reasoning is grounded in actual upstream contract text (not fabricated), the zero-migration-cost claim and the zero-`OK`-traceability honesty are both independently confirmed, and `BR3.3` genuinely discharges the one obligation `components.md` assigns this stage rather than just restating it. The rule/entity counts in the self-check are machine-verifiable and were independently recomputed to match exactly. The two Minor findings are a citation-attribution nit and a missing (low-risk) CONDITIONAL-stage skip-risk flag — neither blocks implementation.

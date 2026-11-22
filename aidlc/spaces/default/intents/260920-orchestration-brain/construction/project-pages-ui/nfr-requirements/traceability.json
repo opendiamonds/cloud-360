@@ -1,0 +1,43 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "project-pages-ui",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR5", "NFR6", "NFR7", "NFR8", "NFR9", "NFR10", "NFR11"],
+  "coverage": [
+    { "id": "NFR1", "status": "N/A", "target": "inception NFR1 — 意圖識別準確率（路由層，U11）。本單元不做意圖識別、不交辦" },
+    { "id": "NFR2", "status": "N/A", "target": "inception NFR2 — 跨頁面上下文保留率。母體逐字限定為入口頁、/workspace、/assessment 三處（requirements.md:430 起），專案頁不在其中；本單元不持有大腦的作業對象三元組" },
+    { "id": "NFR3", "status": "N/A", "target": "inception NFR3 — 首字回應時間（LLM 串流）。本單元零 LLM 呼叫、零 WebSocket" },
+    { "id": "NFR4", "status": "N/A", "target": "inception NFR4 — 大腦 session 與工作狀態放 Redis。本單元不持有大腦狀態；需求欄位草稿刻意只在元件 state、伺服器為正本（不落地的要求另立孤兒 PPN-17，不掛 NFR4 以免誤繼承）" },
+    { "id": "NFR5", "status": "N/A", "target": "inception NFR5 — WebSocket 契約閘門。本單元只用 HTTP 端點；其契約漂移由既有 OpenAPI drift 檢查承擔（PPN-24）" },
+    { "id": "NFR6", "status": "N/A", "target": "inception NFR6 — 記憶層 schema 隔離。記憶摘要籤為說明佔位、不發記憶請求（BR86.3）；[PPN1]=A 的索引在 public schema 的 project_members，不涉記憶層" },
+    { "id": "NFR7", "status": "N/A", "target": "inception NFR7 — episodic memory 的保存與刪除稽核。本單元不讀寫記憶" },
+    { "id": "NFR8", "status": "OK", "target": "NFR8.100" },
+    { "id": "NFR9", "status": "N/A", "target": "inception NFR9 — 成本原則（LLM 花費）。本單元零 LLM 呼叫" },
+    { "id": "NFR10", "status": "N/A", "target": "inception NFR10 — 路由層模型可替換性。本單元不選模型" },
+    { "id": "NFR11", "status": "OK", "target": "NFR11.100, NFR11.101, NFR11.102" }
+  ],
+  "reverse": [
+    { "id": "PPN-01", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "並行上限 4（OPEN-PP23-5 定案、確認 BR88.3 暫定值）。無 inception 父條：11 條逐條核對無一涵蓋前端請求數（同 U24 的 UIP-* 判定）。數字依據為 database.py:37 的預設連線池與 Dockerfile:30 的單一進程" },
+    { "id": "PPN-02", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "佇列發出順序：需求欄位全部先於變更紀錄、各依系統 id 遞增；重讀與 [重新整理] 不進佇列。帶入項 R-04 的落點。無 inception 父條" },
+    { "id": "PPN-03", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "不截斷、不設總數硬上界（OPEN-PP23-5 的「上界」定案）；已知代價寫在 §三。無 inception 父條" },
+    { "id": "PPN-04", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "卸載後不再發出佇列中的請求（BR88.3 末句的可量測形式）。無 inception 父條" },
+    { "id": "PPN-05", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "切籤零請求（BR85.1 的可量測形式）。無 inception 父條" },
+    { "id": "PPN-06", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "兩支列舉端點的 SQL 語句數不隨 P／S 增長（無 N+1）。無 inception 父條" },
+    { "id": "PPN-07", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/performance-requirements.md", "note": "以使用者查成員列的索引。[PPN1]=A 定案（2026-10-15T22:59:34Z）；取代 [PP3] 選項 A 的「零 schema 變更」，觸發 schema_rbac.sql ＋ DEPLOY.md blocking 同步；U18 security-design.md §4.3 寫下的觸發條件①由本單元成立。無 inception 父條（NFR6 是記憶層 schema，非此表）" },
+    { "id": "PPN-11", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "缺 K2 view 一律 403（BR87.2 ①）。無 inception 父條；依據為 ADR-0006 IAM 與 team.md 的 A／B 規則" },
+    { "id": "PPN-12", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "可見性謂詞單一份、五身分雙向測試；含帶入項 R-03 的 ③ 構造與 M5。無 inception 父條" },
+    { "id": "PPN-13", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "不存在與不可見的回應（狀態碼與 detail）逐位元相同，涵蓋系統清單與三條寫入路徑。無 inception 父條" },
+    { "id": "PPN-14", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "U7 三條寫入路徑的可見性守門（R-01 使用者裁決 2026-10-15T22:46:22Z）；被移出的擁有者 404 且資料不變。關閉 OPEN-PP23-10。無 inception 父條" },
+    { "id": "PPN-14a", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "K2 edit 判定先於守門，缺 edit 者維持 403。七個 canonical role 有 view 無 edit（rbac_seed_data.py:327-337），故可達。無 inception 父條" },
+    { "id": "PPN-14b", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "守門重用同一謂詞、HierarchyFacade 不 import membership、K2 判定只一份（BR87.3）。無 inception 父條" },
+    { "id": "PPN-14c", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "刪除系統以所屬專案判定，系統不存在與不可見同結果。無 inception 父條" },
+    { "id": "PPN-15", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "兩個不做擁有者檢查的方法以 ast 靜態測試鎖住唯一呼叫端（BR87.7）。無 inception 父條" },
+    { "id": "PPN-16", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "前端權限判定只是呈現、不以回應欄位推斷可見。無 inception 父條" },
+    { "id": "PPN-17", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "草稿與清單不寫瀏覽器儲存。與 NFR4 相鄰但不同：NFR4 管大腦狀態放 Redis，本條管前端業務資料不落地，故不掛 NFR4" },
+    { "id": "PPN-18", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/security-requirements.md", "note": "console 不得輸出名稱、欄位值或 id（本 repo 為 public；比照 U24 的 BR28.1）。父條候選 NFR7 是 episodic memory 稽核，不涵蓋前端 console，故宣告孤兒" },
+    { "id": "PPN-21", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/tech-stack-decisions.md", "note": "並行佇列自寫、零新前端依賴（team.md Code Style）。無 inception 父條" },
+    { "id": "PPN-22", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/tech-stack-decisions.md", "note": "SQL 語句計數用 SQLAlchemy 內建事件。無 inception 父條" },
+    { "id": "PPN-23", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/tech-stack-decisions.md", "note": "新測試由既有 CI 指令撿到、不新增 job。無 inception 父條" },
+    { "id": "PPN-24", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/tech-stack-decisions.md", "note": "openapi.json 與 api.d.ts 重產（BR87.4）。父條候選 NFR5 只管 WebSocket 契約，故不掛" },
+    { "id": "PPN-25", "status": "N/A", "target": "construction/project-pages-ui/nfr-requirements/tech-stack-decisions.md", "note": "索引的 DDL／ORM 宣告形式與 schema_rbac.sql ＋ DEPLOY.md 同步（blocking）。[PPN1]=A 定案" }
+  ]
+}

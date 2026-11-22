@@ -1,0 +1,218 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "memory-service",
+  "upstream_ids": [
+    "NFR3.20",
+    "NFR3.21",
+    "NFR3.22",
+    "NFR3.23",
+    "NFR3.24",
+    "NFR4.20",
+    "NFR4.21",
+    "NFR4.22",
+    "NFR4.23",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR6.20",
+    "NFR6.21",
+    "NFR7.13",
+    "NFR7.20",
+    "NFR7.21",
+    "NFR7.22",
+    "NFR7.23",
+    "NFR7.24",
+    "NFR7.25",
+    "NFR7.26",
+    "NFR7.27",
+    "NFR7.28",
+    "NFR7.29",
+    "NFR7.30",
+    "NFR7.31",
+    "NFR7.32",
+    "NFR7.33",
+    "NFR7.34",
+    "NFR8.20"
+  ],
+  "coverage": [
+    {
+      "id": "NFR3.22",
+      "status": "OK",
+      "target": "infrastructure-specification.md §二之三 的 S14 ＋ cicd-pipeline.md §二",
+      "note": "索引斷言落在既有 memory-schema job（純 psql、真實 PG），不新增 job。採 SET enable_seqscan = off 隔離 opclass 正確性。**誠實限定（I8-3）**：S14 證明「索引可用且 opclass 相符」，**不**證明生產資料量下 planner 會選它——後者需要數百至數千列 fixture，而本表目前是空的，現在量只會得到「空表上不選索引」這個正確但無用的結論。 **承審查 R-01 新增 S15**：S14 只驗索引 opclass，不驗檢索查詢本身的組合正確性（過濾＋排序同一查詢、LIMIT 作用於已過濾集合）。該不變量在 SQLite 上無法被測（無向量型別、無距離運算子，SQL 編不出來），且 search 無 HTTP 端點，故初稿把它漏在三個桶之外。S15 落在同一個 memory-schema job，三條斷言中第 ③ 條（過濾後候選數 < LIMIT 時回傳筆數等於過濾後數量）是唯一能區分「同查詢」與「先查再事後過濾」的。"
+    },
+    {
+      "id": "NFR3.20",
+      "status": "Deferred",
+      "target": "cicd-pipeline.md §五 的分桶預判",
+      "note": "延遲實測**無 CI 落點**：NFR3.21 要求記錄當時的 memory_records 列數，而 CI 環境沒有真實資料量。分桶為 tcms-test-cases 的「只能手動」。本站不假裝它可在 CI 驗。"
+    },
+    {
+      "id": "NFR3.21",
+      "status": "Deferred",
+      "target": "cicd-pipeline.md §五",
+      "note": "同 NFR3.20——實測須在有資料量的環境進行。"
+    },
+    {
+      "id": "NFR3.23",
+      "status": "Deferred",
+      "target": "cicd-pipeline.md §五",
+      "note": "列出路徑的延遲同屬需要資料量的量測。分頁本身的正確性可由 TestClient 驗（屬 code-generation）。"
+    },
+    {
+      "id": "NFR3.24",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五 的待自動化桶（PBT）",
+      "note": "純函式的排序決定性可在既有 backend job 以 hypothesis 驗，零新基礎設施。repo 已有 13 個 @given 的先例。"
+    },
+    {
+      "id": "NFR4.20",
+      "status": "OK",
+      "target": "infrastructure-specification.md §一（零新進程）",
+      "note": "本單元不新增進程亦不持有行程內狀態；判準為新模組的模組層無可變容器，可在既有 backend job 以靜態檢查或 import 後反射驗證。"
+    },
+    {
+      "id": "NFR4.21",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五 的待自動化桶",
+      "note": "交易邊界可在既有 backend job 以 TestClient ＋ SQLite 驗（交易語意在此一致，不需真實 PG——與 U19 的 FOR UPDATE 情形不同，見 cicd-pipeline.md §三）。"
+    },
+    {
+      "id": "NFR4.22",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "提供者不可用的大聲失敗可以 stub 提供者 ＋ 注入失敗驗證，零新基礎設施。"
+    },
+    {
+      "id": "NFR4.23",
+      "status": "OK",
+      "target": "infrastructure-specification.md §一",
+      "note": "不實作 retry／circuit breaker——判準是新模組內無重試迴圈，靜態可判。"
+    },
+    {
+      "id": "NFR6.20",
+      "status": "OK",
+      "target": "infrastructure-specification.md §一 ＋ §四",
+      "note": "不新增資料庫連線身分：本單元 diff 不含新憑證、不含 -U、沿用既有 engine。**誠實限定**：grant 邊界目前不構成真實邊界（U9 的 [ND2]=A），本條保留的是「不要變得更糟」。"
+    },
+    {
+      "id": "NFR6.21",
+      "status": "OK",
+      "target": "monitoring-design.md §二",
+      "note": "日誌不得含記憶內容——以既有 logger 承載，零新 logging 基礎設施；判準為字串比對（拿 fixture 的 content 比對日誌輸出），可在既有 backend job 執行。"
+    },
+    {
+      "id": "NFR7.30",
+      "status": "OK",
+      "target": "monitoring-design.md §三",
+      "note": "**[D1]=A 之後由稽核義務升格為唯一的偵測面**：對外回應收斂為 404 後，日誌是區分使用者誤刪與枚舉探測的唯一手段。本站只保證資料在日誌裡；偵測判準已寫下但**不建**（無日誌聚合），記 I8-1。"
+    },
+    {
+      "id": "NFR7.31",
+      "status": "OK",
+      "target": "monitoring-design.md §二",
+      "note": "同 NFR6.21。"
+    },
+    {
+      "id": "NFR7.32",
+      "status": "OK",
+      "target": "monitoring-design.md §二",
+      "note": "提供者名與可選值進日誌，以既有 logger 承載。"
+    },
+    {
+      "id": "NFR7.33",
+      "status": "OK",
+      "target": "monitoring-design.md §二",
+      "note": "logger 命名 cloud360.<module>，靜態可判。"
+    },
+    {
+      "id": "NFR7.34",
+      "status": "OK",
+      "target": "monitoring-design.md §二 ＋ §五之二",
+      "note": "空結果的兩道過濾筆數——這是在沒有 metrics 的情況下讓一個靜默缺陷（換過提供者未重新 embed）變可事後診斷的最低成本做法。筆數不是內容，不違反 NFR6.21。"
+    },
+    {
+      "id": "NFR7.28",
+      "status": "OK",
+      "target": "cicd-pipeline.md §一 的第 2、3 項連鎖",
+      "note": "分頁變更觸發 OpenAPI drift ＋ 前端型別重產生。**兩者必須同一個 PR**：只重 dump openapi.json 而不重跑 gen:types 會讓 backend job 綠而型別與契約不一致，而 team.md 已逐字記載 tsc -b 對這類落差實際無效。"
+    },
+    {
+      "id": "NFR7.29",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "limit 上限可由 TestClient 驗（以超大 limit 呼叫、斷言回傳筆數不超過上限）。"
+    },
+    {
+      "id": "NFR7.20",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "酬載指定擁有者被忽略——TestClient 可驗，且必須斷言「回成功而非 422」。"
+    },
+    {
+      "id": "NFR7.21",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "可見範圍預設最窄——同上。"
+    },
+    {
+      "id": "NFR7.22",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "放寬的 allow/deny ＋ 第三案例（無權＋不存在 → 403），TestClient 可驗。"
+    },
+    {
+      "id": "NFR7.23",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "稽核查詢的 allow/deny，TestClient 可驗。"
+    },
+    {
+      "id": "NFR7.24",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "**判準已因 [D1]=A 改變**：他人刪除回 404（非 403），且必須同時斷言「狀態碼與不存在的情形相同」與「日誌可區分」——缺一不可，否則無法證明 oracle 已關閉。"
+    },
+    {
+      "id": "NFR7.25",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "稽核與資料變更同交易，TestClient ＋ 注入失敗可驗。"
+    },
+    {
+      "id": "NFR7.26",
+      "status": "OK",
+      "target": "cicd-pipeline.md §五",
+      "note": "建立不產生稽核事件——TestClient 斷言稽核列數不變。"
+    },
+    {
+      "id": "NFR7.27",
+      "status": "N/A",
+      "target": "U9 memory-purge（已交付）的清除 workflow 與 watchdog",
+      "note": "成長上界的機制不屬本單元，本單元零增量。**但本站新寫下一項限定**：只有 episodic 受清除約束，semantic／procedure 無上界（D8-5，已記為無自然承接站）。"
+    },
+    {
+      "id": "NFR8.20",
+      "status": "OK",
+      "target": "infrastructure-specification.md §一之一 的四項判準",
+      "note": "零新部署設定：requirements.txt diff 為空、不動 deploy/、validate_env_contract.py 綠燈、secrets 名稱集合不變。**HNSW 索引刻意不列在這條之下**——它是結構變更（schema_rbac.sql ＋ DEPLOY.md）而非部署設定變更，兩者的 blocking 規則不同。"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "N/A",
+      "target": "U5 memory-data（靜態加密，主機層 LUKS）",
+      "note": "本檔 §六 引用它說明索引不改變儲存位置、故該前提不變。擁有者 U5。"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "N/A",
+      "target": "U5 memory-data（傳輸加密）",
+      "note": "本檔 §六 引用它——四條端點走既有 TLS 路徑。擁有者 U5。"
+    },
+    {
+      "id": "NFR7.13",
+      "status": "N/A",
+      "target": "U9 memory-purge（清除漏跑可偵測，已交付）",
+      "note": "本檔 monitoring-design §一 引用 U9 的 watchdog 作為 GitHub Issues 告警管道的既有先例，並對照說明本單元為何不新增告警（本單元的失敗模式是請求層級的，不是「什麼都沒發生」）。擁有者 U9。"
+    }
+  ]
+}

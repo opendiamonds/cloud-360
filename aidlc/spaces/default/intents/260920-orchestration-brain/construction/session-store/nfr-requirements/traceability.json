@@ -1,0 +1,85 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "session-store",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8",
+    "NFR9",
+    "NFR10",
+    "NFR11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "U11 intent-router（意圖識別準確率）",
+      "note": "本單元不做任何判定或分類，無任何落點。量測母體與校正程序皆屬 U11 與 build-and-test。"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "NFR2.40, NFR2.41, NFR2.42",
+      "note": "跨頁面上下文保留率。**本單元提供機制、不擁有 95% 門檻**（其量測機制由 requirements.md:440-445 逐字指派給 build-and-test，並明寫不能由 ui-regression 承載）。NFR2.40 給狀態扇出的伺服器端上界（推導自 NFR3 的 2 秒 ×10%，推導過程寫在 performance-requirements.md）；NFR2.41／NFR2.42 保證連線數成長不改變狀態佔用、扇出成本為線性。"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.40, NFR3.41, NFR3.42, NFR3.43",
+      "note": "首字回應 P50 ≤ 2 秒。**本單元不擁有該門檻**（NFR3 逐字「這條預算幾乎全部被路由層的 LLM 呼叫吃掉」）。本單元的貢獻是把該條逐字宣稱的「Redis 往返約 1ms，可忽略」從**未經量測的判斷**變成三條會紅的上界：load／append_message 各 P95 ≤ 20ms，set_work_target P95 ≤ 150ms（**刻意較寬，因為它會打 PostgreSQL**，與 Redis 級操作混在同一個數字下會讓兩種慢法不可區分）。"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "NFR4.40, NFR4.41, NFR4.44, NFR4.45, NFR4.46, NFR4.47, NFR4.48, NFR4.50, NFR4.51, NFR4.52, NFR4.53, NFR4.54, NFR4.55, NFR4.56, NFR4.57, NFR4.60, NFR4.61, NFR4.62, NFR4.63, NFR4.64",
+      "note": "狀態外部化與重啟還原——本單元最重的一條。**本站查出其可測不變量在今天的基礎設施設定下並不成立**：實讀 deploy/docker-compose.deploy.yml:234-235 為 allkeys-lru，它會淘汰尚未到期的活躍 session，而 U1 自己的註解逐字記載 INFO evicted_keys 在兩個設定身分下都不可執行，故淘汰對應用層不可見、與 TTL 正常到期不可區分。[N3]=A 改為 noeviction（NFR4.50）是對它的處置；NFR4.51 定義降級形狀（寫入大聲失敗、讀取仍可用）。NFR4.53–NFR4.57 把 NFR4 的一句「完整還原」拆成五項可逐項驗證的對象——其中 pageModes（NFR4.56）最容易漏，因為它不是資料而是指標。"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "NFR5.40",
+      "note": "WebSocket 契約閘門。**本單元不擁有該閘門**（U2 brain-ws-contract 擁有），但 functional-design 的 [S1]=A／[S3]=A 要求 K-02 的四個 payload 各加一個識別欄位（D-S10-1），故本單元**造成**一次契約變更。NFR5.40 確立它不得繞過該閘門。若此處判 N/A，就會讓一個本單元造成的義務在追溯表上消失。"
+    },
+    {
+      "id": "NFR6",
+      "status": "N/A",
+      "target": "U5 memory-data／U8 memory-service（記憶層的 schema 隔離）",
+      "note": "本單元不碰 PostgreSQL，亦不擁有任何 schema。[N1]=A 之後對話歷史也不落 PostgreSQL。"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "U9 memory-purge（episodic memory 的 90 天保存與刪除稽核）",
+      "note": "ADR-016 逐字「對話歷史是 session 層，記憶是內容層」——兩者**不是同一件事**，90 天不得套用到本單元的對話歷史上。本單元的保存期由 ADR-005 的 24 小時 TTL 決定（[N1]=A 維持）。"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.40, NFR8.41, NFR8.42",
+      "note": "新增元件的部署設定完整性。Redis 服務本身的變數已由 U1 完成（NFR8.1–NFR8.9）；本單元的增量有三項：訊息筆數上限的環境變數（NFR8.40，**無預設值**——缺值給預設正是 NFR8 逐字引述的 N8N_PASSWORD 那個無聲失敗的同形）、新增 Python Redis 客戶端依賴（NFR8.41，本站**不選套件**但定兩項硬條件）、noeviction 的設定變更須走同一套同步紀律（NFR8.42）。"
+    },
+    {
+      "id": "NFR9",
+      "status": "N/A",
+      "target": "本單元零 LLM 呼叫",
+      "note": "NFR9 逐字為「本平台自身的 LLM 花費上限由 OpenRouter 後台承載」的成本原則。本單元不呼叫任何模型，無落點。"
+    },
+    {
+      "id": "NFR10",
+      "status": "Deferred",
+      "target": "U11 intent-router 的 nfr-requirements（3.2，CONDITIONAL、per-unit）",
+      "note": "**本輪不 discharge 它**。NFR10 逐字把路由層模型的決定指派給 `nfr-requirements`（3.2），但該站 per-unit 執行，而路由層屬 U11——**本輪跑的是 session-store**。已查證 U11 尚未跑過任何一站（construction/ 下無 intent-router/），故它在游標之後、是有效的承接站。**但須一併帶著 NFR10 自己的警語**：若 U11 的 nfr-requirements 被判 skip，NFR10 逐字「沒有自然承接站」，屆時判定 skip 的執行者必須重新提交使用者裁決。"
+    },
+    {
+      "id": "NFR11",
+      "status": "N/A",
+      "target": "情境級量測，落點 build-and-test（3.6）",
+      "note": "跨功能任務的頁面切換次數。本單元是其機制的一部分（同 NFR2 的機制），但不擁有任何可量測的門檻；其基準值須由人工依現行 11 條路由清點，與本單元無關。"
+    }
+  ]
+}

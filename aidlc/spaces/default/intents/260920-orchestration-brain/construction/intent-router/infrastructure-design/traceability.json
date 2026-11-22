@@ -1,0 +1,273 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "intent-router",
+  "upstream_ids": [
+    "NFR1.60",
+    "NFR3.60",
+    "NFR3.61",
+    "NFR3.62",
+    "NFR3.63",
+    "NFR3.64",
+    "NFR3.65",
+    "NFR3.66",
+    "NFR3.67",
+    "NFR3.68",
+    "NFR3.69",
+    "NFR3.70",
+    "NFR3.71",
+    "NFR3.72",
+    "NFR3.73",
+    "NFR3.74",
+    "NFR4.70",
+    "NFR6.60",
+    "NFR7.62",
+    "NFR8.60",
+    "NFR8.61",
+    "NFR9.60",
+    "NFR9.61",
+    "NFR9.62",
+    "NFR10.60",
+    "NFR10.61",
+    "SEC-1",
+    "SEC-2",
+    "SEC-3",
+    "SEC-4",
+    "SEC-5",
+    "NFR4.60",
+    "NFR4.65",
+    "NFR7.60",
+    "NFR7.63"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.60",
+      "status": "Deferred",
+      "target": "observability-setup（4.x）—— 與 U10 的 OPEN-N10-4 同一站",
+      "note": "反問率與準確率同圖呈現——這是 dashboard 的呈現規則，而本 repo 無 dashboard 平台（無 Grafana／CloudWatch）。monitoring-design.md §五 已說明為什麼不先畫一份沒地方放的規格。承接 observability-setup（4.x），與 OPEN-N10-4 同站。 **修訂 1（審查 R-01，Major）：status 由 N/A 改為 Deferred。** N/A 的語意是「無基礎設施落點」（對 NFR3.65／NFR9.61／SEC-1 等純應用層項是正確用法），而本列有**具名承接站**——那是 Deferred。同一個 intent 內的對照組已示範這個區分：brain-infra 的 AUDIT-CORRELATION-ID 與 session-store 的 NFR4.41 都用 Deferred 並寫出承接站。標成 N/A 會讓 observability-setup 若依各單元 traceability 的 Deferred／GAP 列彙總待辦（合理的實作方式），這一項不會出現在清單裡。"
+    },
+    {
+      "id": "NFR3.60",
+      "status": "OK",
+      "target": "既有 backend 容器內，零新增資源；預算由應用層計時標記量測",
+      "note": "P50 ≤ 800 ms 不需要任何基礎設施支援——本單元是 in-process 的函式層。量測點在應用層（classify 進出各一個計時標記），落 workflow_dispatch 的 routing-accuracy job（cicd-pipeline.md §二）。"
+    },
+    {
+      "id": "NFR3.61",
+      "status": "OK",
+      "target": "BRAIN_ROUTER_TIMEOUT_SEC=5，render-env.sh 字面值 ＋ 三處同步",
+      "note": "硬逾時是應用層設定，基礎設施面只需要把變數送進容器。"
+    },
+    {
+      "id": "NFR3.62",
+      "status": "OK",
+      "target": "BRAIN_ROUTER_MAX_CALLS_PER_TURN=1，同上",
+      "note": "同上。"
+    },
+    {
+      "id": "NFR3.63",
+      "status": "OK",
+      "target": "BRAIN_ROUTER_MAX_RETRIES=0，同上",
+      "note": "同上。"
+    },
+    {
+      "id": "NFR3.64",
+      "status": "OK",
+      "target": "五個變數的三處同步（render-env.sh／deploy/.env.example／compose）＋ backend/.env.example",
+      "note": "「全部可設定」在基礎設施面的落法就是三處同步，由 validate_env_contract.py 機械檢查（repo-contract job）。"
+    },
+    {
+      "id": "NFR3.65",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "述詞耗時不列入預算、結構性上界（候選 8／槽位 4）——純應用層，無基礎設施落點。"
+    },
+    {
+      "id": "NFR3.66",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "併發下仍須滿足 P50——本單元隨 backend 水平擴展，無自己的部署單位可調；真正的併發上界在 OpenRouter 側。"
+    },
+    {
+      "id": "NFR3.67",
+      "status": "OK",
+      "target": "零新增共享基礎設施；本單元不引入任何需要跨行程協調的資源",
+      "note": "infrastructure-specification.md §二：無新增 service。本單元對 Redis／PG 皆唯讀。"
+    },
+    {
+      "id": "NFR3.68",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "大聲失敗不降級猜測——應用層的例外型別設計。"
+    },
+    {
+      "id": "NFR3.69",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "空清單是失敗不是反問——應用層的 V-1 驗證。"
+    },
+    {
+      "id": "NFR3.70",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "schema 不合即失敗——應用層的 V-2／V-3／V-4 驗證。"
+    },
+    {
+      "id": "NFR3.71",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "述詞永不失敗——應用層的 property-based 測試（跑在既有 backend job 內，零基礎設施增量）。"
+    },
+    {
+      "id": "NFR3.72",
+      "status": "OK",
+      "target": "結構化 log → 既有容器 stdout；指標定義見 monitoring-design.md §一",
+      "note": "零新增聚合基礎設施（無 ELK／Loki）。"
+    },
+    {
+      "id": "NFR3.73",
+      "status": "OK",
+      "target": "槽位數分佈，monitoring-design.md §一",
+      "note": "它同時是 D-7（上界 4）的覆核依據——這一點讓一個觀測指標變成一個決策輸入。"
+    },
+    {
+      "id": "NFR3.74",
+      "status": "OK",
+      "target": "失敗率按 error_kind 分組，monitoring-design.md §一",
+      "note": "四型別分計；混計會讓「供應商掛了」與「我們的 schema 壞了」看起來一樣。"
+    },
+    {
+      "id": "NFR4.70",
+      "status": "OK",
+      "target": "無狀態 ⇒ 回滾無資料面善後（cicd-pipeline.md §四）",
+      "note": "本單元的無狀態在基礎設施面有一個具體收益：回滾不需要反向 migration、不需要清理半寫入狀態。對照組 U10／U8 的回滾都要考慮資料。"
+    },
+    {
+      "id": "NFR6.60",
+      "status": "OK",
+      "target": "零新增資料庫連線；沿用 U8 既有的 MemoryFacade 路徑",
+      "note": "不繞過 facade 是應用層的結構斷言，基礎設施面無新增連線或憑證。"
+    },
+    {
+      "id": "NFR7.62",
+      "status": "OK",
+      "target": "零基礎設施增量；kinds 由模組層常數固定（應用層）",
+      "note": "**這一條刻意標 OK 而非 N/A**：它是現行防護（U8 的 POST /api/memory/records 已可建 kind=episodic），而「基礎設施不需要做任何事」本身是一個要被記下來的判定——不是跳過。"
+    },
+    {
+      "id": "NFR8.60",
+      "status": "OK",
+      "target": "BRAIN_ROUTER_CONFIDENCE_THRESHOLD 由 render-env.sh 寫字面值 0.7（[I2]=A）",
+      "note": "缺值行為明確：應用層 required-no-default（BR3.4 成立），部署層顯式供給。**不加進兩道 secret 守衛**——它們的三個成員都是憑證，守衛訊息逐字在講 JWT_SECRET 被偽造的後果。既有的 deploy.yml:130 健康檢查是這個失敗模式的網：crash-loop 過不了它，部署失敗並觸發既有 rollback。"
+    },
+    {
+      "id": "NFR8.61",
+      "status": "OK",
+      "target": "三處同步 ＋ validate_env_contract.py（repo-contract job 會擋）",
+      "note": "NFR8 的理由逐字是「此失敗模式無聲」（既有實例 N8N_USER／N8N_PASSWORD 靜默退回灰底圖示）。機械檢查是唯一可靠的落法。"
+    },
+    {
+      "id": "NFR9.60",
+      "status": "OK",
+      "target": "零基礎設施增量；最少上下文是應用層的 prompt 組裝函式",
+      "note": "資料外送最小化靠「組裝函式拿不到整個 BrainSession」，不靠基礎設施。"
+    },
+    {
+      "id": "NFR9.61",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "成本與歷程長度線性相關、context 上界——應用層的 prompt 組裝紀律。"
+    },
+    {
+      "id": "NFR9.62",
+      "status": "OK",
+      "target": "無本單元層級的速率限制或排隊；達供應商上限即大聲失敗",
+      "note": "帳戶額度上限由 OpenRouter 後台承載（NFR9，[F13]），本 intent 不建計量——這是已核可的邊界，故基礎設施面刻意零增量。"
+    },
+    {
+      "id": "NFR10.60",
+      "status": "OK",
+      "target": "BRAIN_ROUTER_MODEL=typesafe/jev-1.13，render-env.sh 字面值",
+      "note": "可替換性的基礎設施落法：改 render-env.sh 一行並走 PR，不需改 code。獨立於 LLM_MODEL（A1／A3 在用），呼應 [F1] 逐字允許兩者用不同模型。"
+    },
+    {
+      "id": "NFR10.61",
+      "status": "OK",
+      "target": "workflow_dispatch 的 routing-accuracy job（cicd-pipeline.md §二）",
+      "note": "「換模型必須重跑標註集」在基礎設施面需要一條能跑它的路徑，而本站查出 ci.yml 全檔零 OPENROUTER——這條 job 就是那條路徑。觸發義務由 build-and-test 的 Unverified 失敗升級強制。"
+    },
+    {
+      "id": "SEC-1",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "principal 由參數傳入——應用層的結構斷言（禁 import 清單）。"
+    },
+    {
+      "id": "SEC-2",
+      "status": "OK",
+      "target": "入站零增量（不暴露 port、不 include_router）；出站零增量（已查證，非推論）",
+      "note": "**出站這一半是本站從推論升為查證的**：backend 容器已對 OpenRouter 出站（A1／A3／C1 經同一個 base URL），本單元不新增任何網路目的地或防火牆規則。這關閉了 nfr-design 的 D-6。"
+    },
+    {
+      "id": "SEC-3",
+      "status": "OK",
+      "target": "結構化 log 的欄位白名單；禁止欄位含 referent",
+      "note": "本 repo 為 public、Actions log 公開可讀。referent 最容易被漏——它看起來像識別碼，實際是使用者句子裡的系統名或圖名。"
+    },
+    {
+      "id": "SEC-4",
+      "status": "Deferred",
+      "target": "observability-setup（4.x）—— 與 U10 的 OPEN-N10-4 同一站",
+      "note": "prompt_guard 命中可觀測但不含輸入——應用層的事件型別；告警通道的缺口見 NFR1.60 那一列的同一個承接站。 **修訂 1（審查 R-01，Major）：status 由 N/A 改為 Deferred。** N/A 的語意是「無基礎設施落點」（對 NFR3.65／NFR9.61／SEC-1 等純應用層項是正確用法），而本列有**具名承接站**——那是 Deferred。同一個 intent 內的對照組已示範這個區分：brain-infra 的 AUDIT-CORRELATION-ID 與 session-store 的 NFR4.41 都用 Deferred 並寫出承接站。標成 N/A 會讓 observability-setup 若依各單元 traceability 的 Deferred／GAP 列彙總待辦（合理的實作方式），這一項不會出現在清單裡。"
+    },
+    {
+      "id": "SEC-5",
+      "status": "OK",
+      "target": "同 SEC-3（共用同一個 RoutingObservation 型別）",
+      "note": "分成兩套會讓「日誌記了但指標沒算」成為可能。"
+    },
+    {
+      "id": "NFR4.60",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "歷史 ID（已改號為 NFR4.70），列此以與上游檔案裡的修訂紀錄對齊。"
+    },
+    {
+      "id": "NFR4.65",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "session-store 單元擁有的 ID，非本單元。"
+    },
+    {
+      "id": "NFR7.60",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "歷史 ID（已改號為 SEC-3）。"
+    },
+    {
+      "id": "NFR7.63",
+      "status": "N/A",
+      "target": "無基礎設施落點 —— 見 note",
+      "note": "歷史 ID（已改號為 SEC-5）。"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "I-1",
+      "status": "N/A",
+      "target": "U13 brain-gateway 的 infrastructure-design（它擁有入口頁的 WS 端點）",
+      "note": "**`render-env.sh:21` 把 `OPENROUTER_API_KEY` 標為 optional、`:104` 為 `${OPENROUTER_API_KEY:-}`（缺值即空字串、不中斷），理由逐字是「A1 design agent; empty disables generation」。但本單元的路由層一旦上線，空金鑰的後果就不只是「A1 不能產圖」——入口頁的每一次輸入都會失敗**（分類是每輪第一步、沒有快路徑）。本站不自行改成 required：那會讓既有的 A1／A3／C1 從「功能降級」變成「整個 stack 起不來」，是跨單元的決定。承接 U13（它是「入口頁完全不能用」這個後果的真正擁有者）。"
+    },
+    {
+      "id": "TS-6-修正",
+      "status": "N/A",
+      "target": "本站就地修正（cicd-pipeline.md §二末）→ 效力及於 build-and-test（3.6，ALWAYS）",
+      "note": "`nfr-requirements` 的 `TS-6` 原文把前置條件寫成「使用者把金鑰寫進 `backend/.env`」。**本站實地查證推翻它**：`ci.yml` 全檔 `OPENROUTER` 零命中，本機 `.env` 不會進 CI。修正後的前置條件是「`OPENROUTER_API_KEY` 必須是一個 GitHub repository secret（`deploy.yml:109`／`:577` 已在用它，故很可能已存在，但本站無法查證——`gh` 不可用）＋ `workflow_dispatch` 的 routing-accuracy job 必須已落地」。`backend/.env` 仍有本機開發的用途，但**它不是 `build-and-test` 的前置條件**——兩者混為一談正是原 `TS-6` 的錯誤。"
+    },
+    {
+      "id": "D-6-已關閉",
+      "status": "N/A",
+      "target": "本站查證完成",
+      "note": "`nfr-design` 的 `D-6`（出站 egress 零增量是推論不是查證）**本站已查證並關閉**：backend 容器已對 OpenRouter 出站（A1 `design_agent`、A3 `review_agent`、C1 `cost_advice_agent` 經 `langgraph_runtime` 打同一個 base URL），本單元不新增任何網路目的地或防火牆規則。"
+    }
+  ]
+}

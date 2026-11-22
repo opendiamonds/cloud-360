@@ -1,0 +1,214 @@
+{
+  "stage": "functional-design",
+  "unit": "rbac-story-ids",
+  "revision": 1,
+  "reverse_count": 32,
+  "upstream_ids": [
+    "AC1.4.1",
+    "AC1.4.2",
+    "AC1.4.3",
+    "AC1.4.4",
+    "AC9.2.1",
+    "AC9.2.2",
+    "AC9.2.3"
+  ],
+  "coverage": [
+    {
+      "id": "AC1.4.1",
+      "status": "Deferred",
+      "target": "BR1.1 — 本單元讓八個角色持有 K1，使這條 AC 的 Given（我持有入口頁的 story 權限）可構造。Then（落在入口頁）需要 / 路由存在且 DefaultRedirect 把 K1 判斷置於權限瀑布之首，兩者皆屬 U14 entry-page-ui。本單元交付零端點零畫面（BR1.4），故不宣稱滿足這條 AC——只宣稱它在本單元之後變成可構造、可測"
+    },
+    {
+      "id": "AC1.4.2",
+      "status": "Deferred",
+      "target": "BR1.3 — 這是本單元唯一真正決定成敗的一條：若 K1 給滿 11 個角色，這條 AC 的 Given（不持有入口頁權限但持有架構圖權限）永遠無法構造，AC 成為不會失敗的死碼。BR1.1 讓 SRE／Ops_Lead／Platform_Engineer 三者不持有 K1，而本站實讀 DEFAULT_ROLE_PERMISSIONS 複驗三者皆有 A1 view，故 Given 成立。Then（落 /workspace 且 Sidebar 不顯示入口項）屬 U14。來源是 user-stories 審查 R-01 的 seed guard，該建議未落入 US1 的 DoD，本單元是它的落點"
+    },
+    {
+      "id": "AC1.4.3",
+      "status": "Deferred",
+      "target": "BR1.4 — 本單元不新增任何授權判定路徑。既有 require_story_action（rbac.py:255–262）在權限判定之前先檢查 authorization_status，故新增 K1 不會製造繞過 isPending 的新路徑。但這條 AC 的 Then 講的是 DefaultRedirect 的分支順序（App.tsx:22 的 isPending 必須在 K1 判斷之前），那是 U14 的實作決定，本單元無法保證"
+    },
+    {
+      "id": "AC1.4.4",
+      "status": "Deferred",
+      "target": "BR1.1、BR1.3 — Given 是「某角色的權限矩陣被調整為不具任何落地權限」，那是執行期由管理者在權限頁造出的狀態（stories.md:107–112 逐字說明它為何改寫成這個形狀）。本單元保證 K1 不是強制持有、且預設值不會讓該狀態變得不可達。Then（落 /403）屬 U14 的瀑布末端"
+    },
+    {
+      "id": "AC9.2.1",
+      "status": "Deferred",
+      "target": "BR2.2 — 本單元讓四個角色持有 K2.edit，使 Given（我具備建立權限）可構造。Then（建立的專案出現在可選的作業對象中）需要建立端點（U7 hierarchy-service）與作業對象選單（U16 object-picker-ui），兩者皆不在本單元。【修訂 1 增補】BR5.4 另要求持有 K2.edit 者必須持有 K3.edit，故本 AC 的 Given（我具備建立權限）同時保證該角色建立後管得動自己的專案（AC12.1.2）"
+    },
+    {
+      "id": "AC9.2.2",
+      "status": "Deferred",
+      "target": "BR2.2 — 同 AC9.2.1：四個角色持有 K2.edit 使 Given（我具備建立權限）可構造。Then（該系統歸屬於該專案、且可被選為作業對象）需要建立端點（U7 hierarchy-service）與作業對象選單（U16 object-picker-ui），兩者皆不在本單元。【修訂 1 增補】同 AC9.2.1 的 BR5.4 蘊含約束"
+    },
+    {
+      "id": "AC9.2.3",
+      "status": "Deferred",
+      "target": "BR2.2、BR2.3 — 七個角色不具 K2.edit，使 Given（我不具備該權限）可構造；BR2.3 確保建立／修改／刪除共用同一個閘門，故 Then 的「經由既有的 require_story_action 路徑」不會有第二條旁路。拒絕行為本身由 U7 的端點實作，本單元無端點可測"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "BR1.1",
+      "status": "Deferred",
+      "target": "由 AC1.4.1／AC1.4.4 的 Deferred 覆蓋列引用（見 coverage）。在此並列的機制理由（**本輪送審後由審查 R-05 更正**）：sensor 的 `derivedOrphans` 以 `targeted`（僅由 `status === \"OK\"` 的 coverage 列累積）與 `explained`（`data.reverse` 的**全部** id，**不篩 status**）兩個集合判定，見 `.claude/tools/aidlc-sensor-traceability.ts:497,505`。故 `Deferred` 覆蓋列的 target 不會進入 `targeted`，使本規則被判為 orphan；而補一筆 `reverse` 項即豁免，**與該項的 status 無關**——這是 sensor 設計內的合法用法，不是鑽漏洞。原本寫的理由（「sensor 只承認 status=OK 的引用」）是錯的：那只對 coverage 成立。本列說明它**不是**無人引用的規則，而是其 Then 落在 U14 entry-page-ui（本單元交付零端點零畫面，BR1.4），故本單元只能宣稱 Deferred"
+    },
+    {
+      "id": "BR1.2",
+      "status": "N/A",
+      "target": "K1 的 can_edit／can_review 恆 false。無對應 AC——上游 FR1.8 與 US1.4 四條 AC 全部只談「持不持有入口頁權限」，沒有任何一處要求唯讀／編輯雙態。本規則是本站 Q1 人工裁決（把 Figma 由約束降為參考）的落點，其反面（是否要雙態）記為交接事項 H-1／OQ-K1 交給 U14"
+    },
+    {
+      "id": "BR1.3",
+      "status": "Deferred",
+      "target": "由 AC1.4.2／AC1.4.4 的 Deferred 覆蓋列引用。理由同 BR1.1（含其機制說明的 R-05 更正）：本單元保證 Given 可構造（三個維運角色不持有 K1 且皆有 A1 view，已腳本複驗），Then（落 /workspace 且 Sidebar 不顯示入口項）屬 U14"
+    },
+    {
+      "id": "BR1.4",
+      "status": "Deferred",
+      "target": "由 AC1.4.3 的 Deferred 覆蓋列引用。理由同 BR1.1（含其機制說明的 R-05 更正）：它是範圍邊界規則，AC 的 Then 講的是 DefaultRedirect 的分支順序（App.tsx 的 isPending 必須在 K1 判斷之前），那是 U14 的實作決定"
+    },
+    {
+      "id": "BR2.1",
+      "status": "N/A",
+      "target": "K2.can_view 給全部 11。它支撐的是脈絡列顯示三元組（US2 整群，AC2.1.1–AC2.1.4），而 story map 把 US2 指給其他單元，不在本單元的 upstream_ids 內。本單元提供其資料面前提"
+    },
+    {
+      "id": "BR2.2",
+      "status": "Deferred",
+      "target": "由 AC9.2.1／AC9.2.2／AC9.2.3 的 Deferred 覆蓋列引用。理由同 BR1.1（含其機制說明的 R-05 更正）：本單元讓四個角色持有 K2.edit 使 Given 可構造，Then（建立的專案出現在可選的作業對象中）需要 U7 的建立端點與 U16 的作業對象選單"
+    },
+    {
+      "id": "BR2.3",
+      "status": "Deferred",
+      "target": "由 AC9.2.3 的 Deferred 覆蓋列引用。理由同 BR1.1（含其機制說明的 R-05 更正）：它確保建立／修改／刪除共用同一個閘門，故 Then 的「經由既有的 require_story_action 路徑」不會有第二條旁路，而拒絕行為本身由 U7 的端點實作"
+    },
+    {
+      "id": "BR2.4",
+      "status": "N/A",
+      "target": "K2 的 can_review 恆 false。防的是挪用既有審核語意（矩陣中唯一 can_review = true 的列是 A3 的 Security_Reviewer），屬設計一致性約束，無對應的使用者可觀察行為"
+    },
+    {
+      "id": "BR3.1",
+      "status": "N/A",
+      "target": "寫入端必須是 ensure_missing_role_permissions。技術規則：它的違反是靜默的（user_can 對缺列回 false，現象是「所有人都沒有入口頁權限」而非錯誤），無對應 AC。本站查證該函式已存在且已被 database.py:171–175 呼叫"
+    },
+    {
+      "id": "BR3.2",
+      "status": "N/A",
+      "target": "禁止依賴 ensure_role_permissions_seeded(force=False)。該函式在表非空時整段 no-op（rbac.py:63–65），對既有環境新增 story id 永遠無效。技術規則，無對應 AC"
+    },
+    {
+      "id": "BR3.3",
+      "status": "N/A",
+      "target": "寫入冪等且不覆寫既有列。保護的是管理者在權限頁做過的調整不被重啟靜默還原，屬既有函式的性質而非本單元新增的行為，無對應 AC"
+    },
+    {
+      "id": "BR3.4",
+      "status": "N/A",
+      "target": "完成後恰 352 列且組合完整（修訂 1 取代原本的 330）。這是交付驗證項（會寫成測試），不是使用者可觀察行為。本站以腳本從 rbac_seed_data.py 實際解析後複算：既有 308 列 ＝ 11 角色 × 28 story id，308 ＋ 11 × 4 ＝ 352。ADR-0006 的 PBT hard constraint 對本單元仍判定 N/A（calculation 類規則實算為 0）；BR7.4 點名的挑選純函式確實是 PBT 標的，但它是 U19 的交付物，本修訂已明確把該義務指派給 U19，不讓它在兩個單元之間掉落"
+    },
+    {
+      "id": "BR4.1",
+      "status": "N/A",
+      "target": "schema_rbac.sql 同步，範圍由 22 列擴為 44 列，且該檔兩處數字要改（第 12 行的檔頭「預設矩陣（308 列）」與第 761 行的驗證註解）。project.md ## Mandated 的 blocking 交付條件，非 AC。**原文記載的行號 759 已失效，本修訂重新核對為 761**；且第 761 行現在就寫 -- 352 而該檔 INSERT 區塊實算為 308，本單元改完後它會碰巧變成正確，不得因此認為它本來就對"
+    },
+    {
+      "id": "BR4.2",
+      "status": "N/A",
+      "target": "DEPLOY.md 同步。同 BR4.1，blocking 交付條件，非 AC。**原文記兩處（第 594／613 行），本修訂實測為五處且行號全不同**：:577、:591、:596、:1259、:1270，最後兩處在英文段落內（照中文關鍵詞搜尋會漏掉，可能是原文只找到兩處的原因）"
+    },
+    {
+      "id": "BR4.3",
+      "status": "N/A",
+      "target": "補 STORY_FEATURE_LABELS 標籤，數量由兩個擴為**四個**。本修訂複驗該字典現有 27 個鍵，加上 CATALOG_EXCLUDED_STORIES 的 J1 恰覆蓋既有 28 個 id、無遺漏。違反不會報錯，只是權限頁出現無名稱的列，無對應 AC"
+    },
+    {
+      "id": "BR4.4",
+      "status": "N/A",
+      "target": "同一個 PR 必須新增測試鎖住 schema_rbac.sql 與 rbac_seed_data.py 兩份 seed 副本逐列等值。team.md ## Code Style 的「單一真實來源」逐字要求跨語言邊界的副本附一致性測試，而本站查證 backend/tests/ 目前零測試做這件事。屬交付條件，非使用者可觀察行為，故無對應 AC。本條為審查後由本站自查補入，審查未提出。【修訂 1】範圍由 22 列擴為 44 列，規則本身不變；本站已實作出該解析（用於複算 308 與 352），故此測試的核心邏輯已有可運行的前例"
+    },
+    {
+      "id": "BR5.1",
+      "status": "N/A",
+      "target": "K3.can_view 給八個角色（同 K1 的持有者集合），SRE／Ops_Lead／Platform_Engineer 三列三旗標全 false。它支撐的是 AC12.1.1（建立者開啟成員頁看到自己）與 AC12.5.1 的 Given，而 story map 把 US12 全群指給 U19／U24，不在本單元的 upstream_ids 內（見 functional-spec.md 的交接事項 H-10）。本單元提供其資料面前提"
+    },
+    {
+      "id": "BR5.2",
+      "status": "N/A",
+      "target": "K3.can_edit 給四個建立者角色。支撐 AC12.1.2 與 AC12.2.1，兩者皆指給 U19／U24，不在本單元的 upstream_ids 內。本單元提供其資料面前提"
+    },
+    {
+      "id": "BR5.3",
+      "status": "N/A",
+      "target": "可達性保證：至少一個持有 A1 view 的角色不得持有 K3。與 BR1.3 同一形狀、落在 K3 上。它保護的是 AC12.5.1／AC12.5.3 的 Given 可構造性，而那兩條 AC 指給 U19／U24。保證本身不是使用者可觀察行為，是 seed 的結構約束，故無對應 AC"
+    },
+    {
+      "id": "BR5.4",
+      "status": "N/A",
+      "target": "持有 K2.edit 者必須持有 K3.edit。這是從 AC12.1.2（「不需任何額外授權步驟」）＋ FR12.6 的兩層串聯推導而得的蘊含約束，不是偏好。它跨 US9.2（本單元的 upstream）與 US12.1（U19／U24 的 upstream）兩群，故雖已在 AC9.2.1／AC9.2.2 的 target 內增補，仍在此記為結構約束本身無對應 AC"
+    },
+    {
+      "id": "BR5.5",
+      "status": "N/A",
+      "target": "本單元只保證 K3 的 story id 存在；成員關係的判定屬 U19 的 MembershipFacade、畫面屬 U24。範圍邊界規則，與 BR1.4 同一形狀，無對應 AC"
+    },
+    {
+      "id": "BR6.1",
+      "status": "N/A",
+      "target": "K4.can_view 給同八個角色。支撐 AC11.2.1（未填欄位須有文字標示）的 Given 可構造——該 AC 指給 U23 project-pages-ui，不在本單元的 upstream_ids 內"
+    },
+    {
+      "id": "BR6.2",
+      "status": "N/A",
+      "target": "K4.can_edit 給同四個建立者角色。依據為 team.md 的 C1 既有先例（架構假設由架構師設定／修改）。支撐 AC11.2.3（儲存失敗時輸入值不消失）的 Given，該 AC 指給 U23"
+    },
+    {
+      "id": "BR6.3",
+      "status": "N/A",
+      "target": "K4 只把關需求籤，不涵蓋清單頁／建立頁／總覽籤。**這是對齊修正而非本站新定案**：K-19 的 authorization_responsibility 逐字說「頁面自身的可見性把關由 K-03 的 K4 story id 承擔」而其 routes 是整個專案頁，與 [UG:G8]=C 的「需求欄位對應 K4」矛盾；兩者皆已核可，依修訂 1 Q6=A 定錨為後者。依 refined-mockups:c3 不回改 contract-summary.md。範圍定錨規則，無對應 AC"
+    },
+    {
+      "id": "BR6.4",
+      "status": "N/A",
+      "target": "不持有 K4 者在總覽籤隱藏未填計數（不是顯示 0，否則與 AC11.3.3 的「全部已填顯示 0」無法區分）。**這是本站新增的明訂**：上游沒有任何規則處理「有 K2 無 K4」這個組合，它是 Q6=A 把兩個畫面掛在不同 story id 上之後才出現的狀態。落點為 U20 的端點契約（K-17 的 read_fields 回傳 unfilled_count），無對應 AC"
+    },
+    {
+      "id": "BR6.5",
+      "status": "N/A",
+      "target": "可達性保證：至少一個角色不得持有 K4，否則 BR6.4 成為不可觸發的死碼。注意 AC11.4.1 的 deny 側（agent 經 MCP 讀「我無權存取的專案」）**不依賴本規則**——它的 Given 是 per-project 非成員，由 K-16 的 resolve_project_role 回 None 構造。seed 的結構約束，無對應 AC"
+    },
+    {
+      "id": "BR7.1",
+      "status": "N/A",
+      "target": "邀為一般成員時檢查 K3.view。它是 FR12.6a 在本單元的落點，支撐 AC12.5.1／AC12.5.3，而該兩條 AC 由 story map 指給 U19／U24。**本單元定義、U19 執行**（BR5.5），故本單元無端點可測、無對應 AC"
+    },
+    {
+      "id": "BR7.2",
+      "status": "N/A",
+      "target": "邀／改為專案管理者時檢查 K3.edit。支撐 AC12.2.1 與 AC12.4.3 的正確性（否則被指定者成為 project_admin 卻每個動作 403，而已核可文案「系統自動把管理權交給你」對他為假）。同 BR7.1，由 U19 執行"
+    },
+    {
+      "id": "BR7.3",
+      "status": "N/A",
+      "target": "自動改選的候選集合只含持有 K3.edit 的成員；無人符合則擋下停用並要求先指定接手人（與 [M3]=A 的唯一成員檢查為同一個閘門，依 [US:D-06] 與 project.md 的 functional-design:c34，守門位在三條路徑的共同上游）。支撐 AC12.4.x，由 U19 執行"
+    },
+    {
+      "id": "BR7.4",
+      "status": "N/A",
+      "target": "AC12.4.2 的挑選純函式不得讀 DB，故候選者的 K3.edit 旗標必須由呼叫端查好後傳入——**這改變了該純函式的簽章**，是本修訂對 U19 的具體指派。units-generation 對 U19 的注意事項已要求它是不讀 DB 的純函式（PBT 的結構前提，真正要驗的是排列不變性）。本單元交付規則而非函式，無對應 AC"
+    },
+    {
+      "id": "BR7.5",
+      "status": "N/A",
+      "target": "邀請被拒的訊息須分辨「完全不持有 K3」與「有 K3.view 但無 K3.edit」兩種情形。AC12.5.1 逐字要求「畫面說明他缺少什麼」，而兩種情形的處置完全不同（前者要先授予全域權限，後者改邀為一般成員即可）。該 AC 指給 U19／U24，本單元定義 reason 的集合"
+    },
+    {
+      "id": "BR4.5",
+      "status": "N/A",
+      "target": "K1–K4 不加入 CATALOG_EXCLUDED_STORIES，故四個中文標籤會出現在**公開的** /roles/catalog 回應中。**本站自檢 2（契約端點三問）查出，上游零記載**：user_router.py:310 的該端點 docstring 逐字「公開：註冊頁角色功能目錄」且無任何 Depends(get_current_user)，其 :313 呼叫 ensure_role_permissions_seeded(db, force=False)——這是該函式的第三個呼叫點，原文只記載了兩個。判定為照既有先例發布、不排除：CATALOG_EXCLUDED_STORIES 目前只含 J1（登入能力，非功能），而 J3a「使用者設定」與 J3b「細項設定」這兩個管理類標籤已經是公開的，故不引入新的揭露類別。屬交付條件與揭露判定，非使用者可觀察行為，故無對應 AC。此判定使 functional-spec.md §六′ 的 network exposure 列由「不適用」改為「適用（一處）」"
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "stage": "nfr-design",
+  "unit": "embedding-port",
+  "upstream_ids": [
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR8.1",
+    "NFR8.2",
+    "NFR9.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "D-5（第二節第 2 條：每次 embed 記一條含耗時毫秒的結構化 INFO，使延遲可事後統計出 P50/P95）＋ 本檔 §二 的誠實說明：這縮小但未關閉 RR-4——它不是自動化斷言，關閉需 build-and-test（3.6），已具名 H-N1"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "D-6（模組層具名常數，值取自環境變數、預設 10 秒，沿用 LENS_AGENT_TIMEOUT_SEC 形狀；模組內不得出現裸數字 timeout）"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "D-2（ProviderResolver 冪等、無副作用、不建連線、不載模型）＋ logical-components §一：它是啟動期函式而非持有狀態的元件，重啟由環境變數重新推導"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "D-1（主機名驗證釘在 startup hook 的模組層函式內，失敗即拋）＋ security-design §三 第 1 層"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "security-design §三 第 2 層：具名為對 U1 的依賴前提，並在 logical-components §二 的失敗域 F1 標明本單元是 ollama 的唯一消費端"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "security-design §三 的三層補償控制圖（網段與設定層，非傳輸加密）＋ D-7（userinfo 剝除）；RR-1 的失效條件原樣保留"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "D-6 的環境變數即 NFR8.1 所指的那一個；tech-stack-decisions §二 已列三處同步義務，本站不重複但在 D-6 指回"
+    },
+    {
+      "id": "NFR8.2",
+      "status": "OK",
+      "target": "D-1：驗證函式由 startup hook 呼叫，使四個既有變數在啟動時真的被讀取與驗證——這正是 deploy/.env.example:96 的現在式宣稱的實作"
+    },
+    {
+      "id": "NFR9.1",
+      "status": "OK",
+      "target": "logical-components §一：三個實作分別為外部同主機容器、行程內 ONNX、純函式，皆無計費端點呼叫；§四 另指出 fastembed 的行程內推論會與請求處理競爭 backend 的 CPU/RAM（本機限定）"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "D-1",
+      "status": "N/A",
+      "target": "啟動驗證落在與 configure_provider_env() 並列的模組層函式，由 main.py 的 startup hook 呼叫；行為依 BR1.6 為失敗即拋（與前例只記 log 不同，刻意且明記）。TestClient(app) 不觸發該 hook，故既有測試檔不需設定 embedding 變數（實際檔數以 security-design.md 的 D-1 為準——該處實算為 49；本檔刻意不複製該數字，避免同一個可計算的數字有第二份會過期的副本）。[Q1]=A"
+    },
+    {
+      "id": "D-2",
+      "status": "N/A",
+      "target": "驗證函式冪等且無副作用：只讀環境變數、回傳 ProviderSelection、失敗時拋；不建連線、不載模型（BR1.5）"
+    },
+    {
+      "id": "D-3",
+      "status": "N/A",
+      "target": "stub 的向量由輸入文字的 hashlib 摘要決定性展開為 1024 個 float；同輸入同輸出且不同輸入幾乎必然不同向量，使 U8 的相似度測試不致恆真。明記它不具語意，只能驗分群與過濾機制。[Q2]=A"
+    },
+    {
+      "id": "D-4",
+      "status": "N/A",
+      "target": "超長輸入由本 Port 截斷到提供者的 context 上限並記 WARN（含被截字元數），不拋例外；其餘失敗維持單一例外，K-06 契約不變。截斷靜默降低該筆檢索品質，WARN 是唯一可見訊號——具名取捨。[Q3]=A"
+    },
+    {
+      "id": "D-5",
+      "status": "N/A",
+      "target": "可觀測性只用 logging，四條規格定死（啟動 INFO／每次 embed 含耗時的 INFO／截斷 WARN／例外不由本 Port 記）。零 metrics 依賴、零新端點。[Q4]=A（修訂）——初答 C 因違反 SEC-1、/metrics 無認證而本 app 對外、與「requirements.txt 淨變更零」矛盾、翻轉 ADR-0006 network exposure 面，四項具體壞法經指名後重選"
+    },
+    {
+      "id": "D-6",
+      "status": "N/A",
+      "target": "timeout 為模組層具名常數，值取自環境變數、預設 10 秒，沿用 LENS_AGENT_TIMEOUT_SEC 形狀；模組內不得出現裸數字 timeout"
+    },
+    {
+      "id": "D-7",
+      "status": "N/A",
+      "target": "EmbeddingProviderUnavailable 攜帶 selectedProvider／target／availableOptions 三欄，target 在組裝前剝除 URL 的 userinfo 區段"
+    },
+    {
+      "id": "D-8",
+      "status": "N/A",
+      "target": "本 Port 不自己記 ERROR——拋出即交給呼叫方；避免同一個失敗被記兩次，且 U8 才有判斷是否降級的上下文"
+    },
+    {
+      "id": "D-9",
+      "status": "N/A",
+      "target": "SEC-1 的三條禁令以 import 面機械保證：模組內 grep 不得出現 DB session 型別、RBAC 判定函式、FastAPI router 裝飾器"
+    },
+    {
+      "id": "D-10",
+      "status": "N/A",
+      "target": "選擇器回傳 Optional（fulltext ⇒ 空）；U8 以「有沒有拿到 Port」分流，不以例外分流"
+    },
+    {
+      "id": "H-N1",
+      "status": "N/A",
+      "target": "交出：embed 延遲的自動化斷言。落點 build-and-test（3.6），與 NFR1–NFR3 的量測落點相同。本站只做到可事後統計，未關閉 RR-4"
+    },
+    {
+      "id": "H-N2",
+      "status": "N/A",
+      "target": "交出：/metrics 與 telemetry 基礎設施（[Q4] 初答 C 的方向）。落點 observability-setup（4.4，CONDITIONAL）——該站被 skip 時判定者須重新提交使用者，RR-3 已有同形前例"
+    },
+    {
+      "id": "H-N3",
+      "status": "N/A",
+      "target": "交出：各提供者 context 上限的實際值（D-4 的截斷門檻）。落點 code-generation（3.5，ALWAYS）；本站只定「必須截斷且必須 WARN」的形狀"
+    }
+  ]
+}
