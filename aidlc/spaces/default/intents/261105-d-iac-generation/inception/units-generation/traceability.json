@@ -1,0 +1,30 @@
+{
+  "stage": "units-generation",
+  "upstream_ids": [
+    "US1.1", "US1.2", "US1.3", "US1.4",
+    "US2.1", "US2.2", "US2.3",
+    "US3.1", "US3.2",
+    "US4.1", "US4.2",
+    "US5.1", "US5.2",
+    "US6.1", "US6.2",
+    "US7.1"
+  ],
+  "coverage": [
+    { "id": "US1.1", "status": "OK", "target": "U2" },
+    { "id": "US1.2", "status": "OK", "target": "U2" },
+    { "id": "US1.3", "status": "OK", "target": "U1" },
+    { "id": "US1.4", "status": "OK", "target": "U2" },
+    { "id": "US2.1", "status": "OK", "target": "U1" },
+    { "id": "US2.2", "status": "OK", "target": "U1" },
+    { "id": "US2.3", "status": "OK", "target": "U1" },
+    { "id": "US3.1", "status": "OK", "target": "U1" },
+    { "id": "US3.2", "status": "OK", "target": "U2" },
+    { "id": "US4.1", "status": "OK", "target": "U1" },
+    { "id": "US4.2", "status": "OK", "target": "U2" },
+    { "id": "US5.1", "status": "OK", "target": "U1, U2" },
+    { "id": "US5.2", "status": "OK", "target": "U1" },
+    { "id": "US6.1", "status": "OK", "target": "U1" },
+    { "id": "US6.2", "status": "OK", "target": "U1, U2" },
+    { "id": "US7.1", "status": "GAP", "target": "Should — no unit this intent" }
+  ]
+}

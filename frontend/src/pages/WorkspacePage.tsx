@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { IacEntryControl } from '../components/iac/IacEntryControl';
+import { rememberPendingGenerate } from '../components/iac/IacWorkspace';
 import { ChatBox } from '../components/ChatBox';
 import type { Message } from '../components/ChatBox';
 import { DrawioCanvas } from '../components/DrawioCanvas';
@@ -70,6 +72,7 @@ export const WorkspacePage = () => {
   const canViewOnly = canArch('view') && !canEditArch;
   const canA3Edit = can('A3', 'edit');
   const canA3View = can('A3', 'view');
+  const canViewD1 = can('D1', 'view');
   const canvasRef = useRef<DrawioCanvasRef>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -502,6 +505,24 @@ export const WorkspacePage = () => {
 
     setToast(null);
     navigate(`/assessment?diagramId=${diagramId}`);
+  };
+
+  const openTerraform = async () => {
+    if (!canViewD1) return;
+    let diagramId = currentDiagramIdRef.current;
+    if (!diagramId) {
+      if (!xml || !canEditArch) {
+        navigate('/iac/generate');
+        return;
+      }
+      diagramId = await saveDiagram(xml, { successMessage: '已儲存，正在產生 IaC…' });
+      if (!diagramId) return;
+    } else if (xml && canEditArch) {
+      await autosaveDiagramXml(diagramId, xml);
+    }
+    setToast(null);
+    rememberPendingGenerate(diagramId);
+    navigate(`/iac/generate?diagramId=${diagramId}`);
   };
 
   const appendAgentMessage = (
@@ -1141,6 +1162,13 @@ export const WorkspacePage = () => {
         }
         headerCenter={
           <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200/80 max-w-full overflow-x-auto">
+            <IacEntryControl
+              canView={canViewD1}
+              onOpen={() => {
+                void openTerraform();
+              }}
+            />
+            <div className="w-px h-4 bg-gray-200 mx-0.5 shrink-0" />
             <select
               className="bg-transparent border-none text-sm font-semibold text-gray-800 outline-none cursor-pointer focus:ring-0 w-44 shrink-0"
               value={currentDiagramId || ''}
