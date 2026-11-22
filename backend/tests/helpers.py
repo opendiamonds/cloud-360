@@ -27,29 +27,6 @@ if importlib.util.find_spec("psycopg") is None:  # pragma: no cover - 取決於�
     for _sub in ("adapt", "pq", "types", "rows"):
         sys.modules.setdefault(f"psycopg.{_sub}", getattr(_psycopg_stub, _sub))
 
-# Mock LangGraph / LangChain stack if running in light test environments
-def _fake_tool(func=None, *args, **kwargs):
-    if func is not None:
-        return func
-    return lambda f: f
-
-langchain_core_tools = MagicMock()
-langchain_core_tools.tool = _fake_tool
-sys.modules.setdefault("langchain_core.tools", langchain_core_tools)
-
-for _mod in [
-    "langgraph",
-    "langgraph.graph",
-    "langgraph.graph.message",
-    "langgraph.checkpoint",
-    "langgraph.checkpoint.memory",
-    "langgraph.prebuilt",
-    "langchain_core",
-    "langchain_core.messages",
-    "langchain_anthropic",
-]:
-    sys.modules.setdefault(_mod, MagicMock())
-
 backend_dir = Path(__file__).resolve().parents[1]
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
