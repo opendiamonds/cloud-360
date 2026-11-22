@@ -1,7 +1,7 @@
 """pgvector bootstrap 的順序、冪等與兩處同步（U1 `brain-infra`／`NFR6.2`、`NFR6.2a`）。
 
 本檔守的是一條**二元判準**：`database._ensure_vector_extension()` 的呼叫必須出現在
-`Base.metadata.create_all()` **之前**。這與本檔 `_ensure_*` 家族其餘七支的方向相反
+`Base.metadata.create_all()` **之前**。這與本檔 `_ensure_*` 家族其餘六支的方向相反
 （它們全在 `create_all()` 之後），所以照既有形狀實作就會放錯邊，而放錯邊的後果不是
 「某個欄位沒補上」，是 **uvicorn 啟動失敗**：`vector` 型別不存在時，任何宣告
 `vector(1024)` 欄位的表在 `create_all()` 裡就會以 `type "vector" does not exist`
@@ -66,9 +66,8 @@ class EnsureVectorExtensionTest(unittest.TestCase):
         """案例 2（核心）：呼叫順序。
 
         以**共用的 parent mock** 攔截兩者，`mock_calls` 保序，所以順序是被觀察到
-        的事實而不是時間戳比較。七支既有 `_ensure_*` 一併攔下，確認它們仍在
+        的事實而不是時間戳比較。六支既有 `_ensure_*` 一併攔下，確認它們仍在
         `create_all` 之後——否則「順序對了」可能只是因為別的東西也被搬動了。
-        漏攔的那一支會改走真實 engine，CI 上沒有 Postgres 時就會連線失敗。
         """
         parent = mock.Mock()
         session = mock.MagicMock()
@@ -86,7 +85,6 @@ class EnsureVectorExtensionTest(unittest.TestCase):
             mock.patch.object(database, "_ensure_cost_schema", parent.cost),
             mock.patch.object(database, "_ensure_estimate_intake_schema", parent.intake),
             mock.patch.object(database, "_ensure_last_activity_schema", parent.activity),
-            mock.patch.object(database, "_ensure_iac_draft_schema", parent.iac),
             mock.patch.object(database, "SessionLocal", mock.MagicMock(return_value=session)),
             mock.patch.object(database, "logger", mock.MagicMock()),
         ]
@@ -104,7 +102,7 @@ class EnsureVectorExtensionTest(unittest.TestCase):
             "_ensure_vector_extension() 必須在 Base.metadata.create_all() 之前呼叫："
             f"實際順序為 {order}",
         )
-        for name in ("a4", "j5", "a3", "cost", "intake", "activity", "iac"):
+        for name in ("a4", "j5", "a3", "cost", "intake", "activity"):
             self.assertGreater(
                 order.index(name),
                 order.index("create_all"),
