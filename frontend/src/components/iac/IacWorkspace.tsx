@@ -1144,7 +1144,7 @@ function IacWorkspaceBody({
               data-testid="iac-run-d1"
               disabled={Boolean(d1Reason) || Boolean(busy)}
               aria-describedby={d1Reason ? 'iac-run-reason' : undefined}
-              onClick={runGenerate}
+              onClick={() => runGenerate()}
               className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
               產生 IaC
