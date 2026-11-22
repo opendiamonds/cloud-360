@@ -1968,11 +1968,12 @@ async def build_compound_diagram_xml(
     """
     依據 Hub-and-Spoke 幾何拓撲組裝混合雲 Draw.io / mxGraph XML (Contract C3)。
     
-    規格要求：
+    支援：
       1. 左翼 Azure (寬度 >= 360px)、中央核心 AWS (寬度 >= 480px)、右翼 GCP (寬度 >= 360px)。
       2. 雲與雲之間保留 120px 緩衝走廊。
       3. 套用 GROUP_STYLES 容器樣式 (azure_cloud, aws_cloud, gcp_cloud)。
-      4. 跨雲連線採直角折線路由 (edgeStyle=orthogonalEdgeStyle;)，中點標註純白膠囊協議標籤 (13.5:1 對比度)。
+      4. 支援每一朵雲內部包含巢狀 groups（VPC / VNet / AZ / Subnets），若未提供子群組則自動生成標準 VPC 與 Subnet 框架。
+      5. 跨雲連線採直角折線路由 (edgeStyle=orthogonalEdgeStyle;)，中點標註純白膠囊協議標籤 (13.5:1 對比度)。
     """
     clouds = [dict(c) for c in (clouds or [])]
     connections = [dict(e) for e in (connections or [])]
@@ -1996,10 +1997,13 @@ async def build_compound_diagram_xml(
         cid = cloud.get("id") or f"{prov}_cloud"
         title = cloud.get("title") or f"{prov.upper()} Cloud"
 
-        # 容器尺寸約束：中央 AWS >= 480px，兩翼 >= 360px
-        min_width = 480.0 if prov == "aws" else 360.0
+        raw_nodes = cloud.get("nodes", [])
+        raw_groups = cloud.get("groups", [])
+
+        # 容器尺寸約束：中央 AWS >= 540px，兩翼 >= 400px (若包含內部群組則自適應擴充)
+        min_width = 540.0 if prov == "aws" else 400.0
         width = max(float(cloud.get("width", min_width)), min_width)
-        height = max(float(cloud.get("height", 360.0)), 360.0)
+        height = max(float(cloud.get("height", 460.0)), 460.0)
 
         # 雲容器對應樣式
         container_style_type = f"{prov}_cloud" if f"{prov}_cloud" in GROUP_STYLES else "aws_cloud"
@@ -2013,62 +2017,249 @@ async def build_compound_diagram_xml(
             "width": width,
             "height": height,
             "provider": prov,
+            "is_cloud": True,
         }
         all_groups.append(cloud_group)
 
-        # 內部節點佈局
-        raw_nodes = cloud.get("nodes", [])
-        node_cols = 3 if prov == "aws" else 2
-        col_width = (width - 60.0) / node_cols
-        row_height = 80.0
+        # 如果 cloud 自帶 groups，直接將其座標 offset 到當前雲容器內部
+        if raw_groups:
+            for g in raw_groups:
+                g_dict = dict(g)
+                # 若為相對座標則轉換為全域絕對座標
+                gx = g_dict.get("x", 20.0)
+                gy = g_dict.get("y", 50.0)
+                if gx < current_x:
+                    gx += current_x
+                if gy < container_y:
+                    gy += container_y
+                g_dict["x"] = gx
+                g_dict["y"] = gy
+                g_dict["provider"] = prov
+                g_dict["type"] = normalize_group_type(g_dict, provider=prov.upper())
+                all_groups.append(g_dict)
 
-        for n_idx, raw_n in enumerate(raw_nodes):
-            nid = raw_n.get("id") or f"{cid}_node_{n_idx}"
-            sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
-            lbl = raw_n.get("label") or raw_n.get("name") or sname
+            for n_idx, raw_n in enumerate(raw_nodes):
+                nid = raw_n.get("id") or f"{cid}_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = raw_n.get("x", 40.0)
+                ny = raw_n.get("y", 80.0)
+                if nx < current_x:
+                    nx += current_x
+                if ny < container_y:
+                    ny += container_y
 
-            col = n_idx % node_cols
-            row = n_idx // node_cols
-            node_abs_x = current_x + 30.0 + col * col_width + (col_width - 40.0) / 2.0
-            node_abs_y = container_y + 60.0 + row * row_height
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "provider": prov,
+                })
+        else:
+            # 自動生成結構化網路階層框架 (VPC / VNet / Subnets)
+            # 依 provider 建立 VPC/VNet 及 Public/Private (或 Frontend/Backend) Subnets
+            inner_pad = 20.0
+            vpc_x = current_x + inner_pad
+            vpc_y = container_y + 40.0
+            vpc_w = width - (inner_pad * 2.0)
+            vpc_h = height - 55.0
 
-            all_nodes.append({
-                "id": nid,
-                "name": sname,
-                "label": lbl,
-                "x": node_abs_x,
-                "y": node_abs_y,
-                "width": 40,
-                "height": 40,
-                "parent_id": cid,
+            vpc_type = "vpc" if prov == "aws" else ("azure_vnet" if prov == "azure" else "gcp_vpc")
+            vpc_name = "VPC" if prov == "aws" else ("Virtual Network (VNet)" if prov == "azure" else "GCP VPC")
+            vpc_id = f"{cid}_vpc"
+
+            all_groups.append({
+                "id": vpc_id,
+                "name": vpc_name,
+                "type": vpc_type,
+                "x": vpc_x,
+                "y": vpc_y,
+                "width": vpc_w,
+                "height": vpc_h,
                 "provider": prov,
             })
+
+            # 建立 Subnets
+            sub_pad = 15.0
+            sub_w = vpc_w - (sub_pad * 2.0)
+            sub1_h = max(130.0, (vpc_h - 70.0) / 2.0)
+            sub2_h = max(130.0, (vpc_h - 70.0) / 2.0)
+
+            sub1_y = vpc_y + 35.0
+            sub2_y = sub1_y + sub1_h + 15.0
+
+            if prov == "aws":
+                sub1_name, sub1_type = "Public Subnet", "public_subnet"
+                sub2_name, sub2_type = "Private Subnet", "private_subnet"
+            elif prov == "azure":
+                sub1_name, sub1_type = "Frontend Subnet", "azure_subnet"
+                sub2_name, sub2_type = "Backend Subnet", "azure_subnet"
+            else:
+                sub1_name, sub1_type = "Public Subnet", "gcp_subnet"
+                sub2_name, sub2_type = "Private Analytics Subnet", "gcp_subnet"
+
+            sub1_id = f"{cid}_sub1"
+            sub2_id = f"{cid}_sub2"
+
+            all_groups.append({
+                "id": sub1_id,
+                "name": sub1_name,
+                "type": sub1_type,
+                "x": vpc_x + sub_pad,
+                "y": sub1_y,
+                "width": sub_w,
+                "height": sub1_h,
+                "provider": prov,
+            })
+            all_groups.append({
+                "id": sub2_id,
+                "name": sub2_name,
+                "type": sub2_type,
+                "x": vpc_x + sub_pad,
+                "y": sub2_y,
+                "width": sub_w,
+                "height": sub2_h,
+                "provider": prov,
+            })
+
+            # 將節點分配至適當子網中
+            # 前端/入口類 (alb, nat, web, ingress, front, public) -> sub1，其餘 (db, storage, worker, eks, aks, bq) -> sub2
+            sub1_nodes = []
+            sub2_nodes = []
+            for raw_n in raw_nodes:
+                sname = (raw_n.get("service_name") or raw_n.get("name") or "").lower()
+                if any(k in sname for k in ("alb", "load balancer", "nat", "gateway", "front", "ingress", "apigateway", "vm")):
+                    sub1_nodes.append(raw_n)
+                else:
+                    sub2_nodes.append(raw_n)
+
+            # 若全部落入同一個子網，平均分攤
+            if not sub1_nodes and sub2_nodes:
+                mid = max(1, len(sub2_nodes) // 2)
+                sub1_nodes = sub2_nodes[:mid]
+                sub2_nodes = sub2_nodes[mid:]
+            elif not sub2_nodes and sub1_nodes:
+                mid = max(1, len(sub1_nodes) // 2)
+                sub2_nodes = sub1_nodes[mid:]
+                sub1_nodes = sub1_nodes[:mid]
+
+            # 排版 sub1 節點
+            cols1 = max(1, len(sub1_nodes))
+            col_w1 = (sub_w - 30.0) / cols1
+            for n_idx, raw_n in enumerate(sub1_nodes):
+                nid = raw_n.get("id") or f"{cid}_s1_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = vpc_x + sub_pad + 15.0 + n_idx * col_w1 + (col_w1 - 40.0) / 2.0
+                ny = sub1_y + 45.0
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "parent_id": sub1_id,
+                    "provider": prov,
+                })
+
+            # 排版 sub2 節點
+            cols2 = max(1, len(sub2_nodes))
+            col_w2 = (sub_w - 30.0) / cols2
+            for n_idx, raw_n in enumerate(sub2_nodes):
+                nid = raw_n.get("id") or f"{cid}_s2_node_{n_idx}"
+                sname = raw_n.get("service_name") or raw_n.get("name") or "unknown"
+                lbl = raw_n.get("label") or raw_n.get("name") or sname
+                nx = vpc_x + sub_pad + 15.0 + n_idx * col_w2 + (col_w2 - 40.0) / 2.0
+                ny = sub2_y + 45.0
+                all_nodes.append({
+                    "id": nid,
+                    "name": sname,
+                    "label": lbl,
+                    "x": nx,
+                    "y": ny,
+                    "width": 40,
+                    "height": 40,
+                    "parent_id": sub2_id,
+                    "provider": prov,
+                })
 
         current_x += width + buffer_corridor
 
     cells: list[str] = []
 
-    # 渲染雲容器
+    # 計算 Groups 面積與巢狀層級（面積由大到小排序，由內到外推算 parent）
     for g in all_groups:
+        g["area"] = g.get("width", 0) * g.get("height", 0)
+    groups_sorted = sorted(all_groups, key=lambda x: x["area"], reverse=True)
+
+    for g in groups_sorted:
+        parent_id = "1"
+        rel_x, rel_y = g["x"], g["y"]
+        for potential_parent in groups_sorted:
+            if g["id"] != potential_parent["id"] and potential_parent["area"] > g["area"]:
+                if is_inside(g, potential_parent):
+                    parent_id = potential_parent["id"]
+                    rel_x = g["x"] - potential_parent["x"]
+                    rel_y = g["y"] - potential_parent["y"]
+                    break
+        g["parent_id"] = parent_id
+        g["rel_x"] = rel_x
+        g["rel_y"] = rel_y
+
+    for node in all_nodes:
+        parent_id = "1"
+        rel_x, rel_y = node["x"], node["y"]
+        node["width"] = 40
+        node["height"] = 40
+
+        # 如果已有指定且存在的 parent_id，優先計算相對座標
+        explicit_parent = next((g for g in groups_sorted if g["id"] == node.get("parent_id")), None)
+        if explicit_parent:
+            parent_id = explicit_parent["id"]
+            rel_x = node["x"] - explicit_parent["x"]
+            rel_y = node["y"] - explicit_parent["y"]
+        else:
+            best_group = None
+            for g in groups_sorted:
+                if is_inside(node, g):
+                    if best_group is None or g["area"] < best_group["area"]:
+                        best_group = g
+            if best_group:
+                parent_id = best_group["id"]
+                rel_x = node["x"] - best_group["x"]
+                rel_y = node["y"] - best_group["y"]
+
+        node["parent_id"] = parent_id
+        node["rel_x"] = rel_x
+        node["rel_y"] = rel_y
+
+    # 渲染群組 cells (由大到小加入)
+    for g in groups_sorted:
         gid = g["id"]
         gname = html.escape(g.get("name", ""))
         gtype = g.get("type", "aws_cloud")
-        style = GROUP_STYLES.get(gtype, GROUP_STYLES["aws_cloud"])
+        style = GROUP_STYLES.get(gtype, GROUP_STYLES.get("aws_cloud", ""))
         w, h = g["width"], g["height"]
-        gx, gy = g["x"], g["y"]
+        rx, ry = g["rel_x"], g["rel_y"]
+        pid = g["parent_id"]
         cells.append(
-            f'<mxCell id="{gid}" value="{gname}" style="{style}" vertex="1" parent="1">'
-            f'<mxGeometry x="{gx}" y="{gy}" width="{w}" height="{h}" as="geometry"/></mxCell>'
+            f'<mxCell id="{gid}" value="{gname}" style="{style}" vertex="1" parent="{pid}">'
+            f'<mxGeometry x="{rx}" y="{ry}" width="{w}" height="{h}" as="geometry"/></mxCell>'
         )
 
-    # 渲染節點
+    # 渲染節點 cells
     for idx, node in enumerate(all_nodes):
         nid = node["id"]
         comp = node["name"]
         pid = node["parent_id"]
-        # 相對父容器的相對座標
-        rel_x = node["x"] - next(g["x"] for g in all_groups if g["id"] == pid)
-        rel_y = node["y"] - next(g["y"] for g in all_groups if g["id"] == pid)
+        rx = node["rel_x"]
+        ry = node["rel_y"]
 
         if on_progress:
             await on_progress(f"🔄 正在取得 {comp.upper()} 圖示 ({idx + 1}/{len(all_nodes)})...")
@@ -2084,10 +2275,10 @@ async def build_compound_diagram_xml(
         escaped_lbl = html.escape(node.get("label", comp).upper())
         cells.append(
             f'<mxCell id="{nid}" value="{escaped_lbl}" style="{style}" vertex="1" parent="{pid}">'
-            f'<mxGeometry x="{rel_x}" y="{rel_y}" width="40" height="40" as="geometry"/></mxCell>'
+            f'<mxGeometry x="{rx}" y="{ry}" width="40" height="40" as="geometry"/></mxCell>'
         )
 
-    # 渲染跨雲連線與純白膠囊標籤
+    # 渲染連線與膠囊標籤
     for idx, conn in enumerate(connections):
         src = conn.get("source_node_id") or conn.get("source")
         tgt = conn.get("target_node_id") or conn.get("target")
@@ -2095,7 +2286,7 @@ async def build_compound_diagram_xml(
             continue
 
         cid = f"conn_{idx}"
-        proto = html.escape(conn.get("protocol_name") or "")
+        proto = html.escape(conn.get("protocol_name") or conn.get("label") or "")
         edge_style = (
             "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
             "html=1;strokeColor=#475569;strokeWidth=2;align=center;verticalAlign=middle;"

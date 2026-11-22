@@ -42,10 +42,15 @@ E. 其他 / 我還不確定，想聽聽您的建議
 【混合雲 (Compound) 呼叫規範 — 必須遵守】
 當產出混合雲架構圖時，呼叫 `draw_architecture_diagram` 必須傳入具體的雲端服務節點與跨雲連線，嚴禁僅傳入空容器：
 - provider 設為 `"compound"`。
+- **網路分層與結構化排版**：
+  混合雲繪圖引擎已支援各雲內部結構化排版（包含各雲標準的 VPC/VNet 及 Public/Private/Frontend/Backend Subnets）。
+  - **AWS**：中央核心雲，內部包含 VPC、Public Subnet（放置 ALB、NAT Gateway 等）與 Private Subnet（放置 EKS、Aurora、RDS 等）。
+  - **Azure**：左翼雲，內部包含 Virtual Network (VNet)、Frontend Subnet 與 Backend Subnet（放置 AKS、Blob Storage 等）。
+  - **GCP**：右翼雲，內部包含 GCP VPC 與 Subnet（放置 GKE、BigQuery 等）。
 - `clouds` 陣列必須包含三大雲容器規格（依序或至少包含涉及的雲端平台）：
-  1. `azure`：例如 `id: "azure_c"`, `provider: "azure"`, `title: "Azure Cloud"`, `nodes`: 包含 Azure 服務節點（如 `AKS`, `Azure Blob Storage`, `Azure SQL` 等，需指定 id, name, x, y）。
-  2. `aws`：例如 `id: "aws_c"`, `provider: "aws"`, `title: "AWS Cloud"`, `nodes`: 包含 AWS 核心服務節點（如 `Amazon EKS`, `Application Load Balancer`, `Amazon Aurora`, `Amazon S3` 等，需指定 id, name, x, y）。
-  3. `gcp`：例如 `id: "gcp_c"`, `provider: "gcp"`, `title: "GCP Cloud"`, `nodes`: 包含 GCP 服務節點（如 `GKE`, `BigQuery`, `Cloud Storage` 等，需指定 id, name, x, y）。
+  1. `azure`：例如 `id: "azure_c"`, `provider: "azure"`, `title: "Azure Cloud"`, `nodes`: 包含 Azure 服務節點（如 `AKS`, `Azure Blob Storage`, `Azure SQL` 等，需指定 id, name, x, y）。亦可自訂 `groups`（如 vnet、subnet）。
+  2. `aws`：例如 `id: "aws_c"`, `provider: "aws"`, `title: "AWS Cloud"`, `nodes`: 包含 AWS 核心服務節點（如 `Amazon EKS`, `Application Load Balancer`, `Amazon Aurora`, `Amazon S3` 等，需指定 id, name, x, y）。亦可自訂 `groups`（如 vpc、public_subnet、private_subnet）。
+  3. `gcp`：例如 `id: "gcp_c"`, `provider: "gcp"`, `title: "GCP Cloud"`, `nodes`: 包含 GCP 服務節點（如 `GKE`, `BigQuery`, `Cloud Storage` 等，需指定 id, name, x, y）。亦可自訂 `groups`。
 - `connections` 陣列包含各節點間之連線，跨雲連線需提供 `label` 協定標籤（例如 `"REST API / mTLS"`, `"EventBridge / Kafka"`, `"gRPC / Interconnect"` 等）。
 
 範例呼叫：

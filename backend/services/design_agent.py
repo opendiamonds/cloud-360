@@ -317,7 +317,18 @@ async def run_design_agent(
 
             last_message = event["messages"][-1]
             if isinstance(last_message, AIMessage) and not last_message.tool_calls:
-                yield {"type": "message", "content": last_message.content}
+                msg_content = last_message.content
+                if isinstance(msg_content, list):
+                    text_parts = []
+                    for part in msg_content:
+                        if isinstance(part, str):
+                            text_parts.append(part)
+                        elif isinstance(part, dict) and "text" in part:
+                            text_parts.append(part["text"])
+                    msg_content = "".join(text_parts)
+                elif not isinstance(msg_content, str):
+                    msg_content = str(msg_content)
+                yield {"type": "message", "content": msg_content}
 
         # drain one last time
         async for q_event in _drain_progress(request_key):
