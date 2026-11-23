@@ -52,6 +52,7 @@ from fastapi import APIRouter, HTTPException, WebSocket
 from pydantic import ValidationError
 from starlette.websockets import WebSocketDisconnect
 
+from services import brain_diagram_creation as creation
 from services import brain_gateway_rules as rules
 from services.auth import get_user_from_token
 from services.brain_ws_contract import (
@@ -72,7 +73,12 @@ from services.brain_ws_contract import (
     WsUnvalidatedEnvelope,
 )
 from services.embedding_port import EMBEDDING_TIMEOUT_SEC, EmbeddingProviderUnavailable
-from services.hierarchy_facade import HierarchyFacade, HierarchyForbidden, mint_principal
+from services.hierarchy_facade import (
+    HierarchyFacade,
+    HierarchyForbidden,
+    HierarchyNotFound,
+    mint_principal,
+)
 from services.intent_routing import IntentRouter
 from services.intent_routing_errors import PlatformSelfModificationRefused
 from services.intent_routing_predicate import intents_after_choice
@@ -93,6 +99,8 @@ from services.session_types import (
     default_page_modes,
 )
 from services.work_orchestrator import WorkOrchestrator
+from services.work_orchestrator_capabilities import KIND_HTTP, CapabilityClient, CapabilityError
+from services.work_orchestrator_rules import CAP_ARCHITECTURE
 
 logger = logging.getLogger("cloud360.brain_gateway")
 
@@ -108,6 +116,10 @@ MEMORY_WORKERS = 4
 PREFETCH_WAIT_SEC = 3.0
 #: 帶入項 8：寫入路徑等待 = 嵌入逾時 + 5 秒（預設 15 秒，與 functional-design 一致）。
 EPISODIC_WAIT_SEC = EMBEDDING_TIMEOUT_SEC + 5.0
+#: 261116-brain-create-diagram 修訂 1（契約 C5 錯誤表「建圖逾時」）：建草稿呼叫的期限。
+#: 同一連線的訊息依序處理，建圖卡住會擋住該連線後續所有訊息，故必須有上限。逾時視為
+#: 「結果不明」：不重試、不交辦。建圖是同進程 ASGI 呼叫加一次 INSERT，15 秒已遠高於正常值。
+DIAGRAM_CREATE_TIMEOUT_SEC = 15.0
 #: 與 `U11` 的取用值相同（`intent_routing.py` 的 `_REFERENT_MEMORY_KINDS`／`_MEMORY_SEARCH_LIMIT`）；
 #: 兩邊一致由 `tests/test_brain_gateway_memory.py` 的契約測試鎖住。
 PREFETCH_KINDS: Tuple[str, ...] = ("semantic", "procedure")
@@ -123,6 +135,46 @@ CLOSE_REASONS: Mapping[int, str] = {
 
 TOO_MANY_PROJECTS_MESSAGE = "專案太多，請先在脈絡列選定專案"
 CONFLICTING_TARGETS_MESSAGE = "這句話提到了不同的對象，請一次只針對一個對象交辦，或先在脈絡列選定。"
+
+# 261116-brain-create-diagram：大腦新建架構圖的固定回覆（不含使用者原文與圖名）。
+#: FR4.1：有 K1 但沒有架構編輯權。
+NEED_ARCH_EDIT_MESSAGE = (
+    "建立架構圖需要架構編輯權。請向平台管理者申請角色變更（管理者在「使用者角色」頁調整）。"
+)
+#: FR3.3：名下沒有任何系統；不自動建立專案或系統。
+NO_SYSTEM_MESSAGE = (
+    "你目前還沒有任何系統，新圖需要掛在系統底下。請先到專案頁（/projects）建立專案與系統，"
+    "再請我畫圖。"
+)
+#: 契約 C5 錯誤表：建圖傳輸錯誤或逾時——結果未知，不重試、不交辦。
+CREATE_UNKNOWN_MESSAGE = "新圖是否建立成功不確定，請到工作區確認後再試一次。"
+#: 建圖收到明確的非 403 錯誤（4xx／5xx）：沒有建立，不交辦。
+CREATE_FAILED_MESSAGE = "新圖沒有建立成功，請稍後再試一次。"
+#: 修訂 1（FR4.1）：建圖 403 但不是缺架構編輯權（K2 edit、擁有權、帳號狀態）。
+#: repo 內沒有對應 K2 的既有文字（`PHRASES["forbidden"]` 會寫成「沒有使用架構設計的權限」，
+#: 又指回架構權限），故另寫；不含系統名或使用者原文。
+#: build-and-test（使用者於 code-generation 閘門裁決）：K2 來自角色權限矩陣，專案管理者
+#: 改不了，故指向平台管理者檢查角色權限，而不是專案管理者；也不提「架構編輯權」，
+#: 以免與 NEED_ARCH_EDIT_MESSAGE 指向同一個原因。
+CREATE_FORBIDDEN_MESSAGE = (
+    "你沒有在這個系統下建立架構圖的權限。"
+    "請改選你可以編輯的系統，或請平台管理者檢查你的角色權限。"
+)
+#: build-and-test（審查 Minor）：建圖回 404＝系統已不存在或已無法存取；這是永久性的，
+#: 不能套「請稍後再試一次」。
+CREATE_NOT_FOUND_MESSAGE = (
+    "這個系統已不存在或你已無法存取，新圖沒有建立。請重新選取作業對象後再說一次。"
+)
+#: 契約 C5 錯誤表：切換作業對象失敗——不交辦、草稿保留。
+SWITCH_FAILED_MESSAGE = "新圖已建立為草稿，但無法切換到新圖。請在脈絡列選取它後再說一次。"
+#: 系統下沒有圖可改、使用者卻選了「修改」（候選失效後重新判定時才可能走到）。
+NOTHING_TO_MODIFY_MESSAGE = "這個系統下目前沒有架構圖可以修改。"
+#: 路由沒有提供門檻設定時的預設（與 `BRAIN_ROUTER_CONFIDENCE_THRESHOLD` 的現值相同）。
+DEFAULT_DIAGRAM_THRESHOLD = 0.7
+#: 契約 C6 的四種新反問。
+DIAGRAM_CLARIFY_KINDS = frozenset(
+    {"pick_system", "pick_diagram", "resume_draft_or_new", "new_or_modify"}
+)
 
 
 def not_found_message(referent: str) -> str:
@@ -151,6 +203,14 @@ _ALLOWED = frozenset(
         "prefetch",
         "count",
         "skipped",
+        # 261116-brain-create-diagram（NFR4）：判定類別與識別碼／類別名——**不含**使用者原文與圖名。
+        "category",
+        "decision",
+        "targetKind",
+        "diagramId",
+        "kind",
+        "status",
+        "error",
     }
 )
 
@@ -619,6 +679,13 @@ def _target_triple(session: Optional[BrainSession], segment_id: str) -> Tuple[An
     )
 
 
+def _as_optional_int(value: Any) -> Optional[int]:
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _current_target(
     session: Optional[BrainSession], segment_id: str, names: Optional[Mapping[str, Any]]
 ) -> rules.CurrentTarget:
@@ -706,8 +773,15 @@ class BrainGateway:
         prefetch_adapter: Optional[MemoryPrefetchAdapter] = None,
         prefetch_wait_sec: float = PREFETCH_WAIT_SEC,
         episodic_wait_sec: float = EPISODIC_WAIT_SEC,
+        diagram_client_factory: Optional[Callable[[str], Any]] = None,
+        diagram_create_timeout_sec: float = DIAGRAM_CREATE_TIMEOUT_SEC,
     ) -> None:
+        self.diagram_create_timeout_sec = diagram_create_timeout_sec
         self.timing = timing or GatewayTiming()
+        # 261116-brain-create-diagram（ADR-008）：`token -> CapabilityClient` 的 async context
+        # manager，閘道以使用者 token 建草稿。`build_brain_gateway` 一律注入；為 None 時大腦
+        # 新建流程不啟用（沿用既有交辦），讓只測既有行為的替身組裝不必提供它。
+        self.diagram_client_factory = diagram_client_factory
         self.store = store
         self.routers = dict(routers)
         self.orchestrator = orchestrator
@@ -1590,9 +1664,20 @@ class BrainGateway:
         await self._reply_and_end(conn, turn, reply)
 
     async def _set_target_confirmed(
-        self, conn: Connection, turn: Optional[Turn], segment_id: str, target: rules.TargetRef
+        self,
+        conn: Connection,
+        turn: Optional[Turn],
+        segment_id: str,
+        target: rules.TargetRef,
+        *,
+        on_hierarchy_error: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> bool:
-        """set_work_target ＋ 扇出；`SessionBackendUnavailable` 時重讀確認「結果未知」（reliability-design §四）。"""
+        """set_work_target ＋ 扇出；`SessionBackendUnavailable` 時重讀確認「結果未知」（reliability-design §四）。
+
+        `target.diagram_id`（261116-brain-create-diagram 契約 C7）一併傳入；`set_work_target`
+        在寫入前經 `resolve_work_target` 驗證存在與擁有權。`on_hierarchy_error`：解析被
+        `HierarchyNotFound`／`HierarchyForbidden` 拒絕時改由呼叫端處置（例如重新列出候選）。
+        """
         try:
             session = await asyncio.to_thread(
                 self.store.set_work_target,
@@ -1601,13 +1686,19 @@ class BrainGateway:
                 conn.principal,
                 target.project_id,
                 target.system_id,
-                None,
+                target.diagram_id,
             )
         except SessionBackendUnavailable as exc:
             session = await self._reread_target(conn, segment_id, target)
             if session is None:
                 await self._error_for_request(conn, turn, exc)
                 return False
+        except (HierarchyNotFound, HierarchyForbidden) as exc:
+            if on_hierarchy_error is not None:
+                await on_hierarchy_error()
+            else:
+                await self._error_for_request(conn, turn, exc)
+            return False
         except Exception as exc:
             await self._error_for_request(conn, turn, exc)
             return False
@@ -1615,14 +1706,25 @@ class BrainGateway:
         return True
 
     async def _reread_target(self, conn: Connection, segment_id: str, target: rules.TargetRef):
+        """Redis 失誤後重讀：只有段內的對象**與要求寫入的一致**才算已確認。
+
+        261116-brain-create-diagram 契約 C7：比對加入 `diagram_id`，否則「切到圖」會被誤判為
+        已確認。切到圖時 `project_id`／`system_id` 可為 None（由伺服器依圖推導），此時不比對它們。
+        """
         try:
             session = await asyncio.to_thread(self.store.load, conn.session_key)
         except Exception:
             return None
         segment = (session.segments or {}).get(segment_id) if session is not None else None
-        if segment is not None and segment.project_id == target.project_id and segment.system_id == target.system_id:
-            return session
-        return None
+        if segment is None:
+            return None
+        if target.project_id is not None and segment.project_id != target.project_id:
+            return None
+        if (target.system_id is not None or target.diagram_id is None) and segment.system_id != target.system_id:
+            return None
+        if getattr(segment, "diagram_id", None) != target.diagram_id:
+            return None
+        return session
 
     async def _error_for_request(self, conn: Connection, turn: Optional[Turn], exc: BaseException) -> None:
         if turn is not None:
@@ -1631,6 +1733,327 @@ class BrainGateway:
             await self._send_single_error(conn, *rules.error_for(exc))
 
     async def _dispatch(self, conn: Connection, turn: Turn, decision: IntentDecision) -> None:
+        """交辦。架構設計的請求先經大腦新建流程（261116-brain-create-diagram ADR-008）。"""
+        if self._diagram_flow_applies(decision):
+            if await self._diagram_flow(conn, turn, decision):
+                return
+        await self._dispatch_to_orchestrator(conn, turn, decision)
+
+    # -- 大腦新建架構圖（261116-brain-create-diagram，ADR-008／ADR-009，契約 C6／C7）------
+
+    def _diagram_flow_applies(self, decision: IntentDecision) -> bool:
+        if self.diagram_client_factory is None or decision.below_threshold:
+            return False
+        return any(i.capability == CAP_ARCHITECTURE for i in decision.intents)
+
+    def _diagram_threshold(self, segment_id: str) -> float:
+        config = getattr(self.routers.get(segment_id), "config", None)
+        value = getattr(config, "confidence_threshold", None)
+        return float(value) if isinstance(value, (int, float)) else DEFAULT_DIAGRAM_THRESHOLD
+
+    def _load_facts(self, principal: Any, pid: Any, sid: Any, did: Any) -> creation.TargetFacts:
+        db = self.session_factory()
+        try:
+            return creation.load_target_facts(
+                db,
+                principal,
+                facade=self.hierarchy_facade_factory(db),
+                membership=self.membership_facade_factory(db),
+                project_id=pid,
+                system_id=sid,
+                diagram_id=did,
+            )
+        finally:
+            db.close()
+
+    def _owned_systems(self, principal: Any) -> List[Tuple[int, int, str, str]]:
+        db = self.session_factory()
+        try:
+            return creation.list_owned_systems(
+                principal,
+                facade=self.hierarchy_facade_factory(db),
+                membership=self.membership_facade_factory(db),
+            )
+        finally:
+            db.close()
+
+    def _record_creation(self, principal: Any, diagram_id: int, title: str) -> None:
+        db = self.session_factory()
+        try:
+            creation.record_creation(
+                self.hierarchy_facade_factory(db), principal, diagram_id=diagram_id, title=title
+            )
+        except Exception as exc:  # session 建立本身失敗：同樣只記 log（契約 C5 錯誤表）
+            _log(logging.ERROR, "diagram_change_record_failed", diagramId=diagram_id, error=type(exc).__name__)
+        finally:
+            db.close()
+
+    async def _current_facts(self, conn: Connection, turn: Turn) -> Tuple[bool, Optional[creation.TargetFacts]]:
+        """`(ok, facts)`。作業對象已失效（不屬於使用者）→ `(True, None)`；其他失敗已結束本輪 → `(False, None)`。"""
+        try:
+            session = await asyncio.to_thread(self.store.load, conn.session_key)
+            pid, sid, did = (_as_optional_int(v) for v in _target_triple(session, turn.segment))
+            facts = await asyncio.to_thread(self._load_facts, conn.principal, pid, sid, did)
+        except (HierarchyNotFound, HierarchyForbidden):
+            return True, None
+        except Exception as exc:
+            await self._fail_turn_exc(conn, turn, exc)
+            return False, None
+        return True, facts
+
+    async def _diagram_flow(self, conn: Connection, turn: Turn, decision: IntentDecision) -> bool:
+        """回 True 表示本輪已由新建流程處置（已交辦、已反問或已回覆）；False 走既有交辦。"""
+        ok, facts = await self._current_facts(conn, turn)
+        if not ok:
+            return True
+        if facts is None:  # 作業對象已失效：交給既有交辦以既有句型回覆
+            return False
+        result = creation.decide(
+            decision.new_diagram_probability,
+            self._diagram_threshold(turn.segment),
+            facts.kind,
+            facts.has_diagrams,
+            facts.has_drafts,
+        )
+        if result == creation.CREATE and facts.system_id is None:
+            result = creation.ASK_PICK_SYSTEM  # 圖沒有歸屬系統（OPEN-H11）：新圖要掛在哪
+        # NFR4：判定類別（新建／修改／反問／回覆），不含使用者原文與圖名。
+        _log(logging.INFO, "diagram_decision", turnId=turn.turn_id,
+             category=creation.decision_category(result), decision=result, targetKind=facts.kind)
+        if result == creation.MODIFY:
+            if facts.kind == creation.TARGET_SYSTEM and len(facts.diagrams) > 1:
+                await self._clarify_pick_diagram(conn, turn, decision, facts)
+                return True
+            return False
+        if not facts.can_edit:  # ADR-009：與端點同一個判定函式，不建草稿、不交辦
+            await self._reply_and_end(conn, turn, NEED_ARCH_EDIT_MESSAGE)
+            return True
+        await self._act_on_diagram_decision(conn, turn, decision, facts, result)
+        return True
+
+    async def _act_on_diagram_decision(
+        self, conn: Connection, turn: Turn, decision: IntentDecision, facts: creation.TargetFacts, result: str
+    ) -> None:
+        if result == creation.CREATE:
+            await self._create_and_dispatch(conn, turn, decision, facts)
+        elif result == creation.ASK_PICK_SYSTEM:
+            await self._clarify_pick_system(conn, turn, decision)
+        elif result == creation.ASK_RESUME_DRAFT:
+            candidates, truncated = creation.resume_candidates(facts.diagrams, facts.system_id)
+            await self._send_diagram_clarify(
+                conn, turn, decision, "resume_draft_or_new",
+                creation.with_truncation_note(candidates, truncated),
+            )
+        else:  # ASK_NEW_OR_MODIFY／NO_DIAGRAM_TO_MODIFY（FR2.4：只列新建）
+            await self._send_diagram_clarify(
+                conn, turn, decision, "new_or_modify",
+                creation.new_or_modify_candidates(can_modify=result == creation.ASK_NEW_OR_MODIFY),
+            )
+
+    async def _clarify_pick_system(self, conn: Connection, turn: Turn, decision: IntentDecision) -> None:
+        try:
+            systems = await asyncio.to_thread(self._owned_systems, conn.principal)
+        except Exception as exc:
+            await self._fail_turn_exc(conn, turn, exc)
+            return
+        if not systems:
+            await self._reply_and_end(conn, turn, NO_SYSTEM_MESSAGE)
+            return
+        candidates, truncated = creation.system_candidates(systems)
+        await self._send_diagram_clarify(
+            conn, turn, decision, "pick_system", creation.with_truncation_note(candidates, truncated)
+        )
+
+    async def _clarify_pick_diagram(
+        self, conn: Connection, turn: Turn, decision: IntentDecision, facts: creation.TargetFacts
+    ) -> None:
+        candidates, truncated = creation.diagram_candidates(facts.diagrams)
+        await self._send_diagram_clarify(
+            conn, turn, decision, "pick_diagram", creation.with_truncation_note(candidates, truncated)
+        )
+
+    async def _send_diagram_clarify(
+        self,
+        conn: Connection,
+        turn: Turn,
+        decision: IntentDecision,
+        kind: str,
+        candidates: Tuple[creation.Candidate, ...],
+    ) -> None:
+        """契約 C6：候選帶僅供呈現的識別；對照存在連線上（ADR-006），點選時重新驗證。"""
+        wire = [
+            ClarifyCandidate(
+                id=c.id,
+                label=c.label,
+                capability=CAP_ARCHITECTURE,
+                confidence=None,
+                systemId=None if c.choice.system_id is None else str(c.choice.system_id),
+                diagramId=None if c.choice.diagram_id is None else str(c.choice.diagram_id),
+                action=c.action_wire,
+            )
+            for c in candidates
+        ]
+        if not await self.send_turn_message(
+            conn, turn, WsServerMessageType.CLARIFY, ClarifyPayload(candidates=wire, kind=kind)
+        ):
+            return
+        conn.pending_clarify = PendingClarify(
+            turn=turn,
+            kind=kind,
+            candidate_ids=tuple(c.id for c in candidates),
+            candidates={c.id: c for c in candidates},
+            decision=decision,
+        )
+        self._log_turn(turn, "clarify")
+
+    async def _create_and_dispatch(
+        self, conn: Connection, turn: Turn, decision: IntentDecision, facts: creation.TargetFacts
+    ) -> None:
+        """ADR-008：以使用者 token 建草稿 → 記變更紀錄 → 作業對象切到新圖 → 交辦。
+
+        建圖**不重試**（契約 C5 錯誤表）：結果未知時重試可能多出一張圖。
+        """
+        title = creation.make_title(
+            turn.utterance, facts.system_name, [t for _i, t, _s in facts.diagrams]
+        )
+        async def create() -> int:
+            async with self.diagram_client_factory(conn.token) as client:
+                return await creation.create_draft(
+                    client, title=title, system_id=int(facts.system_id)
+                )
+
+        try:
+            # 修訂 1：期限經 GatewayTiming（本檔禁令 1）；逾時＝結果不明，與傳輸錯誤同處置。
+            # 已知限制（build-and-test 記錄）：建圖端點是同步 `def`，在 threadpool 執行；
+            # 期限到時取消的是這邊的等待，**不會**中止已送出的 INSERT。因此逾時後草稿仍可能
+            # 晚到落地，且不會有「經大腦建立」的變更紀錄。下一次說要畫圖時通常會經 FR6.3a
+            # 反問接續該草稿；但若晚到的寫入落在下一輪讀取事實之後，仍可能多出一張。
+            diagram_id = await self.timing.wait_for(create(), self.diagram_create_timeout_sec)
+        except asyncio.TimeoutError:
+            _log(logging.WARNING, "diagram_create_timeout", turnId=turn.turn_id)
+            await self._reply_and_end(conn, turn, CREATE_UNKNOWN_MESSAGE)
+            return
+        except CapabilityError as exc:
+            _log(logging.WARNING, "diagram_create_failed", turnId=turn.turn_id,
+                 kind=exc.kind, status=exc.status_code)
+            if exc.kind != KIND_HTTP:
+                reply = CREATE_UNKNOWN_MESSAGE
+            elif exc.status_code == 403 and exc.arch_forbidden:
+                reply = NEED_ARCH_EDIT_MESSAGE
+            elif exc.status_code == 403:
+                # 修訂 1（FR4.1）：K2 edit、擁有權或帳號狀態的 403——不是缺架構編輯權，
+                # 不得指向「申請角色變更」。
+                reply = CREATE_FORBIDDEN_MESSAGE
+            elif exc.status_code == 404:
+                reply = CREATE_NOT_FOUND_MESSAGE
+            else:
+                reply = CREATE_FAILED_MESSAGE
+            await self._reply_and_end(conn, turn, reply)
+            return
+        except Exception as exc:  # noqa: BLE001 - 整合邊界：結果未知，不重試
+            _log(logging.WARNING, "diagram_create_failed", turnId=turn.turn_id, error=type(exc).__name__)
+            await self._reply_and_end(conn, turn, CREATE_UNKNOWN_MESSAGE)
+            return
+        _log(logging.INFO, "diagram_created", turnId=turn.turn_id, diagramId=diagram_id)
+        await asyncio.to_thread(self._record_creation, conn.principal, diagram_id, title)
+
+        async def switch_failed() -> None:
+            await self._reply_and_end(conn, turn, SWITCH_FAILED_MESSAGE)
+
+        target = rules.TargetRef(
+            project_id=facts.project_id,
+            system_id=facts.system_id,
+            name=title,
+            project_name="",
+            diagram_id=diagram_id,
+        )
+        if await self._set_target_confirmed(
+            conn, turn, turn.segment, target, on_hierarchy_error=switch_failed
+        ):
+            await self._dispatch_to_orchestrator(conn, turn, decision)
+
+    async def _on_diagram_select(
+        self, conn: Connection, turn: Turn, pending: PendingClarify, candidate_id: str
+    ) -> None:
+        """契約 C6 的點選：candidateId 已確認屬於本次候選；以連線上的對照重新驗證後繼續。
+
+        不使用客戶端送來的任何識別碼（FR3.5）。失效的候選 → 重新判定並重新列出目前可選的候選。
+        """
+        choice: creation.Choice = pending.candidates[candidate_id].choice
+        decision: IntentDecision = pending.decision
+
+        async def relist() -> None:
+            # FR3.5：失效的候選不執行，也**不改由別的對象代替**——同一種反問以目前的候選重新列出。
+            _log(logging.INFO, "diagram_candidate_stale", turnId=turn.turn_id, kind=pending.kind)
+            if pending.kind == "pick_system":
+                await self._clarify_pick_system(conn, turn, decision)
+                return
+            ok, facts = await self._current_facts(conn, turn)
+            if not ok:
+                return
+            if pending.kind == "pick_diagram" and facts is not None and facts.diagrams:
+                await self._clarify_pick_diagram(conn, turn, decision, facts)
+                return
+            if pending.kind == "pick_diagram":
+                await self._reply_and_end(conn, turn, NOTHING_TO_MODIFY_MESSAGE)
+                return
+            if not await self._diagram_flow(conn, turn, decision):
+                await self._dispatch_to_orchestrator(conn, turn, decision)
+
+        if choice.action == creation.ACTION_DIAGRAM:
+            target = rules.TargetRef(None, None, "", "", diagram_id=choice.diagram_id)
+            if await self._set_target_confirmed(conn, turn, turn.segment, target, on_hierarchy_error=relist):
+                await self._dispatch_to_orchestrator(conn, turn, decision)
+            return
+        if choice.action == creation.ACTION_SYSTEM:
+            target = rules.TargetRef(None, choice.system_id, "", "")
+            if not await self._set_target_confirmed(conn, turn, turn.segment, target, on_hierarchy_error=relist):
+                return
+            await self._continue_create(conn, turn, decision)
+            return
+        if choice.action == creation.ACTION_CREATE:
+            await self._continue_create(conn, turn, decision, expected_system=choice.system_id)
+            return
+        await self._continue_modify(conn, turn, decision)
+
+    async def _continue_create(
+        self, conn: Connection, turn: Turn, decision: IntentDecision, *, expected_system: Optional[int] = None
+    ) -> None:
+        """點選「新建」或選定系統之後：重新取得事實並建草稿（系統下有草稿時仍先問，FR6.3a）。"""
+        ok, facts = await self._current_facts(conn, turn)
+        if not ok:
+            return
+        stale = facts is None or (expected_system is not None and facts.system_id != expected_system)
+        if stale or facts.system_id is None:
+            await self._clarify_pick_system(conn, turn, decision)
+            return
+        if not facts.can_edit:
+            await self._reply_and_end(conn, turn, NEED_ARCH_EDIT_MESSAGE)
+            return
+        if expected_system is None and facts.kind == creation.TARGET_SYSTEM and facts.has_drafts:
+            candidates, truncated = creation.resume_candidates(facts.diagrams, facts.system_id)
+            await self._send_diagram_clarify(
+                conn, turn, decision, "resume_draft_or_new",
+                creation.with_truncation_note(candidates, truncated),
+            )
+            return
+        await self._create_and_dispatch(conn, turn, decision, facts)
+
+    async def _continue_modify(self, conn: Connection, turn: Turn, decision: IntentDecision) -> None:
+        """點選「修改目前的圖」之後：圖 → 交辦；系統下多張 → 問哪一張；沒有圖 → 回覆。"""
+        ok, facts = await self._current_facts(conn, turn)
+        if not ok:
+            return
+        if facts is not None and facts.kind == creation.TARGET_SYSTEM:
+            if len(facts.diagrams) > 1:
+                await self._clarify_pick_diagram(conn, turn, decision, facts)
+                return
+            if not facts.diagrams:
+                await self._reply_and_end(conn, turn, NOTHING_TO_MODIFY_MESSAGE)
+                return
+        await self._dispatch_to_orchestrator(conn, turn, decision)
+
+    async def _dispatch_to_orchestrator(self, conn: Connection, turn: Turn, decision: IntentDecision) -> None:
         try:
             session = await asyncio.to_thread(self.store.load, conn.session_key)
         except Exception as exc:
@@ -1681,6 +2104,9 @@ class BrainGateway:
             if await self._set_target_confirmed(conn, turn, turn.segment, pending.targets[candidate_id]):
                 await self._dispatch(conn, turn, pending.decision)
             return
+        if pending.kind in DIAGRAM_CLARIFY_KINDS:  # 261116-brain-create-diagram 契約 C6
+            await self._on_diagram_select(conn, turn, pending, candidate_id)
+            return
         chosen = pending.candidates[candidate_id]
         # 合併前必修第 5 項：以「被選候選的完整 Intent（含 referent）＋ 其他已確定槽位的 Intent」
         # 依原句的槽位序重建；對照缺失或對不上即大聲失敗，不退回只帶 capability 的舊形狀。
@@ -1693,6 +2119,9 @@ class BrainGateway:
             intents=intents,
             confidence=chosen.confidence if chosen.confidence is not None else 0.0,
             below_threshold=False,
+            # 修訂 1（FR2.4）：意圖反問只解決「哪個能力」，不改變「新建或修改」的判定；
+            # 不帶回 p 會讓它變成 None（不明），要修改的句子在無圖系統下會被誤建新圖。
+            new_diagram_probability=getattr(pending.decision, "new_diagram_probability", None),
         )
         try:
             session = await asyncio.to_thread(self.store.load, conn.session_key)
@@ -1994,6 +2423,9 @@ def build_brain_gateway(app: Any, *, membership_facade_factory: Callable[[Any], 
         membership_facade_factory=membership_facade_factory,
         memory_worker=MemoryWorker(timing),
         prefetch_adapter=adapter,
+        # 261116-brain-create-diagram（ADR-008）：閘道以使用者 token 經同一個 app 的 ASGI
+        # 傳輸建草稿——與工作編排呼叫既有能力的方式相同，端點的授權照常執行。
+        diagram_client_factory=lambda token: CapabilityClient(app, token),
     )
 
 

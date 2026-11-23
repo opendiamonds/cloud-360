@@ -97,6 +97,34 @@ class StartupOrderTest(unittest.TestCase):
             finally:
                 gateway.shutdown()
 
+    def test_build_wires_the_diagram_client_factory(self):
+        """
+        @purpose 261116-brain-create-diagram 修訂 1（審查 R-06）：大腦新建流程以 diagram_client_factory
+                 是否注入為開關；正式組裝若漏注入，功能會靜默退回舊行為而其餘測試全綠。
+        @given Redis client、redis-py 例外型別與 IntentRouter 的建構以 mock 隔離；三個 Redis 變數已設
+        @step 呼叫 build_brain_gateway(main.app, ...) | diagram_client_factory 非 None
+        @step 以一個 token 呼叫該 factory | 回傳綁定 main.app 與該 token 的 CapabilityClient
+        @step 檢查建圖期限 | 等於 DIAGRAM_CREATE_TIMEOUT_SEC
+        @pass 三項成立
+        @story FR1.1
+        """
+        from services.work_orchestrator_capabilities import CapabilityClient
+
+        with mock.patch.dict(os.environ, _ENV, clear=False), \
+                mock.patch.object(G, "build_redis_client", return_value=mock.Mock()), \
+                mock.patch.object(G, "redis_py_error_types", return_value=()), \
+                mock.patch.object(G, "IntentRouter", return_value=mock.Mock()):
+            gateway = G.build_brain_gateway(main.app, membership_facade_factory=membership_facade.MembershipFacade)
+            try:
+                self.assertIsNotNone(gateway.diagram_client_factory)
+                client = gateway.diagram_client_factory("user-token")
+                self.assertIsInstance(client, CapabilityClient)
+                self.assertIs(client._app, main.app)
+                self.assertEqual("user-token", client._token)
+                self.assertEqual(G.DIAGRAM_CREATE_TIMEOUT_SEC, gateway.diagram_create_timeout_sec)
+            finally:
+                gateway.shutdown()
+
 
 class StartupFailureTest(unittest.TestCase):
     def tearDown(self):

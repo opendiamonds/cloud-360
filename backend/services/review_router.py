@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import ArchitectureReview, User, UserDiagram
+from models import DRAFT_REJECTED_RESPONSE, ArchitectureReview, User, UserDiagram
+from services.collab_router import reject_if_draft
 from services.rbac import require_story_action, user_can_arch
 from services.review_orchestrator import (
     audit_log,
@@ -101,7 +102,7 @@ def detect_review_provider(
     return detect_provider(summary)
 
 
-@router.post("/reviews")
+@router.post("/reviews", responses=DRAFT_REJECTED_RESPONSE)
 async def create_review(
     body: StartReviewBody,
     current_user: User = Depends(require_story_action("A3", "edit")),
@@ -140,6 +141,8 @@ async def create_review(
         diagram = get_accessible_diagram(db, current_user, body.diagram_id)
         if not diagram:
             raise HTTPException(status_code=403, detail="無法存取此架構圖或不存在")
+        # 261116-brain-create-diagram FR6.4a／契約 C4：評核不得以草稿為對象。
+        reject_if_draft(diagram)
         if not xml:
             xml = diagram.xml_data
     elif xml:
@@ -173,7 +176,7 @@ async def create_review(
     return _sse_response(event_generator())
 
 
-@router.post("/reviews/commit-collab")
+@router.post("/reviews/commit-collab", responses=DRAFT_REJECTED_RESPONSE)
 def commit_collab_review_endpoint(
     body: CommitCollabReviewBody,
     current_user: User = Depends(require_story_action("A3", "edit")),
@@ -188,6 +191,11 @@ def commit_collab_review_endpoint(
     ):
         raise HTTPException(status_code=403, detail="儲存架構圖需要架構圖編輯權限")
     _validate_xml(body.xml_data)
+    # 261116-brain-create-diagram FR6.4a／契約 C4：草稿不得被評核覆寫並記錄；
+    # 在任何寫入之前判定。存取不到的圖照舊交給 commit_collab_review 回 403。
+    target = get_accessible_diagram(db, current_user, body.diagram_id)
+    if target is not None:
+        reject_if_draft(target)
     from services.wa_collab_orchestrator import commit_collab_review
 
     score_payload = {

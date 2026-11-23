@@ -2,8 +2,10 @@ import React, { useId, useState } from 'react';
 import { useAuth } from '../../context/auth-context';
 import type { BrainConnection } from '../../brain/brainSession';
 import { isOwnedByMe } from '../../brain/objectPickerModel';
+import { DraftBadge } from '../DraftBadge';
 import {
   ApiError,
+  isDraft,
   setDiagramSystem,
   type MyDiagram,
   type ProjectOut,
@@ -103,6 +105,7 @@ const SystemRow: React.FC<{
           {attached.map((d) => (
             <li key={d.id} className="flex items-center gap-2" data-testid="system-diagram-item">
               <span>{d.title}</span>
+              {isDraft(d) && <DraftBadge testId={`system-diagram-draft-${d.id}`} />}
               {canEdit && (
                 <button
                   type="button"
@@ -138,10 +141,18 @@ const SystemRow: React.FC<{
           >
             <option value="">選擇我的架構圖</option>
             {candidates.map((d) => (
-              <option key={d.id} value={String(d.id)}>
-                {d.system_id === null
-                  ? d.title
-                  : `${d.title}（目前在「${systemName(d.system_id) ?? '其他專案的系統'}」）`}
+              <option
+                key={d.id}
+                value={String(d.id)}
+                data-testid={`attach-candidate-${d.id}`}
+                data-draft={isDraft(d) ? 'true' : 'false'}
+              >
+                {/* 修訂 1（FR6.4）：這份清單也要能辨識草稿，避免不知情地把草稿搬到別的系統。 */}
+                {`${d.title}${isDraft(d) ? '（草稿）' : ''}${
+                  d.system_id === null
+                    ? ''
+                    : `（目前在「${systemName(d.system_id) ?? '其他專案的系統'}」）`
+                }`}
               </option>
             ))}
           </select>

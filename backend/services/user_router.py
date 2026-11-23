@@ -434,6 +434,8 @@ def _empty_default_project_ids(db: Session, uid: int) -> List[int]:
     )
     result: List[int] = []
     for (project_id,) in candidates:
+        # 261116-brain-create-diagram FR6.4b：草稿也算「有圖」——不得加狀態過濾，
+        # 否則仍有草稿的預設專案會被清除（草稿列隨後撞上 ON DELETE RESTRICT）。
         has_diagram = (
             db.query(UserDiagram.id)
             .join(System, UserDiagram.system_id == System.id)
@@ -648,6 +650,7 @@ def _hard_delete_user(db: Session, user: User) -> _UserPurgeSummary:
         synchronize_session=False
     )
     db.execute(diagram_shares.delete().where(diagram_shares.c.user_id == uid))
+    # 261116-brain-create-diagram FR6.4b／ADR-007：草稿也算擁有的圖，不排除。
     owned = db.query(UserDiagram).filter(UserDiagram.user_id == uid).count()
     if owned > 0:
         raise HTTPException(

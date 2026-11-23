@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""U4 `hierarchy-data` 的一次性遷移指令（部署期執行，**不在啟動路徑上**）。
+"""U4 `hierarchy-data` 的一次性遷移指令（部署期執行，**不在啟動路徑上**；
+唯一例外是 `user_diagrams.status` 一欄，改由啟動時的 `database._ensure_diagram_status_schema()` 補上）。
 
 為什麼是獨立指令而不是啟動副作用（`Q2=A`）
 ------------------------------------------

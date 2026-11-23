@@ -280,6 +280,8 @@ export const DrawioCanvas = forwardRef<DrawioCanvasRef, DrawioCanvasProps>(
               <>
                 <div className="w-px h-6 bg-gray-200 mx-2"></div>
                 <button
+                  type="button"
+                  data-testid="workspace-save-diagram-button"
                   onClick={() => onSaveClick(latestXmlRef.current)}
                   className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
                 >

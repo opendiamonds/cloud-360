@@ -217,7 +217,7 @@ class FacadeThreadTest(unittest.TestCase):
 
         async def scenario():
             h = Harness()
-            h.recorder.system_diagrams[3] = [(12, "訂單系統")]
+            h.recorder.system_diagrams[3] = [(12, "訂單系統", "ready", None)]
             loop_thread = threading.get_ident()
             await h.dispatch(ARCH, diagram_id=None, system_id=3)
             await drain(h.orchestrator)
@@ -227,13 +227,16 @@ class FacadeThreadTest(unittest.TestCase):
         self.assertTrue(h.recorder.threads)
         self.assertNotIn(loop_thread, h.recorder.threads)
         self.assertEqual(h.recorder.calls[0][0], "list_diagrams_of_system")
+        # 261116-brain-create-diagram ADR-005：工作編排選圖必須明示包含草稿。
+        self.assertIs(h.recorder.calls[0][3], True)
         self.assertEqual(h.recorder.db_log.count(("close", h.recorder.db_log[0][1])) >= 1, True)
 
     def test_target_resolution_failures_use_distinct_phrases(self):
         cases = [
             ({"diagram_id": None, "system_id": None, "project_id": 4}, {}, "請先在脈絡列選定架構圖或系統"),
             ({"diagram_id": None, "system_id": 3}, {3: []}, "這個系統下沒有掛上的架構圖，請在脈絡列選定圖"),
-            ({"diagram_id": None, "system_id": 3}, {3: [(1, "a"), (2, "b")]},
+            ({"diagram_id": None, "system_id": 3},
+             {3: [(2, "b", "ready", None), (1, "a", "draft", None)]},
              "這個系統下有多張架構圖，請在脈絡列選定要用的那一張"),
         ]
         for target, diagrams, phrase in cases:

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/auth-context';
 import type { BrainConnection } from '../../brain/brainSession';
 import {
+  isDraft,
   listMyDiagrams,
   type DiagramChangeOut,
   type MyDiagram,
@@ -31,10 +32,13 @@ import { SystemDiagrams, type MyDiagramsLoad } from './SystemDiagrams';
  *   不顯示 0（0 會被讀成「沒有圖」）。
  */
 
-/** 本專案系統下「我的圖」張數（純函式；P3 突變的鎖定點）。 */
+/**
+ * 本專案系統下「我的圖」張數（純函式；P3 突變的鎖定點）。
+ * 261116-brain-create-diagram FR6.4a：**不計草稿**（草稿仍在下方清單標示「草稿」，FR6.4）。
+ */
 function attachedCount(systems: SystemOut[], diagrams: MyDiagram[]): number {
   const ids = new Set(systems.map((s) => s.id));
-  return diagrams.filter((d) => d.system_id !== null && ids.has(d.system_id)).length;
+  return diagrams.filter((d) => d.system_id !== null && ids.has(d.system_id) && !isDraft(d)).length;
 }
 
 type FieldsEntry = FieldSetView | 'failed';

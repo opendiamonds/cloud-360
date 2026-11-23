@@ -157,7 +157,7 @@ def init_db():
             "記憶專用資料庫連線未設定（MEMORY_DB_PASSWORD 為空或非 PostgreSQL）——"
             "以 cloud360_memory 角色連線的程式路徑不可用"
         )
-    # U1：**必須早於 create_all**，方向與下面七支 _ensure_* 相反。理由見該函式的
+    # U1：**必須早於 create_all**，方向與下面八支 _ensure_* 相反。理由見該函式的
     # docstring；順序寫錯的後果是啟動失敗，不是延後修復。
     _ensure_vector_extension()
     Base.metadata.create_all(bind=engine)
@@ -169,6 +169,7 @@ def init_db():
     _ensure_estimate_intake_schema()
     _ensure_last_activity_schema()
     _ensure_iac_draft_schema()
+    _ensure_diagram_status_schema()
 
     db = SessionLocal()
     try:
@@ -698,6 +699,50 @@ def _ensure_iac_draft_schema():
             except Exception as e:
                 logger.warning("IaC draft schema 補丁略過/失敗: %s", e)
     logger.info("IaC draft schema 檢查完成")
+
+
+def _ensure_diagram_status_schema(bind=None):
+    """為既有資料庫補上 user_diagrams.status（261116-brain-create-diagram FR6.5）。
+
+    形狀比照 `_ensure_last_activity_schema`：只碰這一欄、可重跑、欄位已在即不動。
+    `models.UserDiagram.status` 已被 ORM 映射，所有讀圖查詢都會選取它——舊 volume
+    若沒有這一欄，工作區、專案頁、評核的讀圖端點全數 500，而部署後探針只打登入，
+    不會發現。故掛在啟動路徑上，不再依賴人工執行 `run_hierarchy_migration.py`。
+
+    **只補欄位，不跑整套階層遷移**：DDL 沿用 `hierarchy_migration._ensure_diagram_status_column`
+    （同一條敘述含 NOT NULL、DEFAULT 'ready' 與 CHECK；與 `schema_rbac.sql` 的一致性已由
+    既有測試鎖住），不經 `_ensure_hierarchy_schema`／`run_hierarchy_migration`，所以不會
+    建立專案／系統、也不改寫任何圖的 `system_id`。
+
+    與其他 `_ensure_*` 的差別：**失敗會往外拋**。缺這一欄時讀圖必然 500，吞成 warning
+    只會讓服務帶著壞狀態啟動；往外拋讓啟動失敗、部署探針判定失敗並觸發 rollback。
+
+    `bind` 供測試注入；正式路徑使用模組層的 `engine`。
+    """
+    from sqlalchemy import inspect
+    from sqlalchemy.orm import Session
+    from services.hierarchy_migration import _ensure_diagram_status_column
+
+    target = bind if bind is not None else engine
+    inspector = inspect(target)
+    if not inspector.has_table("user_diagrams"):
+        # create_all 之後不會發生；防禦性處理——沒有表就沒有欄位可補。
+        logger.warning("diagram status schema 補丁略過：user_diagrams 不存在")
+        return
+    columns = {col["name"] for col in inspector.get_columns("user_diagrams")}
+    if "status" in columns:
+        logger.info("diagram status schema 檢查完成（欄位已存在）")
+        return
+    session = Session(bind=target)
+    try:
+        _ensure_diagram_status_column(session, columns)
+    except Exception:
+        session.rollback()
+        logger.error("diagram status schema 補丁失敗：user_diagrams.status 未補上")
+        raise
+    finally:
+        session.close()
+    logger.info("diagram status schema 補丁完成：已補 user_diagrams.status（既有圖為 ready）")
 
 
 # 本補丁的識別字。與使用者帳號共用同一個欄位，而帳號無格式約束，故理論上可能

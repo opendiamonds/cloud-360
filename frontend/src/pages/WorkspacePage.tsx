@@ -17,15 +17,21 @@ import { useBrainSession } from '../brain/brainSession';
 import { useWorkspaceTargetSync } from '../brain/useWorkspaceTargetSync';
 import { ContextBar } from '../components/brain/ContextBar';
 import { SyncNotice } from '../components/brain/SyncNotice';
+import type { components } from '../types/api';
 
-interface Diagram {
-  id: number;
-  title: string;
-  xml_data?: string;
-  is_owner: boolean;
-  shared_user_ids?: number[];
-  updated_at: string;
-}
+/**
+ * 261116-brain-create-diagram 修訂 1（審查 R-06）：識別欄位與 `diagram_status` 取自產生的
+ * `MyDiagramItem`（`GET /api/collab/diagrams` 的回應），且 `diagram_status` 為必填——後端改名
+ * 或漏回該欄時 `tsc -b` 會紅燈，而不是讓「（草稿）」標示靜默消失。`xml_data`／`shared_user_ids`
+ * 只在明細（`DiagramDetail`）出現，維持選填。
+ */
+type Diagram = Pick<
+  components['schemas']['MyDiagramItem'],
+  'id' | 'title' | 'is_owner' | 'diagram_status' | 'updated_at'
+> & {
+  xml_data?: components['schemas']['DiagramDetail']['xml_data'];
+  shared_user_ids?: components['schemas']['DiagramDetail']['shared_user_ids'];
+};
 
 type ToastType = 'success' | 'error';
 
@@ -884,7 +890,9 @@ export const WorkspacePage = () => {
 
   const saveDiagram = async (
     currentXml: string,
-    opts?: { successMessage?: string }
+    // finalize（261116-brain-create-diagram 契約 C2／FR6.2）：只有「儲存架構圖」按鈕傳 true，
+    // 把草稿轉為正式；評核前寫回與自動存檔不傳，打開草稿不會讓它變成正式。
+    opts?: { successMessage?: string; finalize?: boolean }
   ): Promise<number | null> => {
     if (!canEditArch) {
       showToast('僅檢視／審核權限無法儲存架構圖', 'error', { autoDismissMs: 4000 });
@@ -905,6 +913,7 @@ export const WorkspacePage = () => {
             xml_data: currentXml,
             title:
               diagramsRef.current.find((d) => d.id === id)?.title || '未命名架構圖',
+            ...(opts?.finalize ? { finalize: true } : {}),
           }),
         });
         if (response.ok) {
@@ -1000,7 +1009,7 @@ export const WorkspacePage = () => {
   };
 
   const handleSaveDiagram = async (currentXml: string) => {
-    await saveDiagram(currentXml);
+    await saveDiagram(currentXml, { finalize: true });
   };
 
   return (
@@ -1221,9 +1230,15 @@ export const WorkspacePage = () => {
                   : '載入中…'}
               </option>
               {diagrams.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.is_owner ? d.title : `👥 ${d.title}`} (
-                  {new Date(d.updated_at).toLocaleDateString()})
+                <option
+                  key={d.id}
+                  value={d.id}
+                  data-testid="workspace-diagram-option"
+                  data-draft={d.diagram_status === 'draft' ? 'true' : undefined}
+                >
+                  {d.is_owner ? d.title : `👥 ${d.title}`}
+                  {d.diagram_status === 'draft' ? '（草稿）' : ''} (
+                  {d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—'})
                 </option>
               ))}
             </select>

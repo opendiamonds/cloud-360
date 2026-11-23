@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import DRAFT_REJECTED_RESPONSE, User
 from services.design_agent import run_design_agent
 from services.progress_channel import DuplicateChannelKey, ProgressChannel
 from services.llm_provider import (
@@ -43,6 +43,7 @@ from services.prompt_guard import (
     is_platform_self_modification,
     latest_user_text,
 )
+from services.collab_router import reject_if_draft
 from services.rbac import require_arch_action
 from services.review_orchestrator import get_accessible_diagram
 from services.wa_collab_orchestrator import run_wa_collab
@@ -164,7 +165,7 @@ async def chat_and_generate(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-@router.post("/generate-wa-collab")
+@router.post("/generate-wa-collab", responses=DRAFT_REJECTED_RESPONSE)
 async def chat_and_generate_wa_collab(
     request: WaCollabRequest,
     current_user: User = Depends(require_arch_action("edit")),
@@ -198,6 +199,8 @@ async def chat_and_generate_wa_collab(
         diagram = get_accessible_diagram(db, current_user, request.diagram_id)
         if not diagram:
             raise HTTPException(status_code=404, detail="找不到架構圖或無權限")
+        # 261116-brain-create-diagram FR6.4a／契約 C4：WA 共編不得以草稿為對象。
+        reject_if_draft(diagram)
 
     current_xml = request.current_xml
     if not current_xml and diagram is not None:

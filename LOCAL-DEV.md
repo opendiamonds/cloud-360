@@ -77,6 +77,7 @@ FastAPI → chat_model() → ClaudeCodeChatModel → claude -p（子行程）→
 - **不串流**：A3 建議是整段一次出現。
 - `temperature`、`BRAIN_ROUTER_MAX_RETRIES` 在這條路徑不起作用。
 - **意圖路由走工具呼叫，不走 Decisions API**：OpenRouter 下路由改用 Decisions API 與決策模型 `typesafe/jev-1.14`（ADR-0024），本機 `claude-code` 沒有那個端點，所以照舊用工具呼叫；兩條路徑的反問候選文字不同（Decisions 由伺服器模板產生），本機看到的路由行為不等於 staging。
+- **大腦建立架構圖的「新建或修改」判定在本機恆為「不明」**（261116-brain-create-diagram）：這個機率只由 Decisions 路徑回傳，工具呼叫路徑沒有這一題。後果是本機上「系統沒有圖」時任何架構請求（含明確的修改句）都直接建一張空白草稿、「系統有圖」時每句畫圖都會反問「新建或修改」。**驗證 FR2（新建／修改判定）必須用 `openrouter`**；本機只能驗建草稿、反問與草稿標示。
 - 用量算在你的 Claude 帳號上。
 - 跑後端單元測試時把 `.env` 的 `LLM_PROVIDER` 改回 `openrouter`：既有測試以替身驗 OpenRouter 路徑，選到 `claude-code` 會走錯分支。
 
@@ -239,12 +240,18 @@ psql "postgresql://postgres:postgres@localhost:5432/cloud360" -f schema_rbac.sql
 
 **實務結論**：改了 `schema_rbac.sql` 卻只重啟容器 → 不生效。反過來，多數欄位新增只要**重啟後端**就會被 `_ensure_*_schema()` 的 `ALTER TABLE ... IF NOT EXISTS` 補上（例如 `estimate_line_items.spec_description`）。
 
-**一個例外，改 `database.py` 時要知道**：`init_db()` 裡的 `_ensure_*` 現在有**七支**，
-其中六支在 `Base.metadata.create_all()` **之後**（它們補 `create_all` 不會做的 `ALTER`），
+**一個例外，改 `database.py` 時要知道**：`init_db()` 裡的 `_ensure_*` 現在有**九支**，
+其中八支在 `Base.metadata.create_all()` **之後**（它們補 `create_all` 不會做的 `ALTER`），
 而 **`_ensure_vector_extension()` 在它之前**——`vector` 型別必須先存在，否則宣告 `vector`
 欄位的表在 `create_all()` 裡就會以 `type "vector" does not exist` 失敗，而那是**啟動失敗**
 （`init_db()` 由 startup 事件同步呼叫）。新增補丁時照既有形狀擺在後面是對的；**唯獨擴充類
 必須在前面**。這條順序由 `backend/tests/test_vector_extension_bootstrap.py` 守著。
+
+**最後一支 `_ensure_diagram_status_schema()`（261116-brain-create-diagram）**：只補
+`user_diagrams.status`（草稿／正式，既有圖一律 `ready`），不跑整套階層遷移。既有的本機
+資料庫**重啟後端即補上**，不必為這一欄跑 `run_hierarchy_migration.py`。它是唯一**失敗會讓
+啟動失敗**的 `_ensure_*`（其餘失敗只記 warning）：缺這一欄時工作區、專案頁讀圖全數 500，
+所以寧可啟動失敗。看到 `diagram status schema 補丁失敗` 就是這一支。
 
 ### ⚠️ H6：`schema_rbac.sql` 不會給你 `U5`／`U18` 的表，而 `U19` 的程式會真的去讀它們
 
@@ -534,6 +541,7 @@ INFO:cloud360.database:A4 schema 檢查完成
 INFO:cloud360.database:J5 schema 檢查完成
 INFO:cloud360.database:A3 schema 檢查完成
 INFO:cloud360.database:last_activity schema 檢查完成
+INFO:cloud360.database:diagram status schema 檢查完成（欄位已存在）
 INFO:cloud360.database:資料庫已存在 1 位使用者，跳過初始化。
 INFO:cloud360.database:role_permissions 已有 308 列，略過 seed
 INFO:cloud360.database:J3a 權限套用：已跳過（...）

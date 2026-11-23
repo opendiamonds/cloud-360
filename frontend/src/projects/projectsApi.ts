@@ -156,14 +156,15 @@ export async function listDiagramChanges(
 export type DiagramSystemOut = components['schemas']['DiagramSystemOut'];
 
 /**
- * `GET /api/collab/diagrams` 的一列。該端點沒有回應模型（`openapi.json` 無 schema 可產型別），
- * 故這裡只宣告本檔用到的欄位；`system_id` 只對自己擁有的圖有值（伺服器對分享的圖一律給 null）。
+ * `GET /api/collab/diagrams` 的一列（`MyDiagramItem`）。261116-brain-create-diagram 契約 C3 起該端點
+ * 有回應模型，型別改由產生的 `api.d.ts` 推導、不再手寫——漏接欄位會在 `check:types` 與 `tsc -b` 紅燈。
+ * `system_id` 只對自己擁有的圖有值（伺服器對分享的圖一律給 null）；`diagram_status` 為 `draft`／`ready`。
  */
-export interface MyDiagram {
-  id: number;
-  title: string;
-  is_owner: boolean;
-  system_id: number | null;
+export type MyDiagram = components['schemas']['MyDiagramItem'];
+
+/** 契約 C3：草稿（大腦新建、尚未完成產圖）。拿圖來用或對外呈現的地方要排除它（FR6.4a）。 */
+export function isDraft(diagram: Pick<MyDiagram, 'diagram_status'>): boolean {
+  return diagram.diagram_status === 'draft';
 }
 
 /** 我看得到的架構圖（含歸屬）。只保留自己擁有的圖——掛載只能動自己的圖。 */

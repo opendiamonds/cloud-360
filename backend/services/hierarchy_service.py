@@ -18,7 +18,7 @@ from typing import FrozenSet, List, NamedTuple, Optional, Sequence
 
 from sqlalchemy.orm import Session
 
-from models import DiagramChangeRecord, Project, System, UserDiagram
+from models import DIAGRAM_STATUS_DRAFT, DiagramChangeRecord, Project, System, UserDiagram
 from services.hierarchy_facade import (
     PROJECT_NOT_FOUND_DETAIL,
     SYSTEM_NOT_FOUND_DETAIL,
@@ -208,6 +208,8 @@ def delete_system(db: Session, *, system_id: int) -> None:
     # BR4.3：仍有架構圖歸屬於它即拒絕。保護的是「遷移後歸屬為空的架構圖
     # 列數必須為 0」——那是 `U4` 擁有且已有測試的不變量。
     # 註：DDL 的 ON DELETE RESTRICT 也會擋，但訊息對使用者無意義。
+    # 261116-brain-create-diagram FR6.4b：**草稿也算**——不得加狀態過濾，
+    # 否則只有草稿的系統會通過本檢查、再撞上資料庫的 RESTRICT。
     remaining = (
         db.query(UserDiagram).filter(UserDiagram.system_id == system_id).count()
     )
@@ -286,26 +288,37 @@ def set_diagram_system(
 
 
 def list_diagrams_of_system(
-    db: Session, *, system_id: int, owner_user_id: int
+    db: Session, *, system_id: int, owner_user_id: int, include_drafts: bool
 ) -> List[tuple]:
     """`U12 work-orchestrator` 的跨單元新增（`U12` functional-spec 2.4）。
 
-    回傳該系統下、由 `owner_user_id` 擁有的圖的 `(diagram_id, title)`，依 id 遞增。
-    `system_id` 為空的圖不屬於任何系統（`OPEN-H11`：三條建圖路徑都不傳它，故
-    這條查詢在現況下多半回空清單——那是如實的結果，不是錯誤）。
+    回傳該系統下、由 `owner_user_id` 擁有的圖的
+    `(diagram_id, title, diagram_status, updated_at)`，依 `updated_at` 降冪、相同時
+    `diagram_id` 降冪（新到舊；261116-brain-create-diagram 契約 C5）。
+    `system_id` 為空的圖不屬於任何系統（`OPEN-H11`）。
+
+    `include_drafts` **必填、沒有預設值**（ADR-005／FR6.4c）：「判斷底下有沒有圖」
+    的呼叫端（反問候選、重名判斷、工作編排選圖）傳 `True`；「拿圖來用或對外呈現」
+    的呼叫端傳 `False`。漏寫在呼叫時就是 `TypeError`，不會默默用錯。
 
     擁有者範圍由 facade 先以 `assert_system_owned_by` 確認系統屬於呼叫者；本函式
     另以 `user_diagrams.user_id` 過濾，使同一系統下他人的圖不會被列出
     （`BR6.3`：圖的可見性以圖自身的擁有者判定）。
     """
-    rows = (
-        db.query(UserDiagram.id, UserDiagram.title)
+    query = (
+        db.query(UserDiagram.id, UserDiagram.title, UserDiagram.status, UserDiagram.updated_at)
         .filter(UserDiagram.system_id == system_id)
         .filter(UserDiagram.user_id == owner_user_id)
-        .order_by(UserDiagram.id.asc())
-        .all()
     )
-    return [(int(row[0]), row[1]) for row in rows]
+    if not include_drafts:
+        query = query.filter(UserDiagram.status != DIAGRAM_STATUS_DRAFT)
+    # build-and-test：`.desc()` 不帶 NULLS 子句時，PostgreSQL 把 NULL 排最前、SQLite 排最後
+    # （本機一次性 PostgreSQL 17 實測）。FR3.6 要「最近更新由新到舊」，沒有更新時間的圖
+    # 不該排在最前，故明訂 NULLS LAST，使兩種方言一致。
+    rows = query.order_by(
+        UserDiagram.updated_at.desc().nulls_last(), UserDiagram.id.desc()
+    ).all()
+    return [(int(row[0]), row[1], row[2], row[3]) for row in rows]
 
 def resolve_work_target(
     db: Session,

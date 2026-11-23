@@ -284,9 +284,11 @@ class DecisionsEndToEndTest(unittest.TestCase):
         self.assertEqual(sorted(criteria), ["none", "t0", "t1"])
         self.assertNotIn("\n", criteria["t0"])
         self.assertEqual(criteria["t0"].count("「"), 1)
+        # 261116-brain-create-diagram FR2.2：wants_new_diagram 併入同一次請求。
         self.assertEqual(
             set(sent["questions"]),
-            {"primary", "wants_design", "wants_review", "wants_cost", "named_target"},
+            {"primary", "wants_design", "wants_review", "wants_cost", "wants_new_diagram",
+             "named_target"},
         )
         self.assertTrue(http.requests[0].headers["Authorization"].startswith("Bearer "))
 

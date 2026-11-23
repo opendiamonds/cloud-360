@@ -12,13 +12,38 @@ import { useBrainSession } from '../brain/brainSession';
 import { useAssessmentTargetSync } from '../brain/useAssessmentTargetSync';
 import { ContextBar } from '../components/brain/ContextBar';
 import { SyncNotice } from '../components/brain/SyncNotice';
+import type { components } from '../types/api';
 
-type DiagramItem = {
-  id: number;
-  title: string;
-  updated_at?: string;
+/**
+ * 261116-brain-create-diagram：識別欄位與 `diagram_status` 取自產生的 `MyDiagramItem`，
+ * `diagram_status` 為必填——後端漏回該欄時 `tsc -b` 會紅燈，而不是讓「（草稿）」標示靜默消失。
+ */
+type DiagramItem = Pick<
+  components['schemas']['MyDiagramItem'],
+  'id' | 'title' | 'diagram_status'
+> & {
+  updated_at?: components['schemas']['MyDiagramItem']['updated_at'];
   is_owner?: boolean;
 };
+
+/**
+ * 修訂 1（FR6.4a）：把失敗回應轉成使用者可讀的句子。FastAPI 的錯誤是
+ * `{"detail": "..."}`；直接顯示 `res.text()` 會讓畫面出現原始 JSON。
+ * detail 不是字串（例如 422 的欄位清單）或不是 JSON 時，退回原文。
+ */
+async function readErrorDetail(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const body: unknown = JSON.parse(text);
+    if (body && typeof body === 'object' && 'detail' in body) {
+      const detail = (body as { detail: unknown }).detail;
+      if (typeof detail === 'string' && detail) return detail;
+    }
+  } catch {
+    // 不是 JSON：沿用原文
+  }
+  return text;
+}
 
 type Finding = {
   code: string;
@@ -940,7 +965,7 @@ export const AssessmentPage = () => {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const detail = await res.text();
+        const detail = await readErrorDetail(res);
         throw new Error(detail || `HTTP ${res.status}`);
       }
       await readSse(res, applySseEvent);
@@ -1317,8 +1342,14 @@ export const AssessmentPage = () => {
               >
                 <option value="">— 選擇 —</option>
                 {diagrams.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.title}
+                  <option
+                    key={d.id}
+                    value={d.id}
+                    data-testid={`assessment-diagram-option-${d.id}`}
+                    data-draft={d.diagram_status === 'draft' ? 'true' : 'false'}
+                  >
+                    {/* 修訂 1（FR6.4）：草稿可被選到，但評核會被 409 拒絕——先讓使用者看得出來。 */}
+                    {d.diagram_status === 'draft' ? `${d.title}（草稿）` : d.title}
                   </option>
                 ))}
               </select>

@@ -10,6 +10,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    HTTPException,
     Query,
     UploadFile,
     status,
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from cost import estimate_intake_service as svc
 from database import get_db
-from models import User
+from models import DIAGRAM_STATUS_DRAFT, DRAFT_REJECTED_DETAIL, DRAFT_REJECTED_RESPONSE, User, UserDiagram
 from services.rbac import require_story_action
 
 logger = logging.getLogger("cloud360.estimate_intake_router")
@@ -99,6 +100,25 @@ class EstimateSetDetailView(EstimateSetSummaryView):
     workload_context: dict | None = None
 
 
+def _reject_own_draft_diagram(db: Session, user: User, diagram_id: int | None) -> None:
+    """261116-brain-create-diagram FR6.4a／契約 C4：估價不得綁草稿。
+
+    判定順序是**擁有權優先**：只有「圖存在、屬於呼叫者、且為草稿」才回 409。
+    圖不存在或不屬於呼叫者時維持現況——`diagram_id` 原樣存入、不回錯誤
+    （`estimate_access.py`：diagram_id is never consulted）——本 intent 不改變那個
+    既有行為，也因此不會成為探測他人圖狀態的管道。
+    """
+    if diagram_id is None:
+        return
+    status_value = (
+        db.query(UserDiagram.status)
+        .filter(UserDiagram.id == diagram_id, UserDiagram.user_id == user.id)
+        .scalar()
+    )
+    if status_value == DIAGRAM_STATUS_DRAFT:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=DRAFT_REJECTED_DETAIL)
+
+
 def _read_uploads(files: list[UploadFile]) -> tuple[list[UploadFile], list[bytes]]:
     payloads: list[bytes] = []
     for uf in files:
@@ -110,6 +130,7 @@ def _read_uploads(files: list[UploadFile]) -> tuple[list[UploadFile], list[bytes
     "/sets",
     status_code=status.HTTP_201_CREATED,
     response_model=EstimateSetDetailView,
+    responses=DRAFT_REJECTED_RESPONSE,
 )
 async def upload_estimate_set(
     files: Annotated[list[UploadFile], File(...)],
@@ -120,6 +141,7 @@ async def upload_estimate_set(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_story_action("C1", "edit")),
 ):
+    _reject_own_draft_diagram(db, current_user, diagram_id)
     files_list, payloads = _read_uploads(files)
     try:
         set_row = svc.create_estimate_set(

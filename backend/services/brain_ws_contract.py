@@ -129,6 +129,19 @@ class ClarifyCandidate(BaseModel):
             "門檻判斷本身在 U11，不在本契約。"
         ),
     )
+    # 261116-brain-create-diagram 契約 C6：以下三欄皆選填、**僅供呈現**——伺服器點選時
+    # 不讀客戶端送回的任何識別碼（`SelectClarifyCandidatePayload` 只帶 candidateId）。
+    systemId: Optional[str] = Field(
+        default=None, description="候選指向的系統識別（pick_system），僅供呈現。"
+    )
+    diagramId: Optional[str] = Field(
+        default=None,
+        description="候選指向的架構圖識別（pick_diagram／resume_draft_or_new 的草稿），僅供呈現。",
+    )
+    action: Optional[Literal["create", "modify"]] = Field(
+        default=None,
+        description="new_or_modify／resume_draft_or_new 的「新建」候選為 create，修改為 modify。",
+    )
 
 
 class WorkItem(BaseModel):
@@ -226,12 +239,19 @@ class ClarifyPayload(BaseModel):
             "使用者看到「請選一個」卻沒有可選項是本規則要防的畫面。"
         ),
     )
-    kind: Literal["intent", "target"] = Field(
+    kind: Literal[
+        "intent", "target", "pick_system", "pick_diagram", "resume_draft_or_new", "new_or_modify"
+    ] = Field(
         description=(
             "ADR-0020 C-7：反問的種類，**必填、無預設**。"
             "intent ＝ 分類信心不足，候選是同一句話的不同解讀（依 capability 與 label 呈現）；"
             "target ＝ 意圖已確定，候選是名稱相符的不同作業對象（**只顯示 label**，"
             "capability 不表達意圖）。兩者在選定後的處置不同，前端不得以同一種畫面呈現。"
+            "261116-brain-create-diagram 契約 C6 新增四種（皆為架構設計的作業對象反問，"
+            "**只顯示 label**）：pick_system ＝ 新圖要掛在哪個系統；pick_diagram ＝ 要改系統下"
+            "的哪一張圖；resume_draft_or_new ＝ 接著畫哪一張草稿或新建一張；"
+            "new_or_modify ＝ 新建一張或修改目前的圖（候選帶 action）。"
+            "點選一律只送 candidateId，伺服器以連線上保存的對照重新驗證。"
         ),
     )
 

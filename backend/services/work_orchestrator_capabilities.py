@@ -16,7 +16,8 @@ work_orchestrator_capabilities.py — `U12 work-orchestrator` 對既有能力的
 |---|---|---|
 | 讀圖 | `GET /api/collab/diagrams/{id}` → `title`、`xml_data`、`updated_at` | `collab_router.get_diagram` |
 | A1 產圖 | `POST /api/architecture/generate`（`messages`、`current_xml`），SSE | `agent_router.chat_and_generate` |
-| 存圖 | `PUT /api/collab/diagrams/{id}`（`xml_data`、`title`） | `collab_router.update_diagram` |
+| 存圖 | `PUT /api/collab/diagrams/{id}`（`xml_data`、`title`、`finalize`） | `collab_router.update_diagram` |
+| 建草稿 | `POST /api/collab/diagrams`（`xml_data`、`title`、`system_id`、`as_draft=true`；261116-brain-create-diagram） | `collab_router.create_diagram` |
 | A3 檢視 | `POST /api/architecture/reviews`（`diagram_id`、`save_diagram=false`），SSE | `review_router.create_review` |
 | C1 估價表 | `GET /api/cost/v1/sets?page=&page_size=` | `cost/estimate_intake_router.list_estimate_sets` |
 | C1 建議快照 | `GET /api/cost/v1/sets/{id}/advice` | `cost/estimate_intake_router.get_advice_snapshot` |
@@ -43,6 +44,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
 import httpx
+
+from models import ARCH_FORBIDDEN_DETAIL_PREFIX, DRAFT_REJECTED_DETAIL
 
 #: ASGI 傳輸不出行程；主機名只是 httpx 組 URL 用的佔位，不會被解析。
 BASE_URL = "http://brain.internal"
@@ -77,13 +80,52 @@ class CapabilityError(Exception):
         *,
         status_code: Optional[int] = None,
         error_class: Optional[str] = None,
+        draft_rejected: bool = False,
+        arch_forbidden: bool = False,
     ) -> None:
         self.kind = kind
         self.status_code = status_code
         self.error_class = error_class
+        #: 261116-brain-create-diagram 契約 C4：409 且回應 detail **等於**
+        #: `DRAFT_REJECTED_DETAIL` 常數時為真。只保存這個布林值，不保存回應內容。
+        self.draft_rejected = draft_rejected
+        #: 修訂 1（FR4.1）：403 且回應 detail 以 `ARCH_FORBIDDEN_DETAIL_PREFIX` 開頭時為真
+        #: （缺架構編輯權）；K2、擁有權與帳號狀態的 403 為假。同樣只保存布林值。
+        self.arch_forbidden = arch_forbidden
         super().__init__(
             f"capability_error kind={kind} status={status_code} class={error_class}"
+            f" draft_rejected={draft_rejected} arch_forbidden={arch_forbidden}"
         )
+
+
+def _is_draft_rejection(response: httpx.Response) -> bool:
+    """409 的回應 detail 是否恰為草稿被拒的固定常數（契約 C4）。
+
+    只做等值比較，不回傳也不保存 detail 本身：其他 409 的 detail 可能含使用者內容。
+    """
+    if response.status_code != 409:
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("detail") == DRAFT_REJECTED_DETAIL
+
+
+def _is_arch_forbidden(response: httpx.Response) -> bool:
+    """403 的回應 detail 是否為「缺架構權限」（`rbac.require_arch_action` 的固定前綴）。
+
+    修訂 1（FR4.1）：建圖端點的 403 有多個來源——架構權限、帳號尚未授權、K2 edit——只有
+    前者該回「需要架構編輯權」。只做前綴比對，不回傳也不保存 detail（其中含角色名）。
+    """
+    if response.status_code != 403:
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return isinstance(detail, str) and detail.startswith(ARCH_FORBIDDEN_DETAIL_PREFIX)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +299,12 @@ class CapabilityClient:
         except Exception as exc:  # noqa: BLE001 - 整合邊界：只保留類別名
             raise CapabilityError(KIND_TRANSPORT, error_class=type(exc).__name__) from None
         if not 200 <= response.status_code < 300:
-            raise CapabilityError(KIND_HTTP, status_code=response.status_code)
+            raise CapabilityError(
+                KIND_HTTP,
+                status_code=response.status_code,
+                draft_rejected=_is_draft_rejection(response),
+                arch_forbidden=_is_arch_forbidden(response),
+            )
         return response
 
     async def _json(self, method: str, path: str, **kwargs: Any) -> Any:
@@ -277,12 +324,36 @@ class CapabilityClient:
             "updated_at": data.get("updated_at"),
         }
 
-    async def put_diagram(self, diagram_id: int, *, title: str, xml_data: str) -> None:
+    async def put_diagram(
+        self, diagram_id: int, *, title: str, xml_data: str, finalize: bool = False
+    ) -> None:
+        """寫回架構圖。`finalize=True` 把草稿轉正式（契約 C2；大腦產圖存回成功時傳）。"""
         await self._request(
             "PUT",
             f"/api/collab/diagrams/{int(diagram_id)}",
-            json={"xml_data": xml_data, "title": title},
+            json={"xml_data": xml_data, "title": title, "finalize": bool(finalize)},
         )
+
+    async def create_diagram(self, *, title: str, xml_data: str, system_id: int) -> int:
+        """以使用者 token 經 C1 建立一張**草稿**（固定 `as_draft=true`），回新圖 id。
+
+        261116-brain-create-diagram 契約 C7。失敗即 `CapabilityError`，**呼叫端不得重試**：
+        傳輸錯誤或逾時時結果未知（可能已建立），重試會多出一張圖。
+        """
+        data = await self._json(
+            "POST",
+            "/api/collab/diagrams",
+            json={
+                "xml_data": xml_data,
+                "title": title,
+                "system_id": int(system_id),
+                "as_draft": True,
+            },
+        )
+        try:
+            return int(data["id"])
+        except (KeyError, TypeError, ValueError):
+            raise CapabilityError(KIND_TRANSPORT, error_class="InvalidJSON") from None
 
     async def generate_architecture(
         self, request_text: str, current_xml: Optional[str]

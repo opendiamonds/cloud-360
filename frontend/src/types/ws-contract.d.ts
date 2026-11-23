@@ -13,6 +13,12 @@ export interface components {
          */
         ClarifyCandidate: {
             /**
+             * Action
+             * @description new_or_modify／resume_draft_or_new 的「新建」候選為 create，修改為 modify。
+             * @default null
+             */
+            action: ("create" | "modify") | null;
+            /**
              * Capability
              * @description 該候選會交辦給哪一個能力。
              */
@@ -24,6 +30,12 @@ export interface components {
              */
             confidence: number | null;
             /**
+             * Diagramid
+             * @description 候選指向的架構圖識別（pick_diagram／resume_draft_or_new 的草稿），僅供呈現。
+             * @default null
+             */
+            diagramId: string | null;
+            /**
              * Id
              * @description 候選的識別。唯一的讀取端是 SelectClarifyCandidatePayload.candidateId。
              */
@@ -33,6 +45,12 @@ export interface components {
              * @description 給使用者看的候選說明。
              */
             label: string;
+            /**
+             * Systemid
+             * @description 候選指向的系統識別（pick_system），僅供呈現。
+             * @default null
+             */
+            systemId: string | null;
         };
         /**
          * ClarifyPayload
@@ -46,10 +64,10 @@ export interface components {
             candidates: components["schemas"]["ClarifyCandidate"][];
             /**
              * Kind
-             * @description ADR-0020 C-7：反問的種類，**必填、無預設**。intent ＝ 分類信心不足，候選是同一句話的不同解讀（依 capability 與 label 呈現）；target ＝ 意圖已確定，候選是名稱相符的不同作業對象（**只顯示 label**，capability 不表達意圖）。兩者在選定後的處置不同，前端不得以同一種畫面呈現。
+             * @description ADR-0020 C-7：反問的種類，**必填、無預設**。intent ＝ 分類信心不足，候選是同一句話的不同解讀（依 capability 與 label 呈現）；target ＝ 意圖已確定，候選是名稱相符的不同作業對象（**只顯示 label**，capability 不表達意圖）。兩者在選定後的處置不同，前端不得以同一種畫面呈現。261116-brain-create-diagram 契約 C6 新增四種（皆為架構設計的作業對象反問，**只顯示 label**）：pick_system ＝ 新圖要掛在哪個系統；pick_diagram ＝ 要改系統下的哪一張圖；resume_draft_or_new ＝ 接著畫哪一張草稿或新建一張；new_or_modify ＝ 新建一張或修改目前的圖（候選帶 action）。點選一律只送 candidateId，伺服器以連線上保存的對照重新驗證。
              * @enum {string}
              */
-            kind: "intent" | "target";
+            kind: "intent" | "target" | "pick_system" | "pick_diagram" | "resume_draft_or_new" | "new_or_modify";
         };
         /**
          * CorrectWorkItemPayload

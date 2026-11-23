@@ -105,7 +105,9 @@ class DiagramSystemAttachTest(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200, res.text)
         body = res.json()
-        self.assertEqual(set(body), {"id", "system_id", "status", "message"})
+        # 261116-brain-create-diagram 契約 C1：DiagramCreated 加 diagram_status。
+        self.assertEqual(set(body), {"id", "system_id", "status", "message", "diagram_status"})
+        self.assertEqual(body["diagram_status"], "ready")
         self.assertEqual(body["system_id"], self.s_alice)
         self.assertEqual(self._system_of(body["id"]), self.s_alice)
 
@@ -116,9 +118,9 @@ class DiagramSystemAttachTest(unittest.TestCase):
         )
         # 大腦的 `_list_system_diagrams` 就是這一個 facade 呼叫（work_orchestrator.py）。
         brain_view = HierarchyFacade(self.db).list_diagrams_of_system(
-            mint_principal(self.alice), system_id=self.s_alice
+            mint_principal(self.alice), system_id=self.s_alice, include_drafts=True
         )
-        self.assertEqual(brain_view, [(body["id"], "電商架構")])
+        self.assertEqual([row[:3] for row in brain_view], [(body["id"], "電商架構", "ready")])
 
     def test_create_without_system_stays_unattached(self):
         """

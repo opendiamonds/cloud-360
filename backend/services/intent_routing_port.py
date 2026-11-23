@@ -465,6 +465,9 @@ class RoutedClassification:
 
     result: ClassificationResult
     force_clarify: bool = False
+    #: 261116-brain-create-diagram：「是否要一張新的圖」的機率（只有 Decisions 會設；
+    #: 工具呼叫路徑沒有這一題，恆為 None，下游視為「不明」）。
+    new_diagram_probability: Optional[float] = None
 
 
 async def _call_with_typed_failures(call: Any) -> Any:
@@ -577,7 +580,11 @@ class DecisionsRoutingPort:
         )
         answers = parse_answers(body, tuple(key for key, _o, _s in targets))
         routed = routing_from_answers(answers, self._config.confidence_threshold, targets)
-        return RoutedClassification(result=routed.result, force_clarify=routed.force_clarify)
+        return RoutedClassification(
+            result=routed.result,
+            force_clarify=routed.force_clarify,
+            new_diagram_probability=routed.new_diagram_probability,
+        )
 
 
 def select_routing_port(

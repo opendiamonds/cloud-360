@@ -9,6 +9,7 @@
 --   E) A3：architecture_reviews（評核結果）+ wa_lenses（Offline Lens 現行標準）
 --   H) U4：projects / systems / diagram_change_records 三表
 --      ＋ user_diagrams.system_id（歸屬的權威來源）＋ 兩個部分唯一索引
+--      ＋ user_diagrams.status（草稿／正式，261116-brain-create-diagram）
 --   J) U18：project_members / reselection_events / system_requirement_fields 三表
 --      （per-project 成員與角色、改選稽核、系統層需求欄位值）
 --      ＋ U23：project_members 的 user_id 索引 ix_project_members_user_id
@@ -412,6 +413,29 @@ CREATE INDEX IF NOT EXISTS ix_user_diagrams_system_id ON user_diagrams (system_i
 
 COMMENT ON COLUMN user_diagrams.system_id IS
   'U4/ADR-002: AUTHORITATIVE source of ownership (which system this diagram belongs to). user_id answers "who created it", NOT belonging. Nullable by design; ON DELETE RESTRICT so deleting a System cannot orphan a diagram (BR1.2) — SET NULL would itself create the BR2.1 violation. Filled by services/hierarchy_migration.py.';
+
+-- 261116-brain-create-diagram（ADR-003／FR6.1／FR6.5）：架構圖的草稿／正式狀態。
+-- 既有的圖一律視為正式，故預設 'ready'；加欄當下所有既有列都拿到 'ready'。
+-- 既有非空 volume 的演進路徑是 backend 啟動時的 database._ensure_diagram_status_schema()，
+-- 它沿用 services/hierarchy_migration.py 的 _ensure_diagram_status_column()
+-- （DDL 兩處並存，改一處必須改另一處）。
+-- 可重跑：欄位 IF NOT EXISTS、CHECK 以 pg_constraint 判斷存在與否。
+ALTER TABLE user_diagrams
+  ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'ready';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'ck_user_diagrams_status'
+  ) THEN
+    ALTER TABLE user_diagrams
+      ADD CONSTRAINT ck_user_diagrams_status
+      CHECK (status IN ('draft', 'ready'));
+  END IF;
+END $$;
+
+COMMENT ON COLUMN user_diagrams.status IS
+  '261116-brain-create-diagram ADR-003: draft | ready. Diagrams created by the brain start as draft and become ready only when the brain stores a generated diagram or the user presses the workspace Save button (PUT finalize=true). Drafts are excluded from review, WA collab, estimate binding, sharing and the project-page count, but INCLUDED when deciding whether a system/project still holds diagrams (delete-system, default-project cleanup). API exposes it as diagram_status.';
 
 CREATE TABLE IF NOT EXISTS diagram_change_records (
   id SERIAL PRIMARY KEY,
@@ -1320,6 +1344,11 @@ COMMIT;
 --   AND indexname LIKE 'uq_%';
 --   -- 應有兩列：uq_projects_default_per_owner、uq_systems_default_per_project
 -- SELECT count(*) FROM user_diagrams WHERE system_id IS NULL;   -- 遷移後應為 0
+-- -- 261116-brain-create-diagram：草稿狀態欄位
+-- SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+--   WHERE table_name = 'user_diagrams' AND column_name = 'status';
+--   -- 應為：status | character varying | NO | 'ready'::character varying
+-- SELECT status, count(*) FROM user_diagrams GROUP BY status;   -- 升級當下只有 ready
 -- SELECT id, diagram_id, status, overall_score, archived FROM architecture_reviews ORDER BY id DESC LIMIT 5;
 -- SELECT id, lens_id, is_active, updated_at FROM wa_lenses ORDER BY id DESC LIMIT 5;
 -- -- J) U18 project-meta-data：

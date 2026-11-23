@@ -356,8 +356,13 @@
         "type": "object"
       },
       "CreateDiagramRequest": {
-        "description": "建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；\n**本階段新增、已核可 scope／requirements 尚未涵蓋**）。\n\n刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應\n順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。",
+        "description": "建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；\n**本階段新增、已核可 scope／requirements 尚未涵蓋**）。\n\n刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應\n順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。\n\n`as_draft`（261116-brain-create-diagram 契約 C1）：`true` 建為草稿；既有呼叫端\n不送，行為不變（建為正式）。",
         "properties": {
+          "as_draft": {
+            "default": false,
+            "title": "As Draft",
+            "type": "boolean"
+          },
           "system_id": {
             "anyOf": [
               {
@@ -524,6 +529,119 @@
         "title": "DiagramChangeOut",
         "type": "object"
       },
+      "DiagramCreated": {
+        "properties": {
+          "diagram_status": {
+            "enum": [
+              "draft",
+              "ready"
+            ],
+            "title": "Diagram Status",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Id"
+          }
+        },
+        "required": [
+          "id",
+          "system_id",
+          "status",
+          "message",
+          "diagram_status"
+        ],
+        "title": "DiagramCreated",
+        "type": "object"
+      },
+      "DiagramDetail": {
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "can_review": {
+            "title": "Can Review",
+            "type": "boolean"
+          },
+          "diagram_status": {
+            "enum": [
+              "draft",
+              "ready"
+            ],
+            "title": "Diagram Status",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_owner": {
+            "title": "Is Owner",
+            "type": "boolean"
+          },
+          "shared_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Shared User Ids",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "xml_data": {
+            "title": "Xml Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "xml_data",
+          "updated_at",
+          "is_owner",
+          "shared_user_ids",
+          "can_edit",
+          "can_review",
+          "diagram_status"
+        ],
+        "title": "DiagramDetail",
+        "type": "object"
+      },
       "DiagramReadinessModel": {
         "properties": {
           "diagram_id": {
@@ -555,6 +673,34 @@
           "node_count"
         ],
         "title": "DiagramReadinessModel",
+        "type": "object"
+      },
+      "DiagramSaved": {
+        "properties": {
+          "diagram_status": {
+            "enum": [
+              "draft",
+              "ready"
+            ],
+            "title": "Diagram Status",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "diagram_status"
+        ],
+        "title": "DiagramSaved",
         "type": "object"
       },
       "DiagramSystemIn": {
@@ -1538,6 +1684,63 @@
         "title": "ModuleTreeModel",
         "type": "object"
       },
+      "MyDiagramItem": {
+        "properties": {
+          "diagram_status": {
+            "enum": [
+              "draft",
+              "ready"
+            ],
+            "title": "Diagram Status",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_owner": {
+            "title": "Is Owner",
+            "type": "boolean"
+          },
+          "system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "updated_at",
+          "is_owner",
+          "system_id",
+          "diagram_status"
+        ],
+        "title": "MyDiagramItem",
+        "type": "object"
+      },
       "OffendersView": {
         "properties": {
           "currency_ordinals": {
@@ -2032,28 +2235,6 @@
         "title": "SaveChatRequest",
         "type": "object"
       },
-      "SaveDiagramRequest": {
-        "properties": {
-          "title": {
-            "default": "未命名架構圖",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
-          },
-          "xml_data": {
-            "maxLength": 2097152,
-            "minLength": 1,
-            "title": "Xml Data",
-            "type": "string"
-          }
-        },
-        "required": [
-          "xml_data"
-        ],
-        "title": "SaveDiagramRequest",
-        "type": "object"
-      },
       "SaveDraftResponseModel": {
         "properties": {
           "diagram_id": {
@@ -2428,6 +2609,34 @@
         "title": "UpdateActiveRequest",
         "type": "object"
       },
+      "UpdateDiagramRequest": {
+        "description": "`PUT /diagrams/{id}`。`finalize`（261116-brain-create-diagram 契約 C2）：\n\n`true` 把草稿轉為正式；`false`（預設）只寫內容、不改狀態；對已是正式的圖無作用。\n只有工作區「儲存架構圖」按鈕與大腦產圖存回會送 `true`（FR6.2）——自動存檔與\n評核前寫回不送，打開草稿不會使它轉正式。",
+        "properties": {
+          "finalize": {
+            "default": false,
+            "title": "Finalize",
+            "type": "boolean"
+          },
+          "title": {
+            "default": "未命名架構圖",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "xml_data": {
+            "maxLength": 2097152,
+            "minLength": 1,
+            "title": "Xml Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "xml_data"
+        ],
+        "title": "UpdateDiagramRequest",
+        "type": "object"
+      },
       "UpdateRoleRequest": {
         "properties": {
           "role": {
@@ -2791,6 +3000,9 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "description": "草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖）"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3115,6 +3327,9 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "description": "草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖）"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3156,6 +3371,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖）"
           },
           "422": {
             "content": {
@@ -4100,7 +4318,13 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MyDiagramItem"
+                  },
+                  "title": "Response List My Diagrams Api Collab Diagrams Get",
+                  "type": "array"
+                }
               }
             },
             "description": "Successful Response"
@@ -4129,7 +4353,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramCreated"
+                }
               }
             },
             "description": "Successful Response"
@@ -4212,7 +4438,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramDetail"
+                }
               }
             },
             "description": "Successful Response"
@@ -4252,7 +4480,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SaveDiagramRequest"
+                "$ref": "#/components/schemas/UpdateDiagramRequest"
               }
             }
           },
@@ -4262,7 +4490,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramSaved"
+                }
               }
             },
             "description": "Successful Response"
@@ -4451,6 +4681,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖）"
           },
           "422": {
             "content": {
@@ -4647,6 +4880,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖）"
           },
           "422": {
             "content": {
