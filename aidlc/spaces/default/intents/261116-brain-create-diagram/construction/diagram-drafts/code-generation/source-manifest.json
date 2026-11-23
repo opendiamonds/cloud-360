@@ -1,0 +1,29 @@
+{
+  "stage": "code-generation",
+  "unit": "diagram-drafts",
+  "version": 1,
+  "writes": [
+    { "path": "backend/models.py" },
+    { "path": "backend/services/hierarchy_migration.py" },
+    { "path": "backend/scripts/run_hierarchy_migration.py" },
+    { "path": "backend/services/hierarchy_service.py" },
+    { "path": "backend/services/hierarchy_facade.py" },
+    { "path": "backend/services/collab_router.py" },
+    { "path": "backend/services/review_router.py" },
+    { "path": "backend/services/agent_router.py" },
+    { "path": "backend/services/user_router.py" },
+    { "path": "backend/services/work_orchestrator.py" },
+    { "path": "backend/cost/estimate_intake_router.py" },
+    { "path": "schema_rbac.sql" },
+    { "path": "DEPLOY.md" },
+    { "path": "backend/database.py" },
+    { "path": "LOCAL-DEV.md" },
+    { "path": "openapi.json" },
+    { "path": "backend/tests/test_diagram_drafts_schema.py" },
+    { "path": "backend/tests/test_diagram_drafts_hierarchy.py" },
+    { "path": "backend/tests/test_diagram_drafts_api.py" },
+    { "path": "backend/tests/test_diagram_system_attach.py" },
+    { "path": "backend/tests/test_work_orchestrator_store.py" },
+    { "path": "backend/tests/work_orchestrator_fakes.py" }
+  ]
+}

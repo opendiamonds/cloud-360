@@ -1,0 +1,80 @@
+{
+  "stage": "code-generation",
+  "unit": "diagram-drafts",
+  "upstream_ids": [
+    "FR1.3a",
+    "FR4.2",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR6.4a",
+    "FR6.4b",
+    "FR6.4c",
+    "FR6.5",
+    "FR7",
+    "FR7.1",
+    "NFR5"
+  ],
+  "coverage": [
+    {
+      "id": "FR1.3a",
+      "status": "OK",
+      "target": "backend/services/collab_router.py"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "backend/services/collab_router.py"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "backend/models.py"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "backend/models.py"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "backend/services/collab_router.py"
+    },
+    {
+      "id": "FR6.4a",
+      "status": "OK",
+      "target": "backend/services/collab_router.py"
+    },
+    {
+      "id": "FR6.4b",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py"
+    },
+    {
+      "id": "FR6.4c",
+      "status": "OK",
+      "target": "backend/services/hierarchy_service.py"
+    },
+    {
+      "id": "FR6.5",
+      "status": "OK",
+      "target": "backend/services/hierarchy_migration.py"
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "backend/services/brain_diagram_creation.py"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "backend/services/brain_diagram_creation.py"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "backend/tests/test_diagram_drafts_api.py"
+    }
+  ]
+}

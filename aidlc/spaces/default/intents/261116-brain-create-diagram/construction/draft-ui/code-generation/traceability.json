@@ -1,0 +1,32 @@
+{
+  "stage": "code-generation",
+  "unit": "draft-ui",
+  "upstream_ids": [
+    "FR3.4",
+    "FR6.2",
+    "FR6.4",
+    "FR6.4a"
+  ],
+  "coverage": [
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "frontend/src/components/brain/ClarifyCandidates.tsx"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "frontend/src/pages/WorkspacePage.tsx"
+    },
+    {
+      "id": "FR6.4",
+      "status": "OK",
+      "target": "frontend/src/components/projects/SystemDiagrams.tsx"
+    },
+    {
+      "id": "FR6.4a",
+      "status": "OK",
+      "target": "frontend/src/components/projects/OverviewTab.tsx"
+    }
+  ]
+}

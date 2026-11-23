@@ -1,0 +1,25 @@
+{
+  "stage": "code-generation",
+  "unit": "brain-create-flow",
+  "version": 1,
+  "writes": [
+    { "path": "backend/services/brain_diagram_creation.py" },
+    { "path": "backend/services/brain_gateway.py" },
+    { "path": "backend/services/brain_gateway_rules.py" },
+    { "path": "backend/services/brain_ws_contract.py" },
+    { "path": "backend/services/intent_routing.py" },
+    { "path": "backend/services/intent_routing_decisions.py" },
+    { "path": "backend/services/intent_routing_port.py" },
+    { "path": "backend/services/intent_routing_types.py" },
+    { "path": "backend/services/work_orchestrator_capabilities.py" },
+    { "path": "backend/services/work_orchestrator_rules.py" },
+    { "path": "ws-contract.json" },
+    { "path": "backend/tests/test_brain_diagram_creation.py" },
+    { "path": "backend/tests/test_brain_diagram_creation_flow.py" },
+    { "path": "backend/tests/test_intent_routing_decisions.py" },
+    { "path": "backend/tests/test_work_orchestrator_rules.py" },
+    { "path": "backend/tests/test_work_orchestrator_flow.py" },
+    { "path": "backend/services/rbac.py" },
+    { "path": "backend/tests/test_brain_gateway_startup.py" }
+  ]
+}

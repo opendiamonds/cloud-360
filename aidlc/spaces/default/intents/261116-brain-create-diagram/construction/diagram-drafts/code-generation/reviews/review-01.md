@@ -1,0 +1,16 @@
+## Review
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | DEPLOY.md > 2.2.7「草稿狀態欄位」；backend/models.py > UserDiagram.status；backend/services/hierarchy_migration.py > _ensure_diagram_status_column；.github/workflows/deploy.yml（部署後探針） | 部署順序只靠文件，沒有機制擋住。ORM 已映射 user_diagrams.status，所有讀圖查詢都會選取這一欄；既有 volume 若在新版 backend 上線前沒補欄位，工作區、專案頁、評核的讀圖端點全數 500。合併進 ut 會自動部署，而啟動路徑（database.py 的 _ensure 家族、main.py 的 ensure_project_members_on_startup）都不補這一欄。兩項證據讓它難以靠文件化解：(1) deploy.yml 部署後的 data plane 探針只打 POST /api/auth/login 並以 401 為通過（約 336–395 行，檔內註解寫明處理函式只查 users），完全不碰 user_diagrams，所以缺欄位的狀態會被判為部署健康，自動 rollback 不會觸發；(2) 新增的 DEPLOY.md 指令 cd backend 後執行 python scripts/run_hierarchy_migration.py 在部署主機上無法照寫執行：同檔 206 行寫明部署主機的 db 沒有 host port、要走 docker exec，而進入既有 backend 容器也不行（舊 image 沒有 _ensure_diagram_status_column）。另外該腳本是整套階層遷移（含把 system_id 為空的圖重新指派），DEPLOY.md 稱「可重跑：欄位已在就不動」只對加欄這一步成立。倉庫有先例可借：U19 以使用者裁決改為啟動時自動補齊。code-summary 已自陳此項需人裁決。 | 在關卡上由人裁決擇一：(a) 加一支只補 status 欄位與 CHECK 的啟動補丁（可重跑、失敗要大聲），並同步更新 LOCAL-DEV.md 與 DEPLOY.md；或 (b) 維持手動，但在 DEPLOY.md 改寫成部署主機可執行的 docker exec 加 psql 的單條 ALTER 指令，並把「合併前先補欄位」列為合併前檢查項。無論選哪個，都要更正「整支腳本可重跑且不動資料」的說法。 | New |
+| R-02 | Minor | backend/services/hierarchy_migration.py > _ensure_diagram_status_column；backend/tests/test_diagram_drafts_schema.py | 補欄位那條敘述（同一條 ALTER TABLE 加欄、NOT NULL、DEFAULT ready、CHECK）只在 SQLite 上被測過（helpers.py 以記憶體 SQLite 取代 PostgreSQL）。這是 staging 唯一會用到的升級路徑，PostgreSQL 端語法與「既有列全為 ready」只有閱讀為據；test_schema_rbac_sql_declares_the_same_column_and_check 只是對 SQL 檔做字串比對，樣式出現（連註解中的也算）即通過，驗不到 DDL 可執行。 | 在 build-and-test 以舊 schema 的 PostgreSQL 副本實跑一次遷移，並執行 DEPLOY.md 的三條驗證查詢，把結果記入該階段紀錄；本單元不需改程式。 | New |
+| R-03 | Minor | DEPLOY.md > 2.2.7「草稿狀態欄位」的回復段；backend/services/collab_router.py > reject_if_draft | 回復段只說舊版 backend 不讀這一欄、回退應用即可。但回退後已存在的 draft 列在舊版眼中就是一般架構圖：內容是空白骨架、舊版沒有 409 檢查，可被分享、評核、綁估價。部署失敗會自動 rollback，這不是假設情境。 | 在回復段補一句：回退前先把不要的草稿刪除或由擁有者存成正式，或明寫接受「回退後草稿等同正式圖」。 | New |
+| R-04 | Minor | backend/services/hierarchy_service.py > list_diagrams_of_system（order_by updated_at desc） | 排序對 NULL 的位置在 PostgreSQL（DESC 時 NULL 排最前）與 SQLite（排最後）不同，而 schema_rbac.sql 的 user_diagrams.updated_at 可為空。FR3.6 要求決定性排序、契約 C5 要求新到舊；測試只在 SQLite 跑，抓不到。經 ORM 寫入的列都有 server_default，風險低，但手動匯入或舊資料的 NULL 列在 PostgreSQL 上會被當成最新而排在反問候選最前。 | 排序明確處理 NULL（例如 coalesce 或 nulls_last），並在 hierarchy 測試加一列 NULL updated_at 的案例。 | New |
+
+### Summary
+本次未執行任何指令，全部以靜態讀檔與唯讀 git diff 查證；作者自陳的 1601 測試、contract 檢查、lint、build、Playwright 結果未獨立複驗。授權與一致性面向沒有發現問題：閘道預檢與端點 require_arch_action("edit") 走同一個 user_can_arch、端點檢查保留，點選後經 resolve_work_target 重新驗證且不信任客戶端識別碼；五個 409 入口（評核建立、評核共編確認儲存、WA 共編、估價綁圖、分享）共用 reject_if_draft 與同一常數，估價為擁有權優先、分享在擁有者檢查之後，各有 TestClient 測試且斷言資料未被寫入；四支端點 response_model 涵蓋原回傳全部鍵；finalize 預設 false，只有「儲存架構圖」按鈕送 true，評核前寫回不送；include_drafts 必填，刪除系統、清除預設專案、刪除使用者三處刻意不過濾狀態且有對照測試；日誌不含使用者原文與圖名；schema_rbac.sql、遷移函式與 DEPLOY.md 三處欄位定義一致。需人裁決的是部署順序（Major）。八項偏差判斷：#1、#4、#5、#6、#7、#8 合理；#2（草稿作業對象且 p 不低於 t 時接著畫同一張）可接受，因與 FR6.3b 的可測形式一致，但代價（選著草稿時大腦路徑無法再新建第二張，且 FR2.2 判定表第三列文字與 FR6.3 仍互相矛盾）需人在關卡確認並在 requirements 標明第三列對草稿由 FR6.3b 取代；#3（候選失效時缺說明句，FR3.5）是契約缺陷造成的未滿足項，因 ClarifyPayload 沒有文字欄，安全面正確（重新驗證、失效時不改由別的對象代替），tcms-test-cases 不得把該說明句標為已覆蓋。零 Critical、一項 Major，判定 READY。
