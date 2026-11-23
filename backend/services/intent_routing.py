@@ -68,6 +68,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import time
 from dataclasses import dataclass
@@ -494,6 +495,11 @@ class IntentRouter:
                 self._config.confidence_threshold, routed.force_clarify
             )
             decision = decide(result, threshold)
+            # 261116-brain-create-diagram 契約 C7：p 隨判定結果留在行程內，不進觀測事件。
+            decision = dataclasses.replace(
+                decision,
+                new_diagram_probability=getattr(routed, "new_diagram_probability", None),
+            )
         except BaseException as exc:
             self._observe(
                 RoutingObservation(

@@ -377,6 +377,10 @@ PHRASES = {
     "cost_timeout": "成本分析逾時",
     "cost_not_found": "找不到這份估價表的建議",
     "connection_lost": "與成本服務的連線中斷",
+    # 261116-brain-create-diagram 契約 C4：草稿被評核等入口拒絕（409）。**必須**與
+    # `models.DRAFT_REJECTED_DETAIL` 逐字相同（本模組為純函式層，不得 import models；
+    # 兩者相等由 tests/test_brain_diagram_creation_flow.py 鎖住）。
+    "draft_rejected": "這張圖還是草稿，請先完成產圖",
     # 合併前必修第 18 項：併發交辦越過進行中上限時，同批已寫入項的失敗原因
     "capacity_exceeded": "同時進行中的工作已達上限，這一項沒有開始",
     # sideEffect 說明文字
@@ -425,13 +429,22 @@ def failure_reason(key: str, **values: str) -> str:
     return PHRASES[key].format(**values)
 
 
-def failure_for_status(capability: str, status_code: Optional[int]) -> tuple:
-    """HTTP 狀態碼 → `(失敗原因文字, 失敗類別)`（`BR51.3`／`BR51.6`／`BR56.5`）。"""
+def failure_for_status(
+    capability: str, status_code: Optional[int], *, draft_rejected: bool = False
+) -> tuple:
+    """HTTP 狀態碼 → `(失敗原因文字, 失敗類別)`（`BR51.3`／`BR51.6`／`BR56.5`）。
+
+    `draft_rejected`（261116-brain-create-diagram 契約 C4）：409 且回應 detail 等於
+    草稿被拒的常數時為真 → `PHRASES["draft_rejected"]`、類別 `draft_rejected`。
+    其餘 409 照舊歸入 `capability_failed`。
+    """
     name = capability_name(capability)
     if status_code == 401:
         return PHRASES["unauthorized"], "unauthorized"
     if status_code == 403:
         return PHRASES["forbidden"].format(capability=name), "forbidden"
+    if status_code == 409 and draft_rejected:
+        return PHRASES["draft_rejected"], "draft_rejected"
     return PHRASES["unavailable"].format(capability=name), "capability_failed"
 
 

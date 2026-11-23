@@ -53,14 +53,32 @@ export function errorFrame(turnId: string | null, code: ErrorCode, message: stri
   return { v: V, type: 'error', turnId, payload };
 }
 
-/** 候選以 `[id, label, capability]` 三元組傳入；信心值固定給 0.42（畫面不得顯示，BR95.3）。 */
+/** 261116-brain-create-diagram 契約 C6：候選的選填呈現欄位（伺服器一律送出，未用時為 null）。 */
+export type ClarifyExtras = Partial<Pick<S['ClarifyCandidate'], 'systemId' | 'diagramId' | 'action'>>;
+
+/**
+ * 候選以 `[id, label, capability]` 三元組傳入（可帶第四個元素 `ClarifyExtras`）；
+ * 信心值固定給 0.42（畫面不得顯示，BR95.3）。
+ */
 export function clarifyFrame(
   turnId: string,
   kind: ClarifyKind,
-  candidates: ReadonlyArray<readonly [string, string, string]>,
+  candidates: ReadonlyArray<
+    readonly [string, string, string] | readonly [string, string, string, ClarifyExtras]
+  >,
 ): WsEnvelope {
-  const list: S['ClarifyCandidate'][] = candidates.map(([id, label, capability]) => {
-    const candidate: S['ClarifyCandidate'] = { id, label, capability, confidence: 0.42 };
+  const list: S['ClarifyCandidate'][] = candidates.map((entry) => {
+    const [id, label, capability] = entry;
+    const extras: ClarifyExtras = entry.length === 4 ? entry[3] : {};
+    const candidate: S['ClarifyCandidate'] = {
+      id,
+      label,
+      capability,
+      confidence: 0.42,
+      systemId: extras.systemId ?? null,
+      diagramId: extras.diagramId ?? null,
+      action: extras.action ?? null,
+    };
     return candidate;
   });
   const payload: S['ClarifyPayload'] = { kind, candidates: list };

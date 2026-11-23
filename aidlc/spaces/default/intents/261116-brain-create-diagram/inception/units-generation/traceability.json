@@ -1,0 +1,253 @@
+{
+  "stage": "units-generation",
+  "upstream_ids": [
+    "FR1",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR1.3a",
+    "FR1.4",
+    "FR1.5",
+    "FR2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR3.5",
+    "FR3.6",
+    "FR4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR5",
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "FR5.4",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR6.3",
+    "FR6.3a",
+    "FR6.3b",
+    "FR6.4",
+    "FR6.4a",
+    "FR6.4b",
+    "FR6.4c",
+    "FR6.5",
+    "FR7",
+    "FR7.1"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR1.3a",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR1.4",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR1.5",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.5",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR3.6",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR5.4",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.3",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR6.3a",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR6.3b",
+      "status": "OK",
+      "target": "U2"
+    },
+    {
+      "id": "FR6.4",
+      "status": "OK",
+      "target": "U3"
+    },
+    {
+      "id": "FR6.4a",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.4b",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.4c",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR6.5",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "U1"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "U1"
+    }
+  ]
+}

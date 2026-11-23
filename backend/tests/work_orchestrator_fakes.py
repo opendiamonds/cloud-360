@@ -203,6 +203,8 @@ class FakeCapabilityApp:
         self.thread_ids: list = []
         #: 請求抵達時（回應之前）呼叫的掛勾：`{"METHOD /path 前綴": callable}`。
         self.hooks: dict = {}
+        #: `(METHOD path, body bytes)`，依抵達順序。
+        self.bodies: list = []
 
     def count(self, prefix: str) -> int:
         return sum(1 for c in self.calls if c.startswith(prefix))
@@ -221,6 +223,8 @@ class FakeCapabilityApp:
             body += message.get("body", b"")
             if not message.get("more_body"):
                 break
+        # 261116-brain-create-diagram：記下請求本體，讓測試能斷言 PUT 帶 finalize。
+        self.bodies.append((key, body))
         for prefix, hook in list(self.hooks.items()):
             if key.startswith(prefix):
                 hook()
@@ -333,12 +337,19 @@ class FakeHierarchy:
     def __init__(self, recorder: "FacadeRecorder") -> None:
         self._r = recorder
 
-    def list_diagrams_of_system(self, principal, *, system_id):
-        self._r.calls.append(("list_diagrams_of_system", principal.user_id, system_id))
+    def list_diagrams_of_system(self, principal, *, system_id, include_drafts):
+        # 261116-brain-create-diagram 契約 C5：include_drafts 必填（無預設）；
+        # 回傳 (diagram_id, title, diagram_status, updated_at) 四元組。
+        self._r.calls.append(
+            ("list_diagrams_of_system", principal.user_id, system_id, include_drafts)
+        )
         self._r.threads.append(threading.get_ident())
         if self._r.list_error is not None:
             raise self._r.list_error
-        return list(self._r.system_diagrams.get(system_id, []))
+        rows = list(self._r.system_diagrams.get(system_id, []))
+        if not include_drafts:
+            rows = [row for row in rows if row[2] != "draft"]
+        return rows
 
     def record_diagram_change(self, principal, *, diagram_id, requirement_summary,
                               requirement_label, actor_user_id):

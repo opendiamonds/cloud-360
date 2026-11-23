@@ -258,6 +258,10 @@ class IntentDecision:
     below_threshold: bool
     candidates: Optional[Tuple[ClarifyCandidate, ...]] = None
     resolution: Optional[ClarifyResolution] = field(default=None, compare=False, repr=False)
+    #: 261116-brain-create-diagram（契約 C7）：路由同一次請求多問的「是否要一張新的圖」的
+    #: 機率。與 `resolution` 同屬**行程內、不序列化**的附帶資料，不進 WebSocket；閘道交給
+    #: `brain_diagram_creation.decide` 判定新建或修改。`None` 表示這一輪沒有取得。
+    new_diagram_probability: Optional[float] = field(default=None, compare=False, repr=False)
 
 
 # ---------------------------------------------------------------------------

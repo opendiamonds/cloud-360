@@ -367,6 +367,9 @@ class TargetRef:
     system_id: Optional[int]
     name: str
     project_name: str
+    #: 261116-brain-create-diagram 契約 C7：作業對象切到某張圖時帶它（選填；目錄條目恆為 None）。
+    #: `project_id`／`system_id` 可為 None，由 `set_work_target` 依圖推導上層。
+    diagram_id: Optional[int] = None
 
     @property
     def key(self) -> Tuple[int, Optional[int]]:

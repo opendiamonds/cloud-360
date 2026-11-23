@@ -473,7 +473,14 @@ class HierarchyFacade:
         requirement_label: str,
         actor_user_id: int,
     ):
-        """`W4`。`U12 work-orchestrator` 是**唯一寫入端**（契約 `K-07`）。
+        """`W4`。寫入端限**大腦委辦路徑**：`U12 work-orchestrator` 與大腦建圖元件
+        `BrainDiagramCreation`（契約 `K-07` 修訂）。
+
+        `K-07` 原文為「`U12 work-orchestrator` 是唯一寫入端」。261116-brain-create-diagram
+        新增第二個寫入端（經大腦建立架構圖時記一筆「經大腦建立「<名稱>」」，FR7.1），
+        修訂出處：`aidlc/spaces/default/intents/261116-brain-create-diagram/inception/
+        contract-design/contract-summary.md` 的 C5。兩者都是大腦委辦的變更，`source`
+        仍為 `brain_orchestration`（符合 `schema_rbac.sql` 該值的語意），不新增列舉值。
 
         **非冪等（一次異動一列），不得重試**（`BR2.4`）。
 
@@ -602,9 +609,12 @@ class HierarchyFacade:
         return dict(found.names)
 
     def list_diagrams_of_system(
-        self, principal: Principal, *, system_id: int
+        self, principal: Principal, *, system_id: int, include_drafts: bool
     ) -> list:
-        """系統下呼叫者擁有的圖：`[(diagram_id, title), ...]`。**唯讀、冪等。**
+        """系統下呼叫者擁有的圖：`[(diagram_id, title, diagram_status, updated_at), ...]`，
+        新到舊（`updated_at` 降冪、再 `diagram_id` 降冪）。**唯讀、冪等。**
+
+        `include_drafts` 必填（261116-brain-create-diagram ADR-005／契約 C5）。
 
         `U12 work-orchestrator` 的跨單元新增（`U12` functional-spec 2.4／
         `BR56.1`／`BR56.3`：作業對象只指定系統時，換成目標圖集合）。
@@ -618,7 +628,10 @@ class HierarchyFacade:
             self._db, system_id=system_id, user_id=principal.user_id
         )
         return hierarchy_service.list_diagrams_of_system(
-            self._db, system_id=system_id, owner_user_id=principal.user_id
+            self._db,
+            system_id=system_id,
+            owner_user_id=principal.user_id,
+            include_drafts=include_drafts,
         )
 
     def list_diagram_changes(

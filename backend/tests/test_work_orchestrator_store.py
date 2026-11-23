@@ -413,17 +413,28 @@ class ListDiagramsOfSystemTest(unittest.TestCase):
         close_session(self.db)
 
     def test_owner_gets_the_diagrams_of_the_system_only(self):
-        result = self.facade.list_diagrams_of_system(self.alice_p, system_id=self.system.id)
-        self.assertEqual(result, [(self.d1.id, "一號"), (self.d2.id, "二號")])
+        # 261116-brain-create-diagram 契約 C5：四元組、新到舊（updated_at 降冪，
+        # 相同時 id 降冪）。兩張圖在同一次 commit 掛上，updated_at 相同，故 d2 在前。
+        result = self.facade.list_diagrams_of_system(
+            self.alice_p, system_id=self.system.id, include_drafts=True
+        )
+        self.assertEqual(
+            [row[:3] for row in result],
+            [(self.d2.id, "二號", "ready"), (self.d1.id, "一號", "ready")],
+        )
 
     def test_non_owner_gets_not_found(self):
         with self.assertRaises(HierarchyNotFound):
-            self.facade.list_diagrams_of_system(self.bob_p, system_id=self.system.id)
+            self.facade.list_diagrams_of_system(
+                self.bob_p, system_id=self.system.id, include_drafts=True
+            )
 
     def test_system_without_attached_diagrams_returns_empty(self):
         """`OPEN-H11`：系統下沒有掛圖是真實可達的狀態，回空清單而非錯誤。"""
         self.assertEqual(
-            self.facade.list_diagrams_of_system(self.alice_p, system_id=self.empty_system.id),
+            self.facade.list_diagrams_of_system(
+                self.alice_p, system_id=self.empty_system.id, include_drafts=False
+            ),
             [],
         )
 

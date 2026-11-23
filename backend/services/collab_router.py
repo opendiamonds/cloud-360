@@ -13,14 +13,24 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, get_db
-from models import User, UserDiagram, UserDiagramChat, diagram_shares
+from models import (
+    DIAGRAM_STATUS_DRAFT,
+    DIAGRAM_STATUS_READY,
+    DRAFT_REJECTED_DETAIL,
+    DRAFT_REJECTED_RESPONSE,
+    User,
+    UserDiagram,
+    UserDiagramChat,
+    diagram_shares,
+)
 from services.auth import get_current_user, get_user_from_token
 from services.hierarchy_facade import (
     HierarchyFacade,
@@ -319,14 +329,80 @@ class SaveDiagramRequest(BaseModel):
     title: str = Field("未命名架構圖", min_length=1, max_length=MAX_DIAGRAM_TITLE_CHARS)
 
 
+class UpdateDiagramRequest(SaveDiagramRequest):
+    """`PUT /diagrams/{id}`。`finalize`（261116-brain-create-diagram 契約 C2）：
+
+    `true` 把草稿轉為正式；`false`（預設）只寫內容、不改狀態；對已是正式的圖無作用。
+    只有工作區「儲存架構圖」按鈕與大腦產圖存回會送 `true`（FR6.2）——自動存檔與
+    評核前寫回不送，打開草稿不會使它轉正式。"""
+
+    finalize: bool = False
+
+
 class CreateDiagramRequest(SaveDiagramRequest):
     """建立架構圖。`system_id` 選填：帶了就掛到該系統（build-and-test F1，2026-11-12；
     **本階段新增、已核可 scope／requirements 尚未涵蓋**）。
 
     刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應
-    順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。"""
+    順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。
+
+    `as_draft`（261116-brain-create-diagram 契約 C1）：`true` 建為草稿；既有呼叫端
+    不送，行為不變（建為正式）。"""
 
     system_id: Optional[int] = None
+    as_draft: bool = False
+
+
+# 261116-brain-create-diagram 契約 C1～C3：四支端點的 response_model。
+# FastAPI 宣告 response_model 後會**靜默丟掉模型沒列的鍵**，所以下列欄位必須涵蓋
+# 端點目前回傳的全部鍵（契約表逐一列出；`tests/test_diagram_drafts_api.py` 以鍵集合鎖住）。
+DiagramStatus = Literal["draft", "ready"]
+
+
+class DiagramCreated(BaseModel):
+    id: int
+    system_id: Optional[int]
+    status: Literal["success"]
+    message: str
+    diagram_status: DiagramStatus
+
+
+class DiagramSaved(BaseModel):
+    status: Literal["success"]
+    message: str
+    diagram_status: DiagramStatus
+
+
+class MyDiagramItem(BaseModel):
+    id: int
+    title: str
+    updated_at: Optional[datetime]
+    is_owner: bool
+    system_id: Optional[int]
+    diagram_status: DiagramStatus
+
+
+class DiagramDetail(BaseModel):
+    id: int
+    title: str
+    xml_data: str
+    updated_at: Optional[datetime]
+    is_owner: bool
+    shared_user_ids: List[int]
+    can_edit: bool
+    can_review: bool
+    diagram_status: DiagramStatus
+
+
+def _diagram_status_of(diagram: UserDiagram) -> str:
+    """對外一律以 `diagram_status` 呈現（契約 C3）；資料庫值缺漏時視為正式（FR6.5）。"""
+    return diagram.status or DIAGRAM_STATUS_READY
+
+
+def reject_if_draft(diagram: UserDiagram) -> None:
+    """契約 C4：草稿不得被拿來用或對外呈現。四個入口共用這一份判定與訊息。"""
+    if diagram.status == DIAGRAM_STATUS_DRAFT:
+        raise HTTPException(status_code=409, detail=DRAFT_REJECTED_DETAIL)
 
 
 class ShareDiagramRequest(BaseModel):
@@ -341,7 +417,7 @@ class LastOpenedRequest(BaseModel):
     diagram_id: Optional[int] = None
 
 
-@router.get("/diagrams")
+@router.get("/diagrams", response_model=List[MyDiagramItem])
 def list_my_diagrams(
     current_user: User = Depends(require_arch_action("view")),
     db: Session = Depends(get_db),
@@ -356,6 +432,8 @@ def list_my_diagrams(
             # build-and-test F1：系統頁列出「我的圖」與其目前歸屬。只對自己擁有的圖給值——
             # 別人分享的圖的歸屬屬於別人的專案結構，不外露。
             "system_id": d.system_id if d.user_id == current_user.id else None,
+            # 261116-brain-create-diagram 契約 C3：前端依此標示草稿、專案頁計數排除草稿。
+            "diagram_status": _diagram_status_of(d),
         }
         for d in all_diagrams
     ]
@@ -506,7 +584,7 @@ def clear_diagram_chat(
     }
 
 
-@router.get("/diagrams/{diagram_id}")
+@router.get("/diagrams/{diagram_id}", response_model=DiagramDetail)
 def get_diagram(
     diagram_id: int,
     current_user: User = Depends(require_arch_action("view")),
@@ -526,6 +604,7 @@ def get_diagram(
         ),
         "can_edit": _arch_can_edit(db, current_user),
         "can_review": _arch_can_review(db, current_user),
+        "diagram_status": _diagram_status_of(diagram),
     }
 
 
@@ -550,7 +629,7 @@ def _attachable_system_or_raise(db: Session, user: User, system_id: int) -> None
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/diagrams")
+@router.post("/diagrams", response_model=DiagramCreated)
 def create_diagram(
     request: CreateDiagramRequest,
     current_user: User = Depends(require_arch_action("edit")),
@@ -564,6 +643,7 @@ def create_diagram(
         title=request.title,
         xml_data=request.xml_data,
         system_id=request.system_id,
+        status=DIAGRAM_STATUS_DRAFT if request.as_draft else DIAGRAM_STATUS_READY,
     )
     db.add(diagram)
     db.commit()
@@ -575,13 +655,14 @@ def create_diagram(
         "system_id": diagram.system_id,
         "status": "success",
         "message": "Diagram created successfully",
+        "diagram_status": _diagram_status_of(diagram),
     }
 
 
-@router.put("/diagrams/{diagram_id}")
+@router.put("/diagrams/{diagram_id}", response_model=DiagramSaved)
 def update_diagram(
     diagram_id: int,
-    request: SaveDiagramRequest,
+    request: UpdateDiagramRequest,
     current_user: User = Depends(require_arch_action("edit")),
     db: Session = Depends(get_db),
 ):
@@ -590,9 +671,16 @@ def update_diagram(
     # 僅擁有者可改 XML（被分享者若有 edit 仍可協作寫入）
     diagram.xml_data = request.xml_data
     diagram.title = request.title
+    # 契約 C2：只把草稿轉正式；不送或 false 時不改狀態，對正式圖無作用。
+    if request.finalize and diagram.status == DIAGRAM_STATUS_DRAFT:
+        diagram.status = DIAGRAM_STATUS_READY
     current_user.last_opened_diagram_id = diagram_id
     db.commit()
-    return {"status": "success", "message": "Diagram updated successfully"}
+    return {
+        "status": "success",
+        "message": "Diagram updated successfully",
+        "diagram_status": _diagram_status_of(diagram),
+    }
 
 
 @router.delete("/diagrams/{diagram_id}")
@@ -623,7 +711,7 @@ def delete_diagram(
     return {"status": "success", "diagram_id": diagram_id, "message": "Diagram deleted"}
 
 
-@router.post("/diagrams/{diagram_id}/share")
+@router.post("/diagrams/{diagram_id}/share", responses=DRAFT_REJECTED_RESPONSE)
 def share_diagram(
     diagram_id: int,
     request: ShareDiagramRequest,
@@ -635,6 +723,9 @@ def share_diagram(
         raise HTTPException(status_code=404, detail="Diagram not found")
     if diagram.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can share this diagram")
+    # 261116-brain-create-diagram FR6.4a／契約 C4：草稿不得分享。排在擁有者檢查之後，
+    # 不讓非擁有者以 409 探測他人圖的狀態。
+    reject_if_draft(diagram)
 
     users = db.query(User).filter(User.id.in_(request.user_ids)).all()
     diagram.shared_users = users

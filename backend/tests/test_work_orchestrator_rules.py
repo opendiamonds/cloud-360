@@ -146,6 +146,8 @@ class PhraseTest(unittest.TestCase):
         "cost_timeout": ({}, "成本分析逾時"),
         "cost_not_found": ({}, "找不到這份估價表的建議"),
         "connection_lost": ({}, "與成本服務的連線中斷"),
+        # 261116-brain-create-diagram 契約 C4：與 models.DRAFT_REJECTED_DETAIL 逐字相同。
+        "draft_rejected": ({}, "這張圖還是草稿，請先完成產圖"),
         "capacity_exceeded": ({}, "同時進行中的工作已達上限，這一項沒有開始"),
         "side_effect_maybe_persisted": ({"name": "〈A〉"}, "可能已存回架構圖〈A〉"),
         "side_effect_persisted": ({"name": "〈A〉"}, "已存回架構圖〈A〉"),

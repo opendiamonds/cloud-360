@@ -87,6 +87,7 @@ class EnsureVectorExtensionTest(unittest.TestCase):
             mock.patch.object(database, "_ensure_estimate_intake_schema", parent.intake),
             mock.patch.object(database, "_ensure_last_activity_schema", parent.activity),
             mock.patch.object(database, "_ensure_iac_draft_schema", parent.iac),
+            mock.patch.object(database, "_ensure_diagram_status_schema", parent.diagram_status),
             mock.patch.object(database, "SessionLocal", mock.MagicMock(return_value=session)),
             mock.patch.object(database, "logger", mock.MagicMock()),
         ]
@@ -104,7 +105,7 @@ class EnsureVectorExtensionTest(unittest.TestCase):
             "_ensure_vector_extension() 必須在 Base.metadata.create_all() 之前呼叫："
             f"實際順序為 {order}",
         )
-        for name in ("a4", "j5", "a3", "cost", "intake", "activity", "iac"):
+        for name in ("a4", "j5", "a3", "cost", "intake", "activity", "iac", "diagram_status"):
             self.assertGreater(
                 order.index(name),
                 order.index("create_all"),

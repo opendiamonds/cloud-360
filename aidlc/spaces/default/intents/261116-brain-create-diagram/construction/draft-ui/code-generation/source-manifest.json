@@ -1,0 +1,19 @@
+{
+  "stage": "code-generation",
+  "unit": "draft-ui",
+  "version": 1,
+  "writes": [
+    { "path": "frontend/src/components/DraftBadge.tsx" },
+    { "path": "frontend/src/projects/projectsApi.ts" },
+    { "path": "frontend/src/components/projects/OverviewTab.tsx" },
+    { "path": "frontend/src/components/projects/SystemDiagrams.tsx" },
+    { "path": "frontend/src/pages/WorkspacePage.tsx" },
+    { "path": "frontend/src/components/DrawioCanvas.tsx" },
+    { "path": "frontend/src/components/brain/ClarifyCandidates.tsx" },
+    { "path": "frontend/src/brain/testing/wsFrames.ts" },
+    { "path": "frontend/src/types/api.d.ts" },
+    { "path": "frontend/src/types/ws-contract.d.ts" },
+    { "path": "frontend/tests/e2e/diagram-drafts.spec.ts" },
+    { "path": "frontend/src/pages/AssessmentPage.tsx" }
+  ]
+}

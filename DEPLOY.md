@@ -247,6 +247,7 @@ psql "$DATABASE_URL" -f schema_rbac.sql
 | G | **U2 估價上傳** `estimate_sets`／`estimates`／`estimate_line_items`／`estimate_shares`／`estimate_audit_events`／`advice` | **新 `/api/cost/v1` 持久化（Advice 正文屬 U7）** |
 | H | **U4 階層** `projects`／`systems`／`diagram_change_records` | **專案 → 系統 → 架構圖 階層的三張新表**。見 2.2.7 |
 | H | `user_diagrams.system_id` | **架構圖歸屬的權威來源**（可為空；`ON DELETE RESTRICT`）。**既有環境需另跑一次性遷移指令**，見 2.2.7 |
+| H | `user_diagrams.status` | **架構圖草稿／正式狀態**（`draft`／`ready`，非空、預設 `ready`，CHECK `ck_user_diagrams_status`）。**既有環境由新版 backend 啟動時自動補上**（`database._ensure_diagram_status_schema()`，只補這一欄、可重跑），不需手動跑遷移。見 2.2.7 末的「草稿狀態欄位」 |
 | I | **U5 記憶層** `memory` schema ＋ `memory.memory_records`／`memory.memory_audit_events`；**U8 新增** `ix_memory_records_embedding_hnsw` | **本 repo 的第一個獨立 schema**（在此之前全樹無 `CREATE SCHEMA`）。含 `vector(1024)` 欄位、`embedding_model`、grant 邊界與記憶專用登入角色 `cloud360_memory`（無密碼，密碼由部署另設）。見 2.2.8；向量索引（opclass `vector_cosine_ops`）見 **2.2.12** |
 | J | **U18 專案中繼資料** `project_members`／`reselection_events`／`system_requirement_fields` | **per-project 成員與角色、改選稽核、系統層需求欄位值**。三張表皆為全新，**無資料遷移**；唯一例外是 U20 起的條件式欄位轉型（`system_requirement_fields.updated_on_behalf_of` 由 integer 轉為 varchar(64)，只在既有表仍為舊型別時執行，見 2.2.9 之後的 U20 說明）。見 2.2.9 |
 | K | **U9 保留系統 actor** `users` 的一列（`SYSTEM.retention-purge`） | **90 天記憶清除的稽核 actor**。不是人、無法登入、零權限。**刪掉它會讓每一次清除的整個交易中止**。見 2.2.11 |
@@ -309,7 +310,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 | `backend/database.py` 的 `_ensure_vector_extension()` | **既有非空 volume** | 既有 volume 不會重跑 initdb 腳本 |
 
 **`_ensure_vector_extension()` 的呼叫位置是一條硬約束**：它在
-`Base.metadata.create_all()` **之前**，與其餘六支 `_ensure_*_schema()` 方向相反（那六支
+`Base.metadata.create_all()` **之前**，與其餘八支 `_ensure_*_schema()` 方向相反（那八支
 都在 `create_all()` 之後，因為它們補的是 `create_all` 不會做的 `ALTER`）。放錯邊的後果
 不是「少一個擴充」，是 **uvicorn 啟動失敗**（`init_db()` 由 startup 事件同步呼叫），
 在 `restart: unless-stopped` 之下變成重啟迴圈。這條順序由
@@ -335,6 +336,28 @@ psql "$DATABASE_URL" -c "SELECT * FROM pg_available_extensions WHERE name='vecto
 | `systems` | 階層中間層。`project_id` FK → `projects`（`ON DELETE RESTRICT`）；`is_default` 每個專案至多一列為真（`uq_systems_default_per_project`——範圍是**專案**，不是擁有者） |
 | `user_diagrams.system_id` | **新增欄位，可為空**。架構圖歸屬的**權威來源**；`user_id` 只回答「誰建的」，不回答歸屬。FK → `systems` 且為 `ON DELETE RESTRICT`——刪除 System 時**拒絕刪除**而非把本欄設為 NULL |
 | `diagram_change_records` | 架構圖變更紀錄。**本輪只寫不讀**（沒有任何讀取端）。`source` 是封閉列舉、本輪唯一值 `brain_orchestration`；`actor_user_id` **必填**。保存期 90 天、以 `created_at` 為截止欄位（索引 `ix_diagram_change_records_created_at`），**但清除機制本輪尚未落地——這張表實際上不會被清除** |
+| `user_diagrams.status` | **261116-brain-create-diagram 新增**。`draft`（大腦新建、尚未產圖完成）／`ready`（正式）。非空、預設 `ready`、CHECK `ck_user_diagrams_status`。補欄位當下既有圖全部為 `ready`（FR6.5）。API 以 `diagram_status` 對外 |
+
+##### 草稿狀態欄位（261116-brain-create-diagram）
+
+`backend/models.py` 的 `UserDiagram` 映射了 `status`，ORM 每次讀圖都會選取這一欄。既有環境（`192.168.10.10`）若缺這一欄，所有讀圖端點（工作區、專案頁、評核）會因 `column user_diagrams.status does not exist` 而 500——而部署後探針只打登入，抓不到。
+
+**既有環境升級（不需手動步驟）**：新版 backend 啟動時，`database.init_db()` 會呼叫 `_ensure_diagram_status_schema()`，**只補 `user_diagrams.status` 這一欄**（同一條 `ALTER TABLE` 內含 `NOT NULL DEFAULT 'ready'` 與 CHECK `ck_user_diagrams_status`），既有的圖一律成為 `ready`。形狀比照 `_ensure_last_activity_schema()`：可重跑、欄位已在即不動、只碰這一欄。它**不跑整套階層遷移**（不建專案／系統、不改寫任何圖的 `system_id`），所以不需要、也不應該為了這一欄去跑 `run_hierarchy_migration.py`。
+
+與其他 `_ensure_*` 不同：**補欄位失敗會讓 backend 啟動失敗**（不吞成 warning）。缺欄位時讀圖必然 500，讓啟動失敗才會被部署判定為失敗並觸發 rollback；日誌關鍵字為 `diagram status schema 補丁失敗`。
+
+DDL 實際由 `services/hierarchy_migration.py` 的 `_ensure_diagram_status_column()` 執行（啟動補丁只借用這一支函式），與 `schema_rbac.sql` 的同名 DDL 並存，改一處必須改另一處。
+
+驗證：
+
+```bash
+psql "$DATABASE_URL" -c "SELECT column_name, is_nullable, column_default FROM information_schema.columns
+  WHERE table_name = 'user_diagrams' AND column_name = 'status';"   # NO | 'ready'::character varying
+psql "$DATABASE_URL" -c "SELECT status, count(*) FROM user_diagrams GROUP BY status;"   # 升級當下只有 ready
+psql "$DATABASE_URL" -c "SELECT conname FROM pg_constraint WHERE conname = 'ck_user_diagrams_status';"
+```
+
+回復：舊版 backend 不讀這一欄，回退應用即可，不需刪欄位。**但要知道回退後的行為**：舊版 backend 看不到草稿狀態、也沒有任何 409 檢查——已存在的 `draft` 列在舊版眼中就是一般架構圖（內容可能只是空白骨架），可被分享、發起評核、加入 WA 共編、綁到估價，專案頁計數也會把它算進去。部署失敗會自動 rollback，這不是假設情境。回退前先查 `SELECT id, user_id, title FROM user_diagrams WHERE status = 'draft';`，請擁有者刪除不要的草稿或存成正式；若不處理，就是接受「回退期間草稿等同正式圖」。若要移除欄位：先確認沒有 `draft` 列需要保留（`SELECT count(*) FROM user_diagrams WHERE status = 'draft'`），再 `ALTER TABLE user_diagrams DROP COLUMN status;`（CHECK 隨欄位一併移除）。
 
 **「每位使用者至多一組預設專案／系統」不是單一約束**：資料庫只保證「每位使用者至多一個預設專案」與「每個專案至多一個預設系統」。「預設系統一定掛在該使用者的預設專案底下」**沒有任何約束擋住**，它由遷移程序（目前 `is_default` 的唯一寫入端）的執行順序供應。日後若出現第二個 `is_default` 寫入端，這個複合性質就不再自動成立。
 
@@ -358,7 +381,7 @@ hierarchy migration 完成：
 終檢通過：user_diagrams 中 system_id IS NULL 的列數為 0（AC9.1.4）。
 ```
 
-**結束碼 0 才算成功。** 結束碼 1 代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。結束碼 **2** 代表呼叫方式錯誤（帶了任何參數——本指令不接受選項），**未執行任何事**：DDL 與資料都沒有動過，修正呼叫方式後重跑即可（合併前必修第 28 列 (a)）。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 的六支 `_ensure_*` 補丁全部 `except Exception: logger.warning`，本指令不沿用那個形狀。
+**結束碼 0 才算成功。** 結束碼 1 代表終檢未通過（或 DDL／寫入被拒），此時**不得**繼續部署。結束碼 **2** 代表呼叫方式錯誤（帶了任何參數——本指令不接受選項），**未執行任何事**：DDL 與資料都沒有動過，修正呼叫方式後重跑即可（合併前必修第 28 列 (a)）。指令**不會**以警告帶過失敗——這是刻意的，`backend/database.py` 在 `create_all()` 之後的八支 `_ensure_*` 補丁中，七支是 `except Exception: logger.warning`（唯一例外是 `_ensure_diagram_status_schema()`，失敗即往外拋），本指令不沿用吞成警告的形狀。
 
 指令**可重跑**：DDL 為 `IF NOT EXISTS` 形狀；資料面的冪等判準是 `system_id IS NOT NULL`（已掛好的圖不會被重新指派），預設專案／系統「存在就取用、不存在才建」。第二次跑的預期輸出是 `default_pairs_created = 0`、`diagrams_assigned = 0`，而 `users_processed` 仍為使用者數（它算的是走訪數，不是改動數）。
 
@@ -1746,7 +1769,7 @@ directory，本部署形狀下沒有承載者。
 **步 4 的兩條硬條件**：(a) **不得掛 initdb 目錄**——`/docker-entrypoint-initdb.d/` 內的
 `schema_rbac.sql` 會在空 volume 上執行，把即將被還原覆蓋的表先建一遍並重播
 `role_permissions`；(b) **backend 必須是停止的**——它的 startup 會跑 `init_db()`（`create_all`
-＋ 七支 `_ensure_*`），在還原中途動 schema。
+＋ 九支 `_ensure_*`），在還原中途動 schema。
 
 **步 4 的第三條硬條件（2026-11-14 本機演練補入）**：(c) **新 volume 必須掛在
 `/var/lib/postgresql`，不是 `/var/lib/postgresql/data`**。PG 18 起官方映像把 PGDATA 放在
@@ -2124,7 +2147,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 | 回應 | 指向 |
 |---|---|
 | `401` | 兩段都通 |
-| `502`（持續整個重試窗口） | 最可能是 `backend → db` 斷掉（`create_all` 與七支 `_ensure_*` 都在 startup 路徑上，db 不可達時 uvicorn 不進入服務狀態並反覆重啟）。次要可能：backend 映像本身起不來 |
+| `502`（持續整個重試窗口） | 最可能是 `backend → db` 斷掉（`create_all` 與九支 `_ensure_*` 都在 startup 路徑上，db 不可達時 uvicorn 不進入服務狀態並反覆重啟）。次要可能：backend 映像本身起不來 |
 | `500`／`504`／curl 逾時（`000`） | `backend → redis` 或 `backend → ollama` 斷掉——這兩段**不在** startup 路徑上，所以 backend 會正常服務、在請求處理中才失敗或掛住 |
 | `200` 且回 HTML | `/api/` 路由或 `frontend → backend` 斷（落到 `try_files`） |
 

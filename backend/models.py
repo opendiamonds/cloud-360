@@ -92,6 +92,25 @@ class RoleAuthorizationRequest(Base):
     user = relationship("User", back_populates="authorization_requests")
 
 
+DIAGRAM_STATUS_DRAFT = "draft"
+DIAGRAM_STATUS_READY = "ready"
+
+# 261116-brain-create-diagram 契約 C4：草稿被「拿來用或對外呈現」的入口拒絕時的 409
+# detail。**單一常數、四處共用**（評核、WA 共編、估價綁圖、分享）；大腦工作編排以
+# 「回應 detail 是否等於本常數」辨識草稿被拒（`CapabilityError.draft_rejected`），
+# 而 `work_orchestrator_rules.PHRASES["draft_rejected"]` 與本常數以測試鎖住相等。
+DRAFT_REJECTED_DETAIL = "這張圖還是草稿，請先完成產圖"
+# tcms-test-cases（`tcms_validate.py` WARN）：拒收草稿的端點以此宣告 409，使該契約進入
+# `openapi.json` 與前端產生型別，而不是只存在於實作。
+DRAFT_REJECTED_RESPONSE = {409: {"description": f"草稿不得用於此操作（detail：{DRAFT_REJECTED_DETAIL}）"}}
+
+# 261116-brain-create-diagram 修訂 1（FR4.1）：`rbac.require_arch_action` 缺架構權限時
+# 403 detail 的固定前綴（其後接 `<action>，目前角色為 <role>`）。大腦以「403 且 detail
+# 以本前綴開頭」辨識「缺架構編輯權」（`CapabilityError.arch_forbidden`），與 K2／帳號狀態
+# 的 403 分流。只做前綴比對、只保存布林值。
+ARCH_FORBIDDEN_DETAIL_PREFIX = "權限不足：需要架構圖生成."
+
+
 class UserDiagram(Base):
     __tablename__ = "user_diagrams"
 
@@ -108,6 +127,22 @@ class UserDiagram(Base):
     )
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    # 261116-brain-create-diagram ADR-003／FR6.1：草稿（draft）或正式（ready）。
+    # 經大腦新建的圖建立為草稿，產圖存回成功或工作區手動存檔才轉正式（FR6.2）。
+    # 既有的圖與不帶 as_draft 的建圖一律為正式（FR6.5），故預設 ready。
+    # 既有非空資料庫由啟動時的 database._ensure_diagram_status_schema() 補欄位
+    # （它沿用 hierarchy_migration._ensure_diagram_status_column 的 DDL）；
+    # schema_rbac.sql 的 DDL 與此同步（ck_user_diagrams_status）。
+    # API 層一律以 `diagram_status` 對外，不直接暴露欄位名（契約 C3）。
+    status = Column(
+        String(16), nullable=False, default="ready", server_default="ready"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'ready')", name="ck_user_diagrams_status"
+        ),
     )
 
     owner = relationship("User", foreign_keys=[user_id])

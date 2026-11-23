@@ -79,6 +79,14 @@ WANTS_QUESTIONS: Final[Tuple[Tuple[str, str, str], ...]] = (
     ("wants_cost", "cost-finops", "這句話是否要求估算或分析成本？"),
 )
 
+#: 261116-brain-create-diagram FR2.2／契約 C7：「是否要一張新的圖」，與上列題目**同一次**
+#: 請求送出，不另發模型呼叫（NFR2）。結果以 `new_diagram_probability` 留在行程內的判定
+#: 結果，不進 WebSocket；新建或修改的判定由 `brain_diagram_creation.decide` 做。
+Q_WANTS_NEW_DIAGRAM: Final = "wants_new_diagram"
+WANTS_NEW_DIAGRAM_INSTRUCTIONS: Final = (
+    "這句話是否要求建立一張新的架構圖（例如「新的」「另一張」），而不是修改目前這張？"
+)
+
 PRIMARY_INSTRUCTIONS: Final = "這句話最主要想請系統做哪一件事？"
 NAMED_TARGET_INSTRUCTIONS: Final = "這句話指名了下列哪一個專案或系統？沒有指名就選 none。"
 NO_TARGET_DEFINITION: Final = "沒有指名任何一個"
@@ -142,6 +150,7 @@ def build_questions(targets: Sequence[Tuple[str, str, str]]) -> dict:
     }
     for key, _capability, instructions in WANTS_QUESTIONS:
         questions[key] = {"type": "noul", "instructions": instructions}
+    questions[Q_WANTS_NEW_DIAGRAM] = {"type": "noul", "instructions": WANTS_NEW_DIAGRAM_INSTRUCTIONS}
     criteria = {key: f"名稱為「{shown}」的專案或系統" for key, _original, shown in targets}
     criteria[NO_TARGET] = NO_TARGET_DEFINITION
     questions[Q_NAMED_TARGET] = {
@@ -193,6 +202,8 @@ class DecisionsAnswers:
     wants: Tuple[Tuple[str, float], ...]
     named_choice: str
     named_confidence: float
+    #: 「是否要一張新的圖」的機率；回應沒有這一題時為 `None`（視為不明，不猜）。
+    new_diagram_probability: Optional[float] = None
 
 
 def _malformed(reason: str) -> MalformedRouting:
@@ -256,6 +267,15 @@ def parse_answers(body: Any, target_keys: Sequence[str]) -> DecisionsAnswers:
     )
     named_keys = tuple(target_keys) + (NO_TARGET,)
     named_choice, named_confidence, _ = _choice(answers, Q_NAMED_TARGET, named_keys)
+    # 261116-brain-create-diagram：這一題**缺漏時為 None**（不判為壞回應）——它只影響
+    # 新建／修改的判定，缺了就走「不明 → 反問」，不該讓整輪路由失敗。出現但形狀不對
+    # （refusal、型別錯、越界）仍與其他題一樣是 MalformedRouting。
+    new_diagram_probability: Optional[float] = None
+    if Q_WANTS_NEW_DIAGRAM in answers:
+        new_diagram_probability = _probability(
+            _answer(answers, Q_WANTS_NEW_DIAGRAM, "noul").get("noul"),
+            f"answers.{Q_WANTS_NEW_DIAGRAM}.noul",
+        )
     return DecisionsAnswers(
         primary_choice=primary_choice,
         primary_confidence=primary_confidence,
@@ -263,6 +283,7 @@ def parse_answers(body: Any, target_keys: Sequence[str]) -> DecisionsAnswers:
         wants=wants,
         named_choice=named_choice,
         named_confidence=named_confidence,
+        new_diagram_probability=new_diagram_probability,
     )
 
 
@@ -277,6 +298,8 @@ class DecisionsRouting:
 
     result: ClassificationResult
     force_clarify: bool
+    #: 261116-brain-create-diagram：原樣轉傳 `DecisionsAnswers.new_diagram_probability`。
+    new_diagram_probability: Optional[float] = None
 
 
 def effective_threshold(threshold: float, force_clarify: bool) -> float:
@@ -354,6 +377,7 @@ def routing_from_answers(
                 slots=slots, slot_labels=tuple(capability_name(c) for c in above)
             ),
             force_clarify=False,
+            new_diagram_probability=answers.new_diagram_probability,
         )
 
     probabilities = dict(answers.primary_probabilities)
@@ -387,6 +411,7 @@ def routing_from_answers(
             slot_labels=(capability_name(ranked[0]),),
         ),
         force_clarify=force,
+        new_diagram_probability=answers.new_diagram_probability,
     )
 
 
@@ -398,6 +423,7 @@ __all__ = [
     "PRIMARY_CRITERIA",
     "Q_NAMED_TARGET",
     "Q_PRIMARY",
+    "Q_WANTS_NEW_DIAGRAM",
     "TIE_MARGIN",
     "UNCLEAR",
     "WANTS_QUESTIONS",

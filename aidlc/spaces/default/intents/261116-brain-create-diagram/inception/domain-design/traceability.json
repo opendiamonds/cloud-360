@@ -1,0 +1,283 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "FR1",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR1.3a",
+    "FR1.4",
+    "FR1.5",
+    "FR2",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR3",
+    "FR3.1",
+    "FR3.2",
+    "FR3.3",
+    "FR3.4",
+    "FR3.5",
+    "FR3.6",
+    "FR4",
+    "FR4.1",
+    "FR4.2",
+    "FR4.3",
+    "FR5",
+    "FR5.1",
+    "FR5.2",
+    "FR5.3",
+    "FR5.4",
+    "FR6",
+    "FR6.1",
+    "FR6.2",
+    "FR6.3",
+    "FR6.3a",
+    "FR6.3b",
+    "FR6.4",
+    "FR6.4a",
+    "FR6.4b",
+    "FR6.4c",
+    "FR6.5",
+    "FR7",
+    "FR7.1",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR1.3a",
+      "status": "OK",
+      "target": "DiagramStore"
+    },
+    {
+      "id": "FR1.4",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR1.5",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "IntentRouter"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR3.3",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR3.4",
+      "status": "OK",
+      "target": "PendingClarify"
+    },
+    {
+      "id": "FR3.5",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR3.6",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR4",
+      "status": "OK",
+      "target": "AccessControl"
+    },
+    {
+      "id": "FR4.1",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR4.2",
+      "status": "OK",
+      "target": "AccessControl"
+    },
+    {
+      "id": "FR4.3",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR5",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR5.1",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR5.2",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR5.3",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR5.4",
+      "status": "OK",
+      "target": "BrainDiagramCreation"
+    },
+    {
+      "id": "FR6",
+      "status": "OK",
+      "target": "UserDiagram"
+    },
+    {
+      "id": "FR6.1",
+      "status": "OK",
+      "target": "UserDiagram"
+    },
+    {
+      "id": "FR6.2",
+      "status": "OK",
+      "target": "DiagramStore"
+    },
+    {
+      "id": "FR6.3",
+      "status": "OK",
+      "target": "WorkOrchestrator"
+    },
+    {
+      "id": "FR6.3a",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "FR6.3b",
+      "status": "OK",
+      "target": "WorkOrchestrator"
+    },
+    {
+      "id": "FR6.4",
+      "status": "OK",
+      "target": "DiagramListsUI"
+    },
+    {
+      "id": "FR6.4a",
+      "status": "OK",
+      "target": "AssessmentConsumers"
+    },
+    {
+      "id": "FR6.4b",
+      "status": "OK",
+      "target": "UserAccounts"
+    },
+    {
+      "id": "FR6.4c",
+      "status": "OK",
+      "target": "HierarchyService"
+    },
+    {
+      "id": "FR6.5",
+      "status": "OK",
+      "target": "UserDiagram"
+    },
+    {
+      "id": "FR7",
+      "status": "OK",
+      "target": "DiagramChangeRecord"
+    },
+    {
+      "id": "FR7.1",
+      "status": "OK",
+      "target": "DiagramChangeRecord"
+    },
+    {
+      "id": "NFR1",
+      "status": "OK",
+      "target": "IntentRouter"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "BrainGateway"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "IntentRouter"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "DiagramStore"
+    }
+  ]
+}

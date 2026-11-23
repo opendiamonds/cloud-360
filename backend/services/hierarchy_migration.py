@@ -10,13 +10,17 @@ facade（`U7`）；本模組不開第二條路。除了上述入口，其餘皆�
 輔助函式，只由本模組與其測試使用。
 
 **執行位置**：部署期的獨立指令（`Q2=A`），入口腳本為
-`backend/scripts/run_hierarchy_migration.py`。**不掛在啟動路徑上**——
-`main.py` 不匯入本模組，`init_db()` 不呼叫它。
+`backend/scripts/run_hierarchy_migration.py`。**整套遷移不掛在啟動路徑上**——
+`main.py` 不匯入本模組，`init_db()` 不呼叫 `_ensure_hierarchy_schema`／`run_hierarchy_migration`。
+唯一例外（261116-brain-create-diagram）：`database._ensure_diagram_status_schema()` 在啟動時
+匯入並只呼叫本模組的 `_ensure_diagram_status_column()`，補 `user_diagrams.status` 一欄。
 
 **它做什麼**（`WF-1`，順序不可調換）：
 
 1. 建立 `projects`／`systems`／`diagram_change_records` 三表（可重跑安全）
-2. 為 `user_diagrams` 增加 `system_id` 欄位（可為空）
+2. 為 `user_diagrams` 增加 `system_id` 欄位（可為空）；
+   261116-brain-create-diagram 起另補 `status` 欄位（`draft`／`ready`，非空、
+   預設 `ready`，`_ensure_diagram_status_column`）
 3. 建立 `BR1.3` 的兩個部分唯一索引（**必須在步 4 之前**：約束先存在，
    遷移才受它保護；反過來的話，步 4 中途失敗後的重跑會先建出重複資料，
    約束就再也建不起來）
@@ -363,7 +367,40 @@ def _ensure_hierarchy_schema(db: Session) -> None:
         )
     )
     db.commit()
-    logger.info("hierarchy migration: 結構檢查完成（三表 ＋ system_id ＋ 索引）")
+
+    _ensure_diagram_status_column(db, diagram_columns)
+    logger.info(
+        "hierarchy migration: 結構檢查完成（三表 ＋ system_id ＋ status ＋ 索引）"
+    )
+
+
+def _ensure_diagram_status_column(db: Session, diagram_columns: set[str]) -> None:
+    """261116-brain-create-diagram ADR-003／FR6.5：補 `user_diagrams.status`。
+
+    既有的圖一律視為正式（`ready`），故以預設值補欄位——加欄當下，所有既有列
+    都拿到 `ready`。欄位、非空、預設與 CHECK 在**同一條敘述**內完成：SQLite
+    無法對既有表追加約束，拆成兩步會讓測試環境永遠拿不到 CHECK 的保護
+    （與上方 system_id 的作法同理）。
+
+    以 inspector 判斷而非 `ADD COLUMN IF NOT EXISTS`：後者 SQLite 不支援，
+    而本函式必須在兩種方言上行為一致（重跑為無操作）。
+    `schema_rbac.sql` 的同名 DDL 是空 volume 的路徑，兩處並存、改一處必須改另一處。
+
+    **呼叫端有兩個**（修訂 1）：本模組的 `_ensure_hierarchy_schema`（部署期遷移），以及
+    `database._ensure_diagram_status_schema`（啟動路徑，只補這一欄）。後者是本模組
+    「不掛在啟動路徑上」的唯一例外，且只借用本函式，不經整套階層遷移。
+    """
+    if "status" in diagram_columns:
+        return
+    db.execute(
+        text(
+            "ALTER TABLE user_diagrams ADD COLUMN status VARCHAR(16) "
+            "NOT NULL DEFAULT 'ready' "
+            "CONSTRAINT ck_user_diagrams_status CHECK (status IN ('draft', 'ready'))"
+        )
+    )
+    db.commit()
+    logger.info("hierarchy migration: 已為 user_diagrams 加上 status 欄位（既有圖皆為 ready）")
 
 
 def _users_holding_diagrams(db: Session) -> list[tuple[int, str]]:

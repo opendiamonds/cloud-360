@@ -1539,8 +1539,16 @@ export interface components {
          *
          *     刻意不放進 `SaveDiagramRequest`：`PUT /diagrams/{id}` 共用那一個，而更新圖不應
          *     順手改歸屬——改歸屬走 `PUT /api/hierarchy/diagrams/{id}/system`。
+         *
+         *     `as_draft`（261116-brain-create-diagram 契約 C1）：`true` 建為草稿；既有呼叫端
+         *     不送，行為不變（建為正式）。
          */
         CreateDiagramRequest: {
+            /**
+             * As Draft
+             * @default false
+             */
+            as_draft: boolean;
             /** System Id */
             system_id?: number | null;
             /**
@@ -1613,6 +1621,49 @@ export interface components {
             /** Source */
             source: string;
         };
+        /** DiagramCreated */
+        DiagramCreated: {
+            /**
+             * Diagram Status
+             * @enum {string}
+             */
+            diagram_status: "draft" | "ready";
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "success";
+            /** System Id */
+            system_id: number | null;
+        };
+        /** DiagramDetail */
+        DiagramDetail: {
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Review */
+            can_review: boolean;
+            /**
+             * Diagram Status
+             * @enum {string}
+             */
+            diagram_status: "draft" | "ready";
+            /** Id */
+            id: number;
+            /** Is Owner */
+            is_owner: boolean;
+            /** Shared User Ids */
+            shared_user_ids: number[];
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Xml Data */
+            xml_data: string;
+        };
         /** DiagramReadinessModel */
         DiagramReadinessModel: {
             /** Diagram Id */
@@ -1626,6 +1677,21 @@ export interface components {
             status: "ready" | "empty" | "unreadable";
             /** Title */
             title: string;
+        };
+        /** DiagramSaved */
+        DiagramSaved: {
+            /**
+             * Diagram Status
+             * @enum {string}
+             */
+            diagram_status: "draft" | "ready";
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "success";
         };
         /**
          * DiagramSystemIn
@@ -2046,6 +2112,24 @@ export interface components {
             /** Files */
             files: components["schemas"]["FileEntryModel"][];
         };
+        /** MyDiagramItem */
+        MyDiagramItem: {
+            /**
+             * Diagram Status
+             * @enum {string}
+             */
+            diagram_status: "draft" | "ready";
+            /** Id */
+            id: number;
+            /** Is Owner */
+            is_owner: boolean;
+            /** System Id */
+            system_id: number | null;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
         /** OffendersView */
         OffendersView: {
             /** Currency Ordinals */
@@ -2266,16 +2350,6 @@ export interface components {
                 [key: string]: string;
             }[];
         };
-        /** SaveDiagramRequest */
-        SaveDiagramRequest: {
-            /**
-             * Title
-             * @default 未命名架構圖
-             */
-            title: string;
-            /** Xml Data */
-            xml_data: string;
-        };
         /** SaveDraftResponseModel */
         SaveDraftResponseModel: {
             /** Diagram Id */
@@ -2401,6 +2475,28 @@ export interface components {
         UpdateActiveRequest: {
             /** Is Active */
             is_active: boolean;
+        };
+        /**
+         * UpdateDiagramRequest
+         * @description `PUT /diagrams/{id}`。`finalize`（261116-brain-create-diagram 契約 C2）：
+         *
+         *     `true` 把草稿轉為正式；`false`（預設）只寫內容、不改狀態；對已是正式的圖無作用。
+         *     只有工作區「儲存架構圖」按鈕與大腦產圖存回會送 `true`（FR6.2）——自動存檔與
+         *     評核前寫回不送，打開草稿不會使它轉正式。
+         */
+        UpdateDiagramRequest: {
+            /**
+             * Finalize
+             * @default false
+             */
+            finalize: boolean;
+            /**
+             * Title
+             * @default 未命名架構圖
+             */
+            title: string;
+            /** Xml Data */
+            xml_data: string;
         };
         /** UpdateRoleRequest */
         UpdateRoleRequest: {
@@ -2593,6 +2689,13 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description 草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2822,6 +2925,13 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2854,6 +2964,13 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description 草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3565,7 +3682,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MyDiagramItem"][];
                 };
             };
         };
@@ -3589,7 +3706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DiagramCreated"];
                 };
             };
             /** @description Validation Error */
@@ -3620,7 +3737,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DiagramDetail"];
                 };
             };
             /** @description Validation Error */
@@ -3645,7 +3762,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveDiagramRequest"];
+                "application/json": components["schemas"]["UpdateDiagramRequest"];
             };
         };
         responses: {
@@ -3655,7 +3772,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DiagramSaved"];
                 };
             };
             /** @description Validation Error */
@@ -3821,6 +3938,13 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3959,6 +4083,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EstimateSetDetailView"];
                 };
+            };
+            /** @description 草稿不得用於此操作（detail：這張圖還是草稿，請先完成產圖） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

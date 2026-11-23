@@ -12,7 +12,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import RolePermission, User
+from models import ARCH_FORBIDDEN_DETAIL_PREFIX, RolePermission, User
 from services.auth import get_current_user
 from services.rbac_seed_data import DEFAULT_ROLE_PERMISSIONS
 
@@ -214,7 +214,7 @@ def require_arch_action(action: Action):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    f"權限不足：需要架構圖生成.{action}，"
+                    f"{ARCH_FORBIDDEN_DETAIL_PREFIX}{action}，"
                     f"目前角色為 {current_user.role}"
                 ),
             )

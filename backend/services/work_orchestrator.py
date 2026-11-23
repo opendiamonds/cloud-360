@@ -787,7 +787,9 @@ class WorkOrchestrator:
 
         async def put() -> None:
             async with self._client_factory(self._app, ctx.token) as client:
-                await client.put_diagram(diagram_id, title=title, xml_data=xml)
+                # 261116-brain-create-diagram FR6.2／契約 C2：大腦產圖存回成功即轉正式。
+                # 只把草稿轉正式；對已是正式的圖無作用。失敗時圖維持草稿（FR6.3）。
+                await client.put_diagram(diagram_id, title=title, xml_data=xml, finalize=True)
 
         task = asyncio.ensure_future(put())
         deadline = self._clock() + timedelta(seconds=self._persist_timeout)
@@ -964,7 +966,13 @@ class WorkOrchestrator:
 
     async def _list_system_diagrams(self, ctx: _Ctx, item: dict, system_id: int) -> list:
         def read(principal, db):
-            return self._hierarchy_factory(db).list_diagrams_of_system(principal, system_id=system_id)
+            # 261116-brain-create-diagram ADR-005：工作編排選圖屬「判斷底下有沒有圖」，
+            # 包含草稿（作業對象是草稿時要能接著畫，FR6.3）。回傳四元組
+            # (diagram_id, title, diagram_status, updated_at)，下游只取 diagram_id。
+            rows = self._hierarchy_factory(db).list_diagrams_of_system(
+                principal, system_id=system_id, include_drafts=True
+            )
+            return [(diagram_id, title, status, updated_at) for diagram_id, title, status, updated_at in rows]
 
         try:
             return await self._call_facade(ctx.user_id, read)
@@ -1003,7 +1011,9 @@ class WorkOrchestrator:
     @staticmethod
     def _capability_failure(capability: str, exc: CapabilityError) -> _Failed:
         status_code = exc.status_code if exc.kind == KIND_HTTP else None
-        reason, category = R.failure_for_status(capability, status_code)
+        reason, category = R.failure_for_status(
+            capability, status_code, draft_rejected=getattr(exc, "draft_rejected", False)
+        )
         return _Failed(reason, category)
 
     # ==================================================================
