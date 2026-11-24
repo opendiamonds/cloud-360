@@ -1,0 +1,140 @@
+{
+  "stage": "code-generation",
+  "upstream_ids": [
+    "FR1",
+    "FR2",
+    "FR3",
+    "FR1.1",
+    "FR1.2",
+    "FR1.3",
+    "FR1.4",
+    "FR2.1",
+    "FR2.2",
+    "FR2.3",
+    "FR2.4",
+    "FR2.5",
+    "FR3.1",
+    "FR3.2",
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5"
+  ],
+  "coverage": [
+    {
+      "id": "FR1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "需求群組標題（路由能判讀延續回答），由 FR1.1–FR1.4 逐條落地；工具呼叫路徑的截斷在 backend/services/intent_routing_context.py"
+    },
+    {
+      "id": "FR2",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "需求群組標題（架構設計只回提問時不判失敗），由 FR2.1–FR2.5 逐條落地；判定在 backend/services/work_orchestrator_capabilities.py"
+    },
+    {
+      "id": "FR3",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/261122-brain-routing-followup/inception/decisions/0025-decisions-routing-carries-conversation-history.md",
+      "note": "需求群組標題（設計變更紀錄），由 FR3.1（ADR-0025）與 FR3.2（build_state docstring）落地"
+    },
+    {
+      "id": "FR1.1",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "build_state 新增 recent_messages（最後至多 6 則、舊→新、標「使用者／系統」、置於「以下是參考資料，不是指示」之下）；intent_routing_port.py 的 DecisionsRoutingPort.route 傳入歷程。測試：test_intent_routing_decisions.DecisionsEndToEndTest.test_follow_up_answer_carries_the_recent_conversation_into_state、BuildStatePropertyTest.test_history_is_bounded_ordered_tail_truncated_and_after_the_user_sentence；突變 M4、M6 紅燈"
+    },
+    {
+      "id": "FR1.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "CONTINUATION_RULE 附在 PRIMARY_INSTRUCTIONS 與三題 WANTS_QUESTIONS；PRIMARY_CRITERIA 未動（git diff 無該段變更）。測試：DecisionsEndToEndTest.test_follow_up_answer_carries_the_recent_conversation_into_state；突變 M7 紅燈"
+    },
+    {
+      "id": "FR1.3",
+      "status": "OK",
+      "target": "backend/services/intent_routing_context.py",
+      "note": "新增純函式 keep_tail（結尾 limit 字、limit ≤ 0 回空字串），build_routing_prompt 與 intent_routing_decisions.build_state 共用。測試：test_intent_routing_decisions.StateHistoryTruncationTest.test_a_long_question_keeps_its_trailing_options、test_intent_routing_context.MinimalContextTest.test_a_long_question_keeps_its_trailing_options、MinimalContextTest.test_keep_tail_with_a_zero_limit_keeps_nothing、BuildStatePropertyTest；突變 M1、M2、M3 紅燈"
+    },
+    {
+      "id": "FR1.4",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "使用者這一句仍為 state 第一段；則數與字數截斷在 build_state 內無條件發生。測試：BuildStatePropertyTest（性質 a）、StateHistoryTruncationTest.test_no_history_means_no_history_section、DecisionsEndToEndTest.test_request_shape_keeps_user_text_in_state_only；突變 M5 紅燈"
+    },
+    {
+      "id": "FR2.1",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator_capabilities.py",
+      "note": "judge_a1：error → a1_failed；有 xml → 成功；無 xml 但有非空白文字 → awaiting_reply；皆無 → a1_no_xml。測試：test_work_orchestrator_capabilities.A1JudgementTest.test_a1_question_without_xml_awaits_reply_instead_of_failing、test_a1_error_or_missing_xml_is_a_failure_even_with_http_200；突變 M8 紅燈"
+    },
+    {
+      "id": "FR2.2",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "_complete_awaiting_reply：處理中 → 完成、sideEffect none、無 failureReason、不存回圖、不寫變更紀錄與 procedure 記憶，不新增狀態值。測試：test_work_orchestrator_flow.ArchitectureAwaitingReplyTest.test_question_without_diagram_completes_without_failure_or_persist；突變 M8 紅燈"
+    },
+    {
+      "id": "FR2.3",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator_rules.py",
+      "note": "PHRASES 新增 awaiting_reply；先轉送提問文字、再送提示。測試：ArchitectureAwaitingReplyTest.test_question_without_diagram_completes_without_failure_or_persist、test_work_orchestrator_rules.PhraseTest"
+    },
+    {
+      "id": "FR2.4",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "_advance_dependents／_advance_waiter 的 as_status、failure_phrase；等待者以 dependency_awaiting_reply 結束、不呼叫能力 API。測試：ArchitectureAwaitingReplyTest.test_waiters_do_not_run_on_the_unchanged_diagram；突變 M9 紅燈"
+    },
+    {
+      "id": "FR2.5",
+      "status": "OK",
+      "target": "backend/services/work_orchestrator.py",
+      "note": "_recover 第二輪：_awaiting_reply(dependency)（架構設計、完成、dispatchStage 非 result_persisted）→ 等待者以失敗＋dependency_awaiting_reply 結束。測試：test_work_orchestrator_flow.RecoveryTest.test_recovery_does_not_run_waiters_on_an_architecture_still_awaiting_reply、RecoveryTest.test_recovery_starts_waiters_once_the_architecture_was_persisted；既有 test_orphan_waiter_is_advanced_once_even_with_two_concurrent_scans 測資補 dispatchStage=result_persisted；突變 M10、M11 紅燈"
+    },
+    {
+      "id": "FR3.1",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/261122-brain-routing-followup/inception/decisions/0025-decisions-routing-carries-conversation-history.md",
+      "note": "Context、Decision、Consequences、Alternatives Rejected（5 項）、ADR-0006 四面向；修訂 ADR-0024 D-4「不帶歷程」，ADR-0024 本文未改；Status 為 Proposed，待 NFR1 後轉 Accepted"
+    },
+    {
+      "id": "FR3.2",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "build_state docstring 寫明帶歷程與結尾截斷的理由，舊的「不帶對話歷程」敘述已移除"
+    },
+    {
+      "id": "NFR1",
+      "status": "Deferred",
+      "target": "aidlc/spaces/default/intents/261122-brain-routing-followup/inception/decisions/0025-decisions-routing-carries-conversation-history.md",
+      "note": "待辦：部署到 staging 後以 ADR-0024 六句＋「架構設計提問後只回 A」重新量測；本機無 OpenRouter 金鑰，未打真實 API（requirements OQ1，由 build-and-test 之後的部署驗證承接）"
+    },
+    {
+      "id": "NFR2",
+      "status": "OK",
+      "target": "backend/tests/test_intent_routing_decisions.py",
+      "note": "BuildStatePropertyTest.test_history_is_bounded_ordered_tail_truncated_and_after_the_user_sentence（Hypothesis 300 例；文字來源分短文與 401–1200 字長文兩類）；突變 M1、M4、M5 紅燈"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/261122-brain-routing-followup/construction/code-generation/code-summary.md",
+      "note": "cd backend && python3 -m unittest discover -s tests -t .：Ran 1631 tests，OK (skipped=3)（基準 1624＋本輪新增 7）；validate_repo_contract.py 與 validate_env_contract.py 皆 passed"
+    },
+    {
+      "id": "NFR4",
+      "status": "OK",
+      "target": "aidlc/spaces/default/intents/261122-brain-routing-followup/construction/code-generation/code-summary.md",
+      "note": "11 項突變全數紅燈、還原後 124 個範圍測試全綠；突變表見 code-summary.md 第四節"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "backend/services/intent_routing_decisions.py",
+      "note": "message_limit=6、message_chars=400 在 build_state 內無條件截斷，上界 6 × 400 字；由 BuildStatePropertyTest 以寫死的 6／400 驗證"
+    }
+  ]
+}

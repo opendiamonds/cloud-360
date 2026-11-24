@@ -196,6 +196,21 @@ def _diagram_name(item: dict) -> str:
     return R.diagram_display_name(item.get("targetDiagramTitle"), item.get("targetDiagramId"))
 
 
+def _awaiting_reply(dependency: Optional[dict]) -> bool:
+    """被等待項是否為「架構設計回了提問、還在等使用者回覆」（FR2.5）。
+
+    判準：能力為架構設計、狀態為完成、`dispatchStage` 不是 `result_persisted`
+    （沒有存回圖）。`_complete_awaiting_reply` 寫出的正是這個形狀；正常完成的架構設計
+    一定先寫 `result_persisted` 才轉完成。
+    """
+    return (
+        dependency is not None
+        and dependency.get("capability") == R.CAP_ARCHITECTURE
+        and dependency.get("status") == R.STATUS_DONE
+        and dependency.get("dispatchStage") != R.STAGE_RESULT_PERSISTED
+    )
+
+
 class WorkOrchestrator:
     """`K-11` 的落點。每個 `U13` 進程一個實例；狀態全在 Redis，實例只持有 task 參考。"""
 
@@ -532,19 +547,40 @@ class WorkOrchestrator:
             if dependency_status not in R.TERMINAL_STATUSES:
                 continue
             ctx = _Ctx(session_key, waiter["workItemId"], user_id, token, sink)
+            if _awaiting_reply(dependency):
+                # FR2.5：與 `_complete_awaiting_reply` 同一規則——架構設計「完成」卻沒有
+                # 存回圖，代表它還在等使用者回覆；等待者不得在未變動的舊圖上執行。
+                await self._advance_waiter(
+                    ctx, waiter, R.STATUS_FAILED, dependency, failure_phrase="dependency_awaiting_reply"
+                )
+                continue
             await self._advance_waiter(ctx, waiter, dependency_status, dependency)
 
-    async def _advance_dependents(self, ctx: _Ctx, item: dict) -> None:
-        """`item` 剛轉為終態：推進等待它的工作項。"""
+    async def _advance_dependents(
+        self, ctx: _Ctx, item: dict, *, as_status: Optional[str] = None, failure_phrase: Optional[str] = None
+    ) -> None:
+        """`item` 剛轉為終態：推進等待它的工作項。
+
+        `as_status`／`failure_phrase` 讓呼叫端以不同於 `item["status"]` 的終態推進等待者
+        ——架構設計「等你回覆」時工作項本身是完成，但圖尚未產出，等待者不得在舊圖上執行。
+        """
         items = self._store.load_work_items(ctx.session_key)
         for waiter in _sorted(items.values()):
             if waiter["status"] != R.STATUS_WAITING or waiter.get("dependsOn") != item["workItemId"]:
                 continue
             waiter_ctx = _Ctx(ctx.session_key, waiter["workItemId"], ctx.user_id, ctx.token, ctx.sink)
-            await self._advance_waiter(waiter_ctx, waiter, item["status"], item)
+            await self._advance_waiter(
+                waiter_ctx, waiter, as_status or item["status"], item, failure_phrase=failure_phrase
+            )
 
     async def _advance_waiter(
-        self, ctx: _Ctx, waiter: dict, dependency_status: str, dependency: Optional[dict]
+        self,
+        ctx: _Ctx,
+        waiter: dict,
+        dependency_status: str,
+        dependency: Optional[dict],
+        *,
+        failure_phrase: Optional[str] = None,
     ) -> bool:
         event = R.event_for_dependency_terminal(waiter["capability"], dependency_status)
         new_status = R.transition(R.STATUS_WAITING, event)
@@ -560,7 +596,9 @@ class WorkOrchestrator:
                 self._start(ctx)
 
         elif new_status == R.STATUS_FAILED:
-            reason = R.PHRASES["dependency_failed"].format(dependency_label=dependency_label)
+            reason = R.PHRASES[failure_phrase or "dependency_failed"].format(
+                dependency_label=dependency_label
+            )
             patch = {
                 "status": new_status,
                 "failureReason": reason,
@@ -730,6 +768,9 @@ class WorkOrchestrator:
                     await self._emit("turn", ctx.sink, [self._token(result.message_text)])
                 if result.failure:
                     raise _Failed(R.PHRASES[result.failure], "capability_failed")
+                if result.awaiting_reply:
+                    await self._complete_awaiting_reply(ctx, item)
+                    return
                 again = await client.get_diagram(diagram_id)
                 if again.get("updated_at") != diagram.get("updated_at"):
                     raise _Failed(R.PHRASES["diagram_modified"], "capability_failed")
@@ -1074,6 +1115,27 @@ class WorkOrchestrator:
         await self._push_items(ctx.sink, ctx.session_key)
         await self._emit("turn", ctx.sink, messages)
         await self._advance_dependents(ctx, updated)
+
+    async def _complete_awaiting_reply(self, ctx: _Ctx, item: dict) -> None:
+        """架構設計回了提問、沒有產圖：處理中 → 完成，但**不寫 procedure 記憶**、
+        **不存回圖**，等待它的工作項一律以「還在等你回覆」結束（圖沒變，不得在舊圖上執行）。
+
+        使用者的下一句回覆由意圖路由判讀為延續架構設計（`CONTINUATION_RULE`），
+        另開一個新工作項交辦；架構設計 agent 以自己的對話記憶接續。
+        """
+        new_status = R.transition(R.STATUS_PROCESSING, R.EV_CAPABILITY_COMPLETED)
+        patch = {"status": new_status, "deadlineAt": None, "sideEffect": R.SIDE_EFFECT_NONE}
+        if not self._cas(ctx.session_key, item, [R.STATUS_PROCESSING], patch):
+            raise _StepAborted()
+        updated = {**item, **patch}
+        self._log_transition(item, R.STATUS_PROCESSING, new_status)
+        await self._push_items(ctx.sink, ctx.session_key)
+        await self._emit(
+            "turn", ctx.sink, [self._token(R.PHRASES["awaiting_reply"].format(label=item["label"]))]
+        )
+        await self._advance_dependents(
+            ctx, updated, as_status=R.STATUS_FAILED, failure_phrase="dependency_awaiting_reply"
+        )
 
     async def _write_procedure_memory(self, ctx: _Ctx, item: dict) -> None:
         content = f"{R.capability_name(item['capability'])}（{item['label']}）"

@@ -67,5 +67,13 @@
     "dirName": "261105-d-iac-generation",
     "scope": "feature",
     "status": "in-flight"
+  },
+  {
+    "uuid": "01a20397-3ee5-7e63-9e0d-72e4fb786f26",
+    "slug": "brain-routing-followup",
+    "dirName": "261122-brain-routing-followup",
+    "scope": "bugfix",
+    "status": "in-flight",
+    "request": "166ed9b9"
   }
 ]

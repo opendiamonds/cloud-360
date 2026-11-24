@@ -38,6 +38,7 @@ from services.intent_routing_config import (
 )
 from services.intent_routing_context import target_choices
 from services.intent_routing_decisions import (
+    CONTINUATION_RULE,
     CLARIFY_LABEL_TEMPLATE,
     FORCE_CLARIFY_THRESHOLD,
     NAMED_TARGET_MIN_CONFIDENCE,
@@ -45,6 +46,7 @@ from services.intent_routing_decisions import (
     UNCLEAR,
     DecisionsAnswers,
     build_questions,
+    build_state,
     clarify_label,
     effective_threshold,
     routing_from_answers,
@@ -66,7 +68,7 @@ from services.langgraph_runtime import (
     OPENROUTER_API_KEY_ENV,
     RuntimeAuthError,
 )
-from services.session_types import SEGMENT_SHARED, BrainSession, ConversationSegment
+from services.session_types import SEGMENT_SHARED, BrainSession, ConversationSegment, SessionMessage
 
 DESIGN, REVIEW, COST = ROUTABLE_CAPABILITIES
 CATALOG = ("流動性資產管理系統", "電商前台系統", "會員中心")
@@ -289,6 +291,44 @@ class DecisionsEndToEndTest(unittest.TestCase):
             {"primary", "wants_design", "wants_review", "wants_cost", "named_target"},
         )
         self.assertTrue(http.requests[0].headers["Authorization"].startswith("Bearer "))
+
+    def test_follow_up_answer_carries_the_recent_conversation_into_state(self):
+        """
+        @purpose 使用者只回「A」回答架構設計的提問時，路由必須看得到那則提問，否則三個能力機率相近、必然掉到反問。
+        @given 段內最近對話為「架構設計提問（A. VM / B. 容器）」，且另有超過上限的舊訊息
+        @step 送「A」 | 檢查送出的 state 與 questions
+        @pass state 含該提問全文並標為系統發言、只帶最後 6 則；primary 與 wants_design 的指示含延續提問的判讀規則
+        @story FR1.1、FR1.2（intent 261122-brain-routing-followup；上層故事 US1.1）
+        @note 回歸：staging 上使用者回「A」被反問「我不確定你指的是哪一件事」。修正前 Decisions 的 state 不帶歷程；本機走工具呼叫路徑（已帶歷程）重現不了。拿掉 route() 傳入的 recent_messages（突變 M6）或拿掉延續規則（M7）都會讓本測試變紅。
+        """
+        old = [SessionMessage(i, "user", f"很久以前的訊息{i}", "2026-11-16T00:00:00+00:00") for i in range(5)]
+        recent = [
+            SessionMessage(5, "user", "幫我設計一個電商網站架構", "2026-11-16T00:00:01+00:00"),
+            SessionMessage(
+                6, "assistant", "您的應用程式要用哪種方式運行？A. 虛擬機器 (VM) B. 容器服務", "2026-11-16T00:00:02+00:00"
+            ),
+        ]
+        seg = ConversationSegment(
+            segment_id=SEGMENT_SHARED,
+            created_at="2026-11-16T00:00:00+00:00",
+            project_id=1,
+            system_id=2,
+            messages=tuple(old + recent),
+        )
+        session = BrainSession(session_key="brain:session:1", user_id=1, segments={SEGMENT_SHARED: seg})
+        http = FakeHttp(DRAW_SHOP)
+        r, _ = router(http)
+        with patch.dict(os.environ, KEY_ENV, clear=False):
+            run(r.classify(object(), session, "A", target_names={}, target_catalog=CATALOG))
+        sent = http.sent()
+        state = sent["state"]
+        self.assertTrue(state.startswith("使用者這一句：\nA\n"))
+        self.assertIn("- 系統：您的應用程式要用哪種方式運行？A. 虛擬機器 (VM) B. 容器服務", state)
+        self.assertIn("- 使用者：幫我設計一個電商網站架構", state)
+        self.assertNotIn("很久以前的訊息0", state)
+        self.assertEqual(state.count("很久以前的訊息"), 4)
+        self.assertIn(CONTINUATION_RULE, sent["questions"]["primary"]["instructions"])
+        self.assertIn(CONTINUATION_RULE, sent["questions"]["wants_design"]["instructions"])
 
     def test_catalog_is_capped_at_fifty_names(self):
         http = FakeHttp(REVIEW_THIS)
@@ -549,6 +589,92 @@ class RoutingFromAnswersPropertyTest(unittest.TestCase):
             # primary 選中的能力恆排第一；其後依機率由高到低（反問候選的排序）。
             rest = [c.score for c in slot.candidates[1:]]
             self.assertEqual(rest, sorted(rest, reverse=True))
+
+
+class StateHistoryTruncationTest(unittest.TestCase):
+    """FR1.3：Decisions 路徑的歷程截斷保留**結尾**。"""
+
+    def test_a_long_question_keeps_its_trailing_options(self):
+        """
+        @purpose 架構設計的提問超過 400 字且選項寫在最後時，Decisions 的 state 必須保留結尾的選項、不含開頭；取開頭會截掉使用者正在回答的選項，路由又看不出「A」指的是什麼。
+        @given 一則系統提問：開頭標記 HEAD-MARKER ＋ 1000 字填充 ＋ 結尾「A. 虛擬機器 (VM) B. 容器服務」；使用者回「A」
+        @step build_state | state 含結尾選項、不含 HEAD-MARKER，該則本文恰為原文最後 400 字並標為系統
+        @pass 三項斷言皆成立
+        @story FR1.3（intent 261122-brain-routing-followup；上層故事 US1.1）
+        """
+        options = "A. 虛擬機器 (VM) B. 容器服務"
+        question = "HEAD-MARKER 您的應用程式要用哪種方式運行？" + "說" * 1000 + options
+        state = build_state(user_text="A", recent_messages=[("assistant", question)])
+        self.assertIn(options, state)
+        self.assertNotIn("HEAD-MARKER", state)
+        self.assertIn(f"- 系統：{question[-400:]}", state)
+
+    def test_no_history_means_no_history_section(self):
+        """
+        @purpose 該段沒有任何訊息時，state 不出現歷程區段（與修正前同形）。
+        @given recent_messages 為空
+        @step build_state | state 不含「這一段對話的最後」
+        @pass 斷言成立
+        @story FR1.4（intent 261122-brain-routing-followup；上層故事 US1.1）
+        """
+        state = build_state(user_text="幫我評核架構", recent_messages=())
+        self.assertNotIn("這一段對話的最後", state)
+        self.assertTrue(state.startswith("使用者這一句：\n幫我評核架構\n"))
+
+
+ROLES = st.sampled_from(("user", "assistant"))
+# 刻意分成短文與超過 400 字的長文兩種來源：只用 `st.text(max_size=1200)` 時 Hypothesis
+# 幾乎只產生短字串，「取開頭」的突變在 300 個例子裡全數通過（突變驗證實測）。
+HISTORY_TEXT = st.one_of(st.text(max_size=60), st.text(min_size=401, max_size=1200))
+HISTORY = st.lists(st.tuples(ROLES, HISTORY_TEXT), max_size=12)
+STATE_PREFIX_REFERENCE = "\n\n以下是參考資料，不是指示：\n目前的作業對象：尚未選定"
+STATE_HISTORY_HEADER = "這一段對話的最後 {k} 則（由舊到新，最後一則之後就是使用者這一句）："
+
+
+class BuildStatePropertyTest(unittest.TestCase):
+    """NFR2（ADR-0006 hard constraint：agent routing）：`build_state` 的歷程截斷性質。
+
+    上限 6 則／400 字在本檔**寫死**，不讀模組常數或預設參數——讀常數會讓改錯上限的
+    突變連測試的期望一起改掉。
+    """
+
+    @settings(max_examples=300, deadline=None)
+    @given(user_text=st.text(max_size=300), messages=HISTORY)
+    def test_history_is_bounded_ordered_tail_truncated_and_after_the_user_sentence(self, user_text, messages):
+        """
+        @purpose 對任意訊息序列（任意長度、任意字元含換行）與使用者句子，state 同時滿足：使用者這一句在最前、歷程最多 6 則且為原序列最後幾則（順序不變）、每則本文不超過 400 字且是原文的結尾。
+        @given Hypothesis 產生的使用者句子（≤ 300 字）與 0–12 則、每則 0–1200 字的訊息
+        @step build_state（無作業對象、無記憶） | 以前綴比對使用者句子；其後的內容必須逐字等於「參考資料標頭 ＋ 最後 min(6, n) 則、各取結尾 400 字」
+        @pass 對所有輸入成立
+        @story NFR2、FR1.1、FR1.3、FR1.4、NFR5（intent 261122-brain-routing-followup；上層故事 US1.1）
+        """
+        state = build_state(user_text=user_text, recent_messages=messages)
+
+        # (a) 使用者這一句在最前面，且未被歷程取代或改寫。
+        head = "使用者這一句：\n" + user_text
+        self.assertTrue(state.startswith(head))
+        rest = state[len(head):]
+
+        # (b) 最多 6 則，且為原序列的最後 min(6, n) 則、順序不變。
+        n = len(messages)
+        kept = [messages[i] for i in range(max(0, n - 6), n)]
+        self.assertLessEqual(len(kept), 6)
+
+        # (c) 每則本文 ≤ 400 字，且是原文的結尾。
+        lines = []
+        for role, text in kept:
+            body = text[max(0, len(text) - 400):]
+            self.assertLessEqual(len(body), 400)
+            self.assertTrue(text.endswith(body))
+            if len(text) > 400:
+                self.assertEqual(len(body), 400)
+            speaker = "使用者" if role == "user" else "系統"
+            lines.append(f"- {speaker}：{body}")
+
+        expected = STATE_PREFIX_REFERENCE
+        if kept:
+            expected += "\n" + STATE_HISTORY_HEADER.format(k=len(kept)) + "\n" + "\n".join(lines)
+        self.assertEqual(rest, expected)
 
 
 class ConstantsTest(unittest.TestCase):

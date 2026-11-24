@@ -114,13 +114,18 @@ class A1Result:
     """A1 一次產圖的判定結果（`BR56.5`）。
 
     `failure` 為 `None` 表示成功；否則為 `"a1_failed"`（有 error 事件）或
-    `"a1_no_xml"`（結束時沒有 xml）。`message_text` 是全部 `message` 事件依序
-    串接的文字（`BR58.3`：收齊後一次轉送）。
+    `"a1_no_xml"`（結束時沒有 xml、也沒有任何說明文字）。`message_text` 是全部
+    `message` 事件依序串接的文字（`BR58.3`：收齊後一次轉送）。
+
+    `awaiting_reply` 為真表示架構設計**沒有產圖、但回了文字**——它在以多輪問答
+    收集需求（例如「運算層要用 VM 還是容器？」），不是失敗。此時 `xml` 為 `None`、
+    `failure` 為 `None`，由編排層結束工作項並提示使用者直接回覆。
     """
 
     xml: Optional[str]
     message_text: str
     failure: Optional[str]
+    awaiting_reply: bool = False
 
 
 @dataclass(frozen=True)
@@ -133,7 +138,8 @@ class A3Result:
 
 
 def judge_a1(events: Iterable[dict]) -> A1Result:
-    """任一 error → 失敗；有 xml → 取最後一份；無 xml → 失敗並保留說明文字。"""
+    """任一 error → 失敗；有 xml → 取最後一份；無 xml 但有說明文字 → 等使用者回覆；
+    兩者皆無 → 失敗。"""
     xml: Optional[str] = None
     messages: list = []
     has_error = False
@@ -149,6 +155,8 @@ def judge_a1(events: Iterable[dict]) -> A1Result:
     text = "\n".join(m for m in messages if m.strip())
     if has_error:
         return A1Result(xml=None, message_text=text, failure="a1_failed")
+    if xml is None and text.strip():
+        return A1Result(xml=None, message_text=text, failure=None, awaiting_reply=True)
     if xml is None:
         return A1Result(xml=None, message_text=text, failure="a1_no_xml")
     return A1Result(xml=xml, message_text=text, failure=None)

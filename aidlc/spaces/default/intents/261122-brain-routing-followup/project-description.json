@@ -1,0 +1,1 @@
+"修正大腦意圖路由：(1) Decisions 路徑不帶對話歷程，使用者回答架構設計的多輪提問（如只回「A」）時掉到反問；(2) 架構設計只回提問沒產圖時工作項被標為「失敗：架構設計沒有產出圖」。修正已在分支 danniel/fix/brain-routing-followup-context 實作完成（未 commit），本 intent 為事後補走流程：以既有 diff 與診斷為輸入補齊各站產出。"
