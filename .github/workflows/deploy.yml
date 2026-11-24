@@ -57,6 +57,32 @@ jobs:
           ref: ut
           fetch-depth: 0
 
+      # Every workflow of this repo on this self-hosted runner shares ONE
+      # $GITHUB_WORKSPACE. A sparse checkout there (brain-health-watch did this
+      # until it moved to `path:`) leaves core.sparseCheckout=true in
+      # .git/config. actions/checkout's own `sparse-checkout disable` writes its
+      # `false` into config.worktree and then unsets extensions.worktreeConfig,
+      # so git ignores it and checks out only the sparse paths: every deploy
+      # from 2026-11-16 to 2026-11-22 died here with render-env.sh missing
+      # (exit 127, #750 / #756) while the commit plainly contained it. Undo
+      # any such leftover, then fail loudly if the tree is still incomplete.
+      - name: Restore a full working tree if another workflow left it sparse
+        run: |
+          set -euo pipefail
+          skipped=$(git ls-files -t | grep -c '^S' || true)
+          if [ "$(git config --local --get core.sparseCheckout || true)" = "true" ] || [ "${skipped}" -gt 0 ]; then
+            echo "::warning::workspace was left sparse by another workflow (${skipped} paths skipped); restoring a full checkout"
+            git config --local --unset-all core.sparseCheckout || true
+            rm -f "$(git rev-parse --git-path info/sparse-checkout)" "$(git rev-parse --git-path config.worktree)"
+            git ls-files -z | git update-index -z --no-skip-worktree --stdin
+            git checkout-index -a -q
+          fi
+          if [ ! -f deploy/render-env.sh ]; then
+            echo "::error::deploy/render-env.sh is missing right after checkout; the runner workspace is not a full checkout of $(git rev-parse --short HEAD)" >&2
+            git status --short | head -20 >&2
+            exit 1
+          fi
+
       # started is the clock the Slack message reports deploy duration against.
       # subject goes through the heredoc form because a commit title is
       # arbitrary text and would otherwise break the key=value line.
@@ -739,6 +765,32 @@ jobs:
         with:
           ref: ut
           fetch-depth: 0
+
+      # Every workflow of this repo on this self-hosted runner shares ONE
+      # $GITHUB_WORKSPACE. A sparse checkout there (brain-health-watch did this
+      # until it moved to `path:`) leaves core.sparseCheckout=true in
+      # .git/config. actions/checkout's own `sparse-checkout disable` writes its
+      # `false` into config.worktree and then unsets extensions.worktreeConfig,
+      # so git ignores it and checks out only the sparse paths: every deploy
+      # from 2026-11-16 to 2026-11-22 died here with render-env.sh missing
+      # (exit 127, #750 / #756) while the commit plainly contained it. Undo
+      # any such leftover, then fail loudly if the tree is still incomplete.
+      - name: Restore a full working tree if another workflow left it sparse
+        run: |
+          set -euo pipefail
+          skipped=$(git ls-files -t | grep -c '^S' || true)
+          if [ "$(git config --local --get core.sparseCheckout || true)" = "true" ] || [ "${skipped}" -gt 0 ]; then
+            echo "::warning::workspace was left sparse by another workflow (${skipped} paths skipped); restoring a full checkout"
+            git config --local --unset-all core.sparseCheckout || true
+            rm -f "$(git rev-parse --git-path info/sparse-checkout)" "$(git rev-parse --git-path config.worktree)"
+            git ls-files -z | git update-index -z --no-skip-worktree --stdin
+            git checkout-index -a -q
+          fi
+          if [ ! -f deploy/render-env.sh ]; then
+            echo "::error::deploy/render-env.sh is missing right after checkout; the runner workspace is not a full checkout of $(git rev-parse --short HEAD)" >&2
+            git status --short | head -20 >&2
+            exit 1
+          fi
 
       - name: Restore the last-good deployment
         id: restore
