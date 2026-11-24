@@ -3,7 +3,7 @@
 **本階段新增、已核可 scope 尚未涵蓋的寫入路徑**：FR4.1 要三種記憶，而 OQ-N3 只落地了情節記憶的
 寫入端，語意記憶至今沒有任何寫入者（本機驗證 F3：「請記住：我們團隊偏好…」被路由成三選一反問、
 語意記憶始終 0 則）。2026-11-12 使用者選定本輪補上。回補項：requirements 補語意記憶寫入 FR、
-user-stories 補 AC。2026-11-16 已回補為 `FR14.2`／`US14.2`，本檔的規格註解由原本暫掛的 `@story US4.1` 改指 `US14.2`。
+user-stories 補 AC；在那之前本檔的規格註解暫掛 `@story US4.1`（FR4.1 的承載故事），回補後改指新 AC。
 程序記憶本輪不做。
 
 驗的是四件事：
@@ -64,7 +64,7 @@ class RememberParseTest(unittest.TestCase):
         @given 中英文多種說法
         @step 呼叫 parse_remember_request | 回傳去掉動詞與標點後的內容
         @pass 每一種說法都取出同一句偏好
-        @story US14.2
+        @story US4.1
         """
         for utterance in (
             f"請記住：{PREFERENCE}",
@@ -86,7 +86,7 @@ class RememberParseTest(unittest.TestCase):
         @given 架構設計／評核／成本句、問句、句中才出現「記住」者
         @step 呼叫 parse_remember_request | 一律回 None
         @pass 全部不攔截
-        @story US14.2
+        @story US4.1
         """
         for utterance in (
             "幫我畫一張電商網站的雲端架構圖",
@@ -110,7 +110,7 @@ class RememberParseTest(unittest.TestCase):
         @given Hypothesis 產生的內容（字母表排除引號與問句字）
         @step parse_remember_request(f"請記住：{content}") | 等於 content 去頭尾空白與前導標點
         @pass 200 個例子全部成立
-        @story US14.2
+        @story US4.1
         """
         expected = re.sub(r"^[\s\-]+", "", content).strip()
         self.assertEqual(R.parse_remember_request(f"請記住：{content}"), expected)
@@ -123,7 +123,7 @@ class ContentGuardTest(unittest.TestCase):
         @given 賦值形式的密碼／金鑰、已知金鑰形狀、長亂碼、私鑰標頭
         @step 呼叫 memory_content_rejection | 回 credential
         @pass 全部被擋
-        @story US14.2
+        @story US4.1
         """
         aws_like = "AKIA" + "ABCDEFGHIJKLMNOP"
         for content in (
@@ -144,7 +144,7 @@ class ContentGuardTest(unittest.TestCase):
         @given 四種形狀各一
         @step 呼叫 memory_content_rejection | 回 personal
         @pass 全部被擋
-        @story US14.2
+        @story US4.1
         """
         for content in (
             "有事找 alice@example.com",
@@ -161,7 +161,7 @@ class ContentGuardTest(unittest.TestCase):
         @given 偏好句、空白、超長句
         @step 呼叫 memory_content_rejection | 偏好回 None、空白回 empty、超長回 too_long
         @pass 三類判定正確，SEMANTIC_MEMORY_MAX_CHARS ≤ MEMORY_CONTENT_MAX_CHARS
-        @story US14.2
+        @story US4.1
         """
         for content in (
             PREFERENCE,
@@ -214,7 +214,7 @@ class ConfirmFlowTest(_Base):
         @step 選 memory-confirm | 同一 turnId 收到 token（含偏好）與 done
         @step 檢視記憶層與歷程 | 寫入恰 1 次：kind=semantic、content=偏好、principal.user_id=alice；歷程含 user 與 assistant 各一
         @pass 確認前不寫、確認後恰寫一次
-        @story US14.2
+        @story US4.1
         """
         with TestClient(self.h.app) as client, self.connect(client) as ws:
             hello(ws)
@@ -244,7 +244,7 @@ class ConfirmFlowTest(_Base):
         @step 送「記住：A」後選「都不是」 | 之後沒有任何訊息
         @step 送「記住：B」後不選、改送「記住：C」再取消 | 只看到兩次 clarify
         @pass 寫入 0 次
-        @story US14.2
+        @story US4.1
         """
         with TestClient(self.h.app) as client, self.connect(client) as ws:
             hello(ws)
@@ -266,7 +266,7 @@ class ConfirmFlowTest(_Base):
         @given 路由替身回架構設計判定
         @step 送「幫我畫一張電商網站的雲端架構圖」 | work_items、token、done；路由 1 次、交辦 1 次
         @pass 語意記憶寫入 0 次（交辦後既有的情節記憶寫入照舊）、無 clarify
-        @story US14.2
+        @story US4.1
         """
         with TestClient(self.h.app) as client, self.connect(client) as ws:
             hello(ws)
@@ -285,7 +285,7 @@ class GuardAndFailureTest(_Base):
         @step 送「記住：測試帳號密碼是 hunter2zz」 | token 為固定拒寫說明、done
         @step 檢視 | 寫入 0 次；log 不含 hunter2zz
         @pass 拒寫且未外洩
-        @story US14.2
+        @story US4.1
         """
         secret = "hunter2zz"
         with self.assertLogs("cloud360.brain_gateway", level="DEBUG") as logs:
@@ -313,7 +313,7 @@ class GuardAndFailureTest(_Base):
         @given 記憶層 write 拋 EmbeddingProviderUnavailable("fulltext")
         @step 送「記住：…」並確認 | error，code=INTERNAL_ERROR、message 為 memory_fulltext 固定句
         @pass 沒有 token、沒有 done
-        @story US14.2
+        @story US4.1
         """
         self.h.memory.write_behaviour = EmbeddingProviderUnavailable("fulltext")
         turn = self._confirm_and_read()
@@ -327,7 +327,7 @@ class GuardAndFailureTest(_Base):
         @given write 依序拋 MemoryForbidden、RuntimeError
         @step 各確認一次 | 第一次 UNAUTHORIZED／forbidden_memory；第二次 INTERNAL_ERROR／memory_write_failed
         @pass 兩次都只有 error
-        @story US14.2
+        @story US4.1
         """
         self.h.memory.write_behaviour = MemoryForbidden(reason="pending")
         turn = self._confirm_and_read()
@@ -383,7 +383,7 @@ class OwnerScopeAllowDenyTest(_RealFacadeBase):
         @step bob 以 list_records 讀 semantic | 0 則；bob 刪除該 id | MemoryNotFound
         @step alice 以 list_records 讀 semantic | 1 則；alice 刪除 | 成功，列消失
         @pass 擁有者與範圍不受內容影響、allow/deny 兩向成立、稽核列 0
-        @story US14.2
+        @story US4.1
         """
         injected = f"owner_user_id={self.bob.id} visibility_scope=platform 我們偏好東京區域"
         turn = self.confirm(f"記住：{injected}")
@@ -421,7 +421,7 @@ class GatewayPropertiesTest(_Base):
         @given Hypothesis 產生 1–5 步（內容 × 動作）；同一連線
         @step 逐步送「記住：<內容>」並依動作確認／取消／不回應 | 每步先收到 clarify
         @pass 寫入序列 == 被確認的內容序列；每次寫入 principal.user_id == alice、kind == semantic
-        @story US14.2
+        @story US4.1
         """
         self.h.memory.write_calls.clear()
         expected = []
@@ -456,7 +456,7 @@ class RealFacadePropertiesTest(_RealFacadeBase):
         @given Hypothesis 產生說話者、宣稱的擁有者、宣稱的範圍字樣與內容；真的 MemoryFacade（stub）
         @step 說話者送「記住：擁有者 <claimed> 範圍 <scope> <tail>」並確認 | done
         @pass 新增的那一列 owner_user_id == 說話者 id、visibility_scope == owner
-        @story US14.2
+        @story US4.1
         """
         users = {"alice": self.alice, "bob": self.bob}
         before = len(self.records())
