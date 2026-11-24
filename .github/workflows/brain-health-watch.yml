@@ -67,8 +67,13 @@ jobs:
       BACKEND_CONTAINER: cloud360-backend-1
     steps:
       # actions/checkout 只為了取得本 repo 的 composite action；不讀任何程式。
+      # 一定要 checkout 到獨立子目錄。self-hosted runner 上同一個 repo 的所有
+      # workflow 共用同一個 $GITHUB_WORKSPACE；sparse checkout 留在那裡的
+      # core.sparseCheckout=true 會讓 deploy.yml 之後的 checkout 只展開這一個
+      # 目錄（deploy/render-env.sh 消失、exit 127；#750、#756）。
       - uses: actions/checkout@v4
         with:
+          path: .brain-health-src
           sparse-checkout: .github/actions/brain-health-alert
           sparse-checkout-cone-mode: false
 
@@ -164,7 +169,7 @@ jobs:
 
       - name: Notify
         id: notify
-        uses: ./.github/actions/brain-health-alert
+        uses: ./.brain-health-src/.github/actions/brain-health-alert
         with:
           title_prefix: "[brain-health] 大腦服務告警"
           alerts: ${{ steps.decide.outputs.alerts }}
@@ -209,8 +214,13 @@ jobs:
       # 與 deploy.yml 的資料面探測同一個不存在的帳號：預期 401，2xx 代表探測本身錯了。
       PROBE_USERNAME: __cloud360_deploy_probe_no_such_user__
     steps:
+      # 一定要 checkout 到獨立子目錄。self-hosted runner 上同一個 repo 的所有
+      # workflow 共用同一個 $GITHUB_WORKSPACE；sparse checkout 留在那裡的
+      # core.sparseCheckout=true 會讓 deploy.yml 之後的 checkout 只展開這一個
+      # 目錄（deploy/render-env.sh 消失、exit 127；#750、#756）。
       - uses: actions/checkout@v4
         with:
+          path: .brain-health-src
           sparse-checkout: .github/actions/brain-health-alert
           sparse-checkout-cone-mode: false
 
@@ -236,7 +246,7 @@ jobs:
           echo "home=${home} login=${login} alerts=${alerts:-none}"
 
       - name: Notify
-        uses: ./.github/actions/brain-health-alert
+        uses: ./.brain-health-src/.github/actions/brain-health-alert
         with:
           title_prefix: "[brain-health] 網站從公開網址無法使用"
           alerts: ${{ steps.probe.outputs.alerts }}
