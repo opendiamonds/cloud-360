@@ -211,6 +211,68 @@ class ArchitectureHappyPathTest(unittest.TestCase):
         self.assertEqual(h.app.count("PUT"), 1)
 
 
+class ArchitectureAwaitingReplyTest(unittest.TestCase):
+    def test_question_without_diagram_completes_without_failure_or_persist(self):
+        """
+        @purpose 架構設計以問答收集需求、只回提問沒有產圖時，工作項不得標為失敗，也不得存回圖或寫 procedure 記憶。
+        @given A1 串流只有 message（提問）與 complete、沒有 xml。
+        @step 交辦架構設計並等背景執行結束 | 工作項狀態為「完成」、sideEffect 為 none、沒有 failureReason
+        @step 檢查送出的文字 | 含提問原文與「架構設計：架構圖 #12：架構設計在等你回覆上面的問題，直接回答即可」，不得含「沒有產出圖」
+        @step 檢查副作用 | 沒有 PUT、沒有變更紀錄、沒有 procedure 記憶
+        @pass 工作項為「完成」、sideEffect 為 none、無 failureReason；提問文字與「等你回覆」提示都送出；沒有 PUT、沒有變更紀錄、沒有 procedure 記憶。
+        @story FR2.2、FR2.3（intent 261122-brain-routing-followup）
+        @note 回歸：修正前工作項顯示「失敗：架構設計：架構圖 #1 架構設計沒有產出圖」。拿掉 judge_a1 的 awaiting_reply 分支（突變 M8）本測試變紅。
+        """
+
+        async def scenario():
+            h = Harness()
+            h.app.a1_events = [
+                {"type": "message", "content": "運算層要用 A. VM 還是 B. 容器？"},
+                {"type": "complete"},
+            ]
+            created = await h.dispatch(ARCH)
+            await drain(h.orchestrator)
+            return h, created[0].workItemId
+
+        h, wid = run(scenario())
+        item = h.item(wid)
+        self.assertEqual(item["status"], "完成")
+        self.assertEqual(item["sideEffect"], "none")
+        self.assertFalse(item.get("failureReason"))
+        texts = h.sink.all_texts()
+        self.assertIn("運算層要用 A. VM 還是 B. 容器？", texts)
+        self.assertIn("架構設計：架構圖 #12：架構設計在等你回覆上面的問題，直接回答即可", texts)
+        self.assertFalse(any("沒有產出圖" in t for t in texts))
+        self.assertEqual(h.app.count("PUT"), 0)
+        self.assertEqual(h.recorder.changes, [])
+        self.assertEqual(h.recorder.memories, [])
+
+    def test_waiters_do_not_run_on_the_unchanged_diagram(self):
+        """
+        @purpose 架構設計還在等使用者回覆時，等待它的成本分析不得在舊圖上執行。
+        @given 同時交辦架構設計與成本分析；A1 只回提問沒有產圖。
+        @step 等背景執行結束 | 成本分析狀態為「失敗」，failureReason 為「前一項架構設計：架構圖 #12還在等你回覆，這一項沒有執行」
+        @step 檢查成本 API 呼叫次數 | GET /api/cost 呼叫 0 次
+        @pass 成本分析為「失敗」，原因是「前一項…還在等你回覆，這一項沒有執行」；沒有呼叫成本 API。
+        @story FR2.4（intent 261122-brain-routing-followup）
+        @note 防的是「以架構設計本身的狀態（完成）推進等待者」的實作（突變 M9）：那會讓成本在沒變過的舊圖上照跑。
+        """
+
+        async def scenario():
+            h = Harness()
+            h.app.a1_events = [{"type": "message", "content": "請問要哪一雲？"}, {"type": "complete"}]
+            made = await h.dispatch(ARCH, COST)
+            await drain(h.orchestrator)
+            return h, h.item(made[1].workItemId)
+
+        h, cost = run(scenario())
+        self.assertEqual(
+            (cost["status"], cost["failureReason"]),
+            ("失敗", "前一項架構設計：架構圖 #12還在等你回覆，這一項沒有執行"),
+        )
+        self.assertEqual(h.app.count("GET /api/cost"), 0)
+
+
 class FacadeThreadTest(unittest.TestCase):
     def test_facade_calls_run_off_the_event_loop_thread(self):
         """② `NFR12.2`：facade 呼叫在非事件迴圈執行緒。"""
@@ -721,7 +783,15 @@ class RecoveryTest(unittest.TestCase):
 
     def test_orphan_waiter_is_advanced_once_even_with_two_concurrent_scans(self):
         """⑦ `NFR12.13`：被等待者已完成、等待者仍等待中；兩個復原掃描讀到同一份
-        舊快照，只有比對後寫入成功的那一個啟動能力（能力被呼叫恰 1 次）。"""
+        舊快照，只有比對後寫入成功的那一個啟動能力（能力被呼叫恰 1 次）。
+
+        @purpose 架構設計已完成並存回圖、成本分析仍在等待時，兩個並行的復原掃描只能讓成本分析啟動一次（NFR12.13）。
+        @given 重啟後架構設計為「完成」且 dispatchStage 為 result_persisted；成本分析等待中；第二個掃描者持有寫入前的舊快照
+        @step 兩個復原掃描先後執行並等背景結束 | GET /api/cost/v1/sets 與 GET /api/cost/v1/sets/7/advice 各恰 1 次、成本分析為「完成」
+        @pass 成本能力被呼叫恰 1 次
+        @story FR2.5（intent 261122-brain-routing-followup；原測 NFR12.13）
+        @note 本 intent 只改測資：補上 dispatchStage=result_persisted。FR2.5 之後「完成但未存回圖」代表還在等使用者回覆，沒補這個欄位本測試會被新規則擋下而失去原意；斷言不變。
+        """
 
         async def scenario():
             h = Harness()
@@ -732,7 +802,8 @@ class RecoveryTest(unittest.TestCase):
             arch_id, cost_id = made[0].workItemId, made[1].workItemId
             fields = h.redis.hashes[SESSION_KEY]
             arch = json.loads(fields[f"wi:{arch_id}"])
-            arch.update({"status": "完成", "deadlineAt": None})
+            # 「已完成並存回圖」：FR2.5 之後，完成但未 result_persisted 代表還在等使用者回覆。
+            arch.update({"status": "完成", "deadlineAt": None, "dispatchStage": "result_persisted"})
             fields[f"wi:{arch_id}"] = json.dumps(arch, ensure_ascii=False)
 
             # 第二個掃描者在第一個寫入**之前**就讀了快照（多 worker 的交錯）：先記下那份
@@ -778,6 +849,57 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(h.item(cost_id)["status"], "完成")
         cards = [p for ps in h.sink.turns for p in ps if isinstance(p, CostCardPayload)]
         self.assertEqual(len(cards), 1)
+
+    @staticmethod
+    async def _recover_with_architecture(dispatch_stage):
+        """先 hang 住 A1、模擬重啟，把架構設計改為「完成」並設定 `dispatchStage`，再觸發復原掃描。"""
+        h = Harness()
+        h.app.hang = {"POST /api/architecture/generate"}
+        made = await h.dispatch(ARCH, COST)
+        await asyncio.sleep(0)
+        await h.stop_all()
+        arch_id, cost_id = made[0].workItemId, made[1].workItemId
+        fields = h.redis.hashes[SESSION_KEY]
+        arch = json.loads(fields[f"wi:{arch_id}"])
+        arch.update({"status": "完成", "deadlineAt": None, "dispatchStage": dispatch_stage})
+        fields[f"wi:{arch_id}"] = json.dumps(arch, ensure_ascii=False)
+        h.app.hang = set()
+        h.app.release.set()
+        await h.list_items()
+        await drain(h.orchestrator)
+        return h, cost_id
+
+    def test_recovery_does_not_run_waiters_on_an_architecture_still_awaiting_reply(self):
+        """
+        @purpose 程式重啟後的復原掃描必須套用「等你回覆」規則：架構設計完成卻沒有存回圖時，等待它的成本分析不得在未變動的舊圖上開始執行（FR2.5）。
+        @given 同時交辦架構設計與成本分析；重啟後架構設計為「完成」、dispatchStage 為 request_sent，成本分析仍在等待中
+        @step 觸發復原掃描（list_items）並等背景執行結束 | 成本分析為「失敗」，原因為「前一項…還在等你回覆，這一項沒有執行」
+        @pass 狀態與原因逐字相符，且沒有呼叫任何成本 API
+        @story FR2.5（intent 261122-brain-routing-followup）
+        @note 停用 _recover 的 _awaiting_reply 分支（突變 M10）本測試變紅。
+        """
+        h, cost_id = run(self._recover_with_architecture("request_sent"))
+        cost = h.item(cost_id)
+        self.assertEqual(
+            (cost["status"], cost["failureReason"]),
+            ("失敗", "前一項架構設計：架構圖 #12還在等你回覆，這一項沒有執行"),
+        )
+        self.assertEqual(h.app.count("GET /api/cost"), 0)
+
+    def test_recovery_starts_waiters_once_the_architecture_was_persisted(self):
+        """
+        @purpose 對照組：架構設計完成且已存回圖（dispatchStage 為 result_persisted）時，復原掃描照常讓等待的成本分析開始執行，FR2.5 不得誤擋正常完成（FR2.5）。
+        @given 同時交辦架構設計與成本分析；重啟後架構設計為「完成」、dispatchStage 為 result_persisted
+        @step 觸發復原掃描（list_items）並等背景執行結束 | 成本分析呼叫了成本 API 並轉為「完成」
+        @pass 成本 API 至少被呼叫一次，且成本分析狀態為「完成」、無失敗原因
+        @story FR2.5（intent 261122-brain-routing-followup）
+        @note 防過擋：_awaiting_reply 若不看 dispatchStage（突變 M11），正常完成的架構設計也會擋下等待者，本測試變紅。
+        """
+        h, cost_id = run(self._recover_with_architecture("result_persisted"))
+        cost = h.item(cost_id)
+        self.assertGreaterEqual(h.app.count("GET /api/cost"), 1)
+        self.assertEqual(cost["status"], "完成")
+        self.assertFalse(cost.get("failureReason"))
 
     def test_state_survives_dropping_the_orchestrator(self):
         """`NFR12.16`：丟棄實例、以新實例 `list_items` 取回同一集合。"""

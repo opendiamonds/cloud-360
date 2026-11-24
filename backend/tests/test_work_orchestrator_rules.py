@@ -123,6 +123,8 @@ class PhraseTest(unittest.TestCase):
         "done": ({"label": "架構設計"}, "架構設計完成"),
         "done_cost": ({"label": "成本分析"}, "成本分析完成（依既有的估價表與已產生的建議，不會因改圖而重算）"),
         "done_review": ({"score": 80, "count": 3}, "檢視完成：整體分數80，3項發現"),
+        "awaiting_reply": ({"label": "架構設計：架構圖 #1"}, "架構設計：架構圖 #1：架構設計在等你回覆上面的問題，直接回答即可"),
+        "dependency_awaiting_reply": ({"dependency_label": "D"}, "前一項D還在等你回覆，這一項沒有執行"),
         "failed": ({"label": "L", "reason": "R"}, "L沒有完成：R"),
         "stopped": ({"label": "L"}, "已停掉L。請再說一次你要做什麼。"),
         "skipped": ({"label": "架構檢視", "dependency_label": "架構設計"}, "架構檢視沒有執行：前一項架構設計已停掉"),
@@ -154,9 +156,23 @@ class PhraseTest(unittest.TestCase):
     }
 
     def test_every_phrase_has_a_case(self):
+        """
+        @purpose 每一個 PHRASES 句型都有一個逐字期望值；本 intent 新增的 awaiting_reply、dependency_awaiting_reply 也在其中，不得新增句型卻沒有案例。
+        @given EXPECTED 表與 R.PHRASES
+        @step 比對兩者的鍵集合 | 完全相等
+        @pass 鍵集合相等
+        @story FR2.3、FR2.4（intent 261122-brain-routing-followup）
+        """
         self.assertEqual(set(self.EXPECTED), set(R.PHRASES))
 
     def test_each_phrase_renders_exactly(self):
+        """
+        @purpose 句型是 UI 字面：「〈名稱〉：架構設計在等你回覆上面的問題，直接回答即可」與「前一項〈名稱〉還在等你回覆，這一項沒有執行」必須逐字渲染（FR2.3、FR2.4）。
+        @given EXPECTED 表中每一個句型的帶入值與期望字串
+        @step 以帶入值 format 每個句型 | 結果逐字等於期望字串（awaiting_reply 例：「架構設計：架構圖 #1：架構設計在等你回覆上面的問題，直接回答即可」）
+        @pass 所有 subTest 通過
+        @story FR2.3、FR2.4（intent 261122-brain-routing-followup）
+        """
         for key, (values, expected) in self.EXPECTED.items():
             with self.subTest(phrase=key):
                 self.assertEqual(R.PHRASES[key].format(**values), expected)

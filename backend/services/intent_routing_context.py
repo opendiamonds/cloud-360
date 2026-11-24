@@ -222,6 +222,21 @@ def build_system_prompt() -> str:
     )
 
 
+def keep_tail(text: object, limit: int) -> str:
+    """保留 `text` 的**結尾** `limit` 字；`limit <= 0` 時回空字串（FR1.3）。
+
+    歷程裡的系統提問常把選項（「A. … B. …」）寫在最後，取開頭會把使用者要回答的
+    選項截掉。Decisions 路徑（`intent_routing_decisions.build_state`）與本檔共用此函式，
+    兩條路徑的截斷行為因此一致。
+
+    不直接寫 `text[-limit:]`：`limit == 0` 時 `[-0:]` 會回整段原文，等於上限失效。
+    """
+    value = str(text)
+    if limit <= 0:
+        return ""
+    return value[-limit:]
+
+
 def build_routing_prompt(
     *,
     user_text: str,
@@ -264,7 +279,7 @@ def build_routing_prompt(
         lines.append("")
         lines.append(f"這一段對話的最後 {len(tail)} 則（**刻意只給這幾則**）：")
         for role, text in tail:
-            lines.append(f"- {role}：{str(text)[:message_chars]}")
+            lines.append(f"- {role}：{keep_tail(text, message_chars)}")
 
     notes = [note for note in list(memory_notes)[:memory_limit] if note]
     if notes:
@@ -294,6 +309,7 @@ __all__ = [
     "build_routing_prompt",
     "build_system_prompt",
     "format_work_target",
+    "keep_tail",
     "sanitize_target_name",
     "target_choices",
 ]

@@ -55,13 +55,42 @@ class A1JudgementTest(unittest.TestCase):
         self.assertEqual(result.message_text, "第一段\n第二段")
 
     def test_a1_error_or_missing_xml_is_a_failure_even_with_http_200(self):
-        """② HTTP 200 不等於成功（`BR56.5`）：error → a1_failed；無 xml → a1_no_xml 並保留說明。"""
+        """② HTTP 200 不等於成功（`BR56.5`）：error → a1_failed；無 xml 也無文字 → a1_no_xml。
+
+        @purpose A1 串流有 error 時一律判 a1_failed；沒有 xml 且說明文字只有空白時判 a1_no_xml，不得被「等使用者回覆」吃掉（FR2.1 的另外兩個分支）。
+        @given 兩段事件序列：xml＋error；只有空白 message＋complete
+        @step judge_a1（xml＋error） | failure 為 a1_failed、xml 為 None
+        @step judge_a1（空白 message＋complete） | failure 為 a1_no_xml、awaiting_reply 為 False
+        @pass 四項斷言皆成立
+        @story FR2.1（intent 261122-brain-routing-followup）
+        @note 本 intent 把這裡原本的「有提問文字也判 a1_no_xml」改成只用空白文字；有文字的情形移到下一個測試。
+        """
         errored = judge_a1([{"type": "xml", "content": "<x/>"}, {"type": "error", "content": "boom"}])
         self.assertEqual(errored.failure, "a1_failed")
         self.assertIsNone(errored.xml)
-        no_xml = judge_a1([{"type": "message", "content": "請問要哪一雲？"}, {"type": "complete"}])
+        no_xml = judge_a1([{"type": "message", "content": "  "}, {"type": "complete"}])
         self.assertEqual(no_xml.failure, "a1_no_xml")
-        self.assertEqual(no_xml.message_text, "請問要哪一雲？")
+        self.assertFalse(no_xml.awaiting_reply)
+
+    def test_a1_question_without_xml_awaits_reply_instead_of_failing(self):
+        """多輪問答：無 xml 但有提問文字 → 不是失敗，等使用者回覆並保留提問。
+
+        @purpose 架構設計只回提問、沒有 xml 時，判定必須是「等使用者回覆」而不是 a1_no_xml；但同時有 error 時仍判 a1_failed（FR2.1）。
+        @given 兩段事件序列：提問 message＋complete；提問 message＋error
+        @step judge_a1（提問＋complete） | failure 為 None、xml 為 None、awaiting_reply 為 True、message_text 保留提問原文
+        @step judge_a1（提問＋error） | failure 為 a1_failed、awaiting_reply 為 False
+        @pass 六項斷言皆成立
+        @story FR2.1（intent 261122-brain-routing-followup）
+        @note 回歸：修正前工作項顯示「失敗：架構設計：架構圖 #1 架構設計沒有產出圖」。拿掉 awaiting_reply 分支（突變 M8）本測試變紅。
+        """
+        asked = judge_a1([{"type": "message", "content": "請問要哪一雲？"}, {"type": "complete"}])
+        self.assertIsNone(asked.failure)
+        self.assertIsNone(asked.xml)
+        self.assertTrue(asked.awaiting_reply)
+        self.assertEqual(asked.message_text, "請問要哪一雲？")
+        errored = judge_a1([{"type": "message", "content": "請問要哪一雲？"}, {"type": "error", "content": "x"}])
+        self.assertEqual(errored.failure, "a1_failed")
+        self.assertFalse(errored.awaiting_reply)
 
 
 class A3JudgementTest(unittest.TestCase):

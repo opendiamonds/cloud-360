@@ -29,8 +29,10 @@ import unittest
 from pathlib import Path
 
 from services.intent_routing_context import (
+    DEFAULT_MESSAGE_CHARS,
     DEFAULT_MESSAGE_LIMIT,
     build_routing_prompt,
+    keep_tail,
 )
 from services.intent_routing_types import ROUTABLE_CAPABILITIES
 
@@ -86,6 +88,36 @@ class MinimalContextTest(unittest.TestCase):
         # 另一個方向：整段 200 則 × 4000 字元的最壞情況不得逼近 Jev 的
         # context 32000。這裡以字元數作為上界的代理指標。
         self.assertLess(len(long.text), 8000)
+
+    def test_a_long_question_keeps_its_trailing_options(self):
+        """
+        @purpose 一則超過 400 字的系統提問把選項寫在最後時，工具呼叫路徑的 prompt 必須保留結尾的選項、丟掉開頭（FR1.3）；取開頭會把使用者要回答的選項截掉。
+        @given 一則系統提問：開頭標記 HEAD-MARKER ＋ 約 1000 字填充 ＋ 結尾「A. 虛擬機器 (VM) B. 容器服務」
+        @step 以該提問為最近歷程呼叫 build_routing_prompt | prompt 含結尾選項、不含開頭標記，該則本文恰為原文最後 DEFAULT_MESSAGE_CHARS 字
+        @pass 兩項斷言皆成立
+        @story FR1.3（intent 261122-brain-routing-followup；上層故事 US1.1）
+        """
+        options = "A. 虛擬機器 (VM) B. 容器服務"
+        question = "HEAD-MARKER 您的應用程式要用哪種方式運行？" + "說" * 1000 + options
+        prompt = build_routing_prompt(
+            user_text="A", recent_messages=[("assistant", question)]
+        )
+        self.assertIn(options, prompt.user)
+        self.assertNotIn("HEAD-MARKER", prompt.user)
+        self.assertIn(f"- assistant：{question[-DEFAULT_MESSAGE_CHARS:]}\n", prompt.user)
+
+    def test_keep_tail_with_a_zero_limit_keeps_nothing(self):
+        """
+        @purpose 上限為 0 時歷程本文必須為空：Python 的 `[-0:]` 會回整段原文，若直接寫 `text[-limit:]`，上限設 0 反而送出全文（FR1.3、NFR5 的上界失效）。
+        @given 一段 50 字的文字與上限 0、負數、3
+        @step keep_tail | 0 與負數回空字串，3 回最後 3 字
+        @pass 三項斷言皆成立
+        @story FR1.3、NFR5（intent 261122-brain-routing-followup；上層故事 US1.1）
+        """
+        text = "前" * 47 + "ABC"
+        self.assertEqual(keep_tail(text, 0), "")
+        self.assertEqual(keep_tail(text, -1), "")
+        self.assertEqual(keep_tail(text, 3), "ABC")
 
 
 class ReferentPrecedenceTest(unittest.TestCase):

@@ -562,6 +562,7 @@ class DecisionsRoutingPort:
         state = build_state(
             user_text=text,
             work_target_hint=work_target_hint,
+            recent_messages=tuple(recent_messages or ()),
             memory_notes=tuple(memory_notes or ()),
         )
         budget.consume()

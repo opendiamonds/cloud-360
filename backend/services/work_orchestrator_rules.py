@@ -353,6 +353,9 @@ PHRASES = {
     "done": "{label}完成",
     "done_cost": "{label}完成（依既有的估價表與已產生的建議，不會因改圖而重算）",
     "done_review": "檢視完成：整體分數{score}，{count}項發現",
+    # 架構設計以問答收集需求、本次沒有產圖：不是失敗，請使用者直接回覆
+    "awaiting_reply": "{label}：架構設計在等你回覆上面的問題，直接回答即可",
+    "dependency_awaiting_reply": "前一項{dependency_label}還在等你回覆，這一項沒有執行",
     "failed": "{label}沒有完成：{reason}",
     "stopped": "已停掉{label}。請再說一次你要做什麼。",
     "skipped": "{label}沒有執行：前一項{dependency_label}已停掉",
